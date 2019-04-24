@@ -15,15 +15,15 @@ var (
 	ErrInvalidCipherType = errors.New("provided CipherType not supported")
 )
 
-// Key is the interface for cipher key, which is implemented by plainCipherKey, and gcmCipherKey
-type Key interface {
-	// Code return the code specified of the Key type
+// CipherKey is the interface for cipher key, which is implemented by plainCipherKey, and gcmCipherKey
+type CipherKey interface {
+	// Code return the code specified of the CipherKey type
 	CodeName() string
 
 	// Overhead returns the overhead for decrypted text
 	Overhead() uint8
 
-	// Key return the key for the specified Key type
+	// CipherKey return the key for the specified CipherKey type
 	Key() []byte
 
 	// Encrypt will encrypt the input byte slice to cipher text
@@ -38,7 +38,7 @@ type Key interface {
 	DecryptInPlace([]byte) ([]byte, error)
 }
 
-// plainCipherKey implements Key interface. Used only for tests and in scenario that no encryption is needed.
+// plainCipherKey implements CipherKey interface. Used only for tests and in scenario that no encryption is needed.
 type plainCipherKey struct{}
 
 // NewPlainCipherKey return a new plainCipherKey
@@ -53,8 +53,8 @@ func (pc *plainCipherKey) Encrypt(plaintext []byte) ([]byte, error)         { re
 func (pc *plainCipherKey) Decrypt(cipherText []byte) ([]byte, error)        { return cipherText[:], nil }
 func (pc *plainCipherKey) DecryptInPlace(cipherText []byte) ([]byte, error) { return cipherText[:], nil }
 
-// NewCipherKey will create a Key using the key type specified by cipherCode, value with the input key
-func NewCipherKey(cipherCode uint8, key []byte) (Key, error) {
+// NewCipherKey will create a CipherKey using the key type specified by cipherCode, value with the input key
+func NewCipherKey(cipherCode uint8, key []byte) (CipherKey, error) {
 	switch cipherCode {
 	case PlainCipherCode:
 		return &plainCipherKey{}, nil
@@ -65,8 +65,8 @@ func NewCipherKey(cipherCode uint8, key []byte) (Key, error) {
 	}
 }
 
-// GenerateCipherKey generate a random seed and new a key according to the Key type specified by cipherCode
-func GenerateCipherKey(cipherCode uint8) (Key, error) {
+// GenerateCipherKey generate a random seed and new a key according to the CipherKey type specified by cipherCode
+func GenerateCipherKey(cipherCode uint8) (CipherKey, error) {
 	switch cipherCode {
 	case PlainCipherCode:
 		return &plainCipherKey{}, nil

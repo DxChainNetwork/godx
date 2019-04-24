@@ -11,7 +11,7 @@ func TestNewCipherKey(t *testing.T) {
 	tests := []struct {
 		inputCode uint8
 		inputKey  []byte
-		expectKey Key
+		expectKey CipherKey
 		expectErr error
 	}{
 		{
@@ -43,7 +43,7 @@ func TestNewCipherKey(t *testing.T) {
 func TestGenerateCipherKey(t *testing.T) {
 	tests := []struct {
 		inputCode uint8
-		expectKey Key
+		expectKey CipherKey
 		expectErr error
 	}{
 		{
