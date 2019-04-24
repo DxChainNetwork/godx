@@ -57,7 +57,7 @@ func (pc *plainCipherKey) DecryptInPlace(cipherText []byte) ([]byte, error) { re
 func NewCipherKey(cipherCode uint8, key []byte) (CipherKey, error) {
 	switch cipherCode {
 	case PlainCipherCode:
-		return &plainCipherKey{}, nil
+		return NewPlainCipherKey()
 	case GCMCipherCode:
 		return twofishgcm.NewGCMCipherKey(key)
 	default:
