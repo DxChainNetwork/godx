@@ -13,7 +13,7 @@ const (
 	GCMCipherKeyLength = 32
 )
 
-// GCMCipherKey is the implementation of AES-GCM algorithm, implementing Key interface
+// GCMCipherKey is the implementation of two fish-GCM algorithm, implementing crypto.CipherKey interface
 type GCMCipherKey [GCMCipherKeyLength]byte
 
 // Code return the GCMCipherCode specifying the key type
