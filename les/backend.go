@@ -19,6 +19,7 @@ package les
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/host"
 	"sync"
 	"time"
 
@@ -70,6 +71,7 @@ type LightEthereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
+	host		   *host.Host
 
 	networkId     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -102,6 +104,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		peers:          peers,
 		reqDist:        newRequestDistributor(peers, quitSync),
 		accountManager: ctx.AccountManager,
+		host:			ctx.Host,
 		engine:         eth.CreateConsensusEngine(ctx, chainConfig, &config.Ethash, nil, false, chainDb),
 		shutdownChan:   make(chan bool),
 		networkId:      config.NetworkId,

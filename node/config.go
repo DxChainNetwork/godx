@@ -19,6 +19,7 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/DxChainNetwork/godx/host"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -435,6 +436,10 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	if !conf.NoUSB {
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
+}
+
+func makeHost(conf *Config) (*host.Host, error){
+	return &host.Host{}, nil
 }
 
 var warnLock sync.Mutex

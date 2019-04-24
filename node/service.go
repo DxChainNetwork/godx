@@ -17,6 +17,7 @@
 package node
 
 import (
+	"github.com/DxChainNetwork/godx/host"
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -34,6 +35,7 @@ type ServiceContext struct {
 	services       map[reflect.Type]Service // Index of the already constructed services
 	EventMux       *event.TypeMux           // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager        // Account manager created by the node.
+	Host           *host.Host				// Host that provide the host service
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one
