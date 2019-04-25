@@ -1,6 +1,5 @@
 #!/usr/bin/env groovy
 
-
 node {
   def commmit_id
   def email = 'eng@dxchain.com'
