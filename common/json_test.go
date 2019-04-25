@@ -27,7 +27,7 @@ var testData = person{
 
 // test simple save and load data
 func TestJSONCompat(t *testing.T) {
-	err := SaveJSONCompat(metadata, testFile, testData)
+	err := SaveDxJSON(metadata, testFile, testData)
 	if err != nil {
 		t.Fatalf("error: %s \n", err.Error())
 	}
@@ -35,7 +35,7 @@ func TestJSONCompat(t *testing.T) {
 	time.Sleep(time.Microsecond)
 
 	var p1 = person{}
-	err = LoadJSONCompat(metadata, testFile, p1)
+	err = LoadDxJSON(metadata, testFile, p1)
 	if err != nil {
 		t.Fatalf("error loading: %s \n", err.Error())
 	}
@@ -47,14 +47,14 @@ func TestLoadingSavingConcurrent(t *testing.T) {
 	var errHandle = make(chan error)
 
 	go func() {
-		err := SaveJSONCompat(metadata, persistFile, testData)
+		err := SaveDxJSON(metadata, persistFile, testData)
 		if err != nil {
 			errHandle <- err
 		}
 	}()
 
 	go func() {
-		err := LoadJSONCompat(metadata, persistFile, testData)
+		err := LoadDxJSON(metadata, persistFile, testData)
 		if err != nil {
 			errHandle <- err
 		}
@@ -72,7 +72,7 @@ func TestLoadingSavingConcurrent(t *testing.T) {
 
 // test hash value unequal error
 func TestCorruptedFile(t *testing.T) {
-	err := LoadJSONCompat(metadata, corruptedFile, testData)
+	err := LoadDxJSON(metadata, corruptedFile, testData)
 	if err.Error() != ErrCorrupted.Error() {
 		t.Errorf("error: %s \n", err.Error())
 	}
@@ -81,7 +81,7 @@ func TestCorruptedFile(t *testing.T) {
 // test loading manual hash value
 func TestManualHash(t *testing.T) {
 	var p1 = person{}
-	err := LoadJSONCompat(metadata, manualFile, p1)
+	err := LoadDxJSON(metadata, manualFile, p1)
 	if err != nil {
 		t.Fatalf("error loading: %s \n", err.Error())
 	}
@@ -90,7 +90,7 @@ func TestManualHash(t *testing.T) {
 // test file validation suffix error
 func TestFileSuffixError(t *testing.T) {
 	var p1 = person{}
-	err := LoadJSONCompat(metadata, manualFile+tempSuffix, p1)
+	err := LoadDxJSON(metadata, manualFile+tempSuffix, p1)
 	if err != ErrBadFilenameSuffix {
 		t.Fatalf("error: %s \n", err.Error())
 	}
