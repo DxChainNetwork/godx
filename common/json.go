@@ -13,10 +13,11 @@ import (
 
 const (
 	tempSuffix         = "_temp" // temporary file suffix
-	jsonHashValSize    = 67      // quote + 64 byte hash + quote + \n
+	jsonHashValSize    = 69      // quote + 64 byte hash + "0x" + quote + \n
 	jsonManualHashSize = 9       // quote + len("manual") + quote + \n
 )
 
+// Error Collection
 var (
 	ErrBadFilenameSuffix = errors.New("filename suffix '_temp' is not allowed")
 	ErrFileInUse         = errors.New("another routine is saving or loading this file")
@@ -30,10 +31,112 @@ var (
 	activeFilesMu sync.Mutex
 )
 
+// Metadata defines the data file header and version
 type Metadata struct {
 	Header, Version string
 }
 
+// LoadJSONCompat reads the given file and unmarshal its content. It adds compatibility comparing to original file
+func LoadJSONCompat(meta Metadata, filename string, val interface{}) error {
+	// validate file name and whether the file is occupied
+	err := fileValidation(filename)
+	if err != nil {
+		return err
+	}
+
+	// remove the file from the list
+	defer func() {
+		activeFilesMu.Lock()
+		delete(activeFiles, filename)
+		activeFilesMu.Unlock()
+	}()
+
+	err = readJSON(meta, filename, val)
+
+	if err == ErrBadHeader || err == ErrBadVersion || os.IsNotExist(err) {
+		return err
+	}
+
+	// try to read from the temp file
+	if err != nil {
+		err := readJSON(meta, filename+tempSuffix, val)
+		if err != nil {
+			return errors.New("failed to read the JSON file from the disk: " + err.Error())
+		}
+	}
+
+	return nil
+}
+
+func readJSON(meta Metadata, filename string, val interface{}) error {
+	// open the file
+	file, err := os.Open(filename)
+
+	if os.IsNotExist(err) {
+		return err
+	}
+	if err != nil {
+		return ErrFileOpen
+	}
+	defer file.Close()
+
+	// Read the metadata from the file
+	var header, version string
+	dec := json.NewDecoder(file)
+	if err := dec.Decode(&header); err != nil {
+		return errors.New("failed to read the header from the file: " + err.Error())
+	}
+	if header != meta.Header {
+		return ErrBadHeader
+	}
+
+	if err := dec.Decode(&version); err != nil {
+		return errors.New("failed to read the version from the file: " + err.Error())
+	}
+	if version != meta.Version {
+		return ErrBadVersion
+	}
+
+	// read the rest of data from the decoder buffer
+	remaining, err := ioutil.ReadAll(dec.Buffered())
+	if err != nil {
+		return errors.New("failed to read the rest of data from the file: " + err.Error())
+	}
+
+	// double check if all data from the files are read
+	extra, err := ioutil.ReadAll(file)
+	if err != nil {
+		return errors.New("failed to read the rest of data from the file: " + err.Error())
+	}
+	remaining = append(remaining, extra...)
+
+	checkManual := len(remaining) >= jsonManualHashSize
+	if len(remaining) >= jsonHashValSize {
+		var hashVal Hash
+		err = json.Unmarshal(remaining[:jsonHashValSize], &hashVal)
+		checkManual = err != nil
+		if err == nil && hashVal.String() != dataHash(remaining[jsonHashValSize+1:]).String() {
+			return errors.New("hashVal -- loading file with bad hash value")
+		} else if err == nil {
+			remaining = remaining[jsonHashValSize+1:]
+		}
+	}
+
+	if checkManual {
+		var manualHash string
+		err := json.Unmarshal(remaining[:jsonManualHashSize], &manualHash)
+		if err == nil && manualHash != "manual" {
+			return errors.New("manual -- loading file with bad hash value")
+		} else if err == nil {
+			remaining = remaining[jsonManualHashSize+1:]
+		}
+	}
+
+	return json.Unmarshal(remaining, &val)
+}
+
+// SaveJSONCompat saves the metadata, data hash, and data into a file ended with .json
+// and .json_temp
 func SaveJSONCompat(meta Metadata, filename string, val interface{}) error {
 	// validate file name and whether the file is occupied
 	err := fileValidation(filename)
@@ -67,6 +170,7 @@ func SaveJSONCompat(meta Metadata, filename string, val interface{}) error {
 
 	// create hashVal, save it into buffer
 	hashVal := dataHash(valBytes)
+
 	if err := enc.Encode(hashVal); err != nil {
 		return errors.New("failed to encode the checksum: " + err.Error())
 	}
@@ -79,18 +183,19 @@ func SaveJSONCompat(meta Metadata, filename string, val interface{}) error {
 	if !verifyHash(filename) {
 		err = writeFile(filename+tempSuffix, data)
 		if err != nil {
-			return errors.New("temp file -- " + err.Error())
+			return errors.New("temp file --> " + err.Error())
 		}
 	}
 
 	err = writeFile(filename, data)
 	if err != nil {
-		return errors.New("persist file -- " + err.Error())
+		return errors.New("persist file --> " + err.Error())
 	}
 
 	return err
 }
 
+// fileValidation validates the file name and checks whether the file is occupied
 func fileValidation(filename string) error {
 	// verify the filename do not have _temp as suffix
 	if strings.HasSuffix(filename, tempSuffix) {
@@ -107,6 +212,7 @@ func fileValidation(filename string) error {
 	return nil
 }
 
+// writeFile write the data into the file
 func writeFile(filename string, data []byte) (ferr error) {
 	// open / create file
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0600)
@@ -140,6 +246,7 @@ func writeFile(filename string, data []byte) (ferr error) {
 	return nil
 }
 
+// verifyHash verifies whether the data hash is modified
 func verifyHash(filename string) bool {
 	// open the file
 	file, err := os.Open(filename)
@@ -195,6 +302,7 @@ func verifyHash(filename string) bool {
 	return json.Valid(remaining)
 }
 
+// dataHash hashes the object, used for data integrity check
 func dataHash(data ...[]byte) (h Hash) {
 	d := sha3.NewLegacyKeccak256()
 	for _, b := range data {
