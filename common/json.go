@@ -39,7 +39,7 @@ type Metadata struct {
 }
 
 // LoadJSONCompat reads the given file and unmarshal its content. It adds compatibility comparing to original file
-func LoadJSONCompat(meta Metadata, filename string, val interface{}) error {
+func LoadDxJSON(meta Metadata, filename string, val interface{}) error {
 	// validate file name and whether the file is occupied
 	err := fileValidation(filename)
 	if err != nil {
@@ -140,7 +140,7 @@ func readJSON(meta Metadata, filename string, val interface{}) error {
 
 // SaveJSONCompat saves the metadata, data hash, and data into a file ended with .json
 // and .json_temp
-func SaveJSONCompat(meta Metadata, filename string, val interface{}) error {
+func SaveDxJSON(meta Metadata, filename string, val interface{}) error {
 	// validate file name and whether the file is occupied
 	err := fileValidation(filename)
 	if err != nil {
