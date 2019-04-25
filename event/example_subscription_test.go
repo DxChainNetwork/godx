@@ -18,8 +18,7 @@ package event_test
 
 import (
 	"fmt"
-
-	"github.com/ethereum/go-ethereum/event"
+	"github.com/DxChainNetwork/godx/event"
 )
 
 func ExampleNewSubscription() {

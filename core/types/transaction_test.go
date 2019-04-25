@@ -19,11 +19,12 @@ import (
 // txJsonData is the data used for testing json.Marshal and json.Unmarshal.
 // The data is also used in other tests.
 var txJsonData = []struct {
-	name           string
-	json           string
-	tx             *Transaction
-	marshalError   error
-	unmarshalError error
+	name            string
+	json            string
+	tx              *Transaction
+	marshalError    error
+	unmarshalError  error
+	unmarshalError2 error
 }{
 	{
 		name:           "ok",
@@ -87,11 +88,12 @@ var txJsonData = []struct {
 		unmarshalError: errors.New("missing required field 'nonce' for txdata"),
 	},
 	{
-		name:           "JSON error",
-		json:           `{"nonce":"0x1","gasPrice":"1","gas":"0x3","to":"0x0000000000000000000000000000000000000001","value":"0x1","input":"0x6162636466","v":"0x0","r":"0x0","s":"0x0","hash":"0xf66ffe9c5358b305d84192938172f561d920e2cd191602f3a59e3d623eed158c"}`,
-		tx:             nil,
-		marshalError:   nil,
-		unmarshalError: errors.New("json: cannot unmarshal hex string without 0x prefix into Go value of type *hexutil.Big"),
+		name:            "JSON error",
+		json:            `{"nonce":"0x1","gasPrice":"1","gas":"0x3","to":"0x0000000000000000000000000000000000000001","value":"0x1","input":"0x6162636466","v":"0x0","r":"0x0","s":"0x0","hash":"0xf66ffe9c5358b305d84192938172f561d920e2cd191602f3a59e3d623eed158c"}`,
+		tx:              nil,
+		marshalError:    nil,
+		unmarshalError:  errors.New("json: cannot unmarshal hex string without 0x prefix into Go value of type *hexutil.Big"),
+		unmarshalError2: errors.New("json: cannot unmarshal hex string without 0x prefix into Go struct field txdata.gasPrice of type *hexutil.Big"),
 	},
 	{
 		name:           "JSON error",
@@ -239,7 +241,7 @@ func TestTransaction_UnmarshalJSON(t *testing.T) {
 	for _, test := range txJsonData {
 		var tx *Transaction
 		err := json.Unmarshal([]byte(test.json), &tx)
-		checkTransactionUnmarshalError(t, test.name, err, test.unmarshalError)
+		CheckError(t, test.name, err, test.unmarshalError, test.unmarshalError2)
 		if err != nil {
 			continue
 		}
