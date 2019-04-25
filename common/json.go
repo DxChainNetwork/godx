@@ -24,6 +24,8 @@ var (
 	ErrBadHeader         = errors.New("wrong header")
 	ErrBadVersion        = errors.New("incompatible file version")
 	ErrFileOpen          = errors.New("failed to open the file")
+	ErrBadHash           = errors.New("hashVal -- loading file with bad hash value")
+	ErrCorrupted         = errors.New("failed to read the JSON file from the disk: hashVal -- loading file with bad hash value")
 )
 
 var (
@@ -116,7 +118,7 @@ func readJSON(meta Metadata, filename string, val interface{}) error {
 		err = json.Unmarshal(remaining[:jsonHashValSize], &hashVal)
 		checkManual = err != nil
 		if err == nil && hashVal.String() != dataHash(remaining[jsonHashValSize+1:]).String() {
-			return errors.New("hashVal -- loading file with bad hash value")
+			return ErrBadHash
 		} else if err == nil {
 			remaining = remaining[jsonHashValSize+1:]
 		}
@@ -132,6 +134,7 @@ func readJSON(meta Metadata, filename string, val interface{}) error {
 		}
 	}
 
+	// load the rest of data
 	return json.Unmarshal(remaining, &val)
 }
 
@@ -204,7 +207,6 @@ func fileValidation(filename string) error {
 
 	activeFilesMu.Lock()
 	defer activeFilesMu.Unlock()
-
 	if _, exists := activeFiles[filename]; exists {
 		return ErrFileInUse
 	}
@@ -299,6 +301,7 @@ func verifyHash(filename string) bool {
 		}
 	}
 
+	// check if the data is valid JSON data
 	return json.Valid(remaining)
 }
 
