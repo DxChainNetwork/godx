@@ -19,7 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/host"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"net"
 	"os"
 	"path/filepath"
@@ -42,7 +42,7 @@ type Node struct {
 	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 	config   *Config
 	accman   *accounts.Manager
-	host     *host.Host
+	shost    *storagehost.StorageHost
 
 	ephemeralKeystore string         // if non-empty, the key directory that will be removed by Stop
 	instanceDirLock   flock.Releaser // prevents concurrent use of instance directory
@@ -102,7 +102,9 @@ func New(conf *Config) (*Node, error) {
 	// Ensure that the AccountManager method works before the node has started.
 	// We rely on this in cmd/geth.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
-	h, err := makeHost(conf)
+	h, err := makeStorageHost(conf)
+	// TODO: err override
+
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +115,7 @@ func New(conf *Config) (*Node, error) {
 	// in the data directory or instance directory is delayed until Start.
 	return &Node{
 		accman:            am,
-		host:			   h,
+		shost:             h,
 		ephemeralKeystore: ephemeralKeystore,
 		config:            conf,
 		serviceFuncs:      []ServiceConstructor{},
@@ -178,7 +180,7 @@ func (n *Node) Start() error {
 			services:       make(map[reflect.Type]Service),
 			EventMux:       n.eventmux,
 			AccountManager: n.accman,
-			Host:			n.host,
+			StorageHost:    n.shost,
 		}
 		for kind, s := range services { // copy needed for threaded access
 			ctx.services[kind] = s

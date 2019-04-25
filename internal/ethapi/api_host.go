@@ -1,31 +1,35 @@
 package ethapi
 
-import(
+import (
 	"context"
 	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/host"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
-type HostAPI struct{
-	am        *accounts.Manager
-	nonceLock *AddrLocker
-	b         Backend
-	host	  *host.Host
+type StorageHostAPI struct {
+	am        		*accounts.Manager
+	nonceLock 		*AddrLocker
+	b         		Backend
+	storagehost     *storagehost.StorageHost
 }
 
-func NewHostAPI(b Backend, nonceLock *AddrLocker) *HostAPI {
-	return &HostAPI{
+func NewStorageHostAPI(b Backend, nonceLock *AddrLocker) *StorageHostAPI {
+	return &StorageHostAPI{
 		am:        b.AccountManager(),
 		nonceLock: nonceLock,
 		b:         b,
-		host:	   b.Host(),
+		storagehost:     b.StorageHost(),
 	}
 }
 
-func (h *HostAPI) HelloWorld(ctx context.Context) string{
+func (h *StorageHostAPI) HelloWorld(ctx context.Context) string {
 	return "confirmed! host api is working"
 }
 
-func (h *HostAPI) Version() string{
+func (h *StorageHostAPI) Version() string {
 	return "mock host version"
+}
+
+func (h *StorageHostAPI) Persistdir() string{
+	return h.storagehost.GetPersistDir()
 }

@@ -2524,7 +2524,7 @@ var Property = require('./web3/property');
 var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
-var Host = require('./web3/methods/host');
+var StorageHost = require('./web3/methods/storagehost');
 
 
 
@@ -2536,7 +2536,7 @@ function Web3 (provider) {
     this.shh = new Shh(this);
     this.net = new Net(this);
     this.personal = new Personal(this);
-    this.host = new Host(this);
+    this.storagehost = new StorageHost(this);
     this.bzz = new Swarm(this);
     this.settings = new Settings();
     this.version = {
@@ -2634,7 +2634,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js", "./web3/methods/host": 88}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js", "./web3/methods/storagehost": 88}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -5853,7 +5853,7 @@ module.exports = Shh;
     var formatters = require('../formatters');
     var utils = require('../../utils/utils');
 
-    function Host(web3){
+    function StorageHost(web3){
       this._requestManager = web3._requestManager;
 
       var self = this;
@@ -5872,7 +5872,7 @@ module.exports = Shh;
     var methods = function () {
       var helloWorld = new Method({
         name: 'helloWorld',
-        call: 'host_helloWorld',
+        call: 'storagehost_helloWorld',
         params: 0,
       });
 
@@ -5885,12 +5885,16 @@ module.exports = Shh;
       return [
         new Property({
           name: 'version',
-          getter: 'host_version'
+          getter: 'storagehost_version'
+        }),
+        new Property({
+          name: 'persistdir',
+          getter: 'storagehost_persistdir'
         }),
       ];
     };
 
-    module.exports = Host;
+    module.exports = StorageHost;
 
   }, {"../formatters":30,"../method":36,"../property":45, "../../utils/utils":20}],
 

@@ -20,7 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/host"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"math/big"
 	"runtime"
 	"sync"
@@ -78,7 +78,7 @@ type Ethereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-	host		   *host.Host
+	storageHost    *storagehost.StorageHost
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -131,7 +131,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		host:			ctx.Host,
+		storageHost:    ctx.StorageHost,
 		engine:         CreateConsensusEngine(ctx, chainConfig, &config.Ethash, config.MinerNotify, config.MinerNoverify, chainDb),
 		shutdownChan:   make(chan bool),
 		networkID:      config.NetworkId,

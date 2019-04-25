@@ -1,6 +1,5 @@
 package eth
 
-import "github.com/DxChainNetwork/godx/host"
+import "github.com/DxChainNetwork/godx/storage/storagehost"
 
-func (s *Ethereum) GetHost() *host.Host  { return s.host }
-
+func (s *Ethereum) GetStorageHost() *storagehost.StorageHost { return s.storageHost }

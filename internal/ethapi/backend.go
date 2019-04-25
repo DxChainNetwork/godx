@@ -19,7 +19,7 @@ package ethapi
 
 import (
 	"context"
-	"github.com/DxChainNetwork/godx/host"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -45,7 +45,7 @@ type Backend interface {
 	ChainDb() ethdb.Database
 	EventMux() *event.TypeMux
 	AccountManager() *accounts.Manager
-	Host() *host.Host
+	StorageHost() *storagehost.StorageHost
 
 	// BlockChain API
 	SetHead(number uint64)
@@ -115,10 +115,10 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
-		},{
-			Namespace: "host",
+		}, {
+			Namespace: "storagehost",
 			Version:   "1.0",
-			Service:   NewHostAPI(apiBackend, nonceLock),
+			Service:   NewStorageHostAPI(apiBackend, nonceLock),
 			Public:    false,
 		},
 	}

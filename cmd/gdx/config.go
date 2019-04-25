@@ -32,7 +32,9 @@ import (
 	"github.com/DxChainNetwork/godx/eth"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"github.com/naoina/toml"
+
 )
 
 var (
@@ -102,6 +104,8 @@ func defaultNodeConfig() node.Config {
 	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "shh")
 	cfg.WSModules = append(cfg.WSModules, "eth", "shh")
 	cfg.IPCPath = "geth.ipc"
+
+	cfg.StorageHostDir = storagehost.PersistHostDir
 	return cfg
 }
 

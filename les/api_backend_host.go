@@ -1,9 +1,7 @@
 package les
 
-import "github.com/DxChainNetwork/godx/host"
+import "github.com/DxChainNetwork/godx/storage/storagehost"
 
-func (b *LesApiBackend) Host() *host.Host {
-	return b.eth.host
+func (b *LesApiBackend) StorageHost() *storagehost.StorageHost {
+	return b.eth.storageHost
 }
-
-

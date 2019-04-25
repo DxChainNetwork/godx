@@ -19,7 +19,6 @@ package node
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/DxChainNetwork/godx/host"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -35,6 +34,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 const (
@@ -67,6 +67,8 @@ type Config struct {
 	// databases or flat files. This enables ephemeral nodes which can fully reside
 	// in memory.
 	DataDir string
+
+	StorageHostDir	string
 
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
@@ -157,6 +159,7 @@ type Config struct {
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
 	oldGethResourceWarning bool
+
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into
@@ -438,8 +441,9 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	return accounts.NewManager(backends...), ephemeral, nil
 }
 
-func makeHost(conf *Config) (*host.Host, error){
-	return &host.Host{}, nil
+func makeStorageHost(conf *Config) (*storagehost.StorageHost, error) {
+	persistDir := conf.ResolvePath(conf.StorageHostDir)
+	return storagehost.NewStorageHost(persistDir)
 }
 
 var warnLock sync.Mutex
