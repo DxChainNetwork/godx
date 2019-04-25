@@ -28,6 +28,6 @@ func NewStorageHost(persistDir string) (*StorageHost, error){
 
 
 
-func (h *StorageHost)GetPersistDir() string{
+func (h *StorageHost) GetPersistDir() string{
 	return h.persistDir
 }
