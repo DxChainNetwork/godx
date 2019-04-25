@@ -30,15 +30,26 @@ func init() {
 	checkEqualityHandler[reflect.TypeOf(Block{})] = checkBlockEqual
 }
 
-func CheckError(t *testing.T, dataName string, got, want error) {
-	if want == nil && got != nil {
-		t.Fatalf("%s Got unexpected error.\nGot %s\nWant nil", dataName, got.Error())
+func CheckError(t *testing.T, dataName string, got error, wants ...error) {
+	if (len(wants) == 0 || wants[0] == nil) && got != nil {
+		t.Errorf("%s Got unexpected error.\nGot %s\nWant nil", dataName, got.Error())
 	}
-	if want != nil && got == nil {
-		t.Fatalf("%s does not get expected error.\nGot nil\nWant %s", dataName, want.Error())
+	if (len(wants) != 0 && wants[0] != nil) && got == nil {
+		t.Errorf("%s does not get expected error.\nGot nil\nWant %s", dataName, wants[0].Error())
 	}
-	if want != nil && got != nil && want.Error() != got.Error() {
-		t.Fatalf("%s does not get expected error.\nGot %s\nWant %s", dataName, got.Error(), want.Error())
+	if len(wants) != 0 && wants[0] != nil && got != nil {
+		match := false
+		for _, want := range wants {
+			if want == nil {
+				continue
+			}
+			if want.Error() == got.Error() {
+				match = true
+			}
+		}
+		if !match {
+			t.Errorf("%s does not get expected error.\nGot %s\nWant %s", dataName, got.Error(), wants[0].Error())
+		}
 	}
 }
 
