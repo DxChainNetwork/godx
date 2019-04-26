@@ -6,13 +6,20 @@ import (
 )
 
 const (
-	CipherCodeNotSupport uint8 = iota // Code not supported
-	PlainCipherCode                   // type code for plainCipherKey
-	GCMCipherCode                     // type code for gcmCipherKey
+	// CipherCodeNotSupport is the invalid cipher code
+	CipherCodeNotSupport uint8 = iota
+
+	// PlainCipherCode is the cipher code for plainCipherKey
+	PlainCipherCode
+
+	// GCMCipherCode is the cipher code for twofish-gcm
+	GCMCipherCode
 )
 
 var (
-	ErrInvalidCipherType = errors.New("provided CipherType not supported")
+	// ErrInvalidCipherCode is the error type saying that the provided cipher code is not supported.
+	// Supported cipher code: PlainCipherCode, GCMCipherCode
+	ErrInvalidCipherCode = errors.New("provided CipherType not supported")
 )
 
 // CipherKey is the interface for cipher key, which is implemented by plainCipherKey, and gcmCipherKey
@@ -41,8 +48,8 @@ type CipherKey interface {
 // plainCipherKey implements CipherKey interface. Used only for tests and in scenario that no encryption is needed.
 type plainCipherKey struct{}
 
-// NewPlainCipherKey return a new plainCipherKey
-func NewPlainCipherKey() (*plainCipherKey, error) { return &plainCipherKey{}, nil }
+// newPlainCipherKey return a new plainCipherKey
+func newPlainCipherKey() (*plainCipherKey, error) { return &plainCipherKey{}, nil }
 
 func (pc *plainCipherKey) CodeName() string { return "PlainText" } // Plaintext has code PlainCipherCode
 func (pc *plainCipherKey) Overhead() uint8  { return 0 }           // Plaintext has no overhead
@@ -57,11 +64,11 @@ func (pc *plainCipherKey) DecryptInPlace(cipherText []byte) ([]byte, error) { re
 func NewCipherKey(cipherCode uint8, key []byte) (CipherKey, error) {
 	switch cipherCode {
 	case PlainCipherCode:
-		return NewPlainCipherKey()
+		return newPlainCipherKey()
 	case GCMCipherCode:
 		return twofishgcm.NewGCMCipherKey(key)
 	default:
-		return nil, ErrInvalidCipherType
+		return nil, ErrInvalidCipherCode
 	}
 }
 
@@ -73,7 +80,7 @@ func GenerateCipherKey(cipherCode uint8) (CipherKey, error) {
 	case GCMCipherCode:
 		return twofishgcm.GenerateGCMCipherKey()
 	default:
-		return nil, ErrInvalidCipherType
+		return nil, ErrInvalidCipherCode
 	}
 }
 

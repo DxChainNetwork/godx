@@ -16,7 +16,7 @@ const (
 // GCMCipherKey is the implementation of two fish-GCM algorithm, implementing crypto.CipherKey interface
 type GCMCipherKey [GCMCipherKeyLength]byte
 
-// Code return the GCMCipherCode specifying the key type
+// CodeName return the GCMCipherCode specifying the key type
 func (gck *GCMCipherKey) CodeName() string {
 	return "TwoFish_GCM"
 }
@@ -92,7 +92,7 @@ func (gck *GCMCipherKey) newGCM() (cipher.AEAD, error) {
 	return cipher.NewGCM(c)
 }
 
-// NewAESCipherKey returns a new GCMCipherKey using the input seed.
+// NewGCMCipherKey returns a new GCMCipherKey using the input seed.
 // The input key must be of exact size of GCMCipherKeyLength, which is 32
 func NewGCMCipherKey(seed []byte) (*GCMCipherKey, error) {
 	if len(seed) != GCMCipherKeyLength {
@@ -105,7 +105,7 @@ func NewGCMCipherKey(seed []byte) (*GCMCipherKey, error) {
 	return gck, nil
 }
 
-// generateGCMCipherKey will generate a new GCMCipherKey with random seed
+// GenerateGCMCipherKey will generate a new GCMCipherKey with random seed
 func GenerateGCMCipherKey() (*GCMCipherKey, error) {
 	seed := make([]byte, GCMCipherKeyLength)
 	_, err := rand.Read(seed)

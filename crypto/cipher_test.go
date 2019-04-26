@@ -24,7 +24,7 @@ func TestNewCipherKey(t *testing.T) {
 		},
 		{
 			inputCode: 255, inputKey: []byte{},
-			expectKey: nil, expectErr: ErrInvalidCipherType,
+			expectKey: nil, expectErr: ErrInvalidCipherCode,
 		},
 	}
 	for i, test := range tests {
@@ -56,7 +56,7 @@ func TestGenerateCipherKey(t *testing.T) {
 		},
 		{
 			inputCode: 255,
-			expectKey: nil, expectErr: ErrInvalidCipherType,
+			expectKey: nil, expectErr: ErrInvalidCipherCode,
 		},
 	}
 	for i, test := range tests {
