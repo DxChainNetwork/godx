@@ -3,7 +3,7 @@ package twofishgcm
 import (
 	"bytes"
 	"errors"
-	"github.com/DxChainNetwork/go-dxc/common"
+	"github.com/DxChainNetwork/godx/common"
 	"reflect"
 	"testing"
 )
