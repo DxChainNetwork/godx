@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	pageSize     = 4096 // size of the page.
-	pageMetaSize = 8    // size of the page.offset field, which is uint64
+	PageSize       = 4096 // size of the page.
+	PageMetaSize   = 8    // size of the page.offset field, which is uint64
+	MaxPayloadSize = PageSize - PageMetaSize
 )
 
 // page is a in-memory linked page list.
@@ -25,7 +26,7 @@ type page struct {
 }
 
 // The on-disk size is the size of (offset + payload)
-func (p page) size() int { return pageMetaSize + len(p.payload) }
+func (p page) size() int { return PageMetaSize + len(p.payload) }
 
 // nextOffset return the offset of the next page. if the next page is nil, return max uint64
 func (p page) nextOffset() uint64 {
@@ -37,8 +38,8 @@ func (p page) nextOffset() uint64 {
 
 // marshal marshal the page to buffer
 func (p *page) marshal(buf []byte) []byte {
-	// page shall not exceed the size of pageSize
-	if p.size() > pageSize {
+	// page shall not exceed the size of PageSize
+	if p.size() > PageSize {
 		panic(fmt.Sprintf("page(%d) too large: %d bytes", p.offset, p.size()))
 	}
 	var b []byte

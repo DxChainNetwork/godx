@@ -2,20 +2,20 @@ package writeaheadlog
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"testing"
-	"fmt"
 )
 
 func BenchmarkPage_Marshal(b *testing.B) {
-	randomBytes := make([]byte, pageSize-pageMetaSize)
+	randomBytes := make([]byte, PageSize-PageMetaSize)
 	rand.Read(randomBytes)
 	p := page{
 		offset:   4096,
 		payload:  randomBytes,
 		nextPage: &page{offset: 11111},
 	}
-	buf := make([]byte, pageSize)
+	buf := make([]byte, PageSize)
 	b.ResetTimer()
 	b.ReportAllocs()
 
@@ -26,13 +26,13 @@ func BenchmarkPage_Marshal(b *testing.B) {
 
 // TODO: remove the test
 func TestPage(t *testing.T) {
-	data := bytes.Repeat([]byte{1}, 500-pageMetaSize)
+	data := bytes.Repeat([]byte{1}, 500-PageMetaSize)
 	p := page{
-		offset:4096,
-		payload: data,
+		offset:   4096,
+		payload:  data,
 		nextPage: &page{offset: 11111},
 	}
-	buf := make([]byte, pageSize)
+	buf := make([]byte, PageSize)
 	fmt.Println(p.marshal(buf[:0]))
 	fmt.Println(len(p.marshal(buf[:0])))
 }
