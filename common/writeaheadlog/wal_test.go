@@ -647,7 +647,7 @@ func BenchmarkTransactionSpeed(b *testing.B) {
 	numThreads := []int{1, 10, 50, 100}
 	for _, n := range numThreads {
 		b.Run(strconv.Itoa(n), func(b *testing.B) {
-			benchmarkTransactionSpeed(b, n, false, 60*time.Second)
+			benchmarkTransactionSpeed(b, n, false, 1*time.Second)
 		})
 	}
 }
@@ -658,7 +658,7 @@ func BenchmarkTransactionSpeedAppend(b *testing.B) {
 	numThreads := []int{1, 10, 50, 100}
 	for _, n := range numThreads {
 		b.Run(strconv.Itoa(n), func(b *testing.B) {
-			benchmarkTransactionSpeed(b, n, true, 10*time.Second)
+			benchmarkTransactionSpeed(b, n, true, 1*time.Second)
 		})
 	}
 }
@@ -790,103 +790,6 @@ func benchmarkTransactionSpeed(b *testing.B, numThreads int, appendUpdate bool, 
 	b.Logf("maxLatency: %v", maxLatency)
 }
 
-// BenchmarkDiskWrites1 starts benchmarkDiskWrites with 9990 threads, 4kib
-// pages and overwrites those pages once
-func BenchmarkDiskWrites1(b *testing.B) {
-	benchmarkDiskWrites(b, 1, 4096, 9990)
-}
-
-// BenchmarkDiskWrites4 starts benchmarkDiskWrites with 9990 threads, 4kib
-// pages and overwrites those pages 4 times
-func BenchmarkDiskWrites4(b *testing.B) {
-	benchmarkDiskWrites(b, 4, 4096, 9990)
-}
-
-// benchmarkDiskWrites writes numThreads pages of pageSize size and spins up 1
-// goroutine for each page that overwrites it numWrites times
-func benchmarkDiskWrites(b *testing.B, numWrites int, pageSize int, numThreads int) {
-	b.Logf("Starting benchmark with %v writes and %v threads for pages of size %v",
-		numWrites, numThreads, pageSize)
-
-	// Get a tmp dir path
-	tmpdir := tempDir(b.Name())
-
-	// Create dir
-	err := os.MkdirAll(tmpdir, 0700)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// Create a tmp file
-	f, err := os.Create(filepath.Join(tmpdir, "wal.dat"))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// Close it after test
-	defer f.Close()
-
-	// Write numThreads pages to file
-	_, err = f.Write(randomBytes(pageSize * numThreads))
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// Sync it
-	if err = f.Sync(); err != nil {
-		b.Fatal(err)
-	}
-
-	// Define random page data
-	data := randomBytes(pageSize)
-
-	// Declare a waitGroup for later
-	var wg sync.WaitGroup
-
-	// Count errors during execution
-	var atomicCounter uint64
-
-	// Declare a function that writes a page at the offset i * pageSize 4 times
-	write := func(i int) {
-		defer wg.Done()
-		for j := 0; j < numWrites; j++ {
-			if _, err = f.WriteAt(data, int64(i*pageSize)); err != nil {
-				atomic.AddUint64(&atomicCounter, 1)
-				return
-			}
-			if err = f.Sync(); err != nil {
-				atomic.AddUint64(&atomicCounter, 1)
-				return
-			}
-		}
-	}
-
-	// Reset the timer
-	b.ResetTimer()
-
-	// Create one thread for each page and make it overwrite the page and call sync
-	for i := 0; i < numThreads; i++ {
-		wg.Add(1)
-		go write(i)
-	}
-
-	// Wait for the threads and check if they were successfull
-	wg.Wait()
-	if atomicCounter > 0 {
-		b.Fatalf("%v errors happened during execution", atomicCounter)
-	}
-	// Get fileinfo
-	info, err := f.Stat()
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	// Print some info
-	b.Logf("Number of threads: %v", numThreads)
-	b.Logf("PageSize: %v bytes", pageSize)
-	b.Logf("Filesize after benchmark %v", info.Size())
-}
-
 func randomBytes(length int) []byte {
 	rand.Seed(time.Now().UnixNano())
 	randomBytes := make([]byte, length)
@@ -905,4 +808,101 @@ func transactionPages(txn *Transaction) (pages []page) {
 	}
 	return
 }
+
+// BenchmarkDiskWrites1 starts benchmarkDiskWrites with 9990 threads, 4kib
+// pages and overwrites those pages once
+//func BenchmarkDiskWrites1(b *testing.B) {
+//	benchmarkDiskWrites(b, 1, 4096, 9990)
+//}
+
+// BenchmarkDiskWrites4 starts benchmarkDiskWrites with 9990 threads, 4kib
+// pages and overwrites those pages 4 times
+//func BenchmarkDiskWrites4(b *testing.B) {
+//	benchmarkDiskWrites(b, 4, 4096, 9990)
+//}
+
+// benchmarkDiskWrites writes numThreads pages of pageSize size and spins up 1
+// goroutine for each page that overwrites it numWrites times
+//func benchmarkDiskWrites(b *testing.B, numWrites int, pageSize int, numThreads int) {
+//	b.Logf("Starting benchmark with %v writes and %v threads for pages of size %v",
+//		numWrites, numThreads, pageSize)
+//
+//	// Get a tmp dir path
+//	tmpdir := tempDir(b.Name())
+//
+//	// Create dir
+//	err := os.MkdirAll(tmpdir, 0700)
+//	if err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	// Create a tmp file
+//	f, err := os.Create(filepath.Join(tmpdir, "wal.dat"))
+//	if err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	// Close it after test
+//	defer f.Close()
+//
+//	// Write numThreads pages to file
+//	_, err = f.Write(randomBytes(pageSize * numThreads))
+//	if err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	// Sync it
+//	if err = f.Sync(); err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	// Define random page data
+//	data := randomBytes(pageSize)
+//
+//	// Declare a waitGroup for later
+//	var wg sync.WaitGroup
+//
+//	// Count errors during execution
+//	var atomicCounter uint64
+//
+//	// Declare a function that writes a page at the offset i * pageSize 4 times
+//	write := func(i int) {
+//		defer wg.Done()
+//		for j := 0; j < numWrites; j++ {
+//			if _, err = f.WriteAt(data, int64(i*pageSize)); err != nil {
+//				atomic.AddUint64(&atomicCounter, 1)
+//				return
+//			}
+//			if err = f.Sync(); err != nil {
+//				atomic.AddUint64(&atomicCounter, 1)
+//				return
+//			}
+//		}
+//	}
+//
+//	// Reset the timer
+//	b.ResetTimer()
+//
+//	// Create one thread for each page and make it overwrite the page and call sync
+//	for i := 0; i < numThreads; i++ {
+//		wg.Add(1)
+//		go write(i)
+//	}
+//
+//	// Wait for the threads and check if they were successfull
+//	wg.Wait()
+//	if atomicCounter > 0 {
+//		b.Fatalf("%v errors happened during execution", atomicCounter)
+//	}
+//	// Get fileinfo
+//	info, err := f.Stat()
+//	if err != nil {
+//		b.Fatal(err)
+//	}
+//
+//	// Print some info
+//	b.Logf("Number of threads: %v", numThreads)
+//	b.Logf("PageSize: %v bytes", pageSize)
+//	b.Logf("Filesize after benchmark %v", info.Size())
+//}
 
