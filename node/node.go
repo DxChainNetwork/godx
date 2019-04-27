@@ -102,7 +102,7 @@ func New(conf *Config) (*Node, error) {
 	// Ensure that the AccountManager method works before the node has started.
 	// We rely on this in cmd/geth.
 	am, ephemeralKeystore, err := makeAccountManager(conf)
-	h, err := makeStorageHost(conf)
+	h, _ := makeStorageHost(conf)
 	// TODO: err override
 
 	if err != nil {
@@ -408,6 +408,9 @@ func (n *Node) stopWS() {
 func (n *Node) Stop() error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
+
+	// TODO: currently add close host here
+	n.shost.Close()
 
 	// Short circuit if the node's not running
 	if n.server == nil {

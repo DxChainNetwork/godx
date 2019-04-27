@@ -5876,8 +5876,50 @@ module.exports = Shh;
         params: 0,
       });
 
+      var persistdir = new Method({
+        name: 'persistdir',
+        call: 'storagehost_persistdir',
+        params: 0,
+      });
+
+      var printSetting = new Method({
+        name: 'printSetting',
+        call: 'storagehost_printSetting',
+        params: 0,
+      });
+
+      var setBroadCast = new Method({
+        name: 'setBroadCast',
+        call: 'storagehost_setBroadCast',
+        params: 1,
+      });
+
+      var setRevisionNumber = new Method({
+        name: 'setRevisionNumber',
+        call: 'storagehost_setRevisionNumber',
+        params: 1,
+      });
+
+      var setAcceptingContract = new Method({
+        name: 'setAcceptingContract',
+        call: 'storagehost_setAcceptingContract',
+        params: 1,
+      });
+
+      var setDeposit = new Method({
+        name: 'setDeposit',
+        call: 'storagehost_setDeposit',
+        params: 1,
+      });
+
       return [
-        helloWorld
+        helloWorld,
+        persistdir,
+        printSetting,
+        setBroadCast,
+        setRevisionNumber,
+        setAcceptingContract,
+        setDeposit,
       ];
     };
 
