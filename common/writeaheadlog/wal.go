@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	metadataHeader = [24]byte{'d', 'x', 'c', 'h', 'a', 'i', 'n', ' ', 'w', 'r', 'i', 't', 'e', ' ', 'a', 'h',
+	metadataHeader = [24]byte{'u', 'x', 'c', 'h', 'a', 'i', 'n', ' ', 'w', 'r', 'i', 't', 'e', ' ', 'a', 'h',
 		'e', 'a', 'd', ' ', 'l', 'o', 'g', '\n'}
 
 	metadataVersion = [7]byte{'v', '1', '.', '0', '.', '0', '\n'}
@@ -32,7 +32,7 @@ type (
 	Wal struct {
 		// atomic fields. Change these values using atomic package
 		nextTxnId         uint64         // Next TxnId to be executed. TxnId increment for each Txn.
-		numUnfinishedTxns uint64         // Number of unfinished transactions
+		numUnfinishedTxns int64         // Number of unfinished transactions
 		syncStatus        uint32         // 0: No syncing thread; 1: syncing thread, empty queue; 2: syncing thread, non-empty queue
 		syncStatePtr      unsafe.Pointer // pointing to a syncState object
 
@@ -49,6 +49,11 @@ type (
 	}
 )
 
+// New create a new Wal file with the path as logfile
+func New(path string) (*Wal, []*Transaction, error) {
+	return newWal(path, &utilsProd{})
+}
+
 // newWal return a new Wal and unfinished transactions
 func newWal(path string, utils utilsSet) (w *Wal, txns []*Transaction, err error) {
 	newWal := &Wal{
@@ -62,8 +67,16 @@ func newWal(path string, utils utilsSet) (w *Wal, txns []*Transaction, err error
 	// Read the log file
 	data, err := utils.readFile(path)
 	if err == nil {
-		// TODO: recover the wal
-		data = data[:]
+		newWal.logFile, err = utils.openFile(path, os.O_RDWR, 0600)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to open wal logFile: %v", err)
+		}
+		txns, err = newWal.recoverWal(data)
+		if err != nil {
+			err = composeError(err, newWal.logFile.Close())
+			return nil, nil, fmt.Errorf("unable to perform wal recovery: %v", err)
+		}
+		return newWal, txns, nil
 	} else if !os.IsNotExist(err) {
 		return nil, nil, fmt.Errorf("open log file error: %v", err)
 	}
@@ -79,6 +92,29 @@ func newWal(path string, utils utilsSet) (w *Wal, txns []*Transaction, err error
 	return newWal, nil, nil
 }
 
+// Close close the Wal. Return error if there are still unfinished transactions
+func (w *Wal) Close() error {
+	var err1 error
+	if unfinishedTxns := atomic.LoadInt64(&w.numUnfinishedTxns); unfinishedTxns != 0 {
+		err1 = fmt.Errorf("wal closed with %d unfinished transactions", unfinishedTxns)
+	}
+	if err1 == nil && !w.utils.disrupt("UncleanShutdown") {
+		err1 = w.writeRecoveryState(stateClean)
+	}
+
+	w.wg.Wait()
+	err2 := w.logFile.Close()
+
+	return composeError(err1, err2)
+}
+
+// CloseIncomplete close the Wal. Return number of unfinished transactions, and an error
+// for closing the logfile.
+func (w *Wal) CloseIncomplete() (int64, error) {
+	w.wg.Wait()
+	return atomic.LoadInt64(&w.numUnfinishedTxns), w.logFile.Close()
+}
+
 // writeWALMetadata writes metadata with stateUnclean to the input file.
 func writeMetadata(f file) error {
 	// Create the metadata.
@@ -89,30 +125,8 @@ func writeMetadata(f file) error {
 	data = append(data, byte(stateUnclean))
 	data = append(data, byte('\n'))
 	_, err := f.WriteAt(data, 0)
+
 	return err
-}
-
-// readWALMetadata reads WAL metadata from the input file, returning an error
-// if the result is unexpected.
-func readMetadata(data []byte) (uint8, error) {
-	// The metadata should at least long enough to contain all the fields.
-	if len(data) < len(metadataHeader)+len(metadataVersion)+2 {
-		return 0, errors.New("unable to read wal metadata")
-	}
-
-	// Check that the header and version match.
-	if !bytes.Equal(data[:len(metadataHeader)], metadataHeader[:]) {
-		return 0, fmt.Errorf("invalid file header: %v", data[:len(metadataHeader)])
-	}
-	if !bytes.Equal(data[len(metadataHeader):len(metadataHeader)+len(metadataVersion)], metadataVersion[:]) {
-		return 0, fmt.Errorf("invalid version: %v", data[len(metadataHeader):len(metadataHeader)+len(metadataVersion)])
-	}
-	// Determine and return the current status of the file.
-	fileState := uint8(data[len(metadataHeader)+len(metadataVersion)])
-	if fileState <= 0 || fileState > 3 {
-		fileState = stateUnclean
-	}
-	return fileState, nil
 }
 
 // managedReservePages request the pages for data, allocating new pages as necessary.
@@ -148,40 +162,34 @@ func (w *Wal) requestPages(data []byte) *page {
 
 // allocateNewPages update the metadata used for new pages. Note the function is not safe to use
 func (w *Wal) allocateNewPages(numNewPages uint64) {
-	start := w.pageCount
+	start := w.pageCount + 1
 	for i := start; i < start+numNewPages; i++ {
 		w.availablePages = append(w.availablePages, uint64(i)*PageSize)
 	}
 	w.pageCount += numNewPages
 }
 
-// Close close the Wal
-func (w *Wal) Close() error {
-	var err1 error
-	if unfinishedTxns := atomic.LoadUint64(&w.numUnfinishedTxns); unfinishedTxns != 0 {
-		err1 = fmt.Errorf("wal closed with %d unfinished transactions", unfinishedTxns)
-	}
-	if err1 == nil && !w.utils.disrupt("UncleanShutdown") {
-		err1 = w.writeRecoveryState(stateClean)
-	}
-
-	w.wg.Wait()
-	err2 := w.logFile.Close()
-
-	return composeError(err1, err2)
-}
-
 func composeError(errs ...error) error {
 	var errMsg string
 	for _, err := range errs {
 		if err != nil {
+			if len(errMsg) > 0 {
+				errMsg += "; "
+			}
 			errMsg += err.Error()
 		}
+	}
+	if len(errMsg) == 0 {
+		return nil
 	}
 	return errors.New(errMsg)
 }
 
-func (w *Wal) CloseIncomplete() (uint64, error) {
-	w.wg.Wait()
-	return atomic.LoadUint64(&w.numUnfinishedTxns), w.logFile.Close()
+// writeRecoveryState is a helper function that changes the recoveryState on disk
+func (w *Wal) writeRecoveryState(state uint8) error {
+	_, err := w.logFile.WriteAt([]byte{byte(state)}, int64(len(metadataHeader)+len(metadataVersion)))
+	if err != nil {
+		return err
+	}
+	return w.logFile.Sync()
 }

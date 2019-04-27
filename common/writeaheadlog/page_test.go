@@ -1,8 +1,6 @@
 package writeaheadlog
 
 import (
-	"bytes"
-	"fmt"
 	"math/rand"
 	"testing"
 )
@@ -25,14 +23,14 @@ func BenchmarkPage_Marshal(b *testing.B) {
 }
 
 // TODO: remove the test
-func TestPage(t *testing.T) {
-	data := bytes.Repeat([]byte{1}, 500-PageMetaSize)
-	p := page{
-		offset:   4096,
-		payload:  data,
-		nextPage: &page{offset: 11111},
-	}
-	buf := make([]byte, PageSize)
-	fmt.Println(p.marshal(buf[:0]))
-	fmt.Println(len(p.marshal(buf[:0])))
-}
+//func TestPage(t *testing.T) {
+//	data := bytes.Repeat([]byte{1}, 500-PageMetaSize)
+//	p := page{
+//		offset:   4096,
+//		payload:  data,
+//		nextPage: &page{offset: 11111},
+//	}
+//	buf := make([]byte, PageSize)
+//	fmt.Println(p.marshal(buf[:0]))
+//	fmt.Println(len(p.marshal(buf[:0])))
+//}

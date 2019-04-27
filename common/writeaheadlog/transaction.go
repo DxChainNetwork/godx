@@ -72,7 +72,7 @@ func (w *Wal) NewTransaction(ops []*Operation) (*Transaction, error) {
 
 	go txn.threadedInit()
 	// Increment the numUnfinishedTxns
-	atomic.AddUint64(&w.numUnfinishedTxns, 1)
+	atomic.AddInt64(&w.numUnfinishedTxns, 1)
 
 	return txn, nil
 }
@@ -124,7 +124,7 @@ func (t *Transaction) Append(ops []*Operation) <-chan error {
 }
 
 // append is a helper function to append updates to a transaction on which
-// SignalSetupComplete hasn't been called yet
+// Commit hasn't been called yet
 func (t *Transaction) append(ops []*Operation) (err error) {
 	// If there is nothing to append we are done
 	if len(ops) == 0 {
@@ -212,9 +212,9 @@ func (t *Transaction) append(ops []*Operation) (err error) {
 	return nil
 }
 
-// SignalSetupComplete returns a error channel which will block until commit finished.
+// Commit returns a error channel which will block until commit finished.
 // The content is error nil if no error in commit, and error if there is an error
-func (t *Transaction) SignalSetupComplete() <-chan error {
+func (t *Transaction) Commit() <-chan error {
 	done := make(chan error, 1)
 
 	if t.setupComplete || t.commitComplete || t.releaseComplete {
@@ -255,7 +255,7 @@ func (t *Transaction) commit() error {
 	buf := bufPool.Get().([]byte)
 	binary.LittleEndian.PutUint64(buf[:], t.status)
 	binary.LittleEndian.PutUint64(buf[8:], t.Id)
-	copy(buf[16:], checksum[:])
+	copy(buf[16:], checksum)
 
 	// Finalize the commit by writing the metadata to disk.
 	_, err := t.wal.logFile.WriteAt(buf[:16+checksumSize], int64(t.headPage.offset))
@@ -272,8 +272,8 @@ func (t *Transaction) commit() error {
 	return nil
 }
 
-// SignalUpdatesApplied informs the WAL that it is safe to reuse t's pages.
-func (t *Transaction) SignalUpdatesApplied() error {
+// Release informs the WAL that it is safe to reuse t's pages.
+func (t *Transaction) Release() error {
 	if !t.setupComplete || !t.commitComplete || t.releaseComplete {
 		return errors.New("misuse of transaction - call each of the signaling methods exactly once, in serial, in order")
 	}
@@ -307,10 +307,10 @@ func (t *Transaction) SignalUpdatesApplied() error {
 	t.wal.mu.Unlock()
 
 	// Decrease the number of active transactions
-	if atomic.LoadUint64(&t.wal.numUnfinishedTxns) == 0 {
+	if atomic.LoadInt64(&t.wal.numUnfinishedTxns) == 0 {
 		panic("Sanity check failed. atomicUnfinishedTxns should never be negative")
 	}
-	atomic.AddUint64(&t.wal.numUnfinishedTxns, -1)
+	atomic.AddInt64(&t.wal.numUnfinishedTxns, -1)
 	return nil
 }
 
@@ -326,10 +326,17 @@ func (t *Transaction) checksum() []byte {
 	_, _ = h.Write(buf[:16])
 	// write pages
 	for page := t.headPage; page != nil; page = page.nextPage {
-		payload := page.marshal(buf[:0])
-		_, _ = h.Write(payload)
+		for i := range buf {
+			buf[i] = 0
+		}
+		page.marshal(buf[:0])
+		_, _ = h.Write(buf)
 	}
-	return h.Sum(buf[:])[:checksumSize]
+	//fmt.Println(h.Sum(buf[:0]))
+	//fmt.Println()
+	var sum [checksumSize]byte
+	copy(sum[:], h.Sum(buf[:0]))
+	return sum[:]
 }
 
 // writeHeaderPage write the header page of a transaction to the logfile.
