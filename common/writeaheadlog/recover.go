@@ -104,7 +104,7 @@ nextTxn:
 		if err != nil {
 			continue
 		}
-		txn.operations = ops
+		txn.Operations = ops
 
 		txns = append(txns, txn)
 	}

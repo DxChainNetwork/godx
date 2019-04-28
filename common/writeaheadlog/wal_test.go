@@ -13,7 +13,7 @@ import (
 )
 
 func retry(tries int, durationBetweenAttemps time.Duration, fn func() error) (err error) {
-	for i := 1; i > tries; i++ {
+	for i := 1; i < tries; i++ {
 		err = fn()
 		if err == nil {
 			return nil
@@ -76,8 +76,8 @@ func TestCommitFailed(t *testing.T){
 	if err != nil {
 		t.Fatal(err)
 	}
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name: "test",
 		Data: randomBytes(1234),
 	})
@@ -85,8 +85,8 @@ func TestCommitFailed(t *testing.T){
 	if err != nil {
 		t.Fatal(err)
 	}
-	<- txn.initComplete
-	if txn.initErr != nil {
+	<- txn.InitComplete
+	if txn.InitErr != nil {
 		t.Errorf("unexpected init error: %v", err)
 	}
 	wait := txn.Commit()
@@ -120,8 +120,8 @@ func TestReleaseFailed(t *testing.T) {
 	}
 
 	// Create a transaction with 1 update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(1234),
 	})
@@ -175,8 +175,8 @@ func TestReleaseNotCalled(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create a transaction with 1 update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(1234),
 	})
@@ -235,8 +235,8 @@ func TestPayloadCorrupted(t *testing.T) {
 	}
 
 	// Create a transaction with 1 update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(1234),
 	})
@@ -299,8 +299,8 @@ func TestPayloadCorrupted2(t *testing.T) {
 	}
 
 	// Create a transaction with 1 update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(1234),
 	})
@@ -364,8 +364,8 @@ func TestWalParallel(t *testing.T) {
 	}
 
 	// Prepare a random update
-	ops := []*Operation{}
-	ops = append(ops, &Operation{
+	ops := []Operation{}
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(1234),
 	})
@@ -444,8 +444,8 @@ func TestPageRecycling(t *testing.T) {
 	defer wt.close()
 
 	// Prepare a random update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(5000),
 	})
@@ -514,9 +514,9 @@ func TestRecoveryFailed(t *testing.T) {
 
 	// Prepare random ops
 	numOps := 10
-	var ops []*Operation
+	var ops []Operation
 	for i := 0; i < numOps; i++ {
-		ops = append(ops, &Operation{
+		ops = append(ops, Operation{
 			Name:         "test",
 			Data: randomBytes(10000),
 		})
@@ -546,7 +546,7 @@ func TestRecoveryFailed(t *testing.T) {
 	// New should return numOps ops
 	numRecoveredUpdates := 0
 	for _, txn := range recoveredTxns2 {
-		numRecoveredUpdates += len(txn.operations)
+		numRecoveredUpdates += len(txn.Operations)
 	}
 	if numRecoveredUpdates != numOps {
 		t.Errorf("There should be %v ops but there were %v", numOps, numRecoveredUpdates)
@@ -605,7 +605,7 @@ func TestTransactionAppend(t *testing.T) {
 	}
 
 	// Create a transaction with 1 update
-	ops := []*Operation{{
+	ops := []Operation{{
 		Name:         "test",
 		Data: randomBytes(3000),
 	}}
@@ -635,9 +635,9 @@ func TestTransactionAppend(t *testing.T) {
 	}
 	defer w.Close()
 
-	if len(recoveredTxns2[0].operations) != len(ops)*2 {
+	if len(recoveredTxns2[0].Operations) != len(ops)*2 {
 		t.Errorf("Number of ops after restart didn't match. Expected %v, but was %v",
-			len(ops)*2, len(recoveredTxns2[0].operations))
+			len(ops)*2, len(recoveredTxns2[0].Operations))
 	}
 }
 
@@ -678,8 +678,8 @@ func benchmarkTransactionSpeed(b *testing.B, numThreads int, appendUpdate bool, 
 	defer wt.close()
 
 	// Prepare a random update
-	var ops []*Operation
-	ops = append(ops, &Operation{
+	var ops []Operation
+	ops = append(ops, Operation{
 		Name:         "test",
 		Data: randomBytes(4000), // 1 page / txn
 	})
@@ -809,20 +809,23 @@ func transactionPages(txn *Transaction) (pages []page) {
 	return
 }
 
-// BenchmarkDiskWrites1 starts benchmarkDiskWrites with 9990 threads, 4kib
-// pages and overwrites those pages once
+////BenchmarkDiskWrites1 starts benchmarkDiskWrites with 9990 threads, 4kib
+////pages and overwrites those pages once
 //func BenchmarkDiskWrites1(b *testing.B) {
+//	fmt.Println("\n============")
 //	benchmarkDiskWrites(b, 1, 4096, 9990)
 //}
-
-// BenchmarkDiskWrites4 starts benchmarkDiskWrites with 9990 threads, 4kib
-// pages and overwrites those pages 4 times
+//
+//
+////BenchmarkDiskWrites4 starts benchmarkDiskWrites with 9990 threads, 4kib
+////pages and overwrites those pages 4 times
 //func BenchmarkDiskWrites4(b *testing.B) {
+//	fmt.Println("\n==============")
 //	benchmarkDiskWrites(b, 4, 4096, 9990)
 //}
-
-// benchmarkDiskWrites writes numThreads pages of pageSize size and spins up 1
-// goroutine for each page that overwrites it numWrites times
+//
+////benchmarkDiskWrites writes numThreads pages of pageSize size and spins up 1
+////goroutine for each page that overwrites it numWrites times
 //func benchmarkDiskWrites(b *testing.B, numWrites int, pageSize int, numThreads int) {
 //	b.Logf("Starting benchmark with %v writes and %v threads for pages of size %v",
 //		numWrites, numThreads, pageSize)

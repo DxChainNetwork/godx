@@ -27,7 +27,7 @@ func (op *Operation) verify() error {
 }
 
 // marshalOps marshal the ops to byte slice
-func marshalOps(ops []*Operation) []byte {
+func marshalOps(ops []Operation) []byte {
 	// preallocate buffer of appropriate size
 	var size int
 	for _, op := range ops {
@@ -50,12 +50,12 @@ func marshalOps(ops []*Operation) []byte {
 	return buf
 }
 
-// unmarshalUpdates unmarshals the operations of a transaction
-func unmarshalOps(data []byte) ([]*Operation, error) {
+// unmarshalUpdates unmarshals the Operations of a transaction
+func unmarshalOps(data []byte) ([]Operation, error) {
 	// helper function for reading length-prefixed data
 	buf := bytes.NewBuffer(data)
 
-	var ops []*Operation
+	var ops []Operation
 	for {
 		if buf.Len() == 0 {
 			break
@@ -74,7 +74,7 @@ func unmarshalOps(data []byte) ([]*Operation, error) {
 			return nil, errors.New("failed to unmarshal instructions")
 		}
 
-		ops = append(ops, &Operation{
+		ops = append(ops, Operation{
 			Name: string(name),
 			Data: data,
 		})

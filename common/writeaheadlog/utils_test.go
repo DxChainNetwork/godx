@@ -26,11 +26,11 @@ func scrambleData(d []byte) []byte {
 }
 
 type utilsFaultyDisk struct {
-	disabled bool
-	failed bool
+	disabled        bool
+	failed          bool
 	failDenominator int
-	totolWrites int
-	writeLimit int
+	totalWrites     int
+	writeLimit      int
 
 	mu sync.Mutex
 }
@@ -82,7 +82,6 @@ func (f *faultyFile) Sync() error {
 func newUtilsFaultyDisk(writeLimit int) *utilsFaultyDisk {
 	return &utilsFaultyDisk{
 		writeLimit: writeLimit,
-		failDenominator: 1,
 	}
 }
 
@@ -93,18 +92,17 @@ func (u *utilsFaultyDisk) newFaultyFile(f *os.File) *faultyFile {
 
 // tryFail will determine whether the operation could be processed
 func (u *utilsFaultyDisk) tryFail() bool {
-	u.totolWrites++
+	u.totalWrites++
 	if u.disabled {
 		return false
 	}
-	// No consecutive failed
 	if u.failed {
 		return true
 	}
 
-	u.failDenominator += 5
-	fail := rand.Intn(int(u.failDenominator)) == 0
-	if fail || u.totolWrites > u.writeLimit {
+	u.failDenominator += rand.Intn(13)
+	fail := rand.Intn(int(u.failDenominator+1)) == 0 // +1 to prevent 0 from being passed in.
+	if fail || u.failDenominator >= u.writeLimit {
 		u.failed = true
 		return true
 	}

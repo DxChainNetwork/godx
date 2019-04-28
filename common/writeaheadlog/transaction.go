@@ -33,9 +33,9 @@ var bufPool = sync.Pool{
 
 // Transaction is a batch of Operations to be committed as a whole
 type Transaction struct {
-	Id         uint64       // Each transaction is assigned a unique id
-	operations []*Operation // Each transaction is composed of a list of operations
-	headPage   *page        // The first page to write on
+	Id         uint64      // Each transaction is assigned a unique id
+	Operations []Operation // Each transaction is composed of a list of Operations
+	headPage   *page       // The first page to write on
 	wal        *Wal
 
 	// State of the transaction. Default to false when created, and set to true when a certain step is finished.
@@ -45,16 +45,15 @@ type Transaction struct {
 	releaseComplete bool
 
 	status       uint64 // txnStatusInvalid, txnStatusWritten, txnStatusCommitted, txnStatusApplied
-	initComplete chan struct{}
-	initErr      error
-	mu           sync.Mutex
+	InitComplete chan struct{}
+	InitErr      error
 }
 
-// NewTransaction create a new transaction. Start a thread to write the operations to disk.
-func (w *Wal) NewTransaction(ops []*Operation) (*Transaction, error) {
+// NewTransaction create a new transaction. Start a thread to write the Operations to disk.
+func (w *Wal) NewTransaction(ops []Operation) (*Transaction, error) {
 	// Validate the input
 	if len(ops) == 0 {
-		return nil, errors.New("cannot create a transaction without operations")
+		return nil, errors.New("cannot create a transaction without Operations")
 	}
 	for i, op := range ops {
 		err := op.verify()
@@ -65,9 +64,9 @@ func (w *Wal) NewTransaction(ops []*Operation) (*Transaction, error) {
 
 	// Create New Transaction
 	txn := &Transaction{
-		operations:   ops,
+		Operations:   ops,
 		wal:          w,
-		initComplete: make(chan struct{}),
+		InitComplete: make(chan struct{}),
 	}
 
 	go txn.threadedInit()
@@ -77,11 +76,11 @@ func (w *Wal) NewTransaction(ops []*Operation) (*Transaction, error) {
 	return txn, nil
 }
 
-// threadedInit write the metadata and operations to wal.LogFile
+// threadedInit write the metadata and Operations to wal.LogFile
 func (t *Transaction) threadedInit() {
-	defer close(t.initComplete)
+	defer close(t.InitComplete)
 
-	data := marshalOps(t.operations)
+	data := marshalOps(t.Operations)
 	if len(data) > MaxHeadPagePayloadSize {
 		t.headPage = t.wal.requestPages(data[:MaxHeadPagePayloadSize])
 		t.headPage.nextPage = t.wal.requestPages(data[MaxHeadPagePayloadSize:])
@@ -92,20 +91,20 @@ func (t *Transaction) threadedInit() {
 
 	// write the header page
 	if err := t.writeHeaderPage(false); err != nil {
-		t.initErr = fmt.Errorf("writing the first page to disk failed: %v", err)
+		t.InitErr = fmt.Errorf("writing the first page to disk failed: %v", err)
 		return
 	}
 	// write subsequent pages
 	for page := t.headPage.nextPage; page != nil; page = page.nextPage {
 		if err := t.writePage(page); err != nil {
-			t.initErr = fmt.Errorf("writing the page to disk failed: %v", err)
+			t.InitErr = fmt.Errorf("writing the page to disk failed: %v", err)
 			return
 		}
 	}
 }
 
 // Append appends additional updates to a transaction
-func (t *Transaction) Append(ops []*Operation) <-chan error {
+func (t *Transaction) Append(ops []Operation) <-chan error {
 	// Verify the updates
 	for _, op := range ops {
 		op.verify()
@@ -125,16 +124,16 @@ func (t *Transaction) Append(ops []*Operation) <-chan error {
 
 // append is a helper function to append updates to a transaction on which
 // Commit hasn't been called yet
-func (t *Transaction) append(ops []*Operation) (err error) {
+func (t *Transaction) append(ops []Operation) (err error) {
 	// If there is nothing to append we are done
 	if len(ops) == 0 {
 		return nil
 	}
 
 	// Make sure that the initialization finished
-	<-t.initComplete
-	if t.initErr != nil {
-		return t.initErr
+	<-t.InitComplete
+	if t.InitErr != nil {
+		return t.InitErr
 	}
 
 	// Marshal the data
@@ -154,7 +153,7 @@ func (t *Transaction) append(ops []*Operation) (err error) {
 	defer func() {
 		if err != nil {
 			lastPage.payload = lastPage.payload[:len(lastPage.payload)]
-			t.operations = t.operations[:len(t.operations)]
+			t.Operations = t.Operations[:len(t.Operations)]
 			lastPage.nextPage = nil
 
 			// Write last page
@@ -186,7 +185,7 @@ func (t *Transaction) append(ops []*Operation) (err error) {
 		if err := t.writePage(lastPage); err != nil {
 			return fmt.Errorf("writing the last page to disk failed: %v", err)
 		}
-		t.operations = append(t.operations, ops...)
+		t.Operations = append(t.Operations, ops...)
 		return nil
 	}
 
@@ -208,7 +207,7 @@ func (t *Transaction) append(ops []*Operation) (err error) {
 	}
 
 	// Append the ops to the transaction
-	t.operations = append(t.operations, ops...)
+	t.Operations = append(t.Operations, ops...)
 	return nil
 }
 
@@ -233,9 +232,9 @@ func (t *Transaction) Commit() <-chan error {
 // commit commits a transaction by setting the correct status and checksum
 func (t *Transaction) commit() error {
 	// Make sure that the initialization of the transaction finished
-	<-t.initComplete
-	if t.initErr != nil {
-		return t.initErr
+	<-t.InitComplete
+	if t.InitErr != nil {
+		return t.InitErr
 	}
 
 	// Set the transaction status

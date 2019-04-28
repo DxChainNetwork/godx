@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func makeTestOps(num int) []*Operation {
-	var ops []*Operation
+func makeTestOps(num int) []Operation {
+	var ops []Operation
 	for i := 0; i != num ; i++ {
-		ops = append(ops, &Operation {
+		ops = append(ops, Operation {
 			Name: fmt.Sprintf("Test%d", i),
 			Data: bytes.Repeat([]byte{byte(i)}, 100*i),
 		})
@@ -28,8 +28,8 @@ func TestOpsMarshalUnmarshal(t *testing.T) {
 	}
 	for i, op := range ops {
 		recover := recovered[i]
-		if !reflect.DeepEqual(*op, *recover) {
-			t.Errorf("Unmarshaled %v not expected\n\tExpect: %+v\n\tgot: %+v", op.Name, *op, *recover)
+		if !reflect.DeepEqual(op, recover) {
+			t.Errorf("Unmarshaled %v not expected\n\tExpect: %+v\n\tgot: %+v", op.Name, op, recover)
 		}
 	}
 }
@@ -65,9 +65,9 @@ func TestOperation_verify(t *testing.T) {
 
 
 func BenchmarkMarshalUpdates(b *testing.B) {
-	ops := make([]*Operation, 100)
+	ops := make([]Operation, 100)
 	for i := range ops {
-		ops[i] = &Operation{
+		ops[i] = Operation{
 			Name:         "test",
 			Data: randomBytes(1234),
 		}
@@ -80,9 +80,9 @@ func BenchmarkMarshalUpdates(b *testing.B) {
 }
 
 func BenchmarkUnmarshalUpdates(b *testing.B) {
-	ops := make([]*Operation, 100)
+	ops := make([]Operation, 100)
 	for i := range ops{
-		ops[i] = &Operation{
+		ops[i] = Operation{
 			Name:         "test",
 			Data: randomBytes(1234),
 		}
