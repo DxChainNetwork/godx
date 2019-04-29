@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"runtime"
 	"sync"
@@ -86,6 +87,10 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
+
+	apisOnce      sync.Once
+	registeredAPIs []rpc.API
+	storageClient *storageclient.StorageClient
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -188,6 +193,13 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
+	// Initialize StorageClient
+	path := ctx.ResolvePath(config.StorageClientDir)
+	eth.storageClient, err = storageclient.New(path)
+	if err != nil {
+		return nil, err
+	}
+
 	return eth, nil
 }
 
@@ -254,58 +266,62 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
+	getAPI := func() {
+		apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+		// Append any APIs exposed explicitly by the consensus engine
+		apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
-	// Append all the local APIs and return
-	return append(apis, []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicMinerAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
-			Public:    true,
-		}, {
-			Namespace: "miner",
-			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
-			Public:    false,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
-			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(s),
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPublicDebugAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.chainConfig, s),
-		}, {
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   s.netRPCService,
-			Public:    true,
-		},
-	}...)
+		// Append all the local APIs and return
+		s.registeredAPIs = append(apis, []rpc.API{
+			{
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicEthereumAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicMinerAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+				Public:    true,
+			}, {
+				Namespace: "miner",
+				Version:   "1.0",
+				Service:   NewPrivateMinerAPI(s),
+				Public:    false,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
+				Public:    true,
+			}, {
+				Namespace: "admin",
+				Version:   "1.0",
+				Service:   NewPrivateAdminAPI(s),
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPublicDebugAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPrivateDebugAPI(s.chainConfig, s),
+			}, {
+				Namespace: "net",
+				Version:   "1.0",
+				Service:   s.netRPCService,
+				Public:    true,
+			},
+		}...)
+	}
+	s.apisOnce.Do(getAPI)
+	return s.registeredAPIs
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -503,6 +519,13 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
 	}
+
+	// Start Storage Client
+	err := s.storageClient.Start(s)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
