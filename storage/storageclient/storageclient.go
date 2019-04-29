@@ -57,7 +57,7 @@ type StorageClient struct {
 
 	// Utilities
 	streamCache *streamCache
-	log         *log.Logger
+	log         log.Logger
 	// TODO (jacky): considering using the Lock and Unlock with ID ?
 	mu      sync.Mutex
 	tg      threadManager.ThreadManager

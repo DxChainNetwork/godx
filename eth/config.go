@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"os"
 	"os/user"
@@ -59,6 +60,7 @@ var DefaultConfig = Config{
 		Blocks:     20,
 		Percentile: 60,
 	},
+	StorageClientDir: storageclient.PersistDirectory,
 }
 
 func init() {
@@ -135,6 +137,9 @@ type Config struct {
 
 	// Constantinople block override (TODO: remove after the fork)
 	ConstantinopleOverride *big.Int
+
+	// StorageClient Persist Directory
+	StorageClientDir string
 }
 
 type configMarshaling struct {
