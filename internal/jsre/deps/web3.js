@@ -2525,6 +2525,8 @@ var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
 
+var storageclient = require('./web3/methods/storageclient');
+
 
 
 function Web3 (provider) {
@@ -2535,6 +2537,9 @@ function Web3 (provider) {
     this.shh = new Shh(this);
     this.net = new Net(this);
     this.personal = new Personal(this);
+
+    this.storageclient = new storageclient(this);
+
     this.bzz = new Swarm(this);
     this.settings = new Settings();
     this.version = {
@@ -2632,7 +2637,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -5577,7 +5582,50 @@ var properties = function () {
 
 module.exports = Net;
 
-},{"../../utils/utils":20,"../property":45}],40:[function(require,module,exports){
+},{"../../utils/utils":20,"../property":45}],
+
+    200: [function(require,module,exports){
+
+        "use strict";
+
+        var Method = require('../method');
+
+        function storageclient(web3){
+            this._requestManager = web3._requestManager;
+
+            var self = this;
+
+            methods().forEach(function(method) {
+                method.attachToObject(self);
+                method.setRequestManager(self._requestManager);
+            });
+        }
+
+
+        var methods = function () {
+            var payment = new Method({
+                name: 'payment',
+                call: 'storageclient_payment',
+                params: 0,
+            });
+
+            var setpayment = new Method({
+                name: 'setpayment',
+                call: 'storageclient_setpayment',
+                params: 0,
+            });
+
+            return [
+                payment,
+                setpayment,
+            ];
+        };
+
+        module.exports = storageclient;
+    }, {"../method":36}],
+
+
+    40:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
