@@ -18,10 +18,6 @@ type persistence struct {
 	StreamCacheSize  uint64
 }
 
-func (sc *StorageClient) saveSync() error {
-	return common.SaveDxJSON(settingsMetadata, filepath.Join(sc.persistDir, PersistFilename), sc.persist)
-}
-
 func (sc *StorageClient) loadPersist() error {
 	// make directory
 	err := os.MkdirAll(sc.staticFilesDir, 0700)
@@ -43,7 +39,6 @@ func (sc *StorageClient) loadPersist() error {
 		sc.log.SetHandler(log.MultiHandler(logFileHandler, logStreamHandler))
 	}
 
-
 	// TODO (mzhang): Create Write ahead logger
 
 	// TODO (Jacky): Apply un-applied wal transactions
@@ -51,6 +46,11 @@ func (sc *StorageClient) loadPersist() error {
 	// TODO (Jacky): Initialize File Management Related Fields
 
 	return sc.loadSettings()
+}
+
+// save StorageClient settings into storageclient.json file
+func (sc *StorageClient) saveSettings() error {
+	return common.SaveDxJSON(settingsMetadata, filepath.Join(sc.persistDir, PersistFilename), sc.persist)
 }
 
 // load prior StorageClient settings
@@ -61,7 +61,7 @@ func (sc *StorageClient) loadSettings() error {
 		sc.persist.MaxDownloadSpeed = DefaultMaxDownloadSpeed
 		sc.persist.MaxUploadSpeed = DefaultMaxUploadSpeed
 		sc.persist.StreamCacheSize = DefaultStreamCacheSize
-		err = sc.saveSync()
+		err = sc.saveSettings()
 		if err != nil {
 			return err
 		}
