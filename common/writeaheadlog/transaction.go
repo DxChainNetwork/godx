@@ -330,6 +330,7 @@ func (t *Transaction) checksum() []byte {
 		}
 		page.marshal(buf[:0])
 		_, _ = h.Write(buf)
+		//fmt.Println(buf)
 	}
 	//fmt.Println(h.Sum(buf[:0]))
 	//fmt.Println()
@@ -346,6 +347,9 @@ func (t *Transaction) writeHeaderPage(checksum bool) error {
 	buf := bufPool.Get().([]byte)
 	defer bufPool.Put(buf)
 
+	for i := range buf {
+		buf[i] = 0
+	}
 	binary.LittleEndian.PutUint64(buf[:], t.status)
 	binary.LittleEndian.PutUint64(buf[8:], t.ID)
 	// According to input checksum, decide whether to create the hash.

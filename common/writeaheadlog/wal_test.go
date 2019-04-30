@@ -867,7 +867,6 @@ func ExampleWal() {
 		fmt.Println("error commit")
 		return
 	}
-
 	err = wal.Close()
 	fmt.Printf("Close: %v\n", err)
 
