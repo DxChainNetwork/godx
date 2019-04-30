@@ -34,7 +34,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 const (
@@ -439,11 +438,6 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 	if !conf.NoUSB {
 	}
 	return accounts.NewManager(backends...), ephemeral, nil
-}
-
-func makeStorageHost(conf *Config) (*storagehost.StorageHost, error) {
-	persistDir := conf.ResolvePath(conf.StorageHostDir)
-	return storagehost.NewStorageHost(persistDir)
 }
 
 var warnLock sync.Mutex

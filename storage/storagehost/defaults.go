@@ -8,21 +8,24 @@ import (
 const (
 	PersistHostDir  = "storagehost" // the dir for storing the host log, json, and ect.
 	HostSettingFile = "host.json"   // the file name for saving the setting of host
+	HostDB			= "hostdb"
 	HostLog         = "host.log"    // the log file for log of host
+	StorageManager	= "storagemanager"
 )
 
 var (
+	// TODO: ALL values are mock, need to compute reasonable values
+
 	storageHostMeta = common.Metadata{
 		Header:  "DxChain StorageHost JSON",
 		Version: "DxChain host mock version",
 	}
 
 	// persistence default value
-	defaultBroadcast      = false
-	defaultRevisionNumber = 0
+	//defaultBroadcast      = false
+	//defaultRevisionNumber = 0
 
 	// host internal settings default value
-	// TODO: values are mock, need to compute reasonable values
 	defaultMaxDuration          = 144 * 30 * 6
 	defaultMaxDownloadBatchSize = 17 * (1 << 20)
 	defaultMaxReviseBatchSize   = 17 * (1 << 20)
@@ -40,15 +43,8 @@ var (
 	defaultSectorAccessPrice      = 5000
 	defaultStoragePrice           = 6000
 	defaultUploadBandwidthPrice   = 7000
-)
 
-func loadDefaultsPersistence() persistence {
-	return persistence{
-		BroadCast:      defaultBroadcast,
-		RevisionNumber: uint64(defaultRevisionNumber),
-		Settings:       loadDefaultSetting(),
-	}
-}
+)
 
 func loadDefaultSetting() StorageHostIntSetting {
 	return StorageHostIntSetting{
@@ -67,5 +63,6 @@ func loadDefaultSetting() StorageHostIntSetting {
 		MinSectorAccessPrice:      *big.NewInt(int64(defaultSectorAccessPrice)),
 		MinStoragePrice:           *big.NewInt(int64(defaultStoragePrice)),
 		MinUploadBandwidthPrice:   *big.NewInt(int64(defaultUploadBandwidthPrice)),
+
 	}
 }

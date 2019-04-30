@@ -1,6 +1,7 @@
 package storagehost
 
 import (
+	"github.com/davecgh/go-spew/spew"
 	"math/big"
 	"math/rand"
 	"os"
@@ -40,14 +41,12 @@ func TestHostJSDataPreservation(t *testing.T) {
 		persist2 := host.extractPersistence()
 
 		if !reflect.DeepEqual(persist1, persist2) {
-			//spew.Dump(persist1)
-			//spew.Dump(persist2)
+			spew.Dump(persist1)
+			spew.Dump(persist2)
 			t.Errorf("two persistance does not equal to each other")
 		}
 
 		// change the setting again, use the random value
-		host.broadcast = rand.Float32() < 0.5
-		host.revisionNumber = uint64(rand.Intn(100000000))
 		host.settings.AcceptingContracts = rand.Float32() < 0.5
 		host.settings.Deposit = *big.NewInt(int64(rand.Intn(100000000)))
 

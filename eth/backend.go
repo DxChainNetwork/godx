@@ -20,7 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"math/big"
 	"runtime"
 	"sync"
@@ -50,6 +49,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 type LesServer interface {
@@ -61,6 +61,10 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
+	apionce			sync.Once
+	registeredAPIs	[]rpc.API
+	storageHost    *storagehost.StorageHost
+
 	config      *Config
 	chainConfig *params.ChainConfig
 
@@ -78,7 +82,6 @@ type Ethereum struct {
 	eventMux       *event.TypeMux
 	engine         consensus.Engine
 	accountManager *accounts.Manager
-	storageHost    *storagehost.StorageHost
 
 	bloomRequests chan chan *bloombits.Retrieval // Channel receiving bloom data retrieval requests
 	bloomIndexer  *core.ChainIndexer             // Bloom indexer operating during block imports
@@ -131,7 +134,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		chainConfig:    chainConfig,
 		eventMux:       ctx.EventMux,
 		accountManager: ctx.AccountManager,
-		storageHost:    ctx.StorageHost,
 		engine:         CreateConsensusEngine(ctx, chainConfig, &config.Ethash, config.MinerNotify, config.MinerNoverify, chainDb),
 		shutdownChan:   make(chan bool),
 		networkID:      config.NetworkId,
@@ -190,6 +192,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		gpoParams.Default = config.MinerGasPrice
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
+
+	path := ctx.ResolvePath(storagehost.PersistHostDir)
+	eth.storageHost, err = storagehost.NewStorageHost(path)
+
+	if err != nil{
+		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
+		//  make sure what the expected handling case of these failure
+		return nil, err
+	}
 
 	return eth, nil
 }
@@ -257,58 +268,70 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+	getAPI := func() {
+		apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append all the local APIs and return
-	return append(apis, []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicMinerAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
-			Public:    true,
-		}, {
-			Namespace: "miner",
-			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
-			Public:    false,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
-			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(s),
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPublicDebugAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.chainConfig, s),
-		}, {
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   s.netRPCService,
-			Public:    true,
-		},
-	}...)
+		// Append any APIs exposed explicitly by the consensus engine
+		apis = append(apis, s.engine.APIs(s.BlockChain())...)
+
+		// Append all the local APIs and return
+		s.registeredAPIs = append(apis, []rpc.API{
+			{
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicEthereumAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicMinerAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+				Public:    true,
+			}, {
+				Namespace: "miner",
+				Version:   "1.0",
+				Service:   NewPrivateMinerAPI(s),
+				Public:    false,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
+				Public:    true,
+			}, {
+				Namespace: "admin",
+				Version:   "1.0",
+				Service:   NewPrivateAdminAPI(s),
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPublicDebugAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPrivateDebugAPI(s.chainConfig, s),
+			}, {
+				Namespace: "net",
+				Version:   "1.0",
+				Service:   s.netRPCService,
+				Public:    true,
+			}, {
+				Namespace: "hostdebug",
+				Version:   "1.0",
+				Service:   storagehost.NewHostDebugAPI(s.storageHost),
+				Public:    true,
+			},
+		}...)
+	}
+
+	s.apionce.Do(getAPI)
+
+	return s.registeredAPIs
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -506,6 +529,9 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
 	}
+
+	s.storageHost.Start(s)
+
 	return nil
 }
 

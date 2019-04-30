@@ -24,7 +24,6 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rpc"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 // ServiceContext is a collection of service independent options inherited from
@@ -35,7 +34,6 @@ type ServiceContext struct {
 	services       map[reflect.Type]Service // Index of the already constructed services
 	EventMux       *event.TypeMux           // Event multiplexer used for decoupled notifications
 	AccountManager *accounts.Manager        // Account manager created by the node.
-	StorageHost    *storagehost.StorageHost // Host that provide the host service
 }
 
 // OpenDatabase opens an existing database with the given name (or creates one

@@ -2524,7 +2524,7 @@ var Property = require('./web3/property');
 var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
-var StorageHost = require('./web3/methods/storagehost');
+var HostDebug = require('./web3/methods/hostdebug');
 
 
 
@@ -2536,7 +2536,7 @@ function Web3 (provider) {
     this.shh = new Shh(this);
     this.net = new Net(this);
     this.personal = new Personal(this);
-    this.storagehost = new StorageHost(this);
+    this.hostdebug = new HostDebug(this);
     this.bzz = new Swarm(this);
     this.settings = new Settings();
     this.version = {
@@ -2634,7 +2634,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js", "./web3/methods/storagehost": 88}],23:[function(require,module,exports){
+},{"./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js", "./web3/methods/hostdebug": 89}],23:[function(require,module,exports){
 /*
     This file is part of web3.js.
 
@@ -5844,7 +5844,7 @@ module.exports = Shh;
 
 },{"../filter":29,"../method":36,"./watches":43}],
 
-  88: [function(require,module,exports){
+  89: [function(require,module,exports){
 
     "use strict";
 
@@ -5853,7 +5853,7 @@ module.exports = Shh;
     var formatters = require('../formatters');
     var utils = require('../../utils/utils');
 
-    function StorageHost(web3){
+    function HostDebug(web3){
       this._requestManager = web3._requestManager;
 
       var self = this;
@@ -5872,43 +5872,43 @@ module.exports = Shh;
     var methods = function () {
       var helloWorld = new Method({
         name: 'helloWorld',
-        call: 'storagehost_helloWorld',
+        call: 'hostdebug_helloWorld',
         params: 0,
       });
 
       var persistdir = new Method({
         name: 'persistdir',
-        call: 'storagehost_persistdir',
+        call: 'hostdebug_persistdir',
         params: 0,
       });
 
       var printSetting = new Method({
         name: 'printSetting',
-        call: 'storagehost_printSetting',
+        call: 'hostdebug_printSetting',
         params: 0,
       });
 
       var setBroadCast = new Method({
         name: 'setBroadCast',
-        call: 'storagehost_setBroadCast',
+        call: 'hostdebug_setBroadCast',
         params: 1,
       });
 
       var setRevisionNumber = new Method({
         name: 'setRevisionNumber',
-        call: 'storagehost_setRevisionNumber',
+        call: 'hostdebug_setRevisionNumber',
         params: 1,
       });
 
       var setAcceptingContract = new Method({
         name: 'setAcceptingContract',
-        call: 'storagehost_setAcceptingContract',
+        call: 'hostdebug_setAcceptingContract',
         params: 1,
       });
 
       var setDeposit = new Method({
         name: 'setDeposit',
-        call: 'storagehost_setDeposit',
+        call: 'hostdebug_setDeposit',
         params: 1,
       });
 
@@ -5927,16 +5927,16 @@ module.exports = Shh;
       return [
         new Property({
           name: 'version',
-          getter: 'storagehost_version'
+          getter: 'hostdebug_version'
         }),
         new Property({
           name: 'persistdir',
-          getter: 'storagehost_persistdir'
+          getter: 'hostdebug_persistdir'
         }),
       ];
     };
 
-    module.exports = StorageHost;
+    module.exports = HostDebug;
 
   }, {"../formatters":30,"../method":36,"../property":45, "../../utils/utils":20}],
 
