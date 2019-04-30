@@ -809,102 +809,95 @@ func transactionPages(txn *Transaction) (pages []page) {
 	return
 }
 
-////BenchmarkDiskWrites1 starts benchmarkDiskWrites with 9990 threads, 4kib
-////pages and overwrites those pages once
-//func BenchmarkDiskWrites1(b *testing.B) {
-//	fmt.Println("\n============")
-//	benchmarkDiskWrites(b, 1, 4096, 9990)
-//}
-//
-//
-////BenchmarkDiskWrites4 starts benchmarkDiskWrites with 9990 threads, 4kib
-////pages and overwrites those pages 4 times
-//func BenchmarkDiskWrites4(b *testing.B) {
-//	fmt.Println("\n==============")
-//	benchmarkDiskWrites(b, 4, 4096, 9990)
-//}
-//
-////benchmarkDiskWrites writes numThreads pages of pageSize size and spins up 1
-////goroutine for each page that overwrites it numWrites times
-//func benchmarkDiskWrites(b *testing.B, numWrites int, pageSize int, numThreads int) {
-//	b.Logf("Starting benchmark with %v writes and %v threads for pages of size %v",
-//		numWrites, numThreads, pageSize)
-//
-//	// Get a tmp dir path
-//	tmpdir := tempDir(b.Name())
-//
-//	// Create dir
-//	err := os.MkdirAll(tmpdir, 0700)
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	// Create a tmp file
-//	f, err := os.Create(filepath.Join(tmpdir, "wal.dat"))
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	// Close it after test
-//	defer f.Close()
-//
-//	// Write numThreads pages to file
-//	_, err = f.Write(randomBytes(pageSize * numThreads))
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	// Sync it
-//	if err = f.Sync(); err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	// Define random page data
-//	data := randomBytes(pageSize)
-//
-//	// Declare a waitGroup for later
-//	var wg sync.WaitGroup
-//
-//	// Count errors during execution
-//	var atomicCounter uint64
-//
-//	// Declare a function that writes a page at the offset i * pageSize 4 times
-//	write := func(i int) {
-//		defer wg.Done()
-//		for j := 0; j < numWrites; j++ {
-//			if _, err = f.WriteAt(data, int64(i*pageSize)); err != nil {
-//				atomic.AddUint64(&atomicCounter, 1)
-//				return
-//			}
-//			if err = f.Sync(); err != nil {
-//				atomic.AddUint64(&atomicCounter, 1)
-//				return
-//			}
-//		}
-//	}
-//
-//	// Reset the timer
-//	b.ResetTimer()
-//
-//	// Create one thread for each page and make it overwrite the page and call sync
-//	for i := 0; i < numThreads; i++ {
-//		wg.Add(1)
-//		go write(i)
-//	}
-//
-//	// Wait for the threads and check if they were successfull
-//	wg.Wait()
-//	if atomicCounter > 0 {
-//		b.Fatalf("%v errors happened during execution", atomicCounter)
-//	}
-//	// Get fileinfo
-//	info, err := f.Stat()
-//	if err != nil {
-//		b.Fatal(err)
-//	}
-//
-//	// Print some info
-//	b.Logf("Number of threads: %v", numThreads)
-//	b.Logf("PageSize: %v bytes", pageSize)
-//	b.Logf("Filesize after benchmark %v", info.Size())
-//}
+type person struct {
+	name string
+}
+
+func (p *person) saveToDisk(filename string) error {
+	_, err := os.Stat(filename)
+	var f *os.File
+	if err != nil && os.IsNotExist(err) {
+		f, err = os.Create(filename)
+	} else if err == nil {
+		f, err = os.OpenFile(filename, os.O_RDWR, 0777)
+	}
+	if err != nil {
+		return fmt.Errorf("file stat error: %v", err)
+	}
+	if _, err = f.Write([]byte(fmt.Sprintf("%+v", p))); err != nil {
+		return fmt.Errorf("cannot write the content")
+	}
+	return nil
+}
+
+func ExampleWal() {
+	testDir := tempDir("ExampleWal")
+	_ = os.Mkdir(testDir, 0777)
+	// create a new wal
+	wal, txns, err := New(filepath.Join(testDir, "test.wal"))
+	if len(txns) != 0 {
+		fmt.Printf("Unexpected transaction number. Got %d, Expect %d\n", len(txns), 0)
+		return
+	}
+	if err != nil {
+		fmt.Printf("Cannot new wal: %v\n", err)
+		return
+	}
+	// struct to be modified
+	p := person{name: "jacky"}
+	newName := "wyx"
+	op := Operation{
+		Name: "person_rename",
+		Data: []byte(newName),
+	}
+	t, err := wal.NewTransaction([]Operation{op})
+	fmt.Println("Add a new transaction")
+	if err != nil {
+		fmt.Printf("new transaction error: %v\n", err)
+		return
+	}
+	p.name = newName
+	<-t.InitComplete
+	if t.InitErr != nil {
+		fmt.Println(t.InitErr)
+		return
+	}
+	commitDone := t.Commit()
+	if err := <-commitDone; err != nil {
+		fmt.Println("error commit")
+		return
+	}
+
+	err = wal.Close()
+	fmt.Printf("Close: %v\n", err)
+
+	// reopen
+	recoveredWal, recoveredTxn, err := New(filepath.Join(testDir, "test.wal"))
+	if err != nil {
+		fmt.Println("reopen wal error:", err)
+		return
+	}
+	if len(recoveredTxn) != 1 {
+		fmt.Printf("expected recovered txn 1, got %d\n", len(recoveredTxn))
+		return
+	}
+	for _, txn := range recoveredTxn {
+		for _, op := range txn.Operations {
+			p.name = string(op.Data)
+			err := p.saveToDisk(filepath.Join(testDir, "jacky_person.dat"))
+			if err != nil {
+				fmt.Printf("failed save to disk: %v", err)
+				return
+			}
+		}
+		txn.Release()
+	}
+	err = recoveredWal.Close()
+	if err != nil {
+		fmt.Printf("wal doesn't close clean: %v", err)
+	}
+
+	// Output:
+	// Add a new transaction
+	// Close: wal closed with 1 unfinished transactions
+}
