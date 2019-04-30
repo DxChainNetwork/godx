@@ -33,9 +33,9 @@ func tempDir(dirs ...string) string {
 }
 
 type walTester struct {
-	wal *Wal
+	wal           *Wal
 	recoveredTxns []*Transaction
-	path string
+	path          string
 }
 
 func (wt *walTester) close() error {
@@ -71,7 +71,7 @@ func newWalTester(name string, utils utilsSet) (*walTester, error) {
 
 // TestCommitFailed checks if a corruption of the first page of the
 // transaction during the commit is handled correctly
-func TestCommitFailed(t *testing.T){
+func TestCommitFailed(t *testing.T) {
 	wt, err := newWalTester(t.Name(), &utilsCommitFail{})
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestCommitFailed(t *testing.T){
 	if err != nil {
 		t.Fatal(err)
 	}
-	<- txn.InitComplete
+	<-txn.InitComplete
 	if txn.InitErr != nil {
 		t.Errorf("unexpected init error: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestReleaseFailed(t *testing.T) {
 	// Create a transaction with 1 update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(1234),
 	})
 
@@ -177,7 +177,7 @@ func TestReleaseNotCalled(t *testing.T) {
 	// Create a transaction with 1 update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(1234),
 	})
 	// Create one transaction which will be committed and one that will be applied
@@ -237,7 +237,7 @@ func TestPayloadCorrupted(t *testing.T) {
 	// Create a transaction with 1 update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(1234),
 	})
 
@@ -301,7 +301,7 @@ func TestPayloadCorrupted2(t *testing.T) {
 	// Create a transaction with 1 update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(1234),
 	})
 
@@ -366,7 +366,7 @@ func TestWalParallel(t *testing.T) {
 	// Prepare a random update
 	ops := []Operation{}
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(1234),
 	})
 
@@ -446,7 +446,7 @@ func TestPageRecycling(t *testing.T) {
 	// Prepare a random update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(5000),
 	})
 
@@ -517,7 +517,7 @@ func TestRecoveryFailed(t *testing.T) {
 	var ops []Operation
 	for i := 0; i < numOps; i++ {
 		ops = append(ops, Operation{
-			Name:         "test",
+			Name: "test",
 			Data: randomBytes(10000),
 		})
 	}
@@ -606,7 +606,7 @@ func TestTransactionAppend(t *testing.T) {
 
 	// Create a transaction with 1 update
 	ops := []Operation{{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(3000),
 	}}
 	txn, err := wt.wal.NewTransaction(ops)
@@ -680,7 +680,7 @@ func benchmarkTransactionSpeed(b *testing.B, numThreads int, appendUpdate bool, 
 	// Prepare a random update
 	var ops []Operation
 	ops = append(ops, Operation{
-		Name:         "test",
+		Name: "test",
 		Data: randomBytes(4000), // 1 page / txn
 	})
 
@@ -908,4 +908,3 @@ func transactionPages(txn *Transaction) (pages []page) {
 //	b.Logf("PageSize: %v bytes", pageSize)
 //	b.Logf("Filesize after benchmark %v", info.Size())
 //}
-

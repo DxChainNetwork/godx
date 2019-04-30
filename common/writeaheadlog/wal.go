@@ -31,8 +31,8 @@ const (
 type (
 	Wal struct {
 		// atomic fields. Change these values using atomic package
-		nextTxnId         uint64         // Next TxnId to be executed. TxnId increment for each Txn.
-		numUnfinishedTxns int64         // Number of unfinished transactions
+		nextTxnID         uint64         // Next TxnId to be executed. TxnId increment for each Txn.
+		numUnfinishedTxns int64          // Number of unfinished transactions
 		syncStatus        uint32         // 0: No syncing thread; 1: syncing thread, empty queue; 2: syncing thread, non-empty queue
 		syncStatePtr      unsafe.Pointer // pointing to a syncState object
 
@@ -133,8 +133,8 @@ func writeMetadata(f file) error {
 // Return the first page in the page chain
 func (w *Wal) requestPages(data []byte) *page {
 	// Calculate the number of pages needed for storing the data
-	numPages := uint64(len(data) / MaxPayloadSize)
-	if len(data)%MaxPayloadSize != 0 {
+	numPages := uint64(len(data) / maxPayloadSize)
+	if len(data)%maxPayloadSize != 0 {
 		numPages++
 	}
 
@@ -155,7 +155,7 @@ func (w *Wal) requestPages(data []byte) *page {
 			pages[i].nextPage = &pages[i+1]
 		}
 		pages[i].offset = dataPages[i]
-		pages[i].payload = buf.Next(MaxPayloadSize)
+		pages[i].payload = buf.Next(maxPayloadSize)
 	}
 	return &pages[0]
 }

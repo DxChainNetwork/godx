@@ -12,10 +12,10 @@ import (
 const (
 	checksumSize = 16
 	// For the txn's first page, the content is different.
-	// status, Id, checksum, nextPageOffset
+	// status, ID, checksum, nextPageOffset
 	txnMetaSize = 8 + 8 + checksumSize + 8
 
-	MaxHeadPagePayloadSize = PageSize - txnMetaSize
+	maxHeadPagePayloadSize = PageSize - txnMetaSize
 )
 
 const (
@@ -33,7 +33,7 @@ var bufPool = sync.Pool{
 
 // Transaction is a batch of Operations to be committed as a whole
 type Transaction struct {
-	Id         uint64      // Each transaction is assigned a unique id
+	ID         uint64      // Each transaction is assigned a unique id
 	Operations []Operation // Each transaction is composed of a list of Operations
 	headPage   *page       // The first page to write on
 	wal        *Wal
@@ -81,9 +81,9 @@ func (t *Transaction) threadedInit() {
 	defer close(t.InitComplete)
 
 	data := marshalOps(t.Operations)
-	if len(data) > MaxHeadPagePayloadSize {
-		t.headPage = t.wal.requestPages(data[:MaxHeadPagePayloadSize])
-		t.headPage.nextPage = t.wal.requestPages(data[MaxHeadPagePayloadSize:])
+	if len(data) > maxHeadPagePayloadSize {
+		t.headPage = t.wal.requestPages(data[:maxHeadPagePayloadSize])
+		t.headPage.nextPage = t.wal.requestPages(data[maxHeadPagePayloadSize:])
 	} else {
 		t.headPage = t.wal.requestPages(data)
 	}
@@ -166,9 +166,9 @@ func (t *Transaction) append(ops []Operation) (err error) {
 	var lenDiff int
 	if lastPage == t.headPage {
 		// firstPage holds less data than subsequent pages
-		lenDiff = MaxHeadPagePayloadSize - len(lastPage.payload)
+		lenDiff = maxHeadPagePayloadSize - len(lastPage.payload)
 	} else {
-		lenDiff = MaxPayloadSize - len(lastPage.payload)
+		lenDiff = maxPayloadSize - len(lastPage.payload)
 	}
 
 	if len(data) <= lenDiff {
@@ -241,7 +241,7 @@ func (t *Transaction) commit() error {
 	t.status = txnStatusCommitted
 
 	// Set the sequence number and increase the WAL's transactionCounter
-	t.Id = atomic.AddUint64(&t.wal.nextTxnId, 1) - 1
+	t.ID = atomic.AddUint64(&t.wal.nextTxnID, 1) - 1
 
 	// Calculate the checksum
 	checksum := t.checksum()
@@ -253,7 +253,7 @@ func (t *Transaction) commit() error {
 	// Marshal metadata into buffer
 	buf := bufPool.Get().([]byte)
 	binary.LittleEndian.PutUint64(buf[:], t.status)
-	binary.LittleEndian.PutUint64(buf[8:], t.Id)
+	binary.LittleEndian.PutUint64(buf[8:], t.ID)
 	copy(buf[16:], checksum)
 
 	// Finalize the commit by writing the metadata to disk.
@@ -321,7 +321,7 @@ func (t *Transaction) checksum() []byte {
 
 	// write metadata and contents to the buffer
 	binary.LittleEndian.PutUint64(buf[:], t.status)
-	binary.LittleEndian.PutUint64(buf[8:], t.Id)
+	binary.LittleEndian.PutUint64(buf[8:], t.ID)
 	_, _ = h.Write(buf[:16])
 	// write pages
 	for page := t.headPage; page != nil; page = page.nextPage {
@@ -340,14 +340,14 @@ func (t *Transaction) checksum() []byte {
 
 // writeHeaderPage write the header page of a transaction to the logfile.
 // The header page is different from the normal page since it has some additional meta data
-// t.status | t.Id | t.checkSum | page.offset
+// t.status | t.ID | t.checkSum | page.offset
 // The input bool checksum indicates whether the checksum field to be filled
 func (t *Transaction) writeHeaderPage(checksum bool) error {
 	buf := bufPool.Get().([]byte)
 	defer bufPool.Put(buf)
 
 	binary.LittleEndian.PutUint64(buf[:], t.status)
-	binary.LittleEndian.PutUint64(buf[8:], t.Id)
+	binary.LittleEndian.PutUint64(buf[8:], t.ID)
 	// According to input checksum, decide whether to create the hash.
 	var hash []byte
 	if checksum {
@@ -369,7 +369,7 @@ func (t *Transaction) writePage(page *page) error {
 
 	offset := page.offset
 	if page == t.headPage {
-		const shift = txnMetaSize - PageMetaSize
+		const shift = txnMetaSize - pageMetaSize
 		offset += shift
 		buf = buf[:len(buf)-shift]
 	}

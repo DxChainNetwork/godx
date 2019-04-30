@@ -148,7 +148,7 @@ func (u *utilsFaultyDisk) remove(path string) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if u.tryFail(){
+	if u.tryFail() {
 		return nil
 	}
 	return os.Remove(path)

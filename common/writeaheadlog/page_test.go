@@ -6,7 +6,7 @@ import (
 )
 
 func BenchmarkPage_Marshal(b *testing.B) {
-	randomBytes := make([]byte, PageSize-PageMetaSize)
+	randomBytes := make([]byte, PageSize-pageMetaSize)
 	rand.Read(randomBytes)
 	p := page{
 		offset:   4096,
@@ -24,7 +24,7 @@ func BenchmarkPage_Marshal(b *testing.B) {
 
 // TODO: remove the test
 //func TestPage(t *testing.T) {
-//	data := bytes.Repeat([]byte{1}, 500-PageMetaSize)
+//	data := bytes.Repeat([]byte{1}, 500-pageMetaSize)
 //	p := page{
 //		offset:   4096,
 //		payload:  data,

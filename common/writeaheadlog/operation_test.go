@@ -10,8 +10,8 @@ import (
 
 func makeTestOps(num int) []Operation {
 	var ops []Operation
-	for i := 0; i != num ; i++ {
-		ops = append(ops, Operation {
+	for i := 0; i != num; i++ {
+		ops = append(ops, Operation{
 			Name: fmt.Sprintf("Test%d", i),
 			Data: bytes.Repeat([]byte{byte(i)}, 100*i),
 		})
@@ -36,21 +36,21 @@ func TestOpsMarshalUnmarshal(t *testing.T) {
 
 func TestOperation_verify(t *testing.T) {
 	tests := []struct {
-		op Operation
+		op  Operation
 		err error
 	}{
 		{
-			op: Operation{Name: "Normal", Data: []byte{1,1,1,1,1,1}},
+			op:  Operation{Name: "Normal", Data: []byte{1, 1, 1, 1, 1, 1}},
 			err: nil,
 		},
 		{
-			op: Operation{Name: "", Data: []byte{1,1,1,1,1,1}},
+			op:  Operation{Name: "", Data: []byte{1, 1, 1, 1, 1, 1}},
 			err: errors.New("name cannot be empty"),
 		},
 		{
 			op: Operation{
 				Name: "This name is long, long enough that I can ever believe. The one writing this name must be a genius, who is talented, diligent, and handsome. I know that you cannot argue with that. Neither do I. This is the truth over the universe, born with the intellect of human beings. It is the truth that shine and provide like the sun",
-				Data: []byte{1,1,1,1,1},
+				Data: []byte{1, 1, 1, 1, 1},
 			},
 			err: errors.New("name longer than 255 bytes not supported"),
 		},
@@ -63,12 +63,11 @@ func TestOperation_verify(t *testing.T) {
 	}
 }
 
-
 func BenchmarkMarshalUpdates(b *testing.B) {
 	ops := make([]Operation, 100)
 	for i := range ops {
 		ops[i] = Operation{
-			Name:         "test",
+			Name: "test",
 			Data: randomBytes(1234),
 		}
 	}
@@ -81,9 +80,9 @@ func BenchmarkMarshalUpdates(b *testing.B) {
 
 func BenchmarkUnmarshalUpdates(b *testing.B) {
 	ops := make([]Operation, 100)
-	for i := range ops{
+	for i := range ops {
 		ops[i] = Operation{
-			Name:         "test",
+			Name: "test",
 			Data: randomBytes(1234),
 		}
 	}

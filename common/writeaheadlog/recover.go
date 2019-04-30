@@ -37,8 +37,8 @@ func (w *Wal) recoverWal(data []byte) ([]*Transaction, error) {
 		}
 		pages[i] = &diskPage{
 			page: page{
-				offset: i,
-				payload: data[i+PageMetaSize: i+PageSize],
+				offset:  i,
+				payload: data[i+pageMetaSize : i+PageSize],
 			},
 			nextPageOffset: nextOffset,
 		}
@@ -85,7 +85,7 @@ nextTxn:
 			status:         status,
 			setupComplete:  true,
 			commitComplete: true,
-			Id: seq,
+			ID:             seq,
 			headPage:       firstPage,
 			wal:            w,
 		}
@@ -110,11 +110,11 @@ nextTxn:
 	}
 
 	sort.Slice(txns, func(i, j int) bool {
-		return txns[i].Id < txns[j].Id
+		return txns[i].ID < txns[j].ID
 	})
 	// number of pages - meta page
 	w.pageCount = uint64(len(data)) / PageSize
-	if len(data)%PageSize != 0{
+	if len(data)%PageSize != 0 {
 		w.pageCount++
 	}
 	if w.pageCount > 0 {

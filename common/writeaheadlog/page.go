@@ -7,9 +7,14 @@ import (
 )
 
 const (
-	PageSize       = 4096 // size of the page.
-	PageMetaSize   = 8    // size of the page.offset field, which is uint64
-	MaxPayloadSize = PageSize - PageMetaSize
+	// PageSize is the size of a page in Wal logfile
+	PageSize = 4096
+
+	// Page metadata is the metadata size of a page, which is the size of uint64, the next page's offset
+	pageMetaSize = 8
+
+	// maxPayloadSize is the maximum payload size of a page, which is PageSize-pageMetaSize
+	maxPayloadSize = PageSize - pageMetaSize
 )
 
 // page is a in-memory linked page list.
@@ -26,7 +31,7 @@ type page struct {
 }
 
 // The on-disk size is the size of (offset + payload)
-func (p page) size() int { return PageMetaSize + len(p.payload) }
+func (p page) size() int { return pageMetaSize + len(p.payload) }
 
 // nextOffset return the offset of the next page. if the next page is nil, return max uint64
 func (p page) nextOffset() uint64 {
