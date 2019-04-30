@@ -8,9 +8,8 @@ import (
 const (
 	PersistHostDir  = "storagehost" // the dir for storing the host log, json, and ect.
 	HostSettingFile = "host.json"   // the file name for saving the setting of host
-	HostDB			= "hostdb"
-	HostLog         = "host.log"    // the log file for log of host
-	StorageManager	= "storagemanager"
+	HostDB          = "hostdb"
+	StorageManager  = "storagemanager"
 )
 
 var (
@@ -43,7 +42,6 @@ var (
 	defaultSectorAccessPrice      = 5000
 	defaultStoragePrice           = 6000
 	defaultUploadBandwidthPrice   = 7000
-
 )
 
 func loadDefaultSetting() StorageHostIntSetting {
@@ -63,6 +61,5 @@ func loadDefaultSetting() StorageHostIntSetting {
 		MinSectorAccessPrice:      *big.NewInt(int64(defaultSectorAccessPrice)),
 		MinStoragePrice:           *big.NewInt(int64(defaultStoragePrice)),
 		MinUploadBandwidthPrice:   *big.NewInt(int64(defaultUploadBandwidthPrice)),
-
 	}
 }

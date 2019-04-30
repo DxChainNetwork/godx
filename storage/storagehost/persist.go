@@ -7,22 +7,14 @@ import (
 
 // the fields that need to write into the jason file
 type persistence struct {
-	// TODO: not sure if need or not, just place here
-	BlockHeight			uint64
-
-	BroadCast      		bool // Indicate if the host broadcast
-	AutoAddress			string
-	RevisionNumber 		uint64
-	FinalcialMetrics	HostFinancialMetrics
-	Settings       		StorageHostIntSetting
-	//TODO: UnlockHash  types UnlockHash
+	BroadCast        bool                  `json:"broadcast"`
+	RevisionNumber   uint64                `json:"revisionnumber"`
+	FinalcialMetrics HostFinancialMetrics  `json:"finalcialmetrics"`
+	Settings         StorageHostIntSetting `json:"settings"`
 }
 
 // save the host settings: the filed as persistence shown, to the json file
 func (h *StorageHost) syncSetting() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	// extract the persistence from host
 	persist := h.extractPersistence()
 
@@ -35,39 +27,22 @@ func (h *StorageHost) syncSetting() error {
 // extract the persistence data from the host
 func (h *StorageHost) extractPersistence() *persistence {
 	return &persistence{
-		BlockHeight: 	h.blockHeight,
-
-		BroadCast:      	h.broadcast,
-		AutoAddress:		h.autoAddress,
-		FinalcialMetrics:	h.financialMetrics,
-		RevisionNumber: 	h.revisionNumber,
-		Settings:       	h.settings,
-		// TODO: unlock hash
+		BroadCast:        h.broadcast,
+		FinalcialMetrics: h.financialMetrics,
+		RevisionNumber:   h.revisionNumber,
+		Settings:         h.settings,
 	}
 }
 
 // Require: lock the storageHost by caller
 // load the persistence data to the host
 func (h *StorageHost) loadPersistence(persist *persistence) {
-	h.blockHeight = persist.BlockHeight
-
 	h.broadcast = persist.BroadCast
-	h.autoAddress = persist.AutoAddress
 
-	if err := IsValidAddress(persist.AutoAddress); err != nil{
-		// TODO: log the warning
-		h.autoAddress = ""
-	}
+	// TODO: address checking if NetAddress need to be store to the Setting file
+	// TODO: unlock hash checking if unlock hash need to be store to the Setting file
 
 	h.financialMetrics = persist.FinalcialMetrics
 	h.revisionNumber = persist.RevisionNumber
 	h.settings = persist.Settings
-
-	if err := IsValidAddress(persist.Settings.NetAddress); err != nil{
-		// TODO: log the warning
-		h.settings.NetAddress = ""
-	}
-
-	// TODO:  unlock hash
 }
-

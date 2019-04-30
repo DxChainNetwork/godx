@@ -33,14 +33,14 @@ func (h *HostDeBugAPI) Persistdir() string {
 	return h.storagehost.GetPersistDir()
 }
 
-// print the internal setting of the host
-func (h *HostDeBugAPI) PrintSetting() {
-	h.storagehost.PrintIntSetting()
-}
-
 // print the structure of the host
 func (h *HostDeBugAPI) PrintStorageHost() {
 	h.storagehost.PrintStorageHost()
+}
+
+// print the internal financial metrics of the host
+func (h *HostDeBugAPI) PrintPrintFinancialMetrics(){
+	h.storagehost.PrintFinancialMetrics()
 }
 
 // Set the broadcast to a boolean value and save into the setting file
