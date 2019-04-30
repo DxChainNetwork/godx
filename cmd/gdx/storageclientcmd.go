@@ -60,7 +60,7 @@ func setPayment(ctx *cli.Context) error {
 	}
 
 	var result string
-	err = client.Call(&result, "storageclient_setPayment")
+	err = client.Call(&result, "storageclient_setpayment")
 	if err != nil {
 		utils.Fatalf("failed to configure storage client payment settings: %s", err.Error())
 	}

@@ -20,6 +20,6 @@ func NewPrivateStorageClientAPI(sc *StorageClient) *PrivateStorageClientAPI {
 	return &PrivateStorageClientAPI{sc}
 }
 
-func (api *PrivateStorageClientAPI) SetPayment() string {
+func (api *PrivateStorageClientAPI) Setpayment() string {
 	return "working in progress: setting payment information"
 }
