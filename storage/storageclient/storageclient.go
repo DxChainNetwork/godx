@@ -25,6 +25,7 @@ type Wal struct{}
 // *********************************************
 // *********************************************
 
+// Backend allows Ethereum object to be passed in as interface
 type Backend interface {
 	APIs() []rpc.API
 }
@@ -87,11 +88,11 @@ func (sc *StorageClient) Start(eth Backend) error {
 
 	// validation
 	if sc.network == nil {
-		return errors.New("failed to get network information")
+		return errors.New("failed to acquire network information")
 	}
 
 	if sc.account == nil {
-		return errors.New("failed to get account information")
+		return errors.New("failed to acquire account information")
 	}
 
 	// TODO (mzhang): Initialize ContractManager & StorageHostManager -> assign to StorageClient
@@ -101,11 +102,13 @@ func (sc *StorageClient) Start(eth Backend) error {
 		return err
 	}
 
-	// TODO (Jacky): DxFile / DxDirectory Update
+	// TODO (mzhang): Subscribe consensus change
+
+	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
 
 	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
 
-	// TODO (mzhang): Register On Stop Thread Control Function
+	// TODO (mzhang): Register On Stop Thread Control Function, waiting for WAL
 
 	return nil
 }

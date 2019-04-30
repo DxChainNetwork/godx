@@ -193,6 +193,8 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// See storageclientcmd.go
+		storageClientCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

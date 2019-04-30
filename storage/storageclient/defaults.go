@@ -8,6 +8,7 @@ const (
 	DxPathRoot                  = "dxfiles"
 )
 
+// StorageClient Settings, where 0 means unlimited
 const (
 	DefaultMaxDownloadSpeed = 0
 	DefaultMaxUploadSpeed   = 0
