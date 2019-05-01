@@ -14,3 +14,20 @@ const (
 	DefaultMaxUploadSpeed   = 0
 	DefaultStreamCacheSize  = 2
 )
+
+// Max memory available
+const (
+	DefaultMaxMemory = uint64(3 * 1 << 28)
+)
+
+// Backup Header
+const (
+	encryptionPlaintext = "plaintext"
+	encryptionTwofish   = "twofish"
+	encryptionVersion   = "1.0"
+)
+
+// DxFile Related
+const (
+	DxFileExtension = ".dx"
+)
