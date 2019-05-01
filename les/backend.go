@@ -43,9 +43,14 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/discv5"
 	"github.com/DxChainNetwork/godx/params"
 	rpc "github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 type LightEthereum struct {
+	apionce        sync.Once
+	registeredAPIs []rpc.API
+	storageHost    *storagehost.StorageHost
+
 	lesCommons
 
 	odr         *LesOdr
@@ -145,6 +150,16 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 		gpoParams.Default = config.MinerGasPrice
 	}
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
+
+	path := ctx.ResolvePath(storagehost.PersistHostDir)
+	leth.storageHost, err = storagehost.New(path)
+
+	if err != nil {
+		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
+		//  make sure what the expected handling case of these failure
+		return nil, err
+	}
+
 	return leth, nil
 }
 
@@ -186,29 +201,40 @@ func (s *LightDummyAPI) Mining() bool {
 // APIs returns the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *LightEthereum) APIs() []rpc.API {
-	return append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   &LightDummyAPI{},
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
-			Public:    true,
-		}, {
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   s.netRPCService,
-			Public:    true,
-		},
-	}...)
+	getAPI := func() {
+		s.registeredAPIs = append(ethapi.GetAPIs(s.ApiBackend), []rpc.API{
+			{
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   &LightDummyAPI{},
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   filters.NewPublicFilterAPI(s.ApiBackend, true),
+				Public:    true,
+			}, {
+				Namespace: "net",
+				Version:   "1.0",
+				Service:   s.netRPCService,
+				Public:    true,
+			}, {
+				Namespace: "hostdebug",
+				Version:   "1.0",
+				Service:   storagehost.NewHostDebugAPI(s.storageHost),
+				Public:    true,
+			},
+		}...)
+	}
+
+	s.apionce.Do(getAPI)
+
+	return s.registeredAPIs
 }
 
 func (s *LightEthereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -221,6 +247,7 @@ func (s *LightEthereum) Engine() consensus.Engine           { return s.engine }
 func (s *LightEthereum) LesVersion() int                    { return int(ClientProtocolVersions[0]) }
 func (s *LightEthereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *LightEthereum) EventMux() *event.TypeMux           { return s.eventMux }
+func (s *LightEthereum) AccountManager() *accounts.Manager  { return s.accountManager }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
@@ -238,6 +265,9 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	protocolVersion := AdvertiseProtocolVersions[0]
 	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	s.protocolManager.Start(s.config.LightPeers)
+
+	s.storageHost.Start(s)
+
 	return nil
 }
 
@@ -256,6 +286,7 @@ func (s *LightEthereum) Stop() error {
 
 	time.Sleep(time.Millisecond * 200)
 	s.chainDb.Close()
+	s.storageHost.Close()
 	close(s.shutdownChan)
 
 	return nil

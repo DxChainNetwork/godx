@@ -6,7 +6,7 @@
 // be inlined with resource allocation, similar to defer. The difference is that
 // `OnStop` and `AfterStop` will be called following tg.Stop, instead of when
 // the parent function goes out of scope.
-package threadManager
+package threadmanager
 
 import (
 	"errors"
