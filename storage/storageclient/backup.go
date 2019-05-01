@@ -212,7 +212,7 @@ func wrapReaderInCipher(r io.Reader, bh backupHeader, secret []byte) (io.Reader,
 		if err != nil {
 			return nil, err
 		}
-		return cipher.StreamReader {
+		return cipher.StreamReader{
 			S: cipher.NewCTR(c, bh.IV),
 			R: r,
 		}, nil
