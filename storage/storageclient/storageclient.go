@@ -2,7 +2,7 @@ package storageclient
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common/threadManager"
+	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rpc"
@@ -63,7 +63,7 @@ type StorageClient struct {
 	log         log.Logger
 	// TODO (jacky): considering using the Lock and Unlock with ID ?
 	lock    sync.Mutex
-	tm      threadManager.ThreadManager
+	tm      threadmanager.ThreadManager
 	wal     Wal
 	network *ethapi.PublicNetAPI
 	account *ethapi.PrivateAccountAPI
