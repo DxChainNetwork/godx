@@ -6,6 +6,7 @@ import (
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -14,7 +15,6 @@ import (
 // ************** MOCKING DATA *****************
 // *********************************************
 
-type memoryManager struct{}
 type storageHostManager struct{}
 type contractManager struct{}
 type StorageContractID struct{}
@@ -40,7 +40,7 @@ type StorageClient struct {
 	// Todo (jacky): File Recovery Related
 
 	// Memory Management
-	memoryManager *memoryManager
+	memoryManager *memorymanager.MemoryManager
 
 	// contract manager and storage host manager
 	contractManager    contractManager
@@ -60,7 +60,7 @@ type StorageClient struct {
 	streamCache *streamCache
 	log         log.Logger
 	// TODO (jacky): considering using the Lock and Unlock with ID ?
-	mu      sync.Mutex
+	lock    sync.Mutex
 	tg      threadManager.ThreadManager
 	wal     Wal
 	network *ethapi.PublicNetAPI
@@ -76,7 +76,7 @@ func New(persistDir string) (*StorageClient, error) {
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 	}
 
-	// TODO (mzhang): initialize memory manager
+	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tg.StopChan())
 
 	return sc, nil
 }
