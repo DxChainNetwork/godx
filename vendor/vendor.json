@@ -352,6 +352,18 @@
 			"tree": true
 		},
 		{
+			"checksumSHA1": "rM3pI1JDvb21wOaVjTCXrf+Ce04=",
+			"path": "github.com/klauspost/cpuid",
+			"revision": "05a8198c0f5a27739aec358908d7e12c64ce6eb7",
+			"revisionTime": "2019-04-22T09:51:56Z"
+		},
+		{
+			"checksumSHA1": "oNPIJ4td9Sy3KJNG32jzw0WN9nc=",
+			"path": "github.com/klauspost/reedsolomon",
+			"revision": "a373324398e4d088b67d6dd6157285b5d4e29642",
+			"revisionTime": "2019-04-07T15:36:31Z"
+		},
+		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
 			"path": "github.com/maruel/panicparse/stack",
 			"revision": "ad661195ed0e88491e0f14be6613304e3b1141d6",
