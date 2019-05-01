@@ -11,7 +11,7 @@ var err2 = errors.New("testing error 2")
 var err3 = errors.New("testing error 3")
 var err4 = errors.New("testing error 4")
 
-var nilErr error = nil
+var nilErr error
 
 func TestErrCompose(t *testing.T) {
 	expectedOutput := fmt.Sprintf("{%s; %s; %s}", err1.Error(), err2.Error(), err3.Error())
