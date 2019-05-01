@@ -20,6 +20,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"runtime"
 	"sync"
@@ -61,8 +62,6 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	apionce        sync.Once
-	registeredAPIs []rpc.API
 	storageHost    *storagehost.StorageHost
 
 	config      *Config
@@ -91,6 +90,10 @@ type Ethereum struct {
 	miner     *miner.Miner
 	gasPrice  *big.Int
 	etherbase common.Address
+
+	apisOnce      sync.Once
+	registeredAPIs []rpc.API
+	storageClient *storageclient.StorageClient
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
@@ -193,8 +196,15 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	path := ctx.ResolvePath(storagehost.PersistHostDir)
-	eth.storageHost, err = storagehost.New(path)
+	// Initialize StorageClient
+	clientPath := ctx.ResolvePath(config.StorageClientDir)
+	eth.storageClient, err = storageclient.New(clientPath)
+	if err != nil {
+		return nil, err
+	}
+
+	hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
+	eth.storageHost, err = storagehost.New(hostPath)
 
 	if err != nil {
 		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
@@ -268,7 +278,6 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-
 	getAPI := func() {
 		apis := ethapi.GetAPIs(s.APIBackend)
 
@@ -321,6 +330,16 @@ func (s *Ethereum) APIs() []rpc.API {
 				Service:   s.netRPCService,
 				Public:    true,
 			}, {
+				Namespace: "storageclient",
+				Version:   "1.0",
+				Service:   storageclient.NewPublicStorageClientAPI(s.storageClient),
+				Public:    true,
+			}, {
+				Namespace: "storageclient",
+				Version:   "1.0",
+				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
+				Public:    false,
+			},{
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
@@ -329,8 +348,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		}...)
 	}
 
-	s.apionce.Do(getAPI)
-
+	s.apisOnce.Do(getAPI)
 	return s.registeredAPIs
 }
 
@@ -530,6 +548,13 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 		s.lesServer.Start(srvr)
 	}
 
+	// Start Storage Client
+	err := s.storageClient.Start(s)
+	if err != nil {
+		return err
+	}
+
+	// Start Storage Host
 	s.storageHost.Start(s)
 
 	return nil
