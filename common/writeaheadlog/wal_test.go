@@ -46,7 +46,6 @@ func newWalTester(name string, utils utilsSet) (*walTester, error) {
 	testdir := tempDir(name)
 	err := os.MkdirAll(testdir, 0700)
 	if err != nil {
-		fmt.Println("mkdir error")
 		return nil, err
 	}
 	path := filepath.Join(testdir, "test.wal")
