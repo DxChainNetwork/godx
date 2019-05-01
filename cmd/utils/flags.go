@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -112,6 +113,13 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// Storage Client
+	StorageClientMemoryFlag = cli.Uint64Flag{
+		Name: "memorylimit",
+		Usage: "Memory limitation for storage client",
+		Value: storageclient.DefaultMaxMemory,
+	}
+
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",

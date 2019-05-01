@@ -159,6 +159,10 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBHostTagFlag,
 	}
+
+	storageClientFlags = []cli.Flag{
+		utils.StorageClientMemoryFlag,
+	}
 )
 
 func init() {
@@ -203,6 +207,7 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, storageClientFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""
