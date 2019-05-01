@@ -56,6 +56,7 @@ type StorageHost struct {
 	// storageHost basic settings
 	broadcast          bool
 	broadcastConfirmed bool
+	blockHeight        uint64
 
 	financialMetrics HostFinancialMetrics
 	settings         StorageHostIntSetting

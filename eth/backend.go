@@ -61,8 +61,8 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	apionce			sync.Once
-	registeredAPIs	[]rpc.API
+	apionce        sync.Once
+	registeredAPIs []rpc.API
 	storageHost    *storagehost.StorageHost
 
 	config      *Config
@@ -196,7 +196,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	path := ctx.ResolvePath(storagehost.PersistHostDir)
 	eth.storageHost, err = storagehost.NewStorageHost(path)
 
-	if err != nil{
+	if err != nil {
 		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
 		//  make sure what the expected handling case of these failure
 		return nil, err
@@ -550,6 +550,7 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
+	s.storageHost.Close()
 	close(s.shutdownChan)
 	return nil
 }

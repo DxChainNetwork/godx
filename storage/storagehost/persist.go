@@ -7,6 +7,7 @@ import (
 
 // the fields that need to write into the jason file
 type persistence struct {
+	BlockHeight      uint64                `json:"blockHeight"`
 	BroadCast        bool                  `json:"broadcast"`
 	RevisionNumber   uint64                `json:"revisionnumber"`
 	FinalcialMetrics HostFinancialMetrics  `json:"finalcialmetrics"`
@@ -27,6 +28,7 @@ func (h *StorageHost) syncSetting() error {
 // extract the persistence data from the host
 func (h *StorageHost) extractPersistence() *persistence {
 	return &persistence{
+		BlockHeight:      h.blockHeight,
 		BroadCast:        h.broadcast,
 		FinalcialMetrics: h.financialMetrics,
 		RevisionNumber:   h.revisionNumber,
@@ -37,6 +39,7 @@ func (h *StorageHost) extractPersistence() *persistence {
 // Require: lock the storageHost by caller
 // load the persistence data to the host
 func (h *StorageHost) loadPersistence(persist *persistence) {
+	h.blockHeight = persist.BlockHeight
 	h.broadcast = persist.BroadCast
 
 	// TODO: address checking if NetAddress need to be store to the Setting file

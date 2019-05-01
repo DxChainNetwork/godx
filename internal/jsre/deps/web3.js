@@ -5883,8 +5883,8 @@ module.exports = Shh;
       });
 
       var printStorageHost = new Method({
-        name: 'printStorageHost',
-        call: 'hostdebug_printStorageHost',
+        name: 'printHostPersist',
+        call: 'hostdebug_printHostPersist',
         params: 0,
       });
 

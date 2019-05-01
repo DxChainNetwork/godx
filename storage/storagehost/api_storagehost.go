@@ -34,8 +34,8 @@ func (h *HostDeBugAPI) Persistdir() string {
 }
 
 // print the structure of the host
-func (h *HostDeBugAPI) PrintStorageHost() {
-	h.storagehost.PrintStorageHost()
+func (h *HostDeBugAPI) PrintHostPersist() {
+	h.storagehost.PrintHostPersist()
 }
 
 // print the internal setting of host

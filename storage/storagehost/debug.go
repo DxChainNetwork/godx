@@ -10,9 +10,10 @@ func (h *StorageHost) GetPersistDir() string {
 	return h.persistDir
 }
 
-// print the structure of the host
-func (h *StorageHost) PrintStorageHost() {
-	b, _ := json.MarshalIndent(h, "", "")
+// print the structure persistence of storage host
+func (h *StorageHost) PrintHostPersist() {
+	persist := h.extractPersistence()
+	b, _ := json.MarshalIndent(persist, "", "")
 	fmt.Println(string(b))
 }
 
