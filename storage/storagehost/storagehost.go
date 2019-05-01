@@ -76,8 +76,8 @@ type StorageHost struct {
 	log        log.Logger
 
 	// things for thread safety
-	mu sync.RWMutex
-	tm tm.ThreadManager
+	lock sync.RWMutex
+	tm   tm.ThreadManager
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
@@ -105,8 +105,8 @@ func New(persistDir string) (*StorageHost, error) {
 	// use the thread manager to close the things open
 	defer func() {
 		if err != nil {
-			if tgErr := host.tm.Stop(); tgErr != nil {
-				err = errors.New(err.Error() + "; " + tgErr.Error())
+			if tmErr := host.tm.Stop(); tmErr != nil {
+				err = errors.New(err.Error() + "; " + tmErr.Error())
 			}
 		}
 	}()
@@ -170,8 +170,8 @@ func (h *StorageHost) Close() error {
 // HostExtConfig return the host external config, which configure host through,
 // user should not able to modify the config
 func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
 		h.log.Crit("Call to HostExtConfig fail")
 	}
@@ -184,8 +184,8 @@ func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
 // FinancialMetrics contains the information about the activities,
 // commitments, rewards of host
 func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 	if err := h.tm.Add(); err != nil {
 		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")
 	}
@@ -202,8 +202,8 @@ func (h *StorageHost) SetIntConfig(config storage.HostIntConfig, debug ...bool) 
 	//  development, please follow the logic to make the test case success as expected,
 	//  or delete and  do another test case for convenience
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
 		h.log.Crit("Fail to add HostIntConfig Getter to thread manager")
 		return err
@@ -240,8 +240,8 @@ LOADSETTING:
 
 // InternalConfig Return the internal config of host
 func (h *StorageHost) InternalConfig() storage.HostIntConfig {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 	// if not able to add to the thread manager, simply return a empty config structure
 	if err := h.tm.Add(); err != nil {
 		return storage.HostIntConfig{}
@@ -308,8 +308,8 @@ func (h *StorageHost) load() error {
 // loadFromFile load host config from the file, guarantee that host would not be
 // modified if error happen
 func (h *StorageHost) loadFromFile() error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	// load and create a persist from JSON file
 	persist := new(persistence)
@@ -327,7 +327,7 @@ func (h *StorageHost) loadFromFile() error {
 
 // loadDefaults loads the default config for the host
 func (h *StorageHost) loadDefaults() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	h.config = loadDefaultConfig()
 }

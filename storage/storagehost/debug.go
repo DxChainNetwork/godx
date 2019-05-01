@@ -8,16 +8,16 @@ import (
 
 // print the persist directory of the host
 func (h *StorageHost) getPersistDir() string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 
 	return h.persistDir
 }
 
 // print the structure persistence of storage host
 func (h *StorageHost) getHostPersist() {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 
 	persist := h.extractPersistence()
 	b, _ := json.MarshalIndent(persist, "", "")
@@ -51,8 +51,8 @@ func (h *StorageHost) setDefault() {
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the config file
 func (h *StorageHost) setBroadCast(b bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	h.broadcast = b
 	if err := h.syncConfig(); err != nil {
@@ -64,8 +64,8 @@ func (h *StorageHost) setBroadCast(b bool) {
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the config file
 func (h *StorageHost) setRevisionNumber(num int) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	h.revisionNumber = uint64(num)
 	if err := h.syncConfig(); err != nil {
@@ -77,8 +77,8 @@ func (h *StorageHost) setRevisionNumber(num int) {
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the config file
 func (h *StorageHost) setIntConfig(intConfig storage.HostIntConfig) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	h.config = intConfig
 
@@ -92,8 +92,8 @@ func (h *StorageHost) setIntConfig(intConfig storage.HostIntConfig) {
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the config file
 func (h *StorageHost) setFinancialMetrics(metric HostFinancialMetrics) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	// directly load the financial metrics to the host
 	h.financialMetrics = metric
