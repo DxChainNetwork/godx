@@ -5610,14 +5610,35 @@ module.exports = Net;
             });
 
             var setpayment = new Method({
-                name: 'setpayment',
-                call: 'storageclient_setpayment',
+                name: 'setPayment',
+                call: 'storageclient_setPayment',
                 params: 0,
             });
+
+            var memory = new Method({
+                name: 'memory',
+                call: 'storageclient_memoryAvailable',
+                params: 0,
+            });
+
+            var memorylimit = new Method({
+                name: 'memoryLimit',
+                call: 'storageclient_memoryLimit',
+                params: 0,
+            });
+
+            var setMemoryLimit = new Method({
+                name: 'setMemoryLimit',
+                call: 'storageclient_setMemoryLimit',
+                params: 1,
+            })
 
             return [
                 payment,
                 setpayment,
+                memory,
+                memorylimit,
+                setMemoryLimit,
             ];
         };
 
