@@ -5882,9 +5882,27 @@ module.exports = Shh;
         params: 0,
       });
 
-      var printSetting = new Method({
-        name: 'printSetting',
-        call: 'hostdebug_printSetting',
+      var printStorageHost = new Method({
+        name: 'printStorageHost',
+        call: 'hostdebug_printStorageHost',
+        params: 0,
+      });
+
+      var printInternalSetting = new Method({
+        name: 'printInternalSetting',
+        call: 'hostdebug_printIntSetting',
+        params: 0,
+      });
+
+      var printFinancialMetrics = new Method({
+        name: 'printFinancialMetrics',
+        call: 'hostdebug_printFinancialMetrics',
+        params: 0,
+      });
+
+      var setDefault = new Method({
+        name: 'setDefault',
+        call: 'hostdebug_setDefault',
         params: 0,
       });
 
@@ -5900,26 +5918,33 @@ module.exports = Shh;
         params: 1,
       });
 
-      var setAcceptingContract = new Method({
-        name: 'setAcceptingContract',
-        call: 'hostdebug_setAcceptingContract',
+
+      var loadInternalSetting = new Method({
+        name: 'loadInternalSetting',
+        call: 'hostdebug_loadInternalSetting',
         params: 1,
       });
 
-      var setDeposit = new Method({
-        name: 'setDeposit',
-        call: 'hostdebug_setDeposit',
+      var loadFinancialMetrics = new Method({
+        name: 'loadFinancialMetrics',
+        call: 'hostdebug_loadFinancialMetrics',
         params: 1,
       });
+
 
       return [
         helloWorld,
         persistdir,
-        printSetting,
+        printStorageHost,
+        printInternalSetting,
+        printFinancialMetrics,
+
+        setDefault,
         setBroadCast,
         setRevisionNumber,
-        setAcceptingContract,
-        setDeposit,
+
+        loadInternalSetting,
+        loadFinancialMetrics,
       ];
     };
 

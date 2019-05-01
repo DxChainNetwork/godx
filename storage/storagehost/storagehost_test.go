@@ -11,18 +11,17 @@ import (
 	"testing"
 )
 
+// constant range for generating the number randomly
+// this is only used by test case
+const RANDRANGE = 100000000
+
 // Test if the persist Folder could be generate as expected
 // Test if the persist file could be fill using the default value
 // 		when the host is the first time initialized
 func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	// clear the saved data for testing
-	rm := func() {
-		if err := remmoveFolders("./testdata/", t); err != nil {
-			return
-		}
-	}
-	rm()
-	defer rm()
+	remmoveFolders("./testdata/", t)
+	defer remmoveFolders("./testdata/", t)
 
 	// do a new host, check if the folder are all generated
 	host, err := NewStorageHost("./testdata/")
@@ -64,14 +63,8 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 // Test if changing setting would result the change of the setting file
 func TestStorageHost_DataPreservation(t *testing.T) {
 	// clear the saved data for testing
-	rm := func() {
-		if err := remmoveFolders("./testdata/", t); err != nil {
-			return
-		}
-	}
-
-	rm()
-	defer rm()
+	remmoveFolders("./testdata/", t)
+	defer remmoveFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
 	host, err := NewStorageHost("./testdata/")
@@ -109,13 +102,13 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 
 		// host primitive variable
 		host.broadcast = rand.Float32() < 0.5
-		host.revisionNumber = uint64(rand.Intn(100000000))
+		host.revisionNumber = uint64(rand.Intn(RANDRANGE))
 		// host setting structure
 		host.settings.AcceptingContracts = rand.Float32() < 0.5
-		host.settings.Deposit = *big.NewInt(int64(rand.Intn(100000000)))
+		host.settings.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
 		// host financial Metrics
-		host.financialMetrics.ContractCount = uint64(rand.Intn(100000000))
-		host.financialMetrics.StorageRevenue = *big.NewInt(int64(rand.Intn(100000000)))
+		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
+		host.financialMetrics.StorageRevenue = *big.NewInt(int64(rand.Intn(RANDRANGE)))
 
 		// extract the persistence information
 		persist1 = host.extractPersistence()
@@ -138,13 +131,8 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 
 func TestStorageHost_SetIntSetting(t *testing.T) {
 	// clear the saved data for testing
-	rm := func() {
-		if err := remmoveFolders("./testdata/", t); err != nil {
-			return
-		}
-	}
-	rm()
-	defer rm()
+	remmoveFolders("./testdata/", t)
+	defer remmoveFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
 	host, err := NewStorageHost("./testdata/")
@@ -158,9 +146,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		// selectively random a storHostIntSetting
 		internalSetting := StorageHostIntSetting{
 			AcceptingContracts:   rand.Float32() < 0.5,
-			MaxDownloadBatchSize: uint64(rand.Intn(100000000)),
-			Deposit:              *big.NewInt(int64(rand.Intn(100000000))),
-			MinBaseRPCPrice:      *big.NewInt(int64(rand.Intn(100000000))),
+			MaxDownloadBatchSize: uint64(rand.Intn(RANDRANGE)),
+			Deposit:              *big.NewInt(int64(rand.Intn(RANDRANGE))),
+			MinBaseRPCPrice:      *big.NewInt(int64(rand.Intn(RANDRANGE))),
 		}
 
 		// set the randomly generated field to host
@@ -189,7 +177,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		//}
 
 		// TODO: for a more complex data structure, some field may be init as nil, but some
-		//  filed would be init as an empty structre, in order to keep them consistence, more
+		//  filed would be init as an empty structure, in order to keep them consistence, more
 		//  handling may needed
 
 		if !reflect.DeepEqual(host.InternalSetting(), internalSetting) {
@@ -205,11 +193,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 }
 
 // helper function to clear the data file before and after a test case execute
-func remmoveFolders(Persisdir string, t *testing.T) error {
+func remmoveFolders(Persisdir string, t *testing.T) {
 	// clear the testing data
 	if err := os.RemoveAll(Persisdir); err != nil {
-		t.Logf("cannot remove the data when testing")
-		return err
+		t.Error("cannot remove the data when testing")
 	}
-	return nil
 }

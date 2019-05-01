@@ -38,9 +38,21 @@ func (h *HostDeBugAPI) PrintStorageHost() {
 	h.storagehost.PrintStorageHost()
 }
 
+// print the internal setting of host
+func (h *HostDeBugAPI) PrintIntSetting() {
+	h.storagehost.PrintIntSetting()
+}
+
 // print the internal financial metrics of the host
-func (h *HostDeBugAPI) PrintPrintFinancialMetrics(){
+func (h *HostDeBugAPI) PrintFinancialMetrics() {
 	h.storagehost.PrintFinancialMetrics()
+}
+
+// load the internal setting back to default
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *HostDeBugAPI) SetDefault() {
+	h.storagehost.SetDefault()
 }
 
 // Set the broadcast to a boolean value and save into the setting file
@@ -57,16 +69,34 @@ func (h *HostDeBugAPI) SetRevisionNumber(num int) {
 	h.storagehost.SetRevisionNumber(num)
 }
 
-// Simply set the Accepting contract and save into the setting file
+// Set the Internal setting of the host in String format
+// the same as the structure input to the console
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the setting file
-func (h *HostDeBugAPI) SetAcceptingContract(b bool) {
-	h.storagehost.SetAcceptingContract(b)
+func (h *HostDeBugAPI) LoadInternalSettingStream(str string) {
+	h.storagehost.LoadIntSettingStr(str)
 }
 
-// Simply set the deposit and save into the setting file
+// Set the Financial Metrics of the host in String format
+// the same as the structure input to the console
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the setting file
-func (h *HostDeBugAPI) SetDeposit(num int) {
-	h.storagehost.SetDeposit(num)
+func (h *HostDeBugAPI) LoadFinancialMetricsStream(str string) {
+	h.storagehost.LoadFinancialMetricsStr(str)
+}
+
+// Set the Internal setting of the host in Object format
+// the same as the structure input to the console
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *HostDeBugAPI) LoadInternalSetting(internalSetting StorageHostIntSetting) {
+	h.storagehost.LoadIntSetting(internalSetting)
+}
+
+// Set the Financial Metrics of the host in Object format
+// the same as the structure input to the console
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *HostDeBugAPI) LoadFinancialMetrics(metric HostFinancialMetrics) {
+	h.storagehost.LoadFinancialMetrics(metric)
 }

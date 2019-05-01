@@ -176,7 +176,7 @@ func (h *StorageHost) StorageHostExtSetting() StorageHostExtSetting {
 // Financial Metrics contains the information about the activities,
 // commitments, rewards of host
 func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
-	h.mu.RUnlock()
+	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if err := h.tg.Add(); err != nil {
 		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")

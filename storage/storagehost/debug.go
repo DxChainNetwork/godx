@@ -2,8 +2,7 @@ package storagehost
 
 import (
 	"encoding/json"
-	"github.com/davecgh/go-spew/spew"
-	"math/big"
+	"fmt"
 )
 
 // print the persist directory of the host
@@ -13,26 +12,43 @@ func (h *StorageHost) GetPersistDir() string {
 
 // print the structure of the host
 func (h *StorageHost) PrintStorageHost() {
-	spew.Dump(h)
+	b, _ := json.MarshalIndent(h, "", "")
+	fmt.Println(string(b))
 }
 
 // print the internal setting of the host
 func (h *StorageHost) PrintIntSetting() {
-	spew.Dump(h.InternalSetting())
+	b, _ := json.MarshalIndent(h.InternalSetting(), "", "")
+	fmt.Println(string(b))
 }
 
 // print the host financial metrics
-func (h *StorageHost) PrintFinancialMetrics(){
-	spew.Dump(h.FinancialMetrics())
+func (h *StorageHost) PrintFinancialMetrics() {
+	b, _ := json.MarshalIndent(h.FinancialMetrics(), "", "")
+	fmt.Println(string(b))
 }
 
+// load the internal setting back to default
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *StorageHost) SetDefault() {
+	h.loadDefaults()
+	// synchronize to file
+	if err := h.syncSetting(); err != nil {
+		h.log.Warn(err.Error())
+	}
+}
 
 // load the internal setting to the host
-func (h *StorageHost) LoadIntSetting(str string){
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *StorageHost) LoadIntSettingStr(str string) {
 	data := []byte(str)
 	internalSetting := StorageHostIntSetting{}
-	if err := json.Unmarshal(data, &internalSetting); err != nil{
-		h.log.Warn("fail to load the internal setting to storagehost")
+	if err := json.Unmarshal(data, &internalSetting); err != nil {
+		// TODO: log the information in a better way
+		fmt.Println(err.Error())
+		h.log.Warn("fail to load the internal setting to storage host")
 		return
 	}
 
@@ -48,10 +64,12 @@ func (h *StorageHost) LoadIntSetting(str string){
 }
 
 // load the financial metrics to the host
-func (h *StorageHost) LoadFinancialMetrics(str string){
+// Warning: make sure you understand this step to continue do the operation
+// It will rewrite the setting file
+func (h *StorageHost) LoadFinancialMetricsStr(str string) {
 	data := []byte(str)
 	metrix := HostFinancialMetrics{}
-	if err := json.Unmarshal(data, &metrix); err != nil{
+	if err := json.Unmarshal(data, &metrix); err != nil {
 		h.log.Warn("fail to load the HostFinancialMetrics to storagehost")
 		return
 	}
@@ -64,7 +82,6 @@ func (h *StorageHost) LoadFinancialMetrics(str string){
 		h.log.Warn(err.Error())
 	}
 }
-
 
 // Set the broadcast to a boolean value and save into the setting file
 // Warning: make sure you understand this step to continue do the operation
@@ -86,22 +103,27 @@ func (h *StorageHost) SetRevisionNumber(num int) {
 	}
 }
 
-
-// Simply set the Accepting contract and save into the setting file
+// load the internal setting to the host
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the setting file
-func (h *StorageHost) SetAcceptingContract(b bool) {
-	h.settings.AcceptingContracts = b
+func (h *StorageHost) LoadIntSetting(internalSetting StorageHostIntSetting) {
+	h.settings = internalSetting
+
+	// synchronize to file
 	if err := h.syncSetting(); err != nil {
+		fmt.Println(err.Error())
 		h.log.Warn(err.Error())
 	}
 }
 
-// Simply set the deposit and save into the setting file
+// load the financial metrics to the host
 // Warning: make sure you understand this step to continue do the operation
 // It will rewrite the setting file
-func (h *StorageHost) SetDeposit(num int) {
-	h.settings.Deposit = *big.NewInt(int64(num))
+func (h *StorageHost) LoadFinancialMetrics(metric HostFinancialMetrics) {
+	// directly load the financial metrics to the host
+	h.financialMetrics = metric
+
+	// synchronize to file
 	if err := h.syncSetting(); err != nil {
 		h.log.Warn(err.Error())
 	}
