@@ -1,6 +1,7 @@
 package dxfile
 
 import (
+	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"

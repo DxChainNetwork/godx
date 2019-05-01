@@ -6,6 +6,10 @@ import (
 	"sync"
 )
 
+const fileIDSize = 16
+
+type fileID [fileIDSize]byte
+
 type (
 	// DxFile is saved to disk with sequence:
 	// headerLength | ChunkOffset | header             | dataSegment
@@ -18,7 +22,7 @@ type (
 		segmentOffset  uint64
 
 		// header is the persist header is the header of the dxfile
-		header persistHeader
+		fileHeader fileHeader
 
 		// dataSegments is a list of segments the file is split into
 		dataSegments []Segment
@@ -26,15 +30,15 @@ type (
 		// utils field
 		deleted bool
 		lock    sync.RWMutex
-		ID      string
+		ID      fileID
 		wal     *writeaheadlog.Wal
 
 		// filename is the file of the content locates
 		filename string
 	}
 
-	// persistHeader has two
-	persistHeader struct {
+	// fileHeader has two field: metadata of fixed size, and hostAddresses of flexible size.
+	fileHeader struct {
 		// metadata includes all info related to dxfile that is ready to be flushed to data file
 		metadata metadata
 
