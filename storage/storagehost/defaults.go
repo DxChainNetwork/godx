@@ -2,14 +2,19 @@ package storagehost
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 )
 
 const (
-	PersistHostDir  = "storagehost" // the dir for storing the host log, json, and ect.
-	HostSettingFile = "host.json"   // the file name for saving the setting of host
-	HostDB          = "hostdb"
-	StorageManager  = "storagemanager"
+	// PersistHostDir is dir path for storing the host log, json, and ect.
+	PersistHostDir = "storagehost"
+	// HostSettingFile is the file name for saving the setting of host
+	HostSettingFile = "host.json"
+	// HostDB is the database dir for storing host obligation
+	HostDB = "hostdb"
+	// StorageManager is a dir for storagemanager related topic
+	StorageManager = "storagemanager"
 )
 
 var (
@@ -24,7 +29,7 @@ var (
 	//defaultBroadcast      = false
 	//defaultRevisionNumber = 0
 
-	// host internal settings default value
+	// host internal config default value
 	defaultMaxDuration          = 144 * 30 * 6
 	defaultMaxDownloadBatchSize = 17 * (1 << 20)
 	defaultMaxReviseBatchSize   = 17 * (1 << 20)
@@ -44,8 +49,10 @@ var (
 	defaultUploadBandwidthPrice   = 7000
 )
 
-func loadDefaultSetting() StorageHostIntSetting {
-	return StorageHostIntSetting{
+// loadDefaultConfig loads the default setting when
+// it is the first time use the host service, or cannot find the setting file
+func loadDefaultConfig() storage.HostIntConfig {
+	return storage.HostIntConfig{
 		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
 		MaxDuration:          uint64(defaultMaxDuration),
 		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),

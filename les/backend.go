@@ -152,7 +152,7 @@ func New(ctx *node.ServiceContext, config *eth.Config) (*LightEthereum, error) {
 	leth.ApiBackend.gpo = gasprice.NewOracle(leth.ApiBackend, gpoParams)
 
 	path := ctx.ResolvePath(storagehost.PersistHostDir)
-	leth.storageHost, err = storagehost.NewStorageHost(path)
+	leth.storageHost, err = storagehost.New(path)
 
 	if err != nil {
 		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,

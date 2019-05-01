@@ -490,7 +490,7 @@ var (
 		Usage: "Comma separated list of JavaScript files to preload into the console",
 	}
 
-	// Network Settings
+	// Network Config
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",

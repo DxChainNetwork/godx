@@ -5889,8 +5889,8 @@ module.exports = Shh;
       });
 
       var printInternalSetting = new Method({
-        name: 'printInternalSetting',
-        call: 'hostdebug_printIntSetting',
+        name: 'printIntConfig',
+        call: 'hostdebug_printIntConfig',
         params: 0,
       });
 
@@ -5920,8 +5920,8 @@ module.exports = Shh;
 
 
       var loadInternalSetting = new Method({
-        name: 'loadInternalSetting',
-        call: 'hostdebug_loadInternalSetting',
+        name: 'loadIntConfig',
+        call: 'hostdebug_loadIntConfig',
         params: 1,
       });
 

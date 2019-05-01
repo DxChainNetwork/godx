@@ -4,9 +4,10 @@ import (
 	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	tg "github.com/DxChainNetwork/godx/common/threadManager"
+	tm "github.com/DxChainNetwork/godx/common/threadManager"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
 	"os"
 	"path/filepath"
@@ -19,9 +20,9 @@ func (h *StorageHost) checkUnlockHash() error {
 	return nil
 }
 
-// TODO: return the externalSettings for host
-func (h *StorageHost) externalSettings() StorageHostExtSetting {
-	return StorageHostExtSetting{}
+// TODO: return the externalConfig for host
+func (h *StorageHost) externalConfig() storage.HostExtConfig {
+	return storage.HostExtConfig{}
 }
 
 // TODO: mock the database for storing storage obligation, currently use the
@@ -34,7 +35,7 @@ func (h *StorageHost) initDB() error {
 		return err
 	}
 	// add the close of database to the thread manager
-	_ = h.tg.AfterStop(func() error {
+	_ = h.tm.AfterStop(func() error {
 		h.db.Close()
 		return nil
 	})
@@ -42,28 +43,31 @@ func (h *StorageHost) initDB() error {
 	return nil
 }
 
-// TODO: load the database, storage obligation, currently mock loads the settings from the database,
-//  	 if the setting file load sucess
+// TODO: load the database, storage obligation, currently mock loads the config from the database,
+//  	 if the config file load sucess
 func (h *StorageHost) loadFromDB() error {
 	return nil
 }
 
+// StorageHost provide functions for storagehost management
+// It loads or use default config when it have been initialized
+// It aims at communicate by protocal with client and lent its own storage to the client
 type StorageHost struct {
 
 	// Account manager for wallet/account related operation
 	am *accounts.Manager
 
-	// storageHost basic settings
+	// storageHost basic config
 	broadcast          bool
 	broadcastConfirmed bool
 	blockHeight        uint64
 
 	financialMetrics HostFinancialMetrics
-	settings         StorageHostIntSetting
+	config           storage.HostIntConfig
 	revisionNumber   uint64
 
 	// storage host manager for manipulating the file storage system
-	sm.StorageManagerAPI
+	sm.StorageManager
 
 	// things for log and persistence
 	// TODO: database to store the info of storage obligation, here just a mock
@@ -73,18 +77,21 @@ type StorageHost struct {
 
 	// things for thread safety
 	mu sync.RWMutex
-	tg tg.ThreadManager
+	tm tm.ThreadManager
 }
 
-// TODO: Load all APIs and make them mapping
+// Start loads all APIs and make them mapping, also introduce the account
+// manager as a member variable in side the StorageHost
 func (h *StorageHost) Start(eth Backend) {
+	// TODO: Start Load all APIs and make them mapping
 	// init the account manager
 	h.am = eth.AccountManager()
 }
 
-// Initialize the Host
-func NewStorageHost(persistDir string) (*StorageHost, error) {
-	// do a host creation, but incomplete settings
+// New Initialize the Host, including init the structure
+// load or use the default config, init db and ext.
+func New(persistDir string) (*StorageHost, error) {
+	// do a host creation, but incomplete config
 
 	host := StorageHost{
 		log:        log.New(),
@@ -93,12 +100,12 @@ func NewStorageHost(persistDir string) (*StorageHost, error) {
 	}
 
 	var err error   // error potentially affect the system
-	var tgErr error // error for thread manager, could be handle, would be log only
+	var tmErr error // error for thread manager, could be handle, would be log only
 
 	// use the thread manager to close the things open
 	defer func() {
 		if err != nil {
-			if tgErr := host.tg.Stop(); tgErr != nil {
+			if tgErr := host.tm.Stop(); tgErr != nil {
 				err = errors.New(err.Error() + "; " + tgErr.Error())
 			}
 		}
@@ -112,7 +119,7 @@ func NewStorageHost(persistDir string) (*StorageHost, error) {
 	}
 
 	// initialize the storage manager
-	host.StorageManagerAPI, err = sm.New(filepath.Join(persistDir, StorageManager))
+	host.StorageManager, err = sm.New(filepath.Join(persistDir, StorageManager))
 	if err != nil {
 		host.log.Crit("Error caused by Creating StorageManager: " + err.Error())
 		return nil, err
@@ -120,32 +127,32 @@ func NewStorageHost(persistDir string) (*StorageHost, error) {
 
 	// add the storage manager to the thread group
 	// log if closing fail
-	if tgErr = host.tg.AfterStop(func() error {
-		err := host.StorageManagerAPI.Close()
+	if tmErr = host.tm.AfterStop(func() error {
+		err := host.StorageManager.Close()
 		if err != nil {
 			host.log.Warn("Fail to close storage manager: " + err.Error())
 		}
 		return err
-	}); tgErr != nil {
-		host.log.Warn(tgErr.Error())
+	}); tmErr != nil {
+		host.log.Warn(tmErr.Error())
 	}
 
-	// load the data from file or from default setting
+	// load the data from file or from default config
 	err = host.load()
 	if err != nil {
 		return nil, err
 	}
 
-	// add the syncSetting to the thread group, make sure it would be store before system down
-	if tgErr = host.tg.AfterStop(func() error {
-		err := host.syncSetting()
+	// add the syncConfig to the thread group, make sure it would be store before system down
+	if tmErr = host.tm.AfterStop(func() error {
+		err := host.syncConfig()
 		if err != nil {
-			host.log.Warn("Fail to synchronize to setting file: " + err.Error())
+			host.log.Warn("Fail to synchronize to config file: " + err.Error())
 		}
 		return err
-	}); tgErr != nil {
+	}); tmErr != nil {
 		// just log the cannot syn problem, the does not sever enough to panic the system
-		host.log.Warn(tgErr.Error())
+		host.log.Warn(tmErr.Error())
 	}
 
 	// TODO: storageObligation handle
@@ -155,51 +162,53 @@ func NewStorageHost(persistDir string) (*StorageHost, error) {
 	return &host, nil
 }
 
-// close the storage host and persist the data
+// Close the storage host and persist the data
 func (h *StorageHost) Close() error {
-	return h.tg.Stop()
+	return h.tm.Stop()
 }
 
-// return the host external settings, which configure host through,
-// user should not able to modify the setting
-func (h *StorageHost) StorageHostExtSetting() StorageHostExtSetting {
+// HostExtConfig return the host external config, which configure host through,
+// user should not able to modify the config
+func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if err := h.tg.Add(); err != nil {
-		h.log.Crit("Call to StorageHostExtSetting fail")
+	if err := h.tm.Add(); err != nil {
+		h.log.Crit("Call to HostExtConfig fail")
 	}
 
-	defer h.tg.Done()
-	// mock the return of host external settings
-	return h.externalSettings()
+	defer h.tm.Done()
+	// mock the return of host external config
+	return h.externalConfig()
 }
 
-// Financial Metrics contains the information about the activities,
+// FinancialMetrics contains the information about the activities,
 // commitments, rewards of host
 func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	if err := h.tg.Add(); err != nil {
+	if err := h.tm.Add(); err != nil {
 		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")
 	}
-	defer h.tg.Done()
+	defer h.tm.Done()
 
 	return h.financialMetrics
 }
 
-// TODO: not sure the exact procedure
-// TODO: For debugging purpose, currently use vargs and tag for directly ignore the
-//  checking parts, set the settings and increase the revisionNumber, for future
-//  development, please follow the logic to make the test case success as expected,
-//  or delete and  do another test case for convenience
-func (h *StorageHost) SetIntSetting(settings StorageHostIntSetting, debug ...bool) error {
+// SetIntConfig set the input hostconfig to the current host if check all things are good
+func (h *StorageHost) SetIntConfig(config storage.HostIntConfig, debug ...bool) error {
+	// TODO: not sure the exact procedure
+	// TODO: For debugging purpose, currently use vargs and tag for directly ignore the
+	//  checking parts, set the config and increase the revisionNumber, for future
+	//  development, please follow the logic to make the test case success as expected,
+	//  or delete and  do another test case for convenience
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if err := h.tg.Add(); err != nil {
-		h.log.Crit("Fail to add StorageHostIntSetting Getter to thread manager")
+	if err := h.tm.Add(); err != nil {
+		h.log.Crit("Fail to add HostIntConfig Getter to thread manager")
 		return err
 	}
-	defer h.tg.Done()
+	defer h.tm.Done()
 
 	// for debugging purpose, just jump to the last part, so it won't be affected
 	// by the implementation of checking parts (check unlock hash and network address)
@@ -208,7 +217,7 @@ func (h *StorageHost) SetIntSetting(settings StorageHostIntSetting, debug ...boo
 	}
 
 	// TODO: check the unlock hash, if does not need the hash, remove this part of code
-	if settings.AcceptingContracts {
+	if config.AcceptingContracts {
 		err := h.checkUnlockHash()
 		if err != nil {
 			return errors.New("no unlock hash, stop updating: " + err.Error())
@@ -218,34 +227,35 @@ func (h *StorageHost) SetIntSetting(settings StorageHostIntSetting, debug ...boo
 	// TODO: Checking the NetAddress
 
 LOADSETTING:
-	h.settings = settings
+	h.config = config
 	h.revisionNumber++
 
-	// synchronize the setting to file
-	if err := h.syncSetting(); err != nil {
-		return errors.New("internal setting update fail: " + err.Error())
+	// synchronize the config to file
+	if err := h.syncConfig(); err != nil {
+		return errors.New("internal config update fail: " + err.Error())
 	}
 
 	return nil
 }
 
-// Return the internal setting of host
-func (h *StorageHost) InternalSetting() StorageHostIntSetting {
+// InternalConfig Return the internal config of host
+func (h *StorageHost) InternalConfig() storage.HostIntConfig {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	// if not able to add to the thread manager, simply return a empty setting structure
-	if err := h.tg.Add(); err != nil {
-		return StorageHostIntSetting{}
+	// if not able to add to the thread manager, simply return a empty config structure
+	if err := h.tm.Add(); err != nil {
+		return storage.HostIntConfig{}
 	}
-	defer h.tg.Done()
-	return h.settings
+	defer h.tm.Done()
+	return h.config
 }
 
+// load do the following things:
 // 1. init the database
-// 2. load the setting from file
+// 2. load the config from file
 // 3. load from database
-// 4. if the setting file not found, create the setting file, and use the default setting
-// 5. finally synchronize the data to setting file
+// 4. if the config file not found, create the config file, and use the default config
+// 5. finally synchronize the data to config file
 func (h *StorageHost) load() error {
 	var err error
 
@@ -255,7 +265,7 @@ func (h *StorageHost) load() error {
 		return err
 	}
 
-	// try to load from the setting files,
+	// try to load from the config files,
 	if err = h.loadFromFile(); err == nil {
 		// TODO: mock the loading from database
 		err = h.loadFromDB()
@@ -266,35 +276,36 @@ func (h *StorageHost) load() error {
 	}
 
 	// At this step, the error is caused by FILE NOT FOUND Exception
-	// Create the setting file
+	// Create the config file
 	h.log.Info("Creat a new HostSetting file")
 
 	// currently the error is caused by file not found exception
 	// create the file
-	if file, err := os.Create(filepath.Join(h.persistDir, HostSettingFile)); err != nil {
+	file, err := os.Create(filepath.Join(h.persistDir, HostSettingFile))
+	if err != nil {
 		// if the error is throw when create the file
 		// close the file and directly return the error
 		_ = file.Close()
 		return err
-	} else {
-		// assert the error is nil, close the file
-		if err := file.Close(); err != nil {
-			h.log.Info("Unable to close the setting file")
-		}
 	}
 
-	// load the default settings
+	// assert the error is nil, close the file
+	if err := file.Close(); err != nil {
+		h.log.Info("Unable to close the config file")
+	}
+
+	// load the default config
 	h.loadDefaults()
 
 	// and get synchronization
-	if syncErr := h.syncSetting(); syncErr != nil {
-		h.log.Warn("Tempt to synchronize setting to file failed: " + syncErr.Error())
+	if syncErr := h.syncConfig(); syncErr != nil {
+		h.log.Warn("Tempt to synchronize config to file failed: " + syncErr.Error())
 	}
 
 	return nil
 }
 
-// load host setting from the file, guarantee that host would not be
+// loadFromFile load host config from the file, guarantee that host would not be
 // modified if error happen
 func (h *StorageHost) loadFromFile() error {
 	h.mu.Lock()
@@ -314,9 +325,9 @@ func (h *StorageHost) loadFromFile() error {
 	return nil
 }
 
-// loads the default setting for the host
+// loadDefaults loads the default config for the host
 func (h *StorageHost) loadDefaults() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.settings = loadDefaultSetting()
+	h.config = loadDefaultConfig()
 }

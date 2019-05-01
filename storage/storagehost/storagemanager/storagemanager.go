@@ -1,21 +1,21 @@
 package storagemanager
 
-type StorageManager struct {
+type storageManager struct {
 	// TODO: currently mock data structure of storage Manager
 }
 
 
-func New(persistDir string) (*StorageManager, error){
+func New(persistDir string) (*storageManager, error){
 	// TODO: currently mock the storage manager
-	return &StorageManager{}, nil
+	return &storageManager{}, nil
 }
 
 // TODO: currently mock the close of storage manager
-func (cm *StorageManager) Close() error {
+func (cm *storageManager) Close() error {
 	return nil
 }
 
 
-type StorageManagerAPI interface {
+type StorageManager interface {
 	Close() error
 }

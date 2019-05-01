@@ -2,6 +2,7 @@ package storagehost
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/davecgh/go-spew/spew"
 	"math/big"
 	"math/rand"
@@ -24,7 +25,7 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	defer remmoveFolders("./testdata/", t)
 
 	// do a new host, check if the folder are all generated
-	host, err := NewStorageHost("./testdata/")
+	host, err := New("./testdata/")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -53,9 +54,9 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	}
 
 	// assert that the persistence file save the default setting
-	if !reflect.DeepEqual(persist.Settings, loadDefaultSetting()) {
-		spew.Dump(persist.Settings)
-		spew.Dump(loadDefaultSetting())
+	if !reflect.DeepEqual(persist.Config, loadDefaultConfig()) {
+		spew.Dump(persist.Config)
+		spew.Dump(loadDefaultConfig())
 		t.Errorf("the persistence file does not save the default setting as expected")
 	}
 }
@@ -67,7 +68,7 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 	defer remmoveFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
-	host, err := NewStorageHost("./testdata/")
+	host, err := New("./testdata/")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -83,7 +84,7 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 		}
 
 		// renew the host again, check if match the data saving before closed
-		host, err = NewStorageHost("./testdata/")
+		host, err = New("./testdata/")
 		if err != nil {
 			t.Errorf(err.Error())
 		}
@@ -104,8 +105,8 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 		host.broadcast = rand.Float32() < 0.5
 		host.revisionNumber = uint64(rand.Intn(RANDRANGE))
 		// host setting structure
-		host.settings.AcceptingContracts = rand.Float32() < 0.5
-		host.settings.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
+		host.config.AcceptingContracts = rand.Float32() < 0.5
+		host.config.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
 		// host financial Metrics
 		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
 		host.financialMetrics.StorageRevenue = *big.NewInt(int64(rand.Intn(RANDRANGE)))
@@ -116,8 +117,8 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 		// make sure the persistence indeed loaded by the host
 		if host.broadcast != persist1.BroadCast ||
 			host.revisionNumber != persist1.RevisionNumber ||
-			host.settings.AcceptingContracts != persist1.Settings.AcceptingContracts ||
-			!reflect.DeepEqual(host.settings.Deposit, persist1.Settings.Deposit) ||
+			host.config.AcceptingContracts != persist1.Config.AcceptingContracts ||
+			!reflect.DeepEqual(host.config.Deposit, persist1.Config.Deposit) ||
 			host.financialMetrics.ContractCount != persist1.FinalcialMetrics.ContractCount ||
 			!reflect.DeepEqual(host.financialMetrics.StorageRevenue, persist1.FinalcialMetrics.StorageRevenue) {
 			t.Errorf("persistence extracted from host does not match the expected")
@@ -135,7 +136,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 	defer remmoveFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
-	host, err := NewStorageHost("./testdata/")
+	host, err := New("./testdata/")
 	if err != nil {
 		t.Errorf(err.Error())
 	}
@@ -144,7 +145,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 
 	for Iterations := 10; Iterations > 0; Iterations-- {
 		// selectively random a storHostIntSetting
-		internalSetting := StorageHostIntSetting{
+		internalSetting := storage.HostIntConfig{
 			AcceptingContracts:   rand.Float32() < 0.5,
 			MaxDownloadBatchSize: uint64(rand.Intn(RANDRANGE)),
 			Deposit:              *big.NewInt(int64(rand.Intn(RANDRANGE))),
@@ -152,7 +153,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		}
 
 		// set the randomly generated field to host
-		if err := host.SetIntSetting(internalSetting, true); err != nil {
+		if err := host.SetIntConfig(internalSetting, true); err != nil {
 			t.Errorf("fail to set the internal setting")
 		}
 
@@ -164,7 +165,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		// // This field just hard code the comparison, if more complex data structure is added
 		// // to field, simple use this may correct some error
 		// check if the host internal setting is set
-		//extracted := host.InternalSetting()
+		//extracted := host.InternalConfig()
 		//
 		//if  extracted.AcceptingContracts != internalSetting.AcceptingContracts ||
 		//	extracted.MaxDownloadBatchSize != internalSetting.MaxDownloadBatchSize ||
@@ -180,9 +181,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		//  filed would be init as an empty structure, in order to keep them consistence, more
 		//  handling may needed
 
-		if !reflect.DeepEqual(host.InternalSetting(), internalSetting) {
+		if !reflect.DeepEqual(host.InternalConfig(), internalSetting) {
 			spew.Dump(internalSetting)
-			spew.Dump(host.InternalSetting())
+			spew.Dump(host.InternalConfig())
 			t.Errorf("the host setting does not match the previously setted")
 		}
 	}

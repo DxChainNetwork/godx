@@ -194,7 +194,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
 	path := ctx.ResolvePath(storagehost.PersistHostDir)
-	eth.storageHost, err = storagehost.NewStorageHost(path)
+	eth.storageHost, err = storagehost.New(path)
 
 	if err != nil {
 		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,

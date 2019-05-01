@@ -2,6 +2,7 @@ package storagehost
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
 )
 
@@ -11,11 +12,11 @@ type persistence struct {
 	BroadCast        bool                  `json:"broadcast"`
 	RevisionNumber   uint64                `json:"revisionnumber"`
 	FinalcialMetrics HostFinancialMetrics  `json:"finalcialmetrics"`
-	Settings         StorageHostIntSetting `json:"settings"`
+	Config           storage.HostIntConfig `json:"config"`
 }
 
-// save the host settings: the filed as persistence shown, to the json file
-func (h *StorageHost) syncSetting() error {
+// save the host config: the filed as persistence shown, to the json file
+func (h *StorageHost) syncConfig() error {
 	// extract the persistence from host
 	persist := h.extractPersistence()
 
@@ -32,7 +33,7 @@ func (h *StorageHost) extractPersistence() *persistence {
 		BroadCast:        h.broadcast,
 		FinalcialMetrics: h.financialMetrics,
 		RevisionNumber:   h.revisionNumber,
-		Settings:         h.settings,
+		Config:           h.config,
 	}
 }
 
@@ -47,5 +48,5 @@ func (h *StorageHost) loadPersistence(persist *persistence) {
 
 	h.financialMetrics = persist.FinalcialMetrics
 	h.revisionNumber = persist.RevisionNumber
-	h.settings = persist.Settings
+	h.config = persist.Config
 }
