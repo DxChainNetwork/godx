@@ -14,13 +14,14 @@ import (
 
 // ************** MOCKING DATA *****************
 // *********************************************
-
-type storageHostManager struct{}
-type contractManager struct{}
-type StorageContractID struct{}
-type StorageHostEntry struct{}
-type streamCache struct{}
-type Wal struct{}
+type (
+	storageHostManager struct{}
+	contractManager    struct{}
+	StorageContractID  struct{}
+	StorageHostEntry   struct{}
+	streamCache        struct{}
+	Wal                struct{}
+)
 
 // *********************************************
 // *********************************************
@@ -30,6 +31,8 @@ type Backend interface {
 	APIs() []rpc.API
 }
 
+// StorageClient contains fileds that are used to perform StorageHost
+// selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
 	// TODO (jacky): File Management Related
 
@@ -61,7 +64,7 @@ type StorageClient struct {
 	log         log.Logger
 	// TODO (jacky): considering using the Lock and Unlock with ID ?
 	lock    sync.Mutex
-	tg      threadManager.ThreadManager
+	tm      threadManager.ThreadManager
 	wal     Wal
 	network *ethapi.PublicNetAPI
 	account *ethapi.PrivateAccountAPI
@@ -76,7 +79,7 @@ func New(persistDir string) (*StorageClient, error) {
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 	}
 
-	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tg.StopChan())
+	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
 
 	return sc, nil
 }
@@ -95,7 +98,7 @@ func (sc *StorageClient) Start(eth Backend) error {
 		return errors.New("failed to acquire account information")
 	}
 
-	// TODO (mzhang): Initialize ContractManager & StorageHostManager -> assign to StorageClient
+	// TODO (mzhang): Initialize ContractManager & HostManager -> assign to StorageClient
 
 	// Load settings from persist file
 	if err := sc.loadPersist(); err != nil {

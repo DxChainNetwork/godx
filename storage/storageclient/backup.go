@@ -26,11 +26,12 @@ type backupHeader struct {
 	IV         []byte `json:"iv"`
 }
 
+// CreateBackup will create backup of dxfiles
 func (sc *StorageClient) CreateBackup(dst string, secret []byte) error {
-	if err := sc.tg.Add(); err != nil {
+	if err := sc.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tg.Done()
+	defer sc.tm.Done()
 
 	// create gzip file
 	file, err := os.Create(dst)
@@ -79,23 +80,29 @@ func (sc *StorageClient) CreateBackup(dst string, secret []byte) error {
 	gzw := gzip.NewWriter(archive)
 	tw := tar.NewWriter(gzw)
 	if err := sc.managedTarDxFiles(tw); err != nil {
-		twErr := tw.Close()
-		gzwErr := gzw.Close()
-		return ErrCombine(err, twErr, gzwErr)
+		// TODO: ErrCompose Method
+		//twErr := tw.Close()
+		//gzwErr := gzw.Close()
+		//return ErrCombine(err, twErr, gzwErr)
+		return nil
 	}
 
-	twErr := tw.Close()
-	gzwErr := gzw.Close()
+	//twErr := tw.Close()
+	//gzwErr := gzw.Close()
 
 	_, err = file.WriteAt(h.Sum(nil), 0)
-	return ErrCombine(err, twErr, gzwErr)
+	// TODO: ErrCompose Method
+	//return ErrCombine(err, twErr, gzwErr)
+	return nil
 }
 
+// LoadBackup will load the backup created previously, and restore them back to the original
+// files and directory
 func (sc *StorageClient) LoadBackup(src string, secret []byte) error {
-	if err := sc.tg.Add(); err != nil {
+	if err := sc.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tg.Done()
+	defer sc.tm.Done()
 
 	// open the file
 	file, err := os.Open(src)
