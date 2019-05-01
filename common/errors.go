@@ -1,5 +1,6 @@
 package common
 
+// ErrorSet defines a collection of errors
 type ErrorSet struct {
 	ErrSet []error
 }
@@ -71,7 +72,7 @@ func ErrExtend(err, extension error) error {
 	return es
 }
 
-// Contains check if the target error can be found in source error
+// ErrContains check if the target error can be found in source error
 // return true if the error can be found, else, return false
 func ErrContains(src, tar error) bool {
 	if tar == nil || src == nil {
