@@ -1,3 +1,4 @@
+// Package memorymanager implements the storage client memory management methods
 package memorymanager
 
 import (

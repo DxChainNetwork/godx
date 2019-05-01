@@ -1,5 +1,6 @@
 package storageclient
 
+// Files and directories related constant
 const (
 	PersistDirectory            = "storageclient"
 	PersistFilename             = "storageclient.json"

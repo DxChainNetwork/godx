@@ -27,17 +27,17 @@ func (sc *StorageClient) loadPersist() error {
 
 	// initialize logger with multiple handlers (terminal and file)
 	sc.log = log.New()
-	logFileHandler, err := log.FileHandler(
-		filepath.Join(sc.persistDir, PersistLogname),
-		log.JSONFormatEx(false, true),
-	)
-
-	if err != nil {
-		log.Warn("failed to create logger file handler, logging information will not be saved")
-	} else {
-		logStreamHandler := log.StreamHandler(os.Stdout, log.TerminalFormat(true))
-		sc.log.SetHandler(log.MultiHandler(logFileHandler, logStreamHandler))
-	}
+	//logFileHandler, err := log.FileHandler(
+	//	filepath.Join(sc.persistDir, PersistLogname),
+	//	log.JSONFormatEx(false, true),
+	//)
+	//
+	//if err != nil {
+	//	log.Warn("failed to create logger file handler, logging information will not be saved")
+	//} else {
+	//	logStreamHandler := log.StreamHandler(os.Stdout, log.TerminalFormat(true))
+	//	sc.log.SetHandler(log.MultiHandler(logFileHandler, logStreamHandler))
+	//}
 
 	// TODO (mzhang): Create Write ahead logger
 
