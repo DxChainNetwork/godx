@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	tm "github.com/DxChainNetwork/godx/common/threadManager"
+	tm "github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
