@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// memoryManager manages the memory requested by the user,
+// MemoryManager manages the memory requested by the user,
 // blocking any process which needs memory but memory available is not enough
 // once finished using the memory, those memory need to be returned
 type MemoryManager struct {
@@ -25,7 +25,7 @@ type memoryRequest struct {
 	done   chan struct{}
 }
 
-// newMemoryManager create and initialize new memory manager object used to acquire
+// New create and initialize new memory manager object used to acquire
 // memory. If the amount of memory required is not available, the process will be blocked
 // until memory became available
 func New(limit uint64, stopChan <-chan struct{}) *MemoryManager {

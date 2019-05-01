@@ -2,7 +2,7 @@ package memorymanager
 
 import "fmt"
 
-// MaxMemoryAvailable returns max memory allowed
+// MemoryLimit returns max memory allowed
 func (mm *MemoryManager) MemoryLimit() uint64 {
 	return mm.limit
 }
@@ -12,7 +12,7 @@ func (mm *MemoryManager) MemoryAvailable() uint64 {
 	return mm.available
 }
 
-// MaxMemoryModify allows user to expand or shrink the current memory limit
+// SetMemoryLimit allows user to expand or shrink the current memory limit
 func (mm *MemoryManager) SetMemoryLimit(amount uint64) string {
 	if amount < mm.limit {
 		mm.shrinkMaxMemory(amount)
