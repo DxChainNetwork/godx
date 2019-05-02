@@ -1,9 +1,8 @@
 package storagehost
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/davecgh/go-spew/spew"
 )
 
 // print the persist directory of the host
@@ -20,20 +19,17 @@ func (h *StorageHost) getHostPersist() {
 	defer h.lock.RUnlock()
 
 	persist := h.extractPersistence()
-	b, _ := json.MarshalIndent(persist, "", "")
-	fmt.Println(string(b))
+	spew.Dump(persist)
 }
 
 // print the internal config of the host
 func (h *StorageHost) getIntConfig() {
-	b, _ := json.MarshalIndent(h.InternalConfig(), "", "")
-	fmt.Println(string(b))
+	spew.Dump(h.InternalConfig())
 }
 
 // print the host financial metrics
 func (h *StorageHost) getFinancialMetrics() {
-	b, _ := json.MarshalIndent(h.FinancialMetrics(), "", "")
-	fmt.Println(string(b))
+	spew.Dump(h.FinancialMetrics())
 }
 
 // load the internal config back to default
