@@ -2,7 +2,7 @@ package storage
 
 import "math/big"
 
-type(
+type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
 		AcceptingContracts   bool   `json:"acceptingcontracts"`
