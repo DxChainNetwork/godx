@@ -16,9 +16,9 @@ const (
 // dxfileUpdate defines the update interface for dxfile update.
 // Two types of update is supported: insertUpdate and deleteUpdate
 type dxfileUpdate interface {
-	apply() error // Apply the content of the update
+	apply() error                                    // Apply the content of the update
 	encodeToWalOp() (writeaheadlog.Operation, error) // convert an dxfileUpdate to writeaheadlog.Operation
-	fileName() string // filename returns the filename associated with the update
+	fileName() string                                // filename returns the filename associated with the update
 }
 
 // insertUpdate defines an insert dxfile instruction, including filenamefwqxzA, offset, and data to write
@@ -39,7 +39,7 @@ type (
 func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 	data, err := rlp.EncodeToBytes(*iu)
 	if err != nil {
-		return nil, err
+		return writeaheadlog.Operation{}, err
 	}
 	return writeaheadlog.Operation{
 		Name: opInsertFile,
@@ -57,7 +57,7 @@ func (iu *insertUpdate) apply() error {
 	// write data
 	if n, err := f.WriteAt(iu.data, iu.offset); err != nil {
 		return fmt.Errorf("failed to write insertUpdate data: %v", err)
-	} else if n < len(iu.data){
+	} else if n < len(iu.data) {
 		return fmt.Errorf("failed to write full data of an insertUpdate: %v", err)
 	}
 	return f.Sync()
@@ -71,7 +71,7 @@ func (iu *insertUpdate) fileName() string {
 func (du *deleteUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 	data, err := rlp.EncodeToBytes(*du)
 	if err != nil {
-		return nil, err
+		return writeaheadlog.Operation{}, err
 	}
 	return writeaheadlog.Operation{
 		Name: opDeleteFile,
@@ -128,8 +128,8 @@ func (df *DxFile) createInsertUpdate(offset int64, data []byte) (*insertUpdate, 
 	}
 	return &insertUpdate{
 		filename: df.filename,
-		offset: offset,
-		data: data,
+		offset:   offset,
+		data:     data,
 	}, nil
 }
 
@@ -155,7 +155,7 @@ func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %v", err)
 	}
-	<- txn.InitComplete
+	<-txn.InitComplete
 	if txn.InitErr != nil {
 		return fmt.Errorf("failed to create transaction: %v", err)
 	}
@@ -173,7 +173,7 @@ func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 	filtered := make([]dxfileUpdate, len(updates))
 	for _, update := range updates {
 		if update.fileName() == df.filename {
-			if _, err := update.(*deleteUpdate); err == nil {
+			if _, isDeleteUpdate := update.(*deleteUpdate); isDeleteUpdate {
 				// If the update is deletion, remove all previous updates
 				filtered = filtered[:0]
 			}
@@ -184,10 +184,10 @@ func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 }
 
 // updatesToOps convert []dxfileUpdate to []wal.Operation
-func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error){
+func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error) {
 	errs := make([]error, len(updates))
 	ops := make([]writeaheadlog.Operation, len(updates))
-	for i, update := range updates{
+	for _, update := range updates {
 		op, err := update.encodeToWalOp()
 		if err != nil {
 			errs = append(errs, err)
@@ -197,4 +197,3 @@ func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error){
 	}
 	return ops, composeError(errs...)
 }
-

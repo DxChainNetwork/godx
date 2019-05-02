@@ -100,9 +100,13 @@ func (sec *shardErasureCode) Recover(sectors [][]byte, outSize int, w io.Writer)
 		if outSize < recoveredSize + encodedShardSize {
 			recoverSize = outSize - recoveredSize
 		}
-		err := sec.prepareNextShardData(sectors, recoverSize, w)
+		shardData := sec.prepareNextShardData(sectors, recoverSize)
 		if err != nil {
-			return err
+			return fmt.Errorf("cannot recover: %v", err)
+		}
+		err := sec.standardErasureCode.Recover(shardData, recoverSize, w)
+		if err != nil {
+			return fmt.Errorf("cannot recover: %v", err)
 		}
 		recoveredSize += recoveredSize
 	}
@@ -121,7 +125,7 @@ func (sec *shardErasureCode) recoveryDataCheck(sectors [][]byte, outSize int) er
 		return fmt.Errorf("negative outSize: %d", outSize)
 	}
 	sectorSize, validSectors := 0, 0
-	for i, sector := range sectors {
+	for _, sector := range sectors {
 		if sector == nil || len(sector) == 0 {
 			// invalid sector
 			continue
