@@ -1,7 +1,6 @@
 package threadmanager
 
 import (
-	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -26,7 +25,7 @@ func TestThreadManagerStopEarly(t *testing.T) {
 			defer tg.Done()
 			select {
 			case <-time.After(1 * time.Second):
-			case <-tg.StopChan():
+			case <-tg.GetStopChan():
 			}
 		}()
 	}
@@ -74,28 +73,28 @@ func TestThreadManagerWait(t *testing.T) {
 func TestThreadManagerStop(t *testing.T) {
 	// Create a thread group and stop it.
 	var tg ThreadManager
-	// Create an array to track the order of execution for OnStop and AfterStop
+	// Create an array to track the order of execution for PushStopFn and PushDeferFn
 	// calls.
 	var stopCalls []int
 
-	// isStopped should return false
-	if tg.isStopped() {
-		t.Error("isStopped returns true on unstopped ThreadManager")
+	// isOff should return false
+	if tg.isOff() {
+		t.Error("isOff returns true on unstopped ThreadManager")
 	}
-	// The cannel provided by StopChan should be open.
+	// The cannel provided by GetStopChan should be open.
 	select {
-	case <-tg.StopChan():
+	case <-tg.GetStopChan():
 		t.Error("stop chan appears to be closed")
 	default:
 	}
 
-	// OnStop and AfterStop should queue their functions, but not call them.
-	// 'Add' and 'Done' are setup around the OnStop functions, to make sure
-	// that the OnStop functions are called before waiting for all calls to
+	// PushStopFn and PushDeferFn should queue their functions, but not call them.
+	// 'Add' and 'Done' are setup around the PushStopFn functions, to make sure
+	// that the PushStopFn functions are called before waiting for all calls to
 	// 'Done' to come through.
 	//
-	// Note: the practice of calling Add outside of OnStop and Done inside of
-	// OnStop is a bad one - any call to tg.Flush() will cause a deadlock
+	// Note: the practice of calling Add outside of PushStopFn and Done inside of
+	// PushStopFn is a bad one - any call to tg.Flush() will cause a deadlock
 	// because the stop functions will not be called but tg.Flush will be
 	// waiting for the thread group counter to reach zero.
 	err := tg.Add()
@@ -106,7 +105,7 @@ func TestThreadManagerStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tg.OnStop(func() error {
+	err = tg.PushStopFn(func() error {
 		tg.Done()
 		stopCalls = append(stopCalls, 1)
 		return nil
@@ -114,7 +113,7 @@ func TestThreadManagerStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tg.OnStop(func() error {
+	err = tg.PushStopFn(func() error {
 		tg.Done()
 		stopCalls = append(stopCalls, 2)
 		return nil
@@ -122,14 +121,14 @@ func TestThreadManagerStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tg.AfterStop(func() error {
+	err = tg.PushDeferFn(func() error {
 		stopCalls = append(stopCalls, 10)
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = tg.AfterStop(func() error {
+	err = tg.PushDeferFn(func() error {
 		stopCalls = append(stopCalls, 20)
 		return nil
 	})
@@ -146,18 +145,18 @@ func TestThreadManagerStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// isStopped should return true.
-	if !tg.isStopped() {
-		t.Error("isStopped returns false on stopped ThreadManager")
+	// isOff should return true.
+	if !tg.isOff() {
+		t.Error("isOff returns false on stopped ThreadManager")
 	}
-	// The cannel provided by StopChan should be closed.
+	// The cannel provided by GetStopChan should be closed.
 	select {
-	case <-tg.StopChan():
+	case <-tg.GetStopChan():
 	default:
 		t.Error("stop chan appears to be closed")
 	}
-	// The OnStop calls should have been called first, in reverse order, and
-	// the AfterStop calls should have been called second, in reverse order.
+	// The PushStopFn calls should have been called first, in reverse order, and
+	// the PushDeferFn calls should have been called second, in reverse order.
 	if len(stopCalls) != 4 {
 		t.Fatal("Stop did not call the stopping functions correctly")
 	}
@@ -184,30 +183,30 @@ func TestThreadManagerStop(t *testing.T) {
 		t.Error("expected ErrStopped, got", err)
 	}
 
-	// OnStop and AfterStop should call their functions immediately now that
+	// PushStopFn and PushDeferFn should call their functions immediately now that
 	// the thread group has stopped.
 	onStopCalled := false
-	err = tg.OnStop(func() error {
+	err = tg.PushStopFn(func() error {
 		onStopCalled = true
 		return nil
 	})
 	if err == nil {
-		t.Fatal("OnStop should return an error after being called after stop")
+		t.Fatal("PushStopFn should return an error after being called after stop")
 	}
 
 	if !onStopCalled {
-		t.Error("OnStop function not called immediately despite the thread group being closed already.")
+		t.Error("PushStopFn function not called immediately despite the thread group being closed already.")
 	}
 	afterStopCalled := false
-	err = tg.AfterStop(func() error {
+	err = tg.PushDeferFn(func() error {
 		afterStopCalled = true
 		return nil
 	})
 	if err == nil {
-		t.Fatal("AfterStop should return an error after being called after stop")
+		t.Fatal("PushDeferFn should return an error after being called after stop")
 	}
 	if !afterStopCalled {
-		t.Error("AfterStop function not called immediately despite the thread group being closed already.")
+		t.Error("PushDeferFn function not called immediately despite the thread group being closed already.")
 	}
 }
 
@@ -227,7 +226,7 @@ func TestThreadManagerpConcurrentAdd(t *testing.T) {
 
 			select {
 			case <-time.After(100 * time.Millisecond):
-			case <-tg.StopChan():
+			case <-tg.GetStopChan():
 			}
 		}()
 	}
@@ -247,15 +246,15 @@ func TestThreadManagerOnce(t *testing.T) {
 	}
 
 	// these methods should cause stopChan to be initialized
-	tg.StopChan()
+	tg.GetStopChan()
 	if tg.stopChan == nil {
-		t.Error("stopChan should have been initialized by StopChan")
+		t.Error("stopChan should have been initialized by GetStopChan")
 	}
 
 	tg = new(ThreadManager)
-	tg.isStopped()
+	tg.isOff()
 	if tg.stopChan == nil {
-		t.Error("stopChan should have been initialized by isStopped")
+		t.Error("stopChan should have been initialized by isOff")
 	}
 
 	tg = new(ThreadManager)
@@ -272,7 +271,7 @@ func TestThreadManagerOnce(t *testing.T) {
 }
 
 // TestThreadManagerOnStop tests that Stop calls functions registered with
-// OnStop.
+// PushStopFn.
 func TestThreadManagerOnStop(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
@@ -284,7 +283,7 @@ func TestThreadManagerOnStop(t *testing.T) {
 
 	// create ThreadManager and register the closer
 	var tg ThreadManager
-	err = tg.OnStop(func() error { return l.Close() })
+	err = tg.PushStopFn(func() error { return l.Close() })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +307,7 @@ func TestThreadManagerOnStop(t *testing.T) {
 // does not trigger the race detector.
 func TestThreadManagerRace(t *testing.T) {
 	var tg ThreadManager
-	go tg.StopChan()
+	go tg.GetStopChan()
 	go func() {
 		if tg.Add() == nil {
 			tg.Done()
@@ -320,12 +319,12 @@ func TestThreadManagerRace(t *testing.T) {
 	}
 }
 
-// TestThreadManagerCloseAfterStop checks that an AfterStop function is
+// TestThreadManagerCloseAfterStop checks that an PushDeferFn function is
 // correctly called after the thread is stopped.
 func TestThreadManagerClosedAfterStop(t *testing.T) {
 	var tg ThreadManager
 	var closed bool
-	err := tg.AfterStop(func() error { closed = true; return nil })
+	err := tg.PushDeferFn(func() error { closed = true; return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,9 +341,9 @@ func TestThreadManagerClosedAfterStop(t *testing.T) {
 	// Stop has already been called, so the close function should be called
 	// immediately
 	closed = false
-	err = tg.AfterStop(func() error { closed = true; return nil })
+	err = tg.PushDeferFn(func() error { closed = true; return nil })
 	if err == nil {
-		t.Fatal("AfterStop should return an error after stop")
+		t.Fatal("PushDeferFn should return an error after stop")
 	}
 	if !closed {
 		t.Fatal("close function should have been called immediately")
@@ -386,7 +385,7 @@ func TestThreadManagerNetworkExample(t *testing.T) {
 		}
 		close(handlerFinishedChan)
 	}()
-	err = tg.OnStop(func() error {
+	err = tg.PushStopFn(func() error {
 		err := listener.Close()
 		if err != nil {
 			return err
@@ -456,7 +455,7 @@ func TestNestedAdd(t *testing.T) {
 	tg.Stop()
 }
 
-// TestAddOnStop checks that you can safely call OnStop from under the
+// TestAddOnStop checks that you can safely call PushStopFn from under the
 // protection of an Add call.
 func TestAddOnStop(t *testing.T) {
 	if testing.Short() {
@@ -467,7 +466,7 @@ func TestAddOnStop(t *testing.T) {
 	var data int
 	addChan := make(chan struct{})
 	stopChan := make(chan struct{})
-	err := tg.OnStop(func() error {
+	err := tg.PushStopFn(func() error {
 		close(stopChan)
 		return nil
 	})
@@ -482,30 +481,30 @@ func TestAddOnStop(t *testing.T) {
 		close(addChan)
 
 		// Wait for the call to 'Stop' to be called in the parent thread, and
-		// then queue a bunch of 'OnStop' and 'AfterStop' functions before
+		// then queue a bunch of 'PushStopFn' and 'PushDeferFn' functions before
 		// calling 'Done'.
 		<-stopChan
 		for i := 0; i < 10; i++ {
-			err = tg.OnStop(func() error {
+			err = tg.PushStopFn(func() error {
 				data++
 				return nil
 			})
 			if err == nil {
-				t.Fatal("OnStop should return an error when being called after stop")
+				t.Fatal("PushStopFn should return an error when being called after stop")
 			}
-			err = tg.AfterStop(func() error {
+			err = tg.PushDeferFn(func() error {
 				data++
 				return nil
 			})
 			if err == nil {
-				t.Fatal("AfterStop should return an error when being called after stop")
+				t.Fatal("PushDeferFn should return an error when being called after stop")
 			}
 		}
 		tg.Done()
 	}()
 
 	// Wait for 'Add' to be called in the above thread, to guarantee that
-	// OnStop and AfterStop will be called after 'Add' and 'Stop' have been
+	// PushStopFn and PushDeferFn will be called after 'Add' and 'Stop' have been
 	// called together.
 	<-addChan
 	err = tg.Stop()
@@ -538,32 +537,4 @@ func BenchmarkWaitGroup(b *testing.B) {
 		go wg.Done()
 	}
 	wg.Wait()
-}
-
-func TestErrHandler(t *testing.T) {
-	strErr := "Err output does not match the expected"
-	errs1 := errors.New("error 1")
-	errs2 := errors.New("error 2")
-	errs3 := errors.New("error 3")
-	errs4 := errors.New("error 4")
-
-	if errs4 = handleErrs(errs4, errs1); errs4.Error() != "error 4; error 1" {
-		t.Error(strErr)
-	}
-
-	if errs4 = handleErrs(errs4, nil); errs4.Error() != "error 4; error 1" {
-		t.Error(strErr)
-	}
-
-	if errs4 = handleErrs(nil, nil, errs4, nil, errs2, errs3, nil); errs4.Error() != "error 4; error 1; error 2; error 3" {
-		t.Error(strErr)
-	}
-
-	if errs4 = handleErrs(errs4, errs4); errs4.Error() != "error 4; error 1; error 2; error 3; error 4; error 1; error 2; error 3" {
-		t.Error(strErr)
-	}
-
-	if errs4 = handleErrs(nil, nil); errs4 != nil {
-		t.Error(strErr)
-	}
 }

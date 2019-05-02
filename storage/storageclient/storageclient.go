@@ -78,7 +78,7 @@ func New(persistDir string) (*StorageClient, error) {
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 	}
 
-	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
+	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.GetStopChan())
 
 	return sc, nil
 }

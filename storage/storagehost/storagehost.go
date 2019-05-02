@@ -35,7 +35,7 @@ func (h *StorageHost) initDB() error {
 		return err
 	}
 	// add the close of database to the thread manager
-	_ = h.tm.AfterStop(func() error {
+	_ = h.tm.PushDeferFn(func() error {
 		h.db.Close()
 		return nil
 	})
@@ -127,7 +127,7 @@ func New(persistDir string) (*StorageHost, error) {
 
 	// add the storage manager to the thread group
 	// log if closing fail
-	if tmErr = host.tm.AfterStop(func() error {
+	if tmErr = host.tm.PushDeferFn(func() error {
 		err := host.StorageManager.Close()
 		if err != nil {
 			host.log.Warn("Fail to close storage manager: " + err.Error())
@@ -144,7 +144,7 @@ func New(persistDir string) (*StorageHost, error) {
 	}
 
 	// add the syncConfig to the thread group, make sure it would be store before system down
-	if tmErr = host.tm.AfterStop(func() error {
+	if tmErr = host.tm.PushDeferFn(func() error {
 		err := host.syncConfig()
 		if err != nil {
 			host.log.Warn("Fail to synchronize to config file: " + err.Error())
