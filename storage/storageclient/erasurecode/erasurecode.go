@@ -40,9 +40,6 @@ type ErasureCoder interface {
 
 	// Recover decode the input sectors to the original data with length outLen
 	Recover(sectors [][]byte, n int, w io.Writer) error
-
-	// SupportPartialEncoding indicates whether partial encoding is supported. For standard type, always false
-	SupportsPartialEncoding() bool
 }
 
 // New returns a new ErasureCoder. Type supported are ECTypeStandard, and ECTypeShard.

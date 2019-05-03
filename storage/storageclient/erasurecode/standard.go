@@ -80,8 +80,3 @@ func (sec *standardErasureCode) Recover(sectors [][]byte, outLen int, w io.Write
 	}
 	return sec.enc.Join(w, sectors, outLen)
 }
-
-// SupportPartialEncoding indicates whether partial encoding is supported. For standard type, always false
-func (sec *standardErasureCode) SupportsPartialEncoding() bool {
-	return false
-}
