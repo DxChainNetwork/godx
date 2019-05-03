@@ -6,7 +6,6 @@ package dxfile
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +14,19 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
-const PageSize = 4096
+const (
+	// PageSize is the page size of persist data
+	PageSize = 4096
+
+	// sectorPersistSize is the size of rlp encoded string of a sector
+	sectorPersistSize = 56
+
+	// Overhead for PersistSegment persist data. The value is larger than data actually used
+	segmentPersistOverhead = 16
+
+	// Duplication rate is the expected duplication of the size of the sectors
+	redundancyRate float64 = 1.0
+)
 
 // TODO: how to create updates to create dxfile
 
@@ -35,22 +46,30 @@ func readDxFile(path string, wal *writeaheadlog.Wal) (*DxFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %s: %v", path, err)
 	}
-	header, segmentOffset, err := readHeader(f)
+	header, segmentOffset, err := readPersistHeader(f)
 	if err != nil {
 		return nil, err
 	}
-	df.fileHeader = header
-	// TODO: new df.erasureCoder
+	df.metaData = header.Metadata
+	for _, hostAddr := range header.HostAddresses {
+		df.hostAddresses[hostAddr.Address] = hostAddr.Used
+	}
+	df.erasureCode, err = header.newErasureCode()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create erasure code: %v", err)
+	}
 	// read segments
-	off, err := f.Seek(segmentOffset, io.SeekStart)
+	off, err := f.Seek(int64(segmentOffset), io.SeekStart)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read first segment: %v", err)
 	}
 	if off%PageSize != 0 {
 		return nil, fmt.Errorf("segment offset not allowed: %d", off)
 	}
-	// TODO: implement page per segment
-	segmentSize := df.fileHeader.SegmentPersistSize()
+	segmentSize := segmentPersistNumPages(header.NumSectors)
+	if err != nil {
+		return nil, err
+	}
 	for {
 		seg, err := readSegment(f, segmentSize)
 		if err == io.EOF {
@@ -64,9 +83,9 @@ func readDxFile(path string, wal *writeaheadlog.Wal) (*DxFile, error) {
 	return df, nil
 }
 
-// readHeader is the helper function that read the header using rlp encoding,
+// readPersistHeader is the helper function that read the header using rlp encoding,
 // return the decoded header, segment offset, and error
-func readHeader(r io.Reader) (*fileHeader, int64, error) {
+func readPersistHeader(r io.Reader) (*PersistHeader, int32, error) {
 	headerLength, segmentOffset, err := readOverhead(r)
 	if err != nil {
 		return nil, 0, err
@@ -74,11 +93,11 @@ func readHeader(r io.Reader) (*fileHeader, int64, error) {
 	if headerLength > segmentOffset {
 		return nil, 0, fmt.Errorf("failed to read header: segmentOffset larger than header length")
 	}
-	headerBytes, err := readExactBytes(r, headerLength)
+	headerBytes, err := readExactBytes(r, int64(headerLength))
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read header: %v", err)
 	}
-	var ph *fileHeader
+	var ph *PersistHeader
 	if err = rlp.DecodeBytes(headerBytes, ph); err != nil {
 		return nil, 0, fmt.Errorf("failed to decode header: %v", err)
 	}
@@ -86,24 +105,31 @@ func readHeader(r io.Reader) (*fileHeader, int64, error) {
 }
 
 // readOverhead read the first two uint64 as headerLength and segmentOffset
-func readOverhead(r io.Reader) (int64, int64, error) {
-	headerLength, err := readInt64(r)
+func readOverhead(r io.Reader) (int32, int32, error) {
+	headerLength, err := readInt32(r)
 	if err != nil {
 		return 0, 0, fmt.Errorf("read headerLength: %v", err)
 	}
-	segmentOffset, err := readInt64(r)
+	if headerLength < 0 {
+		return 0, 0, fmt.Errorf("headerSize is negative: %v", headerLength)
+	}
+	segmentOffset, err := readInt32(r)
 	if err != nil {
 		return 0, 0, fmt.Errorf("read segmentOffset: %v", err)
+	}
+	if segmentOffset < 0 {
+		return 0, 0, fmt.Errorf("segmentOffset is negative: %v", headerLength)
 	}
 	return headerLength, segmentOffset, nil
 }
 
-func readSegment(r io.Reader, length int64) (*Segment, error) {
+// readSegment is a helper function to read a segment from reader
+func readSegment(r io.Reader, length int64) (*PersistSegment, error) {
 	segmentBytes, err := readExactBytes(r, length)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read segment: %v", err)
 	}
-	var seg *Segment
+	var seg *PersistSegment
 	if err = rlp.DecodeBytes(segmentBytes, seg); err != nil {
 		return nil, err
 	}
@@ -127,30 +153,12 @@ func readExactBytes(r io.Reader, length int64) ([]byte, error) {
 	return dataBytes, nil
 }
 
-// readInt64 is a helper function which read a uint64 from reader
-func readInt64(r io.Reader) (int64, error) {
-	var num int64
+// readInt32 is a helper function which read an int32 from reader
+func readInt32(r io.Reader) (int32, error) {
+	var num int32
 	err := binary.Read(r, binary.LittleEndian, &num)
 	if err != nil {
-		return 0, fmt.Errorf("cannot read uint64: %v", err)
+		return 0, fmt.Errorf("cannot read int32: %v", err)
 	}
 	return num, nil
-}
-
-func composeError(errs ...error) error {
-	var errMsg = "["
-	for _, err := range errs {
-		if err == nil {
-			continue
-		}
-		if len(errMsg) != 1 {
-			errMsg += "; "
-		}
-		errMsg += err.Error()
-	}
-	errMsg += "]"
-	if errMsg == "[]" {
-		return nil
-	}
-	return errors.New(errMsg)
 }

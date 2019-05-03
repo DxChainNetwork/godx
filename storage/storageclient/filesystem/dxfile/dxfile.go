@@ -8,6 +8,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 const fileIDSize = 16
@@ -15,8 +16,8 @@ const fileIDSize = 16
 type fileID [fileIDSize]byte
 
 type (
-	// DxFile is saved to disk with sequence:
-	// headerLength | ChunkOffset | header             | dataSegment
+	// DxFile is saved to disk as follows:
+	// headerLength | ChunkOffset | PersistHeader      | dataSegment
 	// 0:4          | 4:8         | 8:8+headerLength   | segmentOffset:
 	DxFile struct {
 		// headerLength is the size of the rlp string of header, which is put
@@ -26,10 +27,13 @@ type (
 		segmentOffset int32
 
 		// header is the persist header is the header of the dxfile
-		fileHeader *fileHeader
+		metaData Metadata
+
+		// hostAddresses is the map of host address to whether the address is used
+		hostAddresses map[common.Hash]bool
 
 		// dataSegments is a list of segments the file is split into
-		dataSegments []*Segment
+		dataSegments []*PersistSegment
 
 		// utils field
 		deleted bool
@@ -41,41 +45,48 @@ type (
 		filename string
 
 		//cached field
-		erasureCode ErasureCoder
+		erasureCode erasurecode.ErasureCoder
 	}
 
-	// fileHeader has two field: metadata of fixed size, and hostAddresses of flexible size.
-	fileHeader struct {
-		// metadata includes all info related to dxfile that is ready to be flushed to data file
-		metadata *metadata
+	// PersistHeader has two field: Metadata of fixed size, and HostAddresses of flexible size.
+	PersistHeader struct {
+		// Metadata includes all info related to dxfile that is ready to be flushed to data file
+		Metadata
 
-		// hostAddresses is a list of addresses that contains address and whether the host
+		// HostAddresses is a list of addresses that contains address and whether the host
 		// is used
-		hostAddresses []*hostAddress
+		HostAddresses []*PersistHostAddress
 	}
 
-	// hostAddress is a combination of host address for a dxfile and whether the specific host is used in the dxfile
+	// PersistHostAddress is a combination of host address for a dxfile and whether the specific host is used in the dxfile
 	// when encoding, the default rlp encoding algorithm is used
-	hostAddress struct {
-		address common.Hash
-		used    bool
+	PersistHostAddress struct {
+		Address common.Hash
+		Used    bool
 	}
 
-	// Segment is the structure a dxfile is split into
-	Segment struct {
+	// PersistSegment is the structure a dxfile is split into
+	PersistSegment struct {
 		// TODO: Check the ExtensionInfo could be actually removed
-		sectors [][]Sector // sectors contains the recoverable message about the Sector in the Segment
-		stuck   bool       // stuck indicates whether the Segment is stuck or not
+		Sectors [][]PersistSector // Sectors contains the recoverable message about the PersistSector in the PersistSegment
+		Stuck   bool              // Stuck indicates whether the PersistSegment is Stuck or not
 	}
 
-	// Sector is the smallest unit of storage. It the erasure code encoded Segment
-	Sector struct {
-		hostAddress common.Address
-		merkleRoot  common.Hash
+	// PersistSector is the smallest unit of storage. It the erasure code encoded PersistSegment
+	PersistSector struct {
+		MerkleRoot  common.Hash
+		HostOffset  int64 // hostOffset point to the location of host
 	}
 )
 
-// TODO: implement this
-func (fh *fileHeader) SegmentPersistSize() int64 {
-	return 1 * PageSize
+// segmentPersistSize is the helper function to calculate the persist size of the segment
+func segmentPersistNumPages(numSectors uint32) int64 {
+	sectorsSize := sectorPersistSize * numSectors
+	sectorsSizeWithRedundancy := float64(sectorsSize) * (1 + redundancyRate)
+	dataSize := segmentPersistOverhead + int(sectorsSizeWithRedundancy)
+	numPages := dataSize / PageSize
+	if dataSize%PageSize != 0 {
+		numPages++
+	}
+	return int64(numPages)
 }

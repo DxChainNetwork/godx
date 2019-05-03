@@ -6,6 +6,7 @@ package dxfile
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/common"
 	"os"
 
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -17,6 +18,9 @@ const (
 	opInsertFile = "insert_file" // name of the operation to create or update a dxfile
 )
 
+// TODO: Refactor the apply update to write page updates. Each page has next offset
+// 		 Each read will stop at next offset == -1. Call it paged file.
+
 // dxfileUpdate defines the update interface for dxfile update.
 // Two types of update is supported: insertUpdate and deleteUpdate
 type dxfileUpdate interface {
@@ -25,7 +29,7 @@ type dxfileUpdate interface {
 	fileName() string                                // filename returns the filename associated with the update
 }
 
-// insertUpdate defines an insert dxfile instruction, including filenamefwqxzA, offset, and data to write
+// insertUpdate defines an insert dxfile instruction, including filename, offset, and data to write
 type (
 	insertUpdate struct {
 		filename string
@@ -189,15 +193,15 @@ func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 
 // updatesToOps convert []dxfileUpdate to []wal.Operation
 func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error) {
-	errs := make([]error, len(updates))
+	var fullErr error
 	ops := make([]writeaheadlog.Operation, len(updates))
 	for _, update := range updates {
 		op, err := update.encodeToWalOp()
 		if err != nil {
-			errs = append(errs, err)
+			fullErr = common.ErrCompose(fullErr, err)
 			continue
 		}
 		ops = append(ops, op)
 	}
-	return ops, composeError(errs...)
+	return ops, fullErr
 }
