@@ -1,10 +1,12 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
 package storageclient
 
 // Files and directories related constant
 const (
 	PersistDirectory            = "storageclient"
 	PersistFilename             = "storageclient.json"
-	PersistLogname              = "storageclient.log"
 	PersistStorageClientVersion = "1.3.6"
 	DxPathRoot                  = "dxfiles"
 )

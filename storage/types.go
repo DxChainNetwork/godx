@@ -1,8 +1,11 @@
 package storage
 
-import "math/big"
+import (
+	"math/big"
+	"time"
+)
 
-type(
+type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
 		AcceptingContracts   bool   `json:"acceptingcontracts"`
@@ -50,3 +53,38 @@ type(
 		Version        string `json:"version"`
 	}
 )
+
+// StorageHostManager related data structures
+type HostInfo struct {
+	HostExtConfig
+
+	FirstSeen uint64 `json:"firstseen"`
+
+	HistoricDowntime time.Duration `json:"historicdowntime"`
+	HistoricUptime   time.Duration `json:"historicuptime"`
+	ScanRecords      HostPoolScans `json:"scanrecords"`
+
+	HistoricFailedInteractions     float64 `json:"historicfailedinteractions"`
+	HistoricSuccessfulInteractions float64 `json:"historicsuccessfulinteractions"`
+	RecentFailedInteractions       float64 `json:"recentfailedinteractions"`
+	RecentSuccessfulInteractions   float64 `json:"recentsuccessfulinteractions"`
+
+	LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
+
+	IPNets          []string  `json:"ipnets"`
+	LastIPNetChange time.Time `json:"lastipnetchange"`
+
+	// TODO (mzhang): verify with hz, check if the public key will be proviced
+	// if public key is not provided, what kind of information will be used to
+	// verify the host identity, enode ?
+	PublicKey string `json:"publickey"`
+
+	Filtered bool `json:"filtered"`
+}
+
+type HostPoolScans []HostPoolScan
+
+type HostPoolScan struct {
+	Timestamp time.Time `json:"timestamp"`
+	Success   bool      `json:"success"`
+}

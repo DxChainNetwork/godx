@@ -28,3 +28,50 @@ var (
 	Big256 = big.NewInt(256)
 	Big257 = big.NewInt(257)
 )
+
+type BigInt struct {
+	b big.Int
+}
+
+func NewBigInt(x int64) BigInt {
+	return BigInt{
+		b: *big.NewInt(x),
+	}
+}
+
+func (x BigInt) Add(y BigInt) (sum BigInt) {
+	sum.b.Add(&x.b, &y.b)
+	return
+}
+
+func (x BigInt) Sub(y BigInt) (diff BigInt) {
+	diff.b.Sub(&x.b, &y.b)
+	return
+}
+
+func (x BigInt) Cmp(y BigInt) (result int) {
+	result = x.b.Cmp(&y.b)
+	return
+}
+
+func (x BigInt) MultInt(y int64) (prod BigInt) {
+	prod.b.Mul(&x.b, big.NewInt(y))
+	return
+}
+
+func (x BigInt) Div(y BigInt) (quotient BigInt) {
+	// denominator cannot be 0
+	if y.Cmp(NewBigInt(0)) == 0 {
+		y = NewBigInt(1)
+	}
+
+	// division
+	quotient.b.Div(&x.b, &y.b)
+	return
+}
+
+func (x BigInt) Float64() (result float64) {
+	f := new(big.Float).SetInt(&x.b)
+	result, _ = f.Float64()
+	return
+}
