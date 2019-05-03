@@ -6,9 +6,10 @@ package dxfile
 import (
 	"errors"
 	"fmt"
+	"os"
+
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
-	"os"
 )
 
 const (

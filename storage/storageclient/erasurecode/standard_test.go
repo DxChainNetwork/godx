@@ -5,8 +5,8 @@ package erasurecode
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"io/ioutil"
 	"math/rand"
 	"testing"

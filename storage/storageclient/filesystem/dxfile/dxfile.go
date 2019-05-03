@@ -4,9 +4,10 @@
 package dxfile
 
 import (
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"sync"
 )
 
 const fileIDSize = 16

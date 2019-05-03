@@ -5,8 +5,9 @@ package erasurecode
 
 import (
 	"fmt"
-	"github.com/klauspost/reedsolomon"
 	"io"
+
+	"github.com/klauspost/reedsolomon"
 )
 
 // standardECode is an implementation of ErasureCoder, which could encode segment as a whole
