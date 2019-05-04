@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package storageclient
 
 import (
@@ -12,14 +13,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/log"
-	"golang.org/x/crypto/sha3"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
+	"golang.org/x/crypto/sha3"
 	"golang.org/x/crypto/twofish"
 )
 

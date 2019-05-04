@@ -54,12 +54,11 @@ func randomCriteria() EvaluationCriteria {
 	return EvaluationCriteria{
 		AgeAdjustment:              randFloat64(),
 		BurnAdjustment:             randFloat64(),
-		CollateralAdjustment:       randFloat64(),
+		DepositAdjustment:          randFloat64(),
 		InteractionAdjustment:      randFloat64(),
 		PriceAdjustment:            randFloat64(),
 		StorageRemainingAdjustment: randFloat64(),
 		UptimeAdjustment:           randFloat64(),
-		VersionAdjustment:          randFloat64(),
 	}
 }
 
@@ -68,12 +67,11 @@ func partialRandomCriteria() EvaluationCriteria {
 	return EvaluationCriteria{
 		AgeAdjustment:              1,
 		BurnAdjustment:             randFloat64(),
-		CollateralAdjustment:       randFloat64(),
+		DepositAdjustment:          randFloat64(),
 		InteractionAdjustment:      randFloat64(),
 		PriceAdjustment:            100,
 		StorageRemainingAdjustment: randFloat64(),
 		UptimeAdjustment:           randFloat64(),
-		VersionAdjustment:          300,
 	}
 }
 

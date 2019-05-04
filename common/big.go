@@ -32,6 +32,11 @@ var (
 	Big257 = big.NewInt(257)
 )
 
+var (
+	BigInt0 = NewBigInt(0)
+	BigInt1 = NewBigInt(1)
+)
+
 type BigInt struct {
 	b big.Int
 }
@@ -42,6 +47,18 @@ func NewBigInt(x int64) BigInt {
 	}
 }
 
+func NewBigIntUint64(x uint64) BigInt {
+	return BigInt {
+		b: *new(big.Int).SetUint64(x),
+	}
+}
+
+func NewBigIntFloat64(x float64) BigInt {
+	v := uint64(x)
+	return BigInt {
+		b: *new(big.Int).SetUint64(v),
+	}
+}
 
 func RandomBigInt(x BigInt) (random BigInt, err error) {
 
@@ -73,6 +90,11 @@ func (x BigInt) Sub(y BigInt) (diff BigInt) {
 	return
 }
 
+func (x BigInt) Mult(y BigInt) (prod BigInt) {
+	prod.b.Mul(&x.b, &y.b)
+	return
+}
+
 func (x BigInt) Cmp(y BigInt) (result int) {
 	result = x.b.Cmp(&y.b)
 	return
@@ -94,6 +116,11 @@ func (x BigInt) Div(y BigInt) (quotient BigInt) {
 	return
 }
 
+func (x BigInt) DivUint64(y uint64) (quotient BigInt) {
+	quotient.b.Div(&x.b, new(big.Int).SetUint64(y))
+	return
+}
+
 func (x BigInt) Float64() (result float64) {
 	f := new(big.Float).SetInt(&x.b)
 	result, _ = f.Float64()
@@ -102,6 +129,11 @@ func (x BigInt) Float64() (result float64) {
 
 func (x BigInt) BigIntPtr() *big.Int {
 	return &x.b
+}
+
+func (x BigInt) MultUint64(y uint64) (prod BigInt) {
+	prod.b.Mul(&x.b, new(big.Int).SetUint64(y))
+	return
 }
 
 func (x BigInt) MultFloat64(y float64) (prod BigInt) {

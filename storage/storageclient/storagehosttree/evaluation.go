@@ -22,28 +22,26 @@ type EvaluationDetail struct {
 
 	AgeAdjustment              float64 `json:"ageadjustment"`
 	BurnAdjustment             float64 `json:"burnadjustment"`
-	CollateralAdjustment       float64 `json:"collateraladjustment"`
+	DepositAdjustment          float64 `json:"depositeadjustment"`
 	InteractionAdjustment      float64 `json:"interactionadjustment"`
 	PriceAdjustment            float64 `json:"pricesmultiplier"`
 	StorageRemainingAdjustment float64 `json:"storageremainingadjustment"`
 	UptimeAdjustment           float64 `json:"uptimeadjustment"`
-	VersionAdjustment          float64 `json:"versionadjustment"`
 }
 
 type EvaluationCriteria struct {
 	AgeAdjustment              float64
 	BurnAdjustment             float64
-	CollateralAdjustment       float64
+	DepositAdjustment          float64
 	InteractionAdjustment      float64
 	PriceAdjustment            float64
 	StorageRemainingAdjustment float64
 	UptimeAdjustment           float64
-	VersionAdjustment          float64
 }
 
 func (ec EvaluationCriteria) Evaluation() common.BigInt {
-	total := ec.AgeAdjustment * ec.BurnAdjustment * ec.CollateralAdjustment * ec.InteractionAdjustment *
-		ec.PriceAdjustment * ec.StorageRemainingAdjustment * ec.UptimeAdjustment * ec.VersionAdjustment
+	total := ec.AgeAdjustment * ec.BurnAdjustment * ec.DepositAdjustment * ec.InteractionAdjustment *
+		ec.PriceAdjustment * ec.StorageRemainingAdjustment * ec.UptimeAdjustment
 
 	return common.NewBigInt(1).MultFloat64(total)
 }
@@ -65,12 +63,11 @@ func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, 
 		ConversionRate:             ratio,
 		AgeAdjustment:              ec.AgeAdjustment,
 		BurnAdjustment:             ec.BurnAdjustment,
-		CollateralAdjustment:       ec.CollateralAdjustment,
+		DepositAdjustment:          ec.DepositAdjustment,
 		InteractionAdjustment:      ec.InteractionAdjustment,
 		PriceAdjustment:            ec.PriceAdjustment,
 		StorageRemainingAdjustment: ec.StorageRemainingAdjustment,
 		UptimeAdjustment:           ec.UptimeAdjustment,
-		VersionAdjustment:          ec.VersionAdjustment,
 	}
 
 }

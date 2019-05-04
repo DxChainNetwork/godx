@@ -1,18 +1,20 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package storageclient
 
 import (
 	"errors"
+	"path/filepath"
+	"reflect"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
-	"path/filepath"
-	"reflect"
-	"sync"
 )
 
 // ************** MOCKING DATA *****************
@@ -66,11 +68,21 @@ type StorageClient struct {
 	streamCache *streamCache
 	log         log.Logger
 	// TODO (jacky): considering using the Lock and Unlock with ID ?
-	lock    sync.Mutex
-	tm      threadmanager.ThreadManager
-	wal     Wal
-	network *ethapi.PublicNetAPI
+	lock sync.Mutex
+	tm   threadmanager.ThreadManager
+	wal  Wal
+
+	// getting netInfo status
+	netInfo *ethapi.PublicNetAPI
+
+	// used to send transaction
 	account *ethapi.PrivateAccountAPI
+
+	// used to get gas price estimation
+	chainInfo *ethapi.PublicBlockChainAPI
+
+	// used to get syncing status
+	ethInfo *ethapi.PublicEthereumAPI
 }
 
 // New initializes StorageClient object
@@ -93,12 +105,20 @@ func (sc *StorageClient) Start(eth Backend) error {
 	sc.filterAPIs(eth.APIs())
 
 	// validation
-	if sc.network == nil {
-		return errors.New("failed to acquire network information")
+	if sc.netInfo == nil {
+		return errors.New("failed to acquire netInfo information")
 	}
 
 	if sc.account == nil {
 		return errors.New("failed to acquire account information")
+	}
+
+	if sc.ethInfo == nil {
+		return errors.New("failed to acquire eth information")
+	}
+
+	if sc.chainInfo == nil {
+		return errors.New("failed to acquire blockchain information")
 	}
 
 	// TODO (mzhang): Initialize ContractManager & HostManager -> assign to StorageClient
@@ -123,9 +143,13 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) {
 	for _, api := range apis {
 		switch typ := reflect.TypeOf(api.Service); typ {
 		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
-			sc.network = api.Service.(*ethapi.PublicNetAPI)
+			sc.netInfo = api.Service.(*ethapi.PublicNetAPI)
 		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
 			sc.account = api.Service.(*ethapi.PrivateAccountAPI)
+		case reflect.TypeOf(&ethapi.PublicBlockChainAPI{}):
+			sc.chainInfo = api.Service.(*ethapi.PublicBlockChainAPI)
+		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
+			sc.ethInfo = api.Service.(*ethapi.PublicEthereumAPI)
 		default:
 			continue
 		}
