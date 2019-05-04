@@ -16,7 +16,10 @@
 
 package common
 
-import "math/big"
+import (
+	"crypto/rand"
+	"math/big"
+)
 
 // Common big integers often used
 var (
@@ -37,6 +40,27 @@ func NewBigInt(x int64) BigInt {
 	return BigInt{
 		b: *big.NewInt(x),
 	}
+}
+
+
+func RandomBigInt(x BigInt) (random BigInt, err error) {
+
+	randint, err := rand.Int(rand.Reader, x.BigIntPtr())
+
+	if err != nil {
+		return BigInt{}, err
+	}
+	random = BigInt{
+		b: *randint,
+	}
+	return
+}
+
+func (x BigInt) IsNeg() bool {
+	if x.Cmp(NewBigInt(0)) < 0 {
+		return true
+	}
+	return false
 }
 
 func (x BigInt) Add(y BigInt) (sum BigInt) {
@@ -73,5 +97,17 @@ func (x BigInt) Div(y BigInt) (quotient BigInt) {
 func (x BigInt) Float64() (result float64) {
 	f := new(big.Float).SetInt(&x.b)
 	result, _ = f.Float64()
+	return
+}
+
+func (x BigInt) BigIntPtr() *big.Int {
+	return &x.b
+}
+
+func (x BigInt) MultFloat64(y float64) (prod BigInt) {
+	xRat := new(big.Rat).SetInt(&x.b)
+	yRat := new(big.Rat).SetFloat64(y)
+	ratProd := new(big.Rat).Mul(xRat, yRat)
+	prod.b.Div(ratProd.Num(), ratProd.Denom())
 	return
 }

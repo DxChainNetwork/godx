@@ -9,40 +9,39 @@ import (
 	"net"
 )
 
-// Filter defines IP filter map. For any IP addresses with same subnet will be marked
-// and filter needed
-// ip address can be extracted from the enode information
+// Filter defines IP filter map. For any IP addresses with same IP Network will be marked
+// and filter needed. IP address can be extracted from the enode information
 type Filter struct {
 	filter map[string]struct{}
 }
 
 // NewFilter will create and initialize a Filter object
-func (f *Filter) NewFilter() *Filter {
+func NewFilter() *Filter {
 	return &Filter{
 		filter: make(map[string]struct{}),
 	}
 }
 
-// Add will add the subnet of the IP address in to the filter
+// Add will add the IP Network of the IP address in to the filter
 func (f *Filter) Add(ip string) {
-	sub, err := IPSubnet(ip)
+	ipnet, err := IPNetwork(ip)
 	if err != nil {
 		return
 	}
 
-	// add the subnet to the filter
-	f.filter[sub.String()] = struct{}{}
+	// add the IP Network to the filter
+	f.filter[ipnet.String()] = struct{}{}
 }
 
-// Filtered will check if an IP address uses a subnet that is already in used
-// return true indicates the subnet is in use
+// Filtered will check if an IP address uses a IP Network that is already in used
+// return true indicates the IP Network is in use
 func (f *Filter) Filtered(ip string) bool {
-	sub, err := IPSubnet(ip)
+	ipnet, err := IPNetwork(ip)
 	if err != nil {
 		return false
 	}
 
-	if _, exists := f.filter[sub.String()]; exists {
+	if _, exists := f.filter[ipnet.String()]; exists {
 		return true
 	}
 
@@ -54,9 +53,9 @@ func (f *Filter) Reset() {
 	f.filter = make(map[string]struct{})
 }
 
-// IPSubnet will return the subnet used by an IP address
-func IPSubnet(ip string) (sub *net.IPNet, err error) {
+// IPNetwork will return the IP network used by an IP address
+func IPNetwork(ip string) (ipnet *net.IPNet, err error) {
 	cidr := fmt.Sprintf("%s/%d", ip, IPv4PrefixLength)
-	_, sub, err = net.ParseCIDR(cidr)
+	_, ipnet, err = net.ParseCIDR(cidr)
 	return
 }

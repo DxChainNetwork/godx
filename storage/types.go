@@ -71,6 +71,11 @@ type HostInfo struct {
 
 	LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
 
+	// TODO (mzhang): not sure if IP will be provided. However, if not
+	// it can still be derived from the enode information. Need to verify
+	// with HZ office
+	IP              string   `json:"ip"`
+
 	IPNets          []string  `json:"ipnets"`
 	LastIPNetChange time.Time `json:"lastipnetchange"`
 

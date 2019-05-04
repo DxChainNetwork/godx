@@ -14,10 +14,10 @@ type node struct {
 	left   *node
 	right  *node
 
-	count    int
-	occupied bool
-	eval     common.BigInt
-	entry    *nodeEntry
+	count     int
+	occupied  bool
+	evalTotal common.BigInt
+	entry     *nodeEntry
 }
 
 type nodeEntry struct {
@@ -35,21 +35,22 @@ func (ne nodeEntries) Swap(i, j int)      { ne[i], ne[j] = ne[j], ne[i] }
 // the StorageHostTree
 func newNode(parent *node, entry *nodeEntry) *node {
 	return &node{
-		parent:   parent,
-		occupied: true,
-		eval:     entry.eval,
-		count:    1,
-		entry:    entry,
+		parent:    parent,
+		occupied:  true,
+		evalTotal: entry.eval,
+		count:     1,
+		entry:     entry,
 	}
 }
 
 // nodeRemove will not remove the actual node from the tree
 // instead, it update the evaluation, and occupied status
 func (n *node) nodeRemove() {
+	n.evalTotal = n.evalTotal.Sub(n.entry.eval)
 	n.occupied = false
 	parent := n.parent
 	for parent != nil {
-		parent.eval = parent.eval.Sub(n.entry.eval)
+		parent.evalTotal = parent.evalTotal.Sub(n.entry.eval)
 		parent = parent.parent
 	}
 }
@@ -60,7 +61,7 @@ func (n *node) nodeInsert(entry *nodeEntry) (nodesAdded int, nodeInserted *node)
 	if n.parent == nil && !n.occupied && n.left == nil && n.right == nil {
 		n.occupied = true
 		n.entry = entry
-		n.eval = entry.eval
+		n.evalTotal = entry.eval
 
 		nodesAdded = 0
 		nodeInserted = n
@@ -68,7 +69,7 @@ func (n *node) nodeInsert(entry *nodeEntry) (nodesAdded int, nodeInserted *node)
 	}
 
 	// 2. add all child evaluation
-	n.eval = n.eval.Add(entry.eval)
+	n.evalTotal = n.evalTotal.Add(entry.eval)
 
 	// 3. check if the node is occupied
 	if !n.occupied {
@@ -103,17 +104,17 @@ func (n *node) nodeInsert(entry *nodeEntry) (nodesAdded int, nodeInserted *node)
 
 // nodeWithEval will retrieve node with the specific evaluation
 func (n *node) nodeWithEval(eval common.BigInt) (*node, error) {
-	if eval.Cmp(n.eval) > 0 {
+	if eval.Cmp(n.evalTotal) > 0 {
 		return nil, ErrEvaluationTooLarge
 	}
 
 	if n.left != nil {
-		if eval.Cmp(n.left.eval) < 0 {
+		if eval.Cmp(n.left.evalTotal) < 0 {
 			return n.left.nodeWithEval(eval)
 		}
-		eval = eval.Sub(n.left.eval)
+		eval = eval.Sub(n.left.evalTotal)
 	}
-	if n.right != nil && eval.Cmp(n.right.eval) < 0 {
+	if n.right != nil && eval.Cmp(n.right.evalTotal) < 0 {
 		return n.right.nodeWithEval(eval)
 	}
 

@@ -45,7 +45,7 @@ func (ec EvaluationCriteria) Evaluation() common.BigInt {
 	total := ec.AgeAdjustment * ec.BurnAdjustment * ec.CollateralAdjustment * ec.InteractionAdjustment *
 		ec.PriceAdjustment * ec.StorageRemainingAdjustment * ec.UptimeAdjustment * ec.VersionAdjustment
 
-	return common.NewBigInt(int64(total))
+	return common.NewBigInt(1).MultFloat64(total)
 }
 
 func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, ignoreUptime bool) EvaluationDetail {
@@ -58,7 +58,7 @@ func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, 
 
 	eval := ec.Evaluation()
 
-	ratio := converationRate(eval, evalAll)
+	ratio := conversionRate(eval, evalAll)
 
 	return EvaluationDetail{
 		Evaluation:                 eval,
@@ -75,9 +75,9 @@ func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, 
 
 }
 
-func converationRate(eval, evalAll common.BigInt) float64 {
+func conversionRate(eval, evalAll common.BigInt) float64 {
 	// eliminate 0 for denominator
-	if evalAll.Cmp(common.NewBigInt(0)) < 0 {
+	if evalAll.Cmp(common.NewBigInt(0)) <= 0 {
 		evalAll = common.NewBigInt(1)
 	}
 
