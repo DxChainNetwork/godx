@@ -20,7 +20,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"runtime"
 	"sync"
@@ -50,6 +49,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -62,7 +62,7 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	storageHost    *storagehost.StorageHost
+	storageHost *storagehost.StorageHost
 
 	config      *Config
 	chainConfig *params.ChainConfig
@@ -91,14 +91,17 @@ type Ethereum struct {
 	gasPrice  *big.Int
 	etherbase common.Address
 
-	apisOnce      sync.Once
+	apisOnce       sync.Once
 	registeredAPIs []rpc.API
-	storageClient *storageclient.StorageClient
+	storageClient  *storageclient.StorageClient
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	// maintenance
+	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -211,6 +214,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		//  make sure what the expected handling case of these failure
 		return nil, err
 	}
+
+	// new maintenance system
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend)
 
 	return eth, nil
 }
@@ -339,7 +345,7 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 				Public:    false,
-			},{
+			}, {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
@@ -577,5 +583,8 @@ func (s *Ethereum) Stop() error {
 	s.chainDb.Close()
 	s.storageHost.Close()
 	close(s.shutdownChan)
+
+	// stop maintenance
+	s.maintenance.Stop()
 	return nil
 }
