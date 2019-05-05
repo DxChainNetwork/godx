@@ -36,7 +36,7 @@ import (
 var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
-	errUnknownStorageContractTx = errors.New("unknown file contract tx")
+	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
 	fundAddr                    = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
@@ -477,7 +477,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) StorageContract(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 
 	switch txType {
 	case HostAnnounceTransaction:
