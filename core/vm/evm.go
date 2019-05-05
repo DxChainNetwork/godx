@@ -23,15 +23,21 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
 var (
-	emptyCodeHash            = crypto.Keccak256Hash(nil)
-	errUnknownFileContractTx = errors.New("unknown file contract tx")
+	emptyCodeHash = crypto.Keccak256Hash(nil)
+
+	errUnknownStorageContractTx = errors.New("unknown file contract tx")
+	fundAddr                    = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 type (
@@ -471,7 +477,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) StorageContract(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 
 	switch txType {
 	case HostAnnounceTransaction:
@@ -485,66 +491,254 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	case ContractRenewTransaction:
 		return evm.ContractRenewTx(caller, data, gas)
 	default:
-		return nil, gas, errUnknownFileContractTx
+		return nil, gas, errUnknownStorageContractTx
 	}
 
 }
 
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	log.Info("enter host announce tx executing ... ")
 	var (
-		//标记一个锚
 		snapshot = evm.StateDB.Snapshot()
 		err      error
 	)
-	if err != nil {
-		//如果出错，DB回滚
-		evm.StateDB.RevertToSnapshot(snapshot)
 
+	HostInfo := types.HostAnnouncement{}
+	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &HostInfo)
+	errDec, _ := resultDecode[0].(error)
+	if errDec != nil {
+		return nil, gasDecode, errDec
 	}
-	return nil, gas, err
+
+	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, HostInfo, types.BlockHeight(0), []types.Signature{HostInfo.Signature})
+	errCheck, _ := resultCheck[0].(error)
+	if errCheck != nil {
+		log.Error("failed to check signature for host announce", "err", errCheck)
+		return nil, gasCheck, errCheck
+	} else {
+
+		//TODO: 和off chain那边对接，存储到hostDB
+		log.Info("success to host announce", "NatAddress", HostInfo.NetAddress)
+	}
+
+	// go back state DB if something is wrong above
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		return nil, gasCheck, err
+	}
+
+	log.Info("host announce tx execution done", "remain_gas", gas, "host_address", HostInfo.NetAddress)
+
+	// return remain gas if everything is ok
+	return nil, gasCheck, nil
 }
 
 func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	log.Info("enter form contract tx executing ... ")
 	var (
-		//标记一个锚
 		snapshot = evm.StateDB.Snapshot()
 		err      error
+		db       = evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
 	)
-	if err != nil {
-		//如果出错，DB回滚
-		evm.StateDB.RevertToSnapshot(snapshot)
 
+	defer func() {
+		if errInfo := recover(); errInfo != nil {
+			err = errInfo.(error)
+			log.Error("something wrong when executing form contract tx", "err", errInfo)
+		}
+	}()
+
+	// rlp decode and calculate gas used
+	fileContract := types.StorageContract{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &fileContract)
+	errDecode, _ := resultDecode[0].(error)
+	if errDecode != nil {
+		return nil, gasRemainDecode, errDecode
 	}
-	return nil, gas, err
+
+	// check form contract and calculate gas used
+	currentHeight := evm.BlockNumber.Uint64()
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, evm, fileContract, types.BlockHeight(currentHeight))
+	errCheck, _ := resultCheck[0].(error)
+	if errCheck != nil {
+		log.Error("failed to check form contract", "err", errCheck)
+		return nil, gasRemainCheck, errCheck
+	}
+
+	// store file contract info to local DB and calculate gas used
+	scID := fileContract.ID()
+	gasRemainStore, resultStore := RemainGas(gasRemainCheck, StoreStorageContract, db, scID, fileContract)
+	errStore, _ := resultStore[0].(error)
+	if errStore != nil {
+		return nil, gasRemainStore, errStore
+	}
+
+	// store file contract ID to local DB and calculate gas used
+	gasRemainStoreExpire, resultStoreExpire := RemainGas(gasRemainStore, StoreExpireStorageContract, db, scID, fileContract.WindowEnd)
+	errStoreExpire, _ := resultStoreExpire[0].(error)
+	if errStoreExpire != nil {
+		return nil, gasRemainStoreExpire, errStoreExpire
+	}
+
+	// deduct the collateral and deposit it to the public account
+	renterAddr := fileContract.RenterCollateral.Address
+	hostAddr := fileContract.HostCollateral.Address
+	renterCollateralAmount := fileContract.RenterCollateral.Value
+	hostCollateralAmount := fileContract.HostCollateral.Value
+	evm.StateDB.SubBalance(renterAddr, renterCollateralAmount)
+	evm.StateDB.SubBalance(hostAddr, hostCollateralAmount)
+
+	// go back state DB and delete file contract from local DB if something is wrong above
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		errDel := DeleteStorageContract(db, scID)
+		if errDel != nil {
+			log.Error("failed to delete file contract from db", "error", errDel, "file_contract_id", common.Hash(scID).Hex())
+		}
+		errDelExp := DeleteExpireStorageContract(db, scID, fileContract.WindowEnd)
+		if errDelExp != nil {
+			log.Error("failed to delete expire file contract from db", "error", errDelExp, "file_contract_id", common.Hash(scID).Hex())
+		}
+		return nil, gasRemainStoreExpire, err
+	}
+
+	log.Info("form contract tx execution done", "remain_gas", gasRemainStoreExpire, "file_contract_id", common.Hash(scID).Hex())
+
+	// return remain gas if everything is ok
+	return nil, gasRemainStoreExpire, nil
 }
 
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	log.Info("enter file contract reversion tx executing ... ")
 	var (
-		//标记一个锚
 		snapshot = evm.StateDB.Snapshot()
 		err      error
 	)
-	if err != nil {
-		//如果出错，DB回滚
-		evm.StateDB.RevertToSnapshot(snapshot)
 
+	fileContractReversion := types.StorageContractRevision{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &fileContractReversion)
+	errDec, _ := resultDecode[0].(error)
+	if errDec != nil {
+		return nil, gasRemainDecode, errDec
 	}
-	return nil, gas, err
+
+	// check file contract reversion and calculate gas used
+	currentHeight := evm.BlockNumber.Uint64()
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, fileContractReversion, types.BlockHeight(currentHeight))
+	errCheck, _ := resultCheck[0].(error)
+	if errCheck != nil {
+		log.Error("failed to check file contract reversion", "err", errCheck)
+		return nil, gasRemainCheck, errCheck
+	}
+
+	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
+	scID := fileContractReversion.ParentID
+	oldStorageContract, errGet := GetStorageContract(db, scID)
+	if errGet != nil {
+		return nil, gasRemainCheck, errGet
+	}
+
+	newStorageContract := types.StorageContract{
+		FileSize:           fileContractReversion.NewFileSize,
+		FileMerkleRoot:     fileContractReversion.NewFileMerkleRoot,
+		WindowStart:        fileContractReversion.NewWindowStart,
+		WindowEnd:          fileContractReversion.NewWindowEnd,
+		RenterCollateral:   oldStorageContract.RenterCollateral,
+		HostCollateral:     oldStorageContract.HostCollateral,
+		ValidProofOutputs:  fileContractReversion.NewValidProofOutputs,
+		MissedProofOutputs: fileContractReversion.NewMissedProofOutputs,
+		UnlockHash:         fileContractReversion.NewUnlockHash,
+		RevisionNumber:     fileContractReversion.NewRevisionNumber,
+	}
+
+	DeleteStorageContract(db, scID)
+	DeleteExpireStorageContract(db, scID, oldStorageContract.WindowEnd)
+
+	gasRemainStore, resultStore := RemainGas(gasRemainCheck, StoreStorageContract, db, scID, newStorageContract)
+	errStore, _ := resultStore[0].(error)
+	if errStore != nil {
+		return nil, gasRemainStore, errStore
+	}
+
+	gasRemainStoreExpire, resultStoreExpire := RemainGas(gasRemainStore, StoreExpireStorageContract, db, scID, newStorageContract.WindowEnd)
+	errStoreExpire, _ := resultStoreExpire[0].(error)
+	if errStore != nil {
+		return nil, gasRemainStoreExpire, errStoreExpire
+	}
+
+	// go back state DB if something is wrong above
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		errDel := DeleteStorageContract(db, scID)
+		if errDel != nil {
+			log.Error("failed to delete file contract from db", "error", errDel, "file_contract_id", common.Hash(scID).Hex())
+		}
+		errDelExp := DeleteExpireStorageContract(db, scID, newStorageContract.WindowEnd)
+		if errDelExp != nil {
+			log.Error("failed to delete expire file contract from db", "error", errDelExp, "file_contract_id", common.Hash(scID).Hex())
+		}
+		return nil, gasRemainStoreExpire, err
+	}
+
+	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainStoreExpire, "file_contract_id", common.Hash(scID).Hex())
+
+	return nil, gasRemainStoreExpire, nil
 }
 
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-
+	log.Info("enter storage proof tx executing ... ")
 	var (
-		//标记一个锚
 		snapshot = evm.StateDB.Snapshot()
 		err      error
 	)
-	if err != nil {
-		//如果出错，DB回滚
-		evm.StateDB.RevertToSnapshot(snapshot)
 
+	sp := types.StorageProof{}
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &sp)
+	errDec, _ := resultDec[0].(error)
+	if errDec != nil {
+		return nil, gasRemainDec, errDec
 	}
-	return nil, gas, err
+
+	currentHeight := evm.BlockNumber.Uint64()
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, evm, sp, types.BlockHeight(currentHeight))
+	errCheck, _ := resultCheck[0].(error)
+	if errCheck != nil {
+		return nil, gasRemainCheck, errCheck
+	}
+
+	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
+	fc, errGet := GetStorageContract(db, sp.ParentID)
+	if errGet != nil {
+		return nil, gasRemainCheck, errGet
+	}
+
+	// first for fundAddr,second for host
+	firstOutput := fc.ValidProofOutputs[0]
+	secondOutput := fc.ValidProofOutputs[1]
+	if !evm.StateDB.Exist(fundAddr) {
+		evm.StateDB.CreateAccount(fundAddr)
+	}
+	evm.StateDB.AddBalance(fundAddr, firstOutput.Value)
+	evm.StateDB.AddBalance(secondOutput.Address, secondOutput.Value)
+
+	errDel := DeleteStorageContract(db, sp.ParentID)
+	if errDel != nil {
+		log.Error("failed to delete file contract for storage proof", "error", errDel)
+	}
+	errDelExp := DeleteExpireStorageContract(db, sp.ParentID, types.BlockHeight(currentHeight))
+	if errDelExp != nil {
+		log.Error("failed to delete expire file contract for storage proof", "error", errDelExp)
+	}
+
+	// TODO: 全局的 err 根本没用到，其他的合约交易处理一样，后续需要调整下 。。
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		return nil, gasRemainCheck, err
+	}
+
+	log.Info("storage proof tx execution done", "file_contract_id", common.Hash(sp.ParentID).Hex())
+
+	return nil, gasRemainCheck, nil
 }
 
 func (evm *EVM) ContractRenewTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
