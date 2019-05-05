@@ -70,7 +70,8 @@ func CheckFormContract(evm *EVM, fc types.StorageContract, currentHeight types.B
 	}
 
 	// Check that the proof outputs sum to the payout
-	var validProofOutputSum, missedProofOutputSum *big.Int
+	validProofOutputSum := new(big.Int).SetInt64(0)
+	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range fc.ValidProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
@@ -133,7 +134,8 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 
 	// Check that the valid outputs and missed outputs sum to the same
 	// value.
-	var validProofOutputSum, missedProofOutputSum *big.Int
+	validProofOutputSum := new(big.Int).SetInt64(0)
+	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range fcr.NewValidProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
@@ -180,7 +182,9 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 
 	// Check that the payout of the revision matches the payout of the
 	// original, and that the payouts match each other.
-	var validPayout, missedPayout, oldPayout *big.Int
+	validPayout := new(big.Int).SetInt64(0)
+	missedPayout := new(big.Int).SetInt64(0)
+	oldPayout := new(big.Int).SetInt64(0)
 	for _, output := range fcr.NewValidProofOutputs {
 		validPayout = validPayout.Add(validPayout, output.Value)
 	}
