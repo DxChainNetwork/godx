@@ -17,6 +17,8 @@
 package vm
 
 import (
+	"errors"
+	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/params"
@@ -34,6 +36,11 @@ const (
 	GasReturn       uint64 = 0
 	GasStop         uint64 = 0
 	GasContractByte uint64 = 200
+)
+
+var (
+	GasCalculationParamsNumberWorng = errors.New("The parameter was wrong.")
+	GasCalculationinsufficient      = errors.New("This gas is insufficient")
 )
 
 // calcGas returns the actual gas cost of the call.
@@ -56,4 +63,105 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	}
 
 	return callCost.Uint64(), nil
+}
+
+//文件合约相关操作执行前先扣掉相应gas费用
+func RemainGas(args ...interface{}) (uint64, []interface{}) {
+	result := make([]interface{}, 0)
+	gas, ok := args[0].(uint64)
+	if len(args) < 2 || !ok {
+		result = append(result, GasCalculationParamsNumberWorng)
+		return gas, result
+	}
+
+	switch i := args[1].(type) {
+	//返序列化 rlp/decode.go:149
+	case func([]byte, interface{}) error:
+		if gas < params.DecodeGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 4 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		paramsPre, ok := args[2].([]byte)
+		if !ok {
+			return gas, result
+		}
+		gas -= params.DecodeGas
+		err := i(paramsPre, args[3])
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+		//CheckFormContract	core/vm/file_contract_validation.go:39
+	case func(*EVM, types.StorageContract, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		fc, _ := args[3].(types.StorageContract)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, fc, bl)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+		//StoreFileContract	core/vm/file_contract_db.go:81
+	case func(*EVM, types.StorageContractID, types.StorageContract) error:
+		if gas < params.SstoreSetGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		fci, _ := args[3].(types.StorageContractID)
+		fc, _ := args[4].(types.StorageContract)
+		gas -= params.SstoreSetGas
+		err := i(evm, fci, fc)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+		//CheckMultiSignatures	core/vm/file_contract_validation.go:199
+	case func(interface{}, types.BlockHeight, []types.Signature) error:
+		if gas < params.CheckMultiSignaturesGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		bl, _ := args[4].(types.BlockHeight)
+		arrsig, _ := args[4].([]types.Signature)
+		gas -= params.CheckMultiSignaturesGas
+		err := i(args[2], bl, arrsig)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+	default:
+		result = append(result, GasCalculationParamsNumberWorng)
+		return gas, result
+	}
+
 }
