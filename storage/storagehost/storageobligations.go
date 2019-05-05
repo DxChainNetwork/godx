@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -173,4 +177,149 @@ func (i storageObligationStatus) String() string {
 		return "obligationFailed" // 失败
 	}
 	return "storageObligationStatus(" + strconv.FormatInt(int64(i), 10) + ")"
+}
+
+// getStorageObligation fetches a storage obligation from the database
+func getStorageObligation(sc types.StorageContractID) (so StorageObligation, err error) {
+	return
+}
+
+// putStorageObligation places a storage obligation into the database,
+// overwriting the existing storage obligation if there is one.
+func putStorageObligation(so StorageObligation) error {
+	return nil
+}
+
+// expiration returns the height at which the storage obligation expires.
+func (so StorageObligation) expiration() (number types.BlockHeight) {
+	return
+}
+
+// fileSize returns the size of the data protected by the obligation.
+//返回受义务保护的数据大小
+func (so StorageObligation) fileSize() uint64 {
+	return 0
+}
+
+// id returns the id of the storage obligation, which is defined by the file
+// contract id of the storage contract that governs the storage contract.
+//返回这个存储义务的id，该ID由管理存储合同的文件合同的文件合同ID定义
+func (so StorageObligation) id() (scid types.StorageContractID) {
+	return
+}
+
+// isSane checks that required assumptions about the storage obligation are
+// correct.	检查所需的存储义务假设
+func (so StorageObligation) isSane() error {
+	return nil
+}
+
+// merkleRoot returns the file merkle root of a storage obligation.
+//merkleRoot 返回关于存储义务的文件的merkle root
+func (so StorageObligation) merkleRoot() common.Hash {
+	return common.Hash{}
+}
+
+// payouts returns the set of valid payouts and missed payouts that represent
+// the latest revision for the storage obligation.
+//返回有效支付和错过支付的集合，代表存储义务的最新Revision。
+func (so StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
+	return
+}
+
+// proofDeadline returns the height by which the storage proof must be
+// submitted. 返回存储证明必须被提交的块的高度
+func (so StorageObligation) proofDeadline() types.BlockHeight {
+	return 0
+}
+
+// transactionID returns the ID of the transaction containing the Storage
+// contract. 返回包含存储合约的交易的hash
+func (so StorageObligation) transactionID() common.Hash {
+	return common.Hash{}
+}
+
+// value returns the value of fulfilling the storage obligation to the host.
+//将履行存储义务的值返回给host
+func (so StorageObligation) value() *big.Int {
+	return nil
+}
+
+// deleteStorageObligations deletes obligations from the database.
+// It is assumed the deleted obligations don't belong in the database in the first place,
+// so no financial metrics are updated.
+// 删除存储义务从数据库中，假设已删除的义务首先不属于数据库，因此不会更新财务指标。
+func (h StorageHost) deleteStorageObligations(soids []types.StorageContractID) error {
+	return nil
+}
+
+// queueActionItem adds an action item to the host at the input height so that
+// the host knows to perform maintenance on the associated storage obligation
+// when that height is reached.
+// queueActionItem将操作项添加到输入高度的主机，以便主机知道在达到该高度时对相关存储义务执行维护
+func (h *StorageHost) queueActionItem(height types.BlockHeight, id types.StorageContractID) error {
+	return nil
+}
+
+// managedAddStorageObligation adds a storage obligation to the host. Because
+// this operation can return errors, the transactions should not be submitted to
+// the blockchain until after this function has indicated success. All of the
+// sectors that are present in the storage obligation should already be on disk,
+// which means that addStorageObligation should be exclusively called when
+// creating a new, empty file contract or when renewing an existing file
+// contract.	managedAddStorageObligation为主机添加存储义务。
+// 由于此操作可以返回错误，因此在此函数指示成功之前，不应将事务提交到区块链。
+// 存储义务中存在的所有扇区都应该已存在于磁盘上，
+// 这意味着在创建新的空文件合同或续订现有文件合同时，应独占调用addStorageObligation。
+func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
+	return nil
+}
+
+// modifyStorageObligation will take an updated storage obligation along with a
+// list of sector changes and update the database to account for all of it. The
+// sector modifications are only used to update the sector database, they will
+// not be used to modify the storage obligation (most importantly, this means
+// that sectorRoots needs to be updated by the calling function). Virtual
+// sectors will be removed the number of times that they are listed, to remove
+// multiple instances of the same virtual sector, the virtural sector will need
+// to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'.
+// modifyStorageObligation将采用更新的存储义务以及扇区更改列表，并更新数据库以解决所有问题。
+// 扇区修改仅用于更新扇区数据库，它们不会用于修改存储义务（最重要的是，这意味着需要通过调用函数更新sectorRoots）。
+// 虚拟扇区将被删除它们列出的次数，为了删除同一虚拟扇区的多个实例，
+// 虚拟扇区将需要多次出现在“sectorRemoved”中。 与'sectorGained'相同。
+func (h *StorageHost) modifyStorageObligation(so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+	return nil
+}
+
+// PruneStaleStorageObligations will delete storage obligations from the host
+// that, for whatever reason, did not make it on the block chain.
+// As these stale storage obligations have an impact on the host financial metrics,
+// this method updates the host financial metrics to show the correct values.
+//将删除主机的存储义务，无论出于何种原因，它都不会在块链上进行
+//由于这些陈旧的存储义务会对主机财务指标产生影响，因此此方法会更新主机财务指标以显示正确的值。
+func (h *StorageHost) PruneStaleStorageObligations() error {
+	return nil
+}
+
+// removeStorageObligation will remove a storage obligation from the host,
+// either due to failure or success.
+// removeStorageObligation将删除主机的存储义务，无论是由于失败还是成功。
+func (h *StorageHost) removeStorageObligation(so StorageObligation, sos storageObligationStatus) error {
+	return nil
+}
+
+func (h *StorageHost) resetFinancialMetrics() error {
+	return nil
+}
+
+// threadedHandleActionItem will look at a storage obligation and determine
+// which action is necessary for the storage obligation to succeed.	将考虑存储义务并确定存储义务成功所必需的行动
+func (h *StorageHost) threadedHandleActionItem(soid types.StorageContractID) {
+
+}
+
+// StorageObligations fetches the set of storage obligations in the host and
+// returns metadata on them.	StorageObligations获取主机中的存储义务集并返回其上的元数据。
+func (h *StorageHost) StorageObligations() (sos []StorageObligation) {
+	return nil
 }
