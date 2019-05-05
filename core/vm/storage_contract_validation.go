@@ -204,9 +204,9 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 	return nil
 }
 
-func CheckMultiSignatures(originalData interface{}, currentHeight types.BlockHeight, signatures []types.Signature) error {
+func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeight types.BlockHeight, signatures []types.Signature) error {
 	if len(signatures) == 0 {
-		return errors.New("no signatures")
+		return errors.New("no signatures for verification")
 	}
 
 	var (
@@ -216,22 +216,26 @@ func CheckMultiSignatures(originalData interface{}, currentHeight types.BlockHei
 		uc                                     types.UnlockConditions
 	)
 
+	dataHash := originalData.RLPHash()
+
 	if len(signatures) == 1 {
 		singleSig = signatures[0]
-		singlePubkey, err = RecoverPubkeyFromSignature(singleSig)
+		singlePubkey, err = RecoverPubkeyFromSignature(dataHash, singleSig)
 		if err != nil {
 			return err
 		}
-	}
 
-	if len(signatures) == 2 {
+		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&singlePubkey), dataHash[:], singleSig) {
+			return errInvalidHostSig
+		}
+	} else if len(signatures) == 2 {
 		renterSig = signatures[0]
 		hostSig = signatures[1]
-		renterPubkey, err = RecoverPubkeyFromSignature(renterSig)
+		renterPubkey, err = RecoverPubkeyFromSignature(dataHash, renterSig)
 		if err != nil {
 			return err
 		}
-		hostPubkey, err = RecoverPubkeyFromSignature(hostSig)
+		hostPubkey, err = RecoverPubkeyFromSignature(dataHash, hostSig)
 		if err != nil {
 			return err
 		}
@@ -241,44 +245,26 @@ func CheckMultiSignatures(originalData interface{}, currentHeight types.BlockHei
 			PublicKeys:         []ecdsa.PublicKey{renterPubkey, hostPubkey},
 			SignaturesRequired: 2,
 		}
-	}
 
-	// TODO: 代码需要优化下，golang中case也可以逗号并列，但是RLPHash这个方法就无法识别。。。
-	switch dataType := originalData.(type) {
-	case types.HostAnnouncement:
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&singlePubkey), dataType.RLPHash().Bytes(), singleSig) {
-			return errInvalidHostSig
+		originUnlockHash := types.UnlockHash{}
+		switch dataType := originalData.(type) {
+		case types.StorageContract:
+			originUnlockHash = dataType.UnlockHash
+		case types.StorageContractRevision:
+			originUnlockHash = dataType.NewUnlockHash
+		default:
+			return errNoStorageContractType
 		}
 
-	case types.StorageProof:
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&singlePubkey), dataType.RLPHash().Bytes(), singleSig) {
-			return errInvalidHostSig
-		}
-
-	case types.StorageContract:
-		if uc.UnlockHash() != common.Hash(dataType.UnlockHash) {
+		if uc.UnlockHash() != common.Hash(originUnlockHash) {
 			return errWrongUnlockCondition
 		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&renterPubkey), dataType.RLPHash().Bytes(), renterSig) {
+		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&renterPubkey), dataHash[:], renterSig) {
 			return errInvalidRenterSig
 		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&hostPubkey), dataType.RLPHash().Bytes(), hostSig) {
+		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&hostPubkey), dataHash[:], hostSig) {
 			return errInvalidHostSig
 		}
-
-	case types.StorageContractRevision:
-		if uc.UnlockHash() != common.Hash(dataType.NewUnlockHash) {
-			return errWrongUnlockCondition
-		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&renterPubkey), dataType.RLPHash().Bytes(), renterSig) {
-			return errInvalidRenterSig
-		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&hostPubkey), dataType.RLPHash().Bytes(), hostSig) {
-			return errInvalidHostSig
-		}
-
-	default:
-		return errNoStorageContractType
 	}
 
 	return nil
