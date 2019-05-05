@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -28,7 +29,10 @@ import (
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
-var emptyCodeHash = crypto.Keccak256Hash(nil)
+var (
+	emptyCodeHash            = crypto.Keccak256Hash(nil)
+	errUnknownFileContractTx = errors.New("unknown file contract tx")
+)
 
 type (
 	// CanTransferFunc is the signature of a transfer guard function
@@ -466,3 +470,95 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
+
+func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+
+	switch txType {
+	case HostAnnounceTransaction:
+		return evm.HostAnnounceTx(caller, data, gas)
+	case FormContractTransaction:
+		return evm.FormContractTx(caller, data, gas)
+	case CommitRevisionTransaction:
+		return evm.CommitRevisionTx(caller, data, gas)
+	case StorageProofTransaction:
+		return evm.StorageProofTx(caller, data, gas)
+	case ContractRenewTransaction:
+		return evm.ContractRenewTx(caller, data, gas)
+	default:
+		return nil, gas, errUnknownFileContractTx
+	}
+
+}
+
+func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	var (
+		//标记一个锚
+		snapshot = evm.StateDB.Snapshot()
+		err      error
+	)
+	if err != nil {
+		//如果出错，DB回滚
+		evm.StateDB.RevertToSnapshot(snapshot)
+
+	}
+	return nil, gas, err
+}
+
+func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	var (
+		//标记一个锚
+		snapshot = evm.StateDB.Snapshot()
+		err      error
+	)
+	if err != nil {
+		//如果出错，DB回滚
+		evm.StateDB.RevertToSnapshot(snapshot)
+
+	}
+	return nil, gas, err
+}
+
+func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+	var (
+		//标记一个锚
+		snapshot = evm.StateDB.Snapshot()
+		err      error
+	)
+	if err != nil {
+		//如果出错，DB回滚
+		evm.StateDB.RevertToSnapshot(snapshot)
+
+	}
+	return nil, gas, err
+}
+
+func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+
+	var (
+		//标记一个锚
+		snapshot = evm.StateDB.Snapshot()
+		err      error
+	)
+	if err != nil {
+		//如果出错，DB回滚
+		evm.StateDB.RevertToSnapshot(snapshot)
+
+	}
+	return nil, gas, err
+}
+
+func (evm *EVM) ContractRenewTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+
+	var (
+		//标记一个锚
+		snapshot = evm.StateDB.Snapshot()
+		err      error
+	)
+	if err != nil {
+		//如果出错，DB回滚
+		evm.StateDB.RevertToSnapshot(snapshot)
+
+	}
+	return nil, gas, err
+
+}
