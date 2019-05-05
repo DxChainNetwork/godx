@@ -26,7 +26,7 @@ func makeKey(prefix string, key []byte) []byte {
 	return result
 }
 
-func SplitFileContractID(key []byte) (uint64, types.StorageContractID) {
+func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
 	prefixBytes := []byte(PrefixExpireStorageContract)
 	if !bytes.HasPrefix(key, prefixBytes) {
 		return 0, types.StorageContractID{}
@@ -104,7 +104,7 @@ func deleteWithPrefix(db ethdb.Database, key interface{}, prefix string) error {
 	return nil
 }
 
-func GetFileContract(db ethdb.Database, storageContractID types.StorageContractID) (types.StorageContract, error) {
+func GetStorageContract(db ethdb.Database, storageContractID types.StorageContractID) (types.StorageContract, error) {
 	valueBytes, err := getWithPrefix(db, storageContractID, PrefixStorageContract)
 	if err != nil {
 		return types.StorageContract{}, err
@@ -118,22 +118,22 @@ func GetFileContract(db ethdb.Database, storageContractID types.StorageContractI
 	return fc, nil
 }
 
-// 合约DB存储：FileContractID ==》FileContract
-func StoreFileContract(db ethdb.Database, storageContractID types.StorageContractID, sc types.StorageContract) error {
+// 合约DB存储：StorageContractID ==》StorageContract
+func StoreStorageContract(db ethdb.Database, storageContractID types.StorageContractID, sc types.StorageContract) error {
 	return storeWithPrefix(db, storageContractID, sc, PrefixStorageContract)
 }
 
-func DeleteFileContract(db ethdb.Database, storageContractID types.StorageContractID) error {
+func DeleteStorageContract(db ethdb.Database, storageContractID types.StorageContractID) error {
 	return deleteWithPrefix(db, storageContractID, PrefixStorageContract)
 }
 
-// 过期合约DB只是存储：FileContractID ==》[]byte{}
-func StoreExpireFileContract(db ethdb.Database, storageContractID types.StorageContractID, windowEnd types.BlockHeight) error {
+// 过期合约DB只是存储：StorageContractID ==》[]byte{}
+func StoreExpireStorageContract(db ethdb.Database, storageContractID types.StorageContractID, windowEnd types.BlockHeight) error {
 	windowStr := strconv.FormatUint(uint64(windowEnd), 10)
 	return storeWithPrefix(db, storageContractID, []byte{}, PrefixExpireStorageContract+windowStr+"-")
 }
 
-func DeleteExpireFileContract(db ethdb.Database, storageContractID types.StorageContractID, height types.BlockHeight) error {
+func DeleteExpireStorageContract(db ethdb.Database, storageContractID types.StorageContractID, height types.BlockHeight) error {
 	heightStr := strconv.FormatUint(uint64(height), 10)
 	return deleteWithPrefix(db, storageContractID, PrefixExpireStorageContract+heightStr+"-")
 }

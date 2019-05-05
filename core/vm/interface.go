@@ -20,6 +20,7 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
@@ -64,6 +65,8 @@ type StateDB interface {
 	AddPreimage(common.Hash, []byte)
 
 	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
+
+	Database() state.Database
 }
 
 // CallContext provides a basic interface for the EVM calling conventions. The EVM
