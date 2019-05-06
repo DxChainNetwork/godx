@@ -9,6 +9,8 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 
+	"github.com/DxChainNetwork/godx/storage/storagehost"
+
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
@@ -18,6 +20,7 @@ import (
 const (
 	PrefixStorageContract       = "storagecontract-"
 	PrefixExpireStorageContract = "expirestoragecontract-"
+	PrefixStorageObligation     = "storageobligation-"
 )
 
 // make key for key-value storage
@@ -137,4 +140,25 @@ func StoreExpireStorageContract(db ethdb.Database, storageContractID common.Hash
 func DeleteExpireStorageContract(db ethdb.Database, storageContractID common.Hash, height uint64) error {
 	heightStr := strconv.FormatUint(uint64(height), 10)
 	return deleteWithPrefix(db, storageContractID, PrefixExpireStorageContract+heightStr+"-")
+}
+
+func StoreStorageObligation(db ethdb.Database, storageContractID types.StorageContractID, so storagehost.StorageObligation) error {
+	return storeWithPrefix(db, storageContractID, so, PrefixStorageObligation)
+}
+
+func DeleteStorageObligation(db ethdb.Database, storageContractID types.StorageContractID, so storagehost.StorageObligation) error {
+	return deleteWithPrefix(db, storageContractID, PrefixStorageObligation)
+}
+
+func GetStorageObligation(db ethdb.Database, storageContractID types.StorageContractID) (storagehost.StorageObligation, error) {
+	valueBytes, err := getWithPrefix(db, storageContractID, PrefixStorageObligation)
+	if err != nil {
+		return storagehost.StorageObligation{}, err
+	}
+	var so storagehost.StorageObligation
+	err = rlp.DecodeBytes(valueBytes, &so)
+	if err != nil {
+		return storagehost.StorageObligation{}, err
+	}
+	return so, nil
 }
