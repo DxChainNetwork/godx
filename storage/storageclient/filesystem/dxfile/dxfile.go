@@ -82,7 +82,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		SegmentOffset:   2 * PageSize,
 		FileSize:        fileSize,
 		SectorSize:      SectorSize - uint64(cipherKey.Overhead()),
-		PagesPerChunk:   segmentPersistNumPages(numSectors),
+		PagesPerSegment: segmentPersistNumPages(numSectors),
 		LocalPath:       sourcePath,
 		DxPath:          dxPath,
 		CipherKeyCode:   crypto.CipherCodeByName(cipherKey.CodeName()),

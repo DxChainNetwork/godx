@@ -24,7 +24,7 @@ var (
 
 // CipherKey is the interface for cipher key, which is implemented by plainCipherKey, and gcmCipherKey
 type CipherKey interface {
-	// Code return the code specified of the CipherKey type
+	// CodeName return the code specified of the CipherKey type
 	CodeName() string
 
 	// Overhead returns the overhead for decrypted text
@@ -96,8 +96,8 @@ func Overhead(cipherCode uint8) uint8 {
 	}
 }
 
-// CodeByName returns the cipher code associated with the cipher name
-func CodeByName(cipherName string) uint8 {
+// CipherCodeByName returns the cipher code associated with the cipher name
+func CipherCodeByName(cipherName string) uint8 {
 	switch cipherName {
 	case (&plainCipherKey{}).CodeName():
 		return PlainCipherCode

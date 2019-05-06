@@ -5,6 +5,7 @@ package dxfile
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
@@ -19,9 +20,9 @@ type (
 		SegmentOffset   int32
 
 		// size related
-		FileSize      uint64
-		SectorSize    uint64 // ShardSize is the size for one shard, which is by default 4MiB
-		PagesPerChunk uint64 // Number of physical pages per chunk. Determined by erasure coding algorithm
+		FileSize        uint64
+		SectorSize      uint64 // ShardSize is the size for one shard, which is by default 4MiB
+		PagesPerSegment uint64 // Number of physical pages per chunk. Determined by erasure coding algorithm
 
 		// path related
 		LocalPath string // Local path is the on-disk location for uploaded files
@@ -93,10 +94,6 @@ func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 	}
 }
 
-func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
-	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
-}
-
 // erasureCodeToParams is the the helper function to interpret the erasureCoder to params
 // return minSectors, numSectors, and extra
 func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
@@ -116,6 +113,10 @@ func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
 	}
 }
 
+func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
+	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
+}
+
 // segmentSize is the helper function to calculate the segment size based on metadata info
 func (md Metadata) segmentSize() uint64 {
 	return md.SectorSize * uint64(md.MinSectors)
@@ -128,4 +129,18 @@ func (md Metadata) numSegments() uint64 {
 		num++
 	}
 	return num
+}
+
+// validate validate the params in the metadata. If a potential error found, return the error.
+func (md Metadata) validate() error {
+	if md.HostTableOffset != PageSize {
+		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
+	}
+	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
+		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
+	}
+	if md.SegmentOffset % PageSize != 0 {
+		return fmt.Errorf("segment offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+	}
+	return nil
 }

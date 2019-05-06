@@ -59,8 +59,7 @@ func (df *DxFile) loadMetadata(f io.Reader) error {
 		return err
 	}
 	// sanity check
-
-	return nil
+	return df.metadata.validate()
 }
 
 // loadHostAddresses load DxFile.hostTable from the file f
