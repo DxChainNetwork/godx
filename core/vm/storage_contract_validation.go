@@ -5,11 +5,16 @@
 package vm
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"hash"
 	"math/big"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -38,6 +43,8 @@ var (
 	errNoStorageContractType = errors.New("no this file contract type")
 
 	errInvalidStorageProof = errors.New("invalid storage proof")
+
+	errUnfinishedStorageContract = errors.New("storage contract has not yet opened")
 )
 
 const (
@@ -286,7 +293,7 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.Bloc
 	}
 
 	// Check that the storage proof itself is valid.
-	segmentIndex, err := storageProofSegment(db, sp.ParentID)
+	segmentIndex, err := storageProofSegment(db, sp.ParentID, currentHeight)
 	if err != nil {
 		return err
 	}
@@ -319,16 +326,134 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.Bloc
 	return nil
 }
 
-// TODO:
-
+// check whether host store the file
 func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex uint64, merkleRoot common.Hash) bool {
-	return true
+	// convert base and hashSet to proofSet
+	proofSet := make([][]byte, len(hashSet)+1)
+	proofSet[0] = segment
+	for i := range hashSet {
+		proofSet[i+1] = hashSet[i][:]
+	}
+	return VerifyProof(merkleRoot[:], proofSet, segmentIndex, leaves)
 }
 
-func storageProofSegment(db ethdb.Database, ParentID types.StorageContractID) (uint64, error) {
-	return 0, nil
+func storageProofSegment(db ethdb.Database, ParentID types.StorageContractID, currentHeight types.BlockHeight) (uint64, error) {
+
+	// Check that the parent storage contract exists.
+	sc, err := GetStorageContract(db, ParentID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get the trigger block id that parent of windowStart.
+	triggerHeight := sc.WindowStart - 1
+	if triggerHeight > currentHeight {
+		return 0, errUnfinishedStorageContract
+	}
+
+	blockHash := rawdb.ReadCanonicalHash(db, uint64(triggerHeight))
+	seed := crypto.Keccak256Hash(blockHash[:], sc.ID()[:])
+	numSegments := int64(CalculateLeaves(sc.FileSize))
+
+	// index = seedInt % numSegments，index in [0，numSegments]
+	seedInt := new(big.Int).SetBytes(seed[:])
+	index := seedInt.Mod(seedInt, big.NewInt(numSegments)).Uint64()
+	return index, nil
 }
 
 func CalculateLeaves(fileSize uint64) uint64 {
-	return 0
+	numSegments := fileSize / SegmentSize
+	if fileSize == 0 || fileSize%SegmentSize != 0 {
+		numSegments++
+	}
+	return numSegments
+}
+
+func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
+	hasher := sha3.NewLegacyKeccak256()
+
+	if merkleRoot == nil {
+		return false
+	}
+
+	if proofIndex >= numLeaves {
+		return false
+	}
+
+	height := 0
+	if len(proofSet) <= height {
+		return false
+	}
+
+	// proofSet[0] is the segment of the file
+	sum := HashSum(hasher, proofSet[height])
+	height++
+
+	// While the current subtree (of height 'height') is complete, determine
+	// the position of the next sibling using the complete subtree algorithm.
+	// 'stableEnd' tells us the ending index of the last full subtree. It gets
+	// initialized to 'proofIndex' because the first full subtree was the
+	// subtree of height 1, created above (and had an ending index of
+	// 'proofIndex').
+	stableEnd := proofIndex
+	for {
+		// Determine if the subtree is complete. This is accomplished by
+		// rounding down the proofIndex to the nearest 1 << 'height', adding 1
+		// << 'height', and comparing the result to the number of leaves in the
+		// Merkle tree.
+		subTreeStartIndex := (proofIndex / (1 << uint(height))) * (1 << uint(height)) // round down to the nearest 1 << height
+		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1              // subtract 1 because the start index is inclusive
+		if subTreeEndIndex >= numLeaves {
+			// If the Merkle tree does not have a leaf at index
+			// 'subTreeEndIndex', then the subtree of the current height is not
+			// a complete subtree.
+			break
+		}
+		stableEnd = subTreeEndIndex
+
+		// Determine if the proofIndex is in the first or the second half of
+		// the subtree.
+		if len(proofSet) <= height {
+			return false
+		}
+		if proofIndex-subTreeStartIndex < 1<<uint(height-1) {
+			sum = HashSum(hasher, sum, proofSet[height])
+		} else {
+			sum = HashSum(hasher, proofSet[height], sum)
+		}
+		height++
+	}
+
+	// Determine if the next hash belongs to an orphan that was elevated. This
+	// is the case IFF 'stableEnd' (the last index of the largest full subtree)
+	// is equal to the number of leaves in the Merkle tree.
+	if stableEnd != numLeaves-1 {
+		if len(proofSet) <= height {
+			return false
+		}
+		sum = HashSum(hasher, sum, proofSet[height])
+		height++
+	}
+
+	// All remaining elements in the proof set will belong to a left sibling.
+	for height < len(proofSet) {
+		sum = HashSum(hasher, proofSet[height], sum)
+		height++
+	}
+
+	// Compare our calculated Merkle root to the desired Merkle root.
+	if bytes.Equal(sum, merkleRoot) {
+		return true
+	}
+	return false
+}
+
+// returns the hash of the input data using the specified algorithm.
+func HashSum(h hash.Hash, data ...[]byte) []byte {
+	h.Reset()
+	for _, d := range data {
+		// the Hash interface specifies that Write never returns an error
+		_, _ = h.Write(d)
+	}
+	return h.Sum(nil)
 }
