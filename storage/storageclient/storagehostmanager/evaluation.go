@@ -1,23 +1,25 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehostmanager
 
 import (
+	"math"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"math"
 )
 
 func (hm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) storagehosttree.EvaluationFunc {
-	// TODO (mzhang): gas fee estimation is ignored for now, need to double check
-	// if it played a big role in estimation
 	return func(info storage.HostInfo) storagehosttree.HostEvaluation {
 		return storagehosttree.EvaluationCriteria{
-			AgeAdjustment:         hm.ageAdjustment(info),
-			BurnAdjustment:        1,
-			DepositAdjustment:     hm.depositAdjustment(info, rent),
-			InteractionAdjustment: hm.interactionAdjustment(info),
-			// TODO: factor of gas fee
-			PriceAdjustment:            1,
+			AgeAdjustment:              hm.ageAdjustment(info),
+			BurnAdjustment:             1,
+			DepositAdjustment:          hm.depositAdjustment(info, rent),
+			InteractionAdjustment:      hm.interactionAdjustment(info),
+			PriceAdjustment:            hm.priceAdjustment(info, rent),
 			StorageRemainingAdjustment: hm.storageRemainingAdjustment(info),
 			UptimeAdjustment:           hm.uptimeAdjustment(info),
 		}
@@ -58,32 +60,14 @@ func (hm *StorageHostManager) ageAdjustment(info storage.HostInfo) float64 {
 }
 
 func (hm *StorageHostManager) depositAdjustment(info storage.HostInfo, rent storage.RentPayment) float64 {
-	// TODO: the values need to be confirmed with the team
-	// double check if all attributes are non zeros
-	if rent.StorageHosts == 0 {
-		rent.StorageHosts = 1
-	}
-	if rent.Period == 0 {
-		rent.Period = 1
-	}
-	if rent.ExpectedStorage == 0 {
-		rent.ExpectedStorage = 1
-	}
-	if rent.ExpectedUpload == 0 {
-		rent.ExpectedUpload = 1
-	}
-	if rent.ExpectedDownload == 0 {
-		rent.ExpectedDownload = 1
-	}
-	if rent.ExpectedRedundancy == 0 {
-		rent.ExpectedRedundancy = 1
-	}
+	// make sure RentPayment's fields are non zeros
+	rentPaymentValidation(storage.RentPayment{})
 
 	contractExpectedPayment := rent.Payment.DivUint64(rent.StorageHosts)
 	contractExpectedStorage := float64(rent.ExpectedStorage) * rent.ExpectedRedundancy / float64(rent.StorageHosts)
 	contractExpectedStorageTime := common.NewBigIntFloat64(contractExpectedStorage).MultUint64(rent.Period)
 
-	// estimate storage host collateral
+	// estimate storage host deposit
 	hostDeposit := info.Deposit.Mult(contractExpectedStorageTime)
 	possibleDeposit := info.MaxDeposit.Div(contractExpectedStorageTime)
 	if possibleDeposit.Cmp(hostDeposit) < 0 {
@@ -116,6 +100,52 @@ func (hm *StorageHostManager) interactionAdjustment(info storage.HostInfo) float
 	hf := info.HistoricFailedInteractions + 1
 	ratio := hs / (hs + hf)
 	return math.Pow(ratio, interactionExponentiation)
+}
+
+func (hm *StorageHostManager) priceAdjustment(info storage.HostInfo, rent storage.RentPayment) float64 {
+	// TODO (mzhang): gas estimation is ignored for now, no big effect on the result. Is it necessary
+	// to add it back?
+
+	// make sure the rent has non-zero fields
+	rentPaymentValidation(rent)
+
+	// calculate the host expected price
+	expectedDataDownload := common.NewBigIntUint64(rent.ExpectedDownload).MultUint64(rent.Period).DivUint64(rent.StorageHosts)
+	expectedDataUpload := common.NewBigIntUint64(rent.ExpectedUpload).MultUint64(rent.Period).DivUint64(rent.StorageHosts)
+	expectedDataStored := common.NewBigIntUint64(rent.ExpectedStorage).MultFloat64(rent.ExpectedRedundancy).DivUint64(rent.StorageHosts)
+	expectedDataStoredTime := expectedDataStored.MultUint64(rent.Period)
+
+	// double the contract price due to one early contract renew (first one)
+	contractPrice := info.ContractPrice.MultInt(2)
+	downloadPrice := expectedDataDownload.Mult(info.DownloadBandwidthPrice)
+	uploadPrice := expectedDataUpload.Mult(info.UploadBandwidthPrice)
+	storagePrice := expectedDataStoredTime.Mult(info.StoragePrice)
+	hostContractPrice := contractPrice.Add(downloadPrice).Add(uploadPrice).Add(storagePrice).Float64()
+
+	// storage client expected payment per contract
+	clientContractPayment := rent.Payment.DivUint64(rent.StorageHosts)
+
+	cutoff := clientContractPayment.MultFloat64(priceFloor).Float64()
+
+	if hostContractPrice < cutoff {
+		cutoff = hostContractPrice
+	}
+
+	// sanity check
+	if hostContractPrice < 1 {
+		hostContractPrice = 1
+	}
+
+	if cutoff < 1 {
+		cutoff = 1
+	}
+
+	ratio := hostContractPrice / cutoff
+
+	smallWeight := math.Pow(cutoff, priceExponentiationSmall)
+	largeWeight := math.Pow(ratio, priceExponentiationLarge)
+
+	return 1 / (smallWeight * largeWeight)
 }
 
 func (hm *StorageHostManager) storageRemainingAdjustment(info storage.HostInfo) float64 {
@@ -220,4 +250,25 @@ func (hm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 
 	exp := 200 * math.Min(1-uptimeRatio, 0.30)
 	return math.Pow(uptimeRatio, exp)
+}
+
+func rentPaymentValidation(rent storage.RentPayment) {
+	if rent.StorageHosts == 0 {
+		rent.StorageHosts = 1
+	}
+	if rent.Period == 0 {
+		rent.Period = 1
+	}
+	if rent.ExpectedStorage == 0 {
+		rent.ExpectedStorage = 1
+	}
+	if rent.ExpectedUpload == 0 {
+		rent.ExpectedUpload = 1
+	}
+	if rent.ExpectedDownload == 0 {
+		rent.ExpectedDownload = 1
+	}
+	if rent.ExpectedRedundancy == 0 {
+		rent.ExpectedRedundancy = 1
+	}
 }

@@ -5,7 +5,7 @@
 package storageclient
 
 // PublicStorageClientAPI defines the object used to call eligible public APIs
-// public APIs are used to acquire information
+// are used to acquire information
 type PublicStorageClientAPI struct {
 	sc *StorageClient
 }

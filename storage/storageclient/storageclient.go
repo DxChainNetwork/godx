@@ -15,17 +15,17 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
 // ************** MOCKING DATA *****************
 // *********************************************
 type (
-	storageHostManager struct{}
-	contractManager    struct{}
-	StorageContractID  struct{}
-	StorageHostEntry   struct{}
-	streamCache        struct{}
-	Wal                struct{}
+	contractManager   struct{}
+	StorageContractID struct{}
+	StorageHostEntry  struct{}
+	streamCache       struct{}
+	Wal               struct{}
 )
 
 // *********************************************
@@ -51,8 +51,8 @@ type StorageClient struct {
 	memoryManager *memorymanager.MemoryManager
 
 	// contract manager and storage host manager
-	contractManager    contractManager
-	storageHostManager storageHostManager
+	contractManager    *contractManager
+	storageHostManager *storagehostmanager.StorageHostManager
 
 	// TODO (jacky): workerpool
 
@@ -77,9 +77,6 @@ type StorageClient struct {
 
 	// used to send transaction
 	account *ethapi.PrivateAccountAPI
-
-	// used to get gas price estimation
-	chainInfo *ethapi.PublicBlockChainAPI
 
 	// used to get syncing status
 	ethInfo *ethapi.PublicEthereumAPI
@@ -117,11 +114,12 @@ func (sc *StorageClient) Start(eth Backend) error {
 		return errors.New("failed to acquire eth information")
 	}
 
-	if sc.chainInfo == nil {
-		return errors.New("failed to acquire blockchain information")
+	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
+	storageHostManager, err := storagehostmanager.New(sc.persistDir, sc.ethInfo, sc.netInfo)
+	if err != nil {
+		return err
 	}
-
-	// TODO (mzhang): Initialize ContractManager & HostManager -> assign to StorageClient
+	sc.storageHostManager = storageHostManager
 
 	// Load settings from persist file
 	if err := sc.loadPersist(); err != nil {
@@ -146,8 +144,6 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) {
 			sc.netInfo = api.Service.(*ethapi.PublicNetAPI)
 		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
 			sc.account = api.Service.(*ethapi.PrivateAccountAPI)
-		case reflect.TypeOf(&ethapi.PublicBlockChainAPI{}):
-			sc.chainInfo = api.Service.(*ethapi.PublicBlockChainAPI)
 		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
 			sc.ethInfo = api.Service.(*ethapi.PublicEthereumAPI)
 		default:

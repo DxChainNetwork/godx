@@ -114,9 +114,14 @@ type (
 		StorageHosts       uint64        `json:"storagehosts"`
 		Period             uint64        `json:"period"`
 		RenewWindow        uint64        `json:"renewwindow"`
+
+		// ExpectedStorage is amount of data expected to be stored
 		ExpectedStorage    uint64        `json:"expectedstorage"`
+		// ExpectedUpload is expected amount of data upload before redundancy / block
 		ExpectedUpload     uint64        `json:"expectedupload"`
+		// ExpectedDownload is expected amount of data downloaded / block
 		ExpectedDownload   uint64        `json:"expecteddownload"`
+		// ExpectedRedundancy is the average redundancy of files uploaded
 		ExpectedRedundancy float64       `json:"expectedredundancy"`
 	}
 )

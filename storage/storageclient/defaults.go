@@ -8,7 +8,7 @@ package storageclient
 const (
 	PersistDirectory            = "storageclient"
 	PersistFilename             = "storageclient.json"
-	PersistStorageClientVersion = "1.3.6"
+	PersistStorageClientVersion = "1.0"
 	DxPathRoot                  = "dxfiles"
 )
 
