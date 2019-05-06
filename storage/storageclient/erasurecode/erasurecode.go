@@ -38,6 +38,9 @@ type ErasureCoder interface {
 	// MinSectors return the number of minimum sectors that is required to recover the original data
 	MinSectors() uint32
 
+	// Extra return the extra info included in the ErasureCoder
+	Extra() []interface{}
+
 	// Encode encode the segment to sectors
 	Encode(data []byte) ([][]byte, error)
 

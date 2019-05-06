@@ -42,6 +42,11 @@ func (sec *shardErasureCode) Type() uint8 {
 	return ECTypeShard
 }
 
+// Extra return encodedShardSize of shardErasureCode
+func (sec *shardErasureCode) Extra() []interface{} {
+	return []interface{}{sec.encodedShardSize}
+}
+
 // Encode encode the segment to sectors
 func (sec *shardErasureCode) Encode(segment []byte) ([][]byte, error) {
 	// append 0s if data is not divisible by shardSize

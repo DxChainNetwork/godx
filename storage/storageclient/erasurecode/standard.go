@@ -51,6 +51,11 @@ func (sec *standardErasureCode) MinSectors() uint32 {
 	return sec.minSectors
 }
 
+// Extra of standardErasureCode return nothing
+func (sec *standardErasureCode) Extra() []interface{} {
+	return nil
+}
+
 // Encode encode the segment to sectors
 func (sec *standardErasureCode) Encode(data []byte) ([][]byte, error) {
 	sectors, err := sec.enc.Split(data)
