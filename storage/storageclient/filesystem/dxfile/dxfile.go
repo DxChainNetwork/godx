@@ -4,7 +4,10 @@
 package dxfile
 
 import (
+	"github.com/DxChainNetwork/godx/crypto"
+	"os"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -16,24 +19,15 @@ const fileIDSize = 16
 type fileID [fileIDSize]byte
 
 type (
-	// DxFile is saved to disk as follows:
-	// headerLength | ChunkOffset | PersistHeader      | dataSegment
-	// 0:4          | 4:8         | 8:8+headerLength   | segmentOffset:
 	DxFile struct {
-		// headerLength is the size of the rlp string of header, which is put
-		headerLength int32
-
-		// segmentOffset is the offset of the first segment
-		segmentOffset int32
-
-		// header is the persist header is the header of the dxfile
-		metaData Metadata
+		// metaData is the persist metadata
+		metaData *Metadata
 
 		// hostAddresses is the map of host address to whether the address is used
-		hostAddresses map[common.Hash]bool
+		hostAddresses map[common.Address]*hostAddress
 
 		// dataSegments is a list of segments the file is split into
-		dataSegments []*PersistSegment
+		dataSegments []*segment
 
 		// utils field
 		deleted bool
@@ -48,36 +42,28 @@ type (
 		erasureCode erasurecode.ErasureCoder
 	}
 
-	// PersistHeader has two field: Metadata of fixed size, and HostAddresses of flexible size.
-	PersistHeader struct {
-		// Metadata includes all info related to dxfile that is ready to be flushed to data file
-		Metadata
-
-		// HostAddresses is a list of addresses that contains address and whether the host
-		// is used
-		HostAddresses []*PersistHostAddress
-	}
-
-	// PersistHostAddress is a combination of host address for a dxfile and whether the specific host is used in the dxfile
-	// when encoding, the default rlp encoding algorithm is used
-	PersistHostAddress struct {
-		Address common.Hash
+	// hostAddress is the in-memory data for host address.
+	hostAddress struct {
+		Address common.Address
 		Used    bool
 	}
 
-	// PersistSegment is the structure a dxfile is split into
-	PersistSegment struct {
-		// TODO: Check the ExtensionInfo could be actually removed
-		Sectors [][]PersistSector // Sectors contains the recoverable message about the PersistSector in the PersistSegment
-		Stuck   bool              // Stuck indicates whether the PersistSegment is Stuck or not
+	segment struct {
+		sectors [][]*sector
+		stuck   bool
 	}
 
-	// PersistSector is the smallest unit of storage. It the erasure code encoded PersistSegment
-	PersistSector struct {
+	sector struct {
 		MerkleRoot  common.Hash
-		HostOffset  int64 // hostOffset point to the location of host
+		HostAddress common.Address
 	}
 )
+
+// New creates a new dxfile
+func New(filepath string, sourcePath string, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, masterKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
+	currentTime := time.Now()
+
+}
 
 // segmentPersistSize is the helper function to calculate the persist size of the segment
 func segmentPersistNumPages(numSectors uint32) int64 {

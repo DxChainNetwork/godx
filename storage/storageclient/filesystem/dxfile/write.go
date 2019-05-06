@@ -1,3 +1,22 @@
 package dxfile
 
-func (df *DxFile) composePersistHeader() PersistHeader
+import (
+	"fmt"
+	"github.com/DxChainNetwork/godx/rlp"
+)
+
+func (df *DxFile) createMetadataUpdate() (*insertUpdate, error) {
+	metaBytes, err := rlp.EncodeToBytes(df.metaData)
+	if err != nil {
+		return nil, err
+	}
+	if len(metaBytes) > PageSize {
+		// This shall never happen
+		return nil, fmt.Errorf("metadata should not have length larger than %v", PageSize)
+	}
+	return df.createInsertUpdate(0, metaBytes)
+}
+
+func (df *DxFile) createHostTableUpdate() (*insertUpdate, error) {
+
+}

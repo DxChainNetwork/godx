@@ -5,6 +5,7 @@ package dxfile
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 	"time"
@@ -13,10 +14,14 @@ import (
 type (
 	// Metadata is the Metadata of a user uploaded file.
 	Metadata struct {
+		// storage related
+		HostTableOffset int32
+		SegmentOffset   int32
+
 		// size related
-		FileSize      int32
-		SectorSize    int32 // ShardSize is the size for one shard, which is by default 4MiB
-		PagesPerChunk uint8    // Number of physical pages per chunk. Determined by erasure coding algorithm
+		FileSize      uint64
+		SectorSize    uint64 // ShardSize is the size for one shard, which is by default 4MiB
+		PagesPerChunk uint8 // Number of physical pages per chunk. Determined by erasure coding algorithm
 
 		// path related
 		LocalPath string // Local path is the on-disk location for uploaded files
@@ -42,7 +47,7 @@ type (
 		LastRedundancy   float64   // File redundancy from last check
 
 		// File related
-		FileMode     os.FileMode // unix file mode
+		FileMode os.FileMode // unix file mode
 
 		// Erasure code field
 		ErasureCodeType uint8  // the code for the specific erasure code
@@ -76,6 +81,9 @@ func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors)
 	case erasurecode.ECTypeShard:
 		shardSize := int(binary.LittleEndian.Uint32(md.ECExtra))
+		if shardSize < 0 {
+			return nil, fmt.Errorf("shardSize cannot be negative")
+		}
 		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors, shardSize)
 	default:
 		return nil, erasurecode.ErrInvalidECType
