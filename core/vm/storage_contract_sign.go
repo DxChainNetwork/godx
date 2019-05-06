@@ -6,27 +6,54 @@ package vm
 
 import (
 	"crypto/ecdsa"
+	"errors"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 )
 
-// TODO: 文件合约签名
-func SignStorageContract() ([]types.Signature, error) {
-	return nil, nil
+// sign storage contract data
+func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.PrivateKey) ([]types.Signature, error) {
+
+	// rlp hash
+	hashData := originData.RLPHash()
+
+	// 65 bytes signature
+	sig, err := crypto.Sign(hashData[:], prv)
+	if err != nil {
+		return nil, err
+	}
+
+	return []types.Signature{sig}, nil
 }
 
-// TODO: 从文件合约回复公钥
-func RecoverPubkeyFromSignature(signature types.Signature) (ecdsa.PublicKey, error) {
-	return ecdsa.PublicKey{}, nil
+// recover pubkey from storage contract signature
+func RecoverPubkeyFromSignature(originHash common.Hash, signature types.Signature) (ecdsa.PublicKey, error) {
+	pub, err := crypto.SigToPub(originHash.Bytes(), signature)
+	if err != nil {
+		return ecdsa.PublicKey{}, err
+	}
+
+	return *pub, nil
 }
 
-// TODO: 文件合约验签，true表示验签通过
+// verification for storage contract
 func VerifyStorageContractSignatures(pubkey, hash, signature []byte) bool {
-	return true
+	return crypto.VerifySignature(pubkey, hash[:], signature[:len(signature)-1])
 }
 
-// TODO: 从文件合约回复公钥
-func RecoverAddrFromSignature(signature []types.Signature) (common.Address, common.Address, error) {
-	return common.Address{}, common.Address{}, nil
+// recover addr of storage client or host from signature
+func RecoverAddrFromSignature(originHash common.Hash, signature types.Signature) (common.Address, error) {
+	pubkeyBytes, err := crypto.Ecrecover(originHash[:], signature)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(pubkeyBytes) == 0 || pubkeyBytes[0] != 4 {
+		return common.Address{}, errors.New("invalid public key")
+	}
+
+	var addr common.Address
+	copy(addr[:], crypto.Keccak256(pubkeyBytes[1:])[12:])
+	return addr, nil
 }
