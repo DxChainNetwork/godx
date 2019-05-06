@@ -4,6 +4,8 @@
 package dxfile
 
 import (
+	"crypto/rand"
+	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
 	"os"
 	"sync"
@@ -14,7 +16,12 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
-const fileIDSize = 16
+const (
+	fileIDSize = 16
+
+	// SectorSize is the size of a sector, which is 4MiB
+	SectorSize = uint64(1 << 22)
+)
 
 type fileID [fileIDSize]byte
 
@@ -26,8 +33,8 @@ type (
 		// hostAddresses is the map of host address to whether the address is used
 		hostAddresses map[common.Address]*hostAddress
 
-		// dataSegments is a list of segments the file is split into
-		dataSegments []*segment
+		// Segments is a list of segments the file is split into
+		Segments []*segment
 
 		// utils field
 		deleted bool
@@ -35,44 +42,73 @@ type (
 		ID      fileID
 		wal     *writeaheadlog.Wal
 
-		// filename is the file of the content locates
-		filename string
+		// filePath is full file path of
+		filePath string
 
 		//cached field
 		erasureCode erasurecode.ErasureCoder
+		cipherKey   crypto.CipherKey
 	}
 
 	// hostAddress is the in-memory data for host address.
 	hostAddress struct {
-		Address common.Address
-		Used    bool
+		address common.Address
+		used    bool
 	}
 
 	segment struct {
 		sectors [][]*sector
+		offset  uint64
 		stuck   bool
 	}
 
 	sector struct {
-		MerkleRoot  common.Hash
-		HostAddress common.Address
+		merkleRoot  common.Hash
+		hostAddress common.Address
 	}
 )
 
 // New creates a new dxfile
-func New(filepath string, sourcePath string, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, masterKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
+func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
 	currentTime := time.Now()
-
-}
-
-// segmentPersistSize is the helper function to calculate the persist size of the segment
-func segmentPersistNumPages(numSectors uint32) int64 {
-	sectorsSize := sectorPersistSize * numSectors
-	sectorsSizeWithRedundancy := float64(sectorsSize) * (1 + redundancyRate)
-	dataSize := segmentPersistOverhead + int(sectorsSizeWithRedundancy)
-	numPages := dataSize / PageSize
-	if dataSize%PageSize != 0 {
-		numPages++
+	minSectors, numSectors, extra := erasureCodeToParams(erasureCode)
+	var id fileID
+	_, err := rand.Read(id[:])
+	if err != nil {
+		return nil, fmt.Errorf("cannot create a random id: %v", err)
 	}
-	return int64(numPages)
+	md := &Metadata{
+		Version:         "1.0.0",
+		HostTableOffset: PageSize,
+		SegmentOffset:   2 * PageSize,
+		FileSize:        fileSize,
+		SectorSize:      SectorSize - uint64(cipherKey.Overhead()),
+		PagesPerChunk:   segmentPersistNumPages(numSectors),
+		LocalPath:       sourcePath,
+		DxPath:          dxPath,
+		CipherKeyCode:   crypto.CipherCodeByName(cipherKey.CodeName()),
+		CipherKey:       cipherKey.Key(),
+		TimeModify:      currentTime,
+		TimeCreate:      currentTime,
+		FileMode:        fileMode,
+		ErasureCodeType: erasureCode.Type(),
+		MinSectors:      minSectors,
+		NumSectors:      numSectors,
+		ECExtra:         extra,
+	}
+	df := &DxFile{
+		metaData:      md,
+		hostAddresses: make(map[common.Address]*hostAddress),
+		deleted:       false,
+		ID:            id,
+		wal:           wal,
+		filePath:      filePath,
+		erasureCode:   erasureCode,
+		cipherKey:     cipherKey,
+	}
+	df.Segments = make([]*segment, md.numSegments())
+	for i := range df.Segments {
+		df.Segments[i].sectors = make([][]*sector, numSectors)
+	}
+	return df, df.save()
 }

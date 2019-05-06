@@ -1,9 +1,13 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
 package dxfile
 
 import (
 	"crypto/rand"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
+	"reflect"
 	"testing"
 )
 
@@ -26,26 +30,63 @@ func TestSegmentPersistNumPages(t *testing.T) {
 	}
 }
 
-// randomSector is the helper function to create a random sector
-func randomSector(addr common.Address, root common.Hash) *PersistSector {
-	rand.Read(addr[:])
-	rand.Read(root[:])
-	return &PersistSector{
-		sector{
-			HostAddress: addr,
-			MerkleRoot:  root,
-		},
+func TestHostAddress_DecodeRLP_EncodeRLP(t *testing.T) {
+	tests := []*hostAddress{
+		{address: randomAddress(), used: false},
+		{address: randomAddress(), used: true},
+	}
+	for i, test := range tests {
+		b, err := rlp.EncodeToBytes(test)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		var ha *hostAddress
+		if err := rlp.DecodeBytes(b, &ha); err != nil {
+			t.Fatalf(err.Error())
+		}
+		if !reflect.DeepEqual(ha, test) {
+			t.Errorf("Test %d: expect %+v, got %+v", i, test, ha)
+		}
 	}
 }
 
-func randomSegment(numSectors uint32) PersistSegment {
-	var addr common.Address
-	var root common.Hash
-	sectors := make([][]*PersistSector, numSectors)
-	for i := 0; i != int(numSectors); i++ {
-		sectors[i] = append(sectors[i], randomSector(addr, root))
+func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
+	tests := []*segment{
+		randomSegment(0),
+		randomSegment(1),
+		randomSegment(100),
 	}
-	return PersistSegment{
-		Sectors: sectors,
+	for i, test := range tests {
+		b, err := rlp.EncodeToBytes(test)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		var seg *segment
+		if err := rlp.DecodeBytes(b, &seg); err != nil {
+			t.Fatalf(err.Error())
+		}
+		if !reflect.DeepEqual(seg.sectors, test.sectors) {
+			t.Errorf("Test %d: expect %+v, got %+v", i, test, seg)
+		}
 	}
+}
+
+func randomSegment(numSectors uint32) *segment {
+	seg := &segment{sectors: make([][]*sector, numSectors)}
+	for i := range seg.sectors {
+		seg.sectors[i] = append(seg.sectors[i], randomSector())
+	}
+	return seg
+}
+
+func randomSector() *sector {
+	s := &sector{}
+	rand.Read(s.hostAddress[:])
+	rand.Read(s.merkleRoot[:])
+	return s
+}
+
+func randomAddress() (addr common.Address) {
+	rand.Read(addr[:])
+	return
 }

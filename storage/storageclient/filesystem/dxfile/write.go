@@ -17,6 +17,16 @@ func (df *DxFile) createMetadataUpdate() (*insertUpdate, error) {
 	return df.createInsertUpdate(0, metaBytes)
 }
 
-func (df *DxFile) createHostTableUpdate() (*insertUpdate, error) {
+//func (df *DxFile) createHostTableUpdate() (*insertUpdate, error) {
+//
+//}
 
+// createSegmentShiftUpdate shift the first segment
+//func (df *DxFile) createSegmentShiftUpdate() (*insertUpdate, error) {
+//
+//}
+
+// TODO: implement this
+func (df *DxFile) save() error {
+	return nil
 }

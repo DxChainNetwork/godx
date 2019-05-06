@@ -5,7 +5,6 @@ package dxfile
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 	"time"
@@ -21,11 +20,11 @@ type (
 		// size related
 		FileSize      uint64
 		SectorSize    uint64 // ShardSize is the size for one shard, which is by default 4MiB
-		PagesPerChunk uint8 // Number of physical pages per chunk. Determined by erasure coding algorithm
+		PagesPerChunk uint64 // Number of physical pages per chunk. Determined by erasure coding algorithm
 
 		// path related
 		LocalPath string // Local path is the on-disk location for uploaded files
-		DxPath    string // DxPath is the uploaded path of a file
+		DxPath    string // DxPath is the user specified dxpath
 
 		// Encryption
 		// TODO: Add the key for sharing
@@ -75,17 +74,53 @@ type (
 	}
 )
 
+// newErasureCode is the helper function to create the erasureCoder based on metadata params
 func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 	switch md.ErasureCodeType {
 	case erasurecode.ECTypeStandard:
 		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors)
 	case erasurecode.ECTypeShard:
-		shardSize := int(binary.LittleEndian.Uint32(md.ECExtra))
-		if shardSize < 0 {
-			return nil, fmt.Errorf("shardSize cannot be negative")
+		var shardSize int
+		if len(md.ECExtra) >= 4 {
+			shardSize = int(binary.LittleEndian.Uint32(md.ECExtra))
+		} else {
+			shardSize = erasurecode.EncodedShardUnit
 		}
 		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors, shardSize)
 	default:
 		return nil, erasurecode.ErrInvalidECType
 	}
+}
+
+// erasureCodeToParams is the the helper function to interpret the erasureCoder to params
+// return minSectors, numSectors, and extra
+func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
+	minSectors := ec.MinSectors()
+	numSectors := ec.NumSectors()
+	switch ec.Type() {
+	case erasurecode.ECTypeStandard:
+		return minSectors, numSectors, nil
+	case erasurecode.ECTypeShard:
+		extra := ec.Extra()
+		extraBytes := make([]byte, 4)
+		shardSize := extra[0].(int)
+		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
+		return minSectors, numSectors, extraBytes
+	default:
+		panic("erasure code type not recognized")
+	}
+}
+
+// segmentSize is the helper function to calculate the segment size based on metadata info
+func (md Metadata) segmentSize() uint64 {
+	return md.SectorSize * uint64(md.MinSectors)
+}
+
+// numSegments is the number of segments of a dxfile based on metadata info
+func (md Metadata) numSegments() uint64 {
+	num := md.FileSize / md.segmentSize()
+	if md.FileSize/md.segmentSize() != 0 || num == 0 {
+		num++
+	}
+	return num
 }

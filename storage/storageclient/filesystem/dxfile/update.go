@@ -26,10 +26,10 @@ const (
 type dxfileUpdate interface {
 	apply() error                                    // Apply the content of the update
 	encodeToWalOp() (writeaheadlog.Operation, error) // convert an dxfileUpdate to writeaheadlog.Operation
-	fileName() string                                // filename returns the filename associated with the update
+	fileName() string                                // filePath returns the filePath associated with the update
 }
 
-// insertUpdate defines an insert dxfile instruction, including filename, offset, and data to write
+// insertUpdate defines an insert dxfile instruction, including filePath, offset, and data to write
 type (
 	insertUpdate struct {
 		filename string
@@ -37,7 +37,7 @@ type (
 		data     []byte
 	}
 
-	// deleteUpdate defines a delete dxfile instruction, just the filename to be deleted
+	// deleteUpdate defines a delete dxfile instruction, just the filePath to be deleted
 	deleteUpdate struct {
 		filename string
 	}
@@ -55,7 +55,7 @@ func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 	}, err
 }
 
-// apply will open or create the file defined by iu.filename, and write iu.data at iu.offset
+// apply will open or create the file defined by iu.filePath, and write iu.data at iu.offset
 func (iu *insertUpdate) apply() error {
 	// open the file
 	f, err := os.OpenFile(iu.filename, os.O_RDWR|os.O_CREATE, 0600)
@@ -87,7 +87,7 @@ func (du *deleteUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 	}, nil
 }
 
-// apply remove the file specified by deleteUpdate.filename
+// apply remove the file specified by deleteUpdate.filePath
 func (du *deleteUpdate) apply() error {
 	err := os.Remove(du.filename)
 	if os.IsNotExist(err) {
@@ -135,7 +135,7 @@ func (df *DxFile) createInsertUpdate(offset int64, data []byte) (*insertUpdate, 
 		return nil, fmt.Errorf("file offset cannot be negative: %d", offset)
 	}
 	return &insertUpdate{
-		filename: df.filename,
+		filename: df.filePath,
 		offset:   offset,
 		data:     data,
 	}, nil
@@ -143,7 +143,7 @@ func (df *DxFile) createInsertUpdate(offset int64, data []byte) (*insertUpdate, 
 
 func (df *DxFile) createDeleteUpdate() (*deleteUpdate, error) {
 	return &deleteUpdate{
-		filename: df.filename,
+		filename: df.filePath,
 	}, nil
 }
 
@@ -180,7 +180,7 @@ func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 	filtered := make([]dxfileUpdate, len(updates))
 	for _, update := range updates {
-		if update.fileName() == df.filename {
+		if update.fileName() == df.filePath {
 			if _, isDeleteUpdate := update.(*deleteUpdate); isDeleteUpdate {
 				// If the update is deletion, remove all previous updates
 				filtered = filtered[:0]
