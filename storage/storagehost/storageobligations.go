@@ -145,7 +145,7 @@ type (
 		// 协商高度指定协商文件合同的块高度。
 		// 如果原始交易集未被足够快地接受到区块链上，则合同将从主机中删除。
 		// 原始和修订事务集包含合同+修订以及所有父事务。 父母是必要的，因为重新启动后，事务池可能会被清空。
-		NegotiationHeight      *big.Int
+		NegotiationHeight      types.BlockHeight
 		OriginTransactionSet   []types.Signature
 		RevisionTransactionSet []types.Signature
 

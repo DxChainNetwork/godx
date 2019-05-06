@@ -23,12 +23,17 @@ var (
 // host.	managedLockStorageObligation将存储义务置于主机的锁定之下
 func (h *StorageHost) managedLockStorageObligation(soid types.StorageContractID) {
 
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 }
 
 // managedTryLockStorageObligation attempts to put a storage obligation under
 // lock, returning an error if the lock cannot be obtained.
 // managedTryLockStorageObligation尝试将存储义务置于锁定状态，如果无法获取锁定则返回错误。
 func (h *StorageHost) managedTryLockStorageObligation(soid types.StorageContractID, timeout time.Duration) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	return nil
 }
 
@@ -36,5 +41,7 @@ func (h *StorageHost) managedTryLockStorageObligation(soid types.StorageContract
 // the host.
 // managedUnlockStorageObligation从主机锁定中解锁存储义务。
 func (h *StorageHost) managedUnlockStorageObligation(soid types.StorageContractID) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 }
