@@ -6,7 +6,7 @@ import (
 )
 
 func (df *DxFile) createMetadataUpdate() (*insertUpdate, error) {
-	metaBytes, err := rlp.EncodeToBytes(df.metaData)
+	metaBytes, err := rlp.EncodeToBytes(df.metadata)
 	if err != nil {
 		return nil, err
 	}

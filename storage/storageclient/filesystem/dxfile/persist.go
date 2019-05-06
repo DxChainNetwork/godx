@@ -1,6 +1,7 @@
 package dxfile
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
 	"io"
@@ -16,12 +17,13 @@ const (
 	// Overhead for persistSegment persist data. The value is larger than data actually used
 	segmentPersistOverhead = 16
 
-	// Duplication rate is the expected duplication of the size of the sectors
+	// Duplication rate is the expected duplication of the size of the sectors.
+	// A certain sector of certain index of a segment could have multiple sectors
 	redundancyRate float64 = 1.0
 )
 
 type (
-	// persistHostTable is the table to be stored in dxfile
+	// persistHostTable is unmarshaled form of hostTable. Instead of a map, it is marshaled as slice
 	persistHostTable []*persistHostAddress
 
 	// persistHostAddress is the persist data structure for rlp encode and decode
@@ -42,21 +44,35 @@ type (
 	}
 )
 
-// hostAddress implement rlp encode rule to change the private field to public fields
-func (ha *hostAddress) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, persistHostAddress{
-		Address: ha.address,
-		Used:    ha.used,
-	})
+// hostTable implement rlp encode rule, and is encoded as a slice
+func (ht hostTable) EncodeRLP(w io.Writer) error {
+	var pht persistHostTable
+	for addr, used := range ht {
+		pha := &persistHostAddress{
+			Address: addr,
+			Used:    used,
+		}
+		pht = append(pht, pha)
+	}
+	return rlp.Encode(w, pht)
 }
 
-// hostAddress implement rlp decode rule
-func (ha *hostAddress) DecodeRLP(st *rlp.Stream) error {
-	var pha persistHostAddress
-	if err := st.Decode(&pha); err != nil {
+// hostTable implement rlp decode rule, and is decoded from a slice to map.
+// Note if the receiver map already has some keys, the keys are removed.
+func (ht hostTable) DecodeRLP(st *rlp.Stream) error {
+	for k := range ht {
+		delete(ht, k)
+	}
+	var pht persistHostTable
+	if err := st.Decode(&pht); err != nil {
 		return err
 	}
-	ha.address, ha.used = pha.Address, pha.Used
+	for _, pha := range pht {
+		if _, found := ht[pha.Address]; found {
+			return fmt.Errorf("multiple keys: %x", pha.Address)
+		}
+		ht[pha.Address] = pha.Used
+	}
 	return nil
 }
 

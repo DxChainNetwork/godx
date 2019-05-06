@@ -23,18 +23,16 @@ const (
 	SectorSize = uint64(1 << 22)
 )
 
-type fileID [fileIDSize]byte
-
 type (
 	DxFile struct {
-		// metaData is the persist metadata
-		metaData *Metadata
+		// metadata is the persist metadata
+		metadata *Metadata
 
-		// hostAddresses is the map of host address to whether the address is used
-		hostAddresses map[common.Address]*hostAddress
+		// hostTable is the map of host address to whether the address is used
+		hostTable hostTable
 
-		// Segments is a list of segments the file is split into
-		Segments []*segment
+		// segments is a list of segments the file is split into
+		segments []*segment
 
 		// utils field
 		deleted bool
@@ -50,22 +48,23 @@ type (
 		cipherKey   crypto.CipherKey
 	}
 
-	// hostAddress is the in-memory data for host address.
-	hostAddress struct {
-		address common.Address
-		used    bool
-	}
+	// hostTable is the map from host address to specific host info
+	hostTable map[common.Address]bool
 
+	// segment is the data for a segment, which is composed of several sectors
 	segment struct {
 		sectors [][]*sector
 		offset  uint64
 		stuck   bool
 	}
 
+	// sector is the data for a single sector, which has data of merkle root and related host address
 	sector struct {
 		merkleRoot  common.Hash
 		hostAddress common.Address
 	}
+
+	fileID [fileIDSize]byte
 )
 
 // New creates a new dxfile
@@ -97,18 +96,18 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		ECExtra:         extra,
 	}
 	df := &DxFile{
-		metaData:      md,
-		hostAddresses: make(map[common.Address]*hostAddress),
-		deleted:       false,
-		ID:            id,
-		wal:           wal,
-		filePath:      filePath,
-		erasureCode:   erasureCode,
-		cipherKey:     cipherKey,
+		metadata:    md,
+		hostTable:   make(map[common.Address]bool),
+		deleted:     false,
+		ID:          id,
+		wal:         wal,
+		filePath:    filePath,
+		erasureCode: erasureCode,
+		cipherKey:   cipherKey,
 	}
-	df.Segments = make([]*segment, md.numSegments())
-	for i := range df.Segments {
-		df.Segments[i].sectors = make([][]*sector, numSectors)
+	df.segments = make([]*segment, md.numSegments())
+	for i := range df.segments {
+		df.segments[i].sectors = make([][]*sector, numSectors)
 	}
 	return df, df.save()
 }

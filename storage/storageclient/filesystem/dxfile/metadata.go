@@ -5,6 +5,7 @@ package dxfile
 
 import (
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 	"time"
@@ -90,6 +91,10 @@ func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 	default:
 		return nil, erasurecode.ErrInvalidECType
 	}
+}
+
+func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
+	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
 }
 
 // erasureCodeToParams is the the helper function to interpret the erasureCoder to params

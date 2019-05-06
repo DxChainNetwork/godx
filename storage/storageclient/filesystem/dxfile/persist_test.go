@@ -5,6 +5,7 @@ package dxfile
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
 	"reflect"
@@ -21,31 +22,32 @@ func TestSegmentPersistNumPages(t *testing.T) {
 		{100000},
 	}
 	for i, test := range tests {
-		numPages:= segmentPersistNumPages(test.numSectors)
+		numPages := segmentPersistNumPages(test.numSectors)
 		seg := randomSegment(test.numSectors)
 		segBytes, _ := rlp.EncodeToBytes(seg)
-		if PageSize * int(numPages) < len(segBytes) {
+		if PageSize*int(numPages) < len(segBytes) {
 			t.Errorf("Test %d: pages not enough to hold data: %d * %d < %d", i, PageSize, numPages, len(segBytes))
 		}
 	}
 }
 
-func TestHostAddress_DecodeRLP_EncodeRLP(t *testing.T) {
-	tests := []*hostAddress{
-		{address: randomAddress(), used: false},
-		{address: randomAddress(), used: true},
+func TestHostTable_DecodeRLP_EncodeRLP(t *testing.T) {
+	tests := []hostTable{
+		randomHostTable(0),
+		randomHostTable(1),
+		randomHostTable(1024),
 	}
 	for i, test := range tests {
 		b, err := rlp.EncodeToBytes(test)
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		var ha *hostAddress
-		if err := rlp.DecodeBytes(b, &ha); err != nil {
+		ht := make(hostTable)
+		if err := rlp.DecodeBytes(b, &ht); err != nil {
 			t.Fatalf(err.Error())
 		}
-		if !reflect.DeepEqual(ha, test) {
-			t.Errorf("Test %d: expect %+v, got %+v", i, test, ha)
+		if !reflect.DeepEqual(test, ht) {
+			t.Errorf("Test %d: expect %+v, got %+v", i, test, ht)
 		}
 	}
 }
@@ -71,6 +73,14 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 	}
 }
 
+func randomHostTable(numHosts int) hostTable {
+	ht := make(hostTable)
+	for i := 0; i != numHosts; i++ {
+		ht[randomAddress()] = randomBool()
+	}
+	return ht
+}
+
 func randomSegment(numSectors uint32) *segment {
 	seg := &segment{sectors: make([][]*sector, numSectors)}
 	for i := range seg.sectors {
@@ -89,4 +99,11 @@ func randomSector() *sector {
 func randomAddress() (addr common.Address) {
 	rand.Read(addr[:])
 	return
+}
+
+func randomBool() bool {
+	b := make([]byte, 2)
+	rand.Read(b)
+	num := binary.LittleEndian.Uint16(b)
+	return num%2 == 0
 }
