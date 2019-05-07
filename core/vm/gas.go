@@ -18,9 +18,11 @@ package vm
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/ethdb"
+
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -65,7 +67,7 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	return callCost.Uint64(), nil
 }
 
-//文件合约相关操作执行前先扣掉相应gas费用
+// calculate the gas of storage contract execution
 func RemainGas(args ...interface{}) (uint64, []interface{}) {
 	result := make([]interface{}, 0)
 	gas, ok := args[0].(uint64)
@@ -75,7 +77,8 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 	}
 
 	switch i := args[1].(type) {
-	//返序列化 rlp/decode.go:149
+
+	// rlp.DecodeBytes
 	case func([]byte, interface{}) error:
 		if gas < params.DecodeGas {
 			result = append(result, GasCalculationinsufficient)
@@ -97,7 +100,8 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		}
 		result = append(result, nil)
 		return gas, result
-		//CheckFormContract	core/vm/file_contract_validation.go:39
+
+		//CheckFormContract
 	case func(*EVM, types.StorageContract, types.BlockHeight) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
@@ -118,9 +122,10 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		}
 		result = append(result, nil)
 		return gas, result
-		//StoreFileContract	core/vm/file_contract_db.go:81
-	case func(*EVM, types.StorageContractID, types.StorageContract) error:
-		if gas < params.SstoreSetGas {
+
+		//CheckReversionContract
+	case func(*EVM, types.StorageContractRevision, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
@@ -129,17 +134,84 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 			return gas, result
 		}
 		evm, _ := args[2].(*EVM)
-		fci, _ := args[3].(types.StorageContractID)
-		fc, _ := args[4].(types.StorageContract)
-		gas -= params.SstoreSetGas
-		err := i(evm, fci, fc)
+		scr, _ := args[3].(types.StorageContractRevision)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, scr, bl)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
 		}
 		result = append(result, nil)
 		return gas, result
-		//CheckMultiSignatures	core/vm/file_contract_validation.go:199
+
+		//CheckStorageProof
+	case func(*EVM, types.StorageProof, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		sp, _ := args[3].(types.StorageProof)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, sp, bl)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//StoreStorageContract
+	case func(ethdb.Database, types.StorageContractID, types.StorageContract) error:
+		if gas < params.SstoreSetGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		db, _ := args[2].(ethdb.Database)
+		scid, _ := args[3].(types.StorageContractID)
+		sc, _ := args[4].(types.StorageContract)
+		gas -= params.SstoreSetGas
+		err := i(db, scid, sc)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//StoreExpireStorageContract
+	case func(ethdb.Database, types.StorageContractID, types.BlockHeight) error:
+		if gas < params.SstoreSetGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		db, _ := args[2].(ethdb.Database)
+		scid, _ := args[3].(types.StorageContractID)
+		height, _ := args[4].(types.BlockHeight)
+		gas -= params.SstoreSetGas
+		err := i(db, scid, height)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//CheckMultiSignatures
 	case func(interface{}, types.BlockHeight, []types.Signature) error:
 		if gas < params.CheckMultiSignaturesGas {
 			result = append(result, GasCalculationinsufficient)
