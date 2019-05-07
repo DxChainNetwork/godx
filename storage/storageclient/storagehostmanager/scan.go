@@ -90,6 +90,7 @@ func (shm *StorageHostManager) scanSchedule() {
 // queueScan will scan the storage host added
 func (shm *StorageHostManager) queueScan(hi storage.HostInfo) {
 	// TODO: (mzhang) to be implemented
+
 }
 
 // waitSync will pause the current go routine and wait until the
