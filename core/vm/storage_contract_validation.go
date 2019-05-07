@@ -352,7 +352,8 @@ func storageProofSegment(db ethdb.Database, ParentID types.StorageContractID, cu
 	}
 
 	blockHash := rawdb.ReadCanonicalHash(db, uint64(triggerHeight))
-	seed := crypto.Keccak256Hash(blockHash[:], sc.ID()[:])
+	scID := sc.ID()
+	seed := crypto.Keccak256Hash(blockHash[:], scID[:])
 	numSegments := int64(CalculateLeaves(sc.FileSize))
 
 	// index = seedInt % numSegments，index in [0，numSegments]
