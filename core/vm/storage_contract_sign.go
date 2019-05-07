@@ -14,7 +14,7 @@ import (
 )
 
 // sign storage contract data
-func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.PrivateKey) ([]types.Signature, error) {
+func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.PrivateKey) (types.Signature, error) {
 
 	// rlp hash
 	hashData := originData.RLPHash()
@@ -25,7 +25,7 @@ func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.Pri
 		return nil, err
 	}
 
-	return []types.Signature{sig}, nil
+	return sig, nil
 }
 
 // recover pubkey from storage contract signature
