@@ -54,6 +54,7 @@ type (
 	// segment is the data for a segment, which is composed of several sectors
 	segment struct {
 		sectors [][]*sector
+		index   uint64
 		offset  uint64
 		stuck   bool
 	}

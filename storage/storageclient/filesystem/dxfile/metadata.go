@@ -16,8 +16,8 @@ type (
 	// Metadata is the Metadata of a user uploaded file.
 	Metadata struct {
 		// storage related
-		HostTableOffset int32
-		SegmentOffset   int32
+		HostTableOffset uint64
+		SegmentOffset   uint64
 
 		// size related
 		FileSize        uint64
@@ -76,6 +76,25 @@ type (
 	}
 )
 
+
+// validate validate the params in the metadata. If a potential error found, return the error.
+// Note validate will not check params for erasure coding or cipher key since they are checked in other functions.
+func (md Metadata) validate() error {
+	if md.HostTableOffset != PageSize {
+		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
+	}
+	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
+		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
+	}
+	if md.SegmentOffset <= md.HostTableOffset {
+		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
+	}
+	if md.SegmentOffset % PageSize != 0 {
+		return fmt.Errorf("segment offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+	}
+	return nil
+}
+
 // newErasureCode is the helper function to create the erasureCoder based on metadata params
 func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 	switch md.ErasureCodeType {
@@ -113,6 +132,7 @@ func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
 	}
 }
 
+// newCipherKey create a new cipher key based on metadata params
 func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
 	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
 }
@@ -131,16 +151,3 @@ func (md Metadata) numSegments() uint64 {
 	return num
 }
 
-// validate validate the params in the metadata. If a potential error found, return the error.
-func (md Metadata) validate() error {
-	if md.HostTableOffset != PageSize {
-		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
-	}
-	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
-		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
-	}
-	if md.SegmentOffset % PageSize != 0 {
-		return fmt.Errorf("segment offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
-	}
-	return nil
-}

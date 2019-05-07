@@ -59,6 +59,7 @@ func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 func (iu *insertUpdate) apply() error {
 	// open the file
 	f, err := os.OpenFile(iu.filename, os.O_RDWR|os.O_CREATE, 0600)
+	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("failed to apply insertUpdate: %v", err)
 	}
@@ -169,6 +170,12 @@ func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 	}
 	if err = <-txn.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+	for _, u := range updates {
+		err := u.apply()
+		if err != nil {
+			return fmt.Errorf("failed to apply update: %v", err)
+		}
 	}
 	if err = txn.Release(); err != nil {
 		return fmt.Errorf("failed to release transaction: %v", err)

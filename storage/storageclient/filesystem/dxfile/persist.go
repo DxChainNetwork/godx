@@ -35,6 +35,7 @@ type (
 	// persistSegment is the structure a dxfile is split into
 	persistSegment struct {
 		Sectors [][]*sector // Sectors contains the recoverable message about the persistSector in the persistSegment
+		Index   uint64      // Index is the index of the specific segment
 	}
 
 	// persistSector is the smallest unit of storage. It the erasure code encoded persistSegment
@@ -98,6 +99,7 @@ func (s *sector) DecodeRLP(st *rlp.Stream) error {
 func (s *segment) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSegment{
 		Sectors: s.sectors,
+		Index: s.index,
 	})
 }
 
@@ -107,7 +109,7 @@ func (s *segment) DecodeRLP(st *rlp.Stream) error {
 	if err := st.Decode(&ps); err != nil {
 		return err
 	}
-	s.sectors = ps.Sectors
+	s.sectors, s.index = ps.Sectors, ps.Index
 	return nil
 }
 

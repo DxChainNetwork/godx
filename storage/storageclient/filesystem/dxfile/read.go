@@ -12,7 +12,9 @@ import (
 	"os"
 )
 
-func readDxFile(path string, wal *writeaheadlog.Wal) (*DxFile, error) {
+// readDxFile create a new DxFile with a random ID, then open and read the dxfile from filepath
+// and load all params from the file.
+func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
 	var ID fileID
 	_, err := rand.Read(ID[:])
 	if err != nil {
@@ -20,13 +22,14 @@ func readDxFile(path string, wal *writeaheadlog.Wal) (*DxFile, error) {
 	}
 	df := &DxFile{
 		ID:       ID,
-		filePath: path,
+		filePath: filepath,
 		wal:      wal,
 	}
-	f, err := os.OpenFile(path, os.O_RDONLY, 0)
+	f, err := os.OpenFile(filepath, os.O_RDONLY, 0777)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open file %s: %v", path, err)
+		return nil, fmt.Errorf("cannot open file %s: %v", filepath, err)
 	}
+	defer f.Close()
 	err = df.loadMetadata(f)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load metadata: %v", err)
@@ -90,25 +93,40 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	}
 	offset := uint64(df.metadata.SegmentOffset)
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
+	df.segments = make([]*segment, df.metadata.numSegments())
 	for {
-		_, err := f.Seek(int64(offset), io.SeekStart)
+		seg, err := df.readSegment(f, offset)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
-		}
-		var seg *segment
-		err = rlp.Decode(f, &seg)
-		if err == io.EOF {
-			break
-		}
-		if len(seg.sectors) != int(df.metadata.NumSectors) {
-			return fmt.Errorf("segment does not have expected numSectors")
+			return fmt.Errorf("failed to load segment: %v", err)
 		}
 		seg.offset = offset
-		df.segments = append(df.segments, seg)
+		if df.segments[seg.index] != nil {
+			return fmt.Errorf("duplicate segment %d at %d", seg.index, seg.offset)
+		}
+		df.segments[seg.index] = seg
 		offset += segmentSize
 	}
 	return nil
+}
+
+func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*segment, error) {
+	if int64(offset) < 0 {
+		return nil, fmt.Errorf("int64 overflow")
+	}
+	_, err := f.Seek(int64(offset), io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+	var seg *segment
+	err = rlp.Decode(f, &seg)
+	if err != nil {
+		return nil, err
+	}
+	if len(seg.sectors) != int(df.metadata.NumSectors) {
+		return nil, fmt.Errorf("segment does not have expected numSectors")
+	}
+	return seg, nil
 }
