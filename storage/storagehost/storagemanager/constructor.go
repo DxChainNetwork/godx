@@ -2,12 +2,13 @@ package storagemanager
 
 import (
 	"crypto/rand"
-	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"path/filepath"
 	"sync/atomic"
+
+	"github.com/DxChainNetwork/godx/common"
+	tm "github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/log"
 )
 
 func newStorageManager(persistDir string) (*storageManager, error) {
@@ -19,7 +20,15 @@ func newStorageManager(persistDir string) (*storageManager, error) {
 		// initialize folders and sectors map
 		folders: make(map[uint16]*storageFolder),
 		sectors: make(map[sectorID]*storageSector),
+
+		// create the thread manager
+		tm: new(tm.ThreadManager),
+		// TODO: non complete create of wal
+		wal: new(writeAheadLog),
 	}
+
+	// TODO: shut down wal
+
 
 	// try to load every thing from the config file
 	if err := sm.constructManager(); err != nil {
@@ -38,6 +47,13 @@ func (sm *storageManager) constructManager() error {
 	if err = os.MkdirAll(sm.persistDir, 0700); err != nil {
 		return err
 	}
+
+	// TODO: add to another place
+	sm.wal.walFileTmp, err = os.Create(filepath.Join(sm.persistDir, walFile))
+	if err != nil {
+		return err
+	}
+
 	persist := &persistence{}
 	err = common.LoadDxJSON(configMetadata, filepath.Join(sm.persistDir, configFile), persist)
 	if os.IsNotExist(err) {
@@ -51,8 +67,6 @@ func (sm *storageManager) constructManager() error {
 	sm.sectorSalt = persist.SectorSalt
 	// create each of the storageFolder through storageFolder factory
 	sm.constructFolders(persist.Folders)
-
-	fmt.Println(sm.sectorSalt)
 
 	return nil
 }

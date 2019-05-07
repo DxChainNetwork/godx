@@ -13,8 +13,8 @@ import (
 // Try the debug setter function
 func TestHostDeBugAPI_HostSetter(t *testing.T) {
 	// clear the saved data for testing
-	remmoveFolders("./testdata/", t)
-	defer remmoveFolders("./testdata/", t)
+	removeFolders("./testdata/", t)
+	defer removeFolders("./testdata/", t)
 
 	host, err := New("./testdata/")
 	if err != nil {
@@ -49,8 +49,8 @@ func TestHostDeBugAPI_HostSetter(t *testing.T) {
 // testing the load of setting as an object
 func TestHostDeBugAPI_LoadSetting(t *testing.T) {
 	// clear the saved data for testing
-	remmoveFolders("./testdata/", t)
-	defer remmoveFolders("./testdata/", t)
+	removeFolders("./testdata/", t)
+	defer removeFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
 	host, err := New("./testdata/")

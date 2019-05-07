@@ -10,6 +10,8 @@ const (
 
 	// configFile is name of the config file
 	configFile = "config.sys"
+	// walFileTmp is the file which record the change of the system
+	walFile = "wal.log"
 	// sectorMetaFileName is the name of sector metadata file
 	// which store the sector information
 	sectorMetaFileName = "sectormeta.dat"
@@ -25,6 +27,12 @@ var (
 	// configMetadata is the metadata for indicating the config file
 	configMetadata = common.Metadata{
 		Header:  "Gdx storage manager config",
+		Version: "1.0",
+	}
+
+	// wal file
+	walMetadata = common.Metadata{
+		Header:  "Gdx storage manager WAL",
 		Version: "1.0",
 	}
 
@@ -63,8 +71,8 @@ func buildSetting(mode int) {
 	}[mode].(uint64)
 
 	MaxSectorPerFolder = SELECT{
-		STD: uint64(1 << 16),
-		TST: uint64(1 << 3),
+		STD: uint64(1 << 32),
+		TST: uint64(1 << 12),
 	}[mode].(uint64)
 
 	MinSectorPerFolder = SELECT{

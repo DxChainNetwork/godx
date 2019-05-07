@@ -32,19 +32,20 @@ func (sm *storageManager) extractFolderPersist() []folderPersist {
 
 	var idx int
 	for _, folder := range sm.folders {
-
-		persist := folderPersist{
-			Index: folder.index,
-			Path:  folder.path,
-			Usage: folder.usage,
-		}
-
-		folders[idx] = persist
+		folders[idx] = folder.extractFolder()
 		idx++
 
 	}
 
 	return folders
+}
+
+func (sf *storageFolder) extractFolder() folderPersist {
+	return folderPersist{
+		Index: sf.index,
+		Path:  sf.path,
+		Usage: sf.usage,
+	}
 }
 
 func (sm *storageManager) syncConfig() error {

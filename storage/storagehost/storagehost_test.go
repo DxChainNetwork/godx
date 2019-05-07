@@ -21,8 +21,8 @@ const RANDRANGE = 100000000
 // 		when the host is the first time initialized
 func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	// clear the saved data for testing
-	remmoveFolders("./testdata/", t)
-	defer remmoveFolders("./testdata/", t)
+	removeFolders("./testdata/", t)
+	defer removeFolders("./testdata/", t)
 
 	// do a new host, check if the folder are all generated
 	host, err := New("./testdata/")
@@ -64,8 +64,8 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 // Test if changing setting would result the change of the setting file
 func TestStorageHost_DataPreservation(t *testing.T) {
 	// clear the saved data for testing
-	remmoveFolders("./testdata/", t)
-	defer remmoveFolders("./testdata/", t)
+	removeFolders("./testdata/", t)
+	defer removeFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
 	host, err := New("./testdata/")
@@ -132,8 +132,8 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 
 func TestStorageHost_SetIntSetting(t *testing.T) {
 	// clear the saved data for testing
-	remmoveFolders("./testdata/", t)
-	defer remmoveFolders("./testdata/", t)
+	removeFolders("./testdata/", t)
+	defer removeFolders("./testdata/", t)
 
 	// try to do the first data json renew, use the default value
 	host, err := New("./testdata/")
@@ -194,9 +194,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 }
 
 // helper function to clear the data file before and after a test case execute
-func remmoveFolders(Persisdir string, t *testing.T) {
+func removeFolders(persisDir string, t *testing.T) {
 	// clear the testing data
-	if err := os.RemoveAll(Persisdir); err != nil {
+	if err := os.RemoveAll(persisDir); err != nil {
 		t.Error("cannot remove the data when testing")
 	}
 }
