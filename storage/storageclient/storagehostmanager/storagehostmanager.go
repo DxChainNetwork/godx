@@ -32,10 +32,10 @@ type StorageHostManager struct {
 	disableIPViolationCheck bool
 
 	// maintenance related
-	initialScan          bool
+	initialScanFinished  bool
 	initialScanLatencies []time.Duration
-	scanList             []storage.HostInfo
-	scanHosts            map[string]struct{}
+	scanningList         []storage.HostInfo
+	scanPool             map[string]struct{}
 	scanWait             bool
 	scanRoutines         int
 
@@ -68,7 +68,7 @@ func New(persistDir string, ethInfo *ethapi.PublicEthereumAPI, netInfo *ethapi.P
 
 		rent: storage.DefaultRentPayment,
 
-		scanHosts:     make(map[string]struct{}),
+		scanPool:      make(map[string]struct{}),
 		filteredHosts: make(map[string]string),
 	}
 
@@ -108,7 +108,7 @@ func New(persistDir string, ethInfo *ethapi.PublicEthereumAPI, netInfo *ethapi.P
 	// TODO: (mzhang) consensus subscription and related operations
 
 	// started scan and update storage host information
-	go shm.scan()
+	go shm.scanStart()
 
 	return shm, nil
 }

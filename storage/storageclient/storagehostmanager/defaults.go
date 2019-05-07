@@ -26,3 +26,11 @@ const (
 	PersistStorageHostManagerVersion = "1.0"
 	PersistFilename                  = "storagehostmanager.json"
 )
+
+// Scan related constant
+const (
+	scanCheckDuration = time.Second
+	scanQuantity      = 2500
+	maxScanSleep      = 6 * time.Hour
+	minScanSleep      = time.Hour + time.Minute*30
+)

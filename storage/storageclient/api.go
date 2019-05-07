@@ -32,7 +32,7 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs
-// private APIs are used to configure settings
+// that are used to configure settings
 type PrivateStorageClientAPI struct {
 	sc *StorageClient
 }
