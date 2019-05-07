@@ -1,10 +1,11 @@
 package storagehosttree
 
 import (
-	"github.com/DxChainNetwork/errors"
-	"github.com/DxChainNetwork/godx/storage"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/errors"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 var evalFunc = func(storage.HostInfo) HostEvaluation {
@@ -69,7 +70,6 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 }
 
 func TestStorageHostTree_All(t *testing.T) {
-
 	storageHosts := tree.All()
 	if len(storageHosts) != len(ips) {
 		t.Errorf("insufficient amount of storage hosts, expected %d, got %d",
@@ -79,8 +79,8 @@ func TestStorageHostTree_All(t *testing.T) {
 	for i := 0; i < len(storageHosts)-1; i++ {
 		eval1 := tree.hostPool[storageHosts[i].PublicKey].entry.eval
 		eval2 := tree.hostPool[storageHosts[i+1].PublicKey].entry.eval
-		if eval1.Cmp(eval2) > 0 {
-			t.Errorf("the returned storage hosts should be in order, the host has higer evaluation should be in the front")
+		if eval1.Cmp(eval2) < 0 {
+			t.Errorf("the returned storage hosts should be in order, the host has higher evaluation should be in the front")
 		}
 	}
 }
