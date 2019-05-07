@@ -2,6 +2,12 @@ package storagehost
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/DxChainNetwork/godx/core/types"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
@@ -9,9 +15,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
-	"os"
-	"path/filepath"
-	"sync"
 )
 
 // TODO: Network, Transaction, protocol related implementations BELOW:
@@ -60,7 +63,7 @@ type StorageHost struct {
 	// storageHost basic config
 	broadcast          bool
 	broadcastConfirmed bool
-	blockHeight        uint64
+	blockHeight        types.BlockHeight
 
 	financialMetrics HostFinancialMetrics
 	config           storage.HostIntConfig
@@ -68,6 +71,8 @@ type StorageHost struct {
 
 	// storage host manager for manipulating the file storage system
 	sm.StorageManager
+
+	lockedStorageObligations map[types.StorageContractID]*TryMutex
 
 	// things for log and persistence
 	// TODO: database to store the info of storage obligation, here just a mock

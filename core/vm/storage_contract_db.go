@@ -146,7 +146,7 @@ func StoreStorageObligation(db ethdb.Database, storageContractID types.StorageCo
 	return storeWithPrefix(db, storageContractID, so, PrefixStorageObligation)
 }
 
-func DeleteStorageObligation(db ethdb.Database, storageContractID types.StorageContractID, so storagehost.StorageObligation) error {
+func DeleteStorageObligation(db ethdb.Database, storageContractID types.StorageContractID) error {
 	return deleteWithPrefix(db, storageContractID, PrefixStorageObligation)
 }
 

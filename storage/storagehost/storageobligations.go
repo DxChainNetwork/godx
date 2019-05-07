@@ -9,6 +9,11 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/DxChainNetwork/godx/log"
+
+	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/ethdb"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 )
@@ -122,7 +127,8 @@ type (
 		//存储义务被分解为有序的原子扇区，每个扇区正好是4MiB。 通过保存每个扇区的根，
 		// 可以通过使用merkletree.CachedTree以低成本方式进行存储证明和对数据的修改。
 		// 可以附加，修改或删除扇区，主机可以重新计算整个文件的Merkle根，而无需太多的计算或I / O开销。
-		SectorRoots common.Hash
+		SectorRoots       common.Hash
+		StorageContractid types.StorageContractID
 
 		// Variables about the file contract that enforces the storage obligation.
 		// The origin an revision transaction are stored as a set, where the set
@@ -145,9 +151,9 @@ type (
 		// 协商高度指定协商文件合同的块高度。
 		// 如果原始交易集未被足够快地接受到区块链上，则合同将从主机中删除。
 		// 原始和修订事务集包含合同+修订以及所有父事务。 父母是必要的，因为重新启动后，事务池可能会被清空。
-		NegotiationHeight      types.BlockHeight
-		OriginTransactionSet   []types.Signature
-		RevisionTransactionSet []types.Signature
+		NegotiationHeight types.BlockHeight
+		OriginStorage     []types.StorageContract
+		Revision          []types.StorageContractRevision
 
 		// Variables indicating whether the critical transactions in a storage
 		// obligation have been confirmed on the blockchain.
@@ -180,76 +186,129 @@ func (i storageObligationStatus) String() string {
 }
 
 // getStorageObligation fetches a storage obligation from the database
-func getStorageObligation(sc types.StorageContractID) (so StorageObligation, err error) {
-	return
+func getStorageObligation(db ethdb.Database, sc types.StorageContractID) (StorageObligation, error) {
+	so, errGet := vm.GetStorageObligation(db, sc)
+	if errGet != nil {
+		return StorageObligation{}, errGet
+	}
+	return so, nil
 }
 
 // putStorageObligation places a storage obligation into the database,
 // overwriting the existing storage obligation if there is one.
-func putStorageObligation(so StorageObligation) error {
+func putStorageObligation(db ethdb.Database, so StorageObligation) error {
+	err := vm.StoreStorageObligation(db, so.id(), so)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func deleteStorageObligation(db ethdb.Database, sc types.StorageContractID) error {
+	err := vm.DeleteStorageObligation(db, sc)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
 // expiration returns the height at which the storage obligation expires.
-func (so StorageObligation) expiration() (number types.BlockHeight) {
-	return
+func (so StorageObligation) expiration(db ethdb.Database) (number types.BlockHeight) {
+	if len(so.Revision) > 0 {
+		return so.Revision[len(so.Revision)-1].NewWindowStart
+	}
+	return so.OriginStorage[0].WindowStart
 }
 
 // fileSize returns the size of the data protected by the obligation.
 //返回受义务保护的数据大小
-func (so StorageObligation) fileSize() uint64 {
-	return 0
+func (so StorageObligation) fileSize(db ethdb.Database) uint64 {
+	if len(so.Revision) > 0 {
+		return so.Revision[len(so.Revision)-1].NewFileSize
+	}
+	return so.OriginStorage[0].FileSize
 }
 
 // id returns the id of the storage obligation, which is defined by the file
 // contract id of the storage contract that governs the storage contract.
 //返回这个存储义务的id，该ID由管理存储合同的文件合同的文件合同ID定义
 func (so StorageObligation) id() (scid types.StorageContractID) {
-	return
+	return so.StorageContractid
 }
 
 // isSane checks that required assumptions about the storage obligation are
 // correct.	检查所需的存储义务假设
 func (so StorageObligation) isSane() error {
+	if len(so.OriginStorage) == 0 {
+		return errInsaneOriginSetSize
+	}
+
+	if len(so.Revision) == 0 {
+		return errInsaneRevisionSetRevisionCount
+	}
+
 	return nil
 }
 
 // merkleRoot returns the file merkle root of a storage obligation.
 //merkleRoot 返回关于存储义务的文件的merkle root
 func (so StorageObligation) merkleRoot() common.Hash {
-	return common.Hash{}
+	if len(so.Revision) > 0 {
+		return so.Revision[len(so.Revision)-1].NewFileMerkleRoot
+	}
+	return so.OriginStorage[len(so.OriginStorage)-1].FileMerkleRoot
 }
 
 // payouts returns the set of valid payouts and missed payouts that represent
 // the latest revision for the storage obligation.
 //返回有效支付和错过支付的集合，代表存储义务的最新Revision。
 func (so StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
+	if len(so.Revision) > 0 {
+		validProofOutputs = so.Revision[len(so.Revision)-1].NewValidProofOutputs
+		missedProofOutputs = so.Revision[len(so.Revision)-1].NewMissedProofOutputs
+	}
+	validProofOutputs = so.OriginStorage[len(so.OriginStorage)-1].ValidProofOutputs
+	missedProofOutputs = so.OriginStorage[len(so.OriginStorage)-1].MissedProofOutputs
 	return
 }
 
 // proofDeadline returns the height by which the storage proof must be
 // submitted. 返回存储证明必须被提交的块的高度
 func (so StorageObligation) proofDeadline() types.BlockHeight {
-	return 0
+	if len(so.Revision) > 0 {
+		return so.Revision[len(so.Revision)-1].NewWindowEnd
+	}
+	return so.OriginStorage[len(so.OriginStorage)-1].WindowEnd
+
 }
 
 // transactionID returns the ID of the transaction containing the Storage
 // contract. 返回包含存储合约的交易的hash
 func (so StorageObligation) transactionID() common.Hash {
+	//TODO 通过存储合约ID获取到交易hash
 	return common.Hash{}
 }
 
-// value returns the value of fulfilling the storage obligation to the host.
-//将履行存储义务的值返回给host
-func (so StorageObligation) value() *big.Int {
-	return nil
-}
+//// value returns the value of fulfilling the storage obligation to the host.
+////将履行存储义务的值返回给host
+//func (so StorageObligation) value() *big.Int {
+//	return nil
+//}
 
 // deleteStorageObligations deletes obligations from the database.
 // It is assumed the deleted obligations don't belong in the database in the first place,
 // so no financial metrics are updated.
 // 删除存储义务从数据库中，假设已删除的义务首先不属于数据库，因此不会更新财务指标。
-func (h StorageHost) deleteStorageObligations(soids []types.StorageContractID) error {
+func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []types.StorageContractID) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	for _, soid := range soids {
+		err := deleteStorageObligation(db, soid)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -258,6 +317,10 @@ func (h StorageHost) deleteStorageObligations(soids []types.StorageContractID) e
 // when that height is reached.
 // queueActionItem将操作项添加到输入高度的主机，以便主机知道在达到该高度时对相关存储义务执行维护
 func (h *StorageHost) queueActionItem(height types.BlockHeight, id types.StorageContractID) error {
+
+	if height < h.blockHeight {
+
+	}
 	return nil
 }
 
@@ -272,6 +335,19 @@ func (h *StorageHost) queueActionItem(height types.BlockHeight, id types.Storage
 // 存储义务中存在的所有扇区都应该已存在于磁盘上，
 // 这意味着在创建新的空文件合同或续订现有文件合同时，应独占调用addStorageObligation。
 func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
+	err := func() error {
+		h.lock.Lock()
+		defer h.lock.Unlock()
+		if _, ok := h.lockedStorageObligations[so.id()]; ok {
+			log.Info("nil")
+		}
+		return nil
+	}()
+
+	if err != nil {
+
+	}
+
 	return nil
 }
 

@@ -26,6 +26,13 @@ func (h *StorageHost) managedLockStorageObligation(soid types.StorageContractID)
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	tl, exists := h.lockedStorageObligations[soid]
+	if !exists {
+		tl = new(TryMutex)
+		h.lockedStorageObligations[soid] = tl
+	}
+	tl.Lock()
+
 }
 
 // managedTryLockStorageObligation attempts to put a storage obligation under
@@ -34,7 +41,16 @@ func (h *StorageHost) managedLockStorageObligation(soid types.StorageContractID)
 func (h *StorageHost) managedTryLockStorageObligation(soid types.StorageContractID, timeout time.Duration) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	return nil
+	tl, exists := h.lockedStorageObligations[soid]
+	if !exists {
+		tl = new(TryMutex)
+		h.lockedStorageObligations[soid] = tl
+	}
+
+	if tl.TryLockTimed(timeout) {
+		return nil
+	}
+	return errObligationLocked
 }
 
 // managedUnlockStorageObligation takes a storage obligation out from under lock in
@@ -43,5 +59,11 @@ func (h *StorageHost) managedTryLockStorageObligation(soid types.StorageContract
 func (h *StorageHost) managedUnlockStorageObligation(soid types.StorageContractID) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
+
+	tl, exists := h.lockedStorageObligations[soid]
+	if !exists {
+		return
+	}
+	tl.Unlock()
 
 }
