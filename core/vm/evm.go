@@ -549,8 +549,8 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}()
 
 	// rlp decode and calculate gas used
-	fileContract := types.StorageContract{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &fileContract)
+	storageContract := types.StorageContract{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &storageContract)
 	errDecode, _ := resultDecode[0].(error)
 	if errDecode != nil {
 		return nil, gasRemainDecode, errDecode
@@ -558,7 +558,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, evm, fileContract, types.BlockHeight(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, evm, storageContract, types.BlockHeight(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check form contract", "err", errCheck)
@@ -566,25 +566,25 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// store file contract info to local DB and calculate gas used
-	scID := fileContract.ID()
-	gasRemainStore, resultStore := RemainGas(gasRemainCheck, StoreStorageContract, db, scID, fileContract)
+	scID := storageContract.ID()
+	gasRemainStore, resultStore := RemainGas(gasRemainCheck, StoreStorageContract, db, scID, storageContract)
 	errStore, _ := resultStore[0].(error)
 	if errStore != nil {
 		return nil, gasRemainStore, errStore
 	}
 
 	// store file contract ID to local DB and calculate gas used
-	gasRemainStoreExpire, resultStoreExpire := RemainGas(gasRemainStore, StoreExpireStorageContract, db, scID, fileContract.WindowEnd)
+	gasRemainStoreExpire, resultStoreExpire := RemainGas(gasRemainStore, StoreExpireStorageContract, db, scID, storageContract.WindowEnd)
 	errStoreExpire, _ := resultStoreExpire[0].(error)
 	if errStoreExpire != nil {
 		return nil, gasRemainStoreExpire, errStoreExpire
 	}
 
 	// deduct the collateral and deposit it to the public account
-	renterAddr := fileContract.RenterCollateral.Address
-	hostAddr := fileContract.HostCollateral.Address
-	renterCollateralAmount := fileContract.RenterCollateral.Value
-	hostCollateralAmount := fileContract.HostCollateral.Value
+	renterAddr := storageContract.RenterCollateral.Address
+	hostAddr := storageContract.HostCollateral.Address
+	renterCollateralAmount := storageContract.RenterCollateral.Value
+	hostCollateralAmount := storageContract.HostCollateral.Value
 	evm.StateDB.SubBalance(renterAddr, renterCollateralAmount)
 	evm.StateDB.SubBalance(hostAddr, hostCollateralAmount)
 
@@ -595,7 +595,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 		if errDel != nil {
 			log.Error("failed to delete file contract from db", "error", errDel, "file_contract_id", common.Hash(scID).Hex())
 		}
-		errDelExp := DeleteExpireStorageContract(db, scID, fileContract.WindowEnd)
+		errDelExp := DeleteExpireStorageContract(db, scID, storageContract.WindowEnd)
 		if errDelExp != nil {
 			log.Error("failed to delete expire file contract from db", "error", errDelExp, "file_contract_id", common.Hash(scID).Hex())
 		}
@@ -615,8 +615,8 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		err      error
 	)
 
-	fileContractReversion := types.StorageContractRevision{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &fileContractReversion)
+	storageContractReversion := types.StorageContractRevision{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &storageContractReversion)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDecode, errDec
@@ -624,7 +624,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// check file contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, fileContractReversion, types.BlockHeight(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, storageContractReversion, types.BlockHeight(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check file contract reversion", "err", errCheck)
@@ -632,23 +632,23 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	scID := fileContractReversion.ParentID
+	scID := storageContractReversion.ParentID
 	oldStorageContract, errGet := GetStorageContract(db, scID)
 	if errGet != nil {
 		return nil, gasRemainCheck, errGet
 	}
 
 	newStorageContract := types.StorageContract{
-		FileSize:           fileContractReversion.NewFileSize,
-		FileMerkleRoot:     fileContractReversion.NewFileMerkleRoot,
-		WindowStart:        fileContractReversion.NewWindowStart,
-		WindowEnd:          fileContractReversion.NewWindowEnd,
+		FileSize:           storageContractReversion.NewFileSize,
+		FileMerkleRoot:     storageContractReversion.NewFileMerkleRoot,
+		WindowStart:        storageContractReversion.NewWindowStart,
+		WindowEnd:          storageContractReversion.NewWindowEnd,
 		RenterCollateral:   oldStorageContract.RenterCollateral,
 		HostCollateral:     oldStorageContract.HostCollateral,
-		ValidProofOutputs:  fileContractReversion.NewValidProofOutputs,
-		MissedProofOutputs: fileContractReversion.NewMissedProofOutputs,
-		UnlockHash:         fileContractReversion.NewUnlockHash,
-		RevisionNumber:     fileContractReversion.NewRevisionNumber,
+		ValidProofOutputs:  storageContractReversion.NewValidProofOutputs,
+		MissedProofOutputs: storageContractReversion.NewMissedProofOutputs,
+		UnlockHash:         storageContractReversion.NewUnlockHash,
+		RevisionNumber:     storageContractReversion.NewRevisionNumber,
 	}
 
 	DeleteStorageContract(db, scID)
