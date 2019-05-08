@@ -87,9 +87,9 @@ const (
 	Bn256PairingPerPointGas uint64 = 80000  // Per-point price for an elliptic curve pairing check
 
 	// storage contract gas
-	CheckFileGas            uint64 = 10000 // Verify fileContarct content
-	CheckMultiSignaturesGas uint64 = 3000  //Verify multi-signature
-	DecodeGas               uint64 = 1000  //rlp decode
+	CheckFileGas            uint64 = 10000 // the gas for checking storage contract content
+	CheckMultiSignaturesGas uint64 = 3000  // the gas for verifying multi-signature
+	DecodeGas               uint64 = 1000  // the gas for rlp decoding
 )
 
 var (

@@ -19,6 +19,10 @@ type (
 	Signature         []byte
 )
 
+type StorageContractRLPHash interface {
+	RLPHash() common.Hash
+}
+
 type HostAnnouncement struct {
 	// Specifier  types.Specifier
 	NetAddress string // host对外可访问的URI
