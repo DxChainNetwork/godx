@@ -6,6 +6,7 @@ package core
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 	"sync"
 
@@ -24,7 +25,7 @@ const (
 )
 
 var (
-	emptyStorageContractID = types.StorageContractID{}
+	emptyStorageContractID = common.Hash{}
 
 	errStorageProofTiming     = errors.New("missed proof triggered for file contract that is not expiring")
 	errMissingStorageContract = errors.New("storage proof submitted for non existing file contract")
@@ -91,7 +92,7 @@ func (m *MaintenanceSystem) Stop() {
 	m.wg.Wait()
 }
 
-func applyMissedStorageProof(db ethdb.Database, height types.BlockHeight, fcid types.StorageContractID) error {
+func applyMissedStorageProof(db ethdb.Database, height uint64, fcid common.Hash) error {
 
 	// check if fileContract of this fcid exists
 	fc, err := vm.GetStorageContract(db, fcid)
@@ -133,7 +134,7 @@ func applyStorageContractMaintenance(db ethdb.Database, block *types.Block) erro
 			log.Warn("split empty file contract ID")
 			continue
 		}
-		err := applyMissedStorageProof(db, types.BlockHeight(height), fcID)
+		err := applyMissedStorageProof(db, uint64(height), fcID)
 		if err != nil {
 			return err
 		}

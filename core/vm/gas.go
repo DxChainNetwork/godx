@@ -18,6 +18,7 @@ package vm
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/common"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -102,7 +103,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckFormContract
-	case func(*EVM, types.StorageContract, types.BlockHeight) error:
+	case func(*EVM, types.StorageContract, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -113,7 +114,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		}
 		evm, _ := args[2].(*EVM)
 		fc, _ := args[3].(types.StorageContract)
-		bl, _ := args[4].(types.BlockHeight)
+		bl, _ := args[4].(uint64)
 		gas -= params.CheckFileGas
 		err := i(evm, fc, bl)
 		if err != nil {
@@ -124,7 +125,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckReversionContract
-	case func(*EVM, types.StorageContractRevision, types.BlockHeight) error:
+	case func(*EVM, types.StorageContractRevision, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -135,7 +136,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		}
 		evm, _ := args[2].(*EVM)
 		scr, _ := args[3].(types.StorageContractRevision)
-		bl, _ := args[4].(types.BlockHeight)
+		bl, _ := args[4].(uint64)
 		gas -= params.CheckFileGas
 		err := i(evm, scr, bl)
 		if err != nil {
@@ -146,7 +147,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckStorageProof
-	case func(*EVM, types.StorageProof, types.BlockHeight) error:
+	case func(*EVM, types.StorageProof, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -157,7 +158,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		}
 		evm, _ := args[2].(*EVM)
 		sp, _ := args[3].(types.StorageProof)
-		bl, _ := args[4].(types.BlockHeight)
+		bl, _ := args[4].(uint64)
 		gas -= params.CheckFileGas
 		err := i(evm, sp, bl)
 		if err != nil {
@@ -168,7 +169,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//StoreStorageContract
-	case func(ethdb.Database, types.StorageContractID, types.StorageContract) error:
+	case func(ethdb.Database, common.Hash, types.StorageContract) error:
 		if gas < params.SstoreSetGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -178,7 +179,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 			return gas, result
 		}
 		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(types.StorageContractID)
+		scid, _ := args[3].(common.Hash)
 		sc, _ := args[4].(types.StorageContract)
 		gas -= params.SstoreSetGas
 		err := i(db, scid, sc)
@@ -190,7 +191,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//StoreExpireStorageContract
-	case func(ethdb.Database, types.StorageContractID, types.BlockHeight) error:
+	case func(ethdb.Database, common.Hash, uint64) error:
 		if gas < params.SstoreSetGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -200,8 +201,8 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 			return gas, result
 		}
 		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(types.StorageContractID)
-		height, _ := args[4].(types.BlockHeight)
+		scid, _ := args[3].(common.Hash)
+		height, _ := args[4].(uint64)
 		gas -= params.SstoreSetGas
 		err := i(db, scid, height)
 		if err != nil {
@@ -212,7 +213,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckMultiSignatures
-	case func(interface{}, types.BlockHeight, []types.Signature) error:
+	case func(interface{}, uint64, [][]byte) error:
 		if gas < params.CheckMultiSignaturesGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -221,8 +222,8 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
-		bl, _ := args[4].(types.BlockHeight)
-		arrsig, _ := args[4].([]types.Signature)
+		bl, _ := args[4].(uint64)
+		arrsig, _ := args[4].([][]byte)
 		gas -= params.CheckMultiSignaturesGas
 		err := i(args[2], bl, arrsig)
 		if err != nil {

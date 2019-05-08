@@ -264,10 +264,10 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int, homestead bool) (commo
 
 	// add signature verification for file contract tx
 	// NOTE: only 64 bytes of signature without V
-	verified := crypto.VerifySignature(pub, sighash.Bytes(), sig[:len(sig)-1])
-	if !verified {
-		return common.Address{}, errors.New("the signature verification is not passed")
-	}
+	//verified := crypto.VerifySignature(pub, sighash.Bytes(), sig[:len(sig)-1])
+	//if !verified {
+	//	return common.Address{}, errors.New("the signature verification is not passed")
+	//}
 
 	var addr common.Address
 	copy(addr[:], crypto.Keccak256(pub[1:])[12:])
