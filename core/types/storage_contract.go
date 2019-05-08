@@ -12,13 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 )
 
-type (
-	BlockHeight       uint64
-	StorageContractID common.Hash
-	UnlockHash        common.Hash
-	Signature         []byte
-)
-
 type StorageContractRLPHash interface {
 	RLPHash() common.Hash
 }
@@ -28,20 +21,20 @@ type HostAnnouncement struct {
 	NetAddress string // host对外可访问的URI
 	// PublicKey  ecdsa.PublicKey // 用于验证host对HostAnnouncement的签名的公钥 （可省去）
 
-	Signature Signature
+	Signature []byte
 }
 
 type HostExternalSettings struct {
 	AcceptingContracts   bool        `json:"acceptingcontracts"`
 	MaxDownloadBatchSize uint64      `json:"maxdownloadbatchsize"`
-	MaxDuration          BlockHeight `json:"maxduration"`
+	MaxDuration          uint64      `json:"maxduration"`
 	MaxReviseBatchSize   uint64      `json:"maxrevisebatchsize"`
 	NetAddress           string      `json:"netaddress"`
 	RemainingStorage     uint64      `json:"remainingstorage"`
 	SectorSize           uint64      `json:"sectorsize"`
 	TotalStorage         uint64      `json:"totalstorage"`
-	UnlockHash           UnlockHash  `json:"unlockhash"`
-	WindowSize           BlockHeight `json:"windowsize"`
+	UnlockHash           common.Hash `json:"unlockhash"`
+	WindowSize           uint64      `json:"windowsize"`
 
 	// Collateral is the amount of collateral that the host will put up for
 	// storage in 'bytes per block', as an assurance to the renter that the
@@ -98,7 +91,7 @@ type HostDBEntry struct {
 	HostExternalSettings
 
 	// FirstSeen is the last block height at which this host was announced.
-	FirstSeen BlockHeight `json:"firstseen"`
+	FirstSeen uint64 `json:"firstseen"`
 
 	// Measurements that have been taken on the host. The most recent
 	// measurements are kept in full detail, historic ones are compressed into
@@ -113,7 +106,7 @@ type HostDBEntry struct {
 	RecentFailedInteractions       float64 `json:"recentfailedinteractions"`
 	RecentSuccessfulInteractions   float64 `json:"recentsuccessfulinteractions"`
 
-	LastHistoricUpdate BlockHeight `json:"lasthistoricupdate"`
+	LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
 
 	// Measurements related to the IP subnet mask.
 	IPNets          []string  `json:"ipnets"`
@@ -129,7 +122,7 @@ type HostDBEntry struct {
 }
 
 type UnlockConditions struct {
-	Timelock           BlockHeight       `json:"timelock"`
+	Timelock           uint64            `json:"timelock"`
 	PublicKeys         []ecdsa.PublicKey `json:"publickeys"`
 	SignaturesRequired uint64            `json:"signaturesrequired"`
 }
@@ -147,8 +140,8 @@ type StorageContract struct {
 	// file part
 	FileSize       uint64      `json:"filesize"`
 	FileMerkleRoot common.Hash `json:"filemerkleroot"`
-	WindowStart    BlockHeight `json:"windowstart"`
-	WindowEnd      BlockHeight `json:"windowend"`
+	WindowStart    uint64      `json:"windowstart"`
+	WindowEnd      uint64      `json:"windowend"`
 
 	// money part
 	// original collateral
@@ -160,35 +153,35 @@ type StorageContract struct {
 	MissedProofOutputs []DxcoinCharge `json:"missedproofoutputs"`
 
 	//解锁条件
-	UnlockHash UnlockHash `json:"unlockhash"`
+	UnlockHash common.Hash `json:"unlockhash"`
 
 	RevisionNumber uint64 `json:"revisionnumber"`
 
-	Signatures []Signature
+	Signatures [][]byte
 }
 
 type StorageContractRevision struct {
-	ParentID          StorageContractID `json:"parentid"`
-	UnlockConditions  UnlockConditions  `json:"unlockconditions"`
-	NewRevisionNumber uint64            `json:"newrevisionnumber"`
+	ParentID          common.Hash      `json:"parentid"`
+	UnlockConditions  UnlockConditions `json:"unlockconditions"`
+	NewRevisionNumber uint64           `json:"newrevisionnumber"`
 
 	NewFileSize           uint64         `json:"newfilesize"`
 	NewFileMerkleRoot     common.Hash    `json:"newfilemerkleroot"`
-	NewWindowStart        BlockHeight    `json:"newwindowstart"`
-	NewWindowEnd          BlockHeight    `json:"newwindowend"`
+	NewWindowStart        uint64         `json:"newwindowstart"`
+	NewWindowEnd          uint64         `json:"newwindowend"`
 	NewValidProofOutputs  []DxcoinCharge `json:"newvalidproofoutputs"`
 	NewMissedProofOutputs []DxcoinCharge `json:"newmissedproofoutputs"`
-	NewUnlockHash         UnlockHash     `json:"newunlockhash"`
+	NewUnlockHash         common.Hash    `json:"newunlockhash"`
 
-	Signatures []Signature
+	Signatures [][]byte
 }
 
 type StorageProof struct {
-	ParentID StorageContractID `json:"parentid"`
-	Segment  [64]byte          `json:"segment"`
-	HashSet  []common.Hash     `json:"hashset"`
+	ParentID common.Hash   `json:"parentid"`
+	Segment  [64]byte      `json:"segment"`
+	HashSet  []common.Hash `json:"hashset"`
 
-	Signature Signature
+	Signature []byte
 }
 
 func (ha HostAnnouncement) RLPHash() common.Hash {
@@ -211,8 +204,8 @@ func (fc StorageContract) RLPHash() common.Hash {
 	})
 }
 
-func (fc StorageContract) ID() StorageContractID {
-	return StorageContractID(fc.RLPHash())
+func (fc StorageContract) ID() common.Hash {
+	return common.Hash(fc.RLPHash())
 }
 
 // 计算UnlockCondition的hash，主要是保证一致性，确保是双方签订的

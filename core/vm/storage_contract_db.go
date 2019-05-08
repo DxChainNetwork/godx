@@ -6,6 +6,7 @@ package vm
 
 import (
 	"bytes"
+	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/core/types"
@@ -31,10 +32,10 @@ func makeKey(prefix string, key interface{}) ([]byte, error) {
 	return result, nil
 }
 
-func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
+func SplitStorageContractID(key []byte) (uint64, common.Hash) {
 	prefixBytes := []byte(PrefixExpireStorageContract)
 	if !bytes.HasPrefix(key, prefixBytes) {
-		return 0, types.StorageContractID{}
+		return 0, common.Hash{}
 	}
 
 	item := key[len(prefixBytes):]
@@ -43,15 +44,15 @@ func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
 	height, err := strconv.ParseUint(string(heightBytes), 10, 64)
 	if err != nil {
 		log.Error("failed to parse uint", "height_str", string(heightBytes), "error", err)
-		return 0, types.StorageContractID{}
+		return 0, common.Hash{}
 	}
 
 	scIDBytes := item[(sepIndex + 1):]
-	var scID types.StorageContractID
+	var scID common.Hash
 	err = rlp.DecodeBytes(scIDBytes, &scID)
 	if err != nil {
 		log.Error("failed to decode rlp bytes", "error", err)
-		return 0, types.StorageContractID{}
+		return 0, common.Hash{}
 	}
 
 	return height, scID
@@ -104,7 +105,7 @@ func deleteWithPrefix(db ethdb.Database, key interface{}, prefix string) error {
 	return nil
 }
 
-func GetStorageContract(db ethdb.Database, storageContractID types.StorageContractID) (types.StorageContract, error) {
+func GetStorageContract(db ethdb.Database, storageContractID common.Hash) (types.StorageContract, error) {
 	valueBytes, err := getWithPrefix(db, storageContractID, PrefixStorageContract)
 	if err != nil {
 		return types.StorageContract{}, err
@@ -119,21 +120,21 @@ func GetStorageContract(db ethdb.Database, storageContractID types.StorageContra
 }
 
 // StorageContractID ==》StorageContract
-func StoreStorageContract(db ethdb.Database, storageContractID types.StorageContractID, sc types.StorageContract) error {
+func StoreStorageContract(db ethdb.Database, storageContractID common.Hash, sc types.StorageContract) error {
 	return storeWithPrefix(db, storageContractID, sc, PrefixStorageContract)
 }
 
-func DeleteStorageContract(db ethdb.Database, storageContractID types.StorageContractID) error {
+func DeleteStorageContract(db ethdb.Database, storageContractID common.Hash) error {
 	return deleteWithPrefix(db, storageContractID, PrefixStorageContract)
 }
 
 // StorageContractID ==》[]byte{}
-func StoreExpireStorageContract(db ethdb.Database, storageContractID types.StorageContractID, windowEnd types.BlockHeight) error {
+func StoreExpireStorageContract(db ethdb.Database, storageContractID common.Hash, windowEnd uint64) error {
 	windowStr := strconv.FormatUint(uint64(windowEnd), 10)
 	return storeWithPrefix(db, storageContractID, []byte{}, PrefixExpireStorageContract+windowStr+"-")
 }
 
-func DeleteExpireStorageContract(db ethdb.Database, storageContractID types.StorageContractID, height types.BlockHeight) error {
+func DeleteExpireStorageContract(db ethdb.Database, storageContractID common.Hash, height uint64) error {
 	heightStr := strconv.FormatUint(uint64(height), 10)
 	return deleteWithPrefix(db, storageContractID, PrefixExpireStorageContract+heightStr+"-")
 }

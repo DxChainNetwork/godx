@@ -14,7 +14,7 @@ import (
 )
 
 // sign storage contract data
-func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.PrivateKey) (types.Signature, error) {
+func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.PrivateKey) ([]byte, error) {
 
 	// rlp hash
 	hashData := originData.RLPHash()
@@ -29,7 +29,7 @@ func SignStorageContract(originData types.StorageContractRLPHash, prv *ecdsa.Pri
 }
 
 // recover pubkey from storage contract signature
-func RecoverPubkeyFromSignature(originHash common.Hash, signature types.Signature) (ecdsa.PublicKey, error) {
+func RecoverPubkeyFromSignature(originHash common.Hash, signature []byte) (ecdsa.PublicKey, error) {
 	pub, err := crypto.SigToPub(originHash.Bytes(), signature)
 	if err != nil {
 		return ecdsa.PublicKey{}, err
@@ -44,7 +44,7 @@ func VerifyStorageContractSignatures(pubkey, hash, signature []byte) bool {
 }
 
 // recover addr of storage client or host from signature
-func RecoverAddrFromSignature(originHash common.Hash, signature types.Signature) (common.Address, error) {
+func RecoverAddrFromSignature(originHash common.Hash, signature []byte) (common.Address, error) {
 	pubkeyBytes, err := crypto.Ecrecover(originHash[:], signature)
 	if err != nil {
 		return common.Address{}, err

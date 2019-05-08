@@ -510,7 +510,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasDecode, errDec
 	}
 
-	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, HostInfo, types.BlockHeight(0), []types.Signature{HostInfo.Signature})
+	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, HostInfo, uint64(0), [][]byte{HostInfo.Signature})
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check signature for host announce", "err", errCheck)
@@ -558,7 +558,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, evm, storageContract, types.BlockHeight(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, evm, storageContract, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check form contract", "err", errCheck)
@@ -624,7 +624,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// check file contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, storageContractReversion, types.BlockHeight(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, storageContractReversion, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check file contract reversion", "err", errCheck)
@@ -700,7 +700,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, evm, sp, types.BlockHeight(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, evm, sp, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		return nil, gasRemainCheck, errCheck
@@ -725,7 +725,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	if errDel != nil {
 		log.Error("failed to delete file contract for storage proof", "error", errDel)
 	}
-	errDelExp := DeleteExpireStorageContract(db, sp.ParentID, types.BlockHeight(currentHeight))
+	errDelExp := DeleteExpireStorageContract(db, sp.ParentID, uint64(currentHeight))
 	if errDelExp != nil {
 		log.Error("failed to delete expire file contract for storage proof", "error", errDelExp)
 	}

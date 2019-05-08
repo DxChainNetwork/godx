@@ -50,7 +50,7 @@ const (
 	SegmentSize = 64
 )
 
-func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight types.BlockHeight) error {
+func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64) error {
 
 	// check if this file contract exist
 	scID := sc.ID()
@@ -124,7 +124,7 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight types.B
 	return nil
 }
 
-func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, currentHeight types.BlockHeight) error {
+func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, currentHeight uint64) error {
 
 	if scr.UnlockConditions.Timelock > currentHeight {
 		return errTimelockNotSatisfied
@@ -210,13 +210,13 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 	return nil
 }
 
-func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeight types.BlockHeight, signatures []types.Signature) error {
+func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeight uint64, signatures [][]byte) error {
 	if len(signatures) == 0 {
 		return errors.New("no signatures for verification")
 	}
 
 	var (
-		singleSig, renterSig, hostSig          types.Signature
+		singleSig, renterSig, hostSig          []byte
 		singlePubkey, renterPubkey, hostPubkey ecdsa.PublicKey
 		err                                    error
 		uc                                     types.UnlockConditions
@@ -252,7 +252,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 			SignaturesRequired: 2,
 		}
 
-		originUnlockHash := types.UnlockHash{}
+		originUnlockHash := common.Hash{}
 		switch dataType := originalData.(type) {
 		case types.StorageContract:
 			originUnlockHash = dataType.UnlockHash
@@ -276,7 +276,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 	return nil
 }
 
-func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.BlockHeight) error {
+func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight uint64) error {
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
 	sc, err := GetStorageContract(db, sp.ParentID)
 	if err != nil {
@@ -336,7 +336,7 @@ func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex u
 	return VerifyProof(merkleRoot[:], proofSet, segmentIndex, leaves)
 }
 
-func storageProofSegment(db ethdb.Database, ParentID types.StorageContractID, currentHeight types.BlockHeight) (uint64, error) {
+func storageProofSegment(db ethdb.Database, ParentID common.Hash, currentHeight uint64) (uint64, error) {
 
 	// Check that the parent storage contract exists.
 	sc, err := GetStorageContract(db, ParentID)
