@@ -24,23 +24,22 @@ import (
 var (
 	errZeroCollateral                          = errors.New("the payout of form contract is less 0")
 	errZeroOutput                              = errors.New("the output of form contract is less 0")
-	errStorageContractValidOutputSumViolation  = errors.New("file contract has invalid valid proof output sums")
-	errStorageContractMissedOutputSumViolation = errors.New("file contract has invalid missed proof output sums")
-	errStorageContractOutputSumViolation       = errors.New("file contract has ")
+	errStorageContractValidOutputSumViolation  = errors.New("storage contract has invalid valid proof output sums")
+	errStorageContractMissedOutputSumViolation = errors.New("storage contract has invalid missed proof output sums")
+	errStorageContractOutputSumViolation       = errors.New("the missed proof ouput sum and valid proof output sum not equal")
 
-	errStorageContractWindowEndViolation   = errors.New("file contract window must end at least one block after it starts")
-	errStorageContractWindowStartViolation = errors.New("file contract window must start in the future")
+	errStorageContractWindowEndViolation   = errors.New("storage contract window must end at least one block after it starts")
+	errStorageContractWindowStartViolation = errors.New("storage contract window must start in the future")
 
 	errTimelockNotSatisfied  = errors.New("timelock has not been met")
-	errLateRevision          = errors.New("file contract revision submitted after deadline")
-	errLowRevisionNumber     = errors.New("transaction has a file contract with an outdated revision number")
-	errWrongUnlockConditions = errors.New("transaction contains incorrect unlock conditions")
-	errRevisionValidPayouts  = errors.New("file contract revision has altered valid payout")
-	errRevisionMissedPayouts = errors.New("file contract revision has altered missed payout")
-	errWrongUnlockCondition  = errors.New("the unlockhash of file contract not match unlockcondition")
+	errLateRevision          = errors.New("storage contract revision submitted after deadline")
+	errLowRevisionNumber     = errors.New("transaction has a storage contract with an outdated revision number")
+	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
+	errRevisionMissedPayouts = errors.New("storage contract revision has altered missed payout")
+	errWrongUnlockCondition  = errors.New("the unlockhash of storage contract not match unlockcondition")
 	errInvalidRenterSig      = errors.New("invalid renter signatures")
 	errInvalidHostSig        = errors.New("invalid host signatures")
-	errNoStorageContractType = errors.New("no this file contract type")
+	errNoStorageContractType = errors.New("no this storage contract type")
 
 	errInvalidStorageProof = errors.New("invalid storage proof")
 
@@ -51,48 +50,48 @@ const (
 	SegmentSize = 64
 )
 
-func CheckFormContract(evm *EVM, fc types.StorageContract, currentHeight types.BlockHeight) error {
+func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight types.BlockHeight) error {
 
 	// check if this file contract exist
-	fcID := fc.ID()
+	scID := sc.ID()
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	_, err := GetStorageContract(db, fcID)
+	_, err := GetStorageContract(db, scID)
 	if err == nil {
 		return errors.New("this file contract exist")
 	}
 
-	if fc.RenterCollateral.Value.Sign() <= 0 {
+	if sc.RenterCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
-	if fc.HostCollateral.Value.Sign() <= 0 {
+	if sc.HostCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
 
 	// Check that start and expiration are reasonable values.
-	if fc.WindowStart <= currentHeight {
+	if sc.WindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
-	if fc.WindowEnd <= fc.WindowStart {
+	if sc.WindowEnd <= sc.WindowStart {
 		return errStorageContractWindowEndViolation
 	}
 
 	// Check that the proof outputs sum to the payout
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
-	for _, output := range fc.ValidProofOutputs {
+	for _, output := range sc.ValidProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
 		}
 		validProofOutputSum = validProofOutputSum.Add(validProofOutputSum, output.Value)
 	}
-	for _, output := range fc.MissedProofOutputs {
+	for _, output := range sc.MissedProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
 		}
 		missedProofOutputSum = missedProofOutputSum.Add(missedProofOutputSum, output.Value)
 	}
 
-	payout := fc.RenterCollateral.Value.Add(fc.RenterCollateral.Value, fc.HostCollateral.Value)
+	payout := sc.RenterCollateral.Value.Add(sc.RenterCollateral.Value, sc.HostCollateral.Value)
 	if validProofOutputSum.Cmp(payout) != 0 {
 		return errStorageContractValidOutputSumViolation
 	}
@@ -101,10 +100,10 @@ func CheckFormContract(evm *EVM, fc types.StorageContract, currentHeight types.B
 	}
 
 	// check if balance is enough for collateral
-	renterAddr := fc.RenterCollateral.Address
-	renterCollateralAmount := fc.RenterCollateral.Value
-	hostAddr := fc.HostCollateral.Address
-	hostCollateralAmount := fc.HostCollateral.Value
+	renterAddr := sc.RenterCollateral.Address
+	renterCollateralAmount := sc.RenterCollateral.Value
+	hostAddr := sc.HostCollateral.Address
+	hostCollateralAmount := sc.HostCollateral.Value
 
 	renterBalance := evm.StateDB.GetBalance(renterAddr)
 	if renterBalance.Cmp(renterCollateralAmount) == -1 {
@@ -116,7 +115,7 @@ func CheckFormContract(evm *EVM, fc types.StorageContract, currentHeight types.B
 		return errors.New("host has not enough balance for file contract collateral")
 	}
 
-	err = CheckMultiSignatures(fc, currentHeight, fc.Signatures)
+	err = CheckMultiSignatures(sc, currentHeight, sc.Signatures)
 	if err != nil {
 		log.Error("failed to check signature for form contract", "err", err)
 		return err
@@ -125,17 +124,17 @@ func CheckFormContract(evm *EVM, fc types.StorageContract, currentHeight types.B
 	return nil
 }
 
-func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, currentHeight types.BlockHeight) error {
+func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, currentHeight types.BlockHeight) error {
 
-	if fcr.UnlockConditions.Timelock > currentHeight {
+	if scr.UnlockConditions.Timelock > currentHeight {
 		return errTimelockNotSatisfied
 	}
 
 	// Check that start and expiration are reasonable values.
-	if fcr.NewWindowStart <= currentHeight {
+	if scr.NewWindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
-	if fcr.NewWindowEnd <= fcr.NewWindowStart {
+	if scr.NewWindowEnd <= scr.NewWindowStart {
 		return errStorageContractWindowEndViolation
 	}
 
@@ -143,13 +142,13 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 	// value.
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
-	for _, output := range fcr.NewValidProofOutputs {
+	for _, output := range scr.NewValidProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
 		}
 		validProofOutputSum = validProofOutputSum.Add(validProofOutputSum, output.Value)
 	}
-	for _, output := range fcr.NewMissedProofOutputs {
+	for _, output := range scr.NewMissedProofOutputs {
 		if output.Value.Sign() <= 0 {
 			return errZeroOutput
 		}
@@ -159,32 +158,32 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 		return errStorageContractOutputSumViolation
 	}
 
-	if err := CheckMultiSignatures(fcr, 0, fcr.Signatures); err != nil {
+	if err := CheckMultiSignatures(scr, 0, scr.Signatures); err != nil {
 		return err
 	}
 
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	fc, err := GetStorageContract(db, fcr.ParentID)
+	sc, err := GetStorageContract(db, scr.ParentID)
 	if err != nil {
 		return err
 	}
 
-	// Check that the height is less than fc.WindowStart - revisions are
+	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
 	// opened.  This reduces complexity for unconfirmed transactions.
-	if currentHeight > fc.WindowStart {
+	if currentHeight > sc.WindowStart {
 		return errLateRevision
 	}
 
 	// Check that the revision number of the revision is greater than the
 	// revision number of the existing file contract.
-	if fc.RevisionNumber >= fcr.NewRevisionNumber {
+	if sc.RevisionNumber >= scr.NewRevisionNumber {
 		return errLowRevisionNumber
 	}
 
 	// Check that the unlock conditions match the unlock hash.
-	if fcr.UnlockConditions.UnlockHash() != common.Hash(fc.UnlockHash) {
-		return errWrongUnlockConditions
+	if scr.UnlockConditions.UnlockHash() != common.Hash(sc.UnlockHash) {
+		return errWrongUnlockCondition
 	}
 
 	// Check that the payout of the revision matches the payout of the
@@ -192,13 +191,13 @@ func CheckReversionContract(evm *EVM, fcr types.StorageContractRevision, current
 	validPayout := new(big.Int).SetInt64(0)
 	missedPayout := new(big.Int).SetInt64(0)
 	oldPayout := new(big.Int).SetInt64(0)
-	for _, output := range fcr.NewValidProofOutputs {
+	for _, output := range scr.NewValidProofOutputs {
 		validPayout = validPayout.Add(validPayout, output.Value)
 	}
-	for _, output := range fcr.NewMissedProofOutputs {
+	for _, output := range scr.NewMissedProofOutputs {
 		missedPayout = missedPayout.Add(missedPayout, output.Value)
 	}
-	for _, output := range fc.ValidProofOutputs {
+	for _, output := range sc.ValidProofOutputs {
 		oldPayout = oldPayout.Add(oldPayout, output.Value)
 	}
 	if validPayout.Cmp(oldPayout) != 0 {
@@ -279,16 +278,16 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 
 func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.BlockHeight) error {
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	fc, err := GetStorageContract(db, sp.ParentID)
+	sc, err := GetStorageContract(db, sp.ParentID)
 	if err != nil {
 		return err
 	}
 
-	if fc.WindowStart > currentHeight {
+	if sc.WindowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
 	}
 
-	if fc.WindowEnd < currentHeight {
+	if sc.WindowEnd < currentHeight {
 		return errors.New("too late to submit storage proof")
 	}
 
@@ -298,14 +297,14 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.Bloc
 		return err
 	}
 
-	leaves := CalculateLeaves(fc.FileSize)
+	leaves := CalculateLeaves(sc.FileSize)
 
 	segmentLen := uint64(SegmentSize)
 
 	// If this segment chosen is the final segment, it should only be as
 	// long as necessary to complete the filesize.
 	if segmentIndex == leaves-1 {
-		segmentLen = fc.FileSize % SegmentSize
+		segmentLen = sc.FileSize % SegmentSize
 	}
 
 	if segmentLen == 0 {
@@ -317,9 +316,9 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight types.Bloc
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		fc.FileMerkleRoot,
+		sc.FileMerkleRoot,
 	)
-	if !verified && fc.FileSize > 0 {
+	if !verified && sc.FileSize > 0 {
 		return errInvalidStorageProof
 	}
 
@@ -352,7 +351,8 @@ func storageProofSegment(db ethdb.Database, ParentID types.StorageContractID, cu
 	}
 
 	blockHash := rawdb.ReadCanonicalHash(db, uint64(triggerHeight))
-	seed := crypto.Keccak256Hash(blockHash[:], sc.ID()[:])
+	scID := sc.ID()
+	seed := crypto.Keccak256Hash(blockHash[:], scID[:])
 	numSegments := int64(CalculateLeaves(sc.FileSize))
 
 	// index = seedInt % numSegments，index in [0，numSegments]

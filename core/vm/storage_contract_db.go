@@ -19,11 +19,16 @@ const (
 	PrefixExpireStorageContract = "expirestoragecontract-"
 )
 
-// 构造合约存储键值对的 key
-func makeKey(prefix string, key []byte) []byte {
+// make key for key-value storage
+func makeKey(prefix string, key interface{}) ([]byte, error) {
+	keyBytes, err := rlp.EncodeToBytes(key)
+	if err != nil {
+		return nil, err
+	}
+
 	result := []byte(prefix)
-	result = append(result, key...)
-	return result
+	result = append(result, keyBytes...)
+	return result, nil
 }
 
 func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
@@ -33,14 +38,15 @@ func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
 	}
 
 	item := key[len(prefixBytes):]
-	heightBytes := item[:8]
+	sepIndex := bytes.Index(item, []byte("-"))
+	heightBytes := item[:sepIndex]
 	height, err := strconv.ParseUint(string(heightBytes), 10, 64)
 	if err != nil {
 		log.Error("failed to parse uint", "height_str", string(heightBytes), "error", err)
 		return 0, types.StorageContractID{}
 	}
 
-	scIDBytes := item[9:]
+	scIDBytes := item[(sepIndex + 1):]
 	var scID types.StorageContractID
 	err = rlp.DecodeBytes(scIDBytes, &scID)
 	if err != nil {
@@ -52,12 +58,10 @@ func SplitStorageContractID(key []byte) (uint64, types.StorageContractID) {
 }
 
 func getWithPrefix(db ethdb.Database, key interface{}, prefix string) ([]byte, error) {
-	keyBytes, err := rlp.EncodeToBytes(key)
+	keyByPrefix, err := makeKey(prefix, key)
 	if err != nil {
 		return nil, err
 	}
-
-	keyByPrefix := makeKey(prefix, keyBytes)
 
 	value, err := db.Get(keyByPrefix)
 	if err != nil {
@@ -68,12 +72,10 @@ func getWithPrefix(db ethdb.Database, key interface{}, prefix string) ([]byte, e
 }
 
 func storeWithPrefix(db ethdb.Database, key, value interface{}, prefix string) error {
-	keyBytes, err := rlp.EncodeToBytes(key)
+	keyByPrefix, err := makeKey(prefix, key)
 	if err != nil {
 		return err
 	}
-
-	keyByPrefix := makeKey(prefix, keyBytes)
 
 	valueBytes, err := rlp.EncodeToBytes(value)
 	if err != nil {
@@ -89,12 +91,10 @@ func storeWithPrefix(db ethdb.Database, key, value interface{}, prefix string) e
 }
 
 func deleteWithPrefix(db ethdb.Database, key interface{}, prefix string) error {
-	keyBytes, err := rlp.EncodeToBytes(key)
+	keyByPrefix, err := makeKey(prefix, key)
 	if err != nil {
 		return err
 	}
-
-	keyByPrefix := makeKey(prefix, keyBytes)
 
 	err = db.Delete(keyByPrefix)
 	if err != nil {
@@ -118,7 +118,7 @@ func GetStorageContract(db ethdb.Database, storageContractID types.StorageContra
 	return fc, nil
 }
 
-// 合约DB存储：StorageContractID ==》StorageContract
+// StorageContractID ==》StorageContract
 func StoreStorageContract(db ethdb.Database, storageContractID types.StorageContractID, sc types.StorageContract) error {
 	return storeWithPrefix(db, storageContractID, sc, PrefixStorageContract)
 }
@@ -127,7 +127,7 @@ func DeleteStorageContract(db ethdb.Database, storageContractID types.StorageCon
 	return deleteWithPrefix(db, storageContractID, PrefixStorageContract)
 }
 
-// 过期合约DB只是存储：StorageContractID ==》[]byte{}
+// StorageContractID ==》[]byte{}
 func StoreExpireStorageContract(db ethdb.Database, storageContractID types.StorageContractID, windowEnd types.BlockHeight) error {
 	windowStr := strconv.FormatUint(uint64(windowEnd), 10)
 	return storeWithPrefix(db, storageContractID, []byte{}, PrefixExpireStorageContract+windowStr+"-")
