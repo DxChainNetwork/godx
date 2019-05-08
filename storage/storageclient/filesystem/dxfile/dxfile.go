@@ -51,7 +51,7 @@ type (
 	// hostTable is the map from host address to specific host info
 	hostTable map[common.Address]bool
 
-	// segment is the data for a segment, which is composed of several sectors
+	// segment is the Data for a segment, which is composed of several sectors
 	segment struct {
 		sectors [][]*sector
 		index   uint64
@@ -59,7 +59,7 @@ type (
 		stuck   bool
 	}
 
-	// sector is the data for a single sector, which has data of merkle root and related host address
+	// sector is the Data for a single sector, which has Data of merkle root and related host address
 	sector struct {
 		merkleRoot  common.Hash
 		hostAddress common.Address
@@ -70,7 +70,7 @@ type (
 
 // New creates a new dxfile
 func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
-	currentTime := time.Now()
+	currentTime := uint64(time.Now().Unix())
 	minSectors, numSectors, extra := erasureCodeToParams(erasureCode)
 	var id fileID
 	_, err := rand.Read(id[:])
@@ -108,7 +108,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	}
 	df.segments = make([]*segment, md.numSegments())
 	for i := range df.segments {
-		df.segments[i].sectors = make([][]*sector, numSectors)
+		df.segments[i] = &segment{sectors: make([][]*sector, numSectors), index: uint64(i)}
 	}
-	return df, df.save()
+	return df, df.saveAll()
 }

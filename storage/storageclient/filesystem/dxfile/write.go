@@ -3,22 +3,44 @@ package dxfile
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/rlp"
-	"io"
 	"os"
 )
 
+// saveAll save all contents of a DxFile to the file.
 func (df *DxFile) saveAll() error {
+	var updates []dxfileUpdate
+	iu, hostTableSize, err := df.createHostTableUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, iu)
+	pagesHostTable := hostTableSize / PageSize
+	if hostTableSize % PageSize != 0{
+		pagesHostTable++
+	}
+	df.metadata.SegmentOffset = df.metadata.HostTableOffset + PageSize * pagesHostTable
+	segmentPersistSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 
+	for i := range df.segments {
+		offset := df.metadata.SegmentOffset + uint64(i) * segmentPersistSize
+		update, err := df.createSegmentUpdate(uint64(i), offset)
+		if err != nil {
+			return err
+		}
+		updates = append(updates, update)
+	}
+	iu, err = df.createMetadataUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, iu)
+	return df.applyUpdates(updates)
 }
 
 // saveHostTableUpdate save the host table as well as the metadata
 func (df *DxFile) saveHostTableUpdate() error {
 	var updates []dxfileUpdate
-	iu, err := df.createMetadataUpdate()
-	if err != nil {
-		return err
-	}
-	updates = append(updates, iu)
+
 	iu, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return err
@@ -33,38 +55,67 @@ func (df *DxFile) saveHostTableUpdate() error {
 		}
 		updates = append(updates, shiftUpdates...)
 	}
+	iu, err = df.createMetadataUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, iu)
 	return df.applyUpdates(updates)
 }
 
 // segmentShift shift the first segment in persist file to the end of the persist file.
 // Return the corresponding update and the underlying error.
-func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]*insertUpdate, error) {
+func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, error) {
 	f, err := os.OpenFile(df.filePath, os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open the file %v: %v", df.filePath, err)
 	}
 	defer f.Close()
 
-	var updates []*insertUpdate
-	for targetHostTableSize > df.metadata.SegmentOffset - df.metadata.HostTableOffset {
-		// read the segment at first segment
-		seg, err := df.readSegment(f, df.metadata.SegmentOffset)
-		if err == io.EOF {
-			break
-		}
+	shiftOffset, numSegToShift, segmentOffsetDiff := df.shiftOffset(targetHostTableSize)
+	fmt.Printf("shift: %d num: %d\n", shiftOffset, numSegToShift)
+	prevOffset := df.metadata.SegmentOffset
+	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
+
+	var updates []dxfileUpdate
+	for i := 0; uint64(i) < numSegToShift; i++ {
+		seg, err := df.readSegment(f, prevOffset)
 		if err != nil {
 			return nil, err
 		}
-		// increment the segment offset
-		df.metadata.SegmentOffset += segmentPersistNumPages(df.metadata.NumSectors) * PageSize
-		newOffset := PageSize * segmentPersistNumPages(df.metadata.NumSectors) + df.metadata.SegmentOffset
+		newOffset := prevOffset + shiftOffset
 		iu, err := df.createSegmentUpdate(seg.index, newOffset)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create segment update: %v", err)
 		}
 		updates = append(updates, iu)
+		prevOffset += segmentSize
 	}
+	df.metadata.SegmentOffset += segmentOffsetDiff
 	return updates, nil
+}
+
+// shiftOffset calculate for shift operation. return three offsets:
+// 1. The size of shift
+// 2. The number to segments to shift
+// 3. Difference between new and old segment offset
+func (df *DxFile) shiftOffset(targetHostTableSize uint64) (uint64, uint64, uint64) {
+	if targetHostTableSize < df.metadata.SegmentOffset - df.metadata.HostTableOffset {
+		return 0, 0, 0
+	}
+	numPagePerSeg := segmentPersistNumPages(df.metadata.NumSectors)
+	sizePerSeg := PageSize * numPagePerSeg
+	prevHostTableSize := df.metadata.SegmentOffset - df.metadata.HostTableOffset
+	numShiftSeg := (targetHostTableSize - prevHostTableSize) / sizePerSeg
+	if (targetHostTableSize - prevHostTableSize) % sizePerSeg != 0 {
+		numShiftSeg++
+	}
+	numSeg := uint64(len(df.segments))
+	var numSegToShift = numShiftSeg
+	if numSegToShift > uint64(numSeg) {
+		return numSegToShift * sizePerSeg, numSeg, numShiftSeg * sizePerSeg
+	}
+	return numSeg * sizePerSeg, numSegToShift, sizePerSeg
 }
 
 // saveMetadataUpdate create and save the metadata, return the list of update and underlying error
@@ -77,7 +128,7 @@ func (df *DxFile) saveMetadataUpdate() error{
 }
 
 // createMetadataUpdate create an insert update for metadata
-func (df *DxFile) createMetadataUpdate() (*insertUpdate, error) {
+func (df *DxFile) createMetadataUpdate() (dxfileUpdate, error) {
 	metaBytes, err := rlp.EncodeToBytes(df.metadata)
 	if err != nil {
 		return nil, err
@@ -91,12 +142,12 @@ func (df *DxFile) createMetadataUpdate() (*insertUpdate, error) {
 
 // createHostTableUpdate create a hostTable update. Return the insertUpdate, size of hostTable bytes
 // and the error
-func (df *DxFile) createHostTableUpdate() (*insertUpdate, uint64, error) {
+func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
 	hostTableBytes, err := rlp.EncodeToBytes(df.hostTable)
 	if err != nil {
 		return nil, 0, err
 	}
-	iu, err := df.createInsertUpdate(int64(df.metadata.HostTableOffset), hostTableBytes)
+	iu, err := df.createInsertUpdate(df.metadata.HostTableOffset, hostTableBytes)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -104,7 +155,7 @@ func (df *DxFile) createHostTableUpdate() (*insertUpdate, uint64, error) {
 }
 
 // createSegmentShiftUpdate create an segment update
-func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (*insertUpdate, error) {
+func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfileUpdate, error) {
 	if segmentIndex > uint64(len(df.segments)) {
 		return nil, fmt.Errorf("unexpected index: %d", segmentIndex)
 	}
@@ -112,6 +163,7 @@ func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (*inse
 	if segment.index != segmentIndex {
 		return nil, fmt.Errorf("data corrupted: segment index not align: %d != %d", segment.index, segmentIndex)
 	}
+	segment.index = segmentIndex
 	segment.offset = offset
 	segBytes, err := rlp.EncodeToBytes(segment)
 	if err != nil {
@@ -123,10 +175,5 @@ func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (*inse
 	if int64(offset) < 0 {
 		return nil, fmt.Errorf("uint64 overflow: %v", int64(offset))
 	}
-	return df.createInsertUpdate(int64(offset), segBytes)
-}
-
-// TODO: implement this
-func (df *DxFile) save() error {
-	return nil
+	return df.createInsertUpdate(offset, segBytes)
 }

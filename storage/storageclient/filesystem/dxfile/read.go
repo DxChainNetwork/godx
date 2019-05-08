@@ -79,7 +79,7 @@ func (df *DxFile) loadHostAddresses(f io.ReadSeeker) error {
 		return fmt.Errorf("offset not divisible by page size")
 	}
 	df.hostTable = make(hostTable)
-	err = rlp.Decode(f, df.hostTable)
+	err = rlp.Decode(f, &df.hostTable)
 	if err != nil {
 		return err
 	}
@@ -94,13 +94,14 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	offset := uint64(df.metadata.SegmentOffset)
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 	df.segments = make([]*segment, df.metadata.numSegments())
-	for {
+	for i := 0 ; uint64(i) < df.metadata.numSegments(); i++{
+		fmt.Println(offset)
 		seg, err := df.readSegment(f, offset)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to load segment: %v", err)
+			return fmt.Errorf("failed to load segment at %d: %v", offset, err)
 		}
 		seg.offset = offset
 		if df.segments[seg.index] != nil {

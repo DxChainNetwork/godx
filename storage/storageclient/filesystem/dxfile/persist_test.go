@@ -7,9 +7,14 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/twofishgcm"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestSegmentPersistNumPages(t *testing.T) {
@@ -26,7 +31,7 @@ func TestSegmentPersistNumPages(t *testing.T) {
 		seg := randomSegment(test.numSectors)
 		segBytes, _ := rlp.EncodeToBytes(seg)
 		if PageSize*int(numPages) < len(segBytes) {
-			t.Errorf("Test %d: pages not enough to hold data: %d * %d < %d", i, PageSize, numPages, len(segBytes))
+			t.Errorf("Test %d: pages not enough to hold Data: %d * %d < %d", i, PageSize, numPages, len(segBytes))
 		}
 	}
 }
@@ -73,6 +78,48 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 	}
 }
 
+func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
+	meta := Metadata {
+		HostTableOffset: PageSize,
+		SegmentOffset: 2*PageSize,
+		FileSize: randomUint64(),
+		SectorSize: randomUint64(),
+		PagesPerSegment: randomUint64(),
+		LocalPath: filepath.Join(testDir, t.Name()),
+		DxPath: t.Name(),
+		CipherKeyCode: crypto.GCMCipherCode,
+		CipherKey: randomBytes(twofishgcm.GCMCipherKeyLength),
+		TimeModify: uint64(time.Now().Unix()),
+		TimeUpdate: uint64(time.Now().Unix()),
+		TimeAccess: uint64(time.Now().Unix()),
+		TimeCreate: uint64(time.Now().Unix()),
+		Health: 100,
+		StuckHealth: 100,
+		LastHealthCheck: uint64(time.Now().Unix()),
+		NumStuckChunks: 32,
+		RecentRepairTime: uint64(time.Now().Unix()),
+		LastRedundancy: 100,
+		FileMode: 0777,
+		ErasureCodeType: erasurecode.ECTypeShard,
+		MinSectors: 10,
+		NumSectors: 30,
+		ECExtra: []byte{},
+		Version: "1.0.0",
+	}
+	b, err := rlp.EncodeToBytes(meta)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	var md Metadata
+	err = rlp.DecodeBytes(b, &md)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if !reflect.DeepEqual(meta, md) {
+		t.Errorf("not Equal\n\texpect %+v\n\tgot %+v", meta, md)
+	}
+}
+
 func randomHostTable(numHosts int) hostTable {
 	ht := make(hostTable)
 	for i := 0; i != numHosts; i++ {
@@ -113,4 +160,10 @@ func randomUint64() uint64 {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return binary.LittleEndian.Uint64(b)
+}
+
+func randomBytes(num int) []byte{
+	b := make([]byte, num)
+	rand.Read(b)
+	return b
 }

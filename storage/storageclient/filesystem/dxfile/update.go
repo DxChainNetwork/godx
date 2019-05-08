@@ -18,8 +18,8 @@ const (
 	opInsertFile = "insert_file" // name of the operation to create or update a dxfile
 )
 
-// TODO: Refactor the apply update to write page updates. Each page has next offset
-// 		 Each read will stop at next offset == -1. Call it paged file.
+// TODO: Refactor the apply update to write page updates. Each page has next Offset
+// 		 Each read will stop at next Offset == -1. Call it paged file.
 
 // dxfileUpdate defines the update interface for dxfile update.
 // Two types of update is supported: insertUpdate and deleteUpdate
@@ -29,17 +29,17 @@ type dxfileUpdate interface {
 	fileName() string                                // filePath returns the filePath associated with the update
 }
 
-// insertUpdate defines an insert dxfile instruction, including filePath, offset, and data to write
+// insertUpdate defines an insert dxfile instruction, including filePath, Offset, and Data to write
 type (
 	insertUpdate struct {
-		filename string
-		offset   int64
-		data     []byte
+		Filename string
+		Offset   uint64
+		Data     []byte
 	}
 
 	// deleteUpdate defines a delete dxfile instruction, just the filePath to be deleted
 	deleteUpdate struct {
-		filename string
+		Filename string
 	}
 )
 
@@ -55,25 +55,25 @@ func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 	}, err
 }
 
-// apply will open or create the file defined by iu.filePath, and write iu.data at iu.offset
+// apply will open or create the file defined by iu.filePath, and write iu.Data at iu.Offset
 func (iu *insertUpdate) apply() error {
 	// open the file
-	f, err := os.OpenFile(iu.filename, os.O_RDWR|os.O_CREATE, 0600)
+	f, err := os.OpenFile(iu.Filename, os.O_RDWR|os.O_CREATE, 0600)
 	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("failed to apply insertUpdate: %v", err)
 	}
-	// write data
-	if n, err := f.WriteAt(iu.data, iu.offset); err != nil {
-		return fmt.Errorf("failed to write insertUpdate data: %v", err)
-	} else if n < len(iu.data) {
-		return fmt.Errorf("failed to write full data of an insertUpdate: %v", err)
+	// write Data
+	if n, err := f.WriteAt(iu.Data, int64(iu.Offset)); err != nil {
+		return fmt.Errorf("failed to write insertUpdate Data: %v", err)
+	} else if n < len(iu.Data) {
+		return fmt.Errorf("failed to write full Data of an insertUpdate: %v", err)
 	}
 	return f.Sync()
 }
 
 func (iu *insertUpdate) fileName() string {
-	return iu.filename
+	return iu.Filename
 }
 
 // encodeToWalOp will encode a deleteUpdate to writeaheadlog.Operation
@@ -90,7 +90,7 @@ func (du *deleteUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 
 // apply remove the file specified by deleteUpdate.filePath
 func (du *deleteUpdate) apply() error {
-	err := os.Remove(du.filename)
+	err := os.Remove(du.Filename)
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -98,7 +98,7 @@ func (du *deleteUpdate) apply() error {
 }
 
 func (du *deleteUpdate) fileName() string {
-	return du.filename
+	return du.Filename
 }
 
 // decodeFromWalOp will decode the wal.Operation to a specified type of dxfileUpdate based on the op.Name field
@@ -113,38 +113,41 @@ func decodeFromWalOp(op writeaheadlog.Operation) (dxfileUpdate, error) {
 	}
 }
 
-func decodeOpToDeleteUpdate(op writeaheadlog.Operation) (du *deleteUpdate, err error) {
-	err = rlp.DecodeBytes(op.Data, du)
+func decodeOpToDeleteUpdate(op writeaheadlog.Operation) ( *deleteUpdate, error) {
+	var du deleteUpdate
+	err := rlp.DecodeBytes(op.Data, &du)
 	if err != nil {
 		return nil, err
 	}
-	return
+	return &du, nil
 }
 
 // decodeOpToInsertUpdate decode the op to insert update
-func decodeOpToInsertUpdate(op writeaheadlog.Operation) (iu *insertUpdate, err error) {
-	err = rlp.DecodeBytes(op.Data, iu)
+func decodeOpToInsertUpdate(op writeaheadlog.Operation) (*insertUpdate, error) {
+	var iu insertUpdate
+	err := rlp.DecodeBytes(op.Data, &iu)
 	if err != nil {
 		return nil, err
 	}
-	return
+	return &iu, nil
 }
 
-func (df *DxFile) createInsertUpdate(offset int64, data []byte) (*insertUpdate, error) {
-	// check validity of the offset variable
+func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*insertUpdate, error) {
+	// check validity of the Offset variable
 	if offset < 0 {
-		return nil, fmt.Errorf("file offset cannot be negative: %d", offset)
+		return nil, fmt.Errorf("file Offset cannot be negative: %d", offset)
 	}
+	fmt.Printf("created insert at %d with length %d\n", offset, len(data))
 	return &insertUpdate{
-		filename: df.filePath,
-		offset:   offset,
-		data:     data,
+		Filename: df.filePath,
+		Offset:   offset,
+		Data:     data,
 	}, nil
 }
 
 func (df *DxFile) createDeleteUpdate() (*deleteUpdate, error) {
 	return &deleteUpdate{
-		filename: df.filePath,
+		Filename: df.filePath,
 	}, nil
 }
 
@@ -185,7 +188,7 @@ func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 
 // filterUpdates filter the updates associated with the DxFile, and also filter all updates before a delete update
 func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
-	filtered := make([]dxfileUpdate, len(updates))
+	filtered := make([]dxfileUpdate, 0, len(updates))
 	for _, update := range updates {
 		if update.fileName() == df.filePath {
 			if _, isDeleteUpdate := update.(*deleteUpdate); isDeleteUpdate {
@@ -202,13 +205,13 @@ func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error) {
 	var fullErr error
 	ops := make([]writeaheadlog.Operation, len(updates))
-	for _, update := range updates {
+	for i, update := range updates {
 		op, err := update.encodeToWalOp()
 		if err != nil {
 			fullErr = common.ErrCompose(fullErr, err)
 			continue
 		}
-		ops = append(ops, op)
+		ops[i] = op
 	}
 	return ops, fullErr
 }

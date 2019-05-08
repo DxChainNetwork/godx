@@ -34,25 +34,25 @@ type (
 		CipherKey     []byte // Key used to encrypt pieces
 
 		// Time fields. most of unix timestamp
-		TimeModify time.Time // time of last content modification
-		TimeUpdate time.Time // time of last Metadata update
-		TimeAccess time.Time // time of last access
-		TimeCreate time.Time // time of file creation
+		TimeModify uint64 // time of last content modification
+		TimeUpdate uint64 // time of last Metadata update
+		TimeAccess uint64 // time of last access
+		TimeCreate uint64 // time of file creation
 
 		// Repair loop fields
-		Health           float64   // Worst health of the file's unstuck chunk
-		StuckHealth      float64   // Worst health of the file's Stuck chunk
-		LastHealthCheck  time.Time // Time of last health check happenning
+		Health           uint32   // Worst health of the file's unstuck chunk
+		StuckHealth      uint32   // Worst health of the file's Stuck chunk
+		LastHealthCheck  uint64 // Time of last health check happenning
 		NumStuckChunks   uint32    // Number of Stuck chunks
-		RecentRepairTime time.Time // Timestamp of last chunk repair
-		LastRedundancy   float64   // File redundancy from last check
+		RecentRepairTime uint64 // Timestamp of last chunk repair
+		LastRedundancy   uint32   // File redundancy from last check
 
 		// File related
 		FileMode os.FileMode // unix file mode
 
 		// Erasure code field
 		ErasureCodeType uint8  // the code for the specific erasure code
-		MinSectors      uint32 // params for erasure coding. The number of slice raw data split into.
+		MinSectors      uint32 // params for erasure coding. The number of slice raw Data split into.
 		NumSectors      uint32 // params for erasure coding. The number of total Sectors
 		ECExtra         []byte // extra parameters for erasure code
 
@@ -90,7 +90,7 @@ func (md Metadata) validate() error {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
 	}
 	if md.SegmentOffset % PageSize != 0 {
-		return fmt.Errorf("segment offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
 	}
 	return nil
 }
@@ -145,7 +145,7 @@ func (md Metadata) segmentSize() uint64 {
 // numSegments is the number of segments of a dxfile based on metadata info
 func (md Metadata) numSegments() uint64 {
 	num := md.FileSize / md.segmentSize()
-	if md.FileSize/md.segmentSize() != 0 || num == 0 {
+	if md.FileSize%md.segmentSize() != 0 || num == 0 {
 		num++
 	}
 	return num

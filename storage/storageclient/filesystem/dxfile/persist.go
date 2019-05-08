@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	// PageSize is the page size of persist data
+	// PageSize is the page size of persist Data
 	PageSize = 4096
 
 	// sectorPersistSize is the size of rlp encoded string of a sector
 	sectorPersistSize = 56
 
-	// Overhead for persistSegment persist data. The value is larger than data actually used
+	// Overhead for persistSegment persist Data. The value is larger than Data actually used
 	segmentPersistOverhead = 16
 
 	// Duplication rate is the expected duplication of the size of the sectors.
@@ -26,7 +26,7 @@ type (
 	// persistHostTable is unmarshaled form of hostTable. Instead of a map, it is marshaled as slice
 	persistHostTable []*persistHostAddress
 
-	// persistHostAddress is the persist data structure for rlp encode and decode
+	// persistHostAddress is the persist Data structure for rlp encode and decode
 	persistHostAddress struct {
 		Address common.Address
 		Used    bool
