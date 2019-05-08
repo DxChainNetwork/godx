@@ -20,6 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"runtime"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
@@ -47,11 +53,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
-	"math/big"
-	"runtime"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 type LesServer interface {
@@ -63,7 +64,7 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	storageHost    *storagehost.StorageHost
+	storageHost *storagehost.StorageHost
 
 	config      *Config
 	chainConfig *params.ChainConfig
@@ -92,14 +93,17 @@ type Ethereum struct {
 	gasPrice  *big.Int
 	etherbase common.Address
 
-	apisOnce      sync.Once
+	apisOnce       sync.Once
 	registeredAPIs []rpc.API
-	storageClient *storageclient.StorageClient
+	storageClient  *storageclient.StorageClient
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	// maintenance
+	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -212,6 +216,9 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		//  make sure what the expected handling case of these failure
 		return nil, err
 	}
+
+	// new maintenance system
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend)
 
 	return eth, nil
 }
@@ -340,7 +347,7 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 				Public:    false,
-			},{
+			}, {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
@@ -578,6 +585,9 @@ func (s *Ethereum) Stop() error {
 	s.chainDb.Close()
 	s.storageHost.Close()
 	close(s.shutdownChan)
+
+	// stop maintenance
+	s.maintenance.Stop()
 	return nil
 }
 
@@ -585,7 +595,7 @@ func (s *Ethereum) Stop() error {
 func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
 	// within the 30 seconds, if the peer is still not added to the peer set
 	// return error
-	timeout := time.After(30*time.Second)
+	timeout := time.After(30 * time.Second)
 	var p *peer
 
 	for {
@@ -596,7 +606,7 @@ func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtC
 
 		// after thirty seconds,
 		select {
-		case <- timeout:
+		case <-timeout:
 			return errors.New("peer cannot be found")
 		default:
 		}

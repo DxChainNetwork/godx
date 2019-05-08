@@ -32,6 +32,23 @@ import (
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
+
+const (
+	HostAnnounceTransaction   = "HostAnnounce"
+	FormContractTransaction   = "FormContract"
+	CommitRevisionTransaction = "CommitRevision"
+	StorageProofTransaction   = "StorageProof"
+	ContractRenewTransaction  = "ContractRenew"
+)
+
+var PrecompiledEVMFileContracts = map[common.Address]string{
+	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
+	common.BytesToAddress([]byte{10}): FormContractTransaction,
+	common.BytesToAddress([]byte{11}): CommitRevisionTransaction,
+	common.BytesToAddress([]byte{12}): StorageProofTransaction,
+	common.BytesToAddress([]byte{13}): ContractRenewTransaction,
+}
+
 type PrecompiledContract interface {
 	RequiredGas(input []byte) uint64  // RequiredPrice calculates the contract gas use
 	Run(input []byte) ([]byte, error) // Run runs the precompiled contract

@@ -149,6 +149,10 @@ func (b *EthAPIBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) e
 	return b.eth.BlockChain().SubscribeChainSideEvent(ch)
 }
 
+func (b *EthAPIBackend) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeChainChangeEvent(ch)
+}
+
 func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return b.eth.BlockChain().SubscribeLogsEvent(ch)
 }
@@ -222,4 +226,9 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+// subscribe canonical chain head event for file contract maintenance
+func (b *EthAPIBackend) SubscribeCanonicalChainEvent(ch chan<- core.CanonicalChainHeadEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeCanonicalChainEvent(ch)
 }

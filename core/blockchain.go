@@ -43,7 +43,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -99,14 +99,16 @@ type BlockChain struct {
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                     *HeaderChain
+	rmLogsFeed             event.Feed
+	chainFeed              event.Feed
+	chainSideFeed          event.Feed
+	chainHeadFeed          event.Feed
+	chainChangeFeed        event.Feed
+	canonicalChainHeadFeed event.Feed // canonical chain head feed for file contract maintenance
+	logsFeed               event.Feed
+	scope                  event.SubscriptionScope
+	genesisBlock           *types.Block
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -1022,12 +1024,20 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 		}
 	}
 	if reorg {
+		var chainChangeEvent *ChainChangeEvent
+
 		// Reorganise the chain if the parent is not the head block
 		if block.ParentHash() != currentBlock.Hash() {
-			if err := bc.reorg(currentBlock, block); err != nil {
+			chainChangeEvent, err = bc.reorg(currentBlock, block)
+			if err != nil {
 				return NonStatTy, err
 			}
+		} else {
+			chainChangeEvent = &ChainChangeEvent{AppliedBlockHashes: []common.Hash{block.Hash()}}
 		}
+
+		bc.chainChangeFeed.Send(*chainChangeEvent)
+
 		// Write the positional metadata for transaction/receipt lookups and preimages
 		rawdb.WriteTxLookupEntries(batch, block)
 		rawdb.WritePreimages(batch, state.Preimages())
@@ -1043,6 +1053,10 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
+
+		// send canonical chain head event for file contract maintennance
+		canEv := CanonicalChainHeadEvent{block}
+		bc.canonicalChainHeadFeed.Send(canEv)
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
@@ -1388,13 +1402,18 @@ func (bc *BlockChain) insertSidechain(it *insertIterator) (int, []interface{}, [
 // reorgs takes two blocks, an old chain and a new chain and will reconstruct the blocks and inserts them
 // to be part of the new canonical chain and accumulates potential missing transactions and post an
 // event about them
-func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
+func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) (*ChainChangeEvent, error) {
 	var (
 		newChain    types.Blocks
 		oldChain    types.Blocks
 		commonBlock *types.Block
 		deletedTxs  types.Transactions
 		deletedLogs []*types.Log
+
+		// storage contract revert block hashes
+		revertedBlockHashes []common.Hash
+		appliedBlockHashes  []common.Hash
+
 		// collectLogs collects the logs that were generated during the
 		// processing of the block that corresponds with the given hash.
 		// These logs are later announced as deleted.
@@ -1420,6 +1439,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// reduce old chain
 		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
 			oldChain = append(oldChain, oldBlock)
+			revertedBlockHashes = append([]common.Hash{oldBlock.Hash()}, revertedBlockHashes...)
 			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 
 			collectLogs(oldBlock.Hash())
@@ -1428,13 +1448,14 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		// reduce new chain and append new chain blocks for inserting later on
 		for ; newBlock != nil && newBlock.NumberU64() != oldBlock.NumberU64(); newBlock = bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1) {
 			newChain = append(newChain, newBlock)
+			appliedBlockHashes = append([]common.Hash{newBlock.Hash()}, appliedBlockHashes...)
 		}
 	}
 	if oldBlock == nil {
-		return fmt.Errorf("Invalid old chain")
+		return nil, fmt.Errorf("Invalid old chain")
 	}
 	if newBlock == nil {
-		return fmt.Errorf("Invalid new chain")
+		return nil, fmt.Errorf("Invalid new chain")
 	}
 
 	for {
@@ -1444,16 +1465,20 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}
 
 		oldChain = append(oldChain, oldBlock)
+		revertedBlockHashes = append([]common.Hash{oldBlock.Hash()}, revertedBlockHashes...)
+
 		newChain = append(newChain, newBlock)
+		appliedBlockHashes = append([]common.Hash{newBlock.Hash()}, appliedBlockHashes...)
+
 		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
 		collectLogs(oldBlock.Hash())
 
 		oldBlock, newBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1), bc.GetBlock(newBlock.ParentHash(), newBlock.NumberU64()-1)
 		if oldBlock == nil {
-			return fmt.Errorf("Invalid old chain")
+			return nil, fmt.Errorf("Invalid old chain")
 		}
 		if newBlock == nil {
-			return fmt.Errorf("Invalid new chain")
+			return nil, fmt.Errorf("Invalid new chain")
 		}
 	}
 	// Ensure the user sees large reorgs
@@ -1497,7 +1522,12 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		}()
 	}
 
-	return nil
+	chainChangeEvent := &ChainChangeEvent{
+		RevertedBlockHashes: revertedBlockHashes,
+		AppliedBlockHashes:  appliedBlockHashes,
+	}
+
+	return chainChangeEvent, nil
 }
 
 // PostChainEvents iterates over the events generated by a chain insertion and
@@ -1716,4 +1746,13 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (bc *BlockChain) SubscribeCanonicalChainEvent(ch chan<- CanonicalChainHeadEvent) event.Subscription {
+	return bc.scope.Track(bc.canonicalChainHeadFeed.Subscribe(ch))
+}
+
+func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) event.Subscription {
+	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
 }
