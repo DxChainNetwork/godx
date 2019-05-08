@@ -19,6 +19,15 @@ import (
 )
 
 const (
+	// resubmissionTimeout defines the number of blocks that a host will wait
+	// before attempting to resubmit a transaction to the blockchain.
+	// Typically, this transaction will contain either a file contract, a file
+	// contract revision, or a storage proof.
+	revisionSubmissionBuffer = types.BlockHeight(144)
+	resubmissionTimeout      = 3
+)
+
+const (
 	obligationUnresolved storageObligationStatus = iota // Indicatees that an unitialized value was used. Unresolved
 	// 表示使用了未初始化的值。
 	obligationRejected // Indicates that the obligation never got started, no revenue gained or lost.
@@ -213,7 +222,7 @@ func deleteStorageObligation(db ethdb.Database, sc types.StorageContractID) erro
 }
 
 // expiration returns the height at which the storage obligation expires.
-func (so StorageObligation) expiration(db ethdb.Database) (number types.BlockHeight) {
+func (so StorageObligation) expiration() (number types.BlockHeight) {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewWindowStart
 	}
@@ -222,7 +231,7 @@ func (so StorageObligation) expiration(db ethdb.Database) (number types.BlockHei
 
 // fileSize returns the size of the data protected by the obligation.
 //返回受义务保护的数据大小
-func (so StorageObligation) fileSize(db ethdb.Database) uint64 {
+func (so StorageObligation) fileSize() uint64 {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewFileSize
 	}
@@ -334,19 +343,77 @@ func (h *StorageHost) queueActionItem(height types.BlockHeight, id types.Storage
 // 由于此操作可以返回错误，因此在此函数指示成功之前，不应将事务提交到区块链。
 // 存储义务中存在的所有扇区都应该已存在于磁盘上，
 // 这意味着在创建新的空文件合同或续订现有文件合同时，应独占调用addStorageObligation。
-func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
+func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageObligation) error {
 	err := func() error {
 		h.lock.Lock()
 		defer h.lock.Unlock()
 		if _, ok := h.lockedStorageObligations[so.id()]; ok {
-			log.Info("nil")
+			log.Info("addStorageObligation called with an obligation that is not locked")
 		}
+
+		// Sanity check - There needs to be enough time left on the file contract
+		// for the host to safely submit the file contract revision.
+		// 完整性检查 - 文件合同需要有足够的时间让主机安全地提交文件合同修订版。
+		if h.blockHeight+revisionSubmissionBuffer >= so.expiration() {
+			return errNoBuffer
+		}
+
+		// Sanity check - the resubmission timeout needs to be smaller than storage
+		// proof window.
+		// 完整性检查 - 重新提交超时需要小于存储证明窗口。
+		if so.expiration()+resubmissionTimeout >= so.proofDeadline() {
+			//主机配置错误 - 存储证明窗口需要足够长，以便在需要时重新提交
+			return errors.New("fill me in")
+		}
+
+		errDB := func() error {
+
+			if len(so.SectorRoots) != 0 {
+
+				//TODO	If the storage obligation already has sectors, it means that the
+				//	file contract is being renewed, and that the sector should be
+				// re-added with a new expiration height. If there is an error at any
+				// point, all of the sectors should be removed.
+				// 如果存储义务已经存在扇区，则表示正在续订文件合同，
+				// 并且应该使用新的到期高度重新添加该扇区。 如果在任何时候出现错误，则应删除所有扇区。
+			}
+
+			errPut := vm.StoreStorageObligation(db, so.StorageContractid, so)
+			if errPut != nil {
+				return errPut
+			}
+			return nil
+
+		}()
+
+		if errDB != nil {
+			return errDB
+		}
+
+		// Update the host financial metrics with regards to this storage
+		// obligation.	更新有关此存储义务的主机财务指标。
+		h.financialMetrics.ContractCount++
+		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+		h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
+
 		return nil
 	}()
 
 	if err != nil {
-
+		return err
 	}
+
+	//TODO Check that the transaction is fully valid and submit it to the
+	// transaction pool.
+	// 检查事务是否完全有效并将其提交到事务池。
+
+	//TODO Queue the action items.
+	// 排队执行项目。
 
 	return nil
 }
@@ -363,8 +430,126 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 // 扇区修改仅用于更新扇区数据库，它们不会用于修改存储义务（最重要的是，这意味着需要通过调用函数更新sectorRoots）。
 // 虚拟扇区将被删除它们列出的次数，为了删除同一虚拟扇区的多个实例，
 // 虚拟扇区将需要多次出现在“sectorRemoved”中。 与'sectorGained'相同。
-func (h *StorageHost) modifyStorageObligation(so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+	if _, ok := h.lockedStorageObligations[so.id()]; ok {
+		log.Info("modifyStorageObligation called with an obligation that is not locked")
+	}
+
+	// Sanity check - there needs to be enough time to submit the file contract
+	// revision to the blockchain.
+	// 完整性检查 - 需要有足够的时间将文件合同修订提交到区块链。
+	if so.expiration()-revisionSubmissionBuffer <= h.blockHeight {
+		return errNoBuffer
+	}
+
+	// Sanity check - sectorsGained and gainedSectorData need to have the same length.
+	// 完整性检查 -  sectorGained和obtainSectorData需要具有相同的长度。
+	if len(sectorsGained) != len(gainedSectorData) {
+		//用垃圾扇区数据修改修订版
+		return errInsaneStorageObligationRevision
+	}
+	// Sanity check - all of the sector data should be modules.SectorSize
+	// 所有扇区数据都应该是modules.SectorSize
+	for _, data := range gainedSectorData {
+		if uint64(len(data)) != uint64(1<<22) { //Sector Size	4 MiB
+			return errInsaneStorageObligationRevision
+		}
+	}
+
+	// TODO Note, for safe error handling, the operation order should be: add
+	// sectors, update database, remove sectors. If the adding or update fails,
+	// the added sectors should be removed and the storage obligation shoud be
+	// considered invalid. If the removing fails, this is okay, it's ignored
+	// and left to consistency checks and user actions to fix (will reduce host
+	// capacity, but will not inhibit the host's ability to submit storage
+	// proofs)
+	// 注意，对于安全错误处理，操作顺序应该是：添加扇区，更新数据库，删除扇区。
+	// 如果添加或更新失败，则应删除添加的扇区，并将存储义务视为无效。
+	// 如果删除失败，这是可以的，它被忽略并留给一致性检查和用户操作来修复
+	// （将减少主机容量，但不会抑制主机提交存储证明的能力）
+
+	//var i int
+	//var err error
+	//for i = range sectorsGained {
+	//	//err = h.AddSector(sectorsGained[i], gainedSectorData[i])
+	//	if err != nil {
+	//		break
+	//	}
+	//}
+	//if err != nil {
+	//	// Because there was an error, all of the sectors that got added need
+	//	// to be reverted.
+	//	// 因为存在错误，所有需要添加的扇区都需要还原。
+	//	for j := 0; j < i; j++ {
+	//		// Error is not checked because there's nothing useful that can be
+	//		// done about an error.
+	//		// 未检查错误，因为没有任何有用的错误信息。
+	//		//_ = h.RemoveSector(sectorsGained[j])
+	//	}
+	//	return err
+	//}
+
+	var oldso StorageObligation
+	var errOld error
+	errDBso := func() error {
+
+		oldso, errOld = getStorageObligation(db, so.id())
+		if errOld != nil {
+			return errOld
+		}
+
+		errOld = putStorageObligation(db, so)
+		if errOld != nil {
+			return errOld
+		}
+		return nil
+	}()
+
+	if errDBso != nil {
+		//TODO
+		// Because there was an error, all of the sectors that got added need
+		// to be reverted.
+		// 因为存在错误，所有添加的扇区都需要恢复。
+		//for i := range sectorsGained {
+		//	// Error is not checked because there's nothing useful that can be
+		//	// done about an error.	未检查错误，因为没有任何关于错误的有用信息
+		//	//_ = h.RemoveSector(sectorsGained[i])
+		//}
+		return errDBso
+	}
+
+	// TODO Call removeSector for all of the sectors that have been removed.
+	// 所有扇区都应该被删除
+	//for k := range sectorsRemoved {
+	//	// Error is not checkeed because there's nothing useful that can be
+	//	// done about an error. Failing to remove a sector is not a terrible
+	//	// place to be, especially if the host can run consistency checks.
+	//	// 错误并没有因为对错误没有任何帮助。 未能删除扇区并不是一个糟糕的地方，特别是如果主机可以运行一致性检查。
+	//	_ = h.RemoveSector(sectorsRemoved[k])
+	//}
+
+	// Update the financial information for the storage obligation - apply the
+	// new values.	更新存储义务的财务信息 - 应用新值。
+	h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
+	h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+	h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
+
+	// Update the financial information for the storage obligation - remove the
+	// old values.	更新存储义务的财务信息 - 删除旧值。
+	h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, oldso.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, oldso.LockedCollateral)
+	h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, oldso.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, oldso.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, oldso.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, oldso.RiskedCollateral)
+	h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, oldso.TransactionFeesAdded)
+
 	return nil
+
 }
 
 // PruneStaleStorageObligations will delete storage obligations from the host
