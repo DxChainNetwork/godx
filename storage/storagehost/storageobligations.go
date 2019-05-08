@@ -23,7 +23,7 @@ const (
 	// before attempting to resubmit a transaction to the blockchain.
 	// Typically, this transaction will contain either a file contract, a file
 	// contract revision, or a storage proof.
-	revisionSubmissionBuffer = types.BlockHeight(144)
+	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
 )
 
@@ -137,7 +137,7 @@ type (
 		// 可以通过使用merkletree.CachedTree以低成本方式进行存储证明和对数据的修改。
 		// 可以附加，修改或删除扇区，主机可以重新计算整个文件的Merkle根，而无需太多的计算或I / O开销。
 		SectorRoots       common.Hash
-		StorageContractid types.StorageContractID
+		StorageContractid common.Hash
 
 		// Variables about the file contract that enforces the storage obligation.
 		// The origin an revision transaction are stored as a set, where the set
@@ -160,7 +160,7 @@ type (
 		// 协商高度指定协商文件合同的块高度。
 		// 如果原始交易集未被足够快地接受到区块链上，则合同将从主机中删除。
 		// 原始和修订事务集包含合同+修订以及所有父事务。 父母是必要的，因为重新启动后，事务池可能会被清空。
-		NegotiationHeight types.BlockHeight
+		NegotiationHeight uint64
 		OriginStorage     []types.StorageContract
 		Revision          []types.StorageContractRevision
 
@@ -195,7 +195,7 @@ func (i storageObligationStatus) String() string {
 }
 
 // getStorageObligation fetches a storage obligation from the database
-func getStorageObligation(db ethdb.Database, sc types.StorageContractID) (StorageObligation, error) {
+func getStorageObligation(db ethdb.Database, sc common.Hash) (StorageObligation, error) {
 	so, errGet := vm.GetStorageObligation(db, sc)
 	if errGet != nil {
 		return StorageObligation{}, errGet
@@ -213,7 +213,7 @@ func putStorageObligation(db ethdb.Database, so StorageObligation) error {
 	return nil
 }
 
-func deleteStorageObligation(db ethdb.Database, sc types.StorageContractID) error {
+func deleteStorageObligation(db ethdb.Database, sc common.Hash) error {
 	err := vm.DeleteStorageObligation(db, sc)
 	if err != nil {
 		return err
@@ -222,7 +222,7 @@ func deleteStorageObligation(db ethdb.Database, sc types.StorageContractID) erro
 }
 
 // expiration returns the height at which the storage obligation expires.
-func (so StorageObligation) expiration() (number types.BlockHeight) {
+func (so StorageObligation) expiration() (number uint64) {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewWindowStart
 	}
@@ -241,7 +241,7 @@ func (so StorageObligation) fileSize() uint64 {
 // id returns the id of the storage obligation, which is defined by the file
 // contract id of the storage contract that governs the storage contract.
 //返回这个存储义务的id，该ID由管理存储合同的文件合同的文件合同ID定义
-func (so StorageObligation) id() (scid types.StorageContractID) {
+func (so StorageObligation) id() (scid common.Hash) {
 	return so.StorageContractid
 }
 
@@ -283,7 +283,7 @@ func (so StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, m
 
 // proofDeadline returns the height by which the storage proof must be
 // submitted. 返回存储证明必须被提交的块的高度
-func (so StorageObligation) proofDeadline() types.BlockHeight {
+func (so StorageObligation) proofDeadline() uint64 {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewWindowEnd
 	}
@@ -308,7 +308,7 @@ func (so StorageObligation) transactionID() common.Hash {
 // It is assumed the deleted obligations don't belong in the database in the first place,
 // so no financial metrics are updated.
 // 删除存储义务从数据库中，假设已删除的义务首先不属于数据库，因此不会更新财务指标。
-func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []types.StorageContractID) error {
+func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []common.Hash) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	for _, soid := range soids {
@@ -325,7 +325,7 @@ func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []types.S
 // the host knows to perform maintenance on the associated storage obligation
 // when that height is reached.
 // queueActionItem将操作项添加到输入高度的主机，以便主机知道在达到该高度时对相关存储义务执行维护
-func (h *StorageHost) queueActionItem(height types.BlockHeight, id types.StorageContractID) error {
+func (h *StorageHost) queueActionItem(height uint64, id common.Hash) error {
 
 	if height < h.blockHeight {
 
@@ -575,7 +575,7 @@ func (h *StorageHost) resetFinancialMetrics() error {
 
 // threadedHandleActionItem will look at a storage obligation and determine
 // which action is necessary for the storage obligation to succeed.	将考虑存储义务并确定存储义务成功所必需的行动
-func (h *StorageHost) threadedHandleActionItem(soid types.StorageContractID) {
+func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 
 }
 

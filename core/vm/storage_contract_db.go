@@ -6,8 +6,9 @@ package vm
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/godx/common"
 	"strconv"
+
+	"github.com/DxChainNetwork/godx/common"
 
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 
@@ -142,15 +143,15 @@ func DeleteExpireStorageContract(db ethdb.Database, storageContractID common.Has
 	return deleteWithPrefix(db, storageContractID, PrefixExpireStorageContract+heightStr+"-")
 }
 
-func StoreStorageObligation(db ethdb.Database, storageContractID types.StorageContractID, so storagehost.StorageObligation) error {
+func StoreStorageObligation(db ethdb.Database, storageContractID common.Hash, so storagehost.StorageObligation) error {
 	return storeWithPrefix(db, storageContractID, so, PrefixStorageObligation)
 }
 
-func DeleteStorageObligation(db ethdb.Database, storageContractID types.StorageContractID) error {
+func DeleteStorageObligation(db ethdb.Database, storageContractID common.Hash) error {
 	return deleteWithPrefix(db, storageContractID, PrefixStorageObligation)
 }
 
-func GetStorageObligation(db ethdb.Database, storageContractID types.StorageContractID) (storagehost.StorageObligation, error) {
+func GetStorageObligation(db ethdb.Database, storageContractID common.Hash) (storagehost.StorageObligation, error) {
 	valueBytes, err := getWithPrefix(db, storageContractID, PrefixStorageObligation)
 	if err != nil {
 		return storagehost.StorageObligation{}, err
