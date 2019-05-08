@@ -137,7 +137,6 @@ func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*insertUpdate,
 	if offset < 0 {
 		return nil, fmt.Errorf("file Offset cannot be negative: %d", offset)
 	}
-	fmt.Printf("created insert at %d with length %d\n", offset, len(data))
 	return &insertUpdate{
 		Filename: df.filePath,
 		Offset:   offset,

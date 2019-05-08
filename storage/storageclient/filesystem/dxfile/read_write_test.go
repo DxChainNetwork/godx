@@ -3,29 +3,40 @@ package dxfile
 import (
 	"bytes"
 	"fmt"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"math/rand"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
+
+var sectorSize = SectorSize - uint64(crypto.Overhead(crypto.GCMCipherCode))
 
 // TestPersist write a dxFile and then read from the file try to get exactly the same dxfile.
 func TestPersist(t *testing.T) {
-	df, err := newTestDxFile(t, SectorSize << 6, 10, 30)
-	err = df.saveAll()
-	if err != nil {
-		t.Fatalf(err.Error())
+	tests := []uint8{
+		erasurecode.ECTypeStandard,
+		erasurecode.ECTypeShard,
 	}
-	filename := filepath.Join(testDir, t.Name())
-	wal := df.wal
-	newDF, err := readDxFile(filename, wal)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	if err = checkDxFileEqual(*df, *newDF); err != nil {
-		t.Error(err.Error())
+	for _, test := range tests {
+		df, err := newTestDxFile(t, SectorSize << 6, 10, 30, test)
+		err = df.saveAll()
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		filename := filepath.Join(testDir, t.Name())
+		wal := df.wal
+		newDF, err := readDxFile(filename, wal)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		if err = checkDxFileEqual(*df, *newDF); err != nil {
+			t.Error(err.Error())
+		}
 	}
 }
 
@@ -34,7 +45,6 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 	//Two scenarios has to be tested:
 	//1. Shift size smaller than segment persist sizes,
 	//2. Shift size larger than segment persist size.
-	sectorSize := SectorSize - uint64(crypto.Overhead(crypto.GCMCipherCode))
 	tests := []struct {
 		numSegments uint64 // size of the file, determine how many segments
 		numHostTablePages uint64 // size of added host key
@@ -57,11 +67,10 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		fmt.Println("=============================")
 		minSectors := uint32(10)
 		numSectors := uint32(30)
 		fileSize := sectorSize * uint64(minSectors) * test.numSegments
-		df, err := newTestDxFile(t, fileSize, minSectors, numSectors)
+		df, err := newTestDxFile(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
@@ -85,11 +94,38 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 	}
 }
 
+// TestDxFile_SaveSegment test the functionality of saveSegment
+func TestDxFile_SaveSegment(t *testing.T) {
+	rand.Seed(time.Now().Unix())
+	minSectors := uint32(10)
+	numSectors := uint32(30)
+	fileSize := sectorSize * uint64(minSectors) * 10
+	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	// Edit one of the segment
+	modifyIndex := rand.Intn(len(df.segments))
+	df.segments[modifyIndex].sectors[0][0].merkleRoot = common.Hash{}
+	err = df.saveSegment(modifyIndex)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	filename := filepath.Join(testDir, t.Name())
+	newDF, err := readDxFile(filename, df.wal)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if err = checkDxFileEqual(*df, *newDF); err != nil {
+		t.Errorf("%v", err)
+	}
+}
+
 // newTestDxFile generate a random DxFile used for testing.
 // The DxFile use erasure code params minSector = 10; numSector=30 with shardECType
 // All segments are generated randomly.
-func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32) (*DxFile, error){
-	ec, _ := erasurecode.New(erasurecode.ECTypeShard, minSectors, numSectors, 64)
+func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error){
+	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
 	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	filename := filepath.Join(testDir, t.Name())
 	wal, txns, _ := writeaheadlog.New(filepath.Join(testDir, t.Name()+".wal"))
@@ -123,8 +159,13 @@ func checkDxFileEqual(df1, df2 DxFile) error {
 	if err := checkMetadataEqual(df1.metadata, df2.metadata); err != nil{
 		return err
 	}
-	if !reflect.DeepEqual(df1.segments, df2.segments) {
-		return fmt.Errorf("segments not equal:\n\t%+v\n\t%+v", df1.segments, df2.segments)
+	if len(df1.segments) != len(df2.segments) {
+		return fmt.Errorf("length of segments not equal: %d / %d", len(df1.segments), len(df2.segments))
+	}
+	for i := range df1.segments {
+		if !reflect.DeepEqual(df1.segments[i], df2.segments[i]) {
+			return fmt.Errorf("segment %d not equal:\n\t%+v\n\t%+v", i, df1.segments[i], df2.segments[i])
+		}
 	}
 	if !reflect.DeepEqual(df1.hostTable, df2.hostTable) {
 		return fmt.Errorf("hostTable not equal:\n\t%+v\n\t%+v", df1.hostTable, df2.hostTable)
@@ -191,14 +232,14 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	if md1.StuckHealth != md2.StuckHealth {
 		return fmt.Errorf("md.StuckHealth not equal:\n\t%+v\n\t%+v", md1.StuckHealth, md2.StuckHealth)
 	}
-	if md1.LastHealthCheck != md2.LastHealthCheck {
-		return fmt.Errorf("md.LastHealthCheck not equal:\n\t%+v\n\t%+v", md1.LastHealthCheck, md2.LastHealthCheck)
+	if md1.TimeLastHealthCheck != md2.TimeLastHealthCheck {
+		return fmt.Errorf("md.TimeLastHealthCheck not equal:\n\t%+v\n\t%+v", md1.TimeLastHealthCheck, md2.TimeLastHealthCheck)
 	}
 	if md1.NumStuckChunks != md2.NumStuckChunks {
 		return fmt.Errorf("md.NumStuckChunks not equal:\n\t%+v\n\t%+v", md1.NumStuckChunks, md2.NumStuckChunks)
 	}
-	if md1.RecentRepairTime != md2.RecentRepairTime {
-		return fmt.Errorf("md.RecentRepairTime not equal:\n\t%+v\n\t%+v", md1.RecentRepairTime, md2.RecentRepairTime)
+	if md1.TimeRecentRepair != md2.TimeRecentRepair {
+		return fmt.Errorf("md.TimeRecentRepair not equal:\n\t%+v\n\t%+v", md1.TimeRecentRepair, md2.TimeRecentRepair)
 	}
 	if md1.LastRedundancy != md2.LastRedundancy {
 		return fmt.Errorf("md.LastRedundancy not equal:\n\t%+v\n\t%+v", md1.LastRedundancy, md2.LastRedundancy)

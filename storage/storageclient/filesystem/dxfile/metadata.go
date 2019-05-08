@@ -4,8 +4,6 @@
 package dxfile
 
 import (
-	"encoding/binary"
-	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
@@ -40,12 +38,12 @@ type (
 		TimeCreate uint64 // time of file creation
 
 		// Repair loop fields
-		Health           uint32   // Worst health of the file's unstuck chunk
-		StuckHealth      uint32   // Worst health of the file's Stuck chunk
-		LastHealthCheck  uint64 // Time of last health check happenning
-		NumStuckChunks   uint32    // Number of Stuck chunks
-		RecentRepairTime uint64 // Timestamp of last chunk repair
-		LastRedundancy   uint32   // File redundancy from last check
+		Health              uint32 // Worst health of the file's unstuck chunk
+		StuckHealth         uint32 // Worst health of the file's Stuck chunk
+		TimeLastHealthCheck uint64 // Time of last health check happenning
+		NumStuckChunks      uint32 // Number of Stuck chunks
+		TimeRecentRepair    uint64 // Timestamp of last chunk repair
+		LastRedundancy      uint32 // File redundancy from last check
 
 		// File related
 		FileMode os.FileMode // unix file mode
@@ -76,78 +74,125 @@ type (
 	}
 )
 
-
-// validate validate the params in the metadata. If a potential error found, return the error.
-// Note validate will not check params for erasure coding or cipher key since they are checked in other functions.
-func (md Metadata) validate() error {
-	if md.HostTableOffset != PageSize {
-		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
+// TimeAccess return the TimeModify of a DxFile
+func (df *DxFile) TimeModify() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeModify) < 0 {
+		panic("TimeModify uint64 overflow")
 	}
-	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
-		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
-	}
-	if md.SegmentOffset <= md.HostTableOffset {
-		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
-	}
-	if md.SegmentOffset % PageSize != 0 {
-		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
-	}
-	return nil
+	return time.Unix(int64(df.metadata.TimeModify), 0)
 }
 
-// newErasureCode is the helper function to create the erasureCoder based on metadata params
-func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
-	switch md.ErasureCodeType {
-	case erasurecode.ECTypeStandard:
-		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors)
-	case erasurecode.ECTypeShard:
-		var shardSize int
-		if len(md.ECExtra) >= 4 {
-			shardSize = int(binary.LittleEndian.Uint32(md.ECExtra))
-		} else {
-			shardSize = erasurecode.EncodedShardUnit
-		}
-		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors, shardSize)
-	default:
-		return nil, erasurecode.ErrInvalidECType
+// TimeAccess return the last access time of a DxFile
+func (df *DxFile) TimeAccess() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeAccess) < 0 {
+		panic("TimeAccess uint64 overflow")
 	}
+	return time.Unix(int64(df.metadata.TimeAccess), 0)
 }
 
-// erasureCodeToParams is the the helper function to interpret the erasureCoder to params
-// return minSectors, numSectors, and extra
-func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
-	minSectors := ec.MinSectors()
-	numSectors := ec.NumSectors()
-	switch ec.Type() {
-	case erasurecode.ECTypeStandard:
-		return minSectors, numSectors, nil
-	case erasurecode.ECTypeShard:
-		extra := ec.Extra()
-		extraBytes := make([]byte, 4)
-		shardSize := extra[0].(int)
-		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
-		return minSectors, numSectors, extraBytes
-	default:
-		panic("erasure code type not recognized")
+// TimeAccess return the last access time of a DxFile
+func (df *DxFile) TimeUpdate() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeUpdate) < 0 {
+		panic("TimeUpdate uint64 overflow")
 	}
+	return time.Unix(int64(df.metadata.TimeUpdate), 0)
 }
 
-// newCipherKey create a new cipher key based on metadata params
-func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
-	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
-}
-
-// segmentSize is the helper function to calculate the segment size based on metadata info
-func (md Metadata) segmentSize() uint64 {
-	return md.SectorSize * uint64(md.MinSectors)
-}
-
-// numSegments is the number of segments of a dxfile based on metadata info
-func (md Metadata) numSegments() uint64 {
-	num := md.FileSize / md.segmentSize()
-	if md.FileSize%md.segmentSize() != 0 || num == 0 {
-		num++
+// TimeCreate returns the TimeCreate of a DxFile
+func (df *DxFile) TimeCreate() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeCreate) < 0 {
+		panic("TimeCreate uint64 overflow")
 	}
-	return num
+	return time.Unix(int64(df.metadata.TimeCreate), 0)
 }
+
+// LastTimeHealthCheck return TimeHealthCheck
+func (df *DxFile) LastTimeHealthCheck() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeRecentRepair) < 0 {
+		panic("TimeRecentRepair uint64 overflow")
+	}
+	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
+}
+
+// LastTimeHealthCheck return TimeHealthCheck
+func (df *DxFile) LastTimeRecentRepair() time.Time {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if int64(df.metadata.TimeRecentRepair) < 0 {
+		panic("TimeRecentRepair uint64 overflow")
+	}
+	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
+}
+
+// SegmentSize return the size of a segment for a DxFile.
+func (df *DxFile) SegmentSize() uint64 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return df.metadata.segmentSize()
+}
+
+// LocalPath return the local path of a file
+func (df *DxFile) LocalPath() string {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return df.metadata.LocalPath
+}
+
+// CipherKey return the cipher key
+func (df *DxFile) CipherKey() crypto.CipherKey {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	if df.cipherKey != nil {
+		return df.cipherKey
+	}
+	key, err := crypto.NewCipherKey(df.metadata.CipherKeyCode, df.metadata.CipherKey)
+	if err != nil {
+		// this should never happen
+		panic(err.Error())
+	}
+	return key
+}
+
+// ErasureCode return the erasure code
+func (df *DxFile) ErasureCode() erasurecode.ErasureCoder {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	if df.erasureCode != nil {
+		return df.erasureCode
+	}
+	ec, err := erasurecode.New(df.metadata.ErasureCodeType, df.metadata.MinSectors, df.metadata.NumSectors,
+		df.metadata.ECExtra)
+	if err != nil{
+		// this shall not happen
+		panic(err.Error())
+	}
+	return ec
+}
+
+// FileMode return the os file mode of a dxfile
+func (df *DxFile) FileMode() os.FileMode {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.FileMode
+}
+
+func (df *DxFile) SectorSize() uint64 {
+	return SectorSize - uint64(crypto.Overhead(df.metadata.CipherKeyCode))
+}
+
+
+
 

@@ -40,7 +40,7 @@ type (
 		ID      fileID
 		wal     *writeaheadlog.Wal
 
-		// filePath is full file path of
+		// filePath is full file path
 		filePath string
 
 		//cached field

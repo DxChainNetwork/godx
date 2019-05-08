@@ -9,11 +9,11 @@ import (
 // saveAll save all contents of a DxFile to the file.
 func (df *DxFile) saveAll() error {
 	var updates []dxfileUpdate
-	iu, hostTableSize, err := df.createHostTableUpdate()
+	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return err
 	}
-	updates = append(updates, iu)
+	updates = append(updates, up)
 	pagesHostTable := hostTableSize / PageSize
 	if hostTableSize % PageSize != 0{
 		pagesHostTable++
@@ -29,23 +29,33 @@ func (df *DxFile) saveAll() error {
 		}
 		updates = append(updates, update)
 	}
-	iu, err = df.createMetadataUpdate()
+	up, err = df.createMetadataUpdate()
 	if err != nil {
 		return err
 	}
-	updates = append(updates, iu)
+	updates = append(updates, up)
 	return df.applyUpdates(updates)
 }
 
-// saveHostTableUpdate save the host table as well as the metadata
-func (df *DxFile) saveHostTableUpdate() error {
+//func (df *DxFile) rename(newFilename string) error {
+//	var updates []dxfileUpdate
+//	du, err := df.createDeleteUpdate()
+//	if err != nil {
+//		return fmt.Errorf("cannot create delete update: %v", err)
+//	}
+//	sf.
+//
+//}
+
+// saveSegment save the segment with the segmentIndex, and write to file
+func (df *DxFile) saveSegment(segmentIndex int) error {
 	var updates []dxfileUpdate
 
-	iu, hostTableSize, err := df.createHostTableUpdate()
+	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return err
 	}
-	updates = append(updates, iu)
+	updates = append(updates, up)
 
 	shiftNeeded := hostTableSize > df.metadata.SegmentOffset - df.metadata.HostTableOffset
 	if shiftNeeded {
@@ -55,15 +65,51 @@ func (df *DxFile) saveHostTableUpdate() error {
 		}
 		updates = append(updates, shiftUpdates...)
 	}
-	iu, err = df.createMetadataUpdate()
+	// Write the segment with the segmentIndex
+	seg := df.segments[segmentIndex]
+	if seg.index != uint64(segmentIndex) {
+		return fmt.Errorf("cannot write segment: data corrupted - segment index not expected")
+	}
+	up, err = df.createSegmentUpdate(uint64(segmentIndex), seg.offset)
+	if err != nil {
+		return fmt.Errorf("cannot write segment: %v", err)
+	}
+	updates = append(updates, up)
+	up, err = df.createMetadataUpdate()
 	if err != nil {
 		return err
 	}
-	updates = append(updates, iu)
+	updates = append(updates, up)
 	return df.applyUpdates(updates)
 }
 
-// segmentShift shift the first segment in persist file to the end of the persist file.
+// saveHostTableUpdate save the host table as well as the metadata
+func (df *DxFile) saveHostTableUpdate() error {
+	var updates []dxfileUpdate
+
+	up, hostTableSize, err := df.createHostTableUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, up)
+
+	shiftNeeded := hostTableSize > df.metadata.SegmentOffset - df.metadata.HostTableOffset
+	if shiftNeeded {
+		shiftUpdates, err := df.segmentShift(hostTableSize)
+		if err != nil {
+			return err
+		}
+		updates = append(updates, shiftUpdates...)
+	}
+	up, err = df.createMetadataUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, up)
+	return df.applyUpdates(updates)
+}
+
+// segmentShift shift segment in persist file to the end of the persist file to give space for hostTable.
 // Return the corresponding update and the underlying error.
 func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, error) {
 	f, err := os.OpenFile(df.filePath, os.O_RDONLY, 0777)
@@ -73,7 +119,6 @@ func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, erro
 	defer f.Close()
 
 	shiftOffset, numSegToShift, segmentOffsetDiff := df.shiftOffset(targetHostTableSize)
-	fmt.Printf("shift: %d num: %d\n", shiftOffset, numSegToShift)
 	prevOffset := df.metadata.SegmentOffset
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 

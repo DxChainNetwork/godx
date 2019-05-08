@@ -1,9 +1,12 @@
 package dxfile
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"io"
 )
 
@@ -124,4 +127,78 @@ func segmentPersistNumPages(numSectors uint32) uint64 {
 		numPages++
 	}
 	return uint64(numPages)
+}
+
+// validate validate the params in the metadata. If a potential error found, return the error.
+// Note validate will not check params for erasure coding or cipher key since they are checked in other functions.
+func (md Metadata) validate() error {
+	if md.HostTableOffset != PageSize {
+		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
+	}
+	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
+		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
+	}
+	if md.SegmentOffset <= md.HostTableOffset {
+		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
+	}
+	if md.SegmentOffset % PageSize != 0 {
+		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+	}
+	return nil
+}
+
+// newErasureCode is the helper function to create the erasureCoder based on metadata params
+func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
+	switch md.ErasureCodeType {
+	case erasurecode.ECTypeStandard:
+		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors)
+	case erasurecode.ECTypeShard:
+		var shardSize int
+		if len(md.ECExtra) >= 4 {
+			shardSize = int(binary.LittleEndian.Uint32(md.ECExtra))
+		} else {
+			shardSize = erasurecode.EncodedShardUnit
+		}
+		return erasurecode.New(md.ErasureCodeType, md.MinSectors, md.NumSectors, shardSize)
+	default:
+		return nil, erasurecode.ErrInvalidECType
+	}
+}
+
+// erasureCodeToParams is the the helper function to interpret the erasureCoder to params
+// return minSectors, numSectors, and extra
+func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
+	minSectors := ec.MinSectors()
+	numSectors := ec.NumSectors()
+	switch ec.Type() {
+	case erasurecode.ECTypeStandard:
+		return minSectors, numSectors, nil
+	case erasurecode.ECTypeShard:
+		extra := ec.Extra()
+		extraBytes := make([]byte, 4)
+		shardSize := extra[0].(int)
+		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
+		return minSectors, numSectors, extraBytes
+	default:
+		panic("erasure code type not recognized")
+	}
+}
+
+// newCipherKey create a new cipher key based on metadata params
+func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
+	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
+}
+
+// segmentSize is the helper function to calculate the segment size based on metadata info
+func (md Metadata) segmentSize() uint64 {
+	return md.SectorSize * uint64(md.MinSectors)
+}
+
+// numSegments is the number of segments of a dxfile based on metadata info
+func (md Metadata) numSegments() uint64 {
+	num := md.FileSize / md.segmentSize()
+	if md.FileSize%md.segmentSize() != 0 || num == 0 {
+		num++
+	}
+	return num
 }

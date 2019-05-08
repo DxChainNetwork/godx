@@ -95,7 +95,6 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 	df.segments = make([]*segment, df.metadata.numSegments())
 	for i := 0 ; uint64(i) < df.metadata.numSegments(); i++{
-		fmt.Println(offset)
 		seg, err := df.readSegment(f, offset)
 		if err == io.EOF {
 			break
