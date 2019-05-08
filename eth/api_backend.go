@@ -223,3 +223,8 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+// subscribe canonical chain head event for file contract maintenance
+func (b *EthAPIBackend) SubscribeCanonicalChainEvent(ch chan<- core.CanonicalChainHeadEvent) event.Subscription {
+	return b.eth.BlockChain().SubscribeCanonicalChainEvent(ch)
+}

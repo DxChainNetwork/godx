@@ -17,8 +17,12 @@
 package vm
 
 import (
+	"errors"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/ethdb"
+
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -34,6 +38,11 @@ const (
 	GasReturn       uint64 = 0
 	GasStop         uint64 = 0
 	GasContractByte uint64 = 200
+)
+
+var (
+	GasCalculationParamsNumberWorng = errors.New("The parameter was wrong.")
+	GasCalculationinsufficient      = errors.New("This gas is insufficient")
 )
 
 // calcGas returns the actual gas cost of the call.
@@ -56,4 +65,175 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	}
 
 	return callCost.Uint64(), nil
+}
+
+// calculate the gas of storage contract execution
+func RemainGas(args ...interface{}) (uint64, []interface{}) {
+	result := make([]interface{}, 0)
+	gas, ok := args[0].(uint64)
+	if len(args) < 2 || !ok {
+		result = append(result, GasCalculationParamsNumberWorng)
+		return gas, result
+	}
+
+	switch i := args[1].(type) {
+
+	// rlp.DecodeBytes
+	case func([]byte, interface{}) error:
+		if gas < params.DecodeGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 4 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		paramsPre, ok := args[2].([]byte)
+		if !ok {
+			return gas, result
+		}
+		gas -= params.DecodeGas
+		err := i(paramsPre, args[3])
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//CheckFormContract
+	case func(*EVM, types.StorageContract, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		fc, _ := args[3].(types.StorageContract)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, fc, bl)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//CheckReversionContract
+	case func(*EVM, types.StorageContractRevision, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		scr, _ := args[3].(types.StorageContractRevision)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, scr, bl)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//CheckStorageProof
+	case func(*EVM, types.StorageProof, types.BlockHeight) error:
+		if gas < params.CheckFileGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		evm, _ := args[2].(*EVM)
+		sp, _ := args[3].(types.StorageProof)
+		bl, _ := args[4].(types.BlockHeight)
+		gas -= params.CheckFileGas
+		err := i(evm, sp, bl)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//StoreStorageContract
+	case func(ethdb.Database, types.StorageContractID, types.StorageContract) error:
+		if gas < params.SstoreSetGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		db, _ := args[2].(ethdb.Database)
+		scid, _ := args[3].(types.StorageContractID)
+		sc, _ := args[4].(types.StorageContract)
+		gas -= params.SstoreSetGas
+		err := i(db, scid, sc)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//StoreExpireStorageContract
+	case func(ethdb.Database, types.StorageContractID, types.BlockHeight) error:
+		if gas < params.SstoreSetGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		db, _ := args[2].(ethdb.Database)
+		scid, _ := args[3].(types.StorageContractID)
+		height, _ := args[4].(types.BlockHeight)
+		gas -= params.SstoreSetGas
+		err := i(db, scid, height)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+
+		//CheckMultiSignatures
+	case func(interface{}, types.BlockHeight, []types.Signature) error:
+		if gas < params.CheckMultiSignaturesGas {
+			result = append(result, GasCalculationinsufficient)
+			return gas, result
+		}
+		if len(args) != 5 {
+			result = append(result, GasCalculationParamsNumberWorng)
+			return gas, result
+		}
+		bl, _ := args[4].(types.BlockHeight)
+		arrsig, _ := args[4].([]types.Signature)
+		gas -= params.CheckMultiSignaturesGas
+		err := i(args[2], bl, arrsig)
+		if err != nil {
+			result = append(result, err)
+			return gas, result
+		}
+		result = append(result, nil)
+		return gas, result
+	default:
+		result = append(result, GasCalculationParamsNumberWorng)
+		return gas, result
+	}
+
 }

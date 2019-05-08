@@ -43,7 +43,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -99,14 +99,15 @@ type BlockChain struct {
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
-	hc            *HeaderChain
-	rmLogsFeed    event.Feed
-	chainFeed     event.Feed
-	chainSideFeed event.Feed
-	chainHeadFeed event.Feed
-	logsFeed      event.Feed
-	scope         event.SubscriptionScope
-	genesisBlock  *types.Block
+	hc                     *HeaderChain
+	rmLogsFeed             event.Feed
+	chainFeed              event.Feed
+	chainSideFeed          event.Feed
+	chainHeadFeed          event.Feed
+	canonicalChainHeadFeed event.Feed // canonical chain head feed for file contract maintenance
+	logsFeed               event.Feed
+	scope                  event.SubscriptionScope
+	genesisBlock           *types.Block
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock
@@ -517,6 +518,10 @@ func (bc *BlockChain) insert(block *types.Block) {
 
 		bc.currentFastBlock.Store(block)
 	}
+
+	// send canonical chain head event for file contract maintennance
+	canEv := CanonicalChainHeadEvent{block}
+	bc.canonicalChainHeadFeed.Send(canEv)
 }
 
 // Genesis retrieves the chain's genesis block.
@@ -1716,4 +1721,9 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
+}
+
+// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
+func (bc *BlockChain) SubscribeCanonicalChainEvent(ch chan<- CanonicalChainHeadEvent) event.Subscription {
+	return bc.scope.Track(bc.canonicalChainHeadFeed.Subscribe(ch))
 }
