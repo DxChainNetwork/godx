@@ -588,3 +588,7 @@ func (s *Ethereum) Stop() error {
 	s.maintenance.Stop()
 	return nil
 }
+
+func (s *Ethereum) ProtocolManager() *ProtocolManager {
+	return s.protocolManager
+}

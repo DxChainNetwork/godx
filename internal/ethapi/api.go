@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 	"strings"
 	"time"
@@ -1569,4 +1570,28 @@ func (s *PublicNetAPI) PeerCount() hexutil.Uint {
 // Version returns the current ethereum protocol version.
 func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
+}
+
+func (s *PublicNetAPI) AddPeer(node *enode.Node) (bool, error) {
+	server := s.net
+	if server == nil {
+		return false, fmt.Errorf("server stopped")
+	}
+
+	server.AddPeer(node)
+	server.AddTrustedPeer(node)
+
+	return true, nil
+}
+
+func (s *PublicNetAPI) RemovePeer(node *enode.Node) (bool, error) {
+	server := s.net
+	if server == nil {
+		return false, fmt.Errorf("server stopped")
+	}
+
+	server.RemovePeer(node)
+	server.RemoveTrustedPeer(node)
+
+	return true, nil
 }

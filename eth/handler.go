@@ -702,6 +702,70 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		pm.txpool.AddRemotes(txs)
 
+	case msg.Code == StorageContractCreationMsg:
+		// TODO @Manxiang: check an incoming storage contract matches the host's expectations for a valid contract
+
+		// TODO @Xiang Zhanag: Verify storageClient signatures
+
+		// TODO @Xiang Zhang: Sign storage contract and then send storage client
+
+		p.SendStorageContractCreationHostSign(nil)
+
+	case msg.Code == StorageContractCreationHostSignMsg:
+		// TODO @Xiang Zhanag: verify storageHost signatures
+
+		// assemble init revision and sign it
+
+		// send revision to storage host
+		p.SendStorageContractUpdate(nil)
+
+	case msg.Code == StorageContractUpdateMsg:
+		// TODO @Xiang Zhanag: verify storage contract update signatures from client
+
+		// sign it by storage host
+
+		p.SendStorageContractUpdateHostSign(nil)
+
+	case msg.Code == StorageContractUpdateHostSignMsg:
+		// Verify storage contract update host signature
+
+		// send storage contract creation transaction
+
+		// store revision into one structure(SafeContract)
+
+	case msg.Code == StorageContractUploadRequestMsg:
+		// add data to disk block
+
+		// create merkle proof response
+
+		// send it to storage client
+
+	case msg.Code == StorageContractUploadMerkleRootProofMsg:
+		// verify merkle root proof
+
+		// assemble storage contract revision and sign it
+
+		// send it to storage host
+
+	case msg.Code == StorageContractUploadClientRevisionMsg:
+		// verify signature from storage client
+
+		// sign it by storage client and modify storage obligation
+
+		// send it to storage client
+
+	case msg.Code == StorageContractUploadHostRevisionMsg:
+		// verify signature from storage host
+
+		// update storage contract manager
+
+	case msg.Code == StorageContractDownloadRequestMsg:
+		// retrieve data from disk and send it to client
+
+	case msg.Code == StorageContractDownloadDataMsg:
+
+	case msg.Code == StorageContractDownloadHostRevisionMsg:
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
@@ -811,4 +875,8 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+func (pm *ProtocolManager) PeerSet() *peerSet {
+	return pm.peers
 }

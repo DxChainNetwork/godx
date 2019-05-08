@@ -32,16 +32,17 @@ import (
 const (
 	eth62 = 62
 	eth63 = 63
+	eth64 = 64
 )
 
 // ProtocolName is the official short name of the protocol used during capability negotiation.
 var ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth63, eth62}
+var ProtocolVersions = []uint{eth64, eth63, eth62}
 
 // ProtocolLengths are the number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{17, 8}
+var ProtocolLengths = []uint64{27, 17, 8}
 
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -62,6 +63,22 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Storage Contract Negotiate Protocol belonging to eth/64
+	// Storage Contract Creation/Renew Code Msg
+	StorageContractCreationMsg         = 0x11
+	StorageContractCreationHostSignMsg = 0x12
+	StorageContractUpdateMsg           = 0x13
+	StorageContractUpdateHostSignMsg   = 0x14
+
+	// Upload/Download Data Segment Code Msg
+	StorageContractUploadRequestMsg         = 0x15
+	StorageContractUploadMerkleRootProofMsg = 0x16
+	StorageContractUploadClientRevisionMsg  = 0x17
+	StorageContractUploadHostRevisionMsg    = 0x18
+	StorageContractDownloadRequestMsg       = 0x19
+	StorageContractDownloadDataMsg          = 0x20
+	StorageContractDownloadHostRevisionMsg  = 0x21
 )
 
 type errCode int

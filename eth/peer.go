@@ -71,6 +71,9 @@ type propEvent struct {
 	block *types.Block
 	td    *big.Int
 }
+type Peer struct {
+	*peer
+}
 
 type peer struct {
 	id string
@@ -327,6 +330,21 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
+func (p *peer) SendStorageContractCreationHostSign(data interface{}) error {
+	p.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
+	return p2p.Send(p.rw, StorageContractCreationHostSignMsg, data)
+}
+
+func (p *peer) SendStorageContractUpdate(data interface{}) error {
+	p.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
+	return p2p.Send(p.rw, StorageContractUpdateMsg, data)
+}
+
+func (p *peer) SendStorageContractUpdateHostSign(data interface{}) error {
+	p.Log().Debug("Sending storage contract update host signatures", "signature", data)
+	return p2p.Send(p.rw, StorageContractUpdateHostSignMsg, data)
+}
+
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash) error {
@@ -452,6 +470,13 @@ func (ps *peerSet) Peer(id string) *peer {
 	defer ps.lock.RUnlock()
 
 	return ps.peers[id]
+}
+
+func (ps *peerSet) PeerWrap(id string) *Peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return &Peer{ps.peers[id]}
 }
 
 // Len returns if the current number of peers in the set.
