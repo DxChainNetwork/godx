@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/errors"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -23,16 +24,17 @@ var Samplescans = storage.HostPoolScans{
 	},
 }
 
-var removePubKey = ips[1]
+var removeNodeIndex = 1
 
 var tree = New(evalFunc)
 
 func TestStorageHostTree_Insert(t *testing.T) {
-	for _, ip := range ips {
-		hostinfo := createHostInfo(ip, ip, Samplescans, true)
+	enodeIDGenerater()
+	for i, ip := range ips {
+		hostinfo := createHostInfo(ip, EnodeID[i], Samplescans, true)
 		err := tree.Insert(hostinfo)
 		if err != nil {
-			t.Errorf("error inserting %s. pubkey: %s", err.Error(), hostinfo.PublicKey)
+			t.Errorf("error inserting %s. pubkey: %s", err.Error(), hostinfo.EnodeID)
 		}
 	}
 
@@ -49,18 +51,18 @@ func TestStorageHostTree_Insert(t *testing.T) {
 }
 
 func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
-	ptr, exists := tree.hostPool[ips[3]]
+	ptr, exists := tree.hostPool[EnodeID[3].String()]
 	if !exists {
 		t.Fatalf("error: host does not exist")
 	}
 	archive := *ptr
 
-	hostinfo := createHostInfo("104.238.46.129", ips[3], Samplescans, true)
+	hostinfo := createHostInfo("104.238.46.129", EnodeID[3], Samplescans, true)
 	err := tree.HostInfoUpdate(hostinfo)
 	if err != nil {
 		t.Fatalf("error: failed to update the storage host information %s", err.Error())
 	}
-	new := tree.hostPool[ips[3]]
+	new := tree.hostPool[EnodeID[3].String()]
 	if archive.entry.IP == new.entry.IP {
 		t.Errorf("error: the ip address should be updated. expected: 104.238.46.129, got %s",
 			archive.entry.IP)
@@ -77,8 +79,8 @@ func TestStorageHostTree_All(t *testing.T) {
 	}
 
 	for i := 0; i < len(storageHosts)-1; i++ {
-		eval1 := tree.hostPool[storageHosts[i].PublicKey].entry.eval
-		eval2 := tree.hostPool[storageHosts[i+1].PublicKey].entry.eval
+		eval1 := tree.hostPool[storageHosts[i].EnodeID.String()].entry.eval
+		eval2 := tree.hostPool[storageHosts[i+1].EnodeID.String()].entry.eval
 		if eval1.Cmp(eval2) < 0 {
 			t.Errorf("the returned storage hosts should be in order, the host has higher evaluation should be in the front")
 		}
@@ -86,7 +88,7 @@ func TestStorageHostTree_All(t *testing.T) {
 }
 
 func TestStorageHostTree_Remove(t *testing.T) {
-	err := tree.Remove(removePubKey)
+	err := tree.Remove(EnodeID[removeNodeIndex].String())
 	if err != nil {
 		t.Fatalf("error: %s", err.Error())
 	}
@@ -100,7 +102,7 @@ func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
 		t.Errorf("error: the node with \"the key does not exist\" should not exist")
 	}
 
-	if _, exist := tree.RetrieveHostInfo(ips[4]); !exist {
+	if _, exist := tree.RetrieveHostInfo(EnodeID[4].String()); !exist {
 		t.Errorf("error: the node with key %s should exist", ips[4])
 	}
 }
@@ -124,14 +126,14 @@ func TestStorageHostTree_SelectRandom(t *testing.T) {
 	}
 }
 
-func createHostInfo(ip, PublicKey string, scans storage.HostPoolScans, contract bool) storage.HostInfo {
+func createHostInfo(ip string, id enode.ID, scans storage.HostPoolScans, contract bool) storage.HostInfo {
 	return storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
 			AcceptingContracts: contract,
 		},
 
 		IP:          ip,
-		PublicKey:   PublicKey,
+		EnodeID:     id,
 		ScanRecords: scans,
 	}
 }

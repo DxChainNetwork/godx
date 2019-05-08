@@ -27,10 +27,21 @@ const (
 	PersistFilename                  = "storagehostmanager.json"
 )
 
-// Scan related constant
+// Scan related constants
 const (
-	scanCheckDuration = time.Second
-	scanQuantity      = 2500
-	maxScanSleep      = 6 * time.Hour
-	minScanSleep      = time.Hour + time.Minute*30
+	scanOnlineCheckDuration = 30 * time.Second
+	scanCheckDuration       = time.Second
+	scanQuantity            = 2500
+	maxScanSleep            = 6 * time.Hour
+	minScanSleep            = time.Hour + time.Minute*30
+	maxScanningRoutines     = 80
+	minScans                = 12
+	maxDowntime             = 10 * 24 * time.Hour
+)
+
+// historical interaction with host related constants
+const (
+	historicInteractionDecay      = 0.9995
+	historicInteractionDecayLimit = 500
+	recentInteractionWeightLimit  = 0.01
 )

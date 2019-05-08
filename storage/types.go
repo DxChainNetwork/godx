@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
 type (
@@ -59,7 +60,7 @@ type (
 		Version        string `json:"version"`
 	}
 
-	// StorageHostManager related data structures
+	// HostInfo storage storage host information
 	HostInfo struct {
 		HostExtConfig
 
@@ -76,24 +77,18 @@ type (
 
 		LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
 
-		// TODO (mzhang): not sure if IP will be provided. However, if not
-		// it can still be derived from the enode information. Need to verify
-		// with HZ office
+		// IP will be decoded from the enode URL
 		IP string `json:"ip"`
 
-		IPNets          []string  `json:"ipnets"`
-		LastIPNetChange time.Time `json:"lastipnetchange"`
+		IPNetwork           string    `json:"ipnetwork"`
+		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		// TODO (mzhang): verify with hz, check if the public key will be proviced
-		// if public key is not provided, what kind of information will be used to
-		// verify the host identity, enode ?
-		PublicKey string `json:"publickey"`
+		EnodeID  enode.ID `json:"enodeid"`
+		EnodeURL string   `json:"enodeurl"`
 
 		Filtered bool `json:"filtered"`
 	}
 
-
-	// TODO (mzhang): change the name to maintenance
 	// HostPoolScans stores a list of host pool scan records
 	HostPoolScans []HostPoolScan
 
@@ -106,22 +101,20 @@ type (
 )
 
 type (
-	// TODO (mzhang): double check with Hangzhou office to see if they will be in charge of the
-	// rent payment
-	// TODO (mzhang): ensure those value should not be 0
+	// RentPayment stores the StorageClient payment settings for renting the storage space from the host
 	RentPayment struct {
-		Payment            common.BigInt `json:"payment"`
-		StorageHosts       uint64        `json:"storagehosts"`
-		Period             uint64        `json:"period"`
-		RenewWindow        uint64        `json:"renewwindow"`
+		Payment      common.BigInt `json:"payment"`
+		StorageHosts uint64        `json:"storagehosts"`
+		Period       uint64        `json:"period"`
+		RenewWindow  uint64        `json:"renewwindow"`
 
 		// ExpectedStorage is amount of data expected to be stored
-		ExpectedStorage    uint64        `json:"expectedstorage"`
+		ExpectedStorage uint64 `json:"expectedstorage"`
 		// ExpectedUpload is expected amount of data upload before redundancy / block
-		ExpectedUpload     uint64        `json:"expectedupload"`
+		ExpectedUpload uint64 `json:"expectedupload"`
 		// ExpectedDownload is expected amount of data downloaded / block
-		ExpectedDownload   uint64        `json:"expecteddownload"`
+		ExpectedDownload uint64 `json:"expecteddownload"`
 		// ExpectedRedundancy is the average redundancy of files uploaded
-		ExpectedRedundancy float64       `json:"expectedredundancy"`
+		ExpectedRedundancy float64 `json:"expectedredundancy"`
 	}
 )

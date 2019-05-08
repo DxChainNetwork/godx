@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -19,10 +20,8 @@ type persistence struct {
 	StorageHostsInfo        []storage.HostInfo
 	BlockHeight             uint64
 	DisableIPViolationCheck bool
-	FilteredHosts           map[string]string
+	FilteredHosts           map[string]enode.ID
 	FilterMode              FilterMode
-	// TODO: (mzhang) removed lastChange field, need to sync with
-	// HZ office to make sure the field is not needed
 }
 
 func (shm *StorageHostManager) saveSettings() error {
@@ -72,7 +71,7 @@ func (shm *StorageHostManager) loadSettings() error {
 	}
 
 	var persist persistence
-	persist.FilteredHosts = make(map[string]string)
+	persist.FilteredHosts = make(map[string]enode.ID)
 
 	err = common.LoadDxJSON(settingsMetadata, filepath.Join(shm.persistDir, PersistFilename), &persist)
 	if err != nil {
@@ -101,7 +100,7 @@ func (shm *StorageHostManager) loadSettings() error {
 
 		// start storage host scanning based on the scan records
 		if len(info.ScanRecords) < 2 {
-			shm.queueScan(info)
+			shm.scanQueue(info)
 		}
 	}
 

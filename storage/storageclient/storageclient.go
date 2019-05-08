@@ -6,6 +6,8 @@ package storageclient
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -30,11 +32,6 @@ type (
 
 // *********************************************
 // *********************************************
-
-// Backend allows Ethereum object to be passed in as interface
-type Backend interface {
-	APIs() []rpc.API
-}
 
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
@@ -80,6 +77,9 @@ type StorageClient struct {
 
 	// used to get syncing status
 	ethInfo *ethapi.PublicEthereumAPI
+
+	// get the P2P server for adding peer
+	p2pServer  *p2p.Server
 }
 
 // New initializes StorageClient object
@@ -97,7 +97,16 @@ func New(persistDir string) (*StorageClient, error) {
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(eth Backend) error {
+func (sc *StorageClient) Start(eth storage.ClientBackend, server *p2p.Server) error {
+
+	// validation
+	if server == nil {
+		return errors.New("failed to get the P2P server")
+	}
+
+	// get the p2p server for the adding peers
+	sc.p2pServer = server
+
 	// getting all needed API functions
 	sc.filterAPIs(eth.APIs())
 
@@ -115,7 +124,7 @@ func (sc *StorageClient) Start(eth Backend) error {
 	}
 
 	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
-	storageHostManager, err := storagehostmanager.New(sc.persistDir, sc.ethInfo, sc.netInfo)
+	storageHostManager, err := storagehostmanager.New(sc.persistDir, sc.ethInfo, sc.netInfo, sc.p2pServer, eth)
 	if err != nil {
 		return err
 	}

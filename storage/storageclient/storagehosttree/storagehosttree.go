@@ -5,10 +5,11 @@
 package storagehosttree
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"sort"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 type StorageHostTree struct {
@@ -43,7 +44,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	}
 
 	// validation: check if the storagehost exists already
-	if _, exists := t.hostPool[hi.PublicKey]; exists {
+	if _, exists := t.hostPool[hi.EnodeID.String()]; exists {
 		return ErrHostExists
 	}
 
@@ -51,18 +52,18 @@ func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	_, node := t.root.nodeInsert(entry)
 
 	// update hostPool
-	t.hostPool[hi.PublicKey] = node
+	t.hostPool[hi.EnodeID.String()] = node
 
 	return nil
 }
 
-// HostInfoUpdate updates the host information in in the tree based on the public key
+// HostInfoUpdate updates the host information in in the tree based on the enode ID
 func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// get the node
-	n, exist := t.hostPool[hi.PublicKey]
+	n, exist := t.hostPool[hi.EnodeID.String()]
 	if !exist {
 		return ErrHostNotExists
 	}
@@ -77,26 +78,26 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 
 	// insert node and update the hostPool
 	_, node := n.nodeInsert(entry)
-	t.hostPool[hi.PublicKey] = node
+	t.hostPool[hi.EnodeID.String()] = node
 
 	return nil
 }
 
 // Remove will remove the node from the hostPool as well as
 // making the node unocuppied, updating the evaluation
-func (t *StorageHostTree) Remove(pubkey string) error {
+func (t *StorageHostTree) Remove(enodeID string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	// TODO (mzhang): verify if the public key is string with HZ
-	n, exists := t.hostPool[pubkey]
+	// TODO (mzhang): verify if the enode ID is string with HZ
+	n, exists := t.hostPool[enodeID]
 	if !exists {
 		return ErrHostNotExists
 	}
 
 	// remove node and update the host pool
 	n.nodeRemove()
-	delete(t.hostPool, pubkey)
+	delete(t.hostPool, enodeID)
 
 	return nil
 }
@@ -128,12 +129,12 @@ func (t *StorageHostTree) all() (his []storage.HostInfo) {
 }
 
 // RetrieveHostInfo will get storage host information from the tree based on the
-// public key
-func (t *StorageHostTree) RetrieveHostInfo(pubkey string) (storage.HostInfo, bool) {
+// enode ID
+func (t *StorageHostTree) RetrieveHostInfo(enodeID string) (storage.HostInfo, bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	node, exist := t.hostPool[pubkey]
+	node, exist := t.hostPool[enodeID]
 	if !exist {
 		return storage.HostInfo{}, false
 	}
@@ -174,8 +175,8 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 }
 
 // SelectRandom will randomly select nodes from the storage host tree based
-// on their evaluation. For any storage host's public key contained in the blacklist,
-// the storage host cannot be selected. For any storage host's public contained in the
+// on their evaluation. For any storage host's enode ID contained in the blacklist,
+// the storage host cannot be selected. For any storage host's enode ID contained in the
 // addrBlacklist, the address's ip network will have to be added into the filter, meaning
 // the storage host with same ip network cannot be selected
 //  	1. handle addrBlacklist
@@ -192,8 +193,8 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []st
 	filter := NewFilter()
 
 	// 1. handle addrBlacklist
-	for _, pubkey := range addrBlacklist {
-		node, exists := t.hostPool[pubkey]
+	for _, enodeID := range addrBlacklist {
+		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
 		}
@@ -201,14 +202,14 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []st
 	}
 
 	// 2. handle blacklist
-	for _, pubkey := range blacklist {
-		node, exists := t.hostPool[pubkey]
+	for _, enodeID := range blacklist {
+		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
 		}
 
 		node.nodeRemove()
-		delete(t.hostPool, pubkey)
+		delete(t.hostPool, enodeID)
 
 		removedNodeEntries = append(removedNodeEntries, node.entry)
 	}
@@ -249,14 +250,14 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []st
 
 		// remove the node
 		node.nodeRemove()
-		delete(t.hostPool, node.entry.PublicKey)
+		delete(t.hostPool, node.entry.EnodeID.String())
 		removedNodeEntries = append(removedNodeEntries, node.entry)
 	}
 
 	// 4. restore storage host tree structure
 	for _, entry := range removedNodeEntries {
 		_, node := t.root.nodeInsert(entry)
-		t.hostPool[node.entry.PublicKey] = node
+		t.hostPool[node.entry.EnodeID.String()] = node
 	}
 
 	return storageHosts
