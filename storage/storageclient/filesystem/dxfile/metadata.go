@@ -7,6 +7,7 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -41,7 +42,7 @@ type (
 		Health              uint32 // Worst health of the file's unstuck chunk
 		StuckHealth         uint32 // Worst health of the file's Stuck chunk
 		TimeLastHealthCheck uint64 // Time of last health check happenning
-		NumStuckChunks      uint32 // Number of Stuck chunks
+		NumStuckSegments    uint32 // Number of Stuck chunks
 		TimeRecentRepair    uint64 // Timestamp of last chunk repair
 		LastRedundancy      uint32 // File redundancy from last check
 
@@ -72,7 +73,45 @@ type (
 		Size             uint64
 		TimeModify       time.Time
 	}
+
+	// CachedHealthMetadata is a helper struct that contains the siafile health
+	// metadata fields that are cached
+	CachedHealthMetadata struct {
+		Health      uint32
+		Redundancy  uint32
+		StuckHealth uint32
+	}
 )
+
+// LocalPath return the local path of a file
+func (df *DxFile) LocalPath() string {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return df.metadata.LocalPath
+}
+
+// SetLocalPath change the value of local path and save to disk
+func (df *DxFile) SetLocalPath(path string) error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	df.metadata.LocalPath = path
+	return df.saveMetadata()
+}
+
+// DxPath return dxfile.metadata.DxPath
+func (df *DxFile) DxPath() string {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return df.metadata.DxPath
+}
+
+// Size return the file size of the dxfile
+func (df *DxFile) FileSize() uint64 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return df.metadata.FileSize
+}
 
 // TimeAccess return the TimeModify of a DxFile
 func (df *DxFile) TimeModify() time.Time {
@@ -92,6 +131,13 @@ func (df *DxFile) TimeAccess() time.Time {
 		panic("TimeAccess uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeAccess), 0)
+}
+
+func (df *DxFile) SetTimeAccess(t time.Time) error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	df.metadata.TimeAccess = uint64(t.Unix())
+	return df.saveMetadata()
 }
 
 // TimeAccess return the last access time of a DxFile
@@ -115,13 +161,20 @@ func (df *DxFile) TimeCreate() time.Time {
 }
 
 // LastTimeHealthCheck return TimeHealthCheck
-func (df *DxFile) LastTimeHealthCheck() time.Time {
+func (df *DxFile) TimeLastHealthCheck() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeRecentRepair) < 0 {
 		panic("TimeRecentRepair uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
+}
+
+func (df *DxFile) SetTimeLastHealthCheck(t time.Time) error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	df.metadata.TimeLastHealthCheck = uint64(t.Unix())
+	return df.saveMetadata()
 }
 
 // LastTimeHealthCheck return TimeHealthCheck
@@ -134,18 +187,19 @@ func (df *DxFile) LastTimeRecentRepair() time.Time {
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
 
+func (df *DxFile) SetTimeRecentRepair(t time.Time) error {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+
+	df.metadata.TimeRecentRepair = uint64(t.Unix())
+	return df.saveMetadata()
+}
+
 // SegmentSize return the size of a segment for a DxFile.
 func (df *DxFile) SegmentSize() uint64 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	return df.metadata.segmentSize()
-}
-
-// LocalPath return the local path of a file
-func (df *DxFile) LocalPath() string {
-	df.lock.RLock()
-	defer df.lock.RUnlock()
-	return df.metadata.LocalPath
 }
 
 // CipherKey return the cipher key
@@ -189,8 +243,50 @@ func (df *DxFile) FileMode() os.FileMode {
 	return df.metadata.FileMode
 }
 
+// SetFileMode change the value of df.metadata.FileMode and save it to file
+func (df *DxFile) SetFileMode(mode os.FileMode) error {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+
+	df.metadata.FileMode = mode
+
+	return df.saveMetadata()
+}
+
+// SectorSize return the sector size of a dxfile
 func (df *DxFile) SectorSize() uint64 {
 	return SectorSize - uint64(crypto.Overhead(df.metadata.CipherKeyCode))
+}
+
+// Rename rename the DxFile, remove the previous dxfile and create a new file to write content on
+func (df *DxFile) Rename(newDxFile string, newDxFilename string) error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	dir, _ := filepath.Split(newDxFilename)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	return df.rename(newDxFile, newDxFilename)
+}
+
+func (df *DxFile) ApplyCachedHealthMetadata(metadata CachedHealthMetadata) error {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+
+	var numStuckSegments uint32
+	for _, seg := range df.segments {
+		if seg.stuck {
+			numStuckSegments++
+		}
+	}
+	df.metadata.Health = metadata.Health
+	df.metadata.NumStuckSegments = numStuckSegments
+	df.metadata.LastRedundancy = metadata.Redundancy
+	df.metadata.StuckHealth = metadata.StuckHealth
+
+	return df.saveMetadata()
 }
 
 

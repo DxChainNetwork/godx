@@ -31,6 +31,7 @@ type (
 		// hostTable is the map of host address to whether the address is used
 		hostTable hostTable
 
+		// TODO: create a indexed list structure for the segments
 		// segments is a list of segments the file is split into
 		segments []*segment
 

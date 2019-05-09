@@ -153,6 +153,8 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 	return df, nil
 }
 
+// TODO: test rename
+
 // Two DxFile are exactly the same if the all fields other than file id are the same
 // (of course not including wal, lock, id, e.t.c
 func checkDxFileEqual(df1, df2 DxFile) error {
@@ -217,9 +219,6 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	if md1.TimeModify != md2.TimeModify {
 		return fmt.Errorf("md.TimeModify not equal:\n\t%+v\n\t%+v", md1.TimeModify, md2.TimeModify)
 	}
-	if md1.TimeUpdate != md2.TimeUpdate {
-		return fmt.Errorf("md.TimeUpdate not equal:\n\t%+v\n\t%+v", md1.TimeUpdate, md2.TimeUpdate)
-	}
 	if md1.TimeAccess != md2.TimeAccess {
 		return fmt.Errorf("md.TimeAccess not equal:\n\t%+v\n\t%+v", md1.TimeAccess, md2.TimeAccess)
 	}
@@ -235,8 +234,8 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	if md1.TimeLastHealthCheck != md2.TimeLastHealthCheck {
 		return fmt.Errorf("md.TimeLastHealthCheck not equal:\n\t%+v\n\t%+v", md1.TimeLastHealthCheck, md2.TimeLastHealthCheck)
 	}
-	if md1.NumStuckChunks != md2.NumStuckChunks {
-		return fmt.Errorf("md.NumStuckChunks not equal:\n\t%+v\n\t%+v", md1.NumStuckChunks, md2.NumStuckChunks)
+	if md1.NumStuckSegments != md2.NumStuckSegments {
+		return fmt.Errorf("md.NumStuckSegments not equal:\n\t%+v\n\t%+v", md1.NumStuckSegments, md2.NumStuckSegments)
 	}
 	if md1.TimeRecentRepair != md2.TimeRecentRepair {
 		return fmt.Errorf("md.TimeRecentRepair not equal:\n\t%+v\n\t%+v", md1.TimeRecentRepair, md2.TimeRecentRepair)

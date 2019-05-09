@@ -96,7 +96,7 @@ func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
 		Health:              100,
 		StuckHealth:         100,
 		TimeLastHealthCheck: uint64(time.Now().Unix()),
-		NumStuckChunks:      32,
+		NumStuckSegments:    32,
 		TimeRecentRepair:    uint64(time.Now().Unix()),
 		LastRedundancy:      100,
 		FileMode:            0777,
