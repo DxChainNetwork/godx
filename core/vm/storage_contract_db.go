@@ -47,8 +47,8 @@ func SplitStorageContractID(key []byte) (uint64, common.Hash) {
 }
 
 func GetStorageContract(db ethdb.Database, storageContractID common.Hash) (types.StorageContract, error) {
-	scdb:=ethdb.StorageContractDB{db}
-	valueBytes, err := scdb.GetWithPrefix( storageContractID, PrefixStorageContract)
+	scdb := ethdb.StorageContractDB{db}
+	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixStorageContract)
 	if err != nil {
 		return types.StorageContract{}, err
 	}
@@ -63,24 +63,28 @@ func GetStorageContract(db ethdb.Database, storageContractID common.Hash) (types
 
 // StorageContractID ==》StorageContract
 func StoreStorageContract(db ethdb.Database, storageContractID common.Hash, sc types.StorageContract) error {
-	scdb:=ethdb.StorageContractDB{db}
-	return scdb.StoreWithPrefix( storageContractID, sc, PrefixStorageContract)
+	scdb := ethdb.StorageContractDB{db}
+	data, err := rlp.EncodeToBytes(sc)
+	if err != nil {
+		return err
+	}
+	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageContract)
 }
 
 func DeleteStorageContract(db ethdb.Database, storageContractID common.Hash) error {
-	scdb:=ethdb.StorageContractDB{db}
-	return scdb.DeleteWithPrefix( storageContractID, PrefixStorageContract)
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.DeleteWithPrefix(storageContractID, PrefixStorageContract)
 }
 
 // StorageContractID ==》[]byte{}
 func StoreExpireStorageContract(db ethdb.Database, storageContractID common.Hash, windowEnd uint64) error {
 	windowStr := strconv.FormatUint(uint64(windowEnd), 10)
-	scdb:=ethdb.StorageContractDB{db}
-	return scdb.StoreWithPrefix( storageContractID, []byte{}, PrefixExpireStorageContract+windowStr+"-")
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.StoreWithPrefix(storageContractID, []byte{}, PrefixExpireStorageContract+windowStr+"-")
 }
 
 func DeleteExpireStorageContract(db ethdb.Database, storageContractID common.Hash, height uint64) error {
 	heightStr := strconv.FormatUint(uint64(height), 10)
-	scdb:=ethdb.StorageContractDB{db}
-	return scdb.DeleteWithPrefix( storageContractID, PrefixExpireStorageContract+heightStr+"-")
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.DeleteWithPrefix(storageContractID, PrefixExpireStorageContract+heightStr+"-")
 }

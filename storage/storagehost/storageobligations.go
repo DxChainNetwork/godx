@@ -12,7 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -24,7 +23,10 @@ const (
 	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
 
+	RespendTimeout = 40
+
 	PrefixStorageObligation = "storageobligation-"
+	PrefixHeight            = "height-"
 )
 
 const (
@@ -328,8 +330,18 @@ func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []common.
 func (h *StorageHost) queueActionItem(height uint64, id common.Hash) error {
 
 	if height < h.blockHeight {
-
+		h.log.Info("action item queued improperly")
 	}
+
+	err := func() error {
+
+		return nil
+	}()
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -348,7 +360,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 		h.lock.Lock()
 		defer h.lock.Unlock()
 		if _, ok := h.lockedStorageObligations[so.id()]; ok {
-			log.Info("addStorageObligation called with an obligation that is not locked")
+			h.log.Info("addStorageObligation called with an obligation that is not locked")
 		}
 
 		// Sanity check - There needs to be enough time left on the file contract
@@ -432,7 +444,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 // 虚拟扇区将需要多次出现在“sectorRemoved”中。 与'sectorGained'相同。
 func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageObligations[so.id()]; ok {
-		log.Info("modifyStorageObligation called with an obligation that is not locked")
+		h.log.Info("modifyStorageObligation called with an obligation that is not locked")
 	}
 
 	// Sanity check - there needs to be enough time to submit the file contract
@@ -558,18 +570,176 @@ func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageOblig
 // this method updates the host financial metrics to show the correct values.
 //将删除主机的存储义务，无论出于何种原因，它都不会在块链上进行
 //由于这些陈旧的存储义务会对主机财务指标产生影响，因此此方法会更新主机财务指标以显示正确的值。
-func (h *StorageHost) PruneStaleStorageObligations() error {
+func (h *StorageHost) PruneStaleStorageObligations(db ethdb.Database) error {
+
+	sos := h.StorageObligations(db)
+	var scids []common.Hash
+	for _, so := range sos {
+		//TODO 交易确认
+		//@xiaofeiliu
+		//	if (h.blockHeight > so.NegotiationHeight+40) && !conf {
+		if h.blockHeight > so.NegotiationHeight+RespendTimeout {
+			scids = append(scids, so.StorageContractid)
+		}
+
+	}
+
+	// Delete stale obligations from the database.
+	err := h.deleteStorageObligations(db, scids)
+	if err != nil {
+		return err
+	}
+
+	// Update the financial metrics of the host.
+	err = h.resetFinancialMetrics(db)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // removeStorageObligation will remove a storage obligation from the host,
 // either due to failure or success.
 // removeStorageObligation将删除主机的存储义务，无论是由于失败还是成功。
-func (h *StorageHost) removeStorageObligation(so StorageObligation, sos storageObligationStatus) error {
+func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageObligation, sos storageObligationStatus) error {
+
+	//TODO Error is not checked, we want to call remove on every sector even if
+	// there are problems - disk health information will be updated.
+	//_ = h.RemoveSectorBatch(so.SectorRoots)
+
+	// Update the host revenue metrics based on the status of the obligation.
+	// 根据义务状态更新主机收入指标。
+	if sos == obligationUnresolved { //Rejected 未解决
+		h.log.Info("storage obligation 'unresolved' during call to removeStorageObligation, id", so.id())
+	}
+	if sos == obligationRejected { //Rejected	被拒绝的
+		if h.financialMetrics.TransactionFeeExpenses.Cmp(so.TransactionFeesAdded) >= 0 {
+			h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Sub(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
+
+			// Remove the obligation statistics as potential risk and income.	删除义务统计数据作为潜在风险和收益
+			h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
+			h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
+			h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
+			h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+			h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+			h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+		}
+	}
+
+	if sos == obligationSucceeded {
+		// Empty obligations don't submit a storage proof. The revenue for an empty
+		// storage obligation should equal the contract cost of the obligation
+		// 空义务不提交存储证明。 空存储债务的收入应等于该义务的合同成本
+		//revenue := so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
+		revenue := new(big.Int).Add(so.ContractCost, so.PotentialStorageRevenue)
+		revenue = new(big.Int).Add(revenue, so.PotentialDownloadRevenue)
+		revenue = new(big.Int).Add(revenue, so.PotentialUploadRevenue)
+		if len(so.SectorRoots) == 0 {
+			h.log.Info("No need to submit a storage proof for empty contract. Revenue is %v.\n", revenue)
+		} else {
+			h.log.Info("Successfully submitted a storage proof. Revenue is %v.\n", revenue)
+		}
+
+		// Remove the obligation statistics as potential risk and income. 删除义务统计数据作为潜在风险和收益
+		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+
+		// Add the obligation statistics as actual income. 添加义务统计数据作为实际的收益
+		h.financialMetrics.ContractCompensation = *new(big.Int).Add(&h.financialMetrics.ContractCompensation, so.ContractCost)
+		h.financialMetrics.StorageRevenue = *new(big.Int).Add(&h.financialMetrics.StorageRevenue, so.PotentialStorageRevenue)
+		h.financialMetrics.DownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.DownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+		h.financialMetrics.UploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.UploadBandwidthRevenue, so.PotentialUploadRevenue)
+	}
+
+	if sos == obligationFailed {
+		// Remove the obligation statistics as potential risk and income.	删除义务统计数据作为潜在风险和收益
+
+		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+
+		// Add the obligation statistics as loss.	将义务统计添加为损失
+		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.RiskedCollateral)
+
+		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.ContractCost)
+		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialStorageRevenue)
+		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialDownloadRevenue)
+		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialUploadRevenue)
+
+	}
+
+	// Update the storage obligation to be finalized but still in-database. The
+	// obligation status is updated so that the user can see how the obligation
+	// ended up, and the sector roots are removed because they are large
+	// objects with little purpose once storage proofs are no longer needed.
+	// 更新存储义务即可最终确定但仍在数据库中。
+	// 更新义务状态，以便用户可以看到义务如何结束，并且删除扇区根源，因为它们是大型对象，一旦不再需要存储证明就没有用处。
+	h.financialMetrics.ContractCount--
+	so.ObligationStatus = sos
+	so.SectorRoots = common.Hash{}
+
+	errDb := StoreStorageObligation(db, so.id(), so)
+	if errDb != nil {
+		return errDb
+	}
+
 	return nil
 }
 
-func (h *StorageHost) resetFinancialMetrics() error {
+func (h *StorageHost) resetFinancialMetrics(db ethdb.Database) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	fm := HostFinancialMetrics{}
+
+	sos := h.StorageObligations(db)
+
+	for _, so := range sos {
+		// Transaction fees are always added.
+		fm.TransactionFeeExpenses = *new(big.Int).Add(&fm.TransactionFeeExpenses, so.TransactionFeesAdded)
+		// Update the other financial values based on the obligation status.
+		if so.ObligationStatus == obligationUnresolved {
+			fm.ContractCount++
+			fm.PotentialContractCompensation = *new(big.Int).Add(&fm.PotentialContractCompensation, so.ContractCost)
+			fm.LockedStorageDeposit = *new(big.Int).Add(&fm.LockedStorageDeposit, so.LockedCollateral)
+			fm.PotentialStorageRevenue = *new(big.Int).Add(&fm.PotentialStorageRevenue, so.PotentialStorageRevenue)
+			fm.RiskedStorageDeposit = *new(big.Int).Add(&fm.RiskedStorageDeposit, so.RiskedCollateral)
+			fm.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&fm.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+			fm.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&fm.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+		}
+
+		if so.ObligationStatus == obligationSucceeded {
+			fm.ContractCompensation = *new(big.Int).Add(&fm.ContractCompensation, so.ContractCost)
+			fm.StorageRevenue = *new(big.Int).Add(&fm.StorageRevenue, so.PotentialStorageRevenue)
+			fm.DownloadBandwidthRevenue = *new(big.Int).Add(&fm.DownloadBandwidthRevenue, so.PotentialDownloadRevenue)
+			fm.UploadBandwidthRevenue = *new(big.Int).Add(&fm.UploadBandwidthRevenue, so.PotentialUploadRevenue)
+		}
+		if so.ObligationStatus == obligationFailed {
+			// If there was no risked collateral for the failed obligation, we don't
+			// update anything since no revenues were lost. Only the contract compensation
+			// and transaction fees are added.
+			fm.ContractCompensation = *new(big.Int).Add(&fm.ContractCompensation, so.ContractCost)
+			if false { //!so.RiskedCollateral.IsZero()
+				// Storage obligation failed with risked collateral.
+				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialStorageRevenue)
+				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialDownloadRevenue)
+				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialUploadRevenue)
+				fm.LockedStorageDeposit = *new(big.Int).Add(&fm.LockedStorageDeposit, so.RiskedCollateral)
+			}
+		}
+
+	}
+
+	h.financialMetrics = fm
+
 	return nil
 }
 
@@ -581,15 +751,33 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 
 // StorageObligations fetches the set of storage obligations in the host and
 // returns metadata on them.	StorageObligations获取主机中的存储义务集并返回其上的元数据。
-func (h *StorageHost) StorageObligations() (sos []StorageObligation) {
-	return nil
+func (h *StorageHost) StorageObligations(db ethdb.Database) (sos []StorageObligation) {
+
+	if len(h.lockedStorageObligations) < 1 {
+		return nil
+	}
+
+	for i := range h.lockedStorageObligations {
+		so, err := GetStorageObligation(db, i)
+		if err != nil {
+			continue
+		}
+
+		sos = append(sos, so)
+	}
+
+	return sos
 }
 
 // definition of storage obligation db operation:
 
 func StoreStorageObligation(db ethdb.Database, storageContractID common.Hash, so StorageObligation) error {
 	scdb := ethdb.StorageContractDB{db}
-	return scdb.StoreWithPrefix(storageContractID, so, PrefixStorageObligation)
+	data, err := rlp.EncodeToBytes(so)
+	if err != nil {
+		return err
+	}
+	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageObligation)
 }
 
 func DeleteStorageObligation(db ethdb.Database, storageContractID common.Hash) error {
@@ -609,4 +797,45 @@ func GetStorageObligation(db ethdb.Database, storageContractID common.Hash) (Sto
 		return StorageObligation{}, err
 	}
 	return so, nil
+}
+
+func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64) error {
+	scdb := ethdb.StorageContractDB{db}
+
+	hinfo := struct {
+		Height uint64
+	}{
+		Height: height,
+	}
+
+	data, err := rlp.EncodeToBytes(&hinfo)
+	if err != nil {
+		return err
+	}
+
+	return scdb.StoreWithPrefix(storageContractID, data, PrefixHeight)
+}
+
+func DeleteHeight(db ethdb.Database, storageContractID common.Hash) error {
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.DeleteWithPrefix(storageContractID, PrefixHeight)
+}
+
+func GetHeight(db ethdb.Database, storageContractID common.Hash) (uint64, error) {
+	scdb := ethdb.StorageContractDB{db}
+	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	hinfo := struct {
+		Height uint64
+	}{}
+
+	err = rlp.DecodeBytes(valueBytes, &hinfo)
+	if err != nil {
+		return 0, err
+	}
+
+	return hinfo.Height, nil
 }
