@@ -4,17 +4,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage/storagehost/storagemanager/bitvector"
 )
 
-// TODO: don't directly return the err
-// TODO: add this stuff in commit stage
-// TODO: what if the folder is in progress but not commit: use wal lock
-
+// prepareAddStorageFolder manage the first step for adding a folder
 func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*storageFolder, error) {
 	var err error
+
 	// check the number of sectors
 	sectors := size / SectorSize
 
@@ -33,24 +28,16 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 		return nil, errors.New("folder size should be a multiple of 64")
 	}
 
-	// if is in the standard mode, no worry is not the absolute path, but
-	// we do need the folder be absolute path in standard mode
+	// if the mode is not standard mode, a relative path is allowed to use
+	// for simplify the testing
 	if Mode == STD && !filepath.IsAbs(path) {
 		return nil, errors.New("given path is not an absolute path")
 	}
 
-	// make the dir. If the dir is already exist or the status is not health
-	// the circumstance are already be handled in the MkdirAll function,
-	// TODO: test what happen if the meta, sector already exist in the folder
-	if err = os.MkdirAll(path, 0700); err != nil {
-		return nil, err
-	}
-
 	// create a folder object
 	sf := &storageFolder{
-		path:       path,
-		usage:      make([]bitvector.BitVector, sectors/granularity),
-		freeSector: make(map[sectorID]uint32),
+		path:  path,
+		usage: make([]BitVector, sectors/granularity),
 	}
 
 	// in order to prevent duplicate add
@@ -64,9 +51,8 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 		return nil, errors.New("reach the limitation of maximum number of folder")
 	}
 
-	// TODO: 什么情况下folder没有被记录到config中，可能导致data被重写? 假设已经有folder没有被映射
-
-	// check if the folder is not a duplicate one
+	// loop through the folders in memory, if the folder intend to
+	// override a existing storage folder, return an error
 	for _, f := range sm.folders {
 		if path == f.path {
 			return nil, ErrFolderAlreadyExist
@@ -79,40 +65,38 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 		return nil, err
 	}
 
-	// persist the change to the json file
-	// log the prepare stage of the folder addition
-	persist := sf.extractFolder()
-	err = sm.wal.writeEntry(logEntry{PrepareAddStorageFolder: []folderPersist{persist}})
+	// extract the config for the folder and write into log
+	sfConfig := sf.extractFolder()
+	err = sm.wal.writeEntry(logEntry{PrepareAddStorageFolder: []folderPersist{sfConfig}})
 	if err != nil {
-		// TODO : consider just crashing the system to prevent corruption
-		return nil, errors.New("cannot write wal, consider crashing in the future")
+		return nil, errors.New("cannot write wal")
 	}
 
-	// this step make change to the storage manager on the
-	// mapping of folders
+	// manage map the folder
 	sm.folderLock.Lock()
 	defer sm.folderLock.Unlock()
 
-	// map the new folder to the folder map
+	// TODO: if this is map. how to handle when sector need to write data to this folder
 	sm.folders[sf.index] = sf
 
 	return sf, nil
 }
 
+// TODO: revert add storage folder
+// TODO: create would redo the already existing file
+
+// processAddStorageFolder start to create metadata files and sector file
+// for the folder object. Also include truncating
 func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
+	sf.lock.Lock()
+	defer sf.lock.Unlock()
+
 	var err error
 
-	// if at the end, there is error, revert all the things done
-	defer func() {
-		if err != nil {
-			err = common.ErrCompose(err, sm.revertAddStorageFolder(sf))
-		}
-	}()
-
-	// TODO: if the folder exist but no record, the Create of sector file
-	//  and metadata file are possible to clear the original one, dangerous operation,
-	//  but seems this is handled by record the formation of folder when
-	//  checking duplicate path.
+	// create all the directory
+	if err = os.MkdirAll(sf.path, 0700); err != nil {
+		return err
+	}
 
 	// create the metadata file
 	sf.sectorMeta, err = os.Create(filepath.Join(sf.path, sectorMetaFileName))
@@ -138,51 +122,51 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 		return err
 	}
 
-	// TODO: synchronize the files
-
-	// if all things work as expected, record the change
+	// lock wal to write entry
 	sm.wal.lock.Lock()
-	persist := sf.extractFolder()
-	err = sm.wal.writeEntry(logEntry{ProcessedAddStorageFolder: []folderPersist{persist}})
-	if err != nil {
-		// TODO : consider just crashing the system to prevent corruption
-		return errors.New("cannot write wal, consider crashing in the future")
-	}
-	sm.wal.lock.Unlock()
+	defer sm.wal.lock.Unlock()
 
-	// TODO: refresh the mapping even though it have already been added?
+	// extract the folder information and write to entry
+	sfConfig := sf.extractFolder()
+	err = sm.wal.writeEntry(logEntry{ProcessedAddStorageFolder: []folderPersist{sfConfig}})
+	if err != nil {
+		return errors.New("cannot write wal, consider crashing in future")
+	}
+
+	// re update the folder mapping
 	sm.folderLock.Lock()
 	defer sm.folderLock.Unlock()
+
 	sm.folders[sf.index] = sf
 
 	return nil
 }
 
-// revertAddStorageFolder revert the change of the storage folder
-func (sm *storageManager) revertAddStorageFolder(sf *storageFolder) error {
-	var err error
+func findUnprocessedFolderAddition(entries []logEntry) []folderPersist {
+	entryMap := make(map[uint16]folderPersist)
 
-	// extract the information of folder to be removed
-	// and record the folder information to the log
-	persist := sf.extractFolder()
-	err = sm.wal.writeEntry(logEntry{RevertAddStorageFolder: []folderPersist{persist}})
-	if err != nil {
-		// TODO : consider just crashing the system to prevent corruption
-		return errors.New("cannot write wal, consider crashing in the future")
+	for _, entry := range entries {
+		// add all the folder in prepare stage
+		for _, sf := range entry.PrepareAddStorageFolder {
+			entryMap[sf.Index] = sf
+		}
+
+		// delete all the folder processed add operation
+		for _, sf := range entry.ProcessedAddStorageFolder {
+			delete(entryMap, sf.Index)
+		}
+
+		// delete all the folder in revert state
+		for _, sf := range entry.RevertAddStorageFolder {
+			delete(entryMap, sf.Index)
+		}
+
+		// TODO: delete the folder in removal stage
 	}
-	sm.folderLock.Lock()
-	defer sm.folderLock.Unlock()
 
-	// delete the folder from the mapping
-	delete(sm.folders, sf.index)
-
-	// close and remove the sector file, metadata file
-
-	err = common.ErrCompose(err, sf.sectorData.Close())
-	err = common.ErrCompose(err, sf.sectorMeta.Close())
-	// using of removeAll to simplify the case that the sector or meta file have not been create yet
-	err = common.ErrCompose(err, os.RemoveAll(filepath.Join(sf.path, sectorDataFileName)))
-	err = common.ErrCompose(err, os.RemoveAll(filepath.Join(sf.path, sectorMetaFileName)))
-
-	return err
+	var folders []folderPersist
+	for _, sf := range entryMap {
+		folders = append(folders, sf)
+	}
+	return folders
 }

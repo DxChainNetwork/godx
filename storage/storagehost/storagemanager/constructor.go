@@ -1,116 +1,128 @@
 package storagemanager
 
 import (
-	"crypto/rand"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync/atomic"
-
-	"github.com/DxChainNetwork/godx/common"
-	tm "github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/log"
+	"time"
 )
 
+// newStorageManager would help to create a storage manager by given persisDir
 func newStorageManager(persistDir string) (*storageManager, error) {
+	// create a storage manager object
 	sm := &storageManager{
-		// loads the persist dir to current object
+		log:        log.New(),
 		persistDir: persistDir,
-		// create the logger
-		log: log.New(),
-		// initialize folders and sectors map
-		folders: make(map[uint16]*storageFolder),
-		sectors: make(map[sectorID]*storageSector),
-
-		// create the thread manager
-		tm: new(tm.ThreadManager),
-		// TODO: non complete create of wal
-		wal: new(writeAheadLog),
+		stopChan:   make(chan struct{}),
+		folders:    make(map[uint16]*storageFolder),
+		wal:        new(writeAheadLog),
 	}
 
-	// TODO: shut down wal
+	// if there is any error , close the storage manager
+	var err error
+	defer func() {
+		if err != nil {
+			err = common.ErrCompose(err, sm.Close())
+		}
+	}()
 
+	// construct the body of storage manager
+	if err = constructManager(sm); err != nil {
+		return nil, err
+	}
 
-	// try to load every thing from the config file
-	if err := sm.constructManager(); err != nil {
+	// then construct the writeAheadLog
+	if err = constructWriteAheadLog(sm.wal, sm.persistDir); err != nil {
 		return nil, err
 	}
 
 	return sm, nil
 }
 
-// constructManager construct the manager object through the config file
-// if the config file could not be found, use the default setting, if the
-// error is not caused by the FILE NOT FOUND Exception, return the error
-func (sm *storageManager) constructManager() error {
+// construct the writeAheadLog
+// TODO: recover process,
+func constructWriteAheadLog(wal *writeAheadLog, persisDir string) error {
+	wal.entries = make([]logEntry, 0)
+	var walErr, confErr error
+	wal.walFileTmp, walErr = os.Create(filepath.Join(persisDir, walFileTmp))
+	wal.configTmp, confErr = os.Create(filepath.Join(persisDir, configFileTmp))
+	return common.ErrCompose(walErr, confErr)
+}
+
+// constructManager construct the body of storage manager, according to the
+// config file, each sector and folders object would be create
+func constructManager(sm *storageManager) error {
 	var err error
 
-	if err = os.MkdirAll(sm.persistDir, 0700); err != nil {
+	// make up dir for storing
+	if err := os.MkdirAll(sm.persistDir, 0700); err != nil {
 		return err
 	}
 
-	// TODO: add to another place
-	sm.wal.walFileTmp, err = os.Create(filepath.Join(sm.persistDir, walFile))
-	if err != nil {
-		return err
-	}
-
-	persist := &persistence{}
-	err = common.LoadDxJSON(configMetadata, filepath.Join(sm.persistDir, configFile), persist)
+	// loads the config from the config log
+	config := &configPersist{}
+	err = common.LoadDxJSON(configMetadata, filepath.Join(sm.persistDir, configFile), config)
+	// if cannot find any config file
 	if os.IsNotExist(err) {
-		// if the config file could not be found, do the default settings
-		return sm.constructManagerDefault()
+		// use the default setting for constructing the storage manager
+		return constructManagerDefault(sm)
 	} else if err != nil {
+		// if the error is not caused by the FILE NOT FOUND
 		return err
 	}
 
-	// loads the storageSector salt to the storageManager
-	sm.sectorSalt = persist.SectorSalt
-	// create each of the storageFolder through storageFolder factory
-	sm.constructFolders(persist.Folders)
-
+	// loads the sector salt and construct the folders object
+	sm.sectorSalt = config.SectorSalt
+	constructFolders(sm, config.Folders)
 	return nil
 }
 
-// constructFolders read from metadata and construct each folder
-func (sm *storageManager) constructFolders(folders []folderPersist) {
+// constructFolders construct the folder object for storage manager
+func constructFolders(sm *storageManager, folders []folderPersist) {
 	var err error
 
-	// loop through each folders, and check the availability
+	// create folders for from the persisted info
 	for _, folder := range folders {
 		f := &storageFolder{
-			index:      folder.Index,
-			path:       folder.Path,
-			usage:      folder.Usage,
-			freeSector: make(map[sectorID]uint32),
+			index: folder.Index,
+			path:  folder.Path,
+			usage: folder.Usage,
 		}
 
+		// try to open the sector metadata file
 		f.sectorMeta, err = os.OpenFile(filepath.Join(f.path, sectorMetaFileName), os.O_RDWR, 0700)
 		if err != nil {
 			atomic.StoreUint64(&f.atomicUnavailable, 1)
-			sm.log.Warn("fail to open sector metadata file for folder: ", f.path)
 		}
 
+		// try to open the sector data file
 		f.sectorData, err = os.OpenFile(filepath.Join(f.path, sectorDataFileName), os.O_RDWR, 0700)
 		if err != nil {
 			atomic.StoreUint64(&f.atomicUnavailable, 1)
-			sm.log.Warn("fail to open sector data file for folder: ", f.path)
 		}
 
+		// map the folder object using the index
 		sm.folders[f.index] = f
-
-		// TODO: init the sectors from each folder
 	}
 }
 
-// constructManagerDefault construct storageManager using default setting
-// read a random bytes for salt
-func (sm *storageManager) constructManagerDefault() error {
+// construct the default storage manager setting
+func constructManagerDefault(sm *storageManager) error {
 	var err error
-	// get a random bytes for sector Salt
+
+	// random a seeds for rand, and generate a sector salt
+	rand.Seed(time.Now().UTC().UnixNano())
 	if _, err = rand.Read(sm.sectorSalt[:]); err != nil {
 		return err
 	}
 
-	// synchronize the configuration
-	return sm.syncConfig()
+	// manage to synchronize the default config to config file
+	if err := sm.syncConfigForce(); err != nil {
+		return err
+	}
+
+	return nil
 }

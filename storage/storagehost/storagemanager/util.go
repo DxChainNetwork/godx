@@ -2,7 +2,7 @@ package storagemanager
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common/math"
+	"math"
 	"math/rand"
 	"time"
 )

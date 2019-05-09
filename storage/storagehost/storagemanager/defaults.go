@@ -1,25 +1,25 @@
 package storagemanager
 
-import "github.com/DxChainNetwork/godx/common"
+import (
+	"github.com/DxChainNetwork/godx/common"
+	"time"
+)
 
 const (
-	// STD and TST is the mode of setting for initialization
-	// of to fits both the testing and standard requirement
 	STD = iota
 	TST
 
-	// configFile is name of the config file
 	configFile = "config.sys"
-	// walFileTmp is the file which record the change of the system
-	walFile = "wal.log"
-	// sectorMetaFileName is the name of sector metadata file
-	// which store the sector information
+	walFile    = "wal.log"
+
+	configFileTmp = "configTmp.sys"
+	walFileTmp    = "walTmp.log"
+
 	sectorMetaFileName = "sectormeta.dat"
-	// sectorDataFileName is the name of sector file,
-	// which store the actual data of sector
 	sectorDataFileName = "sectordata.dat"
-	// specify the granularity of storage, means 64 sector would form
-	// as a granularity
+
+	commitFrequency = 500 * time.Millisecond
+
 	granularity = 64
 )
 
@@ -52,16 +52,6 @@ var (
 
 type SELECT map[int]interface{}
 
-// init first initialize the settings to a standard mode, if further
-// testing environment is needed, buildSetting would be called again to
-// switch the setting value
-func init() {
-	buildSetting(STD)
-}
-
-// buildSetting help the initializer init the global vars. In order to fits
-// the data comfortable for both standard mode and testing mode, this function
-// may be called to switch data for caller's need
 func buildSetting(mode int) {
 	Mode = mode
 

@@ -8,8 +8,10 @@ import (
 
 type writeAheadLog struct {
 	walFileTmp *os.File
+	configTmp  *os.File
 
-	entries []logEntry
+	entries      []logEntry
+	loggedConfig *configPersist
 
 	lock sync.Mutex
 }
@@ -20,9 +22,10 @@ type logEntry struct {
 	RevertAddStorageFolder    []folderPersist
 }
 
-// writeEntry write the wal entry
-// Require: lock of wal should be handle by the caller
-// Effect: append new log entry to the wal
+func (wal *writeAheadLog) Close() {
+
+}
+
 func (wal *writeAheadLog) writeEntry(entries ...logEntry) error {
 	changeBytes, err := json.MarshalIndent(entries, "", "\t")
 	if err != nil {
@@ -37,5 +40,17 @@ func (wal *writeAheadLog) writeEntry(entries ...logEntry) error {
 
 	wal.entries = append(wal.entries, entries...)
 
+	return nil
+}
+
+func (wal *writeAheadLog) writeWALMeta() error {
+	changeBytes, err := json.MarshalIndent(walMetadata, "", "\t")
+	if err != nil {
+		return err
+	}
+	_, err = wal.walFileTmp.Write(changeBytes)
+	if err != nil {
+		return err
+	}
 	return nil
 }
