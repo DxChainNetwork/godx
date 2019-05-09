@@ -11,7 +11,7 @@ import (
 
 func TestSplitStorageContractID(t *testing.T) {
 	wantedHeight := uint64(123)
-	wantedStorageContractID := types.StorageContractID(common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7"))
+	wantedStorageContractID := common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7")
 
 	keyBytes, err := makeKey(PrefixExpireStorageContract+"123-", wantedStorageContractID)
 	if err != nil {
@@ -35,8 +35,8 @@ func TestStorageContractDB(t *testing.T) {
 	sc := types.StorageContract{
 		FileSize:       2048,
 		FileMerkleRoot: common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7"),
-		WindowStart:    types.BlockHeight(234),
-		WindowEnd:      types.BlockHeight(345),
+		WindowStart:    uint64(234),
+		WindowEnd:      uint64(345),
 		RenterCollateral: types.DxcoinCollateral{
 			DxcoinCharge: types.DxcoinCharge{
 				Address: common.HexToAddress("0xcf1FA0d741F155Bd2cF69A5a791C81BB8222118D"),
@@ -57,7 +57,7 @@ func TestStorageContractDB(t *testing.T) {
 			{Address: common.HexToAddress("0xcf1FA0d741F155Bd2cF69A5a791C81BB8222118D"),
 				Value: new(big.Int).SetInt64(10000)},
 		},
-		UnlockHash:     types.UnlockHash(common.HexToHash("0x000000000000000000000000000000000000000A")),
+		UnlockHash:     common.HexToHash("0x000000000000000000000000000000000000000A"),
 		RevisionNumber: 111,
 	}
 
