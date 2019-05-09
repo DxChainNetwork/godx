@@ -144,3 +144,7 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 
 	return nil
 }
+
+func (c *contractManager) FormContract(params ContractParams) {
+	// TODO
+}
