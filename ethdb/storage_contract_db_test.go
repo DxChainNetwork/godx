@@ -3,8 +3,6 @@ package ethdb
 import (
 	"bytes"
 	"testing"
-
-	"github.com/DxChainNetwork/godx/rlp"
 )
 
 func TestMakeKey(t *testing.T) {
@@ -40,15 +38,8 @@ func TestStorageContractDBOperation(t *testing.T) {
 		t.Errorf("something wrong to query key-value: %v", err)
 	}
 
-	// NOTE: everything stored in DB is rlp-decoded, so please rlp-encode it after get from db
-	getted := ""
-	err = rlp.DecodeBytes(gettedValue, &getted)
-	if err != nil {
-		t.Errorf("something wrong to rlp decode: %v", err)
-	}
-
-	if value != getted {
-		t.Errorf("wanted %s, getted %s", value, getted)
+	if value != string(gettedValue) {
+		t.Errorf("wanted %s, getted %s", value, string(gettedValue))
 	}
 
 	// delete
