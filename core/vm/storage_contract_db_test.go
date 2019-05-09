@@ -13,7 +13,7 @@ func TestSplitStorageContractID(t *testing.T) {
 	wantedHeight := uint64(123)
 	wantedStorageContractID := common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7")
 
-	keyBytes, err := makeKey(PrefixExpireStorageContract+"123-", wantedStorageContractID)
+	keyBytes, err := ethdb.MakeKey(PrefixExpireStorageContract+"123-", wantedStorageContractID)
 	if err != nil {
 		t.Errorf("failed to make key: %v", err)
 	}
