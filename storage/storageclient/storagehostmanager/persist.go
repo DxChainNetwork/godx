@@ -1,7 +1,7 @@
 package storagehostmanager
 
 import (
-	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,7 +25,6 @@ type persistence struct {
 }
 
 func (shm *StorageHostManager) saveSettings() error {
-	fmt.Println("save settings")
 	persist := shm.persistUpdate()
 	return common.SaveDxJSON(settingsMetadata, filepath.Join(shm.persistDir, PersistFilename), persist)
 }
@@ -41,10 +40,11 @@ func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 }
 
 func (shm *StorageHostManager) autoSaveSettings() {
-	err := shm.tm.Add()
-	if err != nil {
+	if err := shm.tm.Add(); err != nil {
+		log.Warn("failed to start auto save settings when initializing storage")
 		return
 	}
+
 	defer shm.tm.Done()
 
 	for {
@@ -86,11 +86,6 @@ func (shm *StorageHostManager) loadSettings() error {
 
 	// update the storage host tree
 	for _, info := range persist.StorageHostsInfo {
-		// verify the storage host information
-		// making sure everything is up to date
-		if shm.blockHeight < info.FirstSeen {
-			info.FirstSeen = shm.blockHeight
-		}
 
 		// insert the storage host
 		err := shm.insert(info)

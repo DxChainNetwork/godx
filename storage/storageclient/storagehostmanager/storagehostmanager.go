@@ -7,7 +7,6 @@ package storagehostmanager
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -26,10 +25,6 @@ type StorageHostManager struct {
 	// peer to peer communication
 	p2pServer *p2p.Server
 
-	// getting related information
-	ethInfo *ethapi.PublicEthereumAPI
-	netInfo *ethapi.PublicNetAPI
-
 	rent            storage.RentPayment
 	evalFunc        storagehosttree.EvaluationFunc
 	storageHostTree *storagehosttree.StorageHostTree
@@ -38,9 +33,9 @@ type StorageHostManager struct {
 	disableIPViolationCheck bool
 
 	// maintenance related
-	initialScanFinished bool
+	initialScan         bool
 	scanWaitList        []storage.HostInfo
-	scanPool            map[string]struct{}
+	scanLookup            map[string]struct{}
 	scanWait            bool
 	scanningRoutines    int
 
@@ -61,18 +56,16 @@ type StorageHostManager struct {
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
-func New(persistDir string, ethInfo *ethapi.PublicEthereumAPI, netInfo *ethapi.PublicNetAPI, server *p2p.Server, eth storage.ClientBackend) (*StorageHostManager, error) {
+func New(persistDir string, server *p2p.Server, b storage.ClientBackend) (*StorageHostManager, error) {
 	// initialization
 	shm := &StorageHostManager{
-		b:          eth,
+		b:          b,
 		p2pServer:  server,
-		ethInfo:    ethInfo,
-		netInfo:    netInfo,
 		persistDir: persistDir,
 
 		rent: storage.DefaultRentPayment,
 
-		scanPool:      make(map[string]struct{}),
+		scanLookup:      make(map[string]struct{}),
 		filteredHosts: make(map[string]enode.ID),
 	}
 
@@ -82,39 +75,32 @@ func New(persistDir string, ethInfo *ethapi.PublicEthereumAPI, netInfo *ethapi.P
 	shm.log = log.New()
 
 	// load prior settings
-	shm.lock.Lock()
 	err := shm.loadSettings()
-	shm.lock.Unlock()
 
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 
-	err = shm.tm.AfterStop(func() error {
-		// save the settings
-		shm.lock.Lock()
-		err = shm.saveSettings()
-		shm.lock.Unlock()
-
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
+	if err := shm.tm.AfterStop(func() error {
+		return shm.saveSettings()
+	}); err != nil {
 		return nil, err
 	}
 
 	// automatically save the settings every 2 minutes
 	go shm.autoSaveSettings()
 
-	// TODO: (mzhang) consensus subscription
+	// subscribe consensus change
+	go shm.SubscribeChainChangEvent()
 
 	// started scan and update storage host information
 	go shm.scan()
 
 	return shm, nil
+}
+
+func (shm *StorageHostManager) Close() error {
+	return shm.tm.Stop()
 }
 
 // insert will insert host information into the storageHostTree

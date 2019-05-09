@@ -8,8 +8,8 @@ import (
 )
 
 func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
-	// check if the error is caused by the storage client is not online
-	if err != nil && shm.netInfo.PeerCount() == 0 {
+
+	if err != nil && !shm.b.Online() {
 		return
 	}
 

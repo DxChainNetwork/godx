@@ -13,20 +13,21 @@ import (
 )
 
 func (shm *StorageHostManager) scan() {
-	err := shm.tm.Add()
-	if err != nil {
+	if err := shm.tm.Add(); err != nil {
+		shm.log.Warn("Failed to launch scan task when initializing storage host manager")
 		return
 	}
 	defer shm.tm.Done()
 
-	// wait until the node is fully synced
+	// wait until the node is fully synced (no block chain change)
+	// the information acquired will be more stable
 	shm.waitSync()
 
 	// get all storage hosts who have not been scanned before or no historical information
 	allStorageHosts := shm.storageHostTree.All()
 	shm.lock.Lock()
 	for _, host := range allStorageHosts {
-		if len(host.ScanRecords) == 0 && host.HistoricDowntime == 0 && host.HistoricUptime == 0 {
+		if len(host.ScanRecords) == 0 {
 			shm.scanQueue(host)
 		}
 	}
@@ -34,11 +35,7 @@ func (shm *StorageHostManager) scan() {
 
 	// wait until all current scan tasks to be finished
 	shm.waitScanFinish()
-
-	// finished the first scan
-	shm.lock.Lock()
-	shm.initialScanFinished = true
-	shm.lock.Unlock()
+	shm.initialScan = true
 
 	// schedule scan
 	shm.scanSchedule()
@@ -69,7 +66,6 @@ func (shm *StorageHostManager) scanSchedule() {
 		}
 
 		// queued for scan
-		shm.lock.Lock()
 		for _, host := range onlineHosts {
 			shm.scanQueue(host)
 		}
@@ -77,7 +73,6 @@ func (shm *StorageHostManager) scanSchedule() {
 		for _, host := range offlineHosts {
 			shm.scanQueue(host)
 		}
-		shm.lock.Unlock()
 
 		// sleep for a random amount of time, then schedule scan again
 		rand.Seed(time.Now().UTC().UnixNano())
@@ -95,20 +90,14 @@ func (shm *StorageHostManager) scanSchedule() {
 // scanQueue will scan the storage host added
 func (shm *StorageHostManager) scanQueue(hi storage.HostInfo) {
 	// verify if thestorage host is already in scan pool
-	_, exists := shm.scanPool[hi.EnodeID.String()]
+	_, exists := shm.scanLookup[hi.EnodeID.String()]
 	if exists {
 		return
 	}
 
-	// if not, add it to the pool and scanning list in a random position
-	shm.scanPool[hi.EnodeID.String()] = struct{}{}
+	// if not, add it to the pool and scanning list
+	shm.scanLookup[hi.EnodeID.String()] = struct{}{}
 	shm.scanWaitList = append(shm.scanWaitList, hi)
-	scanningLen := len(shm.scanWaitList)
-	if scanningLen > 1 {
-		rand.Seed(time.Now().UTC().UnixNano())
-		randIndex := rand.Intn(scanningLen - 1)
-		shm.scanWaitList[scanningLen-1], shm.scanWaitList[randIndex] = shm.scanWaitList[randIndex], shm.scanWaitList[scanningLen-1]
-	}
 
 	// wait for another routine to scan the list
 	if shm.scanWait {
@@ -144,7 +133,7 @@ func (shm *StorageHostManager) scanStart() {
 		// get the host information
 		hostinfo := shm.scanWaitList[0]
 		shm.scanWaitList = shm.scanWaitList[1:]
-		delete(shm.scanPool, hostinfo.EnodeID.String())
+		delete(shm.scanLookup, hostinfo.EnodeID.String())
 
 		// based on the host information, get the recent information stored in the tree
 		storedInfo, exists := shm.storageHostTree.RetrieveHostInfo(hostinfo.EnodeID.String())
@@ -261,17 +250,14 @@ func (shm *StorageHostManager) retrieveHostConfig(hi storage.HostInfo) (storage.
 // is online)
 func (shm *StorageHostManager) waitOnline() {
 	for {
-		shm.lock.RLock()
-		online := shm.netInfo.PeerCount() > 0
-		shm.lock.RUnlock()
-
-		if online {
+		if shm.b.Online() {
 			break
 		}
 
 		select {
 		case <-time.After(scanOnlineCheckDuration):
 		case <-shm.tm.StopChan():
+			return
 		}
 	}
 }
@@ -279,11 +265,8 @@ func (shm *StorageHostManager) waitOnline() {
 // waitSync will pause the current go routine and wait until the
 // node is fully synced
 func (shm *StorageHostManager) waitSync() {
-	// TODO: (mzhang) need to test this implementation
 	for {
-		sync, _ := shm.ethInfo.Syncing()
-		syncing, ok := sync.(bool)
-		if ok && !syncing {
+		if !shm.b.Syncing() {
 			break
 		}
 
