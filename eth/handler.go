@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/accounts"
 	"math"
 	"math/big"
 	"sync"
@@ -77,6 +78,7 @@ type ProtocolManager struct {
 	chainconfig *params.ChainConfig
 	maxPeers    int
 
+	eth                    *Ethereum
 	downloader             *downloader.Downloader
 	fetcher                *fetcher.Fetcher
 	peers                  *peerSet
@@ -104,9 +106,10 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
+func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
+		eth:                  eth,
 		networkID:            networkID,
 		eventMux:             mux,
 		txpool:               txpool,
@@ -738,35 +741,90 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.txpool.AddRemotes(txs)
 
 	case msg.Code == StorageContractCreationMsg:
+		var sc types.StorageContract
+		if err := msg.Decode(&sc); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
 		// TODO @Manxiang: check an incoming storage contract matches the host's expectations for a valid contract
+		// VerifyStorageContract
 
-		// TODO @Xiang Zhanag: Verify storageClient signatures
+		// TODO check host balance >= storage contract cost
+		// check host balance
 
-		// TODO @Xiang Zhang: Sign storage contract and then send storage client
+		account := accounts.Account{Address: sc.ValidProofOutputs[1].Address}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find host account error: %v", err)
+		}
 
-		p.SendStorageContractCreationHostSign(nil)
+		sign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "host account sign storage contract error: %v", err)
+		}
+
+		// cache storage contract context
+		sc.Signatures[1] = sign
+		pm.storageContractContext[fmt.Sprintf("%s_%s", "storage_contract", p.ID().String())] = sc
+
+		return p.SendStorageContractCreationHostSign(sign)
 
 	case msg.Code == StorageContractCreationHostSignMsg:
-		// TODO @Xiang Zhanag: verify storageHost signatures
+		var hostSign []byte
+		if err := msg.Decode(&hostSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		storageContract := pm.storageContractContext[p.ID().String()].(types.StorageContract)
+		storageContract.Signatures[1] = hostSign
 
 		// assemble init revision and sign it
+		storageContractRevision := types.StorageContractRevision{}
+		pm.storageContractContext[fmt.Sprintf("%s_%s", "storage_contract_revision", p.ID().String())] = storageContractRevision
+
+		account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find client account error: %v", err)
+		}
+
+		sign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "client sign revison error: %v", err)
+		}
+
+		// submit form contract transaction to tx pool
 
 		// send revision to storage host
-		p.SendStorageContractUpdate(nil)
+		return p.SendStorageContractUpdate(sign)
 
 	case msg.Code == StorageContractUpdateMsg:
-		// TODO @Xiang Zhanag: verify storage contract update signatures from client
+		storageContract := pm.storageContractContext[p.ID().String()].(types.StorageContract)
+
+		// TODO reconstruct revision locally by host
+		storageContractRevision := types.StorageContractRevision{}
+
+		account := accounts.Account{Address: storageContract.ValidProofOutputs[1].Address}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find host account error: %v", err)
+		}
 
 		// sign it by storage host
+		sign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "host sign revison error: %v", err)
+		}
 
-		p.SendStorageContractUpdateHostSign(nil)
+		// TODO managedAddStorageObligation
+
+		return p.SendStorageContractUpdateHostSign(sign)
 
 	case msg.Code == StorageContractUpdateHostSignMsg:
-		// Verify storage contract update host signature
+		// TODO managedInsertContract 保存文件合约到本地数据结构中
 
-		// send storage contract creation transaction
-
-		// store revision into one structure(SafeContract)
+		// form storage contract done. notify client by peer.term channel
+		close(p.term)
 
 	case msg.Code == StorageContractUploadRequestMsg:
 		// add data to disk block
