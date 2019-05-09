@@ -29,7 +29,7 @@ var removeNodeIndex = 1
 var tree = New(evalFunc)
 
 func TestStorageHostTree_Insert(t *testing.T) {
-	enodeIDGenerater()
+	EnodeIDGenerater()
 	for i, ip := range ips {
 		hostinfo := createHostInfo(ip, EnodeID[i], Samplescans, true)
 		err := tree.Insert(hostinfo)

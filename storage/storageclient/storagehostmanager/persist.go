@@ -95,7 +95,7 @@ func (shm *StorageHostManager) loadSettings() error {
 
 		// start storage host scanning based on the scan records
 		if len(info.ScanRecords) < 2 {
-			shm.scanQueue(info)
+			shm.scanValidation(info)
 		}
 	}
 

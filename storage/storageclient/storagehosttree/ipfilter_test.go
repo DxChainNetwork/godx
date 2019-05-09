@@ -53,7 +53,7 @@ func generageRandomByteArray() [32]byte {
 	return result
 }
 
-func enodeIDGenerater() {
+func EnodeIDGenerater() {
 	for i := 0; i < 6; i++ {
 		EnodeID = append(EnodeID, generageRandomByteArray())
 	}

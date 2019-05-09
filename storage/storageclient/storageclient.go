@@ -6,16 +6,14 @@ package storageclient
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
-	"reflect"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
@@ -64,19 +62,13 @@ type StorageClient struct {
 	// Utilities
 	streamCache *streamCache
 	log         log.Logger
-	// TODO (jacky): considering using the Lock and Unlock with ID ?
 	lock sync.Mutex
 	tm   threadmanager.ThreadManager
 	wal  Wal
 
-	// getting netInfo status
-	netInfo *ethapi.PublicNetAPI
-
-	// used to send transaction
-	account *ethapi.PrivateAccountAPI
-
-	// used to get syncing status
-	ethInfo *ethapi.PublicEthereumAPI
+	// information on network, block chain, and etc.
+	info ParsedAPI
+	ethBackend    storage.EthBackend
 
 	// get the P2P server for adding peer
 	p2pServer  *p2p.Server
@@ -92,12 +84,15 @@ func New(persistDir string) (*StorageClient, error) {
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
+	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
 
 	return sc, nil
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(eth storage.ClientBackend, server *p2p.Server) error {
+func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
+	// get the eth backend
+	sc.ethBackend = b
 
 	// validation
 	if server == nil {
@@ -108,27 +103,16 @@ func (sc *StorageClient) Start(eth storage.ClientBackend, server *p2p.Server) er
 	sc.p2pServer = server
 
 	// getting all needed API functions
-	sc.filterAPIs(eth.APIs())
-
-	// validation
-	if sc.netInfo == nil {
-		return errors.New("failed to acquire netInfo information")
-	}
-
-	if sc.account == nil {
-		return errors.New("failed to acquire account information")
-	}
-
-	if sc.ethInfo == nil {
-		return errors.New("failed to acquire eth information")
-	}
-
-	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
-	storageHostManager, err := storagehostmanager.New(sc.persistDir, sc.ethInfo, sc.netInfo, sc.p2pServer, eth)
+	err := sc.filterAPIs(b.APIs())
 	if err != nil {
 		return err
 	}
-	sc.storageHostManager = storageHostManager
+
+	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
+	err = sc.storageHostManager.Start(sc.p2pServer, sc)
+	if err != nil {
+		return err
+	}
 
 	// Load settings from persist file
 	if err := sc.loadPersist(); err != nil {
@@ -146,19 +130,10 @@ func (sc *StorageClient) Start(eth storage.ClientBackend, server *p2p.Server) er
 	return nil
 }
 
-func (sc *StorageClient) filterAPIs(apis []rpc.API) {
-	for _, api := range apis {
-		switch typ := reflect.TypeOf(api.Service); typ {
-		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
-			sc.netInfo = api.Service.(*ethapi.PublicNetAPI)
-		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
-			sc.account = api.Service.(*ethapi.PrivateAccountAPI)
-		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
-			sc.ethInfo = api.Service.(*ethapi.PublicEthereumAPI)
-		default:
-			continue
-		}
-	}
+func (sc *StorageClient) Close() error {
+	err := sc.storageHostManager.Close()
+	errSC := sc.tm.Stop()
+	return common.ErrCompose(err, errSC)
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {

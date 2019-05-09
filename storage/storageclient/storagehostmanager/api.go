@@ -4,7 +4,9 @@
 
 package storagehostmanager
 
-import "github.com/DxChainNetwork/godx/storage"
+import (
+	"github.com/DxChainNetwork/godx/storage"
+)
 
 // PublicStorageHostManagerAPI defines the object used to call eligible public
 // APIs that are used to acquire storage host information
@@ -62,3 +64,29 @@ func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHos
 }
 
 // TODO: (mzhang) private method, set filter mode
+
+// PublicStorageClientDebugAPI defines the object used to call eligible APIs
+// that are used to perform testing
+type PublicHostManagerDebugAPI struct {
+	shm *StorageHostManager
+}
+
+// NewPublicStorageClientDebugAPI initialize PublicStorageClientDebugAPI object
+// which implemented a bunch of debug API methods
+func NewPublicStorageClientDebugAPI(shm *StorageHostManager) *PublicHostManagerDebugAPI {
+	return &PublicHostManagerDebugAPI{
+		shm: shm,
+	}
+}
+
+func (api *PublicHostManagerDebugAPI) Online() bool {
+	return api.shm.b.Online()
+}
+
+func (api *PublicHostManagerDebugAPI) Syncing() bool {
+	return api.shm.b.Syncing()
+}
+
+func (api *PublicHostManagerDebugAPI) BlockHeight() uint64 {
+	return api.shm.blockHeight
+}

@@ -32,11 +32,16 @@ const (
 	scanOnlineCheckDuration = 30 * time.Second
 	scanCheckDuration       = time.Second
 	scanQuantity            = 2500
-	maxScanSleep            = 6 * time.Hour
-	minScanSleep            = time.Hour + time.Minute*30
-	maxScanningRoutines     = 80
-	minScans                = 12
-	maxDowntime             = 10 * 24 * time.Hour
+	//maxScanSleep            = 6 * time.Hour
+	//minScanSleep            = time.Hour + time.Minute*30
+
+	// for testing purpose
+	maxScanSleep = 5 * time.Second
+	minScanSleep = 2 * time.Second
+
+	maxWorkersAllowed = 80
+	minScans          = 12
+	maxDowntime       = 10 * 24 * time.Hour
 )
 
 // historical interaction with host related constants

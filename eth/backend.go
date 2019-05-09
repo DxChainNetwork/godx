@@ -18,8 +18,10 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
 	"sync"
@@ -352,6 +354,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
 				Public:    true,
+			}, {
+				Namespace: "hostmanagerdebug",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
 			},
 		}...)
 	}
@@ -591,7 +598,7 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-// SendMessage will send message to the peer with the corresponded peer ID
+// GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
 	// within the 30 seconds, if the peer is still not added to the peer set
 	// return error
@@ -614,4 +621,14 @@ func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtC
 
 	// send message to the peer
 	return p2p.Send(p.rw, HostSettingMsg, config)
+}
+
+// SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be
+// delivered through the channel
+func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return s.APIBackend.SubscribeChainChangeEvent(ch)
+}
+
+func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }

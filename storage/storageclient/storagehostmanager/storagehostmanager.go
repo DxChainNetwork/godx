@@ -33,11 +33,11 @@ type StorageHostManager struct {
 	disableIPViolationCheck bool
 
 	// maintenance related
-	initialScan         bool
-	scanWaitList        []storage.HostInfo
-	scanLookup            map[string]struct{}
-	scanWait            bool
-	scanningRoutines    int
+	initialScan     bool
+	scanWaitList    []storage.HostInfo
+	scanLookup      map[string]struct{}
+	scanWait        bool
+	scanningWorkers int
 
 	// persistent directory
 	persistDir string
@@ -56,16 +56,14 @@ type StorageHostManager struct {
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
-func New(persistDir string, server *p2p.Server, b storage.ClientBackend) (*StorageHostManager, error) {
+func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		b:          b,
-		p2pServer:  server,
 		persistDir: persistDir,
 
 		rent: storage.DefaultRentPayment,
 
-		scanLookup:      make(map[string]struct{}),
+		scanLookup:    make(map[string]struct{}),
 		filteredHosts: make(map[string]enode.ID),
 	}
 
@@ -74,17 +72,27 @@ func New(persistDir string, server *p2p.Server, b storage.ClientBackend) (*Stora
 	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
+	shm.log.Info("Storage host manager initialized")
+
+	return shm
+}
+
+func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
+	// initialization
+	shm.b = b
+	shm.p2pServer = server
+
 	// load prior settings
 	err := shm.loadSettings()
 
 	if err != nil && !os.IsNotExist(err) {
-		return nil, err
+		return err
 	}
 
 	if err := shm.tm.AfterStop(func() error {
 		return shm.saveSettings()
 	}); err != nil {
-		return nil, err
+		return err
 	}
 
 	// automatically save the settings every 2 minutes
@@ -96,7 +104,9 @@ func New(persistDir string, server *p2p.Server, b storage.ClientBackend) (*Stora
 	// started scan and update storage host information
 	go shm.scan()
 
-	return shm, nil
+	shm.log.Info("Storage Host Manager Started")
+
+	return nil
 }
 
 func (shm *StorageHostManager) Close() error {

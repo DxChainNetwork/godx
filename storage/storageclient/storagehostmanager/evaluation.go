@@ -28,7 +28,7 @@ func (hm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) 
 
 func (hm *StorageHostManager) ageAdjustment(info storage.HostInfo) float64 {
 	// TODO (mzhang): the value need to be discussed with the team
-	base := float64(1)
+	var base float64 = 1
 	if hm.blockHeight >= info.FirstSeen {
 		age := hm.blockHeight - info.FirstSeen
 		if age < 12000 {
@@ -149,7 +149,8 @@ func (hm *StorageHostManager) priceAdjustment(info storage.HostInfo, rent storag
 }
 
 func (hm *StorageHostManager) storageRemainingAdjustment(info storage.HostInfo) float64 {
-	base := float64(1)
+	var base float64 = 1
+
 	if info.RemainingStorage < 100*minStorage {
 		base = base / 2
 	}

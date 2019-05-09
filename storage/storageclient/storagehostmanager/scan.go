@@ -24,26 +24,27 @@ func (shm *StorageHostManager) scan() {
 	shm.waitSync()
 
 	// get all storage hosts who have not been scanned before or no historical information
+	shm.lock.RLock()
 	allStorageHosts := shm.storageHostTree.All()
-	shm.lock.Lock()
+	shm.lock.RUnlock()
+
 	for _, host := range allStorageHosts {
 		if len(host.ScanRecords) == 0 {
-			shm.scanQueue(host)
+			shm.scanValidation(host)
 		}
 	}
-	shm.lock.Unlock()
 
-	// wait until all current scan tasks to be finished
+	// indicate the initial scan is finished
 	shm.waitScanFinish()
 	shm.initialScan = true
 
-	// schedule scan
-	shm.scanSchedule()
+	// scan automatically in a time range
+	shm.autoScan()
 }
 
 // scanSchedule will filter out the online and offline hosts, and getting them
 // into the scanning queue, prepare to be scanned
-func (shm *StorageHostManager) scanSchedule() {
+func (shm *StorageHostManager) autoScan() {
 	for {
 		var onlineHosts, offlineHosts []storage.HostInfo
 		allStorageHosts := shm.storageHostTree.All()
@@ -67,17 +68,16 @@ func (shm *StorageHostManager) scanSchedule() {
 
 		// queued for scan
 		for _, host := range onlineHosts {
-			shm.scanQueue(host)
+			shm.scanValidation(host)
 		}
 
 		for _, host := range offlineHosts {
-			shm.scanQueue(host)
+			shm.scanValidation(host)
 		}
 
 		// sleep for a random amount of time, then schedule scan again
 		rand.Seed(time.Now().UTC().UnixNano())
 		randomSleepTime := time.Duration(rand.Intn(int(maxScanSleep-minScanSleep)) + int(minScanSleep))
-
 		// sleep random amount of time
 		select {
 		case <-shm.tm.StopChan():
@@ -87,17 +87,22 @@ func (shm *StorageHostManager) scanSchedule() {
 	}
 }
 
-// scanQueue will scan the storage host added
-func (shm *StorageHostManager) scanQueue(hi storage.HostInfo) {
-	// verify if thestorage host is already in scan pool
+// scanValidation will scan the storage host added
+func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
+	// verify if the storage host is already in scan pool
+	shm.lock.RLock()
 	_, exists := shm.scanLookup[hi.EnodeID.String()]
 	if exists {
+		shm.lock.RUnlock()
 		return
 	}
+	shm.lock.RUnlock()
 
 	// if not, add it to the pool and scanning list
+	shm.lock.Lock()
 	shm.scanLookup[hi.EnodeID.String()] = struct{}{}
 	shm.scanWaitList = append(shm.scanWaitList, hi)
+	shm.lock.Unlock()
 
 	// wait for another routine to scan the list
 	if shm.scanWait {
@@ -109,71 +114,37 @@ func (shm *StorageHostManager) scanQueue(hi storage.HostInfo) {
 }
 
 func (shm *StorageHostManager) scanStart() {
-	scanWorker := make(chan storage.HostInfo)
-	defer close(scanWorker)
-
 	if err := shm.tm.Add(); err != nil {
 		return
 	}
-
 	defer shm.tm.Done()
 
-	starterRoutine := false
+	scanWorker := make(chan storage.HostInfo)
+	// used for scanExecute termination
+	defer close(scanWorker)
 
 	for {
 		shm.lock.Lock()
-
-		// no scan in the wait list
 		if len(shm.scanWaitList) == 0 {
 			shm.scanWait = false
 			shm.lock.Unlock()
 			return
 		}
 
-		// get the host information
-		hostinfo := shm.scanWaitList[0]
+		// update the scan wait list and scan look up
+		hostInfoTask := shm.scanWaitList[0]
 		shm.scanWaitList = shm.scanWaitList[1:]
-		delete(shm.scanLookup, hostinfo.EnodeID.String())
-
-		// based on the host information, get the recent information stored in the tree
-		storedInfo, exists := shm.storageHostTree.RetrieveHostInfo(hostinfo.EnodeID.String())
-		if exists {
-			hostinfo = storedInfo
-		}
-
-		// send the host information to the worker
-		select {
-		case scanWorker <- hostinfo:
-			shm.lock.Unlock()
-			continue
-		default:
-		}
-
-		// making sure the start routine will always get access
-		if shm.scanningRoutines < maxScanningRoutines || !starterRoutine {
-			starterRoutine = true
-			shm.scanningRoutines++
-			if err := shm.tm.Add(); err != nil {
-				shm.lock.Unlock()
-				return
-			}
-
-			// start the scan execution
-			go func() {
-				defer shm.tm.Done()
-				shm.scanExecute(scanWorker)
-				shm.lock.Lock()
-				shm.scanningRoutines--
-				shm.lock.Unlock()
-			}()
-		}
-
-		// unlock is needed if failed to go through the if statement
+		delete(shm.scanLookup, hostInfoTask.EnodeID.String())
+		workers := shm.scanningWorkers
 		shm.lock.Unlock()
 
-		// block until the worker is available
+		if workers < maxWorkersAllowed {
+			go shm.scanExecute(scanWorker)
+		}
+
+		// send the task to the worker
 		select {
-		case scanWorker <- hostinfo:
+		case scanWorker <- hostInfoTask:
 		case <-shm.tm.StopChan():
 			return
 		}
@@ -181,17 +152,32 @@ func (shm *StorageHostManager) scanStart() {
 }
 
 // scanExecute will check the local node online status, and start to updateHostSettings
+// it will terminate along with termination of scan start
 func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
+	if err := shm.tm.Add(); err != nil {
+		return
+	}
+	defer shm.tm.Done()
+
+	shm.lock.Lock()
+	shm.scanningWorkers++
+	shm.lock.Unlock()
+
+	// keep reading the host information from the worker
+	// and start to update its configuration
 	for info := range scanWorker {
 		shm.waitOnline()
 		shm.updateHostConfig(info)
 	}
+	shm.lock.Lock()
+	shm.scanningWorkers--
+	shm.lock.Unlock()
 }
 
 // updateHostSettings will connect to the host, grabbing the settings,
 // and update the host pool
 func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
-	shm.log.Info("Started scanning the storage host %s", hi.EnodeURL)
+	shm.log.Info("Started updating the storage host %s", hi.EnodeURL)
 
 	// get the IP network and check if it is changed
 	ipnet, err := storagehosttree.IPNetwork(hi.IP)
@@ -202,13 +188,16 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	}
 
 	if err != nil {
-		log.Debug("updateHostConfig: failed to get the IP network information", err.Error())
+		log.Warn("updateHostConfig: failed to get the IP network information", err.Error())
 	}
 
 	// update the historical interactions
 	shm.lock.RLock()
-	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
+	info := &hi
+	blockHeight := shm.blockHeight
 	shm.lock.RUnlock()
+
+	hostHistoricInteractionsUpdate(info, blockHeight)
 
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)

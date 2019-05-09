@@ -12,13 +12,13 @@ func (shm *StorageHostManager) SubscribeChainChangEvent() {
 	}
 	defer shm.tm.Done()
 
-	chainChanges := make(chan core.ChainChangeEvent)
+	chainChanges := make(chan core.ChainChangeEvent, 100)
 	shm.b.SubscribeChainChangeEvent(chainChanges)
 
 	for {
 		select {
-		case change := <- chainChanges:
-			shm.analyzeChainEventChange(change)
+		case change := <-chainChanges:
+			go shm.analyzeChainEventChange(change)
 		case <-shm.tm.StopChan():
 			return
 		}
@@ -30,19 +30,28 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	revert := len(change.RevertedBlockHashes)
 	apply := len(change.AppliedBlockHashes)
 
+	fmt.Println("Applied Blocks", apply)
+	fmt.Println("Reverted Blocks", revert)
+
 	// update the block height
 	for i := 0; i < revert; i++ {
+		shm.lock.Lock()
 		shm.blockHeight--
+		shm.lock.Unlock()
 		if shm.blockHeight < 0 {
 			shm.log.Error("the block height stores in StorageHostManager should be positive")
+			shm.lock.Lock()
 			shm.blockHeight = 0
+			shm.lock.Unlock()
 			break
 		}
 	}
 
 	for i := 0; i < apply; i++ {
 		fmt.Println(shm.blockHeight)
+		shm.lock.Lock()
 		shm.blockHeight++
+		shm.lock.Unlock()
 	}
 
 	// get the block information
