@@ -34,18 +34,13 @@ func (scdb *StorageContractDB) GetWithPrefix(key interface{}, prefix string) ([]
 	return value, nil
 }
 
-func (scdb *StorageContractDB) StoreWithPrefix(key, value interface{}, prefix string) error {
+func (scdb *StorageContractDB) StoreWithPrefix(key interface{}, value []byte, prefix string) error {
 	keyByPrefix, err := MakeKey(prefix, key)
 	if err != nil {
 		return err
 	}
 
-	valueBytes, err := rlp.EncodeToBytes(value)
-	if err != nil {
-		return err
-	}
-
-	err = scdb.DB.Put(keyByPrefix, valueBytes)
+	err = scdb.DB.Put(keyByPrefix, value)
 	if err != nil {
 		return err
 	}

@@ -12,7 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -24,7 +23,10 @@ const (
 	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
 
+	RespendTimeout = 40
+
 	PrefixStorageObligation = "storageobligation-"
+	PrefixHeight            = "height-"
 )
 
 const (
@@ -328,8 +330,18 @@ func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []common.
 func (h *StorageHost) queueActionItem(height uint64, id common.Hash) error {
 
 	if height < h.blockHeight {
-
+		h.log.Info("action item queued improperly")
 	}
+
+	err := func() error {
+
+		return nil
+	}()
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -348,7 +360,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 		h.lock.Lock()
 		defer h.lock.Unlock()
 		if _, ok := h.lockedStorageObligations[so.id()]; ok {
-			log.Info("addStorageObligation called with an obligation that is not locked")
+			h.log.Info("addStorageObligation called with an obligation that is not locked")
 		}
 
 		// Sanity check - There needs to be enough time left on the file contract
@@ -432,7 +444,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 // 虚拟扇区将需要多次出现在“sectorRemoved”中。 与'sectorGained'相同。
 func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageObligations[so.id()]; ok {
-		log.Info("modifyStorageObligation called with an obligation that is not locked")
+		h.log.Info("modifyStorageObligation called with an obligation that is not locked")
 	}
 
 	// Sanity check - there needs to be enough time to submit the file contract
@@ -559,35 +571,30 @@ func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageOblig
 //将删除主机的存储义务，无论出于何种原因，它都不会在块链上进行
 //由于这些陈旧的存储义务会对主机财务指标产生影响，因此此方法会更新主机财务指标以显示正确的值。
 func (h *StorageHost) PruneStaleStorageObligations(db ethdb.Database) error {
-	// Filter the stale obligations from the set of all obligations.
-	//sos := h.StorageObligations()
-	//var stale []types.FileContractID
-	//for _, so := range sos {
-	//	conf, err := h.tpool.TransactionConfirmed(so.TransactionID)
-	//	if err != nil {
-	//		return build.ExtendErr("unable to get transaction ID:", err)
-	//	}
-	//	// An obligation is considered stale if it has not been confirmed
-	//	// within RespendTimeout blocks after negotiation.	// Respend
-	//	// 如果在协商后未在RespendTimeout块中确认，则义务被视为过时
-	//	if (h.blockHeight > so.NegotiationHeight+wallet.RespendTimeout) && !conf {
-	//		stale = append(stale, so.ObligationId)
-	//	}
-	//}
-	//// Delete stale obligations from the database.
-	//err := h.deleteStorageObligations(stale)
-	//if err != nil {
-	//	return build.ExtendErr("unable to delete stale storage ids:", err)
-	//}
-	//// Update the financial metrics of the host.
-	//err = h.resetFinancialMetrics()
-	//if err != nil {
-	//	h.log.Println(build.ExtendErr("unable to reset host financial metrics:", err))
-	//	return err
-	//}
-	//return nil
 
-	//sos := h.StorageObligations(db)
+	sos := h.StorageObligations(db)
+	var scids []common.Hash
+	for _, so := range sos {
+		//TODO 交易确认
+		//@xiaofeiliu
+		//	if (h.blockHeight > so.NegotiationHeight+40) && !conf {
+		if h.blockHeight > so.NegotiationHeight+RespendTimeout {
+			scids = append(scids, so.StorageContractid)
+		}
+
+	}
+
+	// Delete stale obligations from the database.
+	err := h.deleteStorageObligations(db, scids)
+	if err != nil {
+		return err
+	}
+
+	// Update the financial metrics of the host.
+	err = h.resetFinancialMetrics(db)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -604,7 +611,7 @@ func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageOblig
 	// Update the host revenue metrics based on the status of the obligation.
 	// 根据义务状态更新主机收入指标。
 	if sos == obligationUnresolved { //Rejected 未解决
-		log.Info("storage obligation 'unresolved' during call to removeStorageObligation, id", so.id())
+		h.log.Info("storage obligation 'unresolved' during call to removeStorageObligation, id", so.id())
 	}
 	if sos == obligationRejected { //Rejected	被拒绝的
 		if h.financialMetrics.TransactionFeeExpenses.Cmp(so.TransactionFeesAdded) >= 0 {
@@ -629,9 +636,9 @@ func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageOblig
 		revenue = new(big.Int).Add(revenue, so.PotentialDownloadRevenue)
 		revenue = new(big.Int).Add(revenue, so.PotentialUploadRevenue)
 		if len(so.SectorRoots) == 0 {
-			log.Info("No need to submit a storage proof for empty contract. Revenue is %v.\n", revenue)
+			h.log.Info("No need to submit a storage proof for empty contract. Revenue is %v.\n", revenue)
 		} else {
-			log.Info("Successfully submitted a storage proof. Revenue is %v.\n", revenue)
+			h.log.Info("Successfully submitted a storage proof. Revenue is %v.\n", revenue)
 		}
 
 		// Remove the obligation statistics as potential risk and income. 删除义务统计数据作为潜在风险和收益
@@ -766,7 +773,11 @@ func (h *StorageHost) StorageObligations(db ethdb.Database) (sos []StorageObliga
 
 func StoreStorageObligation(db ethdb.Database, storageContractID common.Hash, so StorageObligation) error {
 	scdb := ethdb.StorageContractDB{db}
-	return scdb.StoreWithPrefix(storageContractID, so, PrefixStorageObligation)
+	data, err := rlp.EncodeToBytes(so)
+	if err != nil {
+		return err
+	}
+	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageObligation)
 }
 
 func DeleteStorageObligation(db ethdb.Database, storageContractID common.Hash) error {
@@ -786,4 +797,45 @@ func GetStorageObligation(db ethdb.Database, storageContractID common.Hash) (Sto
 		return StorageObligation{}, err
 	}
 	return so, nil
+}
+
+func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64) error {
+	scdb := ethdb.StorageContractDB{db}
+
+	hinfo := struct {
+		Height uint64
+	}{
+		Height: height,
+	}
+
+	data, err := rlp.EncodeToBytes(&hinfo)
+	if err != nil {
+		return err
+	}
+
+	return scdb.StoreWithPrefix(storageContractID, data, PrefixHeight)
+}
+
+func DeleteHeight(db ethdb.Database, storageContractID common.Hash) error {
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.DeleteWithPrefix(storageContractID, PrefixHeight)
+}
+
+func GetHeight(db ethdb.Database, storageContractID common.Hash) (uint64, error) {
+	scdb := ethdb.StorageContractDB{db}
+	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	hinfo := struct {
+		Height uint64
+	}{}
+
+	err = rlp.DecodeBytes(valueBytes, &hinfo)
+	if err != nil {
+		return 0, err
+	}
+
+	return hinfo.Height, nil
 }

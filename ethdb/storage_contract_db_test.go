@@ -29,7 +29,7 @@ func TestStorageContractDBOperation(t *testing.T) {
 	prefix := "test-"
 
 	// store
-	err := scdb.StoreWithPrefix(key, value, prefix)
+	err := scdb.StoreWithPrefix(key, []byte(value), prefix)
 	if err != nil {
 		t.Errorf("something wrong to store key-value: %v", err)
 	}
