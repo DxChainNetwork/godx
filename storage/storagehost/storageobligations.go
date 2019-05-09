@@ -9,13 +9,11 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/DxChainNetwork/godx/log"
-
-	"github.com/DxChainNetwork/godx/core/vm"
-	"github.com/DxChainNetwork/godx/ethdb"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 const (
@@ -25,6 +23,8 @@ const (
 	// contract revision, or a storage proof.
 	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
+
+	PrefixStorageObligation = "storageobligation-"
 )
 
 const (
@@ -196,7 +196,7 @@ func (i storageObligationStatus) String() string {
 
 // getStorageObligation fetches a storage obligation from the database
 func getStorageObligation(db ethdb.Database, sc common.Hash) (StorageObligation, error) {
-	so, errGet := vm.GetStorageObligation(db, sc)
+	so, errGet := GetStorageObligation(db, sc)
 	if errGet != nil {
 		return StorageObligation{}, errGet
 	}
@@ -206,7 +206,7 @@ func getStorageObligation(db ethdb.Database, sc common.Hash) (StorageObligation,
 // putStorageObligation places a storage obligation into the database,
 // overwriting the existing storage obligation if there is one.
 func putStorageObligation(db ethdb.Database, so StorageObligation) error {
-	err := vm.StoreStorageObligation(db, so.id(), so)
+	err := StoreStorageObligation(db, so.id(), so)
 	if err != nil {
 		return err
 	}
@@ -214,7 +214,7 @@ func putStorageObligation(db ethdb.Database, so StorageObligation) error {
 }
 
 func deleteStorageObligation(db ethdb.Database, sc common.Hash) error {
-	err := vm.DeleteStorageObligation(db, sc)
+	err := DeleteStorageObligation(db, sc)
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 				// 并且应该使用新的到期高度重新添加该扇区。 如果在任何时候出现错误，则应删除所有扇区。
 			}
 
-			errPut := vm.StoreStorageObligation(db, so.StorageContractid, so)
+			errPut := StoreStorageObligation(db, so.StorageContractid, so)
 			if errPut != nil {
 				return errPut
 			}
@@ -583,4 +583,30 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 // returns metadata on them.	StorageObligations获取主机中的存储义务集并返回其上的元数据。
 func (h *StorageHost) StorageObligations() (sos []StorageObligation) {
 	return nil
+}
+
+// definition of storage obligation db operation:
+
+func StoreStorageObligation(db ethdb.Database, storageContractID common.Hash, so StorageObligation) error {
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.StoreWithPrefix(storageContractID, so, PrefixStorageObligation)
+}
+
+func DeleteStorageObligation(db ethdb.Database, storageContractID common.Hash) error {
+	scdb := ethdb.StorageContractDB{db}
+	return scdb.DeleteWithPrefix(storageContractID, PrefixStorageObligation)
+}
+
+func GetStorageObligation(db ethdb.Database, storageContractID common.Hash) (StorageObligation, error) {
+	scdb := ethdb.StorageContractDB{db}
+	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixStorageObligation)
+	if err != nil {
+		return StorageObligation{}, err
+	}
+	var so StorageObligation
+	err = rlp.DecodeBytes(valueBytes, &so)
+	if err != nil {
+		return StorageObligation{}, err
+	}
+	return so, nil
 }
