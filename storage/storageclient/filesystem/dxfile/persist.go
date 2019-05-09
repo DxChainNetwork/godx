@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"io"
@@ -15,7 +16,7 @@ const (
 	PageSize = 4096
 
 	// sectorPersistSize is the size of rlp encoded string of a sector
-	sectorPersistSize = 56
+	sectorPersistSize = 70
 
 	// Overhead for persistSegment persist Data. The value is larger than Data actually used
 	segmentPersistOverhead = 16
@@ -31,7 +32,7 @@ type (
 
 	// persistHostAddress is the persist Data structure for rlp encode and decode
 	persistHostAddress struct {
-		Address common.Address
+		Address enode.ID
 		Used    bool
 	}
 
@@ -44,7 +45,7 @@ type (
 	// persistSector is the smallest unit of storage. It the erasure code encoded persistSegment
 	persistSector struct {
 		MerkleRoot  common.Hash
-		HostAddress common.Address
+		HostAddress enode.ID
 	}
 )
 

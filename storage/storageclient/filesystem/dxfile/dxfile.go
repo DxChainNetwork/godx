@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"os"
 	"sync"
 	"time"
@@ -50,7 +51,7 @@ type (
 	}
 
 	// hostTable is the map from host address to specific host info
-	hostTable map[common.Address]bool
+	hostTable map[enode.ID]bool
 
 	// segment is the Data for a segment, which is composed of several sectors
 	segment struct {
@@ -63,7 +64,7 @@ type (
 	// sector is the Data for a single sector, which has Data of merkle root and related host address
 	sector struct {
 		merkleRoot  common.Hash
-		hostAddress common.Address
+		hostAddress enode.ID
 	}
 
 	fileID [fileIDSize]byte
@@ -99,7 +100,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	}
 	df := &DxFile{
 		metadata:    md,
-		hostTable:   make(map[common.Address]bool),
+		hostTable:   make(map[enode.ID]bool),
 		deleted:     false,
 		ID:          id,
 		wal:         wal,
@@ -113,3 +114,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	}
 	return df, df.saveAll()
 }
+
+//func (df *DxFile) AddSector(){
+//
+//}

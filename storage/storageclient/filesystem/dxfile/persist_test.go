@@ -6,9 +6,9 @@ package dxfile
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/twofishgcm"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"path/filepath"
@@ -144,7 +144,7 @@ func randomSector() *sector {
 	return s
 }
 
-func randomAddress() (addr common.Address) {
+func randomAddress() (addr enode.ID) {
 	rand.Read(addr[:])
 	return
 }
