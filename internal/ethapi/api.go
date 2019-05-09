@@ -1572,26 +1572,26 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
-func (s *PublicNetAPI) AddPeer(node *enode.Node) (bool, error) {
+func (s *PublicNetAPI) AddStorageContractPeer(node *enode.Node) (bool, error) {
 	server := s.net
 	if server == nil {
 		return false, fmt.Errorf("server stopped")
 	}
 
 	server.AddPeer(node)
-	server.AddTrustedPeer(node)
+	server.AddStorageContractPeer(node)
 
 	return true, nil
 }
 
-func (s *PublicNetAPI) RemovePeer(node *enode.Node) (bool, error) {
+func (s *PublicNetAPI) RemoveStorageContractPeer(node *enode.Node) (bool, error) {
 	server := s.net
 	if server == nil {
 		return false, fmt.Errorf("server stopped")
 	}
 
 	server.RemovePeer(node)
-	server.RemoveTrustedPeer(node)
+	server.RemoveStorageContractPeer(node)
 
 	return true, nil
 }

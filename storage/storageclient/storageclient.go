@@ -2,18 +2,14 @@ package storageclient
 
 import (
 	"errors"
-	"fmt"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/eth"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"path/filepath"
 	"reflect"
 	"sync"
-	"time"
 )
 
 // ************** MOCKING DATA *****************
@@ -72,7 +68,6 @@ type StorageClient struct {
 	wal     Wal
 	network *ethapi.PublicNetAPI
 	account *ethapi.PrivateAccountAPI
-	eth     *eth.PublicEthereumAPI
 }
 
 // New initializes StorageClient object
@@ -128,8 +123,6 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) {
 			sc.network = api.Service.(*ethapi.PublicNetAPI)
 		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
 			sc.account = api.Service.(*ethapi.PrivateAccountAPI)
-		case reflect.TypeOf(&eth.PublicEthereumAPI{}):
-			sc.eth = api.Service.(*eth.PublicEthereumAPI)
 		default:
 			continue
 		}
@@ -149,58 +142,5 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 		// TODO (mzhang): update contract settings to the loaded data
 	}
 
-	return nil
-}
-
-func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*eth.Peer, error) {
-	if sc.network == nil {
-		return nil, fmt.Errorf("network API is not ready")
-	}
-
-	node, err := enode.ParseV4(hostEnodeUrl)
-	if err != nil {
-		return nil, fmt.Errorf("invalid enode: %v", err)
-	}
-
-	if _, err := sc.network.AddPeer(node); err != nil {
-		return nil, err
-	}
-
-	if sc.eth == nil {
-		return nil, fmt.Errorf("storage client eth is not ready")
-	}
-
-	timer := time.NewTimer(time.Second * 3)
-
-	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
-	var conn *eth.Peer
-	for {
-		conn = sc.eth.Ethereum().ProtocolManager().PeerSet().PeerWrap(nodeId)
-		if conn != nil {
-			return conn, nil
-		}
-
-		select {
-		case <-timer.C:
-			sc.network.RemovePeer(node)
-			return nil, fmt.Errorf("setup connection timeout")
-		default:
-		}
-	}
-}
-
-func (sc *StorageClient) Disconnect(hostEnodeUrl string) error {
-	if sc.network == nil {
-		return fmt.Errorf("network API is not ready")
-	}
-
-	node, err := enode.ParseV4(hostEnodeUrl)
-	if err != nil {
-		return fmt.Errorf("invalid enode: %v", err)
-	}
-
-	if _, err := sc.network.RemovePeer(node); err != nil {
-		return err
-	}
 	return nil
 }

@@ -20,10 +20,12 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -589,6 +591,51 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func (s *Ethereum) ProtocolManager() *ProtocolManager {
-	return s.protocolManager
+func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*Peer, error) {
+	if s.netRPCService == nil {
+		return nil, fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.AddStorageContractPeer(node); err != nil {
+		return nil, err
+	}
+
+	timer := time.NewTimer(time.Second * 3)
+
+	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
+	var conn *Peer
+	for {
+		conn = s.protocolManager.StorageContractPeerSet().PeerWrap(nodeId)
+		if conn != nil {
+			return conn, nil
+		}
+
+		select {
+		case <-timer.C:
+			s.netRPCService.RemoveStorageContractPeer(node)
+			return nil, fmt.Errorf("setup connection timeout")
+		default:
+		}
+	}
+}
+
+func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
+	if s.netRPCService == nil {
+		return fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
+		return err
+	}
+	return nil
 }
