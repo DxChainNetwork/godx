@@ -749,10 +749,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// TODO @Manxiang: check an incoming storage contract matches the host's expectations for a valid contract
 		// VerifyStorageContract
 
-		// TODO check host balance >= storage contract cost
-		// check host balance
+		// check host balance >= storage contract cost
+		hostAddress := sc.ValidProofOutputs[1].Address
+		statedb, err := pm.blockchain.State()
+		if err != nil {
+			return errResp(ErrDecode, "get state db error: %v", err)
+		}
+		if statedb.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
+			return errResp(ErrDecode, "host balance insufficient: %v", err)
+		}
 
-		account := accounts.Account{Address: sc.ValidProofOutputs[1].Address}
+		account := accounts.Account{Address: hostAddress}
 		wallet, err := pm.eth.AccountManager().Find(account)
 		if err != nil {
 			return errResp(ErrDecode, "find host account error: %v", err)
