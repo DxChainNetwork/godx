@@ -310,11 +310,11 @@ func (so StorageObligation) transactionID() common.Hash {
 // It is assumed the deleted obligations don't belong in the database in the first place,
 // so no financial metrics are updated.
 // 删除存储义务从数据库中，假设已删除的义务首先不属于数据库，因此不会更新财务指标。
-func (h StorageHost) deleteStorageObligations(db ethdb.Database, soids []common.Hash) error {
+func (h StorageHost) deleteStorageObligations(soids []common.Hash) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	for _, soid := range soids {
-		err := deleteStorageObligation(db, soid)
+		err := deleteStorageObligation(h.db, soid)
 		if err != nil {
 			return err
 		}
@@ -333,10 +333,7 @@ func (h *StorageHost) queueActionItem(height uint64, id common.Hash) error {
 		h.log.Info("action item queued improperly")
 	}
 
-	err := func() error {
-
-		return nil
-	}()
+	err := StoreHeight(h.db, id, height)
 
 	if err != nil {
 		return err
@@ -355,7 +352,7 @@ func (h *StorageHost) queueActionItem(height uint64, id common.Hash) error {
 // 由于此操作可以返回错误，因此在此函数指示成功之前，不应将事务提交到区块链。
 // 存储义务中存在的所有扇区都应该已存在于磁盘上，
 // 这意味着在创建新的空文件合同或续订现有文件合同时，应独占调用addStorageObligation。
-func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageObligation) error {
+func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 	err := func() error {
 		h.lock.Lock()
 		defer h.lock.Unlock()
@@ -390,7 +387,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 				// 并且应该使用新的到期高度重新添加该扇区。 如果在任何时候出现错误，则应删除所有扇区。
 			}
 
-			errPut := StoreStorageObligation(db, so.StorageContractid, so)
+			errPut := StoreStorageObligation(h.db, so.StorageContractid, so)
 			if errPut != nil {
 				return errPut
 			}
@@ -427,6 +424,31 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 	//TODO Queue the action items.
 	// 排队执行项目。
 
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	//TODO error 处理 @host erros.go
+
+	// The file contract was already submitted to the blockchain, need to check
+	// after the resubmission timeout that it was submitted successfully.
+	// 文件合同已经提交给区块链，需要在重新提交超时后检查它是否已成功提交。
+	h.queueActionItem(h.blockHeight+resubmissionTimeout, so.id())
+	h.queueActionItem(h.blockHeight+resubmissionTimeout*2, so.id()) // Paranoia
+	// Queue an action item to submit the file contract revision - if there is
+	// never a file contract revision, the handling of this action item will be
+	// a no-op.
+	// 对提交文件合同修订的操作项进行排队 - 如果从未进行过文件合同修订，则此操作项的处理将为无操作。
+	h.queueActionItem(so.expiration()-revisionSubmissionBuffer, so.id())
+	h.queueActionItem(so.expiration()-revisionSubmissionBuffer+resubmissionTimeout, so.id()) // Paranoia
+	// The storage proof should be submitted
+	h.queueActionItem(so.expiration()+resubmissionTimeout, so.id())
+	h.queueActionItem(so.expiration()+resubmissionTimeout*2, so.id()) // Paranoia
+	//err = composeErrors(err1, err2, err3, err4, err5, err6)
+	//if err != nil {
+	//	h.log.Println("Error with transaction set, redacting obligation, id", so.id())
+	//	return composeErrors(err, h.removeStorageObligation(so, obligationRejected))
+	//}
+
 	return nil
 }
 
@@ -442,7 +464,7 @@ func (h *StorageHost) managedAddStorageObligation(db ethdb.Database, so StorageO
 // 扇区修改仅用于更新扇区数据库，它们不会用于修改存储义务（最重要的是，这意味着需要通过调用函数更新sectorRoots）。
 // 虚拟扇区将被删除它们列出的次数，为了删除同一虚拟扇区的多个实例，
 // 虚拟扇区将需要多次出现在“sectorRemoved”中。 与'sectorGained'相同。
-func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+func (h *StorageHost) modifyStorageObligation(so StorageObligation, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageObligations[so.id()]; ok {
 		h.log.Info("modifyStorageObligation called with an obligation that is not locked")
 	}
@@ -505,12 +527,12 @@ func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageOblig
 	var errOld error
 	errDBso := func() error {
 
-		oldso, errOld = getStorageObligation(db, so.id())
+		oldso, errOld = getStorageObligation(h.db, so.id())
 		if errOld != nil {
 			return errOld
 		}
 
-		errOld = putStorageObligation(db, so)
+		errOld = putStorageObligation(h.db, so)
 		if errOld != nil {
 			return errOld
 		}
@@ -570,9 +592,9 @@ func (h *StorageHost) modifyStorageObligation(db ethdb.Database, so StorageOblig
 // this method updates the host financial metrics to show the correct values.
 //将删除主机的存储义务，无论出于何种原因，它都不会在块链上进行
 //由于这些陈旧的存储义务会对主机财务指标产生影响，因此此方法会更新主机财务指标以显示正确的值。
-func (h *StorageHost) PruneStaleStorageObligations(db ethdb.Database) error {
+func (h *StorageHost) PruneStaleStorageObligations() error {
 
-	sos := h.StorageObligations(db)
+	sos := h.StorageObligations()
 	var scids []common.Hash
 	for _, so := range sos {
 		//TODO 交易确认
@@ -585,13 +607,13 @@ func (h *StorageHost) PruneStaleStorageObligations(db ethdb.Database) error {
 	}
 
 	// Delete stale obligations from the database.
-	err := h.deleteStorageObligations(db, scids)
+	err := h.deleteStorageObligations(scids)
 	if err != nil {
 		return err
 	}
 
 	// Update the financial metrics of the host.
-	err = h.resetFinancialMetrics(db)
+	err = h.resetFinancialMetrics()
 	if err != nil {
 		return err
 	}
@@ -602,7 +624,7 @@ func (h *StorageHost) PruneStaleStorageObligations(db ethdb.Database) error {
 // removeStorageObligation will remove a storage obligation from the host,
 // either due to failure or success.
 // removeStorageObligation将删除主机的存储义务，无论是由于失败还是成功。
-func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageObligation, sos storageObligationStatus) error {
+func (h *StorageHost) removeStorageObligation(so StorageObligation, sos storageObligationStatus) error {
 
 	//TODO Error is not checked, we want to call remove on every sector even if
 	// there are problems - disk health information will be updated.
@@ -686,7 +708,7 @@ func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageOblig
 	so.ObligationStatus = sos
 	so.SectorRoots = common.Hash{}
 
-	errDb := StoreStorageObligation(db, so.id(), so)
+	errDb := StoreStorageObligation(h.db, so.id(), so)
 	if errDb != nil {
 		return errDb
 	}
@@ -694,13 +716,13 @@ func (h *StorageHost) removeStorageObligation(db ethdb.Database, so StorageOblig
 	return nil
 }
 
-func (h *StorageHost) resetFinancialMetrics(db ethdb.Database) error {
+func (h *StorageHost) resetFinancialMetrics() error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	fm := HostFinancialMetrics{}
 
-	sos := h.StorageObligations(db)
+	sos := h.StorageObligations()
 
 	for _, so := range sos {
 		// Transaction fees are always added.
@@ -744,21 +766,153 @@ func (h *StorageHost) resetFinancialMetrics(db ethdb.Database) error {
 }
 
 // threadedHandleActionItem will look at a storage obligation and determine
-// which action is necessary for the storage obligation to succeed.	将考虑存储义务并确定存储义务成功所必需的行动
+// which action is necessary for the storage obligation to succeed.
 func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
+
+	// Lock the storage obligation in question.
+	h.managedLockStorageObligation(soid)
+	defer func() {
+		h.managedUnlockStorageObligation(soid)
+	}()
+
+	// Fetch the storage obligation associated with the storage obligation id.
+	h.lock.RLock()
+	so, errGetso := getStorageObligation(h.db, soid)
+	if errGetso != nil {
+		h.log.Info("Could not get storage obligation:", errGetso)
+		return
+	}
+
+	// Check whether the storage obligation has already been completed.
+	if so.ObligationStatus != obligationUnresolved {
+		// Storage obligation has already been completed, skip action item.
+		return
+	}
+
+	// Check whether the file contract has been seen. If not, resubmit and
+	// queue another action item. Check for death. (signature should have a
+	// kill height)
+	if !so.OriginConfirmed {
+		//TODO Submit the transaction set again, try to get the transaction
+		// confirmed. 重新提交交易集合，尝试获取这个交易的确认
+
+		// Queue another action item to check the status of the transaction.
+		h.lock.Lock()
+		err := h.queueActionItem(h.blockHeight+resubmissionTimeout, so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+
+	}
+
+	// Check if the file contract revision is ready for submission. Check for death.
+	if !so.RevisionConfirmed && len(so.Revision) > 0 && h.blockHeight >= so.expiration()-revisionSubmissionBuffer {
+		// Sanity check - there should be a file contract revision.
+		rtsLen := len(so.Revision)
+		if rtsLen < 1 {
+			h.log.Info("transaction revision marked as unconfirmed, yet there is no transaction revision")
+			return
+		}
+
+		// Check if the revision has failed to submit correctly.
+		if h.blockHeight > so.expiration() {
+			// TODO: Check this error.
+			//
+			// TODO: this is not quite right, because a previous revision may
+			// be confirmed, and the origin transaction may be confirmed, which
+			// would confuse the revenue stuff a bit. Might happen frequently
+			// due to the dynamic fee pool.
+			h.log.Info("Full time has elapsed, but the revision transaction could not be submitted to consensus, id", so.id())
+			h.lock.Lock()
+			h.removeStorageObligation(so, obligationRejected)
+			h.lock.Unlock()
+			return
+		}
+
+		// Queue another action item to check the status of the transaction.
+		h.lock.Lock()
+		err := h.queueActionItem(h.blockHeight+resubmissionTimeout, so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+
+		//TODO Add a miner fee to the transaction and submit it to the blockchain.
+
+	}
+
+	// Check whether a storage proof is ready to be provided, and whether it
+	// has been accepted. Check for death.	检查存储证明准备提交和是否被接收，检查状态是否销毁
+	if !so.ProofConfirmed && h.blockHeight >= so.expiration()+resubmissionTimeout {
+		h.log.Info("Host is attempting a storage proof for", so.id())
+
+		// If the obligation has no sector roots, we can remove the obligation and not
+		// submit a storage proof. The host payout for a failed empty contract
+		// includes the contract cost and locked collateral.
+		if len(so.SectorRoots) == 0 {
+			h.log.Info("storage proof not submitted for empty contract, id", so.id())
+			h.lock.Lock()
+			err := h.removeStorageObligation(so, obligationSucceeded)
+			h.lock.Unlock()
+			if err != nil {
+				h.log.Info("Error removing storage obligation:", err)
+			}
+			return
+		}
+		// If the window has closed, the host has failed and the obligation can
+		// be removed.
+		if so.proofDeadline() < h.blockHeight {
+			h.log.Info("storage proof not confirmed by deadline, id", so.id())
+			h.lock.Lock()
+			err := h.removeStorageObligation(so, obligationFailed)
+			h.lock.Unlock()
+			if err != nil {
+				h.log.Info("Error removing storage obligation:", err)
+			}
+			return
+		}
+
+		//TODO Get the index of the segment, and the index of the sector containing the segment.
+
+		//TODO Build the storage proof for just the sector.
+
+		//TODO Create and build the transaction with the storage proof.
+
+		h.lock.Lock()
+		err := h.queueActionItem(so.proofDeadline(), so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+	}
+
+	// Save the storage obligation to account for any fee changes.	保存存储义务以记录任何费用变化。
+	errDB := StoreStorageObligation(h.db, soid, so)
+	if errDB != nil {
+		h.log.Info("Error updating the storage obligations", errDB)
+	}
+
+	// Check if all items have succeeded with the required confirmations. Report
+	if so.ProofConfirmed && h.blockHeight >= so.proofDeadline() {
+		h.log.Info("file contract complete, id", so.id())
+		h.lock.Lock()
+		h.removeStorageObligation(so, obligationSucceeded)
+		h.lock.Unlock()
+	}
 
 }
 
 // StorageObligations fetches the set of storage obligations in the host and
 // returns metadata on them.	StorageObligations获取主机中的存储义务集并返回其上的元数据。
-func (h *StorageHost) StorageObligations(db ethdb.Database) (sos []StorageObligation) {
+func (h *StorageHost) StorageObligations() (sos []StorageObligation) {
 
 	if len(h.lockedStorageObligations) < 1 {
 		return nil
 	}
 
 	for i := range h.lockedStorageObligations {
-		so, err := GetStorageObligation(db, i)
+		so, err := GetStorageObligation(h.db, i)
 		if err != nil {
 			continue
 		}
@@ -802,40 +956,27 @@ func GetStorageObligation(db ethdb.Database, storageContractID common.Hash) (Sto
 func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64) error {
 	scdb := ethdb.StorageContractDB{db}
 
-	hinfo := struct {
-		Height uint64
-	}{
-		Height: height,
-	}
-
-	data, err := rlp.EncodeToBytes(&hinfo)
+	existingItems, err := GetHeight(db, height)
 	if err != nil {
-		return err
+		existingItems = make([]byte, 1)
 	}
 
-	return scdb.StoreWithPrefix(storageContractID, data, PrefixHeight)
+	existingItems = append(existingItems, storageContractID[:]...)
+
+	return scdb.StoreWithPrefix(storageContractID, existingItems, PrefixHeight)
 }
 
-func DeleteHeight(db ethdb.Database, storageContractID common.Hash) error {
+func DeleteHeight(db ethdb.Database, height uint64) error {
 	scdb := ethdb.StorageContractDB{db}
-	return scdb.DeleteWithPrefix(storageContractID, PrefixHeight)
+	return scdb.DeleteWithPrefix(height, PrefixHeight)
 }
 
-func GetHeight(db ethdb.Database, storageContractID common.Hash) (uint64, error) {
+func GetHeight(db ethdb.Database, height uint64) ([]byte, error) {
 	scdb := ethdb.StorageContractDB{db}
-	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixHeight)
+	valueBytes, err := scdb.GetWithPrefix(height, PrefixHeight)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	hinfo := struct {
-		Height uint64
-	}{}
-
-	err = rlp.DecodeBytes(valueBytes, &hinfo)
-	if err != nil {
-		return 0, err
-	}
-
-	return hinfo.Height, nil
+	return valueBytes, nil
 }
