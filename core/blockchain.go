@@ -840,6 +840,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		start = time.Now()
 		bytes = 0
 		batch = bc.db.NewBatch()
+
+		chainChangeEvent   *ChainChangeEvent
+		appliedBlockHashes []common.Hash
 	)
 	for i, block := range blockChain {
 		receipts := receiptChain[i]
@@ -864,6 +867,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
 		rawdb.WriteReceipts(batch, block.Hash(), block.NumberU64(), receipts)
 		rawdb.WriteTxLookupEntries(batch, block)
+
+		appliedBlockHashes = append(appliedBlockHashes, block.Hash())
 
 		stats.processed++
 
@@ -903,6 +908,9 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 		context = append(context, []interface{}{"ignored", stats.ignored}...)
 	}
 	log.Info("Imported new block receipts", context...)
+
+	chainChangeEvent = &ChainChangeEvent{AppliedBlockHashes: appliedBlockHashes}
+	bc.chainChangeFeed.Send(*chainChangeEvent)
 
 	return 0, nil
 }
