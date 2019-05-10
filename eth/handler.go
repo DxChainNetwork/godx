@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/accounts"
 	"math"
 	"math/big"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/misc"
@@ -779,6 +779,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := pm.storageContractContext.Put([]byte(key), enc); err != nil {
 			return errResp(ErrDecode, "storage contract context encode error: %v", err)
 		}
+
+		// TODO: 这里需要host发送协商完成通知，client收到通知后才会真正发送交易
 
 		return p.SendStorageContractCreationHostSign(sign)
 

@@ -330,6 +330,11 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
+func (p *peer) SendStorageContractCreation(data interface{}) error {
+	p.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
+	return p2p.Send(p.rw, StorageContractCreationMsg, data)
+}
+
 func (p *peer) SendStorageContractCreationHostSign(data interface{}) error {
 	p.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
 	return p2p.Send(p.rw, StorageContractCreationHostSignMsg, data)
