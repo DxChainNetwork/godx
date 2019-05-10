@@ -766,8 +766,140 @@ func (h *StorageHost) resetFinancialMetrics() error {
 }
 
 // threadedHandleActionItem will look at a storage obligation and determine
-// which action is necessary for the storage obligation to succeed.	将考虑存储义务并确定存储义务成功所必需的行动
+// which action is necessary for the storage obligation to succeed.
 func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
+
+	// Lock the storage obligation in question.
+	h.managedLockStorageObligation(soid)
+	defer func() {
+		h.managedUnlockStorageObligation(soid)
+	}()
+
+	// Fetch the storage obligation associated with the storage obligation id.
+	h.lock.RLock()
+	so, errGetso := getStorageObligation(h.db, soid)
+	if errGetso != nil {
+		h.log.Info("Could not get storage obligation:", errGetso)
+		return
+	}
+
+	// Check whether the storage obligation has already been completed.
+	if so.ObligationStatus != obligationUnresolved {
+		// Storage obligation has already been completed, skip action item.
+		return
+	}
+
+	// Check whether the file contract has been seen. If not, resubmit and
+	// queue another action item. Check for death. (signature should have a
+	// kill height)
+	if !so.OriginConfirmed {
+		//TODO Submit the transaction set again, try to get the transaction
+		// confirmed. 重新提交交易集合，尝试获取这个交易的确认
+
+		// Queue another action item to check the status of the transaction.
+		h.lock.Lock()
+		err := h.queueActionItem(h.blockHeight+resubmissionTimeout, so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+
+	}
+
+	// Check if the file contract revision is ready for submission. Check for death.
+	if !so.RevisionConfirmed && len(so.Revision) > 0 && h.blockHeight >= so.expiration()-revisionSubmissionBuffer {
+		// Sanity check - there should be a file contract revision.
+		rtsLen := len(so.Revision)
+		if rtsLen < 1 {
+			h.log.Info("transaction revision marked as unconfirmed, yet there is no transaction revision")
+			return
+		}
+
+		// Check if the revision has failed to submit correctly.
+		if h.blockHeight > so.expiration() {
+			// TODO: Check this error.
+			//
+			// TODO: this is not quite right, because a previous revision may
+			// be confirmed, and the origin transaction may be confirmed, which
+			// would confuse the revenue stuff a bit. Might happen frequently
+			// due to the dynamic fee pool.
+			h.log.Info("Full time has elapsed, but the revision transaction could not be submitted to consensus, id", so.id())
+			h.lock.Lock()
+			h.removeStorageObligation(so, obligationRejected)
+			h.lock.Unlock()
+			return
+		}
+
+		// Queue another action item to check the status of the transaction.
+		h.lock.Lock()
+		err := h.queueActionItem(h.blockHeight+resubmissionTimeout, so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+
+		//TODO Add a miner fee to the transaction and submit it to the blockchain.
+
+	}
+
+	// Check whether a storage proof is ready to be provided, and whether it
+	// has been accepted. Check for death.	检查存储证明准备提交和是否被接收，检查状态是否销毁
+	if !so.ProofConfirmed && h.blockHeight >= so.expiration()+resubmissionTimeout {
+		h.log.Info("Host is attempting a storage proof for", so.id())
+
+		// If the obligation has no sector roots, we can remove the obligation and not
+		// submit a storage proof. The host payout for a failed empty contract
+		// includes the contract cost and locked collateral.
+		if len(so.SectorRoots) == 0 {
+			h.log.Info("storage proof not submitted for empty contract, id", so.id())
+			h.lock.Lock()
+			err := h.removeStorageObligation(so, obligationSucceeded)
+			h.lock.Unlock()
+			if err != nil {
+				h.log.Info("Error removing storage obligation:", err)
+			}
+			return
+		}
+		// If the window has closed, the host has failed and the obligation can
+		// be removed.
+		if so.proofDeadline() < h.blockHeight {
+			h.log.Info("storage proof not confirmed by deadline, id", so.id())
+			h.lock.Lock()
+			err := h.removeStorageObligation(so, obligationFailed)
+			h.lock.Unlock()
+			if err != nil {
+				h.log.Info("Error removing storage obligation:", err)
+			}
+			return
+		}
+
+		//TODO Get the index of the segment, and the index of the sector containing the segment.
+
+		//TODO Build the storage proof for just the sector.
+
+		//TODO Create and build the transaction with the storage proof.
+
+		h.lock.Lock()
+		err := h.queueActionItem(so.proofDeadline(), so.id())
+		h.lock.Unlock()
+		if err != nil {
+			h.log.Info("Error queuing action item:", err)
+		}
+	}
+
+	// Save the storage obligation to account for any fee changes.	保存存储义务以记录任何费用变化。
+	errDB := StoreStorageObligation(h.db, soid, so)
+	if errDB != nil {
+		h.log.Info("Error updating the storage obligations", errDB)
+	}
+
+	// Check if all items have succeeded with the required confirmations. Report
+	if so.ProofConfirmed && h.blockHeight >= so.proofDeadline() {
+		h.log.Info("file contract complete, id", so.id())
+		h.lock.Lock()
+		h.removeStorageObligation(so, obligationSucceeded)
+		h.lock.Unlock()
+	}
 
 }
 
