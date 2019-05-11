@@ -1,0 +1,127 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
+package storage
+
+import (
+	"errors"
+	"fmt"
+	"github.com/DxChainNetwork/godx/p2p"
+	"sync"
+)
+
+const (
+	// Storage Contract Negotiate Protocol belonging to eth/64
+	// Storage Contract Creation/Renew Code Msg
+	StorageContractCreationMsg         = 0x11
+	StorageContractCreationHostSignMsg = 0x12
+	StorageContractUpdateMsg           = 0x13
+	StorageContractUpdateHostSignMsg   = 0x14
+
+	// Upload/Download Data Segment Code Msg
+	StorageContractUploadRequestMsg         = 0x15
+	StorageContractUploadMerkleRootProofMsg = 0x16
+	StorageContractUploadClientRevisionMsg  = 0x17
+	StorageContractUploadHostRevisionMsg    = 0x18
+	StorageContractDownloadRequestMsg       = 0x19
+	StorageContractDownloadDataMsg          = 0x20
+	StorageContractDownloadHostRevisionMsg  = 0x21
+)
+
+type SessionSet struct {
+	sessions map[string]*Session
+	lock     sync.RWMutex
+	closed   bool
+}
+
+func NewSessionSet() *SessionSet {
+	return &SessionSet{
+		sessions: make(map[string]*Session),
+	}
+}
+
+func (st *SessionSet) Register(s *Session) error {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+
+	if st.closed {
+		return errors.New("session is closed")
+	}
+
+	if _, ok := st.sessions[s.id]; ok {
+		return errors.New("session is already registered")
+	}
+	st.sessions[s.id] = s
+
+	return nil
+}
+
+func (st *SessionSet) Unregister(id string) error {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+
+	_, ok := st.sessions[id]
+	if !ok {
+		return errors.New("session is not registered")
+	}
+	delete(st.sessions, id)
+
+	return nil
+}
+
+func (st *SessionSet) Close() {
+	st.lock.Lock()
+	defer st.lock.Unlock()
+
+	for _, p := range st.sessions {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	st.closed = true
+}
+
+// Peer retrieves the registered peer with the given id.
+func (st *SessionSet) Session(id string) *Session {
+	st.lock.RLock()
+	defer st.lock.RUnlock()
+
+	return st.sessions[id]
+}
+
+type Session struct {
+	id string
+
+	*p2p.Peer
+	rw p2p.MsgReadWriter
+
+	version int
+}
+
+func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
+	return &Session{
+		id:      fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:    p,
+		rw:      rw,
+		version: version,
+	}
+}
+
+func (s *Session) SendStorageContractCreation(data interface{}) error {
+	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
+	return p2p.Send(s.rw, StorageContractCreationMsg, data)
+}
+
+func (s *Session) SendStorageContractCreationHostSign(data interface{}) error {
+	s.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
+	return p2p.Send(s.rw, StorageContractCreationHostSignMsg, data)
+}
+
+func (s *Session) SendStorageContractUpdate(data interface{}) error {
+	s.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
+	return p2p.Send(s.rw, StorageContractUpdateMsg, data)
+}
+
+func (s *Session) SendStorageContractUpdateHostSign(data interface{}) error {
+	s.Log().Debug("Sending storage contract update host signatures", "signature", data)
+	return p2p.Send(s.rw, StorageContractUpdateHostSignMsg, data)
+}

@@ -57,28 +57,13 @@ const (
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
+	HostSettingMsg     = 0x08
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
-
-	// Storage Contract Negotiate Protocol belonging to eth/64
-	// Storage Contract Creation/Renew Code Msg
-	StorageContractCreationMsg         = 0x11
-	StorageContractCreationHostSignMsg = 0x12
-	StorageContractUpdateMsg           = 0x13
-	StorageContractUpdateHostSignMsg   = 0x14
-
-	// Upload/Download Data Segment Code Msg
-	StorageContractUploadRequestMsg         = 0x15
-	StorageContractUploadMerkleRootProofMsg = 0x16
-	StorageContractUploadClientRevisionMsg  = 0x17
-	StorageContractUploadHostRevisionMsg    = 0x18
-	StorageContractDownloadRequestMsg       = 0x19
-	StorageContractDownloadDataMsg          = 0x20
-	StorageContractDownloadHostRevisionMsg  = 0x21
 )
 
 type errCode int
@@ -96,7 +81,7 @@ const (
 )
 
 const (
-	StorageContractContextKey = "storage_contract"
+	StorageContractContextKey         = "storage_contract"
 	StorageContractRevisionContextKey = "storage_contract_revision"
 )
 

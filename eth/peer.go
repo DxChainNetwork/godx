@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
 	"time"
@@ -332,22 +333,22 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 
 func (p *peer) SendStorageContractCreation(data interface{}) error {
 	p.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
-	return p2p.Send(p.rw, StorageContractCreationMsg, data)
+	return p2p.Send(p.rw, storage.StorageContractCreationMsg, data)
 }
 
 func (p *peer) SendStorageContractCreationHostSign(data interface{}) error {
 	p.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
-	return p2p.Send(p.rw, StorageContractCreationHostSignMsg, data)
+	return p2p.Send(p.rw, storage.StorageContractCreationHostSignMsg, data)
 }
 
 func (p *peer) SendStorageContractUpdate(data interface{}) error {
 	p.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
-	return p2p.Send(p.rw, StorageContractUpdateMsg, data)
+	return p2p.Send(p.rw, storage.StorageContractUpdateMsg, data)
 }
 
 func (p *peer) SendStorageContractUpdateHostSign(data interface{}) error {
 	p.Log().Debug("Sending storage contract update host signatures", "signature", data)
-	return p2p.Send(p.rw, StorageContractUpdateHostSignMsg, data)
+	return p2p.Send(p.rw, storage.StorageContractUpdateHostSignMsg, data)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,
@@ -419,6 +420,10 @@ func (p *peer) String() string {
 	)
 }
 
+func (p *peer) Peer2Session() *storage.Session {
+	return storage.NewSession(p.version, p.Peer, p.rw)
+}
+
 // peerSet represents the collection of active peers currently participating in
 // the Ethereum sub-protocol.
 type peerSet struct {
@@ -475,13 +480,6 @@ func (ps *peerSet) Peer(id string) *peer {
 	defer ps.lock.RUnlock()
 
 	return ps.peers[id]
-}
-
-func (ps *peerSet) PeerWrap(id string) *Peer {
-	ps.lock.RLock()
-	defer ps.lock.RUnlock()
-
-	return &Peer{ps.peers[id]}
 }
 
 // Len returns if the current number of peers in the set.

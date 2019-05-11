@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"math/big"
 	"strings"
@@ -27,7 +29,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/misc"
@@ -79,13 +80,13 @@ type ProtocolManager struct {
 	chainconfig *params.ChainConfig
 	maxPeers    int
 
-	eth                    *Ethereum
-	downloader             *downloader.Downloader
-	fetcher                *fetcher.Fetcher
-	peers                  *peerSet
-	storageContractPeers   *peerSet
-	storageContractContext *ethdb.MemDatabase
-	SubProtocols           []p2p.Protocol
+	eth                     *Ethereum
+	downloader              *downloader.Downloader
+	fetcher                 *fetcher.Fetcher
+	peers                   *peerSet
+	storageContractSessions *storage.SessionSet
+	storageContractContext  *ethdb.MemDatabase
+	SubProtocols            []p2p.Protocol
 
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
@@ -110,20 +111,20 @@ type ProtocolManager struct {
 func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		eth:                  eth,
-		networkID:            networkID,
-		eventMux:             mux,
-		txpool:               txpool,
-		blockchain:           blockchain,
-		chainconfig:          config,
-		peers:                newPeerSet(),
-		storageContractPeers: newPeerSet(),
-		storageContractContext: ethdb.NewMemDatabase(),
-		whitelist:            whitelist,
-		newPeerCh:            make(chan *peer),
-		noMorePeers:          make(chan struct{}),
-		txsyncCh:             make(chan *txsync),
-		quitSync:             make(chan struct{}),
+		eth:                     eth,
+		networkID:               networkID,
+		eventMux:                mux,
+		txpool:                  txpool,
+		blockchain:              blockchain,
+		chainconfig:             config,
+		peers:                   newPeerSet(),
+		storageContractSessions: storage.NewSessionSet(),
+		storageContractContext:  ethdb.NewMemDatabase(),
+		whitelist:               whitelist,
+		newPeerCh:               make(chan *peer),
+		noMorePeers:             make(chan struct{}),
+		txsyncCh:                make(chan *txsync),
+		quitSync:                make(chan struct{}),
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -213,16 +214,16 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 }
 
-func (pm *ProtocolManager) removeStorageContactPeer(id string) {
+func (pm *ProtocolManager) removeStorageContactSession(id string) {
 	// Short circuit if the peer was already removed
-	peer := pm.storageContractPeers.Peer(id)
+	peer := pm.storageContractSessions.Session(id)
 	if peer == nil {
 		return
 	}
 	log.Debug("Removing Ethereum peer", "peer", id)
 
 	// Unregister the peer from Ethereum peer set
-	if err := pm.storageContractPeers.Unregister(id); err != nil {
+	if err := pm.storageContractSessions.Unregister(id); err != nil {
 		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
@@ -349,11 +350,11 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			rw.Init(p.version)
 		}
 
-		if err := pm.storageContractPeers.Register(p); err != nil {
+		if err := pm.storageContractSessions.Register(p.Peer2Session()); err != nil {
 			p.Log().Error("Ethereum peer registration failed", "err", err)
 			return err
 		}
-		defer pm.removeStorageContactPeer(p.id)
+		defer pm.removeStorageContactSession(p.id)
 	}
 
 	// Handle incoming messages until the connection is torn down
@@ -742,7 +743,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		pm.txpool.AddRemotes(txs)
 
-	case msg.Code == StorageContractCreationMsg:
+	case msg.Code == storage.StorageContractCreationMsg:
 		var sc types.StorageContract
 		if err := msg.Decode(&sc); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -784,7 +785,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		return p.SendStorageContractCreationHostSign(sign)
 
-	case msg.Code == StorageContractCreationHostSignMsg:
+	case msg.Code == storage.StorageContractCreationHostSignMsg:
 		var hostSign []byte
 		if err := msg.Decode(&hostSign); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
@@ -845,7 +846,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		// send revision to storage host
 		return p.SendStorageContractUpdate(sign)
 
-	case msg.Code == StorageContractUpdateMsg:
+	case msg.Code == storage.StorageContractUpdateMsg:
 		// Storage Host
 		var clientSign []byte
 		if err := msg.Decode(&clientSign); err != nil {
@@ -896,7 +897,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		return p.SendStorageContractUpdateHostSign(sign)
 
-	case msg.Code == StorageContractUpdateHostSignMsg:
+	case msg.Code == storage.StorageContractUpdateHostSignMsg:
 		// Storage Client
 		var hostSign []byte
 		if err := msg.Decode(&hostSign); err != nil {
@@ -933,38 +934,38 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		case <-time.After(3 * time.Second):
 		}
 
-	case msg.Code == StorageContractUploadRequestMsg:
+	case msg.Code == storage.StorageContractUploadRequestMsg:
 		// add data to disk block
 
 		// create merkle proof response
 
 		// send it to storage client
 
-	case msg.Code == StorageContractUploadMerkleRootProofMsg:
+	case msg.Code == storage.StorageContractUploadMerkleRootProofMsg:
 		// verify merkle root proof
 
 		// assemble storage contract revision and sign it
 
 		// send it to storage host
 
-	case msg.Code == StorageContractUploadClientRevisionMsg:
+	case msg.Code == storage.StorageContractUploadClientRevisionMsg:
 		// verify signature from storage client
 
 		// sign it by storage client and modify storage obligation
 
 		// send it to storage client
 
-	case msg.Code == StorageContractUploadHostRevisionMsg:
+	case msg.Code == storage.StorageContractUploadHostRevisionMsg:
 		// verify signature from storage host
 
 		// update storage contract manager
 
-	case msg.Code == StorageContractDownloadRequestMsg:
+	case msg.Code == storage.StorageContractDownloadRequestMsg:
 		// retrieve data from disk and send it to client
 
-	case msg.Code == StorageContractDownloadDataMsg:
+	case msg.Code == storage.StorageContractDownloadDataMsg:
 
-	case msg.Code == StorageContractDownloadHostRevisionMsg:
+	case msg.Code == storage.StorageContractDownloadHostRevisionMsg:
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -1077,6 +1078,6 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 	}
 }
 
-func (pm *ProtocolManager) StorageContractPeerSet() *peerSet {
-	return pm.storageContractPeers
+func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
+	return pm.storageContractSessions
 }
