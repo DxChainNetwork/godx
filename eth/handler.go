@@ -23,6 +23,7 @@ import (
 	"github.com/DxChainNetwork/godx/accounts"
 	"math"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,7 +84,7 @@ type ProtocolManager struct {
 	fetcher                *fetcher.Fetcher
 	peers                  *peerSet
 	storageContractPeers   *peerSet
-	storageContractContext map[interface{}]interface{}
+	storageContractContext *ethdb.MemDatabase
 	SubProtocols           []p2p.Protocol
 
 	eventMux      *event.TypeMux
@@ -117,6 +118,7 @@ func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode download
 		chainconfig:          config,
 		peers:                newPeerSet(),
 		storageContractPeers: newPeerSet(),
+		storageContractContext: ethdb.NewMemDatabase(),
 		whitelist:            whitelist,
 		newPeerCh:            make(chan *peer),
 		noMorePeers:          make(chan struct{}),
@@ -772,7 +774,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 		// cache storage contract context
 		sc.Signatures[1] = sign
-		pm.storageContractContext[fmt.Sprintf("%s_%s", "storage_contract", p.ID().String())] = sc
+		key := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+		enc, _ := rlp.EncodeToBytes(sc)
+		if err := pm.storageContractContext.Put([]byte(key), enc); err != nil {
+			return errResp(ErrDecode, "storage contract context encode error: %v", err)
+		}
 
 		return p.SendStorageContractCreationHostSign(sign)
 
@@ -782,12 +788,39 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 
-		storageContract := pm.storageContractContext[p.ID().String()].(types.StorageContract)
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
 		storageContract.Signatures[1] = hostSign
 
+		enc, _ := rlp.EncodeToBytes(storageContract)
+		if err := pm.storageContractContext.Put([]byte(storageContractKey), enc); err != nil {
+			return errResp(ErrDecode, "storage contract context encode error: %v", err)
+		}
+
 		// assemble init revision and sign it
-		storageContractRevision := types.StorageContractRevision{}
-		pm.storageContractContext[fmt.Sprintf("%s_%s", "storage_contract_revision", p.ID().String())] = storageContractRevision
+		storageContractRevision := types.StorageContractRevision{
+			ParentID: storageContract.RLPHash(),
+			// UnlockConditions:  ,
+			NewRevisionNumber: 1,
+
+			NewFileSize:           storageContract.FileSize,
+			NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+			NewWindowStart:        storageContract.WindowStart,
+			NewWindowEnd:          storageContract.WindowEnd,
+			NewValidProofOutputs:  storageContract.ValidProofOutputs,
+			NewMissedProofOutputs: storageContract.MissedProofOutputs,
+			NewUnlockHash:         storageContract.UnlockHash,
+		}
 
 		account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
 		wallet, err := pm.eth.AccountManager().Find(account)
@@ -799,17 +832,50 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err != nil {
 			return errResp(ErrDecode, "client sign revison error: %v", err)
 		}
+		storageContractRevision.Signatures = [][]byte{sign}
 
-		// submit form contract transaction to tx pool
+		storageContractRevisionKey := strings.Join([]string{StorageContractRevisionContextKey, p.ID().String()}, "_")
+		revisionEnc, _ := rlp.EncodeToBytes(storageContractRevision)
+		if err := pm.storageContractContext.Put([]byte(storageContractRevisionKey), revisionEnc); err != nil {
+			return errResp(ErrDecode, "storage contract revision context encode error: %v", err)
+		}
 
 		// send revision to storage host
 		return p.SendStorageContractUpdate(sign)
 
 	case msg.Code == StorageContractUpdateMsg:
-		storageContract := pm.storageContractContext[p.ID().String()].(types.StorageContract)
+		// Storage Host
+		var clientSign []byte
+		if err := msg.Decode(&clientSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
 
-		// TODO reconstruct revision locally by host
-		storageContractRevision := types.StorageContractRevision{}
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
+		// reconstruct revision locally by host
+		storageContractRevision := types.StorageContractRevision{
+			ParentID: storageContract.RLPHash(),
+			// UnlockConditions:  ,
+			NewRevisionNumber: 1,
+
+			NewFileSize:           storageContract.FileSize,
+			NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+			NewWindowStart:        storageContract.WindowStart,
+			NewWindowEnd:          storageContract.WindowEnd,
+			NewValidProofOutputs:  storageContract.ValidProofOutputs,
+			NewMissedProofOutputs: storageContract.MissedProofOutputs,
+			NewUnlockHash:         storageContract.UnlockHash,
+		}
 
 		account := accounts.Account{Address: storageContract.ValidProofOutputs[1].Address}
 		wallet, err := pm.eth.AccountManager().Find(account)
@@ -823,15 +889,47 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "host sign revison error: %v", err)
 		}
 
+		storageContractRevision.Signatures = [][]byte{clientSign, sign}
 		// TODO managedAddStorageObligation
 
 		return p.SendStorageContractUpdateHostSign(sign)
 
 	case msg.Code == StorageContractUpdateHostSignMsg:
+		// Storage Client
+		var hostSign []byte
+		if err := msg.Decode(&hostSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		storageContractRevisionKey := strings.Join([]string{StorageContractRevisionContextKey, p.ID().String()}, "_")
+		var storageContractRevision types.StorageContractRevision
+		if bytes, err := pm.storageContractContext.Get([]byte(storageContractRevisionKey)); err != nil {
+			return errResp(ErrDecode, "storage contract revision context decode error: %v", err)
+		} else {
+			if err := rlp.DecodeBytes(bytes, &storageContractRevision); err != nil {
+				return errResp(ErrDecode, "storage contract revision rlp decode error: %v", err)
+			}
+		}
+
+		storageContractRevision.Signatures[1] = hostSign
 		// TODO managedInsertContract 保存文件合约到本地数据结构中
 
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
 		// form storage contract done. notify client by peer.term channel
-		close(p.term)
+		select {
+		// case p.term <- storageContract:
+		case <-time.After(3 * time.Second):
+		}
 
 	case msg.Code == StorageContractUploadRequestMsg:
 		// add data to disk block
