@@ -37,7 +37,9 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
-	fundAddr                    = common.HexToAddress("0x0000000000000000000000000000000000000000")
+
+	// TODO: storage contract中的押金存入这个基金账户，需要创建一个账户，类似personal.newAccount的方法，必须得有一套公私钥来管理这个公共账户
+	fundAddr = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 type (
