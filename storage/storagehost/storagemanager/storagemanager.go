@@ -27,7 +27,7 @@ type storageManager struct {
 	atomicSwitch uint64
 	// folderLock manage the read and write for folders map, upgrade to RWLock in the future
 	folderLock sync.Mutex
-	wg         sync.WaitGroup
+	wg         *sync.WaitGroup
 }
 
 // New help to create a storage manager by using constructors, and also start the
@@ -37,7 +37,14 @@ func New(persistDir string, mode ...int) (*storageManager, error) {
 		buildSetting(mode[0])
 	}
 	sm, err := newStorageManager(persistDir)
+	if sm == nil || err != nil{
+		return sm, err
+	}
+
+	sm.wg.Add(1)
+
 	go sm.startMaintenance()
+
 	return sm, err
 }
 
@@ -75,6 +82,10 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) error {
 
 // use the thread manager to close all the related process
 func (sm *storageManager) Close() error {
+	// check if already closed
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1{
+		return errors.New("storage managger already closed")
+	}
 	// close the switch, indicating the storage manager would no longer receive
 	// any operation
 	atomic.StoreUint64(&sm.atomicSwitch, 1)
@@ -82,6 +93,7 @@ func (sm *storageManager) Close() error {
 	// signal the maintenance threads to shut down
 	// TODO: if this is called when the maintenance not running,
 	//  would result an infinite waiting,
+
 	sm.stopChan <- struct{}{}
 
 	// wait until all running operation finish their job

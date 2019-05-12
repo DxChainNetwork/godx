@@ -1,7 +1,6 @@
 package storagemanager
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"os"
 	"path/filepath"
@@ -114,9 +113,7 @@ func (sm *storageManager) syncConfig() {
 	if err = os.Rename(filepath.Join(sm.persistDir, configFileTmp),
 		filepath.Join(sm.persistDir, configFile)); err != nil {
 		// TODO: log the failure
-		fmt.Println("rename fail")
 	}
-	fmt.Println("rename down")
 }
 
 func (sm *storageManager) syncConfigForce() error {

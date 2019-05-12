@@ -1,11 +1,14 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 const (
+	// STD and TST is the mode of setting for initialization
+	// of to fits both the testing and standard requirement
 	STD = iota
 	TST
 
@@ -38,6 +41,8 @@ var (
 
 	// Mode indicate the current mode
 	Mode int
+	// Mock fails to disrupt the system
+	MockFails map[string]bool
 	// SectorSize is the size of a sector
 	SectorSize uint64
 	// SectorMetaSize is the size of the sector's metadata
@@ -52,8 +57,19 @@ var (
 
 type SELECT map[int]interface{}
 
+// init first initialize the settings to a standard mode, if further
+// testing environment is needed, buildSetting would be called again to
+// switch the setting value
+func init() {
+	buildSetting(STD)
+}
+
+// buildSetting help the initializer init the global vars. In order to fits
+// the data comfortable for both standard mode and testing mode, this function
+// may be called to switch data for caller's need
 func buildSetting(mode int) {
 	Mode = mode
+	MockFails = make(map[string]bool)
 
 	SectorSize = SELECT{
 		STD: uint64(1 << 22),
