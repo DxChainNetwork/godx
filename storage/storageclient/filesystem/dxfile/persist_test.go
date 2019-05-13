@@ -84,7 +84,6 @@ func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
 		SegmentOffset:       2*PageSize,
 		FileSize:            randomUint64(),
 		SectorSize:          randomUint64(),
-		PagesPerSegment:     randomUint64(),
 		LocalPath:           filepath.Join(testDir, t.Name()),
 		DxPath:              t.Name(),
 		CipherKeyCode:       crypto.GCMCipherCode,
@@ -139,7 +138,7 @@ func randomSegment(numSectors uint32) *segment {
 
 func randomSector() *sector {
 	s := &sector{}
-	rand.Read(s.hostAddress[:])
+	rand.Read(s.hostID[:])
 	rand.Read(s.merkleRoot[:])
 	return s
 }

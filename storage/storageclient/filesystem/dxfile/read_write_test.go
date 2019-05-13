@@ -48,22 +48,44 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 	tests := []struct {
 		numSegments uint64 // size of the file, determine how many segments
 		numHostTablePages uint64 // size of added host key
+		minSectors uint32
+		numSectors uint32
 	}{
 		{
 			numSegments: 1,
 			numHostTablePages: 1,
+			minSectors: 10,
+			numSectors: 30,
 		},
 		{
 			numSegments: 1,
 			numHostTablePages: 10,
+			minSectors: 10,
+			numSectors: 30,
 		},
 		{
 			numSegments: 3,
 			numHostTablePages: 1,
+			minSectors: 10,
+			numSectors: 30,
 		},
 		{
 			numSegments: 3,
 			numHostTablePages: 10,
+			minSectors: 10,
+			numSectors: 30,
+		},
+		{
+			numSegments: 3,
+			numHostTablePages: 1,
+			minSectors: 1000,
+			numSectors: 3000,
+		},
+		{
+			numSegments: 3,
+			numHostTablePages: 10,
+			minSectors: 1000,
+			numSectors: 3000,
 		},
 	}
 	for i, test := range tests {
@@ -75,7 +97,7 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 			t.Fatalf("test %d: %v", i, err)
 		}
 		hostTableSize := PageSize * test.numHostTablePages
-		for i := 0; uint64(i) != hostTableSize / 23; i++ {
+		for i := 0; uint64(i) != hostTableSize / 35; i++ {
 			df.hostTable[randomAddress()] = false
 		}
 		err = df.saveHostTableUpdate()
@@ -142,7 +164,7 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 		df.segments[i] = seg
 		for _, sectors := range seg.sectors {
 			for _, sector := range sectors {
-				df.hostTable[sector.hostAddress] = true
+				df.hostTable[sector.hostID] = true
 			}
 		}
 	}
@@ -200,9 +222,6 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	}
 	if md1.SectorSize != md2.SectorSize {
 		return fmt.Errorf("md.SectorSize not equal:\n\t%+v\n\t%+v", md1.SectorSize, md2.SectorSize)
-	}
-	if md1.PagesPerSegment != md2.PagesPerSegment {
-		return fmt.Errorf("md.PagesPerSegment not equal:\n\t%+v\n\t%+v", md1.PagesPerSegment, md2.PagesPerSegment)
 	}
 	if md1.LocalPath != md2.LocalPath {
 		return fmt.Errorf("md.LocalPath not equal:\n\t%+v\n\t%+v", md1.LocalPath, md2.LocalPath)

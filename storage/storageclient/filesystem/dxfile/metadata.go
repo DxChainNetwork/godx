@@ -21,7 +21,6 @@ type (
 		// size related
 		FileSize        uint64
 		SectorSize      uint64 // ShardSize is the size for one shard, which is by default 4MiB
-		PagesPerSegment uint64 // Number of physical pages per chunk. Determined by erasure coding algorithm
 
 		// path related
 		LocalPath string // Local path is the on-disk location for uploaded files
@@ -59,7 +58,7 @@ type (
 		Version string
 
 		// TODO: Check whether removed field is really necessary when finished
-		//  Removed fields: UserId, GroupId, ChunkMetadataSize, sharingKey.
+		//  Removed fields: UserId, GroupId, ChunkMetadataSize, sharingKey, PagesPerSegment.
 	}
 
 	// BubbleMetaData is the Metadata to be bubbled

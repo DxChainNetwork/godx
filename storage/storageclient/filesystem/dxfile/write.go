@@ -1,6 +1,7 @@
 package dxfile
 
 import (
+	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/rlp"
 	"os"
@@ -9,6 +10,9 @@ import (
 
 // saveAll save all contents of a DxFile to the file.
 func (df *DxFile) saveAll() error {
+	if df.deleted {
+		return errors.New("cannot save the file: file already deleted")
+	}
 	var updates []dxfileUpdate
 	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
@@ -40,6 +44,9 @@ func (df *DxFile) saveAll() error {
 
 // rename create a series of transactions to rename the file to a new file
 func (df *DxFile) rename(dxPath string, newFilePath string) error {
+	if df.deleted {
+		return errors.New("cannot rename the file: file already deleted")
+	}
 	var updates []dxfileUpdate
 	du, err := df.createDeleteUpdate()
 	if err != nil {
@@ -76,8 +83,22 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 	return df.applyUpdates(updates)
 }
 
+func (df *DxFile) delete() error {
+	if df.deleted {
+		return errors.New("file already deleted")
+	}
+	du, err := df.createDeleteUpdate()
+	if err != nil {
+		return fmt.Errorf("cannot create delete update: %v", err)
+	}
+	return df.applyUpdates([]dxfileUpdate{du})
+}
+
 // saveSegment save the segment with the segmentIndex, and write to file
 func (df *DxFile) saveSegment(segmentIndex int) error {
+	if df.deleted {
+		return errors.New("cannot save the segment: file already deleted")
+	}
 	updates, err := df.createMetadataHostTableUpdate()
 	if err != nil {
 		return err
@@ -102,6 +123,9 @@ func (df *DxFile) saveSegment(segmentIndex int) error {
 
 // saveHostTableUpdate save the host table as well as the metadata
 func (df *DxFile) saveHostTableUpdate() error {
+	if df.deleted {
+		return errors.New("cannot save the host table: file already deleted")
+	}
 	updates, err := df.createMetadataHostTableUpdate()
 	if err != nil {
 		return err
@@ -111,6 +135,9 @@ func (df *DxFile) saveHostTableUpdate() error {
 
 // saveMetadata only save the metadata
 func (df *DxFile) saveMetadata() error {
+	if df.deleted {
+		return errors.New("cannot save the metadata: file already deleted")
+	}
 	up, err := df.createMetadataUpdate()
 	if err != nil {
 		return err
@@ -190,20 +217,10 @@ func (df *DxFile) shiftOffset(targetHostTableSize uint64) (uint64, uint64, uint6
 		numShiftSeg++
 	}
 	numSeg := uint64(len(df.segments))
-	var numSegToShift = numShiftSeg
-	if numSegToShift > uint64(numSeg) {
-		return numSegToShift * sizePerSeg, numSeg, numShiftSeg * sizePerSeg
+	if numShiftSeg > uint64(numSeg) {
+		return numShiftSeg * sizePerSeg, numSeg, numShiftSeg * sizePerSeg
 	}
-	return numSeg * sizePerSeg, numSegToShift, sizePerSeg
-}
-
-// saveMetadataUpdate create and save the metadata, return the list of update and underlying error
-func (df *DxFile) saveMetadataUpdate() error{
-	iu, err := df.createMetadataUpdate()
-	if err != nil {
-		return err
-	}
-	return df.applyUpdates([]dxfileUpdate{iu})
+	return numSeg * sizePerSeg, numShiftSeg, numShiftSeg * sizePerSeg
 }
 
 // createMetadataUpdate create an insert update for metadata
@@ -247,8 +264,9 @@ func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfil
 	segment.offset = offset
 	segBytes, err := rlp.EncodeToBytes(segment)
 	if err != nil {
-		return nil, fmt.Errorf("cannot enocde segment: %+v", segment)
+		return nil, fmt.Errorf("cannot encode segment: %+v", segment)
 	}
+	// if the segment does not fit in, prune sectors with unused hosts
 	if limit := PageSize * segmentPersistNumPages(df.metadata.NumSectors); uint64(len(segBytes)) > limit {
 		return nil, fmt.Errorf("segment bytes exceed limit: %d > %d", len(segBytes), limit)
 	}

@@ -19,11 +19,7 @@ const (
 	sectorPersistSize = 70
 
 	// Overhead for persistSegment persist Data. The value is larger than Data actually used
-	segmentPersistOverhead = 16
-
-	// Duplication rate is the expected duplication of the size of the sectors.
-	// A certain sector of certain index of a segment could have multiple sectors
-	redundancyRate float64 = 1.0
+	segmentPersistOverhead = 32
 )
 
 type (
@@ -44,8 +40,8 @@ type (
 
 	// persistSector is the smallest unit of storage. It the erasure code encoded persistSegment
 	persistSector struct {
-		MerkleRoot  common.Hash
-		HostAddress enode.ID
+		MerkleRoot common.Hash
+		HostID     enode.ID
 	}
 )
 
@@ -84,8 +80,8 @@ func (ht hostTable) DecodeRLP(st *rlp.Stream) error {
 // sector implements rlp encode rule
 func (s *sector) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSector{
-		MerkleRoot:  s.merkleRoot,
-		HostAddress: s.hostAddress,
+		MerkleRoot: s.merkleRoot,
+		HostID:     s.hostID,
 	})
 }
 
@@ -95,7 +91,7 @@ func (s *sector) DecodeRLP(st *rlp.Stream) error {
 	if err := st.Decode(&ps); err != nil {
 		return err
 	}
-	s.merkleRoot, s.hostAddress = ps.MerkleRoot, ps.HostAddress
+	s.merkleRoot, s.hostID = ps.MerkleRoot, ps.HostID
 	return nil
 }
 
@@ -121,8 +117,7 @@ func (s *segment) DecodeRLP(st *rlp.Stream) error {
 // the persist of a segment
 func segmentPersistNumPages(numSectors uint32) uint64 {
 	sectorsSize := sectorPersistSize * numSectors
-	sectorsSizeWithRedundancy := float64(sectorsSize) * (1 + redundancyRate)
-	dataSize := segmentPersistOverhead + int(sectorsSizeWithRedundancy)
+	dataSize := segmentPersistOverhead + sectorsSize
 	numPages := dataSize / PageSize
 	if dataSize%PageSize != 0 {
 		numPages++
@@ -135,9 +130,6 @@ func segmentPersistNumPages(numSectors uint32) uint64 {
 func (md Metadata) validate() error {
 	if md.HostTableOffset != PageSize {
 		return fmt.Errorf("HostTableOffset unexpected: %d != %d", md.HostTableOffset, PageSize)
-	}
-	if expPagesPerSegment := segmentPersistNumPages(md.NumSectors); md.PagesPerSegment != expPagesPerSegment {
-		return fmt.Errorf("PagesPerSegment unexpected: %d != %d", md.PagesPerSegment, expPagesPerSegment)
 	}
 	if md.SegmentOffset <= md.HostTableOffset {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)

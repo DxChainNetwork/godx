@@ -63,8 +63,8 @@ type (
 
 	// sector is the Data for a single sector, which has Data of merkle root and related host address
 	sector struct {
-		merkleRoot  common.Hash
-		hostAddress enode.ID
+		merkleRoot common.Hash
+		hostID     enode.ID
 	}
 
 	fileID [fileIDSize]byte
@@ -85,7 +85,6 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		SegmentOffset:   2 * PageSize,
 		FileSize:        fileSize,
 		SectorSize:      SectorSize - uint64(cipherKey.Overhead()),
-		PagesPerSegment: segmentPersistNumPages(numSectors),
 		LocalPath:       sourcePath,
 		DxPath:          dxPath,
 		CipherKeyCode:   crypto.CipherCodeByName(cipherKey.CodeName()),
@@ -115,6 +114,83 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	return df, df.saveAll()
 }
 
-//func (df *DxFile) AddSector(){
-//
-//}
+func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex uint64, merkleRoot common.Hash) error {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+	// if file already deleted, report an error
+	if df.deleted {
+		return fmt.Errorf("file already deleted")
+	}
+	// Update the hostTable
+	df.hostTable[address] = true
+	// Params validation
+	if segmentIndex > uint64(len(df.segments)) {
+		return fmt.Errorf("segment index %d out of bound %d", segmentIndex, len(df.segments))
+	}
+	if sectorIndex > uint64(df.metadata.NumSectors) {
+		return fmt.Errorf("sector index %d out of bound %d", sectorIndex, df.metadata.NumSectors)
+	}
+	df.segments[segmentIndex].sectors[sectorIndex] = append(df.segments[segmentIndex].sectors[sectorIndex],
+		&sector {
+			hostID: address,
+			merkleRoot: merkleRoot,
+		})
+	df.metadata.TimeAccess = unixNow()
+	df.metadata.TimeModify = df.metadata.TimeAccess
+	df.metadata.TimeUpdate = df.metadata.TimeAccess
+
+	df.pruneSegment(df.segments[segmentIndex])
+	return df.saveSegment(int(segmentIndex))
+}
+
+// Delete delete the DxFile
+func (df *DxFile) Delete() error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	err := df.delete()
+	if err != nil {
+		return err
+	}
+	df.deleted = true
+	return nil
+}
+
+// Deleted return the dxfile status of whether deleted
+func (df *DxFile) Deleted() bool {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.deleted
+}
+
+// pruneSegment try to prune sectors from unused hosts to fit in the page size
+func (df *DxFile) pruneSegment(seg *segment) {
+	maxSegmentSize := segmentPersistNumPages(df.metadata.NumSectors) * PageSize
+	maxSectors := (maxSegmentSize - segmentPersistOverhead) / sectorPersistSize
+	maxSectorsPerIndex := maxSectors / uint64(len(seg.sectors))
+
+	var numSectors int
+	for _, sectors := range seg.sectors {
+		numSectors += len(sectors)
+	}
+	if uint64(numSectors) <= maxSectors {
+		// no need to prune the sector
+		return
+	}
+
+	for i, sectors := range seg.sectors {
+		var newSectors []*sector
+		for _, sector := range sectors {
+			if uint64(len(newSectors)) >= maxSectorsPerIndex {
+				break
+			}
+			if df.hostTable[sector.hostID] {
+				newSectors = append(newSectors, sector)
+			}
+		}
+		seg.sectors[i] = newSectors
+	}
+}
+
+// TODO: Expiration when given renter contract structure
