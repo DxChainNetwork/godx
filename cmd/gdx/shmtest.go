@@ -7,7 +7,7 @@ import (
 )
 
 var hostManagerTestCommand = cli.Command{
-	Name:      "hmtest",
+	Name:      "shmdebug",
 	Usage:     "Storage Host Manager related test operations",
 	ArgsUsage: "",
 	Category:  "Storage Host Manager COMMANDS",
@@ -57,6 +57,18 @@ var hostManagerTestCommand = cli.Command{
 			the --insertamount flag, user is able to configure how many storage host information
 			to be inserted into the storage host manager`,
 		},
+		{
+			Name:      "insertActive",
+			Usage:     "insert active host information into the storage host manager",
+			ArgsUsage: "",
+			Flags: []cli.Flag{
+				utils.StorageHostManagerInsertFlag,
+			},
+			Action: utils.MigrateFlags(insertActiveHostInfo),
+			Description: `insert active host information into the storage host manager. By using
+			the --insertamount flag, user is able to configure how many storage host information
+			to be inserted into the storage host manager`,
+		},
 	},
 }
 
@@ -81,6 +93,32 @@ func insertHostInfo(ctx *cli.Context) error {
 	err = client.Call(&result, "hostmanagerdebug_insertHostInfo", amount)
 	if err != nil {
 		utils.Fatalf("failed to insert the storage host information into the pool %s", err.Error())
+	}
+	fmt.Println(result)
+	return nil
+}
+
+func insertActiveHostInfo(ctx *cli.Context) error {
+	var amount int
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	// check if the flag is set
+	if !ctx.GlobalIsSet(utils.StorageHostManagerInsertFlag.Name) {
+		amount = 10
+	} else {
+		amount = ctx.GlobalInt(utils.StorageHostManagerInsertFlag.Name)
+	}
+	if amount <= 0 {
+		utils.Fatalf("the amount of storage host information to be inserted must be greater than 0")
+	}
+
+	var result string
+	err = client.Call(&result, "hostmanagerdebug_insertActiveHostInfo", amount)
+	if err != nil {
+		utils.Fatalf("failed to insert the activve storage host information into the pool %s", err.Error())
 	}
 	fmt.Println(result)
 	return nil

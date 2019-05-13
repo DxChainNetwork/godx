@@ -43,12 +43,20 @@ func (api *PublicStorageHostManagerAPI) ActiveStorageHosts() (activeStorageHosts
 	return
 }
 
-// AllStorageHosts will return all storage hosts information stored in the storage host pool
+// AllStorageHosts will return all storage hosts information stored from the storage host pool
 func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []storage.HostInfo) {
 	return api.shm.storageHostTree.All()
 }
 
-// TODO: (mzhang) search based on the public key
+// StorageHost will return a specific host detailed information from the storage host pool
+func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {
+	info, exist :=  api.shm.storageHostTree.RetrieveHostInfo(id)
+
+	if !exist {
+		return storage.HostInfo{}
+	}
+	return info
+}
 
 // PrivateStorageHostManagerAPI defines the object used to call eligible APIs
 // that are used to configure settings
@@ -95,10 +103,22 @@ func (api *PublicHostManagerDebugAPI) BlockHeight() uint64 {
 func (api *PublicHostManagerDebugAPI) InsertHostInfo(amount int) string {
 	for i := 0; i < amount; i++ {
 		hi := hostInfoGenerator()
+
 		err := api.shm.insert(hi)
 		if err != nil {
 			return fmt.Sprintf("insert failed: %s", err.Error())
 		}
 	}
-	return fmt.Sprintf("Successfully Inserted %v Storage Host Information", amount)
+	return fmt.Sprintf("Successfully inserted %v Storage Host Information", amount)
+}
+
+func (api *PublicHostManagerDebugAPI) InsertActiveHostInfo(amount int) string {
+	for i := 0; i < amount; i++ {
+		hi := activeHostInfoGenerator()
+		err := api.shm.insert(hi)
+		if err != nil {
+			return fmt.Sprintf("insert failed: %s", err.Error())
+		}
+	}
+	return fmt.Sprintf("Successfully inserted %v Active Storage Host Information", amount)
 }

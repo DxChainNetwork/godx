@@ -18,6 +18,7 @@ package common
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 )
 
@@ -60,7 +61,7 @@ func NewBigIntFloat64(x float64) BigInt {
 	}
 }
 
-func RandomBigInt(x BigInt) (random BigInt, err error) {
+func RandomBigIntRange(x BigInt) (random BigInt, err error) {
 
 	randint, err := rand.Int(rand.Reader, x.BigIntPtr())
 
@@ -71,6 +72,17 @@ func RandomBigInt(x BigInt) (random BigInt, err error) {
 		b: *randint,
 	}
 	return
+}
+
+func RandomBigInt() BigInt {
+	randint, _ := rand.Int(rand.Reader, big.NewInt(1000))
+	return BigInt{
+		b: *randint,
+	}
+}
+
+func (x BigInt) String() string {
+	return x.b.String()
 }
 
 func (x BigInt) IsNeg() bool {
@@ -142,4 +154,21 @@ func (x BigInt) MultFloat64(y float64) (prod BigInt) {
 	ratProd := new(big.Rat).Mul(xRat, yRat)
 	prod.b.Div(ratProd.Num(), ratProd.Denom())
 	return
+}
+
+func (x BigInt) MarshalJSON() ([]byte, error) {
+	return []byte(x.b.String()), nil
+}
+
+func (x *BigInt) UnmarshalJSON(val []byte) error {
+	if string(val) == "null" {
+		return nil
+	}
+	var y big.Int
+	_, ok := y.SetString(string(val), 10)
+	if !ok {
+		return fmt.Errorf("invalid big integer: %s", y)
+	}
+	x.b = y
+	return nil
 }

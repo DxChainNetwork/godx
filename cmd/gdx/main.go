@@ -167,6 +167,10 @@ var (
 	storageHostManagerTestFlags = []cli.Flag{
 		utils.StorageHostManagerInsertFlag,
 	}
+
+	storageHostManagerFlags = []cli.Flag{
+		utils.StorageHostManagerEnodeFlag,
+	}
 )
 
 func init() {
@@ -216,6 +220,8 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 	app.Flags = append(app.Flags, storageClientFlags...)
+	app.Flags = append(app.Flags, storageHostManagerFlags...)
+	app.Flags = append(app.Flags, storageHostManagerTestFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""

@@ -223,7 +223,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []st
 			break
 		}
 
-		randEval, err := common.RandomBigInt(t.root.evalTotal)
+		randEval, err := common.RandomBigIntRange(t.root.evalTotal)
 
 		if err != nil {
 			break
