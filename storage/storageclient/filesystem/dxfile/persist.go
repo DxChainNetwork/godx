@@ -3,12 +3,13 @@ package dxfile
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"io"
 )
 
 const (
@@ -99,7 +100,7 @@ func (s *sector) DecodeRLP(st *rlp.Stream) error {
 func (s *segment) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSegment{
 		Sectors: s.sectors,
-		Index: s.index,
+		Index:   s.index,
 	})
 }
 
@@ -134,7 +135,7 @@ func (md Metadata) validate() error {
 	if md.SegmentOffset <= md.HostTableOffset {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
 	}
-	if md.SegmentOffset % PageSize != 0 {
+	if md.SegmentOffset%PageSize != 0 {
 		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
 	}
 	return nil

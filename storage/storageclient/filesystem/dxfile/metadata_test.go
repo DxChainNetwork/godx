@@ -3,8 +3,9 @@ package dxfile
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 // TestNewErasureCode_ErasureCodeToParams test conversion from metadata params to ec, and ec to params

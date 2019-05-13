@@ -4,11 +4,12 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 type (
@@ -19,8 +20,8 @@ type (
 		SegmentOffset   uint64
 
 		// size related
-		FileSize        uint64
-		SectorSize      uint64 // ShardSize is the size for one shard, which is by default 4MiB
+		FileSize   uint64
+		SectorSize uint64 // ShardSize is the size for one shard, which is by default 4MiB
 
 		// path related
 		LocalPath string // Local path is the on-disk location for uploaded files
@@ -227,7 +228,7 @@ func (df *DxFile) ErasureCode() erasurecode.ErasureCoder {
 	}
 	ec, err := erasurecode.New(df.metadata.ErasureCodeType, df.metadata.MinSectors, df.metadata.NumSectors,
 		df.metadata.ECExtra)
-	if err != nil{
+	if err != nil {
 		// this shall not happen
 		panic(err.Error())
 	}
@@ -287,7 +288,3 @@ func (df *DxFile) ApplyCachedHealthMetadata(metadata CachedHealthMetadata) error
 
 	return df.saveMetadata()
 }
-
-
-
-

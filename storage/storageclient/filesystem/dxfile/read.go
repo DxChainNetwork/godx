@@ -6,16 +6,17 @@ package dxfile
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/rlp"
 	"io"
 	"os"
+
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 // readDxFile create a new DxFile with a random ID, then open and read the dxfile from filepath
 // and load all params from the file.
 func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
-	var ID fileID
+	var ID FileID
 	_, err := rand.Read(ID[:])
 	if err != nil {
 		return nil, fmt.Errorf("cannot create random ID: %v", err)
@@ -94,7 +95,7 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	offset := uint64(df.metadata.SegmentOffset)
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 	df.segments = make([]*segment, df.metadata.numSegments())
-	for i := 0 ; uint64(i) < df.metadata.numSegments(); i++{
+	for i := 0; uint64(i) < df.metadata.numSegments(); i++ {
 		seg, err := df.readSegment(f, offset)
 		if err == io.EOF {
 			break

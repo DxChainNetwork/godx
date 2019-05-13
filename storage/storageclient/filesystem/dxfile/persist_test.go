@@ -6,15 +6,16 @@ package dxfile
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/twofishgcm"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"path/filepath"
-	"reflect"
-	"testing"
-	"time"
 )
 
 func TestSegmentPersistNumPages(t *testing.T) {
@@ -79,9 +80,9 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 }
 
 func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
-	meta := Metadata {
+	meta := Metadata{
 		HostTableOffset:     PageSize,
-		SegmentOffset:       2*PageSize,
+		SegmentOffset:       2 * PageSize,
 		FileSize:            randomUint64(),
 		SectorSize:          randomUint64(),
 		LocalPath:           filepath.Join(testDir, t.Name()),
@@ -161,7 +162,7 @@ func randomUint64() uint64 {
 	return binary.LittleEndian.Uint64(b)
 }
 
-func randomBytes(num int) []byte{
+func randomBytes(num int) []byte {
 	b := make([]byte, num)
 	rand.Read(b)
 	return b

@@ -6,9 +6,9 @@ package dxfile
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"os"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 )
@@ -113,7 +113,7 @@ func decodeFromWalOp(op writeaheadlog.Operation) (dxfileUpdate, error) {
 	}
 }
 
-func decodeOpToDeleteUpdate(op writeaheadlog.Operation) ( *deleteUpdate, error) {
+func decodeOpToDeleteUpdate(op writeaheadlog.Operation) (*deleteUpdate, error) {
 	var du deleteUpdate
 	err := rlp.DecodeBytes(op.Data, &du)
 	if err != nil {

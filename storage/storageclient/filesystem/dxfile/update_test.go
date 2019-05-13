@@ -2,28 +2,29 @@ package dxfile
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/godx/rlp"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 func TestInsertUpdate_EncodeToWalOp(t *testing.T) {
 	tests := []struct {
 		filename string
-		offset uint64
-		data []byte
+		offset   uint64
+		data     []byte
 	}{
 		{testDir, rand.Uint64(), []byte{}},
 		{testDir, rand.Uint64(), randomBytes(4096)},
 	}
 	for _, test := range tests {
-		iu := insertUpdate {
+		iu := insertUpdate{
 			Filename: test.filename,
-			Offset: test.offset,
-			Data: test.data,
+			Offset:   test.offset,
+			Data:     test.data,
 		}
 		op, err := iu.encodeToWalOp()
 		if err != nil {
@@ -41,10 +42,10 @@ func TestInsertUpdate_EncodeToWalOp(t *testing.T) {
 
 func TestInsertUpdate_Apply(t *testing.T) {
 	tests := []insertUpdate{
-		{ filepath.Join(testDir, t.Name()), 0, randomBytes(10) },
-		{ filepath.Join(testDir, t.Name()), 10, randomBytes(128) },
-		{ filepath.Join(testDir, t.Name()), 256, randomBytes(512) },
-		{ filepath.Join(testDir, t.Name()), 1024, randomBytes(30) },
+		{filepath.Join(testDir, t.Name()), 0, randomBytes(10)},
+		{filepath.Join(testDir, t.Name()), 10, randomBytes(128)},
+		{filepath.Join(testDir, t.Name()), 256, randomBytes(512)},
+		{filepath.Join(testDir, t.Name()), 1024, randomBytes(30)},
 	}
 	for _, test := range tests {
 		err := test.apply()
@@ -72,7 +73,7 @@ func TestDeleteUpdate_Apply(t *testing.T) {
 	f.Sync()
 	f.Close()
 
-	test := deleteUpdate{ filename }
+	test := deleteUpdate{filename}
 	err := test.apply()
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -84,7 +85,7 @@ func TestDeleteUpdate_Apply(t *testing.T) {
 }
 
 func TestDxFileUpdate_Encode_Decode(t *testing.T) {
-	tests := []dxfileUpdate {
+	tests := []dxfileUpdate{
 		&insertUpdate{filepath.Join(testDir, t.Name()), 0, randomBytes(10)},
 		&deleteUpdate{filepath.Join(testDir, t.Name())},
 	}

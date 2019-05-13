@@ -3,15 +3,16 @@ package dxfile
 import (
 	"bytes"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 var sectorSize = SectorSize - uint64(crypto.Overhead(crypto.GCMCipherCode))
@@ -23,7 +24,7 @@ func TestPersist(t *testing.T) {
 		erasurecode.ECTypeShard,
 	}
 	for _, test := range tests {
-		df, err := newTestDxFile(t, SectorSize << 6, 10, 30, test)
+		df, err := newTestDxFile(t, SectorSize<<6, 10, 30, test)
 		err = df.saveAll()
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -46,46 +47,46 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 	//1. Shift size smaller than segment persist sizes,
 	//2. Shift size larger than segment persist size.
 	tests := []struct {
-		numSegments uint64 // size of the file, determine how many segments
+		numSegments       uint64 // size of the file, determine how many segments
 		numHostTablePages uint64 // size of added host key
-		minSectors uint32
-		numSectors uint32
+		minSectors        uint32
+		numSectors        uint32
 	}{
 		{
-			numSegments: 1,
+			numSegments:       1,
 			numHostTablePages: 1,
-			minSectors: 10,
-			numSectors: 30,
+			minSectors:        10,
+			numSectors:        30,
 		},
 		{
-			numSegments: 1,
+			numSegments:       1,
 			numHostTablePages: 10,
-			minSectors: 10,
-			numSectors: 30,
+			minSectors:        10,
+			numSectors:        30,
 		},
 		{
-			numSegments: 3,
+			numSegments:       3,
 			numHostTablePages: 1,
-			minSectors: 10,
-			numSectors: 30,
+			minSectors:        10,
+			numSectors:        30,
 		},
 		{
-			numSegments: 3,
+			numSegments:       3,
 			numHostTablePages: 10,
-			minSectors: 10,
-			numSectors: 30,
+			minSectors:        10,
+			numSectors:        30,
 		},
 		{
-			numSegments: 3,
+			numSegments:       3,
 			numHostTablePages: 1,
-			minSectors: 1000,
-			numSectors: 3000,
+			minSectors:        1000,
+			numSectors:        3000,
 		},
 		{
-			numSegments: 3,
+			numSegments:       3,
 			numHostTablePages: 10,
-			minSectors: 1000,
-			numSectors: 3000,
+			minSectors:        1000,
+			numSectors:        3000,
 		},
 	}
 	for i, test := range tests {
@@ -97,7 +98,7 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 			t.Fatalf("test %d: %v", i, err)
 		}
 		hostTableSize := PageSize * test.numHostTablePages
-		for i := 0; uint64(i) != hostTableSize / 35; i++ {
+		for i := 0; uint64(i) != hostTableSize/35; i++ {
 			df.hostTable[randomAddress()] = false
 		}
 		err = df.saveHostTableUpdate()
@@ -129,7 +130,7 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	// Edit one of the segment
 	modifyIndex := rand.Intn(len(df.segments))
 	df.segments[modifyIndex].sectors[0][0].merkleRoot = common.Hash{}
-	err = df.saveSegment(modifyIndex)
+	err = df.saveSegments([]int{modifyIndex})
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -146,7 +147,7 @@ func TestDxFile_SaveSegment(t *testing.T) {
 // newTestDxFile generate a random DxFile used for testing.
 // The DxFile use erasure code params minSector = 10; numSector=30 with shardECType
 // All segments are generated randomly.
-func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error){
+func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
 	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
 	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	filename := filepath.Join(testDir, t.Name())
@@ -158,7 +159,7 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 	if err != nil {
 		return nil, err
 	}
-	for i :=0; uint64(i) != df.metadata.numSegments(); i++{
+	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
 		seg := randomSegment(df.metadata.NumSectors)
 		seg.index = uint64(i)
 		df.segments[i] = seg
@@ -180,7 +181,7 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 // Two DxFile are exactly the same if the all fields other than file id are the same
 // (of course not including wal, lock, id, e.t.c
 func checkDxFileEqual(df1, df2 DxFile) error {
-	if err := checkMetadataEqual(df1.metadata, df2.metadata); err != nil{
+	if err := checkMetadataEqual(df1.metadata, df2.metadata); err != nil {
 		return err
 	}
 	if len(df1.segments) != len(df2.segments) {

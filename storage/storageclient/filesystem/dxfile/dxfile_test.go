@@ -2,11 +2,12 @@ package dxfile
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rlp"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 var testDir = tempDir()
@@ -26,8 +27,8 @@ func tempDir(dirs ...string) string {
 
 func TestPruneSegment(t *testing.T) {
 	tests := []struct {
-		numSectors int
-		usedNumSectorsPerIndex int
+		numSectors               int
+		usedNumSectorsPerIndex   int
 		unusedNumSectorsPerIndex int
 	}{
 		{10, 1, 1},
@@ -36,11 +37,11 @@ func TestPruneSegment(t *testing.T) {
 	}
 	for _, test := range tests {
 		df := &DxFile{
-			metadata: &Metadata{ NumSectors: uint32(test.numSectors) },
+			metadata:  &Metadata{NumSectors: uint32(test.numSectors)},
 			hostTable: make(hostTable),
 		}
 		seg := segment{
-			sectors: make([][]*sector,test.numSectors),
+			sectors: make([][]*sector, test.numSectors),
 		}
 		usedSectors := make(map[enode.ID]bool)
 		for i := range seg.sectors {
@@ -56,7 +57,8 @@ func TestPruneSegment(t *testing.T) {
 				df.hostTable[sec.hostID] = false
 			}
 		}
-		df.pruneSegment(&seg)
+		df.segments = append(df.segments, &seg)
+		df.pruneSegment(0)
 		// check whether all used sectors still there
 		for _, sectors := range seg.sectors {
 			for _, sector := range sectors {
@@ -74,9 +76,8 @@ func TestPruneSegment(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if allowed := segmentPersistNumPages(uint32(test.numSectors))* PageSize; uint64(len(b)) > allowed {
+		if allowed := segmentPersistNumPages(uint32(test.numSectors)) * PageSize; uint64(len(b)) > allowed {
 			t.Errorf("after purning, size large than allowed %d > %d", len(b), allowed)
 		}
 	}
 }
-
