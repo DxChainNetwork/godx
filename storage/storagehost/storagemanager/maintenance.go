@@ -66,11 +66,13 @@ func (sm *storageManager) commit() {
 		sm.wal.walFileTmp, err = os.Create(filepath.Join(sm.persistDir, walFileTmp))
 		if err != nil {
 			// TODO: log critical
+			fmt.Println(err.Error())
 		}
 
 		err = sm.wal.writeWALMeta()
 		if err != nil {
 			// TODO: log critical
+			fmt.Println(err.Error())
 		}
 	}()
 
@@ -87,6 +89,7 @@ func (sm *storageManager) commit() {
 			filepath.Join(sm.persistDir, configFileTmp), newConfig)
 		if err != nil {
 			// TODO: log
+			fmt.Println(err.Error())
 		}
 		sm.wal.loggedConfig = newConfig
 
@@ -97,6 +100,7 @@ func (sm *storageManager) commit() {
 		sm.wal.configTmp, err = os.Create(filepath.Join(sm.persistDir, configFileTmp))
 		if err != nil {
 			// TODO: log critical
+			fmt.Println(err.Error())
 		}
 	}()
 
@@ -117,6 +121,7 @@ func (sm *storageManager) commit() {
 		PrepareAddStorageFolder: UnprocessedAdditions,
 	}); err != nil {
 		// TODO: log cannot add change
+		fmt.Println(err.Error())
 	}
 }
 
@@ -129,10 +134,10 @@ func (sm *storageManager) recover(walF *os.File) error {
 	decodeWal := json.NewDecoder(walF)
 	if checkMeta(decodeWal) != nil {
 		// TODO: error, log or crash
+		fmt.Println(err.Error())
 	}
 
-
-	// loop through all entires of wal
+	// loop through all entries of wal
 	for err == nil {
 		// decode entry and append to entries
 		err = decodeWal.Decode(&entry)
@@ -144,8 +149,8 @@ func (sm *storageManager) recover(walF *os.File) error {
 
 	if err != io.EOF {
 		// TODO: may only log
+		fmt.Println(err.Error())
 	}
-
 
 	// find the unprocessed addition
 	// close and destroy
@@ -155,6 +160,20 @@ func (sm *storageManager) recover(walF *os.File) error {
 	// find the processed addition
 	processedAddition := findProcessedFolderAddition(entries)
 	sm.commitProcessedAddition(processedAddition)
+
+	// save the config to temporary file, then manage to persist the tmp config
+	newConfig := sm.extractConfig()
+	err = common.SaveDxJSON(configMetadata,
+		filepath.Join(sm.persistDir, configFileTmp), newConfig)
+	if err != nil {
+		// TODO: log
+		fmt.Println(err.Error())
+	}
+
+	// persist the config
+	sm.syncConfig()
+	sm.wal.loggedConfig = newConfig
+
 
 	// all things finished
 	// force to commit again

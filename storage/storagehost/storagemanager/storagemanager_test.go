@@ -287,6 +287,7 @@ func Test_DisruptAdd(t *testing.T) {
 	}
 }
 
+
 // isExpectedFolderList check if the group of folder record
 // contains duplicate index or duplicate folder path,
 // also make sure the folders are all created
@@ -355,7 +356,3 @@ func removeFolders(persistDir string, t *testing.T) {
 		t.Error("cannot remove the data when testing")
 	}
 }
-
-//func TestRunremove(t *testing.T) {
-//	removeFolders("testdata", t)
-//}

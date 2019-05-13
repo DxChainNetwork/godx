@@ -111,6 +111,11 @@ func constructWriteAheadLog(sm *storageManager) error {
 			// TODO: log or crash
 			return err
 		}
+
+		if err != nil{
+			// TODO: log or crash
+			return err
+		}
 	}
 
 	// create tmp file, then ready for recovering
@@ -123,6 +128,7 @@ func constructWriteAheadLog(sm *storageManager) error {
 	}
 
 	// reopen the walFile
+	_ = walF.Close()
 	walF, err = os.Open(walName)
 	// this time should be ok
 	if err != nil{
@@ -135,20 +141,22 @@ func constructWriteAheadLog(sm *storageManager) error {
 
 // make sure the wal and walTmp are already created
 func mergeWal(wal *os.File, walTmp *os.File) error {
+	var err error
 	// check the metadata for
 	decodeWalTmp := json.NewDecoder(walTmp)
-	if checkMeta(decodeWalTmp) != nil {
+	if err = checkMeta(decodeWalTmp); err != nil {
 		// TODO: log or crash
+		return err
 	}
 
 	decodeWal := json.NewDecoder(wal)
-	if checkMeta(decodeWal) != nil {
+	if err = checkMeta(decodeWal); err != nil {
 		// TODO: log or crash
+		return err
 	}
 
 	// if metadata checking is fine
 	// start to merge
-	var err error
 	var entry logEntry
 
 	for err == nil {
@@ -162,8 +170,13 @@ func mergeWal(wal *os.File, walTmp *os.File) error {
 			return err
 		}
 
+		n, err := wal.Seek(0, 2)
+		if err != nil{
+
+		}
+
 		// write the things decode from tmp file to wal file
-		_, err = wal.Write(changeBytes)
+		_, err = wal.WriteAt(changeBytes, n)
 
 		if err != nil {
 			return err
