@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
 	"time"
@@ -70,6 +71,9 @@ type PeerInfo struct {
 type propEvent struct {
 	block *types.Block
 	td    *big.Int
+}
+type Peer struct {
+	*peer
 }
 
 type peer struct {
@@ -327,6 +331,26 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
+func (p *peer) SendStorageContractCreation(data interface{}) error {
+	p.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
+	return p2p.Send(p.rw, storage.StorageContractCreationMsg, data)
+}
+
+func (p *peer) SendStorageContractCreationHostSign(data interface{}) error {
+	p.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
+	return p2p.Send(p.rw, storage.StorageContractCreationHostSignMsg, data)
+}
+
+func (p *peer) SendStorageContractUpdate(data interface{}) error {
+	p.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
+	return p2p.Send(p.rw, storage.StorageContractUpdateMsg, data)
+}
+
+func (p *peer) SendStorageContractUpdateHostSign(data interface{}) error {
+	p.Log().Debug("Sending storage contract update host signatures", "signature", data)
+	return p2p.Send(p.rw, storage.StorageContractUpdateHostSignMsg, data)
+}
+
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash) error {
@@ -394,6 +418,10 @@ func (p *peer) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id,
 		fmt.Sprintf("eth/%2d", p.version),
 	)
+}
+
+func (p *peer) Peer2Session() *storage.Session {
+	return storage.NewSession(p.version, p.Peer, p.rw)
 }
 
 // peerSet represents the collection of active peers currently participating in

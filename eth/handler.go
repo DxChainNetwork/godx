@@ -20,8 +20,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,11 +80,13 @@ type ProtocolManager struct {
 	chainconfig *params.ChainConfig
 	maxPeers    int
 
-	downloader *downloader.Downloader
-	fetcher    *fetcher.Fetcher
-	peers      *peerSet
-
-	SubProtocols []p2p.Protocol
+	eth                     *Ethereum
+	downloader              *downloader.Downloader
+	fetcher                 *fetcher.Fetcher
+	peers                   *peerSet
+	storageContractSessions *storage.SessionSet
+	storageContractContext  *ethdb.MemDatabase
+	SubProtocols            []p2p.Protocol
 
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
@@ -103,20 +108,23 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new Ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the Ethereum network.
-func NewProtocolManager(config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
+func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		networkID:   networkID,
-		eventMux:    mux,
-		txpool:      txpool,
-		blockchain:  blockchain,
-		chainconfig: config,
-		peers:       newPeerSet(),
-		whitelist:   whitelist,
-		newPeerCh:   make(chan *peer),
-		noMorePeers: make(chan struct{}),
-		txsyncCh:    make(chan *txsync),
-		quitSync:    make(chan struct{}),
+		eth:                     eth,
+		networkID:               networkID,
+		eventMux:                mux,
+		txpool:                  txpool,
+		blockchain:              blockchain,
+		chainconfig:             config,
+		peers:                   newPeerSet(),
+		storageContractSessions: storage.NewSessionSet(),
+		storageContractContext:  ethdb.NewMemDatabase(),
+		whitelist:               whitelist,
+		newPeerCh:               make(chan *peer),
+		noMorePeers:             make(chan struct{}),
+		txsyncCh:                make(chan *txsync),
+		quitSync:                make(chan struct{}),
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -206,6 +214,24 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 }
 
+func (pm *ProtocolManager) removeStorageContactSession(id string) {
+	// Short circuit if the peer was already removed
+	peer := pm.storageContractSessions.Session(id)
+	if peer == nil {
+		return
+	}
+	log.Debug("Removing Ethereum peer", "peer", id)
+
+	// Unregister the peer from Ethereum peer set
+	if err := pm.storageContractSessions.Unregister(id); err != nil {
+		log.Error("Peer removal failed", "peer", id, "err", err)
+	}
+	// Hard disconnect at the networking layer
+	if peer != nil {
+		peer.Peer.Disconnect(p2p.DiscUselessPeer)
+	}
+}
+
 func (pm *ProtocolManager) Start(maxPeers int) {
 	pm.maxPeers = maxPeers
 
@@ -255,67 +281,82 @@ func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *p
 // handle is the callback invoked to manage the life cycle of an eth peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
-	// Ignore maxPeers if this is a trusted peer
-	if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
-		return p2p.DiscTooManyPeers
-	}
-	p.Log().Debug("Ethereum peer connected", "name", p.Name())
+	if !p.Peer.Info().Network.StorageContract {
+		// Ignore maxPeers if this is a trusted peer
+		if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
+			return p2p.DiscTooManyPeers
+		}
+		p.Log().Debug("Ethereum peer connected", "name", p.Name())
 
-	// Execute the Ethereum handshake
-	var (
-		genesis = pm.blockchain.Genesis()
-		head    = pm.blockchain.CurrentHeader()
-		hash    = head.Hash()
-		number  = head.Number.Uint64()
-		td      = pm.blockchain.GetTd(hash, number)
-	)
-	if err := p.Handshake(pm.networkID, td, hash, genesis.Hash()); err != nil {
-		p.Log().Debug("Ethereum handshake failed", "err", err)
-		return err
-	}
-	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
-		rw.Init(p.version)
-	}
-	// Register the peer locally
-	if err := pm.peers.Register(p); err != nil {
-		p.Log().Error("Ethereum peer registration failed", "err", err)
-		return err
-	}
-	defer pm.removePeer(p.id)
-
-	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-	if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {
-		return err
-	}
-	// Propagate existing transactions. new transactions appearing
-	// after this will be sent via broadcasts.
-	pm.syncTransactions(p)
-
-	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
-	if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
-		// Request the peer's DAO fork header for extra-data validation
-		if err := p.RequestHeadersByNumber(daoBlock.Uint64(), 1, 0, false); err != nil {
+		// Execute the Ethereum handshake
+		var (
+			genesis = pm.blockchain.Genesis()
+			head    = pm.blockchain.CurrentHeader()
+			hash    = head.Hash()
+			number  = head.Number.Uint64()
+			td      = pm.blockchain.GetTd(hash, number)
+		)
+		if err := p.Handshake(pm.networkID, td, hash, genesis.Hash()); err != nil {
+			p.Log().Debug("Ethereum handshake failed", "err", err)
 			return err
 		}
-		// Start a timer to disconnect if the peer doesn't reply in time
-		p.forkDrop = time.AfterFunc(daoChallengeTimeout, func() {
-			p.Log().Debug("Timed out DAO fork-check, dropping")
-			pm.removePeer(p.id)
-		})
-		// Make sure it's cleaned up if the peer dies off
-		defer func() {
-			if p.forkDrop != nil {
-				p.forkDrop.Stop()
-				p.forkDrop = nil
+		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
+			rw.Init(p.version)
+		}
+		// Register the peer locally
+		if err := pm.peers.Register(p); err != nil {
+			p.Log().Error("Ethereum peer registration failed", "err", err)
+			return err
+		}
+		defer pm.removePeer(p.id)
+
+		// Register the peer in the downloader. If the downloader considers it banned, we disconnect
+		if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {
+			return err
+		}
+		// Propagate existing transactions. new transactions appearing
+		// after this will be sent via broadcasts.
+		pm.syncTransactions(p)
+
+		// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
+		if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
+			// Request the peer's DAO fork header for extra-data validation
+			if err := p.RequestHeadersByNumber(daoBlock.Uint64(), 1, 0, false); err != nil {
+				return err
 			}
-		}()
-	}
-	// If we have any explicit whitelist block hashes, request them
-	for number := range pm.whitelist {
-		if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+			// Start a timer to disconnect if the peer doesn't reply in time
+			p.forkDrop = time.AfterFunc(daoChallengeTimeout, func() {
+				p.Log().Debug("Timed out DAO fork-check, dropping")
+				pm.removePeer(p.id)
+			})
+			// Make sure it's cleaned up if the peer dies off
+			defer func() {
+				if p.forkDrop != nil {
+					p.forkDrop.Stop()
+					p.forkDrop = nil
+				}
+			}()
+		}
+		// If we have any explicit whitelist block hashes, request them
+		for number := range pm.whitelist {
+			if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
+				return err
+			}
+		}
+	} else {
+		p.Log().Debug("Ethereum peer connected", "name", p.Name())
+
+		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
+			rw.Init(p.version)
+		}
+
+		if err := pm.storageContractSessions.Register(p.Peer2Session()); err != nil {
+			p.Log().Error("Ethereum peer registration failed", "err", err)
 			return err
 		}
+		defer pm.removeStorageContactSession(p.id)
 	}
+
 	// Handle incoming messages until the connection is torn down
 	for {
 		if err := pm.handleMsg(p); err != nil {
@@ -702,6 +743,230 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		pm.txpool.AddRemotes(txs)
 
+	case msg.Code == storage.StorageContractCreationMsg:
+		var sc types.StorageContract
+		if err := msg.Decode(&sc); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		// TODO @Manxiang: check an incoming storage contract matches the host's expectations for a valid contract
+		// VerifyStorageContract
+
+		// check host balance >= storage contract cost
+		hostAddress := sc.ValidProofOutputs[1].Address
+		statedb, err := pm.blockchain.State()
+		if err != nil {
+			return errResp(ErrDecode, "get state db error: %v", err)
+		}
+		if statedb.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
+			return errResp(ErrDecode, "host balance insufficient: %v", err)
+		}
+
+		account := accounts.Account{Address: hostAddress}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find host account error: %v", err)
+		}
+
+		sign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "host account sign storage contract error: %v", err)
+		}
+
+		// cache storage contract context
+		sc.Signatures[1] = sign
+		key := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+		enc, _ := rlp.EncodeToBytes(sc)
+		if err := pm.storageContractContext.Put([]byte(key), enc); err != nil {
+			return errResp(ErrDecode, "storage contract context encode error: %v", err)
+		}
+
+		// TODO: 这里需要host发送协商完成通知，client收到通知后才会真正发送交易
+
+		return p.SendStorageContractCreationHostSign(sign)
+
+	case msg.Code == storage.StorageContractCreationHostSignMsg:
+		var hostSign []byte
+		if err := msg.Decode(&hostSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
+		storageContract.Signatures[1] = hostSign
+
+		enc, _ := rlp.EncodeToBytes(storageContract)
+		if err := pm.storageContractContext.Put([]byte(storageContractKey), enc); err != nil {
+			return errResp(ErrDecode, "storage contract context encode error: %v", err)
+		}
+
+		// assemble init revision and sign it
+		storageContractRevision := types.StorageContractRevision{
+			ParentID: storageContract.RLPHash(),
+			// UnlockConditions:  ,
+			NewRevisionNumber: 1,
+
+			NewFileSize:           storageContract.FileSize,
+			NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+			NewWindowStart:        storageContract.WindowStart,
+			NewWindowEnd:          storageContract.WindowEnd,
+			NewValidProofOutputs:  storageContract.ValidProofOutputs,
+			NewMissedProofOutputs: storageContract.MissedProofOutputs,
+			NewUnlockHash:         storageContract.UnlockHash,
+		}
+
+		account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find client account error: %v", err)
+		}
+
+		sign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "client sign revison error: %v", err)
+		}
+		storageContractRevision.Signatures = [][]byte{sign}
+
+		storageContractRevisionKey := strings.Join([]string{StorageContractRevisionContextKey, p.ID().String()}, "_")
+		revisionEnc, _ := rlp.EncodeToBytes(storageContractRevision)
+		if err := pm.storageContractContext.Put([]byte(storageContractRevisionKey), revisionEnc); err != nil {
+			return errResp(ErrDecode, "storage contract revision context encode error: %v", err)
+		}
+
+		// send revision to storage host
+		return p.SendStorageContractUpdate(sign)
+
+	case msg.Code == storage.StorageContractUpdateMsg:
+		// Storage Host
+		var clientSign []byte
+		if err := msg.Decode(&clientSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
+		// reconstruct revision locally by host
+		storageContractRevision := types.StorageContractRevision{
+			ParentID: storageContract.RLPHash(),
+			// UnlockConditions:  ,
+			NewRevisionNumber: 1,
+
+			NewFileSize:           storageContract.FileSize,
+			NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+			NewWindowStart:        storageContract.WindowStart,
+			NewWindowEnd:          storageContract.WindowEnd,
+			NewValidProofOutputs:  storageContract.ValidProofOutputs,
+			NewMissedProofOutputs: storageContract.MissedProofOutputs,
+			NewUnlockHash:         storageContract.UnlockHash,
+		}
+
+		account := accounts.Account{Address: storageContract.ValidProofOutputs[1].Address}
+		wallet, err := pm.eth.AccountManager().Find(account)
+		if err != nil {
+			return errResp(ErrDecode, "find host account error: %v", err)
+		}
+
+		// sign it by storage host
+		sign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+		if err != nil {
+			return errResp(ErrDecode, "host sign revison error: %v", err)
+		}
+
+		storageContractRevision.Signatures = [][]byte{clientSign, sign}
+		// TODO managedAddStorageObligation
+
+		return p.SendStorageContractUpdateHostSign(sign)
+
+	case msg.Code == storage.StorageContractUpdateHostSignMsg:
+		// Storage Client
+		var hostSign []byte
+		if err := msg.Decode(&hostSign); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		storageContractRevisionKey := strings.Join([]string{StorageContractRevisionContextKey, p.ID().String()}, "_")
+		var storageContractRevision types.StorageContractRevision
+		if bytes, err := pm.storageContractContext.Get([]byte(storageContractRevisionKey)); err != nil {
+			return errResp(ErrDecode, "storage contract revision context decode error: %v", err)
+		} else {
+			if err := rlp.DecodeBytes(bytes, &storageContractRevision); err != nil {
+				return errResp(ErrDecode, "storage contract revision rlp decode error: %v", err)
+			}
+		}
+
+		storageContractRevision.Signatures[1] = hostSign
+		// TODO managedInsertContract 保存文件合约到本地数据结构中
+
+		storageContractKey := strings.Join([]string{StorageContractContextKey, p.ID().String()}, "_")
+
+		storageContractBytes, err := pm.storageContractContext.Get([]byte(storageContractKey))
+		if err != nil {
+			return errResp(ErrDecode, "storage contract context decode error: %v", err)
+		}
+
+		var storageContract types.StorageContract
+		if err := rlp.DecodeBytes(storageContractBytes, &storageContract); err != nil {
+			return errResp(ErrDecode, "storage contract decode bytes error: %v", err)
+		}
+
+		// form storage contract done. notify client by peer.term channel
+		select {
+		// case p.term <- storageContract:
+		case <-time.After(3 * time.Second):
+		}
+
+	case msg.Code == storage.StorageContractUploadRequestMsg:
+		// add data to disk block
+
+		// create merkle proof response
+
+		// send it to storage client
+
+	case msg.Code == storage.StorageContractUploadMerkleRootProofMsg:
+		// verify merkle root proof
+
+		// assemble storage contract revision and sign it
+
+		// send it to storage host
+
+	case msg.Code == storage.StorageContractUploadClientRevisionMsg:
+		// verify signature from storage client
+
+		// sign it by storage client and modify storage obligation
+
+		// send it to storage client
+
+	case msg.Code == storage.StorageContractUploadHostRevisionMsg:
+		// verify signature from storage host
+
+		// update storage contract manager
+
+	case msg.Code == storage.StorageContractDownloadRequestMsg:
+		// retrieve data from disk and send it to client
+
+	case msg.Code == storage.StorageContractDownloadDataMsg:
+
+	case msg.Code == storage.StorageContractDownloadHostRevisionMsg:
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
@@ -811,4 +1076,8 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
+}
+
+func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
+	return pm.storageContractSessions
 }
