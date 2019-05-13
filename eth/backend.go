@@ -220,7 +220,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	// new maintenance system
-	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend)
+	state, err := eth.blockchain.State()
+	if err != nil {
+		log.Error("failed to get statedb for maintenance", "error", err)
+		return nil, err
+	}
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
 
 	return eth, nil
 }
