@@ -83,3 +83,4 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager{
 	return sc.storageHostManager
 }
+

@@ -113,6 +113,12 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// Storage Host Manager Testing
+	StorageHostManagerInsertFlag = cli.IntFlag{
+		Name: "insertamount",
+		Usage: "set up how many host info wants to insert into the pool",
+	}
+
 	// Storage Client
 	StorageClientMemoryFlag = cli.Uint64Flag{
 		Name: "memorylimit",

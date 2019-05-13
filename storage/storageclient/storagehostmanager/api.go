@@ -5,6 +5,7 @@
 package storagehostmanager
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -89,4 +90,15 @@ func (api *PublicHostManagerDebugAPI) Syncing() bool {
 
 func (api *PublicHostManagerDebugAPI) BlockHeight() uint64 {
 	return api.shm.blockHeight
+}
+
+func (api *PublicHostManagerDebugAPI) InsertHostInfo(amount int) string {
+	for i := 0; i < amount; i++ {
+		hi := hostInfoGenerator()
+		err := api.shm.insert(hi)
+		if err != nil {
+			return fmt.Sprintf("insert failed: %s", err.Error())
+		}
+	}
+	return fmt.Sprintf("Successfully Inserted %v Storage Host Information", amount)
 }

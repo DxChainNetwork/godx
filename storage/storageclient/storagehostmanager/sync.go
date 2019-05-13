@@ -18,7 +18,7 @@ func (shm *StorageHostManager) SubscribeChainChangEvent() {
 	for {
 		select {
 		case change := <-chainChanges:
-			go shm.analyzeChainEventChange(change)
+			shm.analyzeChainEventChange(change)
 		case <-shm.tm.StopChan():
 			return
 		}

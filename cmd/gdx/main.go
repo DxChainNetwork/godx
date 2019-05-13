@@ -163,6 +163,10 @@ var (
 	storageClientFlags = []cli.Flag{
 		utils.StorageClientMemoryFlag,
 	}
+
+	storageHostManagerTestFlags = []cli.Flag{
+		utils.StorageHostManagerInsertFlag,
+	}
 )
 
 func init() {
@@ -199,8 +203,10 @@ func init() {
 		dumpConfigCommand,
 		// See storageclientcmd.go
 		storageClientCommand,
-		// see storagehostmanagercmd.go
+		// see shmtest.go
 		hostManagerTestCommand,
+		// see storagehostmanagercmd.go
+		hostManagerCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

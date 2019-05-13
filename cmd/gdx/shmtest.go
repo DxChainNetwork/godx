@@ -17,15 +17,14 @@ var hostManagerTestCommand = cli.Command{
 	Subcommands: []cli.Command{
 		{
 
-			Name:        "online",
-			Usage:       "check if the storage client is online",
-			ArgsUsage:   "",
-			Action:      utils.MigrateFlags(getOnlineStatus),
+			Name:      "online",
+			Usage:     "check if the storage client is online",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(getOnlineStatus),
 			Description: `check is the storage client is online, if the 
 			storage client is not connected to any peer, it should return
 			false. Otherwise, true is expected`,
 		},
-
 
 		{
 			Name:      "syncing",
@@ -45,11 +44,50 @@ var hostManagerTestCommand = cli.Command{
 			Description: `get the storage host manager current syncing block height,
 			it should be equivalent to the current block height`,
 		},
+
+		{
+			Name:      "insert",
+			Usage:     "insert host information into the storage host manager",
+			ArgsUsage: "",
+			Flags: []cli.Flag{
+				utils.StorageHostManagerInsertFlag,
+			},
+			Action: utils.MigrateFlags(insertHostInfo),
+			Description: `insert host information into the storage host manager. By using
+			the --insertamount flag, user is able to configure how many storage host information
+			to be inserted into the storage host manager`,
+		},
 	},
 }
 
+func insertHostInfo(ctx *cli.Context) error {
+	var amount int
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	// check if the flag is set
+	if !ctx.GlobalIsSet(utils.StorageHostManagerInsertFlag.Name) {
+		amount = 10
+	} else {
+		amount = ctx.GlobalInt(utils.StorageHostManagerInsertFlag.Name)
+	}
+	if amount <= 0 {
+		utils.Fatalf("the amount of storage host information to be inserted must be greater than 0")
+	}
+
+	var result string
+	err = client.Call(&result, "hostmanagerdebug_insertHostInfo", amount)
+	if err != nil {
+		utils.Fatalf("failed to insert the storage host information into the pool %s", err.Error())
+	}
+	fmt.Println(result)
+	return nil
+}
+
 func getOnlineStatus(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -63,7 +101,7 @@ func getOnlineStatus(ctx *cli.Context) error {
 }
 
 func getSyncingStatus(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -77,7 +115,7 @@ func getSyncingStatus(ctx *cli.Context) error {
 }
 
 func getBlockHeight(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
