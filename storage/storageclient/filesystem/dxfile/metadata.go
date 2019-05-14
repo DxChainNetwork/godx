@@ -258,5 +258,8 @@ func (df *DxFile) SetFileMode(mode os.FileMode) error {
 
 // SectorSize return the sector size of a dxfile
 func (df *DxFile) SectorSize() uint64 {
-	return SectorSize - uint64(crypto.Overhead(df.metadata.CipherKeyCode))
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.SectorSize
 }
