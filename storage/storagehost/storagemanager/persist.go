@@ -19,6 +19,13 @@ type folderPersist struct {
 	Usage []BitVector
 }
 
+type sectorPersist struct {
+	Count  uint16
+	Folder uint16
+	ID     sectorID
+	Index  uint32
+}
+
 func (sm *storageManager) extractConfig() *configPersist {
 	return &configPersist{
 		SectorSalt: sm.sectorSalt,
@@ -40,7 +47,22 @@ func (sf *storageFolder) extractFolder() folderPersist {
 	return folderPersist{
 		Index: sf.index,
 		Path:  sf.path,
+		Usage: sf.clearUsage(),
 	}
+}
+
+func (sf *storageFolder) clearUsage() []BitVector {
+	var ss = make([]BitVector, len(sf.usage))
+
+	copy(ss, sf.usage)
+
+	for _, sectorIndex := range sf.freeSectors {
+		usageIndex := sectorIndex / granularity
+		bitIndex := sectorIndex % granularity
+		ss[usageIndex].clearUsage(uint16(bitIndex))
+	}
+
+	return ss
 }
 
 // syncResources loop through all the folder,

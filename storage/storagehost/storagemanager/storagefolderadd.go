@@ -37,8 +37,9 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 
 	// create a folder object
 	sf := &storageFolder{
-		path:  path,
-		usage: make([]BitVector, sectors/granularity),
+		path:        path,
+		usage:       make([]BitVector, sectors/granularity),
+		freeSectors: make(map[sectorID]uint32),
 	}
 
 	// in order to prevent duplicate add
@@ -69,11 +70,12 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 	// TODO: if this is map. how to handle when sector need to write data to this folder
 	// manage map the folder
 	sm.folderLock.Lock()
+	// lock the storage folder as soon as the storage folder map to the folder
+	sf.fLock.Lock()
 	sm.folders[sf.index] = sf
 	sm.folderLock.Unlock()
 
 	// extract the config for the folder and write into log
-	// TODO: no revert the usage
 	sfConfig := sf.extractFolder()
 	err = sm.wal.writeEntry(logEntry{PrepareAddStorageFolder: []folderPersist{sfConfig}})
 	if err != nil {
@@ -89,8 +91,7 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 // processAddStorageFolder start to create metadata files and sector file
 // for the folder object. Also include truncating
 func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
-	sf.lock.Lock()
-	defer sf.lock.Unlock()
+	defer sf.fLock.Unlock()
 
 	var err error
 
@@ -163,7 +164,7 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 	sm.folders[sf.index] = sf
 	sm.folderLock.Unlock()
 
-	// lock wal to write entry
+	// fLock wal to write entry
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 

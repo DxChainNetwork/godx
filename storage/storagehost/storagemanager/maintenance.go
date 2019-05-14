@@ -174,7 +174,6 @@ func (sm *storageManager) recover(walF *os.File) error {
 	sm.syncConfig()
 	sm.wal.loggedConfig = newConfig
 
-
 	// all things finished
 	// force to commit again
 	sm.commit()
@@ -192,7 +191,7 @@ func (sm *storageManager) clearUnprocessedAddition(unProcessedAddition []folderP
 
 		// if the folder not exist
 		if !exists {
-			if err := os.RemoveAll(sf.Path); err != nil{
+			if err := os.RemoveAll(sf.Path); err != nil {
 				// TODO: log: consider if this is an dangerous operation or not
 			}
 			continue

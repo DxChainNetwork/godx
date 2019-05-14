@@ -21,25 +21,21 @@ type logEntry struct {
 	ProcessedAddStorageFolder []folderPersist
 	RevertAddStorageFolder    []folderPersist
 	CancelAddStorageFolder    []folderPersist
+
+	PrepareAddStorageSector []sectorPersist
 }
 
 func (wal *writeAheadLog) writeEntry(entries ...logEntry) error {
-
-	for _, entry := range entries{
-
+	for _, entry := range entries {
 		changeBytes, err := json.MarshalIndent(entry, "", "\t")
 		if err != nil {
 			return err
 		}
-
 		_, err = wal.walFileTmp.Write(changeBytes)
-
 		if err != nil {
 			return err
 		}
-
 		wal.entries = append(wal.entries, entry)
-
 	}
 	return nil
 }

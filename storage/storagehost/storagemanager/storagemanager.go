@@ -1,6 +1,7 @@
 package storagemanager
 
 import (
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -14,8 +15,14 @@ import (
 type storageManager struct {
 	sectorSalt [32]byte
 
-	// folders map the folder index to a object created
+	// folders map the folder index to folder object created
 	folders map[uint16]*storageFolder
+
+	// sector map the sector id to sector object created
+	sectors map[sectorID]storageSector
+
+	// manage to lock the sector ID
+	sectorLocks map[sectorID]*sectorLock
 
 	log        log.Logger
 	persistDir string
@@ -37,7 +44,7 @@ func New(persistDir string, mode ...int) (*storageManager, error) {
 		buildSetting(mode[0])
 	}
 	sm, err := newStorageManager(persistDir)
-	if sm == nil || err != nil{
+	if sm == nil || err != nil {
 		return sm, err
 	}
 
@@ -80,10 +87,90 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) error {
 	return err
 }
 
+func (sm *storageManager) AddSector(root [32]byte, sectorData []byte) error {
+	// if the switch is top, indicate the storage manager is shut down,
+	// would no longer receive any operation request, return an error
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
+		return errors.New("storage manager is shut down")
+	}
+
+	sm.wg.Add(1)
+	defer sm.wg.Done()
+
+	var err error
+	// get the id for the sector
+	id := sm.getSectorID(root)
+
+	sm.lockSector(id)
+	defer sm.unlockSector(id)
+
+	sm.wal.lock.Lock()
+	sector, exists := sm.sectors[id]
+	sm.wal.lock.Unlock()
+
+	if exists{
+		err = sm.addVirtualSector(id, sector)
+	}else{
+		err = sm.addStorageSector(id, sectorData)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (sm *storageManager) ReadSector(root [32]byte) ([]byte, error) {
+	// if the switch is top, indicate the storage manager is shut down,
+	// would no longer receive any operation request, return an error
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
+		return nil, errors.New("storage manager is shut down")
+	}
+
+	sm.wg.Add(1)
+	defer sm.wg.Done()
+
+	var err error
+	id := sm.getSectorID(root)
+
+	sm.lockSector(id)
+
+	// get the sector
+	ss, exists1 := sm.sectors[id]
+	sf, exists2 := sm.folders[ss.storageFolder]
+
+	if !exists1 {
+		return nil, errors.New("Unable to load storage sector")
+	}
+
+	if !exists2 {
+		return nil, errors.New("Unable to load storage folder")
+	}
+
+	if atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
+		return nil, errors.New("Unable to open the folder")
+	}
+
+	sectorData, err := readSector(sf.sectorData, ss.index)
+
+	return sectorData, err
+}
+
+func readSector(file *os.File, sectorIndex uint32) ([]byte, error) {
+	b := make([]byte, SectorSize)
+	_, err := file.ReadAt(b, int64(uint64(sectorIndex)*SectorSize))
+	if err != nil {
+		return nil, errors.New("fail to read sector")
+	}
+
+	return b, nil
+}
+
 // use the thread manager to close all the related process
 func (sm *storageManager) Close() error {
 	// check if already closed
-	if atomic.LoadUint64(&sm.atomicSwitch) == 1{
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
 		return errors.New("storage managger already closed")
 	}
 	// close the switch, indicating the storage manager would no longer receive
