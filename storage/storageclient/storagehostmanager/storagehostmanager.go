@@ -66,10 +66,12 @@ func New(persistDir string) *StorageHostManager {
 
 		scanLookup: make(map[string]struct{}),
 		filterMode: DisableFilter,
+		filteredHosts: make(map[string]enode.ID),
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
 
 	shm.log.Info("Storage host manager initialized")

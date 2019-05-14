@@ -9,13 +9,17 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// HostEvaluation defines an interface that include methods that used to calculate
+// the storage host evaluation and evaluation details
 type HostEvaluation interface {
 	EvaluationDetail(eval common.BigInt, ignoreAge, ignoreUptime bool) EvaluationDetail
 	Evaluation() common.BigInt
 }
 
+// EvaluationFunc is used to calculate storage host evaluation
 type EvaluationFunc func(storage.HostInfo) HostEvaluation
 
+// EvaluationDetail contains the detailed storage host evaluation factors
 type EvaluationDetail struct {
 	Evaluation     common.BigInt `json:"evaluation"`
 	ConversionRate float64       `json:"conversionrate"`
@@ -29,6 +33,7 @@ type EvaluationDetail struct {
 	UptimeAdjustment           float64 `json:"uptimefactor"`
 }
 
+// EvaluationCriteria contains statistics that used to calculate the storage host evaluation
 type EvaluationCriteria struct {
 	AgeAdjustment              float64
 	BurnAdjustment             float64
@@ -39,6 +44,7 @@ type EvaluationCriteria struct {
 	UptimeAdjustment           float64
 }
 
+// Evaluation will be used to calculate the storage host evaluation
 func (ec EvaluationCriteria) Evaluation() common.BigInt {
 	total := ec.AgeAdjustment * ec.BurnAdjustment * ec.DepositAdjustment * ec.InteractionAdjustment *
 		ec.PriceAdjustment * ec.StorageRemainingAdjustment * ec.UptimeAdjustment
@@ -46,6 +52,7 @@ func (ec EvaluationCriteria) Evaluation() common.BigInt {
 	return common.NewBigInt(1).MultFloat64(total)
 }
 
+// EvaluationDetail will return storage host detailed evaluation, including evaluation criteria
 func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, ignoreUptime bool) EvaluationDetail {
 	if ignoreAge {
 		ec.AgeAdjustment = 1

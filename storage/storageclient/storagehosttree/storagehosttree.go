@@ -12,6 +12,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// StorageHostTree defined a binary tree structure that used to store all
+// storage host information found by the storage client
 type StorageHostTree struct {
 	root     *node
 	hostPool map[string]*node
@@ -19,6 +21,7 @@ type StorageHostTree struct {
 	lock     sync.Mutex
 }
 
+// New will initialize the StorageHostTree object
 func New(ef EvaluationFunc) *StorageHostTree {
 	return &StorageHostTree{
 		hostPool: make(map[string]*node),

@@ -6,6 +6,7 @@ package storagehosttree
 
 import "errors"
 
+// Definition of common error messages
 var (
 	ErrHostExists         = errors.New("storage host existed in the tree already")
 	ErrHostNotExists      = errors.New("storage host cannot be found from the tree")
@@ -13,6 +14,7 @@ var (
 	ErrNodeNotOccupied    = errors.New("node returned is not occupied")
 )
 
+// IPV4 Prefix Length of the IP network
 const (
 	IPv4PrefixLength = 24
 )
