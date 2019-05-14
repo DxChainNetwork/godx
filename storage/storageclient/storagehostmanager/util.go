@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file
+
 package storagehostmanager
 
 import (
@@ -12,6 +16,8 @@ import (
 	"github.com/Pallinder/go-randomdata"
 )
 
+// StorageHostRank will be used to show the rankings of the storage host
+// learnt by the storage client
 type StorageHostRank struct {
 	storagehosttree.EvaluationDetail
 	EnodeID string

@@ -18,12 +18,15 @@ type FilterMode int
 
 // Two kinds of filter mode
 //  1. disable: filter mode is not allowed
-//  2. whitelist: only the storage host in bot whitelist and hostPool can be inserted into filteredTree
+//  2. whitelist: only the storage host in both whitelist and hostPool can be inserted into filteredTree
 const (
 	DisableFilter FilterMode = iota
 	WhitelistFilter
 )
 
+// SetFilterMode will be used to set the host ip filter mode. Actions are required only
+// when the mode is set to be whitelist, meaning that only the storage host in both whitelist
+// and hostPool can be inserted into the filteredTree
 func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID) error {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
@@ -69,6 +72,7 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID
 	return errors.New("filter mode provided not recognized")
 }
 
+// String will convert the filter mode into string, used for displaying purpose
 func (fm FilterMode) String() string {
 	switch {
 	case fm == DisableFilter:

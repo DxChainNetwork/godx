@@ -59,6 +59,8 @@ func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo 
 	return info
 }
 
+// StorageHostRanks will return the storage host rankings based on their evaluations. The
+// higher the evaluation is, the higher order it will be placed
 func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHostRank) {
 	allHosts := api.shm.storageHostTree.All()
 	// based on the host information, calculate the evaluation
@@ -74,7 +76,7 @@ func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHo
 	return
 }
 
-// PublicStorageClientDebugAPI defines the object used to call eligible APIs
+// PublicHostManagerDebugAPI defines the object used to call eligible APIs
 // that are used to perform testing
 type PublicHostManagerDebugAPI struct {
 	shm *StorageHostManager
@@ -88,18 +90,26 @@ func NewPublicStorageClientDebugAPI(shm *StorageHostManager) *PublicHostManagerD
 	}
 }
 
+// Online will be used to indicate if the local node is connected to the internet or not
+// by checking the number of peers it connected width
 func (api *PublicHostManagerDebugAPI) Online() bool {
 	return api.shm.b.Online()
 }
 
+// Syncing will be used to indicate if the local node is currently syncing with the blockchain
 func (api *PublicHostManagerDebugAPI) Syncing() bool {
 	return api.shm.b.Syncing()
 }
 
+// BlockHeight will be used to retrieve the current block height stored in the
+// storage host manager data structure. If everything function correctly, the
+// block height it returned should be same as the blockheight it synced
 func (api *PublicHostManagerDebugAPI) BlockHeight() uint64 {
 	return api.shm.blockHeight
 }
 
+// InsertHostInfo will insert host information into the storage host tree
+// all host information are generated randomly
 func (api *PublicHostManagerDebugAPI) InsertHostInfo(amount int) string {
 	for i := 0; i < amount; i++ {
 		hi := hostInfoGenerator()
@@ -112,6 +122,10 @@ func (api *PublicHostManagerDebugAPI) InsertHostInfo(amount int) string {
 	return fmt.Sprintf("Successfully inserted %v Storage Host Information", amount)
 }
 
+// InsertActiveHostInfo will insert active host information into the storage host tree
+// all host information are generated randomly. NOTE: if the information is not checked
+// immediately, those active hosts will became inactive because of failing to establish
+// connection
 func (api *PublicHostManagerDebugAPI) InsertActiveHostInfo(amount int) string {
 	for i := 0; i < amount; i++ {
 		hi := activeHostInfoGenerator()

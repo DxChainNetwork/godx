@@ -6,7 +6,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
-func (shm *StorageHostManager) SubscribeChainChangEvent() {
+func (shm *StorageHostManager) subscribeChainChangEvent() {
 	if err := shm.tm.Add(); err != nil {
 		return
 	}

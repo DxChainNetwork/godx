@@ -77,6 +77,8 @@ func New(persistDir string) *StorageHostManager {
 	return shm
 }
 
+// Start will start to load prior settings, start go routines to automatically save
+// the settings every 2 min, and go routine to start storage host maintenance
 func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
 	// initialization
 	shm.b = b
@@ -98,8 +100,8 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 	// automatically save the settings every 2 minutes
 	go shm.autoSaveSettings()
 
-	// subscribe consensus change
-	go shm.SubscribeChainChangEvent()
+	// subscribe block chain change event
+	go shm.subscribeChainChangEvent()
 
 	// started scan and update storage host information
 	go shm.scan()
@@ -109,6 +111,8 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 	return nil
 }
 
+// Close will send stop signal to threadmanager, terminate all the
+// running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
 }

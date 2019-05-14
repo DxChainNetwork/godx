@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file
+
 package storageclient
 
 import (
@@ -47,10 +51,12 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
 	return nil
 }
 
+// Online will be used to indicate if the local node is connected to the internet
 func (sc *StorageClient) Online() bool {
 	return sc.info.netInfo.PeerCount() > 0
 }
 
+// Syncing will be used to indicate if the local node is syncing with the blockchain
 func (sc *StorageClient) Syncing() bool {
 	sync, _ := sc.info.ethInfo.Syncing()
 	syncing, ok := sync.(bool)
@@ -61,6 +67,7 @@ func (sc *StorageClient) Syncing() bool {
 	return true
 }
 
+// GetTxByBlockHash will be used to get the detailed transaction by using the block hash
 func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error) {
 	block, err := sc.ethBackend.GetBlockByHash(blockHash)
 	if err != nil {
@@ -70,14 +77,19 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 	return block.Transactions(), nil
 }
 
+// GetStorageHostSetting will be used to get the storage host's external setting based on the
+// peerID provided
 func (sc *StorageClient) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
 	return sc.ethBackend.GetStorageHostSetting(peerID, config)
 }
 
+// SubscribeChainChangeEvent will be used to get block information every time a change happened
+// in the blockchain
 func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return sc.ethBackend.SubscribeChainChangeEvent(ch)
 }
 
+// GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
 }

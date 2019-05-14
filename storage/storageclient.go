@@ -8,6 +8,7 @@ import (
 	"github.com/DxChainNetwork/godx/rpc"
 )
 
+// EthBackend is an interface used to get methods implemented by Ethereum
 type EthBackend interface {
 	APIs() []rpc.API
 	GetStorageHostSetting(peerID string, config *HostExtConfig) error
@@ -15,6 +16,8 @@ type EthBackend interface {
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 }
 
+// ClientBackend is an interface that used to provide necessary functions
+// to storagehostmanager and contract manager
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
