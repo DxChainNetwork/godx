@@ -19,8 +19,7 @@ type ParsedAPI struct {
 	ethInfo *ethapi.PublicEthereumAPI
 }
 
-
-func (sc *StorageClient) filterAPIs(apis []rpc.API) error{
+func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
 	for _, api := range apis {
 		switch typ := reflect.TypeOf(api.Service); typ {
 		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
@@ -47,7 +46,6 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) error{
 	}
 	return nil
 }
-
 
 func (sc *StorageClient) Online() bool {
 	return sc.info.netInfo.PeerCount() > 0
@@ -76,11 +74,10 @@ func (sc *StorageClient) GetStorageHostSetting(peerID string, config *storage.Ho
 	return sc.ethBackend.GetStorageHostSetting(peerID, config)
 }
 
-func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription{
+func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return sc.ethBackend.SubscribeChainChangeEvent(ch)
 }
 
-func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager{
+func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
 }
-

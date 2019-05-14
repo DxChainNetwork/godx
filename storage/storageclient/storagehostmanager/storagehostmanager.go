@@ -64,12 +64,11 @@ func New(persistDir string) *StorageHostManager {
 		rent: storage.DefaultRentPayment,
 
 		scanLookup:    make(map[string]struct{}),
-		filteredHosts: make(map[string]enode.ID),
+		filterMode:    DisableFilter,
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
-	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
 	shm.log.Info("Storage host manager initialized")
@@ -117,8 +116,8 @@ func (shm *StorageHostManager) Close() error {
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	err := shm.storageHostTree.Insert(hi)
 	_, exists := shm.filteredHosts[hi.EnodeID.String()]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+
+	if shm.filterMode == WhitelistFilter && exists {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {
 			err = common.ErrCompose(err, errF)
@@ -131,8 +130,8 @@ func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 func (shm *StorageHostManager) remove(enodeid string) error {
 	err := shm.storageHostTree.Remove(enodeid)
 	_, exists := shm.filteredHosts[enodeid]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+
+	if shm.filterMode == WhitelistFilter && exists {
 		errF := shm.filteredTree.Remove(enodeid)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)
@@ -145,8 +144,8 @@ func (shm *StorageHostManager) remove(enodeid string) error {
 func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 	err := shm.storageHostTree.HostInfoUpdate(hi)
 	_, exists := shm.filteredHosts[hi.EnodeID.String()]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+
+	if shm.filterMode == WhitelistFilter && exists {
 		errF := shm.filteredTree.HostInfoUpdate(hi)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)

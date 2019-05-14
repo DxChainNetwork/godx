@@ -62,16 +62,16 @@ type StorageClient struct {
 	// Utilities
 	streamCache *streamCache
 	log         log.Logger
-	lock sync.Mutex
-	tm   threadmanager.ThreadManager
-	wal  Wal
+	lock        sync.Mutex
+	tm          threadmanager.ThreadManager
+	wal         Wal
 
 	// information on network, block chain, and etc.
-	info ParsedAPI
-	ethBackend    storage.EthBackend
+	info       ParsedAPI
+	ethBackend storage.EthBackend
 
 	// get the P2P server for adding peer
-	p2pServer  *p2p.Server
+	p2pServer *p2p.Server
 }
 
 // New initializes StorageClient object

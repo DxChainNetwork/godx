@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/cmd/utils"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/olekukonko/tablewriter"
-	"gopkg.in/urfave/cli.v1"
 	"os"
 	"strconv"
+
+	"github.com/DxChainNetwork/godx/cmd/utils"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/olekukonko/tablewriter"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var hostManagerCommand = cli.Command{
@@ -37,14 +39,20 @@ var hostManagerCommand = cli.Command{
 		},
 		{
 			Name:      "retrieve",
-			Usage:     "show active storage hosts learnt by the storage client",
+			Usage:     "retrieve detailed information of a storage host based on the enode id learnt by the storage client",
 			ArgsUsage: "",
 			Flags: []cli.Flag{
 				utils.StorageHostManagerEnodeFlag,
 			},
-			Action: utils.MigrateFlags(getHostInfo),
-			Description: `"show active storage hosts learnt by the storage client, with some
-			general information`,
+			Action:      utils.MigrateFlags(getHostInfo),
+			Description: `"retrieve detailed information of a storage host based on the enode id learnt by the storage client`,
+		},
+		{
+			Name:        "ranking",
+			Usage:       "display the ranking of the storage hosts learnt by the storage client",
+			ArgsUsage:   "",
+			Action:      utils.MigrateFlags(getRankings),
+			Description: `"display the ranking of the storage hosts learnt by the storage client`,
 		},
 	},
 }
@@ -138,6 +146,53 @@ func getHostInfo(ctx *cli.Context) error {
 	return nil
 }
 
+func getRankings(ctx *cli.Context) error {
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	var rankings []storagehostmanager.StorageHostRank
+	err = client.Call(&rankings, "hostmanager_storageHostRanks")
+	if err != nil {
+		utils.Fatalf("failed to retrieve the storage host rankings: %s", err.Error())
+	}
+
+	if len(rankings) == 0 {
+		fmt.Println("No storage host can be found")
+		return nil
+	}
+
+	table := hostRankingTable(rankings)
+	table.Render()
+
+	return nil
+}
+
+func hostRankingTable(rankings []storagehostmanager.StorageHostRank) *tablewriter.Table {
+	var formattedData [][]string
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"ID", "Total Evaluation", "AgeFactor", "BurnFactor", "DepositFactor",
+		"InteractionFactor", "PriceFactor", "RemainingStorageFactor", "UptimeFactor"})
+
+	for _, rank := range rankings {
+		dataEntry := []string{rank.EnodeID, rank.Evaluation.String(), floatToString(rank.AgeAdjustment),
+			floatToString(rank.BurnAdjustment), floatToString(rank.DepositAdjustment),
+			floatToString(rank.InteractionAdjustment), floatToString(rank.PriceAdjustment),
+			floatToString(rank.StorageRemainingAdjustment), floatToString(rank.UptimeAdjustment)}
+
+		formattedData = append(formattedData, dataEntry)
+	}
+
+	for _, data := range formattedData {
+		table.Append(data)
+	}
+
+	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	return table
+}
+
 func hostInfoTable(infos []storage.HostInfo) *tablewriter.Table {
 	var formattedData [][]string
 
@@ -155,4 +210,8 @@ func hostInfoTable(infos []storage.HostInfo) *tablewriter.Table {
 
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	return table
+}
+
+func floatToString(val float64) string {
+	return strconv.FormatFloat(val, 'g', 1, 64)
 }

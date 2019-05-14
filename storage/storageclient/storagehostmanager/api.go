@@ -50,7 +50,7 @@ func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []sto
 
 // StorageHost will return a specific host detailed information from the storage host pool
 func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {
-	info, exist :=  api.shm.storageHostTree.RetrieveHostInfo(id)
+	info, exist := api.shm.storageHostTree.RetrieveHostInfo(id)
 
 	if !exist {
 		return storage.HostInfo{}
@@ -58,21 +58,20 @@ func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo 
 	return info
 }
 
-// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
-// that are used to configure settings
-type PrivateStorageHostManagerAPI struct {
-	shm *StorageHostManager
-}
+func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHostRank) {
+	allHosts := api.shm.storageHostTree.All()
+	// based on the host information, calculate the evaluation
+	for _, host := range allHosts {
+		eval := api.shm.evalFunc(host)
 
-// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
-// which implemented a bunch of API methods
-func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
-	return &PrivateStorageHostManagerAPI{
-		shm: shm,
+		rankings = append(rankings, StorageHostRank{
+			EvaluationDetail: eval.EvaluationDetail(eval.Evaluation(), false, false),
+			EnodeID:          host.EnodeID.String(),
+		})
 	}
-}
 
-// TODO: (mzhang) private method, set filter mode
+	return
+}
 
 // PublicStorageClientDebugAPI defines the object used to call eligible APIs
 // that are used to perform testing
