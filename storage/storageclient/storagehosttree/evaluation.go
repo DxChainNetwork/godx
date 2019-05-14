@@ -17,16 +17,16 @@ type HostEvaluation interface {
 type EvaluationFunc func(storage.HostInfo) HostEvaluation
 
 type EvaluationDetail struct {
-	Evaluation     common.BigInt `json:"score"`
+	Evaluation     common.BigInt `json:"evaluation"`
 	ConversionRate float64       `json:"conversionrate"`
 
-	AgeAdjustment              float64 `json:"ageadjustment"`
-	BurnAdjustment             float64 `json:"burnadjustment"`
-	DepositAdjustment          float64 `json:"depositeadjustment"`
-	InteractionAdjustment      float64 `json:"interactionadjustment"`
-	PriceAdjustment            float64 `json:"pricesmultiplier"`
-	StorageRemainingAdjustment float64 `json:"storageremainingadjustment"`
-	UptimeAdjustment           float64 `json:"uptimeadjustment"`
+	AgeAdjustment              float64 `json:"agefactor"`
+	BurnAdjustment             float64 `json:"burnfactor"`
+	DepositAdjustment          float64 `json:"depositfactor"`
+	InteractionAdjustment      float64 `json:"interactionfactor"`
+	PriceAdjustment            float64 `json:"pricefactor"`
+	StorageRemainingAdjustment float64 `json:"remainingstoragefactor"`
+	UptimeAdjustment           float64 `json:"uptimefactor"`
 }
 
 type EvaluationCriteria struct {

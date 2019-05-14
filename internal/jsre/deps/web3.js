@@ -2527,7 +2527,7 @@ var BigNumber = require('bignumber.js');
 var HostDebug = require('./web3/methods/hostdebug');
 
 var storageclient = require('./web3/methods/storageclient');
-
+var storagehostmanager = require('./web3/methods/storagehostmanager');
 
 
 function Web3 (provider) {
@@ -2541,6 +2541,7 @@ function Web3 (provider) {
 
 
     this.storageclient = new storageclient(this);
+    this.storagehostmanager = new storagehostmanager(this);
 
 
     this.hostdebug = new HostDebug(this);
@@ -2642,7 +2643,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{ "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{ "./web3/methods/storagehostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 
 /*
     This file is part of web3.js.
@@ -5651,6 +5652,60 @@ module.exports = Net;
         module.exports = storageclient;
     }, {"../method":36}],
 
+
+    201: [function(require,module,exports){
+
+        "use strict";
+
+        var Method = require('../method');
+
+        function storagehostmanager(web3){
+            this._requestManager = web3._requestManager;
+
+            var self = this;
+
+            methods().forEach(function(method) {
+                method.attachToObject(self);
+                method.setRequestManager(self._requestManager);
+            });
+        }
+
+
+        var methods = function () {
+            var allhosts = new Method({
+                name: 'all',
+                call: 'hostmanager_allStorageHosts',
+                params: 0,
+            });
+
+            var activehosts = new Method({
+                name: 'active',
+                call: 'hostmanager_activeStorageHosts',
+                params: 0,
+            });
+
+            var hostinfo = new Method({
+                name: 'retrieve',
+                call: 'hostmanager_storageHost',
+                params: 1,
+            });
+
+            var rank = new Method({
+                name: 'ranking',
+                call: 'hostmanager_storageHostRanks',
+                params: 0,
+            });
+
+            return [
+                allhosts,
+                activehosts,
+                hostinfo,
+                rank,
+            ];
+        };
+
+        module.exports = storagehostmanager;
+    }, {"../method":36}],
 
     40:[function(require,module,exports){
 /*
