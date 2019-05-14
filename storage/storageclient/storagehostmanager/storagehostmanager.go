@@ -5,6 +5,9 @@
 package storagehostmanager
 
 import (
+	"os"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
@@ -12,8 +15,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"os"
-	"sync"
 )
 
 // StorageHostManager contains necessary fields that are used to manage storage hosts
@@ -63,8 +64,8 @@ func New(persistDir string) *StorageHostManager {
 
 		rent: storage.DefaultRentPayment,
 
-		scanLookup:    make(map[string]struct{}),
-		filterMode:    DisableFilter,
+		scanLookup: make(map[string]struct{}),
+		filterMode: DisableFilter,
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)

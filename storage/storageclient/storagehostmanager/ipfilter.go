@@ -7,6 +7,7 @@ package storagehostmanager
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
@@ -22,17 +23,6 @@ const (
 	DisableFilter FilterMode = iota
 	WhitelistFilter
 )
-
-func (fm FilterMode) String() string {
-	switch {
-	case fm == DisableFilter:
-		return fmt.Sprintf("Disabled")
-	case fm == WhitelistFilter:
-		return fmt.Sprintf("Whitelist")
-	default:
-		return fmt.Sprintf("Nil")
-	}
-}
 
 func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID) error {
 	shm.lock.Lock()
@@ -77,4 +67,15 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID
 	}
 
 	return errors.New("filter mode provided not recognized")
+}
+
+func (fm FilterMode) String() string {
+	switch {
+	case fm == DisableFilter:
+		return fmt.Sprintf("Disabled")
+	case fm == WhitelistFilter:
+		return fmt.Sprintf("Whitelist")
+	default:
+		return fmt.Sprintf("Nil")
+	}
 }

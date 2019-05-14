@@ -3,12 +3,13 @@ package storagehostmanager
 import (
 	"crypto/rand"
 	"fmt"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 	"github.com/Pallinder/go-randomdata"
-	"time"
 )
 
 type StorageHostRank struct {
