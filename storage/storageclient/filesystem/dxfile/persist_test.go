@@ -6,6 +6,7 @@ package dxfile
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/common"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -166,4 +167,10 @@ func randomBytes(num int) []byte {
 	b := make([]byte, num)
 	rand.Read(b)
 	return b
+}
+
+func randomHash() common.Hash {
+	var h common.Hash
+	rand.Read(h[:])
+	return h
 }

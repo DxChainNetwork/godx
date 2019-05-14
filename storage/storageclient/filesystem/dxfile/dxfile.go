@@ -115,6 +115,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	return df, df.saveAll()
 }
 
+// AddSector add a sector to DxFile
 func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex uint64, merkleRoot common.Hash) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
@@ -165,8 +166,8 @@ func (df *DxFile) Deleted() bool {
 	return df.deleted
 }
 
-// HostPublicKey return all hosts (including unused ones)
-func (df *DxFile) HostPublicKey() []enode.ID {
+// HostIDs return all hosts (including unused ones)
+func (df *DxFile) HostIDs() []enode.ID {
 	df.lock.RUnlock()
 	defer df.lock.RUnlock()
 
@@ -414,5 +415,3 @@ func (df *DxFile) pruneSegment(segIndex int) {
 		df.segments[segIndex].sectors[i] = newSectors
 	}
 }
-
-// TODO: Expiration when given renter contract structure

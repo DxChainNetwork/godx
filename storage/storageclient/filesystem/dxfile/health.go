@@ -18,7 +18,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 		return 0, 0, 0
 	}
 	health := uint32(200)
-	stuckHealth := uint32(100)
+	stuckHealth := uint32(200)
 	var numStuckSegments uint32
 	for i, seg := range df.segments {
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
