@@ -121,9 +121,3 @@ func cmpHealth(h1, h2 uint32) int {
 	}
 	return 1
 }
-
-// isStuckHealth return whether the input health is stuck or not.
-// only health with 200 is healthy and unstuck
-func isStuckHealth(health uint32) bool {
-	return health < 200
-}

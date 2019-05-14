@@ -107,6 +107,7 @@ func (df *DxFile) saveSegments(indexes []int) error {
 	}
 	// Write the segment with the segmentIndex
 	for _, index := range indexes {
+		df.pruneSegment(index)
 		seg := df.segments[index]
 		if seg.index != uint64(index) {
 			return fmt.Errorf("cannot write segment: data corrupted - segment index not expected")

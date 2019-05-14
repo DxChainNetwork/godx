@@ -1,8 +1,8 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"testing"
 	"time"
@@ -28,21 +28,6 @@ func TestCmpHealth(t *testing.T) {
 		res := cmpHealth(test.h1, test.h2)
 		if res != test.res {
 			t.Errorf("compare health unexpected value: %d, %d -> %d", test.h1, test.h2, res)
-		}
-	}
-}
-
-func TestIsStuckHealth(t *testing.T) {
-	tests := []struct {
-		health uint32
-		stuck  bool
-	}{
-		{99, true},
-		{200, false},
-	}
-	for _, test := range tests {
-		if res := isStuckHealth(test.health); res != test.stuck {
-			t.Errorf("unexpected %d -> %v", test.health, res)
 		}
 	}
 }
@@ -122,7 +107,7 @@ func TestHealth(t *testing.T) {
 	numSectors := uint32(30)
 	minSectors := uint32(10)
 	for i := 0; i != 10; i++ {
-		df, offline, goodForRenew := makeDxFileWithMaps(sectorSize * 50 * uint64(minSectors), minSectors, numSectors, 2, 10, 3, 3)
+		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*20*uint64(minSectors), minSectors, numSectors, erasurecode.ECTypeStandard, 2, 10, 3, 3)
 		var numExpectStuck int
 		health, stuckHealth, numStuckSegments := df.Health(offline, goodForRenew)
 		var minStuckSegmentFound, minUnstuckSegmentFound bool
@@ -140,7 +125,7 @@ func TestHealth(t *testing.T) {
 				if segHealth == stuckHealth {
 					minStuckSegmentFound = true
 				}
-			}else {
+			} else {
 				if !haveUnstuckSegment {
 					haveUnstuckSegment = true
 				}
@@ -164,27 +149,24 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func makeDxFileWithMaps(fileSize uint64, minSectors, numSectors uint32, stuckRate, absentRate, offlineRate, badForRenewRate int) (DxFile, map[enode.ID]bool, map[enode.ID]bool) {
+func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8, stuckRate, absentRate, offlineRate, badForRenewRate int) (*DxFile, map[enode.ID]bool, map[enode.ID]bool) {
 	rand.Seed(time.Now().UnixNano())
-	df := DxFile {
-		metadata: &Metadata {
-			NumSectors: numSectors,
-			MinSectors: minSectors,
-			FileSize: fileSize,
-			SectorSize:      SectorSize - uint64(crypto.Overhead(crypto.GCMCipherCode)),
-		},
+	df, err :=newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
+	if err != nil {
+		t.Fatal(err)
 	}
 	numSegments := df.metadata.numSegments()
 	offline := make(map[enode.ID]bool)
 	goodForRenew := make(map[enode.ID]bool)
 	for j := 0; j != int(numSegments); j++ {
 		seg := randomSegment(numSectors)
+		seg.index = uint64(j)
 		if rand.Intn(stuckRate) == 0 {
 			seg.stuck = true
 		} else {
 			seg.stuck = false
 		}
-		df.segments = append(df.segments, seg)
+		df.segments[j] = seg
 		for _, sectors := range seg.sectors {
 			for _, sector := range sectors {
 				if rand.Intn(absentRate) == 0 {
@@ -202,6 +184,10 @@ func makeDxFileWithMaps(fileSize uint64, minSectors, numSectors uint32, stuckRat
 				}
 			}
 		}
+	}
+	err = df.saveAll()
+	if err != nil {
+		t.Fatal(err)
 	}
 	return df, offline, goodForRenew
 }

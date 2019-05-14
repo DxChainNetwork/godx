@@ -141,7 +141,6 @@ func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex uint64, 
 	df.metadata.TimeModify = df.metadata.TimeAccess
 	df.metadata.TimeUpdate = df.metadata.TimeAccess
 
-	df.pruneSegment(int(segmentIndex))
 	return df.saveSegments([]int{int(segmentIndex)})
 }
 
@@ -192,12 +191,11 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goo
 			continue
 		}
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
-		if isStuckHealth(segHealth) {
+		if segHealth < 200 {
 			continue
 		}
 		df.segments[i].stuck = false
 		df.metadata.NumStuckSegments--
-
 		indexes = append(indexes, i)
 	}
 	err := df.saveSegments(indexes)
@@ -366,9 +364,6 @@ func (df *DxFile) UpdateUsedHosts(used []enode.ID) error {
 		if !exist {
 			df.hostTable[host] = false
 		}
-	}
-	for i := range df.segments {
-		df.pruneSegment(i)
 	}
 	err := df.saveHostTableUpdate()
 	if err != nil {

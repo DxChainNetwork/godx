@@ -37,6 +37,7 @@ type (
 	persistSegment struct {
 		Sectors [][]*sector // Sectors contains the recoverable message about the persistSector in the persistSegment
 		Index   uint64      // Index is the index of the specific segment
+		Stuck   bool        // Stuck indicates whether the segment is stuck or not
 	}
 
 	// persistSector is the smallest unit of storage. It the erasure code encoded persistSegment
@@ -101,6 +102,7 @@ func (s *segment) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSegment{
 		Sectors: s.sectors,
 		Index:   s.index,
+		Stuck:   s.stuck,
 	})
 }
 
@@ -110,7 +112,7 @@ func (s *segment) DecodeRLP(st *rlp.Stream) error {
 	if err := st.Decode(&ps); err != nil {
 		return err
 	}
-	s.sectors, s.index = ps.Sectors, ps.Index
+	s.sectors, s.index, s.stuck = ps.Sectors, ps.Index, ps.Stuck
 	return nil
 }
 

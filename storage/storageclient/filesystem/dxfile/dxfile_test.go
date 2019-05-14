@@ -136,6 +136,58 @@ func TestDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !df.Deleted() {
-		t.Errorf("After deletion, file not deleted in stat")
+		t.Errorf("After deletion, file not deleted in os system")
+	}
+}
+
+func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T){
+	for i := 0; i != 10; i++{
+		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize * 10 * 20, 10, 30, erasurecode.ECTypeStandard,
+			2, 1000, 3, 3)
+		err := df.MarkAllUnhealthySegmentsAsStuck(offline, goodForRenew)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, seg := range df.segments  {
+			segHealth := df.segmentHealth(i, offline, goodForRenew)
+			if segHealth < repairHealthThreshold && !seg.stuck{
+				t.Errorf("segment with health %d should have been marked as stuck", segHealth)
+			}
+		}
+		filename := filepath.Join(testDir, t.Name())
+		wal := df.wal
+		recoveredDF, err := readDxFile(filename, wal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
+	for i := 0; i != 10; i++{
+		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize * 10 * 20, 10, 30, erasurecode.ECTypeStandard,
+			1, 100, 100, 100)
+		err := df.MarkAllHealthySegmentsAsUnstuck(offline, goodForRenew)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, seg := range df.segments  {
+			segHealth := df.segmentHealth(i, offline, goodForRenew)
+			if segHealth == 200 && seg.stuck{
+				t.Errorf("segment with health %d should have been marked as non-stuck", segHealth)
+			}
+		}
+		filename := filepath.Join(testDir, t.Name())
+		wal := df.wal
+		recoveredDF, err := readDxFile(filename, wal)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+			t.Error(err)
+		}
 	}
 }
