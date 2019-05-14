@@ -189,13 +189,14 @@ func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 func (df *DxFile) filterUpdates(updates []dxfileUpdate) []dxfileUpdate {
 	filtered := make([]dxfileUpdate, 0, len(updates))
 	for _, update := range updates {
-		if update.fileName() == df.filePath {
-			if _, isDeleteUpdate := update.(*deleteUpdate); isDeleteUpdate {
-				// If the update is deletion, remove all previous updates
-				filtered = filtered[:0]
-			}
-			filtered = append(filtered, update)
+		if _, isInsertUpdate := update.(*insertUpdate); isInsertUpdate && update.fileName() != df.filePath {
+			continue
 		}
+		if _, isDeleteUpdate := update.(*deleteUpdate); isDeleteUpdate {
+			// If the update is deletion, remove all previous updates
+			filtered = filtered[:0]
+		}
+		filtered = append(filtered, update)
 	}
 	return filtered
 }

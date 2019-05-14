@@ -33,6 +33,7 @@ func (df *DxFile) saveAll() error {
 		if err != nil {
 			return err
 		}
+		df.segments[i].offset = offset
 		updates = append(updates, update)
 	}
 	up, err = df.createMetadataUpdate()

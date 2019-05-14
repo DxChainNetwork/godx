@@ -151,7 +151,7 @@ func TestHealth(t *testing.T) {
 
 func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8, stuckRate, absentRate, offlineRate, badForRenewRate int) (*DxFile, map[enode.ID]bool, map[enode.ID]bool) {
 	rand.Seed(time.Now().UnixNano())
-	df, err :=newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
+	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors
 	for j := 0; j != int(numSegments); j++ {
 		seg := randomSegment(numSectors)
 		seg.index = uint64(j)
-		if rand.Intn(stuckRate) == 0 {
+		if stuckRate != 0 && rand.Intn(stuckRate) == 0 {
 			seg.stuck = true
 		} else {
 			seg.stuck = false
@@ -169,15 +169,16 @@ func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors
 		df.segments[j] = seg
 		for _, sectors := range seg.sectors {
 			for _, sector := range sectors {
-				if rand.Intn(absentRate) == 0 {
+				df.hostTable[sector.hostID] = true
+				if absentRate != 0 && rand.Intn(absentRate) == 0 {
 					continue
 				}
-				if rand.Intn(offlineRate) == 0 {
+				if offlineRate != 0 && rand.Intn(offlineRate) == 0 {
 					offline[sector.hostID] = true
 				} else {
 					offline[sector.hostID] = false
 				}
-				if rand.Intn(badForRenewRate) == 0 {
+				if badForRenewRate != 0 && rand.Intn(badForRenewRate) == 0 {
 					goodForRenew[sector.hostID] = false
 				} else {
 					goodForRenew[sector.hostID] = true

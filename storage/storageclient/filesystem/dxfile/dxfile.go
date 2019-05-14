@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -115,8 +116,21 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	return df, df.saveAll()
 }
 
+// Rename rename the DxFile, remove the previous dxfile and create a new file to write content on
+func (df *DxFile) Rename(newDxFile string, newDxFilename string) error {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	dir, _ := filepath.Split(newDxFilename)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	return df.rename(newDxFile, newDxFilename)
+}
+
 // AddSector add a sector to DxFile
-func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex uint64, merkleRoot common.Hash) error {
+func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex int, merkleRoot common.Hash) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
 	// if file already deleted, report an error
@@ -126,10 +140,10 @@ func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex uint64, 
 	// Update the hostTable
 	df.hostTable[address] = true
 	// Params validation
-	if segmentIndex > uint64(len(df.segments)) {
+	if segmentIndex > len(df.segments) {
 		return fmt.Errorf("segment index %d out of bound %d", segmentIndex, len(df.segments))
 	}
-	if sectorIndex > uint64(df.metadata.NumSectors) {
+	if uint32(sectorIndex) > df.metadata.NumSectors {
 		return fmt.Errorf("sector index %d out of bound %d", sectorIndex, df.metadata.NumSectors)
 	}
 	df.segments[segmentIndex].sectors[sectorIndex] = append(df.segments[segmentIndex].sectors[sectorIndex],
@@ -167,7 +181,7 @@ func (df *DxFile) Deleted() bool {
 
 // HostIDs return all hosts (including unused ones)
 func (df *DxFile) HostIDs() []enode.ID {
-	df.lock.RUnlock()
+	df.lock.RLock()
 	defer df.lock.RUnlock()
 
 	hosts := make([]enode.ID, 0, len(df.hostTable))
@@ -278,7 +292,7 @@ func (df *DxFile) Redundancy(offlineMap map[enode.ID]bool, goodForRenewMap map[e
 		}
 	}
 	if minRedundancy < 1 && minRedundancyNoRenew >= 1 {
-		return 1
+		return 100
 	} else if minRedundancy < 1 {
 		return minRedundancyNoRenew
 	}
@@ -342,6 +356,16 @@ func (df *DxFile) UploadedBytes() uint64 {
 	return uploaded
 }
 
+// UploadProgress return the upload process of a dxfile
+func (df *DxFile) UploadProgress() float64 {
+	if df.FileSize() == 0 {
+		return 100
+	}
+	uploaded := df.UploadedBytes()
+	desired := uint64(df.NumSegments()) * SectorSize * uint64(df.metadata.NumSectors)
+	return math.Min(100*(float64(uploaded)/float64(desired)), 100)
+}
+
 // UpdateUsedHosts update host table of the dxfile
 func (df *DxFile) UpdateUsedHosts(used []enode.ID) error {
 	df.lock.Lock()
@@ -357,29 +381,16 @@ func (df *DxFile) UpdateUsedHosts(used []enode.ID) error {
 	usedMap := make(map[enode.ID]struct{})
 	for _, host := range used {
 		usedMap[host] = struct{}{}
-		df.hostTable[host] = true
 	}
 	for host := range df.hostTable {
 		_, exist := usedMap[host]
-		if !exist {
-			df.hostTable[host] = false
-		}
+		df.hostTable[host] = exist
 	}
 	err := df.saveHostTableUpdate()
 	if err != nil {
 		df.hostTable = prevHostTable
 	}
 	return err
-}
-
-// UploadProgress return the upload process of a dxfile
-func (df *DxFile) UploadProgress() float64 {
-	if df.FileSize() == 0 {
-		return 100
-	}
-	uploaded := df.UploadedBytes()
-	desired := uint64(df.NumSegments()) * SectorSize * uint64(df.metadata.NumSectors)
-	return math.Min(100*(float64(uploaded)/float64(desired)), 100)
 }
 
 // pruneSegment try to prune sectors from unused hosts to fit in the page size
@@ -409,4 +420,24 @@ func (df *DxFile) pruneSegment(segIndex int) {
 		}
 		df.segments[segIndex].sectors[i] = newSectors
 	}
+}
+
+// ApplyCachedHealthMetadata apply the cachedHealthMetadata to the DxFile
+func (df *DxFile) ApplyCachedHealthMetadata(metadata CachedHealthMetadata) error {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+
+	var numStuckSegments uint32
+	for _, seg := range df.segments {
+		if seg.stuck {
+			numStuckSegments++
+		}
+	}
+	df.metadata.Health = metadata.Health
+	df.metadata.NumStuckSegments = numStuckSegments
+	df.metadata.LastRedundancy = metadata.Redundancy
+	df.metadata.StuckHealth = metadata.StuckHealth
+	df.metadata.TimeUpdate = unixNow()
+
+	return df.saveMetadata()
 }

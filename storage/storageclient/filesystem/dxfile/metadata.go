@@ -5,7 +5,6 @@ package dxfile
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/DxChainNetwork/godx/crypto"
@@ -96,6 +95,7 @@ func (df *DxFile) SetLocalPath(path string) error {
 	defer df.lock.RUnlock()
 
 	df.metadata.LocalPath = path
+	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -174,6 +174,7 @@ func (df *DxFile) SetTimeLastHealthCheck(t time.Time) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	df.metadata.TimeLastHealthCheck = uint64(t.Unix())
+	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -192,6 +193,7 @@ func (df *DxFile) SetTimeRecentRepair(t time.Time) error {
 	defer df.lock.Unlock()
 
 	df.metadata.TimeRecentRepair = uint64(t.Unix())
+	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -249,6 +251,7 @@ func (df *DxFile) SetFileMode(mode os.FileMode) error {
 	defer df.lock.Unlock()
 
 	df.metadata.FileMode = mode
+	df.metadata.TimeUpdate = unixNow()
 
 	return df.saveMetadata()
 }
@@ -256,35 +259,4 @@ func (df *DxFile) SetFileMode(mode os.FileMode) error {
 // SectorSize return the sector size of a dxfile
 func (df *DxFile) SectorSize() uint64 {
 	return SectorSize - uint64(crypto.Overhead(df.metadata.CipherKeyCode))
-}
-
-// Rename rename the DxFile, remove the previous dxfile and create a new file to write content on
-func (df *DxFile) Rename(newDxFile string, newDxFilename string) error {
-	df.lock.RLock()
-	defer df.lock.RUnlock()
-
-	dir, _ := filepath.Split(newDxFilename)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	return df.rename(newDxFile, newDxFilename)
-}
-
-func (df *DxFile) ApplyCachedHealthMetadata(metadata CachedHealthMetadata) error {
-	df.lock.Lock()
-	defer df.lock.Unlock()
-
-	var numStuckSegments uint32
-	for _, seg := range df.segments {
-		if seg.stuck {
-			numStuckSegments++
-		}
-	}
-	df.metadata.Health = metadata.Health
-	df.metadata.NumStuckSegments = numStuckSegments
-	df.metadata.LastRedundancy = metadata.Redundancy
-	df.metadata.StuckHealth = metadata.StuckHealth
-
-	return df.saveMetadata()
 }

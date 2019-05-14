@@ -134,7 +134,6 @@ func randomSegment(numSectors uint32) *segment {
 	for i := range seg.sectors {
 		seg.sectors[i] = append(seg.sectors[i], randomSector())
 	}
-	seg.index = randomUint64()
 	return seg
 }
 

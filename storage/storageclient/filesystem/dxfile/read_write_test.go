@@ -24,7 +24,7 @@ func TestPersist(t *testing.T) {
 		erasurecode.ECTypeShard,
 	}
 	for _, test := range tests {
-		df, err := newTestDxFile(t, SectorSize<<6, 10, 30, test)
+		df, err := newTestDxFileWithSegments(t, SectorSize<<6, 10, 30, test)
 		err = df.saveAll()
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -93,7 +93,7 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 		minSectors := uint32(10)
 		numSectors := uint32(30)
 		fileSize := sectorSize * uint64(minSectors) * test.numSegments
-		df, err := newTestDxFile(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
+		df, err := newTestDxFileWithSegments(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
@@ -123,7 +123,7 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	minSectors := uint32(10)
 	numSectors := uint32(30)
 	fileSize := sectorSize * uint64(minSectors) * 10
-	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
+	df, err := newTestDxFileWithSegments(t, fileSize, minSectors, numSectors, erasurecode.ECTypeStandard)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -145,8 +145,6 @@ func TestDxFile_SaveSegment(t *testing.T) {
 }
 
 // newTestDxFile generate a random DxFile used for testing.
-// The DxFile use erasure code params minSector = 10; numSector=30 with shardECType
-// All segments are generated randomly.
 func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
 	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
 	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -158,6 +156,14 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 	df, err := New(filename, t.Name(), filepath.Join("~/tmp", t.Name()), wal, ec, ck, fileSize, 0777)
 	if err != nil {
 		return nil, err
+	}
+	return df, nil
+}
+
+func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
+	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
 		seg := randomSegment(df.metadata.NumSectors)
