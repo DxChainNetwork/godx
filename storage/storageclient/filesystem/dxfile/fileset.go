@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -55,13 +57,36 @@ type (
 	}
 )
 
-// NewDxFileSet create a new DxFileSet
-func NewDxFileSet(filesDir string, wal *writeaheadlog.Wal) *FileSet {
+// NewFileSet create a new DxFileSet
+func NewFileSet(filesDir string, wal *writeaheadlog.Wal) *FileSet {
 	return &FileSet{
 		filesDir: filesDir,
 		filesMap: make(map[string]*fileSetEntry),
 		wal:      wal,
 	}
+}
+
+// NewDxFile create a DxFile based on the params given.
+func (fs *FileSet) NewDxFile(dxPath string, sourcePath string, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*FileSetEntryWithId, error) {
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
+	exists := fs.exists(dxPath)
+	if exists && !force {
+		return nil, ErrFileExist
+	}
+	filePath := filepath.Join(fs.filesDir, dxPath)
+	df, err := New(filePath, dxPath, sourcePath, fs.wal, erasureCode, cipherKey, fileSize, fileMode)
+	if err != nil {
+		return nil, err
+	}
+	entry := fs.newFileSetEntry(df)
+	threadID := randomThreadID()
+	entry.threadMap[threadID] = newThreadInfo()
+	fs.filesMap[dxPath] = entry
+	return &FileSetEntryWithId{
+		fileSetEntry: entry,
+		threadID: threadID,
+	}, nil
 }
 
 // CopyEntry copy the FileSetEntry
@@ -140,9 +165,9 @@ func (fs *FileSet) Exists(dxPath string) bool {
 }
 
 func (fs *FileSet) exists(dxPath string) bool {
-	_, exists := fs.filesMap[dxPath]
+	entry, exists := fs.filesMap[dxPath]
 	if exists {
-		return exists
+		return !entry.Deleted()
 	}
 	_, err := os.Stat(filepath.Join(fs.filesDir, dxPath))
 	return !os.IsNotExist(err)

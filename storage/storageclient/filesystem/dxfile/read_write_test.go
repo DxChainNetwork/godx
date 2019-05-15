@@ -182,8 +182,6 @@ func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSec
 	return df, nil
 }
 
-// TODO: test rename
-
 // Two DxFile are exactly the same if the all fields other than file id are the same
 // (of course not including wal, lock, id, e.t.c
 func checkDxFileEqual(df1, df2 DxFile) error {
@@ -194,8 +192,8 @@ func checkDxFileEqual(df1, df2 DxFile) error {
 		return fmt.Errorf("length of segments not equal: %d / %d", len(df1.segments), len(df2.segments))
 	}
 	for i := range df1.segments {
-		if !reflect.DeepEqual(df1.segments[i], df2.segments[i]) {
-			return fmt.Errorf("segment %d not equal:\n\t%+v\n\t%+v", i, df1.segments[i], df2.segments[i])
+		if err := checkSegmentEqual(*df1.segments[i], *df2.segments[i]); err != nil {
+			return fmt.Errorf("segment[%d]: %v", i, err)
 		}
 	}
 	if !reflect.DeepEqual(df1.hostTable, df2.hostTable) {
@@ -286,6 +284,35 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	}
 	if md1.Version != md2.Version {
 		return fmt.Errorf("md.Version not equal:\n\t%+v\n\t%+v", md1.Version, md2.Version)
+	}
+	return nil
+}
+
+func checkSegmentEqual(seg1, seg2 segment) error {
+	if len(seg1.sectors) != len(seg2.sectors) {
+		return fmt.Errorf("length of sectors not equal: %d != %d", len(seg1.sectors), len(seg2.sectors))
+	}
+	for i := range seg1.sectors {
+		if ( seg1.sectors[i] == nil || len(seg1.sectors[i]) == 0 ) != ( seg2.sectors[i] == nil || len(seg2.sectors[i]) == 0 ) {
+			return fmt.Errorf("%d: not equal", i)
+		}
+		if seg1.sectors[i] == nil {
+			continue
+		}
+		if len(seg1.sectors[i]) != len(seg2.sectors[i]){
+			return fmt.Errorf("%d: not equal", i)
+		}
+		for j := range seg1.sectors[i] {
+			if (seg1.sectors[i][j] == nil) != (seg2.sectors[i][j] == nil) {
+				return fmt.Errorf("%d/%d: not equal", i, j)
+			}
+			if seg1.sectors[i] == nil {
+				continue
+			}
+			if !reflect.DeepEqual(seg1.sectors[i][j], seg2.sectors[i][j]) {
+				return fmt.Errorf("%d/%d: not equal", i, j)
+			}
+		}
 	}
 	return nil
 }

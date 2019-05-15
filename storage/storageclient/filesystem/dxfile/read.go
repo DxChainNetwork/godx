@@ -27,6 +27,9 @@ func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
 		wal:      wal,
 	}
 	f, err := os.OpenFile(filepath, os.O_RDONLY, 0777)
+	if os.IsNotExist(err) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("cannot open file %s: %v", filepath, err)
 	}
