@@ -1,6 +1,7 @@
 package storagemanager
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"os"
 	"path/filepath"
@@ -68,7 +69,7 @@ func (sf *storageFolder) clearUsage() []BitVector {
 // syncResources loop through all the folder,
 // and synchronize the sector data and metadata
 func (sm *storageManager) syncFiles(wg *sync.WaitGroup) {
-
+	defer wg.Done()
 	for _, sf := range sm.folders {
 		if atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
 			continue
@@ -129,12 +130,14 @@ func (sm *storageManager) syncConfig() {
 	err := sm.wal.configTmp.Sync()
 	if err != nil {
 		// TODO: log the failure, but no return
+		fmt.Println(err.Error())
 	}
 
 	// rename to rewrite the original config file
 	if err = os.Rename(filepath.Join(sm.persistDir, configFileTmp),
 		filepath.Join(sm.persistDir, configFile)); err != nil {
 		// TODO: log the failure
+		fmt.Println(err.Error())
 	}
 }
 

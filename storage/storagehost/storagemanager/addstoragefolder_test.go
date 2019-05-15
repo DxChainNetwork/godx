@@ -12,6 +12,7 @@ import (
 
 const TESTPATH = "./testdata/"
 
+// Test_AddStorageFolderBasic check the basic operation of adding folder
 func Test_AddStorageFolderBasic(t *testing.T) {
 	// clear the saved data for testing
 	removeFolders(TESTPATH, t)
@@ -26,7 +27,7 @@ func Test_AddStorageFolderBasic(t *testing.T) {
 	// folders for adding
 	// NOTE: there is not expected to handle the abs path,
 	// where in the program of testing mode skip the checking the path
-	addfolders := []string{
+	addFolders := []string{
 		// normal add
 		TESTPATH + "folders1",
 		TESTPATH + "folders2",
@@ -41,7 +42,7 @@ func Test_AddStorageFolderBasic(t *testing.T) {
 
 	var wg sync.WaitGroup
 	// add all the specify folders
-	for _, f := range addfolders {
+	for _, f := range addFolders {
 		wg.Add(1)
 		//create the storage folder
 		go func(f string) {
@@ -75,6 +76,9 @@ func Test_AddStorageFolderBasic(t *testing.T) {
 	}
 }
 
+// Test_AddFolderWithExistingSectorsFile test add folder which already contain the
+// sector data and metadata file. In order to prevent overriding of data, revert would be
+// called if sector data and metadata already exist in a folder
 func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 	// clear the saved data for testing
 	removeFolders(TESTPATH, t)
@@ -100,7 +104,7 @@ func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 	// try to add the folder, which given as the already existed folder
 	if err := sm.AddStorageFolder(TESTPATH+"foldershouldfail", SectorSize*64); err == nil {
 		t.Error("sector and metadata should be checked and result of cancellation of operation")
-	} else if err != ErrDataFileAlreadExist {
+	} else if err != ErrDataFileAlreadyExist {
 		// if the error is not caused by the existing of sector and data files
 		t.Error(err.Error())
 	}
@@ -122,6 +126,7 @@ func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 	}
 }
 
+// Test_ReloadConfig test if the system could reload the config saved last time
 func Test_ReloadConfig(t *testing.T) {
 	// clear the saved data for testing
 	removeFolders(TESTPATH, t)
@@ -186,6 +191,7 @@ func Test_ReloadConfig(t *testing.T) {
 	}
 }
 
+// Test_RevertWhenAdd test if the system reverting process when encounter and error
 func Test_RevertWhenAdd(t *testing.T) {
 	removeFolders(TESTPATH, t)
 	defer removeFolders(TESTPATH, t)
@@ -234,6 +240,8 @@ func Test_RevertWhenAdd(t *testing.T) {
 	}
 }
 
+// Test_DisruptAdd test if the recover could recover the adding of storage folder
+// as expected
 func Test_DisruptAdd(t *testing.T) {
 	removeFolders(TESTPATH, t)
 	defer removeFolders(TESTPATH, t)
@@ -262,7 +270,7 @@ func Test_DisruptAdd(t *testing.T) {
 
 			if err := sm.AddStorageFolder(f, SectorSize*MaxSectorPerFolder); err != nil {
 				if err != ErrMock {
-					return
+					t.Error(err.Error())
 				}
 			}
 		}
@@ -348,7 +356,7 @@ func isExpectedFolderList(sm *storageManager, folders []folderPersist) error {
 	return nil
 }
 
-// helper function to clear the data file before and after a test case execute
+// removeFolders is a helper function to clear the data file before and after a test case execute
 func removeFolders(persistDir string, t *testing.T) {
 	// clear the testing data
 	if err := os.RemoveAll(persistDir); err != nil {

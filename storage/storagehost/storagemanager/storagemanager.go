@@ -99,6 +99,7 @@ func (sm *storageManager) AddSector(root [32]byte, sectorData []byte) error {
 
 	var err error
 	// get the id for the sector
+	// TODO: in test case, getSectorID may give existing id but different data
 	id := sm.getSectorID(root)
 
 	sm.lockSector(id)
@@ -108,9 +109,9 @@ func (sm *storageManager) AddSector(root [32]byte, sectorData []byte) error {
 	sector, exists := sm.sectors[id]
 	sm.wal.lock.Unlock()
 
-	if exists{
+	if exists {
 		err = sm.addVirtualSector(id, sector)
-	}else{
+	} else {
 		err = sm.addStorageSector(id, sectorData)
 	}
 
@@ -135,13 +136,14 @@ func (sm *storageManager) ReadSector(root [32]byte) ([]byte, error) {
 	id := sm.getSectorID(root)
 
 	sm.lockSector(id)
+	defer sm.unlockSector(id)
 
 	// get the sector
 	ss, exists1 := sm.sectors[id]
 	sf, exists2 := sm.folders[ss.storageFolder]
 
 	if !exists1 {
-		return nil, errors.New("Unable to load storage sector")
+		return nil, errors.New("Unable to find sector meta")
 	}
 
 	if !exists2 {
@@ -185,5 +187,6 @@ func (sm *storageManager) Close() error {
 
 	// wait until all running operation finish their job
 	sm.wg.Wait()
+
 	return nil
 }

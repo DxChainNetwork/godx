@@ -40,6 +40,8 @@ func (sm *storageManager) maintenanceClose() {
 	if sm.wal.entries != nil || len(sm.wal.entries) != 0 {
 		// it is not a clear shut down
 		// TODO: log not clear shut down
+		_ = sm.wal.walFileTmp.Close()
+		_ = sm.wal.configTmp.Close()
 		fmt.Println("not clear shutdown")
 	} else {
 		// TODO: remove the wal file
@@ -53,6 +55,7 @@ func (sm *storageManager) maintenanceClose() {
 func (sm *storageManager) commit() {
 	var wg sync.WaitGroup
 
+	wg.Add(1)
 	// synchronize all the files
 	go sm.syncFiles(&wg)
 
@@ -66,13 +69,13 @@ func (sm *storageManager) commit() {
 		sm.wal.walFileTmp, err = os.Create(filepath.Join(sm.persistDir, walFileTmp))
 		if err != nil {
 			// TODO: log critical
-			fmt.Println(err.Error())
+			fmt.Println(err.Error(), walFileTmp)
 		}
 
 		err = sm.wal.writeWALMeta()
 		if err != nil {
 			// TODO: log critical
-			fmt.Println(err.Error())
+			fmt.Println(err.Error(), "write wal meta")
 		}
 	}()
 
@@ -85,23 +88,34 @@ func (sm *storageManager) commit() {
 			return
 		}
 		// save the things to json
+		configLock.Lock()
 		err := common.SaveDxJSON(configMetadata,
 			filepath.Join(sm.persistDir, configFileTmp), newConfig)
+		configLock.Unlock()
+
 		if err != nil {
 			// TODO: log
-			fmt.Println(err.Error())
+			fmt.Println(err.Error(), "-----------", configFileTmp)
 		}
 		sm.wal.loggedConfig = newConfig
 
 		// synchronize temporary to persist file
+		configLock.Lock()
 		sm.syncConfig()
-		// give a new pointer to new config temp file
 
+		// close the config
+		err = sm.wal.configTmp.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+		// give a new pointer to new config temp file
 		sm.wal.configTmp, err = os.Create(filepath.Join(sm.persistDir, configFileTmp))
 		if err != nil {
 			// TODO: log critical
-			fmt.Println(err.Error())
+			fmt.Println(err.Error(), "create", configFileTmp)
 		}
+		configLock.Unlock()
 	}()
 
 	wg.Wait()
@@ -161,6 +175,11 @@ func (sm *storageManager) recover(walF *os.File) error {
 	processedAddition := findProcessedFolderAddition(entries)
 	sm.commitProcessedAddition(processedAddition)
 
+	// find the processed sector update and get recover
+	findProcessedSectorUpdate := findProcessedSectorUpdate(entries)
+	sm.recoverSector(findProcessedSectorUpdate)
+
+	configLock.Lock()
 	// save the config to temporary file, then manage to persist the tmp config
 	newConfig := sm.extractConfig()
 	err = common.SaveDxJSON(configMetadata,
@@ -169,6 +188,7 @@ func (sm *storageManager) recover(walF *os.File) error {
 		// TODO: log
 		fmt.Println(err.Error())
 	}
+	configLock.Unlock()
 
 	// persist the config
 	sm.syncConfig()
@@ -176,8 +196,9 @@ func (sm *storageManager) recover(walF *os.File) error {
 
 	// all things finished
 	// force to commit again
+	sm.wal.lock.Lock()
 	sm.commit()
-
+	sm.wal.lock.Unlock()
 	return nil
 }
 

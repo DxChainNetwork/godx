@@ -101,7 +101,7 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 		}
 		// if the error is caused by the existing of sector or meta file
 		// just cancel the operation
-		if err == ErrDataFileAlreadExist {
+		if err == ErrDataFileAlreadyExist {
 			err = common.ErrCompose(err, sm.cancelAddStorageFolder(sf))
 			return
 		}
@@ -118,7 +118,7 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 	if err == nil {
 		// if any of them can be checked without error,
 		// means the sector and metadata exist in the folder
-		err = ErrDataFileAlreadExist
+		err = ErrDataFileAlreadyExist
 		return err
 	} else if !os.IsNotExist(metaErr) || !os.IsNotExist(dataErr) {
 		// if the error is not caused by non existing of file
@@ -159,14 +159,14 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 		return err
 	}
 
+	// fLock wal to write entry
+	sm.wal.lock.Lock()
+	defer sm.wal.lock.Unlock()
+
 	// re update the folder mapping
 	sm.folderLock.Lock()
 	sm.folders[sf.index] = sf
 	sm.folderLock.Unlock()
-
-	// fLock wal to write entry
-	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
 
 	if Mode == TST && MockFails["ADD_EXIT"] {
 		sm.stopChan <- struct{}{}

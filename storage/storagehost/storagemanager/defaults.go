@@ -1,6 +1,7 @@
 package storagemanager
 
 import (
+	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -10,6 +11,9 @@ const (
 	// STD and TST is the mode of setting for initialization
 	// of to fits both the testing and standard requirement
 	STD = iota
+
+	// TST is the mode of testing, the setting would be set to
+	// value of testing to increase the testing speed
 	TST
 
 	configFile = "config.sys"
@@ -41,7 +45,7 @@ var (
 
 	// Mode indicate the current mode
 	Mode int
-	// Mock fails to disrupt the system
+	// MockFails to disrupt the system
 	MockFails map[string]bool
 	// SectorSize is the size of a sector
 	SectorSize uint64
@@ -53,8 +57,11 @@ var (
 	MinSectorPerFolder uint64
 	// MaxStorageFolders is the limitation of maximum folder
 	MaxStorageFolders uint64
+	// configLock manage save and load of the temporary config file, make sure it won't lead race between thread
+	configLock sync.Mutex
 )
 
+// SELECT is a map recording the setting value to used in each mode
 type SELECT map[int]interface{}
 
 // init first initialize the settings to a standard mode, if further

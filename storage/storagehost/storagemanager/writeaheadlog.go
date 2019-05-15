@@ -22,7 +22,7 @@ type logEntry struct {
 	RevertAddStorageFolder    []folderPersist
 	CancelAddStorageFolder    []folderPersist
 
-	PrepareAddStorageSector []sectorPersist
+	SectorUpdate []sectorPersist
 }
 
 func (wal *writeAheadLog) writeEntry(entries ...logEntry) error {

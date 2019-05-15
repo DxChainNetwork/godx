@@ -2,6 +2,7 @@ package storagemanager
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/pkg/errors"
 	"hash/fnv"
 	"sync"
@@ -11,8 +12,11 @@ import (
 	"os"
 )
 
+// sectorID is the id of the sector
 type sectorID [12]byte
 
+// storageSector record the sector information for
+// the system
 type storageSector struct {
 	index         uint32
 	storageFolder uint16
@@ -26,55 +30,69 @@ type sectorLock struct {
 	waiting int
 }
 
+// Lock lock the object
 func (sl *sectorLock) Lock() {
 	sl.lock.Lock()
 }
 
+// Unlock unlock the object
 func (sl *sectorLock) Unlock() {
 	sl.lock.Unlock()
 }
 
+// tryLock return true and lock when no lock on the object,
+// return false and do nothing if there is lock on the object
 func (sl *sectorLock) tryLock() bool {
 	return atomic.CompareAndSwapInt32((*int32)(unsafe.Pointer(&sl.lock)), 0, sectorMutex)
 }
 
+// lockSector try to lock the sector
 func (sm *storageManager) lockSector(id sectorID) {
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 
+	// check if the sector exist in the map
 	sl, exists := sm.sectorLocks[id]
+	// if exist, increase the waiting number
 	if exists {
 		sl.waiting++
 	} else {
+		// if does not exist, create an sector object and store in map
 		sl = &sectorLock{
 			waiting: 1,
 		}
 		sm.sectorLocks[id] = sl
 	}
 
+	// wait until the sector is available
 	sl.Lock()
 }
 
+// unlockSector unlock the sector
 func (sm *storageManager) unlockSector(id sectorID) {
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 
+	// check if the sector lock exist in the map
 	sl, exists := sm.sectorLocks[id]
 	if !exists {
+		// the sector should exist, because this is an operation for unlock
 		// TODO: log severe
 		return
 	}
 
+	// decrease the waiting number
 	sl.waiting--
 	sl.Unlock()
 
+	// check if the waiting number is zero, if does, remove the sector lock from map
 	if sl.waiting == 0 {
 		delete(sm.sectorLocks, id)
 	}
 }
 
-// TODO: currently use go hash32
-// TODO: not a valid sha. mock right now
+// TODO: currently use go hash32, not sure how exactly which hash would be used
+// getSectorID calculate the hash value given the sector root and sector salt
 func (sm *storageManager) getSectorID(sectorRoot [32]byte) (id sectorID) {
 	h := fnv.New32a()
 	data := append(sectorRoot[:], sm.sectorSalt[:]...)
@@ -151,6 +169,18 @@ func (sm *storageManager) addStorageSector(id sectorID, data []byte) error {
 				Index:  sectorIndex,
 			}
 
+			// log the change
+			err = sm.wal.writeEntry(logEntry{
+				SectorUpdate: []sectorPersist{sectorMeta}})
+			if err != nil {
+				// TODO: unable to write entry to wal, consider panic
+				return err
+			}
+
+			if Mode == TST && MockFails["Add_SECTOR_EXIT"] {
+				return ErrMock
+			}
+
 			// write the meta data
 			err = writeSectorMeta(sf.sectorMeta, sectorMeta)
 			if err != nil {
@@ -166,20 +196,16 @@ func (sm *storageManager) addStorageSector(id sectorID, data []byte) error {
 				count:         1,
 			}
 
-			// log the change
-			err = sm.wal.writeEntry(logEntry{
-				PrepareAddStorageSector: []sectorPersist{sectorMeta}})
-			if err != nil {
-				// TODO: unable to write entry to wal, consider panic
-				return err
-			}
-
 			delete(sm.folders[sf.index].freeSectors, id)
 			sm.sectors[id] = storageSector
 			return nil
 		}()
 
 		if err != nil {
+			if err == ErrMock {
+				return ErrMock
+			}
+
 			if folderIndex == -1 {
 				return err
 			}
@@ -190,47 +216,50 @@ func (sm *storageManager) addStorageSector(id sectorID, data []byte) error {
 		break
 	}
 
+	if len(folders) < 1 {
+		return errors.New("not enough storage remaining to accept sector")
+	}
+
 	return nil
 }
 
-
-func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) error{
-	if sector.count == 65535{
+func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) error {
+	if sector.count == 65535 {
 		return errors.New("the number of virtual sector reach maximum")
 	}
 
-	sector.count ++
+	sector.count++
 
-	su := sectorPersist{
-		Count: sector.count,
+	sectorMeta := sectorPersist{
+		Count:  sector.count,
 		Folder: sector.storageFolder,
-		ID: id,
-		Index: sector.index,
+		ID:     id,
+		Index:  sector.index,
 	}
 
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 
-	sf, exists := sm.folders[su.Folder]
-	if !exists || sf.atomicUnavailable == 1{
+	sf, exists := sm.folders[sectorMeta.Folder]
+	if !exists || sf.atomicUnavailable == 1 {
 		return errors.New("storage folder cannot found")
 	}
 
 	err := sm.wal.writeEntry(logEntry{
-		PrepareAddStorageSector: []sectorPersist{su}})
+		SectorUpdate: []sectorPersist{sectorMeta}})
 
 	sm.sectors[id] = sector
 
 	// write the metadata again
 
-	err = writeSectorMeta(sf.sectorMeta, su)
-	if err != nil{
+	err = writeSectorMeta(sf.sectorMeta, sectorMeta)
+	if err != nil {
 		// if there is error, revert the stage
-		su.Count --
-		sector.count --
+		sectorMeta.Count--
+		sector.count--
 		err = sm.wal.writeEntry(logEntry{
-			PrepareAddStorageSector: []sectorPersist{su}})
-		if err != nil{
+			SectorUpdate: []sectorPersist{sectorMeta}})
+		if err != nil {
 			// TODO: consider panic because cannot write into wal
 		}
 		// update in memory
@@ -239,6 +268,127 @@ func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) er
 	}
 
 	return nil
+}
+
+func (sm *storageManager) removeSector(id sectorID) error {
+	sm.wal.lock.Lock()
+	defer sm.wal.lock.Unlock()
+
+	// find the sector by given id
+	sector, exist := sm.sectors[id]
+	if !exist {
+		return errors.New("cannot find the sector by given id")
+	}
+
+	// find the folder by given sector
+	folder, exist := sm.folders[sector.storageFolder]
+	// if the folder does not exist or the folder marked as cannot use
+	if !exist || atomic.LoadUint64(&folder.atomicUnavailable) == 1 {
+		return errors.New("cannot find the folder, or the folder is damaged")
+	}
+
+	// decrease the number of sector
+	sector.count--
+
+	sectorMeta := sectorPersist{
+		Count:  sector.count,
+		ID:     id,
+		Folder: sector.storageFolder,
+		Index:  sector.index,
+	}
+
+	// log the sector update to wal entry
+	err := sm.wal.writeEntry(logEntry{
+		SectorUpdate: []sectorPersist{sectorMeta}})
+	if err != nil {
+		// TODO: consider panic because cannot write into wal
+	}
+
+	if sector.count == 0 {
+		delete(sm.sectors, id)
+		// TODO: mark the free sector, handling
+		folder.freeSectors[id] = sector.index
+
+		// clear the usage and handle the free sector recording
+		usageIndex := sector.index / granularity
+		bitIndex := sector.index % granularity
+		folder.usage[usageIndex].clearUsage(uint16(bitIndex))
+
+		// clear the recorded free sector
+		delete(folder.freeSectors, id)
+	} else {
+		// update the sector
+		sm.sectors[id] = sector
+
+		// update the sector metadata
+		// TODO: recover the metadata according the entry
+		err = writeSectorMeta(folder.sectorMeta, sectorMeta)
+		if err != nil {
+			// if write the sector metadata fail, revert
+			sectorMeta.Count++
+			sector.count++
+
+			err := sm.wal.writeEntry(logEntry{
+				SectorUpdate: []sectorPersist{sectorMeta}})
+			if err != nil {
+				// TODO: consider panic because cannot write into wal
+			}
+
+			// load back the change to memory
+			sm.sectors[id] = sector
+			return errors.New("fail to write sector metadata")
+		}
+	}
+
+	return nil
+}
+
+// recoverSector recover the sector object through wal
+func (sm *storageManager) recoverSector(sectorMeta []sectorPersist) {
+
+	for _, ss := range sectorMeta {
+		sf, exists := sm.folders[ss.Folder]
+		if !exists || atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
+			// TODO: log sever
+			fmt.Println("Unable to get storage folder")
+			return
+		}
+
+		usageIndex := ss.Index / granularity
+		bitIndex := ss.Index % granularity
+
+		if ss.Count == 0 {
+			sf.usage[usageIndex].clearUsage(uint16(bitIndex))
+			return
+		}
+
+		// write the sector metadata again
+		err := writeSectorMeta(sf.sectorMeta, ss)
+		if err != nil {
+			// TODO: log sever
+			return
+		}
+
+		// set the usage back
+		sf.usage[usageIndex].setUsage(uint16(bitIndex))
+
+		sm.sectors[ss.ID] = storageSector{
+			index:         ss.Index,
+			storageFolder: ss.Folder,
+			count:         ss.Count,
+		}
+	}
+}
+
+func findProcessedSectorUpdate(entries []logEntry) []sectorPersist {
+	sectorsUpdate := make([]sectorPersist, 0)
+	for _, entry := range entries {
+		for _, ss := range entry.SectorUpdate {
+			sectorsUpdate = append(sectorsUpdate, ss)
+		}
+	}
+
+	return sectorsUpdate
 }
 
 // write the sector data to the specific location
