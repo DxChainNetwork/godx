@@ -92,7 +92,6 @@ func (t *StorageHostTree) Remove(enodeID string) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	// TODO (mzhang): verify if the enode ID is string with HZ
 	n, exists := t.hostPool[enodeID]
 	if !exists {
 		return ErrHostNotExists
