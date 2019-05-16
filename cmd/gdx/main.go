@@ -199,6 +199,8 @@ func init() {
 		dumpConfigCommand,
 		// See storageclientcmd.go
 		storageClientCommand,
+		// see storagehostmanagercmd.go
+		hostManagerTestCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 

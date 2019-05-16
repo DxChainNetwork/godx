@@ -177,14 +177,16 @@ type Server struct {
 	peerOpDone chan struct{}
 
 	// bunch of channels used for communication among different go routines
-	quit          chan struct{}
-	addstatic     chan *enode.Node // used for adding static peers
-	removestatic  chan *enode.Node // used for static peer disconnection
-	addtrusted    chan *enode.Node // used to add a node to trusted peer
-	removetrusted chan *enode.Node // used to remove a node from trusted peer
-	posthandshake chan *conn
-	addpeer       chan *conn
-	delpeer       chan peerDrop
+	quit                  chan struct{}
+	addstatic             chan *enode.Node // used for adding static peers
+	removestatic          chan *enode.Node // used for static peer disconnection
+	addtrusted            chan *enode.Node // used to add a node to trusted peer
+	removetrusted         chan *enode.Node // used to remove a node from trusted peer
+	addStorageContract    chan *enode.Node // used to add storage contract peer
+	removeStorageContract chan *enode.Node // used to remove storage contract peer
+	posthandshake         chan *conn
+	addpeer               chan *conn
+	delpeer               chan peerDrop
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -206,6 +208,7 @@ const (
 	staticDialedConn
 	inboundConn
 	trustedConn
+	storageContractConn
 )
 
 // conn wraps a network connection with information gathered
@@ -359,6 +362,21 @@ func (srv *Server) AddTrustedPeer(node *enode.Node) {
 func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	select {
 	case srv.removetrusted <- node:
+	case <-srv.quit:
+	}
+}
+
+func (srv *Server) AddStorageContractPeer(node *enode.Node) {
+	select {
+	case srv.addStorageContract <- node:
+	case <-srv.quit:
+	}
+}
+
+// RemoveTrustedPeer removes the given node from the trusted peer set.
+func (srv *Server) RemoveStorageContractPeer(node *enode.Node) {
+	select {
+	case srv.removeStorageContract <- node:
 	case <-srv.quit:
 	}
 }
@@ -705,12 +723,13 @@ func (srv *Server) run(dialstate dialer) {
 	defer srv.nodedb.Close()
 
 	var (
-		peers        = make(map[enode.ID]*Peer)
-		inboundCount = 0 // number of inbound connections
-		trusted      = make(map[enode.ID]bool, len(srv.TrustedNodes))
-		taskdone     = make(chan task, maxActiveDialTasks)
-		runningTasks []task
-		queuedTasks  []task // tasks that can't run yet
+		peers           = make(map[enode.ID]*Peer)
+		inboundCount    = 0 // number of inbound connections
+		trusted         = make(map[enode.ID]bool, len(srv.TrustedNodes))
+		storageContract = make(map[enode.ID]bool, 100)
+		taskdone        = make(chan task, maxActiveDialTasks)
+		runningTasks    []task
+		queuedTasks     []task // tasks that can't run yet
 	)
 
 	// Put trusted nodes into a map to speed up checks.
@@ -827,6 +846,24 @@ running:
 				p.rw.set(trustedConn, false)
 			}
 
+		case n := <-srv.addStorageContract:
+			srv.log.Trace("Adding storage contract node", "node", n)
+			storageContract[n.ID()] = true
+			// Mark any already-connected peer as trusted
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(storageContractConn, true)
+			}
+
+		case n := <-srv.removeStorageContract:
+			srv.log.Trace("Removing storage contract node", "node", n)
+			if _, ok := storageContract[n.ID()]; ok {
+				delete(storageContract, n.ID())
+			}
+			// Unmark any already-connected peer as trusted
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(storageContractConn, false)
+			}
+
 		// it will either get peer count or peers
 		// run the function, and send the done signal
 		// to notify the result is ready
@@ -858,6 +895,9 @@ running:
 			if trusted[c.node.ID()] {
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
+			}
+			if storageContract[c.node.ID()] {
+				c.flags |= storageContractConn
 			}
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
 			select {
@@ -959,9 +999,9 @@ func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount i
 // 4. if the node id is local node id
 func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
-	case !c.is(trustedConn|staticDialedConn) && len(peers) >= srv.MaxPeers:
+	case !c.is(trustedConn|staticDialedConn|storageContractConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
-	case !c.is(trustedConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+	case !c.is(trustedConn) && !c.is(storageContractConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
 	case peers[c.node.ID()] != nil:
 		return DiscAlreadyConnected

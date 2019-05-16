@@ -18,12 +18,16 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -49,6 +53,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
@@ -185,7 +190,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth, eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
 		return nil, err
 	}
 
@@ -349,6 +354,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
+				Public:    true,
+			}, {
+				Namespace: "hostmanagerdebug",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
 				Public:    true,
 			},
 		}...)
@@ -555,7 +565,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s)
+	err := s.storageClient.Start(s, srvr)
 	if err != nil {
 		return err
 	}
@@ -587,4 +597,88 @@ func (s *Ethereum) Stop() error {
 	// stop maintenance
 	s.maintenance.Stop()
 	return nil
+}
+
+func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+	if s.netRPCService == nil {
+		return nil, fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.AddStorageContractPeer(node); err != nil {
+		return nil, err
+	}
+
+	timer := time.NewTimer(time.Second * 3)
+
+	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
+	var conn *storage.Session
+	for {
+		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
+		if conn != nil {
+			return conn, nil
+		}
+
+		select {
+		case <-timer.C:
+			s.netRPCService.RemoveStorageContractPeer(node)
+			return nil, fmt.Errorf("setup connection timeout")
+		default:
+		}
+	}
+}
+
+func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
+	if s.netRPCService == nil {
+		return fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetStorageHostSetting will send message to the peer with the corresponded peer ID
+func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+	// within the 30 seconds, if the peer is still not added to the peer set
+	// return error
+	timeout := time.After(30 * time.Second)
+	var p *peer
+
+	for {
+		p = s.protocolManager.peers.Peer(peerID)
+		if p != nil {
+			break
+		}
+
+		// after thirty seconds,
+		select {
+		case <-timeout:
+			return errors.New("peer cannot be found")
+		default:
+		}
+	}
+
+	// send message to the peer
+	return p2p.Send(p.rw, HostSettingMsg, config)
+}
+
+// SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be
+// delivered through the channel
+func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return s.APIBackend.SubscribeChainChangeEvent(ch)
+}
+
+func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }

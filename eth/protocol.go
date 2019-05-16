@@ -32,16 +32,17 @@ import (
 const (
 	eth62 = 62
 	eth63 = 63
+	eth64 = 64
 )
 
 // ProtocolName is the official short name of the protocol used during capability negotiation.
 var ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
-var ProtocolVersions = []uint{eth63, eth62}
+var ProtocolVersions = []uint{eth64, eth63, eth62}
 
 // ProtocolLengths are the number of implemented message corresponding to different protocol versions.
-var ProtocolLengths = []uint64{17, 8}
+var ProtocolLengths = []uint64{27, 17, 8}
 
 const ProtocolMaxMsgSize = 10 * 1024 * 1024 // Maximum cap on the size of a protocol message
 
@@ -56,6 +57,7 @@ const (
 	GetBlockBodiesMsg  = 0x05
 	BlockBodiesMsg     = 0x06
 	NewBlockMsg        = 0x07
+	HostSettingMsg     = 0x08
 
 	// Protocol messages belonging to eth/63
 	GetNodeDataMsg = 0x0d
@@ -76,6 +78,11 @@ const (
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
 	ErrSuspendedPeer
+)
+
+const (
+	StorageContractContextKey         = "storage_contract"
+	StorageContractRevisionContextKey = "storage_contract_revision"
 )
 
 func (e errCode) String() string {
