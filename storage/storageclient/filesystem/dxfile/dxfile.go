@@ -22,7 +22,7 @@ import (
 const (
 	fileIDSize = 16
 
-	// SectorSize is the size of a sector, which is 4MiB
+	// SectorSize is the size of a Sector, which is 4MiB
 	SectorSize = uint64(1 << 22)
 )
 
@@ -34,9 +34,8 @@ type (
 		// hostTable is the map of host address to whether the address is used
 		hostTable hostTable
 
-		// TODO: create a indexed list structure for the segments
 		// segments is a list of segments the file is split into
-		segments []*segment
+		segments []*Segment
 
 		// utils field
 		deleted bool
@@ -55,18 +54,18 @@ type (
 	// hostTable is the map from host address to specific host info
 	hostTable map[enode.ID]bool
 
-	// segment is the Data for a segment, which is composed of several sectors
-	segment struct {
-		sectors [][]*sector
-		index   uint64
+	// Segment is the Data for a Segment, which is composed of several Sectors
+	Segment struct {
+		Sectors [][]*Sector
+		Index   uint64
+		Stuck   bool
 		offset  uint64
-		stuck   bool
 	}
 
-	// sector is the Data for a single sector, which has Data of merkle root and related host address
-	sector struct {
-		merkleRoot common.Hash
-		hostID     enode.ID
+	// Sector is the Data for a single Sector, which has Data of merkle root and related host address
+	Sector struct {
+		MerkleRoot common.Hash
+		HostID     enode.ID
 	}
 
 	FileID [fileIDSize]byte
@@ -109,9 +108,9 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		erasureCode: erasureCode,
 		cipherKey:   cipherKey,
 	}
-	df.segments = make([]*segment, md.numSegments())
+	df.segments = make([]*Segment, md.numSegments())
 	for i := range df.segments {
-		df.segments[i] = &segment{sectors: make([][]*sector, numSectors), index: uint64(i)}
+		df.segments[i] = &Segment{Sectors: make([][]*Sector, numSectors), Index: uint64(i)}
 	}
 	return df, df.saveAll()
 }
@@ -129,7 +128,7 @@ func (df *DxFile) Rename(newDxFile string, newDxFilename string) error {
 	return df.rename(newDxFile, newDxFilename)
 }
 
-// AddSector add a sector to DxFile
+// AddSector add a Sector to DxFile
 func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex int, merkleRoot common.Hash) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
@@ -141,15 +140,15 @@ func (df *DxFile) AddSector(address enode.ID, segmentIndex, sectorIndex int, mer
 	df.hostTable[address] = true
 	// Params validation
 	if segmentIndex > len(df.segments) {
-		return fmt.Errorf("segment index %d out of bound %d", segmentIndex, len(df.segments))
+		return fmt.Errorf("Segment Index %d out of bound %d", segmentIndex, len(df.segments))
 	}
 	if uint32(sectorIndex) > df.metadata.NumSectors {
-		return fmt.Errorf("sector index %d out of bound %d", sectorIndex, df.metadata.NumSectors)
+		return fmt.Errorf("Sector Index %d out of bound %d", sectorIndex, df.metadata.NumSectors)
 	}
-	df.segments[segmentIndex].sectors[sectorIndex] = append(df.segments[segmentIndex].sectors[sectorIndex],
-		&sector{
-			hostID:     address,
-			merkleRoot: merkleRoot,
+	df.segments[segmentIndex].Sectors[sectorIndex] = append(df.segments[segmentIndex].Sectors[sectorIndex],
+		&Sector{
+			HostID:     address,
+			MerkleRoot: merkleRoot,
 		})
 	df.metadata.TimeAccess = unixNow()
 	df.metadata.TimeModify = df.metadata.TimeAccess
@@ -201,21 +200,21 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goo
 	}
 	indexes := make([]int, 0, len(df.segments))
 	for i := range df.segments {
-		if !df.segments[i].stuck {
+		if !df.segments[i].Stuck {
 			continue
 		}
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
 		if segHealth < 200 {
 			continue
 		}
-		df.segments[i].stuck = false
+		df.segments[i].Stuck = false
 		df.metadata.NumStuckSegments--
 		indexes = append(indexes, i)
 	}
 	err := df.saveSegments(indexes)
 	if err != nil {
 		for _, i := range indexes {
-			df.segments[i].stuck = true
+			df.segments[i].Stuck = true
 			df.metadata.NumStuckSegments++
 		}
 	}
@@ -223,7 +222,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goo
 }
 
 // MarkAllUnhealthySegmentsAsStuck mark all unhealthy segments (health smaller than repairHealthThreshold)
-// as stuck
+// as Stuck
 func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
@@ -233,21 +232,21 @@ func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(offline map[enode.ID]bool, goo
 	}
 	indexes := make([]int, 0, len(df.segments))
 	for i := range df.segments {
-		if df.segments[i].stuck {
+		if df.segments[i].Stuck {
 			continue
 		}
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
 		if segHealth >= repairHealthThreshold {
 			continue
 		}
-		df.segments[i].stuck = true
+		df.segments[i].Stuck = true
 		df.metadata.NumStuckSegments++
 		indexes = append(indexes, i)
 	}
 	err := df.saveSegments(indexes)
 	if err != nil {
 		for _, i := range indexes {
-			df.segments[i].stuck = false
+			df.segments[i].Stuck = false
 			df.metadata.NumStuckSegments--
 		}
 	}
@@ -262,15 +261,15 @@ func (df *DxFile) NumSegments() int {
 	return len(df.segments)
 }
 
-// SectorsOfSegmentIndex returns sectors of a specific segment with index
-func (df *DxFile) SectorsOfSegmentIndex(index int) ([][]*sector, error) {
+// SectorsOfSegmentIndex returns Sectors of a specific Segment with Index
+func (df *DxFile) SectorsOfSegmentIndex(index int) ([][]*Sector, error) {
 	df.lock.Lock()
 	defer df.lock.Unlock()
 
 	if index > len(df.segments) {
-		return nil, fmt.Errorf("index %d out of range", index)
+		return nil, fmt.Errorf("Index %d out of range", index)
 	}
-	return df.segments[index].sectors, nil
+	return df.segments[index].Sectors, nil
 }
 
 // Redundancy return the redundancy of a dxfile
@@ -299,7 +298,7 @@ func (df *DxFile) Redundancy(offlineMap map[enode.ID]bool, goodForRenewMap map[e
 	return minRedundancy
 }
 
-// SetStuck set a segment of index to the value of stuck
+// SetStuck set a Segment of Index to the value of Stuck
 func (df *DxFile) SetStuckByIndex(index int, stuck bool) (err error) {
 	df.lock.Lock()
 	defer df.lock.Unlock()
@@ -308,18 +307,18 @@ func (df *DxFile) SetStuckByIndex(index int, stuck bool) (err error) {
 		return fmt.Errorf("file %v is deleted", df.metadata.DxPath)
 	}
 
-	if stuck == df.segments[index].stuck {
+	if stuck == df.segments[index].Stuck {
 		return nil
 	}
 	prevNumStuckChunks := df.metadata.NumStuckSegments
-	prevStuck := df.segments[index].stuck
+	prevStuck := df.segments[index].Stuck
 	defer func() {
 		if err != nil {
 			df.metadata.NumStuckSegments = prevNumStuckChunks
-			df.segments[index].stuck = prevStuck
+			df.segments[index].Stuck = prevStuck
 		}
 	}()
-	df.segments[index].stuck = stuck
+	df.segments[index].Stuck = stuck
 	if stuck {
 		df.metadata.NumStuckSegments++
 	} else {
@@ -330,12 +329,12 @@ func (df *DxFile) SetStuckByIndex(index int, stuck bool) (err error) {
 	return
 }
 
-// GetStuckByIndex get the stuck status of the indexed segment
+// GetStuckByIndex get the Stuck status of the indexed Segment
 func (df *DxFile) GetStuckByIndex(index int) bool {
 	df.lock.Lock()
 	defer df.lock.Unlock()
 
-	return df.segments[index].stuck
+	return df.segments[index].Stuck
 }
 
 // UID return the id of the dxfile
@@ -349,7 +348,7 @@ func (df *DxFile) UploadedBytes() uint64 {
 	defer df.lock.RUnlock()
 	var uploaded uint64
 	for _, segment := range df.segments {
-		for _, sectors := range segment.sectors {
+		for _, sectors := range segment.Sectors {
 			uploaded += SectorSize * uint64(len(sectors))
 		}
 	}
@@ -393,32 +392,32 @@ func (df *DxFile) UpdateUsedHosts(used []enode.ID) error {
 	return err
 }
 
-// pruneSegment try to prune sectors from unused hosts to fit in the page size
+// pruneSegment try to prune Sectors from unused hosts to fit in the page size
 func (df *DxFile) pruneSegment(segIndex int) {
 	maxSegmentSize := segmentPersistNumPages(df.metadata.NumSectors) * PageSize
 	maxSectors := (maxSegmentSize - segmentPersistOverhead) / sectorPersistSize
-	maxSectorsPerIndex := maxSectors / uint64(len(df.segments[segIndex].sectors))
+	maxSectorsPerIndex := maxSectors / uint64(len(df.segments[segIndex].Sectors))
 
 	var numSectors int
-	for _, sectors := range df.segments[segIndex].sectors {
+	for _, sectors := range df.segments[segIndex].Sectors {
 		numSectors += len(sectors)
 	}
 	if uint64(numSectors) <= maxSectors {
-		// no need to prune the sector
+		// no need to prune the Sector
 		return
 	}
 
-	for i, sectors := range df.segments[segIndex].sectors {
-		var newSectors []*sector
+	for i, sectors := range df.segments[segIndex].Sectors {
+		var newSectors []*Sector
 		for _, sector := range sectors {
 			if uint64(len(newSectors)) >= maxSectorsPerIndex {
 				break
 			}
-			if df.hostTable[sector.hostID] {
+			if df.hostTable[sector.HostID] {
 				newSectors = append(newSectors, sector)
 			}
 		}
-		df.segments[segIndex].sectors[i] = newSectors
+		df.segments[segIndex].Sectors[i] = newSectors
 	}
 }
 
@@ -429,7 +428,7 @@ func (df *DxFile) ApplyCachedHealthMetadata(metadata CachedHealthMetadata) error
 
 	var numStuckSegments uint32
 	for _, seg := range df.segments {
-		if seg.stuck {
+		if seg.Stuck {
 			numStuckSegments++
 		}
 	}

@@ -46,31 +46,31 @@ func TestPruneSegment(t *testing.T) {
 			metadata:  &Metadata{NumSectors: uint32(test.numSectors)},
 			hostTable: make(hostTable),
 		}
-		seg := segment{
-			sectors: make([][]*sector, test.numSectors),
+		seg := Segment{
+			Sectors: make([][]*Sector, test.numSectors),
 		}
 		usedSectors := make(map[enode.ID]bool)
-		for i := range seg.sectors {
+		for i := range seg.Sectors {
 			for j := 0; j < test.usedNumSectorsPerIndex; j++ {
 				sec := randomSector()
-				seg.sectors[i] = append(seg.sectors[i], sec)
-				df.hostTable[sec.hostID] = true
-				usedSectors[sec.hostID] = false
+				seg.Sectors[i] = append(seg.Sectors[i], sec)
+				df.hostTable[sec.HostID] = true
+				usedSectors[sec.HostID] = false
 			}
 			for j := 0; j < test.unusedNumSectorsPerIndex; j++ {
 				sec := randomSector()
-				seg.sectors[i] = append(seg.sectors[i], sec)
-				df.hostTable[sec.hostID] = false
+				seg.Sectors[i] = append(seg.Sectors[i], sec)
+				df.hostTable[sec.HostID] = false
 			}
 		}
 		df.segments = append(df.segments, &seg)
 		df.pruneSegment(0)
-		// check whether all used sectors still there
+		// check whether all used Sectors still there
 		if test.fitIn {
-			for _, sectors := range seg.sectors {
+			for _, sectors := range seg.Sectors {
 				for _, sector := range sectors {
-					if _, exist := usedSectors[sector.hostID]; exist {
-						usedSectors[sector.hostID] = true
+					if _, exist := usedSectors[sector.HostID]; exist {
+						usedSectors[sector.HostID] = true
 					}
 				}
 			}
@@ -113,13 +113,13 @@ func TestAddSector(t *testing.T) {
 	if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
 		t.Error(err)
 	}
-	sectors := recoveredDF.segments[segmentIndex].sectors[sectorIndex]
+	sectors := recoveredDF.segments[segmentIndex].Sectors[sectorIndex]
 	recoveredNewSector := sectors[len(sectors)-1]
-	if !bytes.Equal(recoveredNewSector.merkleRoot[:], newHash[:]) {
-		t.Errorf("new sector merkle root not expected. Expect %v, got %v", newHash, recoveredNewSector.merkleRoot)
+	if !bytes.Equal(recoveredNewSector.MerkleRoot[:], newHash[:]) {
+		t.Errorf("new Sector merkle root not expected. Expect %v, got %v", newHash, recoveredNewSector.MerkleRoot)
 	}
-	if !bytes.Equal(recoveredNewSector.hostID[:], newAddr[:]) {
-		t.Errorf("new sector host address not expected. Expect %v, got %v", newAddr, recoveredNewSector.hostID)
+	if !bytes.Equal(recoveredNewSector.HostID[:], newAddr[:]) {
+		t.Errorf("new Sector host address not expected. Expect %v, got %v", newAddr, recoveredNewSector.HostID)
 	}
 }
 
@@ -150,8 +150,8 @@ func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 		}
 		for i, seg := range df.segments {
 			segHealth := df.segmentHealth(i, offline, goodForRenew)
-			if segHealth < repairHealthThreshold && !seg.stuck {
-				t.Errorf("segment with health %d should have been marked as stuck", segHealth)
+			if segHealth < repairHealthThreshold && !seg.Stuck {
+				t.Errorf("Segment with health %d should have been marked as Stuck", segHealth)
 			}
 		}
 		filename := filepath.Join(testDir, t.Name())
@@ -176,8 +176,8 @@ func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
 		}
 		for i, seg := range df.segments {
 			segHealth := df.segmentHealth(i, offline, goodForRenew)
-			if segHealth == 200 && seg.stuck {
-				t.Errorf("segment with health %d should have been marked as non-stuck", segHealth)
+			if segHealth == 200 && seg.Stuck {
+				t.Errorf("Segment with health %d should have been marked as non-Stuck", segHealth)
 			}
 		}
 		filename := filepath.Join(testDir, t.Name())
@@ -243,7 +243,7 @@ func TestSetStuckByIndex(t *testing.T) {
 		}
 		df.metadata.NumStuckSegments = test.prevNumStuckSegment
 		df.segments[0] = randomSegment(30)
-		df.segments[0].stuck = test.prevStuck
+		df.segments[0].Stuck = test.prevStuck
 		err = df.saveAll()
 		if err != nil {
 			t.Fatal(err)
@@ -257,7 +257,7 @@ func TestSetStuckByIndex(t *testing.T) {
 				df.metadata.NumStuckSegments)
 		}
 		if df.GetStuckByIndex(0) != test.setStuck {
-			t.Errorf("test %d: stuck not expected. Expect %v, Got %v", i, test.setStuck, df.segments[0].stuck)
+			t.Errorf("test %d: Stuck not expected. Expect %v, Got %v", i, test.setStuck, df.segments[0].Stuck)
 		}
 		filename := filepath.Join(testDir, t.Name())
 		recoveredDF, err := readDxFile(filename, df.wal)
@@ -281,11 +281,11 @@ func TestUploadProgress(t *testing.T) {
 	prevProgress := float64(0)
 	progress := float64(0)
 	for i := range df.segments {
-		for j := range df.segments[i].sectors {
+		for j := range df.segments[i].Sectors {
 			addr := randomAddress()
 			err := df.AddSector(addr, i, j, randomHash())
 			if err != nil {
-				t.Fatalf("sector %d %d: %v", i, j, err)
+				t.Fatalf("Sector %d %d: %v", i, j, err)
 			}
 			progress = df.UploadProgress()
 			if progress <= prevProgress {

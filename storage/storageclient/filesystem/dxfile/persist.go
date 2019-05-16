@@ -16,7 +16,7 @@ const (
 	// PageSize is the page size of persist Data
 	PageSize = 4096
 
-	// sectorPersistSize is the size of rlp encoded string of a sector
+	// sectorPersistSize is the size of rlp encoded string of a Sector
 	sectorPersistSize = 70
 
 	// Overhead for persistSegment persist Data. The value is larger than Data actually used
@@ -35,9 +35,9 @@ type (
 
 	// persistSegment is the structure a dxfile is split into
 	persistSegment struct {
-		Sectors [][]*sector // Sectors contains the recoverable message about the persistSector in the persistSegment
-		Index   uint64      // Index is the index of the specific segment
-		Stuck   bool        // Stuck indicates whether the segment is stuck or not
+		Sectors [][]*Sector // Sectors contains the recoverable message about the persistSector in the persistSegment
+		Index   uint64      // Index is the Index of the specific Segment
+		Stuck   bool        // Stuck indicates whether the Segment is Stuck or not
 	}
 
 	// persistSector is the smallest unit of storage. It the erasure code encoded persistSegment
@@ -79,45 +79,45 @@ func (ht hostTable) DecodeRLP(st *rlp.Stream) error {
 	return nil
 }
 
-// sector implements rlp encode rule
-func (s *sector) EncodeRLP(w io.Writer) error {
+// Sector implements rlp encode rule
+func (s *Sector) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSector{
-		MerkleRoot: s.merkleRoot,
-		HostID:     s.hostID,
+		MerkleRoot: s.MerkleRoot,
+		HostID:     s.HostID,
 	})
 }
 
-// sector implements rlp decode rule
-func (s *sector) DecodeRLP(st *rlp.Stream) error {
+// Sector implements rlp decode rule
+func (s *Sector) DecodeRLP(st *rlp.Stream) error {
 	var ps persistSector
 	if err := st.Decode(&ps); err != nil {
 		return err
 	}
-	s.merkleRoot, s.hostID = ps.MerkleRoot, ps.HostID
+	s.MerkleRoot, s.HostID = ps.MerkleRoot, ps.HostID
 	return nil
 }
 
-// segment implements rlp encode rule to encode the sectors field
-func (s *segment) EncodeRLP(w io.Writer) error {
+// Segment implements rlp encode rule to encode the Sectors field
+func (s *Segment) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSegment{
-		Sectors: s.sectors,
-		Index:   s.index,
-		Stuck:   s.stuck,
+		Sectors: s.Sectors,
+		Index:   s.Index,
+		Stuck:   s.Stuck,
 	})
 }
 
-// segment implements rlp decode rule to decode the sectors field
-func (s *segment) DecodeRLP(st *rlp.Stream) error {
+// Segment implements rlp decode rule to decode the Sectors field
+func (s *Segment) DecodeRLP(st *rlp.Stream) error {
 	var ps persistSegment
 	if err := st.Decode(&ps); err != nil {
 		return err
 	}
-	s.sectors, s.index, s.stuck = ps.Sectors, ps.Index, ps.Stuck
+	s.Sectors, s.Index, s.Stuck = ps.Sectors, ps.Index, ps.Stuck
 	return nil
 }
 
 // segmentPersistSize is the helper function to calculate the number of pages to be used for
-// the persist of a segment
+// the persist of a Segment
 func segmentPersistNumPages(numSectors uint32) uint64 {
 	sectorsSize := sectorPersistSize * numSectors
 	dataSize := segmentPersistOverhead + sectorsSize
@@ -138,7 +138,7 @@ func (md Metadata) validate() error {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
 	}
 	if md.SegmentOffset%PageSize != 0 {
-		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+		return fmt.Errorf("Segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
 	}
 	return nil
 }
@@ -185,7 +185,7 @@ func (md Metadata) newCipherKey() (crypto.CipherKey, error) {
 	return crypto.NewCipherKey(md.CipherKeyCode, md.CipherKey)
 }
 
-// segmentSize is the helper function to calculate the segment size based on metadata info
+// segmentSize is the helper function to calculate the Segment size based on metadata info
 func (md Metadata) segmentSize() uint64 {
 	return md.SectorSize * uint64(md.MinSectors)
 }

@@ -60,7 +60,7 @@ func TestHostTable_DecodeRLP_EncodeRLP(t *testing.T) {
 }
 
 func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
-	tests := []*segment{
+	tests := []*Segment{
 		randomSegment(0),
 		randomSegment(1),
 		randomSegment(100),
@@ -70,11 +70,11 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		var seg *segment
+		var seg *Segment
 		if err := rlp.DecodeBytes(b, &seg); err != nil {
 			t.Fatalf(err.Error())
 		}
-		if !reflect.DeepEqual(seg.sectors, test.sectors) {
+		if !reflect.DeepEqual(seg.Sectors, test.Sectors) {
 			t.Errorf("Test %d: expect %+v, got %+v", i, test, seg)
 		}
 	}
@@ -129,18 +129,18 @@ func randomHostTable(numHosts int) hostTable {
 	return ht
 }
 
-func randomSegment(numSectors uint32) *segment {
-	seg := &segment{sectors: make([][]*sector, numSectors)}
-	for i := range seg.sectors {
-		seg.sectors[i] = append(seg.sectors[i], randomSector())
+func randomSegment(numSectors uint32) *Segment {
+	seg := &Segment{Sectors: make([][]*Sector, numSectors)}
+	for i := range seg.Sectors {
+		seg.Sectors[i] = append(seg.Sectors[i], randomSector())
 	}
 	return seg
 }
 
-func randomSector() *sector {
-	s := &sector{}
-	rand.Read(s.hostID[:])
-	rand.Read(s.merkleRoot[:])
+func randomSector() *Sector {
+	s := &Sector{}
+	rand.Read(s.HostID[:])
+	rand.Read(s.MerkleRoot[:])
 	return s
 }
 

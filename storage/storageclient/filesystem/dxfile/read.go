@@ -97,26 +97,26 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	}
 	offset := uint64(df.metadata.SegmentOffset)
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
-	df.segments = make([]*segment, df.metadata.numSegments())
+	df.segments = make([]*Segment, df.metadata.numSegments())
 	for i := 0; uint64(i) < df.metadata.numSegments(); i++ {
 		seg, err := df.readSegment(f, offset)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to load segment at %d: %v", offset, err)
+			return fmt.Errorf("failed to load Segment at %d: %v", offset, err)
 		}
 		seg.offset = offset
-		if df.segments[seg.index] != nil {
-			return fmt.Errorf("duplicate segment %d at %d", seg.index, seg.offset)
+		if df.segments[seg.Index] != nil {
+			return fmt.Errorf("duplicate Segment %d at %d", seg.Index, seg.offset)
 		}
-		df.segments[seg.index] = seg
+		df.segments[seg.Index] = seg
 		offset += segmentSize
 	}
 	return nil
 }
 
-func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*segment, error) {
+func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*Segment, error) {
 	if int64(offset) < 0 {
 		return nil, fmt.Errorf("int64 overflow")
 	}
@@ -124,13 +124,13 @@ func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*segment, error) 
 	if err != nil {
 		return nil, err
 	}
-	var seg *segment
+	var seg *Segment
 	err = rlp.Decode(f, &seg)
 	if err != nil {
 		return nil, err
 	}
-	if len(seg.sectors) != int(df.metadata.NumSectors) {
-		return nil, fmt.Errorf("segment does not have expected numSectors")
+	if len(seg.Sectors) != int(df.metadata.NumSectors) {
+		return nil, fmt.Errorf("Segment does not have expected numSectors")
 	}
 	return seg, nil
 }

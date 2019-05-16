@@ -197,7 +197,7 @@ func (df *DxFile) SetTimeRecentRepair(t time.Time) error {
 	return df.saveMetadata()
 }
 
-// SegmentSize return the size of a segment for a DxFile.
+// SegmentSize return the size of a Segment for a DxFile.
 func (df *DxFile) SegmentSize() uint64 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -256,7 +256,7 @@ func (df *DxFile) SetFileMode(mode os.FileMode) error {
 	return df.saveMetadata()
 }
 
-// SectorSize return the sector size of a dxfile
+// SectorSize return the Sector size of a dxfile
 func (df *DxFile) SectorSize() uint64 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()

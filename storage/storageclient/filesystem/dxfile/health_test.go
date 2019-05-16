@@ -60,13 +60,13 @@ func TestSegmentHealth(t *testing.T) {
 					NumSectors: test.numSectors,
 					MinSectors: test.minSectors,
 				},
-				segments: []*segment{seg},
+				segments: []*Segment{seg},
 			}
 			offlineMap, goodForRenewMap := make(map[enode.ID]bool), make(map[enode.ID]bool)
-			for _, sectors := range seg.sectors {
+			for _, sectors := range seg.Sectors {
 				for _, sector := range sectors {
-					offlineMap[sector.hostID] = false
-					goodForRenewMap[sector.hostID] = true
+					offlineMap[sector.HostID] = false
+					goodForRenewMap[sector.HostID] = true
 				}
 			}
 			for i := 0; i != test.numMiss; i++ {
@@ -114,13 +114,13 @@ func TestHealth(t *testing.T) {
 		var haveStuckSegment, haveUnstuckSegment bool
 		for i, seg := range df.segments {
 			segHealth := df.SegmentHealth(i, offline, goodForRenew)
-			if seg.stuck {
+			if seg.Stuck {
 				if !haveStuckSegment {
 					haveStuckSegment = true
 				}
 				numExpectStuck++
 				if segHealth < stuckHealth {
-					t.Errorf("stuck segment health larger than dxfile stuck health: %d > %d", segHealth, stuckHealth)
+					t.Errorf("Stuck Segment health larger than dxfile Stuck health: %d > %d", segHealth, stuckHealth)
 				}
 				if segHealth == stuckHealth {
 					minStuckSegmentFound = true
@@ -130,7 +130,7 @@ func TestHealth(t *testing.T) {
 					haveUnstuckSegment = true
 				}
 				if segHealth < health {
-					t.Errorf("unstuck segment health larger than dxfile health: %d > %d", segHealth, health)
+					t.Errorf("unstuck Segment health larger than dxfile health: %d > %d", segHealth, health)
 				}
 				if segHealth == health {
 					minUnstuckSegmentFound = true
@@ -138,10 +138,10 @@ func TestHealth(t *testing.T) {
 			}
 		}
 		if haveStuckSegment && !minStuckSegmentFound {
-			t.Errorf("min stuck segment not found %v", stuckHealth)
+			t.Errorf("min Stuck Segment not found %v", stuckHealth)
 		}
 		if haveUnstuckSegment && !minUnstuckSegmentFound {
-			t.Errorf("min unstuck segment not found %v", health)
+			t.Errorf("min unstuck Segment not found %v", health)
 		}
 		if numExpectStuck != int(numStuckSegments) {
 			t.Errorf("numExpectStuck not equal. Expect %d Got %d", numExpectStuck, numStuckSegments)
@@ -160,28 +160,28 @@ func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors
 	goodForRenew := make(map[enode.ID]bool)
 	for j := 0; j != int(numSegments); j++ {
 		seg := randomSegment(numSectors)
-		seg.index = uint64(j)
+		seg.Index = uint64(j)
 		if stuckRate != 0 && rand.Intn(stuckRate) == 0 {
-			seg.stuck = true
+			seg.Stuck = true
 		} else {
-			seg.stuck = false
+			seg.Stuck = false
 		}
 		df.segments[j] = seg
-		for _, sectors := range seg.sectors {
+		for _, sectors := range seg.Sectors {
 			for _, sector := range sectors {
-				df.hostTable[sector.hostID] = true
+				df.hostTable[sector.HostID] = true
 				if absentRate != 0 && rand.Intn(absentRate) == 0 {
 					continue
 				}
 				if offlineRate != 0 && rand.Intn(offlineRate) == 0 {
-					offline[sector.hostID] = true
+					offline[sector.HostID] = true
 				} else {
-					offline[sector.hostID] = false
+					offline[sector.HostID] = false
 				}
 				if badForRenewRate != 0 && rand.Intn(badForRenewRate) == 0 {
-					goodForRenew[sector.hostID] = false
+					goodForRenew[sector.HostID] = false
 				} else {
-					goodForRenew[sector.hostID] = true
+					goodForRenew[sector.HostID] = true
 				}
 			}
 		}

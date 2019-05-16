@@ -44,8 +44,8 @@ func TestPersist(t *testing.T) {
 // TestDxFile_SaveHostTableUpdate test the shift functionality of persistence
 func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 	//Two scenarios has to be tested:
-	//1. Shift size smaller than segment persist sizes,
-	//2. Shift size larger than segment persist size.
+	//1. Shift size smaller than Segment persist sizes,
+	//2. Shift size larger than Segment persist size.
 	tests := []struct {
 		numSegments       uint64 // size of the file, determine how many segments
 		numHostTablePages uint64 // size of added host key
@@ -127,9 +127,9 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	// Edit one of the segment
+	// Edit one of the Segment
 	modifyIndex := rand.Intn(len(df.segments))
-	df.segments[modifyIndex].sectors[0][0].merkleRoot = common.Hash{}
+	df.segments[modifyIndex].Sectors[0][0].MerkleRoot = common.Hash{}
 	err = df.saveSegments([]int{modifyIndex})
 	if err != nil {
 		t.Fatal(err.Error())
@@ -167,11 +167,11 @@ func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSec
 	}
 	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
 		seg := randomSegment(df.metadata.NumSectors)
-		seg.index = uint64(i)
+		seg.Index = uint64(i)
 		df.segments[i] = seg
-		for _, sectors := range seg.sectors {
+		for _, sectors := range seg.Sectors {
 			for _, sector := range sectors {
-				df.hostTable[sector.hostID] = true
+				df.hostTable[sector.HostID] = true
 			}
 		}
 	}
@@ -193,7 +193,7 @@ func checkDxFileEqual(df1, df2 DxFile) error {
 	}
 	for i := range df1.segments {
 		if err := checkSegmentEqual(*df1.segments[i], *df2.segments[i]); err != nil {
-			return fmt.Errorf("segment[%d]: %v", i, err)
+			return fmt.Errorf("Segment[%d]: %v", i, err)
 		}
 	}
 	if !reflect.DeepEqual(df1.hostTable, df2.hostTable) {
@@ -288,28 +288,28 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	return nil
 }
 
-func checkSegmentEqual(seg1, seg2 segment) error {
-	if len(seg1.sectors) != len(seg2.sectors) {
-		return fmt.Errorf("length of sectors not equal: %d != %d", len(seg1.sectors), len(seg2.sectors))
+func checkSegmentEqual(seg1, seg2 Segment) error {
+	if len(seg1.Sectors) != len(seg2.Sectors) {
+		return fmt.Errorf("length of Sectors not equal: %d != %d", len(seg1.Sectors), len(seg2.Sectors))
 	}
-	for i := range seg1.sectors {
-		if ( seg1.sectors[i] == nil || len(seg1.sectors[i]) == 0 ) != ( seg2.sectors[i] == nil || len(seg2.sectors[i]) == 0 ) {
+	for i := range seg1.Sectors {
+		if ( seg1.Sectors[i] == nil || len(seg1.Sectors[i]) == 0 ) != ( seg2.Sectors[i] == nil || len(seg2.Sectors[i]) == 0 ) {
 			return fmt.Errorf("%d: not equal", i)
 		}
-		if seg1.sectors[i] == nil {
+		if seg1.Sectors[i] == nil {
 			continue
 		}
-		if len(seg1.sectors[i]) != len(seg2.sectors[i]){
+		if len(seg1.Sectors[i]) != len(seg2.Sectors[i]){
 			return fmt.Errorf("%d: not equal", i)
 		}
-		for j := range seg1.sectors[i] {
-			if (seg1.sectors[i][j] == nil) != (seg2.sectors[i][j] == nil) {
+		for j := range seg1.Sectors[i] {
+			if (seg1.Sectors[i][j] == nil) != (seg2.Sectors[i][j] == nil) {
 				return fmt.Errorf("%d/%d: not equal", i, j)
 			}
-			if seg1.sectors[i] == nil {
+			if seg1.Sectors[i] == nil {
 				continue
 			}
-			if !reflect.DeepEqual(seg1.sectors[i][j], seg2.sectors[i][j]) {
+			if !reflect.DeepEqual(seg1.Sectors[i][j], seg2.Sectors[i][j]) {
 				return fmt.Errorf("%d/%d: not equal", i, j)
 			}
 		}

@@ -2,7 +2,7 @@ package dxfile
 
 import "github.com/DxChainNetwork/godx/p2p/enode"
 
-// repairHealthThreshold is the threshold that file with smaller health is marked as stuck and
+// repairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
 // to be repaired
 const repairHealthThreshold = 175
 
@@ -22,7 +22,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 	var numStuckSegments uint32
 	for i, seg := range df.segments {
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
-		if seg.stuck {
+		if seg.Stuck {
 			numStuckSegments++
 			if segHealth < stuckHealth {
 				stuckHealth = segHealth
@@ -34,7 +34,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 	return health, stuckHealth, numStuckSegments
 }
 
-// Segment health return the health of a segment based on information provided
+// Segment health return the health of a Segment based on information provided
 func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -42,7 +42,7 @@ func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, 
 	return df.segmentHealth(segmentIndex, offlineMap, goodForRenewMap)
 }
 
-// segmentHealth return the health of a segment.
+// segmentHealth return the health of a Segment.
 // Health 0~100: unrecoverable from contracts
 // Health 100~200: recoverable
 // Health 200: No fix needed
@@ -62,23 +62,23 @@ func (df *DxFile) segmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, 
 	return score
 }
 
-// goodSectors return the number of sectors goodForRenew and numSectorsGoodForUpload with the
+// goodSectors return the number of Sectors goodForRenew and numSectorsGoodForUpload with the
 // given offlineMap and goodForRenewMap
 func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) (uint32, uint32) {
 	numSectorsGoodForRenew := uint64(0)
 	numSectorsGoodForUpload := uint64(0)
 
-	for _, sectors := range df.segments[segmentIndex].sectors {
+	for _, sectors := range df.segments[segmentIndex].Sectors {
 		foundGoodForRenew := false
 		foundOnline := false
 		for _, sector := range sectors {
-			offline, exist1 := offlineMap[sector.hostID]
-			goodForRenew, exist2 := goodForRenewMap[sector.hostID]
+			offline, exist1 := offlineMap[sector.HostID]
+			goodForRenew, exist2 := goodForRenewMap[sector.HostID]
 			if exist1 != exist2 {
 				panic("consistency error: offlineMap should have same key as goodForRenewMap")
 			}
 			if !exist1 || offline {
-				// sector not known, continue
+				// Sector not known, continue
 				continue
 			}
 			if goodForRenew {
@@ -99,7 +99,7 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 
 // cmpHealth compare two health.
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
-// The cmpHealth result returns the priority the health related segment should be fixed
+// The cmpHealth result returns the priority the health related Segment should be fixed
 func cmpHealth(h1, h2 uint32) int {
 	if h1 == h2 {
 		return 0

@@ -97,25 +97,25 @@ func (df *DxFile) delete() error {
 	return df.applyUpdates([]dxfileUpdate{du})
 }
 
-// saveSegment save the segment with the segmentIndex, and write to file
+// saveSegment save the Segment with the segmentIndex, and write to file
 func (df *DxFile) saveSegments(indexes []int) error {
 	if df.deleted {
-		return errors.New("cannot save the segment: file already deleted")
+		return errors.New("cannot save the Segment: file already deleted")
 	}
 	updates, err := df.createMetadataHostTableUpdate()
 	if err != nil {
 		return err
 	}
-	// Write the segment with the segmentIndex
+	// Write the Segment with the segmentIndex
 	for _, index := range indexes {
 		df.pruneSegment(index)
 		seg := df.segments[index]
-		if seg.index != uint64(index) {
-			return fmt.Errorf("cannot write segment: data corrupted - segment index not expected")
+		if seg.Index != uint64(index) {
+			return fmt.Errorf("cannot write Segment: data corrupted - Segment Index not expected")
 		}
 		up, err := df.createSegmentUpdate(uint64(index), seg.offset)
 		if err != nil {
-			return fmt.Errorf("cannot write segment: %v", err)
+			return fmt.Errorf("cannot write Segment: %v", err)
 		}
 		updates = append(updates, up)
 		up, err = df.createMetadataUpdate()
@@ -177,7 +177,7 @@ func (df *DxFile) createMetadataHostTableUpdate() ([]dxfileUpdate, error) {
 	return updates, nil
 }
 
-// segmentShift shift segment in persist file to the end of the persist file to give space for hostTable.
+// segmentShift shift Segment in persist file to the end of the persist file to give space for hostTable.
 // Return the corresponding update and the underlying error.
 func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, error) {
 	f, err := os.OpenFile(df.filePath, os.O_RDONLY, 0777)
@@ -197,9 +197,9 @@ func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, erro
 			return nil, err
 		}
 		newOffset := prevOffset + shiftOffset
-		iu, err := df.createSegmentUpdate(seg.index, newOffset)
+		iu, err := df.createSegmentUpdate(seg.Index, newOffset)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create segment update: %v", err)
+			return nil, fmt.Errorf("failed to create Segment update: %v", err)
 		}
 		updates = append(updates, iu)
 		prevOffset += segmentSize
@@ -211,7 +211,7 @@ func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, erro
 // shiftOffset calculate for shift operation. return three offsets:
 // 1. The size of shift
 // 2. The number to segments to shift
-// 3. Difference between new and old segment offset
+// 3. Difference between new and old Segment offset
 func (df *DxFile) shiftOffset(targetHostTableSize uint64) (uint64, uint64, uint64) {
 	if targetHostTableSize < df.metadata.SegmentOffset-df.metadata.HostTableOffset {
 		return 0, 0, 0
@@ -258,24 +258,24 @@ func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
 	return iu, uint64(len(hostTableBytes)), nil
 }
 
-// createSegmentShiftUpdate create an segment update
+// createSegmentShiftUpdate create an Segment update
 func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfileUpdate, error) {
 	if segmentIndex > uint64(len(df.segments)) {
-		return nil, fmt.Errorf("unexpected index: %d", segmentIndex)
+		return nil, fmt.Errorf("unexpected Index: %d", segmentIndex)
 	}
 	segment := df.segments[segmentIndex]
-	if segment.index != segmentIndex {
-		return nil, fmt.Errorf("data corrupted: segment index not align: %d != %d", segment.index, segmentIndex)
+	if segment.Index != segmentIndex {
+		return nil, fmt.Errorf("data corrupted: Segment Index not align: %d != %d", segment.Index, segmentIndex)
 	}
-	segment.index = segmentIndex
+	segment.Index = segmentIndex
 	segment.offset = offset
 	segBytes, err := rlp.EncodeToBytes(segment)
 	if err != nil {
-		return nil, fmt.Errorf("cannot encode segment: %+v", segment)
+		return nil, fmt.Errorf("cannot encode Segment: %+v", segment)
 	}
-	// if the segment does not fit in, prune sectors with unused hosts
+	// if the Segment does not fit in, prune Sectors with unused hosts
 	if limit := PageSize * segmentPersistNumPages(df.metadata.NumSectors); uint64(len(segBytes)) > limit {
-		return nil, fmt.Errorf("segment bytes exceed limit: %d > %d", len(segBytes), limit)
+		return nil, fmt.Errorf("Segment bytes exceed limit: %d > %d", len(segBytes), limit)
 	}
 	if int64(offset) < 0 {
 		return nil, fmt.Errorf("uint64 overflow: %v", int64(offset))
