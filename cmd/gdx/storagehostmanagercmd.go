@@ -173,14 +173,14 @@ func hostRankingTable(rankings []storagehostmanager.StorageHostRank) *tablewrite
 	var formattedData [][]string
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ID", "Total Evaluation", "AgeFactor", "BurnFactor", "DepositFactor",
+	table.SetHeader([]string{"ID", "Total Evaluation", "AgeFactor", "DepositFactor",
 		"InteractionFactor", "PriceFactor", "RemainingStorageFactor", "UptimeFactor"})
 
 	for _, rank := range rankings {
-		dataEntry := []string{rank.EnodeID, rank.Evaluation.String(), floatToString(rank.AgeAdjustment),
-			floatToString(rank.BurnAdjustment), floatToString(rank.DepositAdjustment),
-			floatToString(rank.InteractionAdjustment), floatToString(rank.PriceAdjustment),
-			floatToString(rank.StorageRemainingAdjustment), floatToString(rank.UptimeAdjustment)}
+		dataEntry := []string{rank.EnodeID, rank.Evaluation.String(), floatToString(rank.PresenceFactor),
+			floatToString(rank.DepositFactor),
+			floatToString(rank.InteractionFactor), floatToString(rank.ContractPriceFactor),
+			floatToString(rank.StorageRemainingFactor), floatToString(rank.UptimeFactor)}
 
 		formattedData = append(formattedData, dataEntry)
 	}

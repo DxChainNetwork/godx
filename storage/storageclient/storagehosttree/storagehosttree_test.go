@@ -51,7 +51,7 @@ func TestStorageHostTree_Insert(t *testing.T) {
 }
 
 func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
-	ptr, exists := tree.hostPool[EnodeID[3].String()]
+	ptr, exists := tree.hostPool[EnodeID[3]]
 	if !exists {
 		t.Fatalf("error: host does not exist")
 	}
@@ -62,7 +62,7 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error: failed to update the storage host information %s", err.Error())
 	}
-	new := tree.hostPool[EnodeID[3].String()]
+	new := tree.hostPool[EnodeID[3]]
 	if archive.entry.IP == new.entry.IP {
 		t.Errorf("error: the ip address should be updated. expected: 104.238.46.129, got %s",
 			archive.entry.IP)
@@ -79,8 +79,8 @@ func TestStorageHostTree_All(t *testing.T) {
 	}
 
 	for i := 0; i < len(storageHosts)-1; i++ {
-		eval1 := tree.hostPool[storageHosts[i].EnodeID.String()].entry.eval
-		eval2 := tree.hostPool[storageHosts[i+1].EnodeID.String()].entry.eval
+		eval1 := tree.hostPool[storageHosts[i].EnodeID].entry.eval
+		eval2 := tree.hostPool[storageHosts[i+1].EnodeID].entry.eval
 		if eval1.Cmp(eval2) < 0 {
 			t.Errorf("the returned storage hosts should be in order, the host has higher evaluation should be in the front")
 		}
@@ -88,21 +88,21 @@ func TestStorageHostTree_All(t *testing.T) {
 }
 
 func TestStorageHostTree_Remove(t *testing.T) {
-	err := tree.Remove(EnodeID[removeNodeIndex].String())
+	err := tree.Remove(EnodeID[removeNodeIndex])
 	if err != nil {
 		t.Fatalf("error: %s", err.Error())
 	}
-	if _, exists := tree.hostPool[ips[1]]; exists {
+	if _, exists := tree.hostPool[EnodeID[removeNodeIndex]]; exists {
 		t.Errorf("failed to remove the node from the tree, the node still exists")
 	}
 }
 
 func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
-	if _, exist := tree.RetrieveHostInfo("the key does not exist"); exist {
+	if _, exist := tree.RetrieveHostInfo([32]byte{}); exist {
 		t.Errorf("error: the node with \"the key does not exist\" should not exist")
 	}
 
-	if _, exist := tree.RetrieveHostInfo(EnodeID[4].String()); !exist {
+	if _, exist := tree.RetrieveHostInfo(EnodeID[4]); !exist {
 		t.Errorf("error: the node with key %s should exist", ips[4])
 	}
 }

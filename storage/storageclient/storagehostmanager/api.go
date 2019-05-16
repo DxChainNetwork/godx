@@ -5,7 +5,9 @@
 package storagehostmanager
 
 import (
+	"encoding/hex"
 	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -51,7 +53,17 @@ func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []sto
 
 // StorageHost will return a specific host detailed information from the storage host pool
 func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {
-	info, exist := api.shm.storageHostTree.RetrieveHostInfo(id)
+	var enodeid enode.ID
+
+	// convert the hex string back to the enode.ID type
+	idSlice, err := hex.DecodeString(id)
+	if err != nil {
+		return storage.HostInfo{}
+	}
+	copy(enodeid[:], idSlice)
+
+	// get the storage host information based on the enode id
+	info, exist := api.shm.storageHostTree.RetrieveHostInfo(enodeid)
 
 	if !exist {
 		return storage.HostInfo{}

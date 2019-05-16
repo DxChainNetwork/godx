@@ -6,6 +6,8 @@ package storageclient
 
 import (
 	"errors"
+	"reflect"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -14,15 +16,18 @@ import (
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"reflect"
 )
 
+// ParsedAPI will parse the APIs saved in the Ethereum
+// and get the ones needed
 type ParsedAPI struct {
 	netInfo *ethapi.PublicNetAPI
 	account *ethapi.PrivateAccountAPI
 	ethInfo *ethapi.PublicEthereumAPI
 }
 
+// filterAPIs will filter the APIs saved in the Ethereum and
+// save them into ParsedAPI data structure
 func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
 	for _, api := range apis {
 		switch typ := reflect.TypeOf(api.Service); typ {

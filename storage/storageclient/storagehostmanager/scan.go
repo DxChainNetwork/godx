@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehostmanager
 
 import (
@@ -12,6 +16,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// scan will start the initial storage host scan and activate the auto scan service
 func (shm *StorageHostManager) scan() {
 	if err := shm.tm.Add(); err != nil {
 		shm.log.Warn("Failed to launch scan task when initializing storage host manager")
@@ -36,7 +41,10 @@ func (shm *StorageHostManager) scan() {
 
 	// indicate the initial scan is finished
 	shm.waitScanFinish()
+
+	shm.lock.Lock()
 	shm.initialScan = true
+	shm.lock.Unlock()
 
 	// scan automatically in a time range
 	shm.autoScan()
@@ -78,6 +86,9 @@ func (shm *StorageHostManager) autoScan() {
 		// sleep for a random amount of time, then schedule scan again
 		rand.Seed(time.Now().UTC().UnixNano())
 		randomSleepTime := time.Duration(rand.Intn(int(maxScanSleep-minScanSleep)) + int(minScanSleep))
+
+		shm.log.Debug("Random Sleep Time:", randomSleepTime)
+
 		// sleep random amount of time
 		select {
 		case <-shm.tm.StopChan():
@@ -89,20 +100,21 @@ func (shm *StorageHostManager) autoScan() {
 
 // scanValidation will scan the storage host added
 func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
+	shm.log.Debug("Started Scan Validation")
+
 	// verify if the storage host is already in scan pool
-	shm.lock.RLock()
-	_, exists := shm.scanLookup[hi.EnodeID.String()]
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	_, exists := shm.scanLookup[hi.EnodeID]
+
 	if exists {
-		shm.lock.RUnlock()
 		return
 	}
-	shm.lock.RUnlock()
 
 	// if not, add it to the pool and scanning list
-	shm.lock.Lock()
-	shm.scanLookup[hi.EnodeID.String()] = struct{}{}
+	shm.scanLookup[hi.EnodeID] = struct{}{}
 	shm.scanWaitList = append(shm.scanWaitList, hi)
-	shm.lock.Unlock()
 
 	// wait for another routine to scan the list
 	if shm.scanWait {
@@ -113,6 +125,9 @@ func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
 	go shm.scanStart()
 }
 
+// scanStart will update the scan wait list and scan look up map
+// afterwards, the host needed to be scanned will be passed in through channel
+// NOTE: multiple go routines will be activated to handle scan requet
 func (shm *StorageHostManager) scanStart() {
 	if err := shm.tm.Add(); err != nil {
 		return
@@ -125,6 +140,7 @@ func (shm *StorageHostManager) scanStart() {
 
 	for {
 		shm.lock.Lock()
+
 		if len(shm.scanWaitList) == 0 {
 			shm.scanWait = false
 			shm.lock.Unlock()
@@ -134,7 +150,7 @@ func (shm *StorageHostManager) scanStart() {
 		// update the scan wait list and scan look up
 		hostInfoTask := shm.scanWaitList[0]
 		shm.scanWaitList = shm.scanWaitList[1:]
-		delete(shm.scanLookup, hostInfoTask.EnodeID.String())
+		delete(shm.scanLookup, hostInfoTask.EnodeID)
 		workers := shm.scanningWorkers
 		shm.lock.Unlock()
 
@@ -154,6 +170,8 @@ func (shm *StorageHostManager) scanStart() {
 // scanExecute will check the local node online status, and start to updateHostSettings
 // it will terminate along with termination of scan start
 func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
+	shm.log.Debug("Started Scan Execution")
+
 	if err := shm.tm.Add(); err != nil {
 		return
 	}
@@ -269,6 +287,8 @@ func (shm *StorageHostManager) waitSync() {
 	}
 }
 
+// waitScanFinish will pause the current process until all the host stored in the scanWaitList
+// got executed
 func (shm *StorageHostManager) waitScanFinish() {
 	for {
 		shm.lock.Lock()

@@ -7,12 +7,11 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-
 func TestStorageHostManager_SetFilterMode(t *testing.T) {
 	shm := New("test")
 	var allHosts []storage.HostInfo
 
-	for i := 0; i < 10; i ++ {
+	for i := 0; i < 10; i++ {
 		host := hostInfoGenerator()
 		allHosts = append(allHosts, host)
 		err := shm.insert(host)
@@ -22,7 +21,7 @@ func TestStorageHostManager_SetFilterMode(t *testing.T) {
 	}
 
 	var whitelist []enode.ID
-	for i := 0; i < 10; i ++ {
+	for i := 0; i < 10; i++ {
 		host := hostInfoGenerator()
 		allHosts = append(allHosts, host)
 		err := shm.insert(host)
@@ -56,17 +55,17 @@ func TestStorageHostManager_SetFilterMode(t *testing.T) {
 	}
 
 	for _, host := range allHosts {
-		_, exist := shm.storageHostTree.RetrieveHostInfo(host.EnodeID.String())
+		_, exist := shm.storageHostTree.RetrieveHostInfo(host.EnodeID)
 		if !exist {
 			t.Fatalf("the host information is not contained in the storage host tree")
 		}
 
-		_, existFilter := shm.filteredTree.RetrieveHostInfo(host.EnodeID.String())
+		_, existFilter := shm.filteredTree.RetrieveHostInfo(host.EnodeID)
 		if existFilter && !exist {
 			t.Fatalf("the host information is contained in the filtered tree but not in the storage host tree")
 		}
 
-		_, filterHostExist := shm.filteredHosts[host.EnodeID.String()]
+		_, filterHostExist := shm.filteredHosts[host.EnodeID]
 		if existFilter && !filterHostExist {
 			t.Fatalf("the host information is contained in the filtered tree but not in the white list")
 		}

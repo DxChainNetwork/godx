@@ -31,45 +31,48 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
 
+	// if the filter is disabled, return directly
 	if fm == DisableFilter {
 		return nil
 	}
 
-	if fm == WhitelistFilter {
-
-		if len(whitelist) == 0 {
-			return errors.New("failed to set whitelist filter mode, empty whitelist")
-		}
-
-		// initialize filtered tree
-		shm.filteredTree = storagehosttree.New(shm.evalFunc)
-		shm.filteredHosts = make(map[string]enode.ID)
-		shm.filterMode = fm
-
-		// update the filter host
-		for _, id := range whitelist {
-			_, exist := shm.filteredHosts[id.String()]
-			if !exist {
-				shm.filteredHosts[id.String()] = id
-			}
-		}
-
-		// insert the host in the whitelist into the filtered tree
-		allHosts := shm.storageHostTree.All()
-		for _, host := range allHosts {
-			_, exist := shm.filteredHosts[host.EnodeID.String()]
-			if exist {
-				err := shm.filteredTree.Insert(host)
-				if err != nil {
-					return err
-				}
-			}
-		}
-		return nil
-
+	// if the filter mode is not disabled and it is not whitelist, then return error
+	if fm != WhitelistFilter {
+		return errors.New("filter mode provided not recognized")
 	}
 
-	return errors.New("filter mode provided not recognized")
+	// if filter mode is whitelist
+
+	// check the number of hosts in the whitelist, if there are no whitelist hosts defined, return error
+	if len(whitelist) == 0 {
+		return errors.New("failed to set whitelist filter mode, empty whitelist")
+	}
+
+	// initialize filtered tree
+	shm.filteredTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredHosts = make(map[enode.ID]struct{})
+	shm.filterMode = fm
+
+	// update the filter host
+	for _, id := range whitelist {
+		_, exist := shm.filteredHosts[id]
+		if !exist {
+			shm.filteredHosts[id] = struct{}{}
+		}
+	}
+
+	// insert the host in the whitelist into the filtered tree
+	allHosts := shm.storageHostTree.All()
+	for _, host := range allHosts {
+		_, exist := shm.filteredHosts[host.EnodeID]
+		if exist {
+			err := shm.filteredTree.Insert(host)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // String will convert the filter mode into string, used for displaying purpose

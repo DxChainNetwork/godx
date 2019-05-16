@@ -23,6 +23,7 @@ type StorageHostRank struct {
 	EnodeID string
 }
 
+// hostInfoGenerator will randomly generate storage host information
 func hostInfoGenerator() storage.HostInfo {
 	ip := randomdata.IpV4Address()
 	id := enodeIDGenerator()
@@ -43,6 +44,7 @@ func hostInfoGenerator() storage.HostInfo {
 	}
 }
 
+// activeHostInfoGenerator will randomly generate active storage host information
 func activeHostInfoGenerator() storage.HostInfo {
 	ip := randomdata.IpV4Address()
 	id := enodeIDGenerator()
@@ -69,10 +71,8 @@ func activeHostInfoGenerator() storage.HostInfo {
 	}
 }
 
-func enodeIDGenerator() enode.ID {
-	id := make([]byte, 32)
-	rand.Read(id)
-	var result [32]byte
-	copy(result[:], id[:32])
-	return enode.ID(result)
+// enodeIDGenerator will randomly generate enode ID
+func enodeIDGenerator() (id enode.ID) {
+	rand.Read(id[:])
+	return
 }

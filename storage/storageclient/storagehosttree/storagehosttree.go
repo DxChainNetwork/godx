@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -16,7 +17,7 @@ import (
 // storage host information found by the storage client
 type StorageHostTree struct {
 	root     *node
-	hostPool map[string]*node
+	hostPool map[enode.ID]*node
 	evalFunc EvaluationFunc
 	lock     sync.Mutex
 }
@@ -24,7 +25,7 @@ type StorageHostTree struct {
 // New will initialize the StorageHostTree object
 func New(ef EvaluationFunc) *StorageHostTree {
 	return &StorageHostTree{
-		hostPool: make(map[string]*node),
+		hostPool: make(map[enode.ID]*node),
 		root: &node{
 			count: 1,
 		},
@@ -39,6 +40,8 @@ func (t *StorageHostTree) Insert(hi storage.HostInfo) error {
 	return t.insert(hi)
 }
 
+// insert will format the storage host information into nodeEntry data type
+// and then insert to the tree and update the host pool
 func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	// nodeEntry
 	entry := &nodeEntry{
@@ -47,7 +50,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	}
 
 	// validation: check if the storagehost exists already
-	if _, exists := t.hostPool[hi.EnodeID.String()]; exists {
+	if _, exists := t.hostPool[hi.EnodeID]; exists {
 		return ErrHostExists
 	}
 
@@ -55,7 +58,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	_, node := t.root.nodeInsert(entry)
 
 	// update hostPool
-	t.hostPool[hi.EnodeID.String()] = node
+	t.hostPool[hi.EnodeID] = node
 
 	return nil
 }
@@ -66,7 +69,7 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 	defer t.lock.Unlock()
 
 	// get the node
-	n, exist := t.hostPool[hi.EnodeID.String()]
+	n, exist := t.hostPool[hi.EnodeID]
 	if !exist {
 		return ErrHostNotExists
 	}
@@ -81,14 +84,14 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 
 	// insert node and update the hostPool
 	_, node := n.nodeInsert(entry)
-	t.hostPool[hi.EnodeID.String()] = node
+	t.hostPool[hi.EnodeID] = node
 
 	return nil
 }
 
 // Remove will remove the node from the hostPool as well as
 // making the node unocuppied, updating the evaluation
-func (t *StorageHostTree) Remove(enodeID string) error {
+func (t *StorageHostTree) Remove(enodeID enode.ID) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -112,6 +115,7 @@ func (t *StorageHostTree) All() []storage.HostInfo {
 	return t.all()
 }
 
+// all will retrieve, sort, and return all host information stored in the tree
 func (t *StorageHostTree) all() (his []storage.HostInfo) {
 	// collect all node entries
 	var entries []nodeEntry
@@ -132,7 +136,7 @@ func (t *StorageHostTree) all() (his []storage.HostInfo) {
 
 // RetrieveHostInfo will get storage host information from the tree based on the
 // enode ID
-func (t *StorageHostTree) RetrieveHostInfo(enodeID string) (storage.HostInfo, bool) {
+func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -162,7 +166,7 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 	t.root = &node{
 		count: 1,
 	}
-	t.hostPool = make(map[string]*node)
+	t.hostPool = make(map[enode.ID]*node)
 	t.evalFunc = ef
 
 	// re-insert the host information
@@ -187,7 +191,7 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 //      4. restore storage host tree structure
 // NOTE: the number of storage hosts information got may not satisfy the number of storage host
 // information needed.
-func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []string) []storage.HostInfo {
+func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -252,14 +256,14 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []st
 
 		// remove the node
 		node.nodeRemove()
-		delete(t.hostPool, node.entry.EnodeID.String())
+		delete(t.hostPool, node.entry.EnodeID)
 		removedNodeEntries = append(removedNodeEntries, node.entry)
 	}
 
 	// 4. restore storage host tree structure
 	for _, entry := range removedNodeEntries {
 		_, node := t.root.nodeInsert(entry)
-		t.hostPool[node.entry.EnodeID.String()] = node
+		t.hostPool[node.entry.EnodeID] = node
 	}
 
 	return storageHosts

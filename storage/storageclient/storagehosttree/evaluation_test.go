@@ -42,41 +42,35 @@ func TestConversionRate(t *testing.T) {
 func TestEvaluationCriteria_EvaluationDetail(t *testing.T) {
 	ec := randomCriteria()
 	ed := ec.EvaluationDetail(common.NewBigInt(1000), true, true)
-	if ed.AgeAdjustment != 1 {
-		t.Errorf("age adjustment is expected to be 1, instead got %v", ed.AgeAdjustment)
+	if ed.PresenceFactor != 1 {
+		t.Errorf("age adjustment is expected to be 1, instead got %v", ed.PresenceFactor)
 	}
 
-	if ed.UptimeAdjustment != 1 {
-		t.Errorf("uptime adjustment is expected to be 1, isntead got %v", ed.UptimeAdjustment)
-	}
-
-	if ed.BurnAdjustment != ec.BurnAdjustment {
-		t.Errorf("burn adjustment is expected to be %v, got %v", ec.BurnAdjustment, ed.BurnAdjustment)
+	if ed.UptimeFactor != 1 {
+		t.Errorf("uptime adjustment is expected to be 1, isntead got %v", ed.UptimeFactor)
 	}
 }
 
 func randomCriteria() EvaluationCriteria {
 	return EvaluationCriteria{
-		AgeAdjustment:              randFloat64(),
-		BurnAdjustment:             randFloat64(),
-		DepositAdjustment:          randFloat64(),
-		InteractionAdjustment:      randFloat64(),
-		PriceAdjustment:            randFloat64(),
-		StorageRemainingAdjustment: randFloat64(),
-		UptimeAdjustment:           randFloat64(),
+		PresenceFactor:         randFloat64(),
+		DepositFactor:          randFloat64(),
+		InteractionFactor:      randFloat64(),
+		ContractPriceFactor:    randFloat64(),
+		StorageRemainingFactor: randFloat64(),
+		UptimeFactor:           randFloat64(),
 	}
 }
 
 func partialRandomCriteria() EvaluationCriteria {
 
 	return EvaluationCriteria{
-		AgeAdjustment:              1,
-		BurnAdjustment:             randFloat64(),
-		DepositAdjustment:          randFloat64(),
-		InteractionAdjustment:      randFloat64(),
-		PriceAdjustment:            100,
-		StorageRemainingAdjustment: randFloat64(),
-		UptimeAdjustment:           randFloat64(),
+		PresenceFactor:         1,
+		DepositFactor:          randFloat64(),
+		InteractionFactor:      randFloat64(),
+		ContractPriceFactor:    100,
+		StorageRemainingFactor: randFloat64(),
+		UptimeFactor:           randFloat64(),
 	}
 }
 

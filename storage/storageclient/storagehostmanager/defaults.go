@@ -8,7 +8,6 @@ import "time"
 
 // Those values are used to calculate the storage host evaluation
 const (
-	// TODO (mzhang): discuss those values with the team
 	priceFloor                = float64(0.1)
 	depositFloor              = priceFloor * 2
 	depositExponentialSmall   = 4
@@ -35,9 +34,9 @@ const (
 	//maxScanSleep            = 6 * time.Hour
 	//minScanSleep            = time.Hour + time.Minute*30
 
-	// for testing purpose
-	maxScanSleep = 5 * time.Second
-	minScanSleep = 2 * time.Second
+	// TODO (mzhang): for testing purpose
+	maxScanSleep = 30 * time.Second
+	minScanSleep = 10 * time.Second
 
 	maxWorkersAllowed = 80
 	minScans          = 12

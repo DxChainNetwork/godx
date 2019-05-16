@@ -36,7 +36,7 @@ type StorageHostManager struct {
 	// maintenance related
 	initialScan     bool
 	scanWaitList    []storage.HostInfo
-	scanLookup      map[string]struct{}
+	scanLookup      map[enode.ID]struct{}
 	scanWait        bool
 	scanningWorkers int
 
@@ -50,7 +50,7 @@ type StorageHostManager struct {
 
 	// filter mode related
 	filterMode    FilterMode
-	filteredHosts map[string]enode.ID
+	filteredHosts map[enode.ID]struct{}
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
@@ -64,9 +64,9 @@ func New(persistDir string) *StorageHostManager {
 
 		rent: storage.DefaultRentPayment,
 
-		scanLookup: make(map[string]struct{}),
-		filterMode: DisableFilter,
-		filteredHosts: make(map[string]enode.ID),
+		scanLookup:    make(map[enode.ID]struct{}),
+		filterMode:    DisableFilter,
+		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
@@ -122,9 +122,9 @@ func (shm *StorageHostManager) Close() error {
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	err := shm.storageHostTree.Insert(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID.String()]
+	_, exists := shm.filteredHosts[hi.EnodeID]
 
-	if shm.filterMode == WhitelistFilter && exists {
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {
 			err = common.ErrCompose(err, errF)
@@ -134,11 +134,11 @@ func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 }
 
 // remove will remove the host information from the storageHostTree
-func (shm *StorageHostManager) remove(enodeid string) error {
+func (shm *StorageHostManager) remove(enodeid enode.ID) error {
 	err := shm.storageHostTree.Remove(enodeid)
 	_, exists := shm.filteredHosts[enodeid]
 
-	if shm.filterMode == WhitelistFilter && exists {
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Remove(enodeid)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)
@@ -150,9 +150,9 @@ func (shm *StorageHostManager) remove(enodeid string) error {
 // modify will modify the host information from the StorageHostTree
 func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 	err := shm.storageHostTree.HostInfoUpdate(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID.String()]
+	_, exists := shm.filteredHosts[hi.EnodeID]
 
-	if shm.filterMode == WhitelistFilter && exists {
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.HostInfoUpdate(hi)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)

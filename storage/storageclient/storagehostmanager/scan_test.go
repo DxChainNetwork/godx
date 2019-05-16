@@ -1,6 +1,13 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file
+
 package storagehostmanager
 
 import (
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -9,8 +16,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"testing"
-	"time"
 )
 
 func TestStorageHostManager_Scan(t *testing.T) {
@@ -28,7 +33,11 @@ func TestStorageHostManager_Scan(t *testing.T) {
 	go shm.scan()
 
 	for {
-		if shm.initialScan {
+		shm.lock.Lock()
+		is := shm.initialScan
+		shm.lock.Unlock()
+
+		if is {
 			return
 		}
 		time.Sleep(time.Second)
@@ -65,7 +74,7 @@ func TestStorageHostManager_ScanValidation(t *testing.T) {
 	shm := newHostManagerTestData()
 	info1 := hostInfoGenerator()
 	info2 := info1
-	shm.scanLookup[info1.EnodeID.String()] = struct{}{}
+	shm.scanLookup[info1.EnodeID] = struct{}{}
 	shm.scanValidation(info2)
 	go func() {
 		time.Sleep(1 * time.Second)
@@ -93,8 +102,8 @@ func newHostManagerTestData() *StorageHostManager {
 
 		rent: storage.DefaultRentPayment,
 
-		scanLookup:    make(map[string]struct{}),
-		filteredHosts: make(map[string]enode.ID),
+		scanLookup:    make(map[enode.ID]struct{}),
+		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
