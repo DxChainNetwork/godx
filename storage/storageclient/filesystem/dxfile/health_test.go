@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -8,6 +12,7 @@ import (
 	"time"
 )
 
+// TestCmpHealth test CmpHealth
 func TestCmpHealth(t *testing.T) {
 	tests := []struct {
 		h1  uint32
@@ -25,13 +30,14 @@ func TestCmpHealth(t *testing.T) {
 		{99, 0, 1},
 	}
 	for _, test := range tests {
-		res := cmpHealth(test.h1, test.h2)
+		res := CmpHealth(test.h1, test.h2)
 		if res != test.res {
 			t.Errorf("compare health unexpected value: %d, %d -> %d", test.h1, test.h2, res)
 		}
 	}
 }
 
+// TestSegmentHealth test DxFile.SegmentHealth
 func TestSegmentHealth(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	tests := []struct {
@@ -102,6 +108,7 @@ func TestSegmentHealth(t *testing.T) {
 	}
 }
 
+// TestHealth test DxFile.Health
 func TestHealth(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	numSectors := uint32(30)
@@ -149,6 +156,8 @@ func TestHealth(t *testing.T) {
 	}
 }
 
+// newTestDxFileWithMaps create a new DxFile along with offlineMao and goodForRenewMap for test purpose.
+// The offlineMap, goodForRenewMap, or stuck is random selected by stuckRate, absentRate, offlineRate, and badForRenewMap
 func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8, stuckRate, absentRate, offlineRate, badForRenewRate int) (*DxFile, map[enode.ID]bool, map[enode.ID]bool) {
 	rand.Seed(time.Now().UnixNano())
 	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)

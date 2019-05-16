@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -71,6 +75,7 @@ func TestNewErasureCode_ErasureCodeToParams(t *testing.T) {
 	}
 }
 
+// makeUint32Byte return a 32 byte as the value of num
 func makeUint32Byte(num uint32) []byte {
 	uint32Byte := make([]byte, 4)
 	binary.LittleEndian.PutUint32(uint32Byte, num)

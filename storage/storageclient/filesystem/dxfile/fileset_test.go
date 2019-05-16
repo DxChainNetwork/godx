@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -12,7 +16,9 @@ import (
 	"testing"
 )
 
-func newTestFileSet(t *testing.T) (*FileSetEntryWithId, *FileSet) {
+// newTestFileSet create a FileSet for test usage, and added a new DxFile to the FileSet.
+// return the added DxFile and the new FileSet.
+func newTestFileSet(t *testing.T) (*FileSetEntryWithID, *FileSet) {
 	wal, _ := newWal(t)
 	fs := NewFileSet(testDir, wal)
 	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 10, 30)
@@ -30,8 +36,9 @@ func newTestFileSet(t *testing.T) (*FileSetEntryWithId, *FileSet) {
 	return entry, fs
 }
 
+// newWal create a new Wal object for testing purpose
 func newWal(t *testing.T) (*writeaheadlog.Wal, string) {
-	walPath := filepath.Join(testDir, t.Name() + "wal")
+	walPath := filepath.Join(testDir, t.Name()+"wal")
 	wal, recoveredTxns, err := writeaheadlog.New(walPath)
 	if err != nil {
 		panic(err)
@@ -45,6 +52,7 @@ func newWal(t *testing.T) (*writeaheadlog.Wal, string) {
 	return wal, walPath
 }
 
+// randomDxPath creates a random DxPath which is a string of byte slice of length 16
 func randomDxPath() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
@@ -54,6 +62,7 @@ func randomDxPath() string {
 	return common.Bytes2Hex(b)
 }
 
+// TestCopyEntry test FileSet.CopyEntry
 func TestCopyEntry(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	copied := entry.CopyEntry()
@@ -79,6 +88,7 @@ func TestCopyEntry(t *testing.T) {
 	}
 }
 
+// TestFileSet_NewDxFile test FileSet.NewDxFile
 func TestFileSet_NewDxFile(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	dxPath := entry.metadata.DxPath
@@ -104,6 +114,8 @@ func TestFileSet_NewDxFile(t *testing.T) {
 	}
 }
 
+// TestFileSet_CloseOpen test the FileSet Close and Open process.
+// First close the file, and then open the file. The process should not give error.
 func TestFileSet_CloseOpen(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	dxPath := entry.metadata.DxPath
@@ -118,11 +130,12 @@ func TestFileSet_CloseOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := checkDxFileEqual(*recovered.fileSetEntry.DxFile, *entry.fileSetEntry.DxFile); err != nil {
+	if err := checkDxFileEqual(recovered.fileSetEntry.DxFile, entry.fileSetEntry.DxFile); err != nil {
 		t.Error(err)
 	}
 }
 
+// TestFileSet_OpenNonExist test the process of opening a not existed DxFile
 func TestFileSet_OpenNonExist(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	err := entry.Close()
@@ -140,6 +153,7 @@ func TestFileSet_OpenNonExist(t *testing.T) {
 	}
 }
 
+// TestFileSet_DeleteOpen test the process of delete and then open a file.
 func TestFileSet_DeleteOpen(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	dxPath := entry.metadata.DxPath
@@ -179,6 +193,7 @@ func TestFileSet_DeleteOpen(t *testing.T) {
 	}
 }
 
+// TestFileSet_RenameOpen test the process of rename a DxFile and then open it.
 func TestFileSet_RenameOpen(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	prevDxPath := entry.metadata.DxPath
@@ -218,7 +233,7 @@ func TestFileSet_RenameOpen(t *testing.T) {
 	if err != nil {
 		t.Errorf("After rename, open the new file give error: %v", err)
 	}
-	if len(fs.filesMap) != 1{
+	if len(fs.filesMap) != 1 {
 		t.Errorf("After open the renamed file, filesmap size not 1: %d", len(fs.filesMap))
 	}
 	err = newEntry.Close()

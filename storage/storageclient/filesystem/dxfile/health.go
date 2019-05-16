@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import "github.com/DxChainNetwork/godx/p2p/enode"
@@ -19,6 +23,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 	}
 	health := uint32(200)
 	stuckHealth := uint32(200)
+	// health, stuckHealth should be the minimum value of the segment health
 	var numStuckSegments uint32
 	for i, seg := range df.segments {
 		segHealth := df.segmentHealth(i, offline, goodForRenew)
@@ -34,7 +39,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 	return health, stuckHealth, numStuckSegments
 }
 
-// Segment health return the health of a Segment based on information provided
+// SegmentHealth return the health of a Segment based on information provided
 func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -97,10 +102,9 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 	return uint32(numSectorsGoodForRenew), uint32(numSectorsGoodForUpload)
 }
 
-// cmpHealth compare two health.
+// cmpHealth compare two health. The cmpHealth result returns the priority the health related Segment should be fixed
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
-// The cmpHealth result returns the priority the health related Segment should be fixed
-func cmpHealth(h1, h2 uint32) int {
+func CmpHealth(h1, h2 uint32) int {
 	if h1 == h2 {
 		return 0
 	}

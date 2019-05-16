@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -18,7 +22,7 @@ import (
 
 var testDir = tempDir()
 
-// newTestDxFile generate a random DxFile used for testing.
+// newTestDxFile generate a random DxFile used for testing. The generated DxFile segments are empty
 func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
 	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
 	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -34,6 +38,7 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 	return df, nil
 }
 
+// newTestDxFileWithSegments generate a random DxFile with some segment data.
 func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
 	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
 	if err != nil {
@@ -49,13 +54,13 @@ func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSec
 			}
 		}
 	}
-
 	if err = df.saveAll(); err != nil {
 		return nil, err
 	}
 	return df, nil
 }
 
+// tempDir removes and creates the folder named dxfile under the temp directory.
 func tempDir(dirs ...string) string {
 	path := filepath.Join(os.TempDir(), "dxfile", filepath.Join(dirs...))
 	err := os.RemoveAll(path)
@@ -69,6 +74,7 @@ func tempDir(dirs ...string) string {
 	return path
 }
 
+// TestPruneSegment test df.pruneSegment
 func TestPruneSegment(t *testing.T) {
 	tests := []struct {
 		numSectors               int
@@ -130,6 +136,7 @@ func TestPruneSegment(t *testing.T) {
 	}
 }
 
+// TestAddSector test DxFile.AddSector
 func TestAddSector(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	df, err := newTestDxFileWithSegments(t, SectorSize*64, 10, 30, erasurecode.ECTypeStandard)
@@ -140,7 +147,7 @@ func TestAddSector(t *testing.T) {
 	segmentIndex := rand.Intn(int(df.metadata.numSegments()))
 	sectorIndex := rand.Intn(int(df.metadata.NumSectors))
 	newHash := randomHash()
-	err = df.AddSector(newAddr, segmentIndex, sectorIndex, newHash)
+	err = df.AddSector(newAddr, newHash, segmentIndex, sectorIndex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +157,7 @@ func TestAddSector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+	if err = checkDxFileEqual(df, recoveredDF); err != nil {
 		t.Error(err)
 	}
 	sectors := recoveredDF.segments[segmentIndex].Sectors[sectorIndex]
@@ -163,6 +170,7 @@ func TestAddSector(t *testing.T) {
 	}
 }
 
+// TestDelete test DxFile.Delete function
 func TestDelete(t *testing.T) {
 	df, err := newTestDxFile(t, sectorSize*64, 10, 30, erasurecode.ECTypeStandard)
 	if err != nil {
@@ -180,6 +188,7 @@ func TestDelete(t *testing.T) {
 	}
 }
 
+// TestMarkAllUnhealthySegmentsAsStuck test df.MarkAllUnhealthySegmentsAsStuck
 func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 	for i := 0; i != 10; i++ {
 		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
@@ -200,12 +209,13 @@ func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+		if err = checkDxFileEqual(df, recoveredDF); err != nil {
 			t.Error(err)
 		}
 	}
 }
 
+// TestMarkAllHealthySegmentsAsUnstuck test MarkAllHealthySegmentsAsUnstuck
 func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
 	for i := 0; i != 10; i++ {
 		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
@@ -226,12 +236,13 @@ func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+		if err = checkDxFileEqual(df, recoveredDF); err != nil {
 			t.Error(err)
 		}
 	}
 }
 
+// TestRedundancy test DxFile.Redundancy
 func TestRedundancy(t *testing.T) {
 	tests := []struct {
 		numSegments         uint64
@@ -264,6 +275,7 @@ func TestRedundancy(t *testing.T) {
 	}
 }
 
+// TestSetStuckByIndex test DxFile.SetStuckByIndex
 func TestSetStuckByIndex(t *testing.T) {
 	tests := []struct {
 		prevNumStuckSegment  uint32
@@ -304,12 +316,13 @@ func TestSetStuckByIndex(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
-		if err = checkDxFileEqual(*df, *recoveredDF); err != nil {
+		if err = checkDxFileEqual(df, recoveredDF); err != nil {
 			t.Errorf("test %d: %v", i, err)
 		}
 	}
 }
 
+// TestUploadProgress test the DxFile.UploadProgress
 func TestUploadProgress(t *testing.T) {
 	fileSegments := uint64(10)
 	minSector := uint32(10)
@@ -323,7 +336,7 @@ func TestUploadProgress(t *testing.T) {
 	for i := range df.segments {
 		for j := range df.segments[i].Sectors {
 			addr := randomAddress()
-			err := df.AddSector(addr, i, j, randomHash())
+			err := df.AddSector(addr, randomHash(), i, j)
 			if err != nil {
 				t.Fatalf("Sector %d %d: %v", i, j, err)
 			}
@@ -339,6 +352,7 @@ func TestUploadProgress(t *testing.T) {
 	}
 }
 
+// TestUpdateUsedHosts test DxFile.UpdateUsedHosts
 func TestUpdateUsedHosts(t *testing.T) {
 	rand.Seed(time.Now().UnixNano())
 	fileSegments := uint64(10)
@@ -377,6 +391,7 @@ func TestUpdateUsedHosts(t *testing.T) {
 	}
 }
 
+// TestHostIDs test DxFile.HostIDs
 func TestHostIDs(t *testing.T) {
 	fileSegments := uint64(10)
 	minSector := uint32(10)
@@ -393,6 +408,7 @@ func TestHostIDs(t *testing.T) {
 	}
 }
 
+// TestRename test DxFile.Rename
 func TestRename(t *testing.T) {
 	fileSegments := uint64(10)
 	minSector := uint32(10)
@@ -416,11 +432,12 @@ func TestRename(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = checkDxFileEqual(*recoveredDF, *df); err != nil {
+	if err = checkDxFileEqual(recoveredDF, df); err != nil {
 		t.Error(err)
 	}
 }
 
+// TestApplyCachedHealthMetadata test DxFile.ApplyCachedHealthMetadata
 func TestApplyCachedHealthMetadata(t *testing.T) {
 	chm := CachedHealthMetadata{
 		Health:      100,
@@ -451,7 +468,7 @@ func TestApplyCachedHealthMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = checkDxFileEqual(*recoveredDF, *df); err != nil {
+	if err = checkDxFileEqual(recoveredDF, df); err != nil {
 		t.Error(err)
 	}
 }

@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -11,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
+// TestInsertUpdate_EncodeToWalOp test insertUpdate.encodeToWalOp
 func TestInsertUpdate_EncodeToWalOp(t *testing.T) {
 	tests := []struct {
 		filename string
@@ -40,6 +45,7 @@ func TestInsertUpdate_EncodeToWalOp(t *testing.T) {
 	}
 }
 
+// TestInsertUpdate_Apply test insertUpdate.apply
 func TestInsertUpdate_Apply(t *testing.T) {
 	tests := []insertUpdate{
 		{filepath.Join(testDir, t.Name()), 0, randomBytes(10)},
@@ -66,6 +72,7 @@ func TestInsertUpdate_Apply(t *testing.T) {
 	}
 }
 
+// TestDeleteUpdate_Apply test deleteUpdate.apply
 func TestDeleteUpdate_Apply(t *testing.T) {
 	filename := filepath.Join(testDir, t.Name())
 	f, _ := os.OpenFile(filename, os.O_RDWR, 0600)
@@ -84,6 +91,8 @@ func TestDeleteUpdate_Apply(t *testing.T) {
 	}
 }
 
+// TestDxFileUpdate_Encode_Decode test the process of encoding the dxFileUpdate to operation and
+// operation to dxFileUpdate
 func TestDxFileUpdate_Encode_Decode(t *testing.T) {
 	tests := []dxfileUpdate{
 		&insertUpdate{filepath.Join(testDir, t.Name()), 0, randomBytes(10)},

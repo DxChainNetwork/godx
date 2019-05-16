@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -34,6 +35,7 @@ func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
 		return nil, fmt.Errorf("cannot open file %s: %v", filepath, err)
 	}
 	defer f.Close()
+	// load data
 	err = df.loadMetadata(f)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load metadata: %v", err)
@@ -116,6 +118,7 @@ func (df *DxFile) loadSegments(f io.ReadSeeker) error {
 	return nil
 }
 
+// readSegment read a segment from the f at offset
 func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*Segment, error) {
 	if int64(offset) < 0 {
 		return nil, fmt.Errorf("int64 overflow")
@@ -130,7 +133,7 @@ func (df *DxFile) readSegment(f io.ReadSeeker, offset uint64) (*Segment, error) 
 		return nil, err
 	}
 	if len(seg.Sectors) != int(df.metadata.NumSectors) {
-		return nil, fmt.Errorf("Segment does not have expected numSectors")
+		return nil, fmt.Errorf("segment does not have expected numSectors")
 	}
 	return seg, nil
 }

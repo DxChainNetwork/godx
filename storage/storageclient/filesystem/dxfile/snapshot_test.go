@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -10,10 +14,11 @@ import (
 	"time"
 )
 
+// TestSnapshotReader test the process of a SnapshotReader
 func TestSnapshotReader(t *testing.T) {
 	numSector := uint32(30)
 	minSector := uint32(10)
-	df, err := newTestDxFileWithSegments(t, sectorSize * uint64(minSector) * 10, minSector, numSector, erasurecode.ECTypeStandard)
+	df, err := newTestDxFileWithSegments(t, sectorSize*uint64(minSector)*10, minSector, numSector, erasurecode.ECTypeStandard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,15 +47,15 @@ func TestSnapshotReader(t *testing.T) {
 	wait := make(chan error)
 	ErrTimeout := fmt.Errorf("time out")
 	ErrSet := fmt.Errorf("set file mode complete")
-	go func(){
+	go func() {
 		_ = df.SetFileMode(0777)
 		wait <- ErrSet
 	}()
-	go func(){
-		<- time.After(300 * time.Millisecond)
+	go func() {
+		<-time.After(300 * time.Millisecond)
 		wait <- ErrTimeout
 	}()
-	err = <- wait
+	err = <-wait
 	if err != ErrTimeout {
 		t.Errorf("dxfile should be locked.")
 	}
@@ -58,16 +63,17 @@ func TestSnapshotReader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = <- wait
+	err = <-wait
 	if err != ErrSet {
 		t.Errorf("dxfile should have been completed: %v", err)
 	}
 }
 
+// TestSnapshot test the creation of a Snapshot
 func TestSnapshot(t *testing.T) {
 	numSector := uint32(30)
 	minSector := uint32(10)
-	df, err := newTestDxFileWithSegments(t, sectorSize * uint64(minSector) * 10, minSector, numSector, erasurecode.ECTypeStandard)
+	df, err := newTestDxFileWithSegments(t, sectorSize*uint64(minSector)*10, minSector, numSector, erasurecode.ECTypeStandard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,6 +112,7 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
+// checkSegmentEqualNotSame checks whether two segments are same in value while different in pointers.
 func checkSegmentEqualNotSame(got, expect *Segment) error {
 	if got.Index != expect.Index {
 		return fmt.Errorf("index not same. Expect %v, Got %v", expect.Index, got.Index)

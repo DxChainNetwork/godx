@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -19,6 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
+// TestSegmentPersistNumPages test function segmentPersistNumPages
 func TestSegmentPersistNumPages(t *testing.T) {
 	tests := []struct {
 		numSectors uint32
@@ -38,6 +40,7 @@ func TestSegmentPersistNumPages(t *testing.T) {
 	}
 }
 
+// TestHostTable_DecodeRLP_EncodeRLP test the decode and encode RLP rule for HostTable
 func TestHostTable_DecodeRLP_EncodeRLP(t *testing.T) {
 	tests := []hostTable{
 		randomHostTable(0),
@@ -59,6 +62,7 @@ func TestHostTable_DecodeRLP_EncodeRLP(t *testing.T) {
 	}
 }
 
+// TestSegment_EncodeRLP_DecodeRLP test the RLP decode and encode rule for Segment
 func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 	tests := []*Segment{
 		randomSegment(0),
@@ -80,6 +84,7 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 	}
 }
 
+// TestMetadata_EncodeRLP_DecodeRLP test the RLP decode and encode rule for Metadata
 func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
 	meta := Metadata{
 		HostTableOffset:     PageSize,
@@ -121,6 +126,7 @@ func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
 	}
 }
 
+// randomHostTable create a random hostTable
 func randomHostTable(numHosts int) hostTable {
 	ht := make(hostTable)
 	for i := 0; i != numHosts; i++ {
@@ -129,6 +135,7 @@ func randomHostTable(numHosts int) hostTable {
 	return ht
 }
 
+// randomSegment create a random segment
 func randomSegment(numSectors uint32) *Segment {
 	seg := &Segment{Sectors: make([][]*Sector, numSectors)}
 	for i := range seg.Sectors {
@@ -137,6 +144,7 @@ func randomSegment(numSectors uint32) *Segment {
 	return seg
 }
 
+// randomSector create a random sector
 func randomSector() *Sector {
 	s := &Sector{}
 	rand.Read(s.HostID[:])
@@ -144,11 +152,13 @@ func randomSector() *Sector {
 	return s
 }
 
+// randomAddress create a random enodeID
 func randomAddress() (addr enode.ID) {
 	rand.Read(addr[:])
 	return
 }
 
+// randomBool create a random true/false
 func randomBool() bool {
 	b := make([]byte, 2)
 	rand.Read(b)
@@ -156,18 +166,21 @@ func randomBool() bool {
 	return num%2 == 0
 }
 
+// randomUint64 create a random Uint64
 func randomUint64() uint64 {
 	b := make([]byte, 8)
 	rand.Read(b)
 	return binary.LittleEndian.Uint64(b)
 }
 
+// randomBytes create a random bytes of size input num
 func randomBytes(num int) []byte {
 	b := make([]byte, num)
 	rand.Read(b)
 	return b
 }
 
+// randomHash creates a random hash
 func randomHash() common.Hash {
 	var h common.Hash
 	rand.Read(h[:])

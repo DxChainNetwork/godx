@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -17,12 +21,16 @@ import (
 const threadDepth = 3
 
 var (
+	// ErrUnknownFile is the error for opening a file that not exists on disk
 	ErrUnknownFile = errors.New("file not known")
-	ErrFileExist   = errors.New("file already exist")
+
+	// ErrFileExist is the error for creating a new file while there already exist a file
+	// with the same name
+	ErrFileExist = errors.New("file already exist")
 )
 
 type (
-	// DxFileSet is the set of DxFile
+	// FileSet is the set of DxFile
 	FileSet struct {
 		// dxFileDir is the file directory for dxfile
 		filesDir string
@@ -34,7 +42,9 @@ type (
 		wal  *writeaheadlog.Wal
 	}
 
-	// fileSetEntry is an entry for fileSet
+	// fileSetEntry is an entry for fileSet. fileSetEntry extends DxFile.
+	// fileSetEntry also keeps a threadMap that traces all threads using the DxFile
+	// fileSetEntry is released in FileSet only if all threads in threadMap are all closed.
 	fileSetEntry struct {
 		*DxFile
 		fileSet *FileSet
@@ -43,8 +53,8 @@ type (
 		threadMapLock sync.Mutex
 	}
 
-	// FileSetEntry is a fileSetEntry with the threadID
-	FileSetEntryWithId struct {
+	// FileSetEntryWithID is a fileSetEntry with the threadID. FileSetEntryWithID extends DxFile
+	FileSetEntryWithID struct {
 		*fileSetEntry
 		threadID uint64
 	}
@@ -57,7 +67,7 @@ type (
 	}
 )
 
-// NewFileSet create a new DxFileSet
+// NewFileSet create a new DxFileSet with provided filesDir and wal.
 func NewFileSet(filesDir string, wal *writeaheadlog.Wal) *FileSet {
 	return &FileSet{
 		filesDir: filesDir,
@@ -66,36 +76,39 @@ func NewFileSet(filesDir string, wal *writeaheadlog.Wal) *FileSet {
 	}
 }
 
-// NewDxFile create a DxFile based on the params given.
-func (fs *FileSet) NewDxFile(dxPath string, sourcePath string, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*FileSetEntryWithId, error) {
+// NewDxFile create a DxFile based on the params given. Return a FileSetEntryWithID that has been
+// registered with threadID in FileSetEntry
+func (fs *FileSet) NewDxFile(dxPath string, sourcePath string, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*FileSetEntryWithID, error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	exists := fs.exists(dxPath)
 	if exists && !force {
 		return nil, ErrFileExist
 	}
+	// Create a new DxFile
 	filePath := filepath.Join(fs.filesDir, dxPath)
 	df, err := New(filePath, dxPath, sourcePath, fs.wal, erasureCode, cipherKey, fileSize, fileMode)
 	if err != nil {
 		return nil, err
 	}
+	// Assign a threadID to the new DxFile. Register the threadID to the entry.
 	entry := fs.newFileSetEntry(df)
 	threadID := randomThreadID()
 	entry.threadMap[threadID] = newThreadInfo()
 	fs.filesMap[dxPath] = entry
-	return &FileSetEntryWithId{
+	return &FileSetEntryWithID{
 		fileSetEntry: entry,
-		threadID: threadID,
+		threadID:     threadID,
 	}, nil
 }
 
-// CopyEntry copy the FileSetEntry
-func (entry *FileSetEntryWithId) CopyEntry() *FileSetEntryWithId {
+// CopyEntry copy the FileSetEntry. A new thread is created and registered in entry.threadMap
+func (entry *FileSetEntryWithID) CopyEntry() *FileSetEntryWithID {
 	entry.threadMapLock.Lock()
 	defer entry.threadMapLock.Unlock()
 
 	threadUID := randomThreadID()
-	copied := &FileSetEntryWithId{
+	copied := &FileSetEntryWithID{
 		fileSetEntry: entry.fileSetEntry,
 		threadID:     threadUID,
 	}
@@ -104,16 +117,18 @@ func (entry *FileSetEntryWithId) CopyEntry() *FileSetEntryWithId {
 }
 
 // Open open a DxFile with dxPath, return the FileSetEntry, along with the threadID
-func (fs *FileSet) Open(dxPath string) (*FileSetEntryWithId, error) {
+func (fs *FileSet) Open(dxPath string) (*FileSetEntryWithID, error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	return fs.open(dxPath)
 }
 
-func (fs *FileSet) open(dxPath string) (*FileSetEntryWithId, error) {
+// open is the helper function for open the DxFile specified by input dxPath.
+// return an entry with registered with id.
+func (fs *FileSet) open(dxPath string) (*FileSetEntryWithID, error) {
 	entry, exist := fs.filesMap[dxPath]
 	if !exist {
-		// file not loaded or not exist
+		// file not loaded or not exist. Try to read DxFile from disk.
 		df, err := readDxFile(filepath.Join(fs.filesDir, dxPath), fs.wal)
 		if os.IsNotExist(err) {
 			return nil, ErrUnknownFile
@@ -127,17 +142,18 @@ func (fs *FileSet) open(dxPath string) (*FileSetEntryWithId, error) {
 	if entry.Deleted() {
 		return nil, ErrUnknownFile
 	}
+	// Register the threadID
 	threadID := randomThreadID()
 	entry.threadMapLock.Lock()
 	defer entry.threadMapLock.Unlock()
 	entry.threadMap[threadID] = newThreadInfo()
-	return &FileSetEntryWithId{
+	return &FileSetEntryWithID{
 		fileSetEntry: entry,
 		threadID:     threadID,
 	}, nil
 }
 
-// Delete delete a file with dxPath from the file set
+// Delete delete a file with dxPath from the file set. Also the DxFile specified by dxPath on disk is also deleted
 func (fs *FileSet) Delete(dxPath string) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
@@ -194,8 +210,8 @@ func (fs *FileSet) Rename(dxPath, newDxPath string) error {
 	return entry.Rename(newDxPath, filepath.Join(fs.filesDir, newDxPath))
 }
 
-// Close close a FileSetEntryWithId
-func (entry *FileSetEntryWithId) Close() error {
+// Close close a FileSetEntryWithID
+func (entry *FileSetEntryWithID) Close() error {
 	entry.fileSet.lock.Lock()
 	entry.fileSet.closeEntry(entry)
 	entry.fileSet.lock.Unlock()
@@ -212,7 +228,7 @@ func (fs *FileSet) newFileSetEntry(df *DxFile) *fileSetEntry {
 }
 
 // closeEntry close the entry with id in fileSet
-func (fs *FileSet) closeEntry(entry *FileSetEntryWithId) {
+func (fs *FileSet) closeEntry(entry *FileSetEntryWithID) {
 	entry.threadMapLock.Lock()
 	defer entry.threadMapLock.Unlock()
 	delete(entry.threadMap, entry.threadID)

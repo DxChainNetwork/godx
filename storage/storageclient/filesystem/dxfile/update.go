@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -14,8 +15,11 @@ import (
 )
 
 const (
-	opDeleteFile = "delete_file" // name of the operation to delete a dxfile
-	opInsertFile = "insert_file" // name of the operation to create or update a dxfile
+	// OpDeleteFile is the Operation name of a deleteUpdate
+	OpDeleteFile = "delete_file" // name of the operation to delete a dxfile
+
+	// OpInsertFile is the Operation name of an insertUpdate
+	OpInsertFile = "insert_file" // name of the operation to create or update a dxfile
 )
 
 // TODO: Refactor the apply update to write page updates. Each page has next Offset
@@ -50,7 +54,7 @@ func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 		return writeaheadlog.Operation{}, err
 	}
 	return writeaheadlog.Operation{
-		Name: opInsertFile,
+		Name: OpInsertFile,
 		Data: data,
 	}, err
 }
@@ -83,7 +87,7 @@ func (du *deleteUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 		return writeaheadlog.Operation{}, err
 	}
 	return writeaheadlog.Operation{
-		Name: opDeleteFile,
+		Name: OpDeleteFile,
 		Data: data,
 	}, nil
 }
@@ -104,15 +108,16 @@ func (du *deleteUpdate) fileName() string {
 // decodeFromWalOp will decode the wal.Operation to a specified type of dxfileUpdate based on the op.Name field
 func decodeFromWalOp(op writeaheadlog.Operation) (dxfileUpdate, error) {
 	switch op.Name {
-	case opInsertFile:
+	case OpInsertFile:
 		return decodeOpToInsertUpdate(op)
-	case opDeleteFile:
+	case OpDeleteFile:
 		return decodeOpToDeleteUpdate(op)
 	default:
 		return nil, fmt.Errorf("invalid op.Name: %v", op.Name)
 	}
 }
 
+// decodeOpToDeleteUpdate decode the wal.Operation to a deleteUpdate
 func decodeOpToDeleteUpdate(op writeaheadlog.Operation) (*deleteUpdate, error) {
 	var du deleteUpdate
 	err := rlp.DecodeBytes(op.Data, &du)
@@ -122,7 +127,7 @@ func decodeOpToDeleteUpdate(op writeaheadlog.Operation) (*deleteUpdate, error) {
 	return &du, nil
 }
 
-// decodeOpToInsertUpdate decode the op to insert update
+// decodeOpToInsertUpdate decode the op to an insertUpdate
 func decodeOpToInsertUpdate(op writeaheadlog.Operation) (*insertUpdate, error) {
 	var iu insertUpdate
 	err := rlp.DecodeBytes(op.Data, &iu)
@@ -132,6 +137,7 @@ func decodeOpToInsertUpdate(op writeaheadlog.Operation) (*insertUpdate, error) {
 	return &iu, nil
 }
 
+// createInsertUpdate create a DxFile insertion update.
 func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*insertUpdate, error) {
 	// check validity of the Offset variable
 	if offset < 0 {
@@ -144,10 +150,24 @@ func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*insertUpdate,
 	}, nil
 }
 
+// createDeleteUpdate create a DxFile deletion update
 func (df *DxFile) createDeleteUpdate() (*deleteUpdate, error) {
 	return &deleteUpdate{
 		Filename: df.filePath,
 	}, nil
+}
+
+// ApplyOperations apply the operation of a dxfileUpdate
+func ApplyOperations(op writeaheadlog.Operation) error {
+	up, err := decodeFromWalOp(op)
+	if err != nil {
+		return fmt.Errorf("cannot decode operation: %v", err)
+	}
+	err = up.apply()
+	if err != nil {
+		return fmt.Errorf("cannot apply the update: %v", err)
+	}
+	return nil
 }
 
 // applyUpdates use Wal to create a transaction to apply the updates

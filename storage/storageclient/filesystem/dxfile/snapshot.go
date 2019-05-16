@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -8,20 +12,23 @@ import (
 	"os"
 )
 
+// Snapshot is the snapshot of a DxFile which contains necessary info for a DxFile.
+// The data of Snapshot is deep copy of the Original DxFile and will not affect the
+// Original DxFile
 type Snapshot struct {
-	fileSize uint64
-	sectorSize uint64
+	fileSize    uint64
+	sectorSize  uint64
 	erasureCode erasurecode.ErasureCoder
-	cipherKey crypto.CipherKey
-	fileMode os.FileMode
-	segments []Segment
-	hostTable map[enode.ID]bool
-	dxPath string
+	cipherKey   crypto.CipherKey
+	fileMode    os.FileMode
+	segments    []Segment
+	hostTable   map[enode.ID]bool
+	dxPath      string
 }
 
 // SnapshotReader is the structure that allow reading the raw DxFile content
 type SnapshotReader struct {
-	f *os.File
+	f  *os.File
 	df *DxFile
 }
 
@@ -40,7 +47,7 @@ func (df *DxFile) SnapshotReader() (*SnapshotReader, error) {
 	}
 	return &SnapshotReader{
 		df: df,
-		f: f,
+		f:  f,
 	}, nil
 }
 
@@ -79,14 +86,14 @@ func (df *DxFile) Snapshot() *Snapshot {
 	}
 
 	return &Snapshot{
-		fileSize: df.metadata.FileSize,
-		sectorSize: df.metadata.SectorSize,
+		fileSize:    df.metadata.FileSize,
+		sectorSize:  df.metadata.SectorSize,
 		erasureCode: ec,
-		cipherKey: ck,
-		fileMode: df.metadata.FileMode,
-		segments: segments,
-		hostTable: hostTable,
-		dxPath: df.metadata.DxPath,
+		cipherKey:   ck,
+		fileMode:    df.metadata.FileMode,
+		segments:    segments,
+		hostTable:   hostTable,
+		dxPath:      df.metadata.DxPath,
 	}
 }
 
@@ -137,16 +144,16 @@ func (s *Snapshot) DxPath() string {
 	return s.dxPath
 }
 
-// DxPath return the file size
+// FileSize return the file size
 func (s *Snapshot) FileSize() uint64 {
 	return uint64(s.fileSize)
 }
 
 // copySegment deep copy a segment
 func copySegment(seg *Segment) Segment {
-	copySeg := Segment {
-		Index: seg.Index,
-		Stuck: seg.Stuck,
+	copySeg := Segment{
+		Index:  seg.Index,
+		Stuck:  seg.Stuck,
 		offset: seg.offset,
 	}
 	copySeg.Sectors = copySectors(seg)

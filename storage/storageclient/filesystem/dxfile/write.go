@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -16,6 +20,7 @@ func (df *DxFile) saveAll() error {
 		return errors.New("cannot save the file: file already deleted")
 	}
 	var updates []dxfileUpdate
+	// create updates for hostTable
 	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return err
@@ -28,6 +33,7 @@ func (df *DxFile) saveAll() error {
 	df.metadata.SegmentOffset = df.metadata.HostTableOffset + PageSize*pagesHostTable
 	segmentPersistSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 
+	// create updates for segments
 	for i := range df.segments {
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
@@ -37,11 +43,15 @@ func (df *DxFile) saveAll() error {
 		df.segments[i].offset = offset
 		updates = append(updates, update)
 	}
+
+	// create update for metadata
 	up, err = df.createMetadataUpdate()
 	if err != nil {
 		return err
 	}
 	updates = append(updates, up)
+
+	// save all updates
 	return df.applyUpdates(updates)
 }
 
@@ -51,6 +61,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 		return errors.New("cannot rename the file: file already deleted")
 	}
 	var updates []dxfileUpdate
+	// create updates for delete
 	du, err := df.createDeleteUpdate()
 	if err != nil {
 		return fmt.Errorf("cannot create delete update: %v", err)
@@ -58,6 +69,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 	updates = append(updates, du)
 	df.filePath = newFilePath
 	df.metadata.DxPath = dxPath
+	// create updates for hostTable
 	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return err
@@ -70,6 +82,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 	df.metadata.SegmentOffset = df.metadata.HostTableOffset + PageSize*pagesHostTable
 	segmentPersistSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 
+	// create updates for segments
 	for i := range df.segments {
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
@@ -78,11 +91,14 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 		}
 		updates = append(updates, update)
 	}
+
+	// create updates for metadata
 	up, err = df.createMetadataUpdate()
 	if err != nil {
 		return err
 	}
 	updates = append(updates, up)
+	// apply updates
 	return df.applyUpdates(updates)
 }
 
@@ -103,6 +119,7 @@ func (df *DxFile) saveSegments(indexes []int) error {
 	if df.deleted {
 		return errors.New("cannot save the Segment: file already deleted")
 	}
+	// create updates for hostTable
 	updates, err := df.createMetadataHostTableUpdate()
 	if err != nil {
 		return err
@@ -120,12 +137,13 @@ func (df *DxFile) saveSegments(indexes []int) error {
 		}
 		updates = append(updates, up)
 	}
+	// create updates for metadata
 	up, err := df.createMetadataUpdate()
 	if err != nil {
 		return err
 	}
 	updates = append(updates, up)
-
+	// apply the updates
 	return df.applyUpdates(updates)
 }
 
@@ -161,7 +179,7 @@ func (df *DxFile) createMetadataHostTableUpdate() ([]dxfileUpdate, error) {
 		return nil, err
 	}
 	updates = append(updates, up)
-
+	// If the hostTable does not fit in the current space for hostTable, shift is needed for next segment
 	shiftNeeded := hostTableSize > df.metadata.SegmentOffset-df.metadata.HostTableOffset
 	if shiftNeeded {
 		shiftUpdates, err := df.segmentShift(hostTableSize)
@@ -170,6 +188,7 @@ func (df *DxFile) createMetadataHostTableUpdate() ([]dxfileUpdate, error) {
 		}
 		updates = append(updates, shiftUpdates...)
 	}
+	// create the updates for metadata
 	up, err = df.createMetadataUpdate()
 	if err != nil {
 		return nil, err
@@ -187,10 +206,12 @@ func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, erro
 	}
 	defer f.Close()
 
+	// calculate the offsets after the host table update
 	shiftOffset, numSegToShift, segmentOffsetDiff := df.shiftOffset(targetHostTableSize)
 	prevOffset := df.metadata.SegmentOffset
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 
+	// move the segment to the end of DxFile
 	var updates []dxfileUpdate
 	for i := 0; uint64(i) < numSegToShift; i++ {
 		seg, err := df.readSegment(f, prevOffset)

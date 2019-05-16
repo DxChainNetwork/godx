@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -57,7 +58,7 @@ type (
 		Version string
 	}
 
-	// BubbleMetaData is the Metadata to be bubbled
+	// UpdateMetaData is the Metadata to be updated
 	UpdateMetaData struct {
 		Health           float64
 		StuckHealth      float64
@@ -101,14 +102,14 @@ func (df *DxFile) DxPath() string {
 	return df.metadata.DxPath
 }
 
-// Size return the file size of the dxfile
+// FileSize return the file size of the dxfile
 func (df *DxFile) FileSize() uint64 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	return df.metadata.FileSize
 }
 
-// TimeAccess return the TimeModify of a DxFile
+// TimeModify return the TimeModify of a DxFile
 func (df *DxFile) TimeModify() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -128,6 +129,7 @@ func (df *DxFile) TimeAccess() time.Time {
 	return time.Unix(int64(df.metadata.TimeAccess), 0)
 }
 
+// SetTimeAccess set df.metadata.TimeAccess
 func (df *DxFile) SetTimeAccess(t time.Time) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -135,7 +137,7 @@ func (df *DxFile) SetTimeAccess(t time.Time) error {
 	return df.saveMetadata()
 }
 
-// TimeAccess return the last access time of a DxFile
+// TimeUpdate return the last update time of a DxFile
 func (df *DxFile) TimeUpdate() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -155,7 +157,7 @@ func (df *DxFile) TimeCreate() time.Time {
 	return time.Unix(int64(df.metadata.TimeCreate), 0)
 }
 
-// LastTimeHealthCheck return TimeHealthCheck
+// TimeLastHealthCheck return TimeHealthCheck
 func (df *DxFile) TimeLastHealthCheck() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -165,6 +167,7 @@ func (df *DxFile) TimeLastHealthCheck() time.Time {
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
 
+// SetTimeLastHealthCheck set and save df.metadata.TimeLastHealthCheck
 func (df *DxFile) SetTimeLastHealthCheck(t time.Time) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -172,7 +175,7 @@ func (df *DxFile) SetTimeLastHealthCheck(t time.Time) error {
 	return df.saveMetadata()
 }
 
-// LastTimeHealthCheck return TimeHealthCheck
+// LastTimeRecentRepair return df.metadata.LastTimeRecentRepair
 func (df *DxFile) LastTimeRecentRepair() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -182,6 +185,7 @@ func (df *DxFile) LastTimeRecentRepair() time.Time {
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
 
+// SetTimeRecentRepair set and save df.metadata.TimeRecentRepair
 func (df *DxFile) SetTimeRecentRepair(t time.Time) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()

@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -79,7 +83,7 @@ func (ht hostTable) DecodeRLP(st *rlp.Stream) error {
 	return nil
 }
 
-// Sector implements rlp encode rule
+// EncodeRLP of Sector implements rlp encode rule
 func (s *Sector) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSector{
 		MerkleRoot: s.MerkleRoot,
@@ -87,7 +91,7 @@ func (s *Sector) EncodeRLP(w io.Writer) error {
 	})
 }
 
-// Sector implements rlp decode rule
+// DecodeRLP of Sector implements rlp decode rule
 func (s *Sector) DecodeRLP(st *rlp.Stream) error {
 	var ps persistSector
 	if err := st.Decode(&ps); err != nil {
@@ -97,7 +101,7 @@ func (s *Sector) DecodeRLP(st *rlp.Stream) error {
 	return nil
 }
 
-// Segment implements rlp encode rule to encode the Sectors field
+// EncodeRLP of Segment implements rlp encode rule to encode the Sectors field
 func (s *Segment) EncodeRLP(w io.Writer) error {
 	return rlp.Encode(w, persistSegment{
 		Sectors: s.Sectors,
@@ -106,7 +110,7 @@ func (s *Segment) EncodeRLP(w io.Writer) error {
 	})
 }
 
-// Segment implements rlp decode rule to decode the Sectors field
+// DecodeRLP of Segment implements rlp decode rule to decode the Sectors field
 func (s *Segment) DecodeRLP(st *rlp.Stream) error {
 	var ps persistSegment
 	if err := st.Decode(&ps); err != nil {

@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package dxfile
 
 import (
@@ -34,7 +38,7 @@ func TestPersist(t *testing.T) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		if err = checkDxFileEqual(*df, *newDF); err != nil {
+		if err = checkDxFileEqual(df, newDF); err != nil {
 			t.Error(err.Error())
 		}
 	}
@@ -110,7 +114,7 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
-		if err = checkDxFileEqual(*df, *newDF); err != nil {
+		if err = checkDxFileEqual(df, newDF); err != nil {
 			t.Errorf("test %d: %v", i, err)
 		}
 	}
@@ -138,14 +142,14 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if err = checkDxFileEqual(*df, *newDF); err != nil {
+	if err = checkDxFileEqual(df, newDF); err != nil {
 		t.Errorf("%v", err)
 	}
 }
 
 // Two DxFile are exactly the same if the all fields other than file id are the same
 // (of course not including wal, lock, id, e.t.c
-func checkDxFileEqual(df1, df2 DxFile) error {
+func checkDxFileEqual(df1, df2 *DxFile) error {
 	if err := checkMetadataEqual(df1.metadata, df2.metadata); err != nil {
 		return err
 	}
@@ -154,7 +158,7 @@ func checkDxFileEqual(df1, df2 DxFile) error {
 	}
 	for i := range df1.segments {
 		if err := checkSegmentEqual(*df1.segments[i], *df2.segments[i]); err != nil {
-			return fmt.Errorf("Segment[%d]: %v", i, err)
+			return fmt.Errorf("segment[%d]: %v", i, err)
 		}
 	}
 	if !reflect.DeepEqual(df1.hostTable, df2.hostTable) {
@@ -249,18 +253,19 @@ func checkMetadataEqual(md1, md2 *Metadata) error {
 	return nil
 }
 
+// checkSegmentEqual checks the equality of two segments. If two nil sectors are compared, true is returned
 func checkSegmentEqual(seg1, seg2 Segment) error {
 	if len(seg1.Sectors) != len(seg2.Sectors) {
 		return fmt.Errorf("length of Sectors not equal: %d != %d", len(seg1.Sectors), len(seg2.Sectors))
 	}
 	for i := range seg1.Sectors {
-		if ( seg1.Sectors[i] == nil || len(seg1.Sectors[i]) == 0 ) != ( seg2.Sectors[i] == nil || len(seg2.Sectors[i]) == 0 ) {
+		if (seg1.Sectors[i] == nil || len(seg1.Sectors[i]) == 0) != (seg2.Sectors[i] == nil || len(seg2.Sectors[i]) == 0) {
 			return fmt.Errorf("%d: not equal", i)
 		}
 		if seg1.Sectors[i] == nil {
 			continue
 		}
-		if len(seg1.Sectors[i]) != len(seg2.Sectors[i]){
+		if len(seg1.Sectors[i]) != len(seg2.Sectors[i]) {
 			return fmt.Errorf("%d: not equal", i)
 		}
 		for j := range seg1.Sectors[i] {
