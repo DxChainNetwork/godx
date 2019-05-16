@@ -6,6 +6,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -78,6 +79,31 @@ func TestCopyEntry(t *testing.T) {
 	}
 }
 
+func TestFileSet_NewDxFile(t *testing.T) {
+	entry, fs := newTestFileSet(t)
+	dxPath := entry.metadata.DxPath
+	// create an existing DxFile
+	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 10, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = fs.NewDxFile(dxPath, "", false, ec, ck, 1<<24, 0777)
+	if err != ErrFileExist {
+		t.Fatalf("New an existing DxFile, dont return file exist error: %v", err)
+	}
+	newEntry, err := fs.NewDxFile(randomDxPath(), "", false, ec, ck, 1<<24, 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(testDir, newEntry.metadata.DxPath)); err != nil {
+		t.Errorf("Creating a DxFile, the file does not exist: %v", err)
+	}
+}
+
 func TestFileSet_CloseOpen(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	dxPath := entry.metadata.DxPath
@@ -95,7 +121,19 @@ func TestFileSet_CloseOpen(t *testing.T) {
 	if err := checkDxFileEqual(*recovered.fileSetEntry.DxFile, *entry.fileSetEntry.DxFile); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestFileSet_OpenNonExist(t *testing.T) {
+	entry, fs := newTestFileSet(t)
+	err := entry.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	emptyDxPath := randomDxPath()
+	exist := fs.Exists(emptyDxPath)
+	if exist {
+		t.Errorf("not expected non-existing dxpath give exist==true")
+	}
 	_, err = fs.Open(emptyDxPath)
 	if err != ErrUnknownFile {
 		t.Errorf("not expect error. Expect %v, Got %v", ErrUnknownFile, err)
@@ -120,6 +158,9 @@ func TestFileSet_DeleteOpen(t *testing.T) {
 	if exist {
 		t.Errorf("File should have been deleted")
 	}
+	if _, err := os.Stat(filepath.Join(testDir, dxPath)); !os.IsNotExist(err) {
+		t.Errorf("After delete, previous dxPath file should not exist: %v", err)
+	}
 	// Open the file now, the file should be deleted
 	_, err = fs.Open(dxPath)
 	if err != ErrUnknownFile {
@@ -129,13 +170,16 @@ func TestFileSet_DeleteOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(fs.filesMap) != 0 {
+		t.Errorf("After closing all entries, the size of filesMap is not 0: %d", len(fs.filesMap))
+	}
 	exist = fs.Exists(dxPath)
 	if exist {
 		t.Errorf("File should have been deleted")
 	}
 }
 
-func TestFileSet_Rename(t *testing.T) {
+func TestFileSet_RenameOpen(t *testing.T) {
 	entry, fs := newTestFileSet(t)
 	prevDxPath := entry.metadata.DxPath
 	newDxPath := randomDxPath()
@@ -151,9 +195,34 @@ func TestFileSet_Rename(t *testing.T) {
 	if !exist2 {
 		t.Errorf("After rename, the new dxPath should exists")
 	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(testDir, prevDxPath)); !os.IsNotExist(err) {
+		t.Errorf("After rename, previous dxPath file should not exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(testDir, newDxPath)); err != nil {
+		t.Errorf("After rename, the new dxPath file should exist: %v", err)
+	}
+	if len(fs.filesMap) != 1 {
+		t.Errorf("after rename, the size of filesMap is not 1: %d", len(fs.filesMap))
+	}
 	err = entry.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	if len(fs.filesMap) != 0 {
+		t.Errorf("After closing all entries, the size of filesMap is not 0: %d", len(fs.filesMap))
+	}
+	newEntry, err := fs.Open(newDxPath)
+	if err != nil {
+		t.Errorf("After rename, open the new file give error: %v", err)
+	}
+	if len(fs.filesMap) != 1{
+		t.Errorf("After open the renamed file, filesmap size not 1: %d", len(fs.filesMap))
+	}
+	err = newEntry.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
