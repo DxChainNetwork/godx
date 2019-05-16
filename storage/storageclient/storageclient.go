@@ -1,34 +1,35 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storageclient
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/internal/ethapi"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rpc"
-	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
-	"reflect"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
 // ************** MOCKING DATA *****************
 // *********************************************
 type (
-	storageHostManager struct{}
-	contractManager    struct{}
-	StorageContractID  struct{}
-	StorageHostEntry   struct{}
-	streamCache        struct{}
-	Wal                struct{}
+	contractManager   struct{}
+	StorageContractID struct{}
+	StorageHostEntry  struct{}
+	streamCache       struct{}
+	Wal               struct{}
 )
-// *********************************************
-// *********************************************
 
-// Backend allows Ethereum object to be passed in as interface
-type Backend interface {
-	APIs() []rpc.API
-}
+// *********************************************
+// *********************************************
 
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
@@ -45,8 +46,8 @@ type StorageClient struct {
 	memoryManager *memorymanager.MemoryManager
 
 	// contract manager and storage host manager
-	contractManager    contractManager
-	storageHostManager storageHostManager
+	contractManager    *contractManager
+	storageHostManager *storagehostmanager.StorageHostManager
 
 	// TODO (jacky): workerpool
 
@@ -61,12 +62,16 @@ type StorageClient struct {
 	// Utilities
 	streamCache *streamCache
 	log         log.Logger
-	// TODO (jacky): considering using the Lock and Unlock with ID ?
-	lock    sync.Mutex
-	tm      threadmanager.ThreadManager
-	wal     Wal
-	network *ethapi.PublicNetAPI
-	account *ethapi.PrivateAccountAPI
+	lock        sync.Mutex
+	tm          threadmanager.ThreadManager
+	wal         Wal
+
+	// information on network, block chain, and etc.
+	info       ParsedAPI
+	ethBackend storage.EthBackend
+
+	// get the P2P server for adding peer
+	p2pServer *p2p.Server
 }
 
 // New initializes StorageClient object
@@ -79,25 +84,35 @@ func New(persistDir string) (*StorageClient, error) {
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
+	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
 
 	return sc, nil
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(eth Backend) error {
-	// getting all needed API functions
-	sc.filterAPIs(eth.APIs())
+func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
+	// get the eth backend
+	sc.ethBackend = b
 
 	// validation
-	if sc.network == nil {
-		return errors.New("failed to acquire network information")
+	if server == nil {
+		return errors.New("failed to get the P2P server")
 	}
 
-	if sc.account == nil {
-		return errors.New("failed to acquire account information")
+	// get the p2p server for the adding peers
+	sc.p2pServer = server
+
+	// getting all needed API functions
+	err := sc.filterAPIs(b.APIs())
+	if err != nil {
+		return err
 	}
 
-	// TODO (mzhang): Initialize ContractManager & HostManager -> assign to StorageClient
+	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
+	err = sc.storageHostManager.Start(sc.p2pServer, sc)
+	if err != nil {
+		return err
+	}
 
 	// Load settings from persist file
 	if err := sc.loadPersist(); err != nil {
@@ -115,17 +130,10 @@ func (sc *StorageClient) Start(eth Backend) error {
 	return nil
 }
 
-func (sc *StorageClient) filterAPIs(apis []rpc.API) {
-	for _, api := range apis {
-		switch typ := reflect.TypeOf(api.Service); typ {
-		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
-			sc.network = api.Service.(*ethapi.PublicNetAPI)
-		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
-			sc.account = api.Service.(*ethapi.PrivateAccountAPI)
-		default:
-			continue
-		}
-	}
+func (sc *StorageClient) Close() error {
+	err := sc.storageHostManager.Close()
+	errSC := sc.tm.Stop()
+	return common.ErrCompose(err, errSC)
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {

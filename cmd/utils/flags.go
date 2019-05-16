@@ -113,6 +113,17 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	StorageHostManagerEnodeFlag = cli.StringFlag{
+		Name: "enodeid",
+		Usage: "used to query the storage host information based on the enode id",
+	}
+
+	// Storage Host Manager Testing
+	StorageHostManagerInsertFlag = cli.IntFlag{
+		Name: "insertamount",
+		Usage: "set up how many host info wants to insert into the pool",
+	}
+
 	// Storage Client
 	StorageClientMemoryFlag = cli.Uint64Flag{
 		Name: "memorylimit",

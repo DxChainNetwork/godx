@@ -34,7 +34,6 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 	"github.com/naoina/toml"
-
 )
 
 var (
