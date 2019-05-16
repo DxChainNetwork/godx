@@ -27,7 +27,6 @@ type (
 		DxPath    string // DxPath is the user specified dxpath
 
 		// Encryption
-		// TODO: Add the key for sharing
 		CipherKeyCode uint8  // cipher key code defined in cipher package
 		CipherKey     []byte // Key used to encrypt pieces
 
@@ -38,11 +37,11 @@ type (
 		TimeCreate uint64 // time of file creation
 
 		// Repair loop fields
-		Health              uint32 // Worst health of the file's unstuck chunk
-		StuckHealth         uint32 // Worst health of the file's Stuck chunk
+		Health              uint32 // Worst health of the file's unstuck segment
+		StuckHealth         uint32 // Worst health of the file's Stuck segment
 		TimeLastHealthCheck uint64 // Time of last health check happenning
-		NumStuckSegments    uint32 // Number of Stuck chunks
-		TimeRecentRepair    uint64 // Timestamp of last chunk repair
+		NumStuckSegments    uint32 // Number of Stuck segments
+		TimeRecentRepair    uint64 // Timestamp of last segment repair
 		LastRedundancy      uint32 // File redundancy from last check
 
 		// File related
@@ -56,9 +55,6 @@ type (
 
 		// Version control for fork
 		Version string
-
-		// TODO: Check whether removed field is really necessary when finished
-		//  Removed fields: UserId, GroupId, ChunkMetadataSize, sharingKey, PagesPerSegment.
 	}
 
 	// BubbleMetaData is the Metadata to be bubbled
@@ -66,7 +62,7 @@ type (
 		Health           float64
 		StuckHealth      float64
 		LastHealthCheck  time.Time
-		NumStuckChunks   uint64
+		NumStuckSegments uint64
 		RecentRepairTime time.Time
 		LastRedundancy   float64
 		Size             uint64
@@ -95,7 +91,6 @@ func (df *DxFile) SetLocalPath(path string) error {
 	defer df.lock.RUnlock()
 
 	df.metadata.LocalPath = path
-	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -174,7 +169,6 @@ func (df *DxFile) SetTimeLastHealthCheck(t time.Time) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	df.metadata.TimeLastHealthCheck = uint64(t.Unix())
-	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -193,7 +187,6 @@ func (df *DxFile) SetTimeRecentRepair(t time.Time) error {
 	defer df.lock.Unlock()
 
 	df.metadata.TimeRecentRepair = uint64(t.Unix())
-	df.metadata.TimeUpdate = unixNow()
 	return df.saveMetadata()
 }
 
@@ -251,7 +244,6 @@ func (df *DxFile) SetFileMode(mode os.FileMode) error {
 	defer df.lock.Unlock()
 
 	df.metadata.FileMode = mode
-	df.metadata.TimeUpdate = unixNow()
 
 	return df.saveMetadata()
 }

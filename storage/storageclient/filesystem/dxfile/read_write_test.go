@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
@@ -142,44 +141,6 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	if err = checkDxFileEqual(*df, *newDF); err != nil {
 		t.Errorf("%v", err)
 	}
-}
-
-// newTestDxFile generate a random DxFile used for testing.
-func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
-	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
-	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
-	filename := filepath.Join(testDir, t.Name())
-	wal, txns, _ := writeaheadlog.New(filepath.Join(testDir, t.Name()+".wal"))
-	for _, txn := range txns {
-		txn.Release()
-	}
-	df, err := New(filename, t.Name(), filepath.Join("~/tmp", t.Name()), wal, ec, ck, fileSize, 0777)
-	if err != nil {
-		return nil, err
-	}
-	return df, nil
-}
-
-func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
-	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
-		seg := randomSegment(df.metadata.NumSectors)
-		seg.Index = uint64(i)
-		df.segments[i] = seg
-		for _, sectors := range seg.Sectors {
-			for _, sector := range sectors {
-				df.hostTable[sector.HostID] = true
-			}
-		}
-	}
-
-	if err = df.saveAll(); err != nil {
-		return nil, err
-	}
-	return df, nil
 }
 
 // Two DxFile are exactly the same if the all fields other than file id are the same

@@ -9,6 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
+// TODO better error handling
 // saveAll save all contents of a DxFile to the file.
 func (df *DxFile) saveAll() error {
 	if df.deleted {
@@ -118,12 +119,12 @@ func (df *DxFile) saveSegments(indexes []int) error {
 			return fmt.Errorf("cannot write Segment: %v", err)
 		}
 		updates = append(updates, up)
-		up, err = df.createMetadataUpdate()
-		if err != nil {
-			return err
-		}
-		updates = append(updates, up)
 	}
+	up, err := df.createMetadataUpdate()
+	if err != nil {
+		return err
+	}
+	updates = append(updates, up)
 
 	return df.applyUpdates(updates)
 }
@@ -247,6 +248,7 @@ func (df *DxFile) createMetadataUpdate() (dxfileUpdate, error) {
 // createHostTableUpdate create a hostTable update. Return the insertUpdate, size of hostTable bytes
 // and the error
 func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
+	df.metadata.TimeUpdate = unixNow()
 	hostTableBytes, err := rlp.EncodeToBytes(df.hostTable)
 	if err != nil {
 		return nil, 0, err
@@ -260,6 +262,7 @@ func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
 
 // createSegmentShiftUpdate create an Segment update
 func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfileUpdate, error) {
+	df.metadata.TimeModify = unixNow()
 	if segmentIndex > uint64(len(df.segments)) {
 		return nil, fmt.Errorf("unexpected Index: %d", segmentIndex)
 	}

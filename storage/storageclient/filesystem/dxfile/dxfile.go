@@ -190,7 +190,7 @@ func (df *DxFile) HostIDs() []enode.ID {
 	return hosts
 }
 
-// MarkAllHealthyChunksAsUnstuck mark all health > 100 segments as unstuck
+// MarkAllHealthySegmentsAsUnstuck mark all health > 100 segments as unstuck
 func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
@@ -310,11 +310,11 @@ func (df *DxFile) SetStuckByIndex(index int, stuck bool) (err error) {
 	if stuck == df.segments[index].Stuck {
 		return nil
 	}
-	prevNumStuckChunks := df.metadata.NumStuckSegments
+	prevNumStuckSegments := df.metadata.NumStuckSegments
 	prevStuck := df.segments[index].Stuck
 	defer func() {
 		if err != nil {
-			df.metadata.NumStuckSegments = prevNumStuckChunks
+			df.metadata.NumStuckSegments = prevNumStuckSegments
 			df.segments[index].Stuck = prevStuck
 		}
 	}()

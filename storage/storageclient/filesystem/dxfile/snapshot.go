@@ -138,7 +138,7 @@ func (s *Snapshot) DxPath() string {
 }
 
 // DxPath return the file size
-func (s *Snapshot) Size() uint64 {
+func (s *Snapshot) FileSize() uint64 {
 	return uint64(s.fileSize)
 }
 
