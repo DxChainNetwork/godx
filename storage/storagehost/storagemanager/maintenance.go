@@ -26,7 +26,9 @@ func (sm *storageManager) startMaintenance() {
 			if Mode == TST && MockFails["EXIT"] {
 				return
 			}
+			sm.wal.lock.Lock()
 			sm.maintenanceClose()
+			sm.wal.lock.Unlock()
 			return
 		case <-time.After(commitFrequency):
 			// do commit
