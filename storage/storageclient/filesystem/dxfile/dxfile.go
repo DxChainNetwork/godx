@@ -26,6 +26,9 @@ const (
 
 	// SectorSize is the size of a Sector, which is 4MiB
 	SectorSize = uint64(1 << 22)
+
+	// Version is the version of dxfile
+	Version = "1.0.0"
 )
 
 type (
@@ -93,7 +96,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 	}
 	// create a metadata
 	md := &Metadata{
-		Version:         "1.0.0",
+		Version:         Version,
 		HostTableOffset: PageSize,
 		SegmentOffset:   2 * PageSize,
 		FileSize:        fileSize,

@@ -32,10 +32,10 @@ var (
 type (
 	// FileSet is the set of DxFile
 	FileSet struct {
-		// dxFileDir is the file directory for dxfile
+		// filesDir is the file directory for dxfile
 		filesDir string
 
-		// dxFileMap is the mapping from dxPath to contents
+		// filesMap is the mapping from dxPath to contents
 		filesMap map[string]*fileSetEntry
 
 		lock sync.Mutex

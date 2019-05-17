@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package erasurecode
 
 import (
@@ -16,7 +17,7 @@ const EncodedShardUnit = 64
 // ErrInsufficientData is the error that not sufficient data is provided for recovery.
 var ErrInsufficientData = errors.New("not sufficient data for recovery")
 
-// shardErasureCode is the erasure code that segment is divided to pieces and each
+// shardErasureCode is the erasure code that segment is divided to shards and each
 // piece data could be independently recovered.
 // Note that the performance of shardErasureCode is about 7-8 times slower than
 // standard erasure code algorithm. Avoid using this algorithm unless user specifies.

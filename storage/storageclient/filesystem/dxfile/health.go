@@ -102,7 +102,7 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 	return uint32(numSectorsGoodForRenew), uint32(numSectorsGoodForUpload)
 }
 
-// cmpHealth compare two health. The cmpHealth result returns the priority the health related Segment should be fixed
+// CmpHealth compare two health. The cmpHealth result returns the priority the health related Segment should be fixed
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
 func CmpHealth(h1, h2 uint32) int {
 	if h1 == h2 {
