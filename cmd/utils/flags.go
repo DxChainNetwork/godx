@@ -20,6 +20,7 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -112,6 +113,24 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	StorageHostManagerEnodeFlag = cli.StringFlag{
+		Name: "enodeid",
+		Usage: "used to query the storage host information based on the enode id",
+	}
+
+	// Storage Host Manager Testing
+	StorageHostManagerInsertFlag = cli.IntFlag{
+		Name: "insertamount",
+		Usage: "set up how many host info wants to insert into the pool",
+	}
+
+	// Storage Client
+	StorageClientMemoryFlag = cli.Uint64Flag{
+		Name: "memorylimit",
+		Usage: "Memory limitation for storage client",
+		Value: storageclient.DefaultMaxMemory,
+	}
+
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -490,7 +509,7 @@ var (
 		Usage: "Comma separated list of JavaScript files to preload into the console",
 	}
 
-	// Network Settings
+	// Network Config
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",

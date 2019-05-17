@@ -18,12 +18,15 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -49,6 +52,9 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 type LesServer interface {
@@ -60,6 +66,8 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
+	storageHost *storagehost.StorageHost
+
 	config      *Config
 	chainConfig *params.ChainConfig
 
@@ -87,10 +95,17 @@ type Ethereum struct {
 	gasPrice  *big.Int
 	etherbase common.Address
 
+	apisOnce       sync.Once
+	registeredAPIs []rpc.API
+	storageClient  *storageclient.StorageClient
+
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	// maintenance
+	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -188,6 +203,30 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
+	// Initialize StorageClient
+	clientPath := ctx.ResolvePath(config.StorageClientDir)
+	eth.storageClient, err = storageclient.New(clientPath)
+	if err != nil {
+		return nil, err
+	}
+
+	hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
+	eth.storageHost, err = storagehost.New(hostPath)
+
+	if err != nil {
+		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
+		//  make sure what the expected handling case of these failure
+		return nil, err
+	}
+
+	// new maintenance system
+	state, err := eth.blockchain.State()
+	if err != nil {
+		log.Error("failed to get statedb for maintenance", "error", err)
+		return nil, err
+	}
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
+
 	return eth, nil
 }
 
@@ -254,58 +293,88 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 // APIs return the collection of RPC services the ethereum package offers.
 // NOTE, some of these services probably need to be moved to somewhere else.
 func (s *Ethereum) APIs() []rpc.API {
-	apis := ethapi.GetAPIs(s.APIBackend)
+	getAPI := func() {
+		apis := ethapi.GetAPIs(s.APIBackend)
 
-	// Append any APIs exposed explicitly by the consensus engine
-	apis = append(apis, s.engine.APIs(s.BlockChain())...)
+		// Append any APIs exposed explicitly by the consensus engine
+		apis = append(apis, s.engine.APIs(s.BlockChain())...)
 
-	// Append all the local APIs and return
-	return append(apis, []rpc.API{
-		{
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicEthereumAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   NewPublicMinerAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
-			Public:    true,
-		}, {
-			Namespace: "miner",
-			Version:   "1.0",
-			Service:   NewPrivateMinerAPI(s),
-			Public:    false,
-		}, {
-			Namespace: "eth",
-			Version:   "1.0",
-			Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
-			Public:    true,
-		}, {
-			Namespace: "admin",
-			Version:   "1.0",
-			Service:   NewPrivateAdminAPI(s),
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPublicDebugAPI(s),
-			Public:    true,
-		}, {
-			Namespace: "debug",
-			Version:   "1.0",
-			Service:   NewPrivateDebugAPI(s.chainConfig, s),
-		}, {
-			Namespace: "net",
-			Version:   "1.0",
-			Service:   s.netRPCService,
-			Public:    true,
-		},
-	}...)
+		// Append all the local APIs and return
+		s.registeredAPIs = append(apis, []rpc.API{
+			{
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicEthereumAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   NewPublicMinerAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   downloader.NewPublicDownloaderAPI(s.protocolManager.downloader, s.eventMux),
+				Public:    true,
+			}, {
+				Namespace: "miner",
+				Version:   "1.0",
+				Service:   NewPrivateMinerAPI(s),
+				Public:    false,
+			}, {
+				Namespace: "eth",
+				Version:   "1.0",
+				Service:   filters.NewPublicFilterAPI(s.APIBackend, false),
+				Public:    true,
+			}, {
+				Namespace: "admin",
+				Version:   "1.0",
+				Service:   NewPrivateAdminAPI(s),
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPublicDebugAPI(s),
+				Public:    true,
+			}, {
+				Namespace: "debug",
+				Version:   "1.0",
+				Service:   NewPrivateDebugAPI(s.chainConfig, s),
+			}, {
+				Namespace: "net",
+				Version:   "1.0",
+				Service:   s.netRPCService,
+				Public:    true,
+			}, {
+				Namespace: "storageclient",
+				Version:   "1.0",
+				Service:   storageclient.NewPublicStorageClientAPI(s.storageClient),
+				Public:    true,
+			}, {
+				Namespace: "storageclient",
+				Version:   "1.0",
+				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
+				Public:    false,
+			}, {
+				Namespace: "hostdebug",
+				Version:   "1.0",
+				Service:   storagehost.NewHostDebugAPI(s.storageHost),
+				Public:    true,
+			}, {
+				Namespace: "hostmanagerdebug",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
+			}, {
+				Namespace: "hostmanager",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
+			},
+		}...)
+	}
+
+	s.apisOnce.Do(getAPI)
+	return s.registeredAPIs
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -503,6 +572,16 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	if s.lesServer != nil {
 		s.lesServer.Start(srvr)
 	}
+
+	// Start Storage Client
+	err := s.storageClient.Start(s, srvr)
+	if err != nil {
+		return err
+	}
+
+	// Start Storage Host
+	s.storageHost.Start(s)
+
 	return nil
 }
 
@@ -521,6 +600,45 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
+	s.storageHost.Close()
 	close(s.shutdownChan)
+
+	// stop maintenance
+	s.maintenance.Stop()
 	return nil
+}
+
+// GetStorageHostSetting will send message to the peer with the corresponded peer ID
+func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+	// within the 30 seconds, if the peer is still not added to the peer set
+	// return error
+	timeout := time.After(30 * time.Second)
+	var p *peer
+
+	for {
+		p = s.protocolManager.peers.Peer(peerID)
+		if p != nil {
+			break
+		}
+
+		// after thirty seconds,
+		select {
+		case <-timeout:
+			return errors.New("peer cannot be found")
+		default:
+		}
+	}
+
+	// send message to the peer
+	return p2p.Send(p.rw, HostSettingMsg, config)
+}
+
+// SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be
+// delivered through the channel
+func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return s.APIBackend.SubscribeChainChangeEvent(ch)
+}
+
+func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }

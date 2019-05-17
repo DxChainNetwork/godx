@@ -1,4 +1,4 @@
-package threadManager
+package threadmanager
 
 import (
 	"errors"

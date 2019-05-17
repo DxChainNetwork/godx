@@ -159,6 +159,18 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBHostTagFlag,
 	}
+
+	storageClientFlags = []cli.Flag{
+		utils.StorageClientMemoryFlag,
+	}
+
+	storageHostManagerTestFlags = []cli.Flag{
+		utils.StorageHostManagerInsertFlag,
+	}
+
+	storageHostManagerFlags = []cli.Flag{
+		utils.StorageHostManagerEnodeFlag,
+	}
 )
 
 func init() {
@@ -193,6 +205,12 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
+		// See storageclientcmd.go
+		storageClientCommand,
+		// see shmtest.go
+		hostManagerTestCommand,
+		// see storagehostmanagercmd.go
+		hostManagerCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -201,6 +219,9 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
+	app.Flags = append(app.Flags, storageClientFlags...)
+	app.Flags = append(app.Flags, storageHostManagerFlags...)
+	app.Flags = append(app.Flags, storageHostManagerTestFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""
