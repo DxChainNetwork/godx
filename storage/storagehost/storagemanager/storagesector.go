@@ -29,6 +29,7 @@ type storageSector struct {
 
 const sectorMutex = 1 << iota
 
+// sectorLock use to lock the sector object
 type sectorLock struct {
 	lock    sync.Mutex
 	waiting int
@@ -111,18 +112,22 @@ func (sm *storageManager) unlockSector(id sectorID) {
 
 // recoverSector recover the sector object through wal
 func (sm *storageManager) recoverSector(sectorMeta []sectorPersist) {
-
+	// loop through the sector meta data
 	for _, ss := range sectorMeta {
+		// check if according the sector meta, the folder exist
 		sf, exists := sm.folders[ss.Folder]
+		// if not exist or the folder is damaged, return
 		if !exists || atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
 			// TODO: log sever
 			fmt.Println("Unable to get storage folder")
 			return
 		}
 
+		// compute the sector index
 		usageIndex := ss.Index / granularity
 		bitIndex := ss.Index % granularity
 
+		// if the sector is marked as removed, clear the usage
 		if ss.Count == 0 {
 			sf.usage[usageIndex].clearUsage(uint16(bitIndex))
 			return
@@ -138,6 +143,7 @@ func (sm *storageManager) recoverSector(sectorMeta []sectorPersist) {
 		// set the usage back
 		sf.usage[usageIndex].setUsage(uint16(bitIndex))
 
+		// map the sector id to the sector object
 		sm.sectors[ss.ID] = storageSector{
 			index:         ss.Index,
 			storageFolder: ss.Folder,
@@ -146,6 +152,8 @@ func (sm *storageManager) recoverSector(sectorMeta []sectorPersist) {
 	}
 }
 
+// findProcessedSectorUpdate loop through given entries and find
+// the finished sector updat information
 func findProcessedSectorUpdate(entries []logEntry) []sectorPersist {
 	sectorsUpdate := make([]sectorPersist, 0)
 	for _, entry := range entries {
@@ -167,6 +175,7 @@ func writeSector(file *os.File, sectorIndex uint32, data []byte) error {
 	return nil
 }
 
+// writeSectorMeta write the sectors metadata to given file at specific location
 func writeSectorMeta(file *os.File, sectorMeta sectorPersist) error {
 	data := make([]byte, SectorMetaSize)
 	copy(data, sectorMeta.ID[:])

@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// TODO: utils random function all need exhausted testing
-
 // RandomFolderIndex get a randoms folder index from 0 (include)
 // to 65535 (include). The algorithm aim at finding a unused index
 // which is the closet to the random number
@@ -80,6 +78,7 @@ func randomAvailableFolder(sfs []*storageFolder) (*storageFolder, int) {
 
 // return: the index [0, len(usage) == number of group of sector], error
 func randomFreeSector(usage []BitVector) (uint32, error) {
+	// TODO: check if seeds could be handle in better way
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	var idx = -1

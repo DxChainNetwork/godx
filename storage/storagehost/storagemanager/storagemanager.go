@@ -32,6 +32,7 @@ type storageManager struct {
 	stopChan chan struct{}
 	// atomicSwitch is a switch for manage to receive an operation or not
 	atomicSwitch uint64
+	lock         sync.Mutex
 	// wg is wait group to avoid shut down without finishing of all operations
 	wg *sync.WaitGroup
 }
@@ -162,8 +163,6 @@ func (sm *storageManager) RemoveSector(id sectorID) error {
 
 // use the thread manager to close all the related process
 func (sm *storageManager) Close() error {
-	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
 
 	// check if already closed
 	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
@@ -171,12 +170,13 @@ func (sm *storageManager) Close() error {
 	}
 	// close the switch, indicating the storage manager would no longer receive
 	// any operation
+	sm.wal.lock.Lock()
 	atomic.StoreUint64(&sm.atomicSwitch, 1)
+	sm.wal.lock.Unlock()
 
 	// signal the maintenance threads to shut down
 	// TODO: if this is called when the maintenance not running,
 	//  may result an infinite waiting,
-
 	sm.stopChan <- struct{}{}
 
 	// wait until all running operation finish their job

@@ -143,11 +143,13 @@ func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) er
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 
+	// check if the folder recorded in the meta data exist or not
 	sf, exists := sm.folders[sectorMeta.Folder]
 	if !exists || sf.atomicUnavailable == 1 {
 		return errors.New("storage folder cannot found")
 	}
 
+	//
 	err := sm.wal.writeEntry(logEntry{
 		SectorUpdate: []sectorPersist{sectorMeta}})
 
@@ -164,6 +166,7 @@ func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) er
 			SectorUpdate: []sectorPersist{sectorMeta}})
 		if err != nil {
 			// TODO: consider panic because cannot write into wal
+			return err
 		}
 		// update in memory
 		sm.sectors[id] = sector
@@ -173,7 +176,17 @@ func (sm *storageManager) addVirtualSector(id sectorID, sector storageSector) er
 	return nil
 }
 
+// removeSector remove the sector by given sector id
 func (sm *storageManager) removeSector(id sectorID) error {
+	// if the switch is top, indicate the storage manager is shut down,
+	// would no longer receive any operation request, return an error
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
+		return errors.New("storage manager is shut down")
+	}
+
+	sm.wg.Add(1)
+	defer sm.wg.Done()
+
 	sm.wal.lock.Lock()
 	defer sm.wal.lock.Unlock()
 
@@ -205,12 +218,11 @@ func (sm *storageManager) removeSector(id sectorID) error {
 		SectorUpdate: []sectorPersist{sectorMeta}})
 	if err != nil {
 		// TODO: consider panic because cannot write into wal
+		return err
 	}
 
 	if sector.count == 0 {
 		delete(sm.sectors, id)
-		// TODO: mark the free sector, handling
-		folder.freeSectors[id] = sector.index
 
 		// clear the usage and handle the free sector recording
 		usageIndex := sector.index / granularity
@@ -224,7 +236,6 @@ func (sm *storageManager) removeSector(id sectorID) error {
 		sm.sectors[id] = sector
 
 		// update the sector metadata
-		// TODO: recover the metadata according the entry
 		err = writeSectorMeta(folder.sectorMeta, sectorMeta)
 		if err != nil {
 			// if write the sector metadata fail, revert
@@ -235,6 +246,7 @@ func (sm *storageManager) removeSector(id sectorID) error {
 				SectorUpdate: []sectorPersist{sectorMeta}})
 			if err != nil {
 				// TODO: consider panic because cannot write into wal
+				return err
 			}
 
 			// load back the change to memory

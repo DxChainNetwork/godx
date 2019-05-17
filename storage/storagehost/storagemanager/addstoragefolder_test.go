@@ -3,11 +3,13 @@ package storagemanager
 import (
 	"errors"
 	"github.com/DxChainNetwork/godx/common"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Test_AddStorageFolderBasic check the basic operation of adding folder
@@ -367,4 +369,18 @@ func isExpectedFolderList(sm *storageManager, folders []folderPersist) error {
 	}
 
 	return nil
+}
+
+// Simply test if the storage manager can run as expected
+func TestStorageManager(t *testing.T) {
+	sm, err := newStorageManager(TestPath)
+	if sm == nil || err != nil {
+		t.Errorf("fail to create storage manager")
+	}
+	rand.Seed(time.Now().UTC().UnixNano())
+	duration := rand.Int31n(4000)
+	time.Sleep(time.Duration(duration) * time.Millisecond)
+	if err := sm.Close(); err != nil {
+		t.Errorf(err.Error())
+	}
 }
