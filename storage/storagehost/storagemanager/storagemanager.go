@@ -32,7 +32,6 @@ type storageManager struct {
 	stopChan chan struct{}
 	// atomicSwitch is a switch for manage to receive an operation or not
 	atomicSwitch uint64
-	lock         sync.Mutex
 	// wg is wait group to avoid shut down without finishing of all operations
 	wg *sync.WaitGroup
 }
