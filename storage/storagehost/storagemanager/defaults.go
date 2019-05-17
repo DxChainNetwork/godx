@@ -1,7 +1,6 @@
 package storagemanager
 
 import (
-	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -57,8 +56,6 @@ var (
 	MinSectorPerFolder uint64
 	// MaxStorageFolders is the limitation of maximum folder
 	MaxStorageFolders uint64
-	// configLock manage save and load of the temporary config file, make sure it won't lead race between thread
-	configLock sync.Mutex
 )
 
 // SELECT is a map recording the setting value to used in each mode

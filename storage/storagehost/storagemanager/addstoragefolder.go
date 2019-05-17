@@ -5,6 +5,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 )
 
 // prepareAddStorageFolder manage the first step for adding a folder
@@ -40,6 +41,7 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 		path:        path,
 		usage:       make([]BitVector, sectors/granularity),
 		freeSectors: make(map[sectorID]uint32),
+		folderLock:  new(folderLock),
 	}
 
 	// in order to prevent duplicate add
@@ -67,16 +69,12 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 		return nil, err
 	}
 
-	// TODO: if this is map. how to handle when sector need to write data to this folder
-	// manage map the folder
-	sm.folderLock.Lock()
-	// lock the storage folder as soon as the storage folder map to the folder
-	sf.fLock.Lock()
+	// lock the folder, mark as cannot use until the folder addition been processed
+	sf.folderLock.Lock()
 	sm.folders[sf.index] = sf
-	sm.folderLock.Unlock()
 
 	// extract the config for the folder and write into log
-	sfConfig := sf.extractFolder()
+	sfConfig := extractFolder(*sf)
 	err = sm.wal.writeEntry(logEntry{PrepareAddStorageFolder: []folderPersist{sfConfig}})
 	if err != nil {
 		return nil, errors.New("cannot write wal")
@@ -85,16 +83,14 @@ func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*st
 	return sf, nil
 }
 
-// TODO: revert add storage folder
-// TODO: create would redo the already existing file
-
 // processAddStorageFolder start to create metadata files and sector file
 // for the folder object. Also include truncating
 func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
-	defer sf.fLock.Unlock()
-
+	// at the end of the operation, the folder can be used, do unlock
+	defer sf.folderLock.Unlock()
 	var err error
 
+	// defer the error handling process
 	defer func(sf *storageFolder) {
 		if err == nil {
 			return
@@ -122,7 +118,7 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 		return err
 	} else if !os.IsNotExist(metaErr) || !os.IsNotExist(dataErr) {
 		// if the error is not caused by non existing of file
-		// TODO: log warning
+		// TODO: log warning or crash
 	}
 
 	// create all the directory
@@ -159,42 +155,44 @@ func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
 		return err
 	}
 
-	// fLock wal to write entry
+	// lock the wal
 	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
 
 	// re update the folder mapping
-	sm.folderLock.Lock()
 	sm.folders[sf.index] = sf
-	sm.folderLock.Unlock()
 
 	if Mode == TST && MockFails["ADD_EXIT"] {
+		sm.wal.lock.Unlock()
 		sm.stopChan <- struct{}{}
 		return nil
 	}
 
 	// extract the folder information and write to entry
-	sfConfig := sf.extractFolder()
+	sfConfig := extractFolder(*sf)
 	err = sm.wal.writeEntry(logEntry{ProcessedAddStorageFolder: []folderPersist{sfConfig}})
 	if err != nil {
+		sm.wal.lock.Unlock()
 		return errors.New("cannot write wal, consider crashing in future")
 	}
+
+	sm.wal.lock.Unlock()
 
 	return nil
 }
 
 // revertAddStorageFolder revert the change of the storage folder
 func (sm *storageManager) revertAddStorageFolder(sf *storageFolder) error {
+	sm.wal.lock.Lock()
+	defer sm.wal.lock.Unlock()
+
 	var err error
 
-	sm.folderLock.Lock()
 	// delete the folder from the mapping
 	delete(sm.folders, sf.index)
-	sm.folderLock.Unlock()
 
 	// extract the information of folder to be removed
 	// and record the folder information to the log
-	folder := sf.extractFolder()
+	folder := extractFolder(*sf)
 	err = sm.wal.writeEntry(logEntry{RevertAddStorageFolder: []folderPersist{folder}})
 	if err != nil {
 		// TODO : consider just crashing the system to prevent corruption
@@ -213,27 +211,47 @@ func (sm *storageManager) revertAddStorageFolder(sf *storageFolder) error {
 }
 
 func (sm *storageManager) cancelAddStorageFolder(sf *storageFolder) error {
+	sm.wal.lock.Lock()
+	defer sm.wal.lock.Unlock()
+
 	// TODO: dangerous operation, may clean out an already mapped memory
 	// delete the folder from the mapping
-	sm.folderLock.Lock()
 	delete(sm.folders, sf.index)
-	sm.folderLock.Unlock()
 
 	// extract the information of folder to be removed
 	// and record the folder information to the log
-	folder := sf.extractFolder()
+	folder := extractFolder(*sf)
 	err := sm.wal.writeEntry(logEntry{CancelAddStorageFolder: []folderPersist{folder}})
 	if err != nil {
 		//TODO: consider crashing the system to prevent corruption
 		return err
 	}
-
 	return nil
 }
 
+// find the already processed folder
+func findProcessedFolderAddition(entries []logEntry) []folderPersist {
+	entryMap := make(map[uint16]folderPersist)
+	// loop through the entry and find the processed addition
+	for _, entry := range entries {
+		for _, sf := range entry.ProcessedAddStorageFolder {
+			entryMap[sf.Index] = sf
+		}
+	}
+	// convert the map to array
+	var folders []folderPersist
+	for _, sf := range entryMap {
+		folders = append(folders, sf)
+	}
+	return folders
+}
+
+// find all the unprocessed folder addition, return a array of folder
+// which have not start to do operation yet
 func findUnprocessedFolderAddition(entries []logEntry) []folderPersist {
 	entryMap := make(map[uint16]folderPersist)
 
+	// loop through the entries
 	for _, entry := range entries {
 		// add all the folder in prepare stage
 		for _, sf := range entry.PrepareAddStorageFolder {
@@ -257,6 +275,7 @@ func findUnprocessedFolderAddition(entries []logEntry) []folderPersist {
 		// TODO: delete the folder in removal stage
 	}
 
+	// convert map to array
 	var folders []folderPersist
 	for _, sf := range entryMap {
 		folders = append(folders, sf)
@@ -264,18 +283,89 @@ func findUnprocessedFolderAddition(entries []logEntry) []folderPersist {
 	return folders
 }
 
-func findProcessedFolderAddition(entries []logEntry) []folderPersist {
-	entryMap := make(map[uint16]folderPersist)
-	for _, entry := range entries {
-		for _, sf := range entry.ProcessedAddStorageFolder {
-			entryMap[sf.Index] = sf
+// if the prepare stage is logged, which means there is no duplication in folders,
+// so no worry about delete data already exist
+func (sm *storageManager) clearUnprocessedAddition(unProcessedAddition []folderPersist) {
+	var err error
+	// check through all unprocessed additions
+	for _, sf := range unProcessedAddition {
+		f, exists := sm.folders[sf.Index]
+
+		// if the folder not exist
+		if !exists {
+			if err := os.RemoveAll(sf.Path); err != nil {
+				// TODO: log: consider if this is an dangerous operation or not
+			}
+			continue
 		}
+		if f.sectorData != nil {
+			// close sector metadata file
+			if err = f.sectorMeta.Close(); err != nil {
+				// TODO: log
+			}
+			// remove the meta data
+			if err = os.RemoveAll(filepath.Join(f.path, sectorMetaFileName)); err != nil {
+				// TODO: log
+			}
+			// close sector data file
+			if err = f.sectorData.Close(); err != nil {
+				// TODO: log
+			}
+			// remove the sector data file
+			if err = os.RemoveAll(filepath.Join(f.path, sectorDataFileName)); err != nil {
+				// TODO: log
+			}
+		}
+		// delete the record from memory
+		delete(sm.folders, sf.Index)
 	}
+}
 
-	var folders []folderPersist
-	for _, sf := range entryMap {
-		folders = append(folders, sf)
+// commit the processed additions, mainly do create the folder object and load into the memory
+func (sm *storageManager) commitProcessedAddition(processedAddition []folderPersist) {
+	// loop through the processed additions
+	for _, sf := range processedAddition {
+		// check if is recorded in the memory
+		f, exists := sm.folders[sf.Index]
+		// if the folder exist in memory, close the files,
+		// and will be reopen after this block in order to get refresh
+		if exists {
+			// if folder object exist in the memory
+			if f.sectorMeta != nil {
+				// availability handle below
+				_ = f.sectorMeta.Close()
+			}
+
+			if f.sectorData != nil {
+				// availability handle below
+				_ = f.sectorData.Close()
+			}
+		}
+
+		f = &storageFolder{
+			index: sf.Index,
+			path:  sf.Path,
+			usage: sf.Usage,
+		}
+
+		atomic.StoreUint64(&f.atomicUnavailable, 0)
+
+		var err error
+
+		// only the folder could be open can be recorded
+		f.sectorMeta, err = os.OpenFile(filepath.Join(sf.Path, sectorMetaFileName), os.O_RDWR, 0700)
+		if err != nil {
+			// if there is error, not load the things to memory
+			continue
+		}
+
+		f.sectorData, err = os.OpenFile(filepath.Join(sf.Path, sectorDataFileName), os.O_RDWR, 0700)
+		if err != nil {
+			// if there is error, not load the things to memory
+			continue
+		}
+
+		// load the folder to memory
+		sm.folders[f.index] = f
 	}
-
-	return folders
 }

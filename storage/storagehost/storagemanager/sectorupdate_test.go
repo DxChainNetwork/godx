@@ -9,35 +9,17 @@ import (
 	"time"
 )
 
-// TestFLock_TryLock test try lock of folderLock
-func TestFLock_TryLock(t *testing.T) {
-	obj := struct {
-		lock *folderLock
-	}{lock: &folderLock{}}
-	obj.lock.TryLock()
-	obj.lock.Unlock()
-
-	// no lock, try lock should return true indicating lock success
-	if !obj.lock.TryLock() {
-		t.Error("try lock fail")
-	}
-
-	// try lock above already lock, this try lock expected to return false
-	if obj.lock.TryLock() {
-		t.Error("try lock fail")
-	}
-
-	// unlock should work as expected
-	obj.lock.Unlock()
-}
+// TODO: testing check the sector position
 
 // TestAddPhysicalSectorNormal test if the adding of sector
 // basic operation work as expected
 func TestStorageManager_AddSectorBasic(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	//defer removeFolders(TestPath, t)
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -47,15 +29,15 @@ func TestStorageManager_AddSectorBasic(t *testing.T) {
 	// where in the program of testing mode skip the checking the path
 	addFolders := []string{
 		// normal add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 		// duplicate add
-		TESTPATH + "folders4",
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
-		TESTPATH + "folders4",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 	}
 
 	var wg sync.WaitGroup
@@ -119,7 +101,9 @@ func TestStorageManager_AddSectorBasic(t *testing.T) {
 		t.Error(err.Error())
 	}
 
-	sm, err = New(TESTPATH, TST)
+	smAPI, err = New(TestPath, TST)
+	sm = smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -138,16 +122,23 @@ func TestStorageManager_AddSectorBasic(t *testing.T) {
 	if !reflect.DeepEqual(b, data3[:]) {
 		t.Error("loaded data does not match the extracted data")
 	}
+
+	err = sm.Close()
+	if err != nil {
+		t.Error(err.Error())
+	}
 }
 
 // TestAddPhysicalSectorNormal test add sector which generate root
 // randomly. Test the basic operation of adding a sector
 func TestAddPhysicalSectorNormal(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -157,15 +148,15 @@ func TestAddPhysicalSectorNormal(t *testing.T) {
 	// where in the program of testing mode skip the checking the path
 	addFolders := []string{
 		// normal add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
-		TESTPATH + "folders4",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 		// duplicate add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
-		TESTPATH + "folders4",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 	}
 
 	// process add all the folder
@@ -216,7 +207,9 @@ func TestAddPhysicalSectorNormal(t *testing.T) {
 	}
 
 	// reopen the storage manager again
-	sm, err = New(TESTPATH, TST)
+	smAPI, err = New(TestPath, TST)
+	sm = smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -242,10 +235,12 @@ func TestAddPhysicalSectorNormal(t *testing.T) {
 // allow reaching the maximum storage folder and maximum sector number
 // test if the system work when reaching the limitation
 func TestAddPhysicalSectorExhausted(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -264,7 +259,7 @@ func TestAddPhysicalSectorExhausted(t *testing.T) {
 					t.Error(err.Error())
 				}
 			}
-		}(TESTPATH + "folder" + strconv.Itoa(i))
+		}(TestPath + "folder" + strconv.Itoa(i))
 	}
 
 	wg.Wait()
@@ -297,7 +292,9 @@ func TestAddPhysicalSectorExhausted(t *testing.T) {
 	}
 
 	// reopen the storage manager again
-	sm, err = New(TESTPATH, TST)
+	smAPI, err = New(TestPath, TST)
+	sm = smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -322,26 +319,27 @@ func TestAddPhysicalSectorExhausted(t *testing.T) {
 	if err = sm.Close(); err != nil {
 		t.Error(err.Error())
 	}
-
 }
 
 // TestAddVirtualSectorBasic test if the virtual sector could be add successfully
 // include the test of reload the config and checking the number of virtual sector
 func TestAddVirtualSectorBasic(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
 
 	addFolders := []string{
 		// normal add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
 	}
 
 	// process add all the folder
@@ -397,7 +395,9 @@ func TestAddVirtualSectorBasic(t *testing.T) {
 	}
 
 	// reopen the storage manager, check if the number of virtual sector is recorded
-	sm, err = New(TESTPATH, TST)
+	smAPI, err = New(TestPath, TST)
+	sm = smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -413,20 +413,22 @@ func TestAddVirtualSectorBasic(t *testing.T) {
 }
 
 func TestRemoveSectorBasic(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
 
 	addFolders := []string{
 		// normal add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
 	}
 
 	// process add all the folder
@@ -510,8 +512,8 @@ func TestRemoveSectorBasic(t *testing.T) {
 }
 
 func TestRecoverAddSector(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	root := [32]byte{213, 68, 137, 90, 127, 127, 51, 118, 68, 37, 215, 35, 98, 207,
 		135, 226, 162, 53, 124, 124, 127, 126, 160, 101, 170, 102, 114, 75, 161, 66, 233, 163}
@@ -527,13 +529,15 @@ func TestRecoverAddSector(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// create a new storage manager for testing mode
-		sm, err := New(TESTPATH, TST)
+		smAPI, err := New(TestPath, TST)
+		sm := smAPI.(*storageManager)
+
 		if sm == nil || err != nil {
 			t.Error("cannot initialize the storage manager: ", err.Error())
 		}
 
 		for i := 0; i <= 3; i++ {
-			f := TESTPATH + strconv.Itoa(i)
+			f := TestPath + strconv.Itoa(i)
 
 			if err := sm.AddStorageFolder(f, SectorSize*128); err != nil {
 				t.Error(err.Error())
@@ -559,7 +563,9 @@ func TestRecoverAddSector(t *testing.T) {
 	wg.Wait()
 
 	// reopen the storage manager, expected to start the recover process
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -601,5 +607,10 @@ func TestRecoverAddSector(t *testing.T) {
 	_, exist = folder.freeSectors[id]
 	if exist {
 		t.Error("free sector should not record the sector id")
+	}
+
+	// close the storage manager
+	if err = sm.Close(); err != nil {
+		t.Error(err.Error())
 	}
 }

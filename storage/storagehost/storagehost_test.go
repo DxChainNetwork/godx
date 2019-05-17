@@ -1,15 +1,16 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/davecgh/go-spew/spew"
 	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/davecgh/go-spew/spew"
 )
 
 // constant range for generating the number randomly

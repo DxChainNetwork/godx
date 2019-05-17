@@ -1,12 +1,12 @@
 package storagemanager
 
 import (
+	"errors"
 	"os"
 	"sync"
 	"sync/atomic"
 
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/pkg/errors"
 )
 
 // storageManager is used to manage the storage such as
@@ -32,27 +32,21 @@ type storageManager struct {
 	stopChan chan struct{}
 	// atomicSwitch is a switch for manage to receive an operation or not
 	atomicSwitch uint64
-	// folderLock manage the read and write for folders map, upgrade to RWLock in the future
-	folderLock sync.Mutex
-	wg         *sync.WaitGroup
+	// wg is wait group to avoid shut down without finishing of all operations
+	wg *sync.WaitGroup
 }
 
-// New help to create a storage manager by using constructors, and also start the
+// New give caller an interface of Storage Manager, which
+// implemented by the storage manager, and also start the
 // maintenance loop for keep track of operation commit
-func New(persistDir string, mode ...int) (*storageManager, error) {
+func New(persistDir string, mode ...int) (StorageManager, error) {
+	// check the mode, and init the value corresponding the mode
 	if mode != nil && len(mode) != 0 {
 		buildSetting(mode[0])
 	}
-	sm, err := newStorageManager(persistDir)
-	if sm == nil || err != nil {
-		return sm, err
-	}
 
-	sm.wg.Add(1)
-
-	go sm.startMaintenance()
-
-	return sm, err
+	// TODO: if error, close all the resources
+	return newStorageManager(persistDir)
 }
 
 // AddStorageFolder include mainly two steps: first check the validity of a folder
@@ -87,6 +81,7 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) error {
 	return err
 }
 
+// AddSector add the sector to the random folder at random index
 func (sm *storageManager) AddSector(root [32]byte, sectorData []byte) error {
 	// if the switch is top, indicate the storage manager is shut down,
 	// would no longer receive any operation request, return an error
@@ -122,6 +117,7 @@ func (sm *storageManager) AddSector(root [32]byte, sectorData []byte) error {
 	return nil
 }
 
+// ReadSector read a sector by given root
 func (sm *storageManager) ReadSector(root [32]byte) ([]byte, error) {
 	// if the switch is top, indicate the storage manager is shut down,
 	// would no longer receive any operation request, return an error
@@ -143,20 +139,50 @@ func (sm *storageManager) ReadSector(root [32]byte) ([]byte, error) {
 	sf, exists2 := sm.folders[ss.storageFolder]
 
 	if !exists1 {
-		return nil, errors.New("Unable to find sector meta")
+		return nil, errors.New("unable to find sector meta")
 	}
 
 	if !exists2 {
-		return nil, errors.New("Unable to load storage folder")
+		return nil, errors.New("unable to load storage folder")
 	}
 
 	if atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
-		return nil, errors.New("Unable to open the folder")
+		return nil, errors.New("unable to open the folder")
 	}
 
 	sectorData, err := readSector(sf.sectorData, ss.index)
 
 	return sectorData, err
+}
+
+// Remove the sector
+func (sm *storageManager) RemoveSector(id sectorID) error {
+	return sm.removeSector(id)
+}
+
+// use the thread manager to close all the related process
+func (sm *storageManager) Close() error {
+	sm.wal.lock.Lock()
+	defer sm.wal.lock.Unlock()
+
+	// check if already closed
+	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
+		return errors.New("storage manager already closed")
+	}
+	// close the switch, indicating the storage manager would no longer receive
+	// any operation
+	atomic.StoreUint64(&sm.atomicSwitch, 1)
+
+	// signal the maintenance threads to shut down
+	// TODO: if this is called when the maintenance not running,
+	//  may result an infinite waiting,
+
+	sm.stopChan <- struct{}{}
+
+	// wait until all running operation finish their job
+	sm.wg.Wait()
+
+	return nil
 }
 
 func readSector(file *os.File, sectorIndex uint32) ([]byte, error) {
@@ -167,26 +193,4 @@ func readSector(file *os.File, sectorIndex uint32) ([]byte, error) {
 	}
 
 	return b, nil
-}
-
-// use the thread manager to close all the related process
-func (sm *storageManager) Close() error {
-	// check if already closed
-	if atomic.LoadUint64(&sm.atomicSwitch) == 1 {
-		return errors.New("storage managger already closed")
-	}
-	// close the switch, indicating the storage manager would no longer receive
-	// any operation
-	atomic.StoreUint64(&sm.atomicSwitch, 1)
-
-	// signal the maintenance threads to shut down
-	// TODO: if this is called when the maintenance not running,
-	//  would result an infinite waiting,
-
-	sm.stopChan <- struct{}{}
-
-	// wait until all running operation finish their job
-	sm.wg.Wait()
-
-	return nil
 }

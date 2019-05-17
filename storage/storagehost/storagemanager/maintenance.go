@@ -3,28 +3,30 @@ package storagemanager
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
+// thread for start the maintenance, for a specific
+// frequency, the thread commit the things already done
 func (sm *storageManager) startMaintenance() {
 	defer sm.wg.Done()
 
 	for {
 		select {
 		case <-sm.stopChan:
+			// mock the fail or unclear shut down
+			// directly return without last commit
 			if Mode == TST && MockFails["EXIT"] {
 				return
 			}
-			sm.wal.lock.Lock()
 			sm.maintenanceClose()
-			sm.wal.lock.Unlock()
 			return
 		case <-time.After(commitFrequency):
 			// do commit
@@ -35,6 +37,8 @@ func (sm *storageManager) startMaintenance() {
 	}
 }
 
+// close the maintenance, start the last commit,
+// and close files
 func (sm *storageManager) maintenanceClose() {
 	sm.commit()
 	if sm.wal.entries != nil || len(sm.wal.entries) != 0 {
@@ -45,6 +49,7 @@ func (sm *storageManager) maintenanceClose() {
 		fmt.Println("not clear shutdown")
 	} else {
 		// TODO: remove the wal file
+		// TODO: close all files resources
 		err := os.RemoveAll(filepath.Join(sm.persistDir, walFileTmp))
 		err = common.ErrCompose(err, os.Remove(filepath.Join(sm.persistDir, walFile)))
 		err = common.ErrCompose(err, os.Remove(filepath.Join(sm.persistDir, configFileTmp)))
@@ -52,9 +57,10 @@ func (sm *storageManager) maintenanceClose() {
 	}
 }
 
+// thread for commit the changes:
+// find out all the unprocessed files and
 func (sm *storageManager) commit() {
 	var wg sync.WaitGroup
-
 	wg.Add(1)
 	// synchronize all the files
 	go sm.syncFiles(&wg)
@@ -63,17 +69,18 @@ func (sm *storageManager) commit() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		// change the walTmp to wal
 		sm.syncWAL()
 
 		var err error
+		// create a new tmp file, and write meta data to it
 		sm.wal.walFileTmp, err = os.Create(filepath.Join(sm.persistDir, walFileTmp))
 		if err != nil {
 			// TODO: log critical
 			fmt.Println(err.Error(), walFileTmp)
 		}
-
-		err = sm.wal.writeWALMeta()
-		if err != nil {
+		// write meta data to the newly created wal tmp
+		if err = sm.wal.writeWALMeta(); err != nil {
 			// TODO: log critical
 			fmt.Println(err.Error(), "write wal meta")
 		}
@@ -83,29 +90,30 @@ func (sm *storageManager) commit() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		newConfig := sm.extractConfig()
+		// extract the current config
+		newConfig := extractConfig(*sm)
+		// if the current config is the same as config logged last time, no need to do sync again
 		if reflect.DeepEqual(newConfig, sm.wal.loggedConfig) {
 			return
 		}
 		// save the things to json
-		configLock.Lock()
 		err := common.SaveDxJSON(configMetadata,
 			filepath.Join(sm.persistDir, configFileTmp), newConfig)
-		configLock.Unlock()
 
 		if err != nil {
 			// TODO: log
-			fmt.Println(err.Error(), "-----------", configFileTmp)
+			fmt.Println(err.Error(), configFileTmp)
 		}
+
+		// mark the new config as logged
 		sm.wal.loggedConfig = newConfig
 
 		// synchronize temporary to persist file
-		configLock.Lock()
 		sm.syncConfig()
 
 		// close the config
-		err = sm.wal.configTmp.Close()
-		if err != nil {
+		if err = sm.wal.configTmp.Close(); err != nil {
+			// TODO: log or crash
 			fmt.Println(err.Error())
 		}
 
@@ -115,13 +123,14 @@ func (sm *storageManager) commit() {
 			// TODO: log critical
 			fmt.Println(err.Error(), "create", configFileTmp)
 		}
-		configLock.Unlock()
 	}()
 
 	wg.Wait()
 
-	// all synchronize down, commit the changes
+	// all synchronize down, find out the unprocessed change,
+	// record those changes to wal tmp again
 	UnprocessedAdditions := findUnprocessedFolderAddition(sm.wal.entries)
+
 	// clear out the entries
 	sm.wal.entries = nil
 
@@ -131,14 +140,16 @@ func (sm *storageManager) commit() {
 	}
 
 	// something is not finished, write to log again
-	if err := sm.wal.writeEntry(logEntry{
-		PrepareAddStorageFolder: UnprocessedAdditions,
-	}); err != nil {
-		// TODO: log cannot add change
+	if err := sm.wal.writeEntry(
+		logEntry{PrepareAddStorageFolder: UnprocessedAdditions},
+	); err != nil {
+		// TODO: log or crash
 		fmt.Println(err.Error())
 	}
 }
 
+// recover read through the entries in wal, find out the
+// unprocessed operations, revert, and commit
 func (sm *storageManager) recover(walF *os.File) error {
 	var err error
 	var entries []logEntry
@@ -146,7 +157,7 @@ func (sm *storageManager) recover(walF *os.File) error {
 
 	// check the metadata of wal file
 	decodeWal := json.NewDecoder(walF)
-	if checkMeta(decodeWal) != nil {
+	if err = checkMeta(decodeWal); err != nil {
 		// TODO: error, log or crash
 		fmt.Println(err.Error())
 	}
@@ -179,112 +190,20 @@ func (sm *storageManager) recover(walF *os.File) error {
 	findProcessedSectorUpdate := findProcessedSectorUpdate(entries)
 	sm.recoverSector(findProcessedSectorUpdate)
 
-	configLock.Lock()
-	// save the config to temporary file, then manage to persist the tmp config
-	newConfig := sm.extractConfig()
-	err = common.SaveDxJSON(configMetadata,
-		filepath.Join(sm.persistDir, configFileTmp), newConfig)
-	if err != nil {
-		// TODO: log
-		fmt.Println(err.Error())
+	// turn the pointer of wal tmp to this file, commit would manage
+	// all the process
+	if err := walF.Close(); err != nil {
+		// TODO: log or crash
 	}
-	configLock.Unlock()
+	if err := os.Rename(filepath.Join(sm.persistDir, walFile), filepath.Join(sm.persistDir, walFileTmp)); err != nil {
+		// TODO: log or crash
+	}
 
-	// persist the config
-	sm.syncConfig()
-	sm.wal.loggedConfig = newConfig
+	if sm.wal.walFileTmp, err = os.OpenFile(filepath.Join(sm.persistDir, walFileTmp), os.O_RDWR, 0700); err != nil {
+		// TODO: log or crash
+	}
 
-	// all things finished
-	// force to commit again
-	sm.wal.lock.Lock()
+	// all things finished force to commit again
 	sm.commit()
-	sm.wal.lock.Unlock()
-	return nil
-}
-
-// if the prepare stagge is logged, which means there is no duplication in folders,
-// so no worry about delete data already exist
-func (sm *storageManager) clearUnprocessedAddition(unProcessedAddition []folderPersist) {
-	var err error
-
-	for _, sf := range unProcessedAddition {
-		f, exists := sm.folders[sf.Index]
-
-		// if the folder not exist
-		if !exists {
-			if err := os.RemoveAll(sf.Path); err != nil {
-				// TODO: log: consider if this is an dangerous operation or not
-			}
-			continue
-		}
-		if f.sectorData != nil {
-			if err = f.sectorMeta.Close(); err != nil {
-				// TODO: log
-			}
-			if err = os.RemoveAll(filepath.Join(f.path, sectorMetaFileName)); err != nil {
-				// TODO: log
-			}
-
-			if err = f.sectorData.Close(); err != nil {
-				// TODO: log
-			}
-			if err = os.RemoveAll(filepath.Join(f.path, sectorDataFileName)); err != nil {
-				// TODO: log
-			}
-		}
-		// delete the record from memory
-		delete(sm.folders, sf.Index)
-	}
-}
-
-func (sm *storageManager) commitProcessedAddition(processedAddition []folderPersist) {
-	for _, sf := range processedAddition {
-		f, exists := sm.folders[sf.Index]
-		if exists {
-			if f.sectorMeta != nil {
-				// availability handle below
-				_ = f.sectorMeta.Close()
-			}
-
-			if f.sectorData != nil {
-				// availability handle below
-				_ = f.sectorData.Close()
-			}
-		}
-
-		f = &storageFolder{
-			index: sf.Index,
-			path:  sf.Path,
-			usage: sf.Usage,
-		}
-
-		var err error
-
-		// only the folder could be open can be recorded
-		f.sectorMeta, err = os.OpenFile(filepath.Join(sf.Path, sectorMetaFileName), os.O_RDWR, 0700)
-		if err != nil {
-			// if there is error, not load the things to memory
-			continue
-		}
-
-		f.sectorData, err = os.OpenFile(filepath.Join(sf.Path, sectorDataFileName), os.O_RDWR, 0700)
-		if err != nil {
-			continue
-		}
-
-		// load the folder to memory
-		sm.folders[f.index] = f
-	}
-}
-
-func checkMeta(decoder *json.Decoder) error {
-	var meta common.Metadata
-	err := decoder.Decode(&meta)
-	if err != nil {
-		return err
-	} else if meta.Header != walMetadata.Header || meta.Version != walMetadata.Version {
-		return errors.New("meta data does not match the expected")
-	}
-
 	return nil
 }

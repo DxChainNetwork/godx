@@ -10,16 +10,16 @@ import (
 	"testing"
 )
 
-const TESTPATH = "./testdata/"
-
 // Test_AddStorageFolderBasic check the basic operation of adding folder
 func Test_AddStorageFolderBasic(t *testing.T) {
 	// clear the saved data for testing
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -29,15 +29,15 @@ func Test_AddStorageFolderBasic(t *testing.T) {
 	// where in the program of testing mode skip the checking the path
 	addFolders := []string{
 		// normal add
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 		// duplicate add
-		TESTPATH + "folders4",
-		TESTPATH + "folders1",
-		TESTPATH + "folders2",
-		TESTPATH + "folders3",
-		TESTPATH + "folders4",
+		TestPath + "folders1",
+		TestPath + "folders2",
+		TestPath + "folders3",
+		TestPath + "folders4",
 	}
 
 	var wg sync.WaitGroup
@@ -81,13 +81,13 @@ func Test_AddStorageFolderBasic(t *testing.T) {
 // called if sector data and metadata already exist in a folder
 func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 	// clear the saved data for testing
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create the folder by given path
-	err := os.MkdirAll(TESTPATH+"foldershouldfail", 0700)
-	_, errMeta := os.Create(filepath.Join(TESTPATH+"foldershouldfail", sectorMetaFileName))
-	_, errSector := os.Create(filepath.Join(TESTPATH+"foldershouldfail", sectorDataFileName))
+	err := os.MkdirAll(TestPath+"folderFail", 0700)
+	_, errMeta := os.Create(filepath.Join(TestPath+"folderFail", sectorMetaFileName))
+	_, errSector := os.Create(filepath.Join(TestPath+"folderFail", sectorDataFileName))
 	err = common.ErrCompose(err, errMeta, errSector)
 	if err != nil {
 		// the error is given by the system, not by the program, ignore and jump out
@@ -96,13 +96,15 @@ func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 	}
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
 
 	// try to add the folder, which given as the already existed folder
-	if err := sm.AddStorageFolder(TESTPATH+"foldershouldfail", SectorSize*64); err == nil {
+	if err := sm.AddStorageFolder(TestPath+"folderFail", SectorSize*64); err == nil {
 		t.Error("sector and metadata should be checked and result of cancellation of operation")
 	} else if err != ErrDataFileAlreadyExist {
 		// if the error is not caused by the existing of sector and data files
@@ -129,11 +131,13 @@ func Test_AddFolderWithExistingSectorsFile(t *testing.T) {
 // Test_ReloadConfig test if the system could reload the config saved last time
 func Test_ReloadConfig(t *testing.T) {
 	// clear the saved data for testing
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -149,10 +153,10 @@ func Test_ReloadConfig(t *testing.T) {
 				// if the error is not caused by the already existence of error
 				// TODO: to handle more exception such as size too large and more
 				if err != ErrFolderAlreadyExist {
-					t.Error(err.Error())
+					t.Errorf(err.Error())
 				}
 			}
-		}(TESTPATH + "folder" + strconv.Itoa(i))
+		}(TestPath + "folder" + strconv.Itoa(i))
 	}
 
 	wg.Wait()
@@ -163,7 +167,8 @@ func Test_ReloadConfig(t *testing.T) {
 	}
 
 	// create a new storage manager for testing mode
-	sm, err = New(TESTPATH, TST)
+	smAPI, err = New(TestPath, TST)
+	sm = smAPI.(*storageManager)
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
@@ -192,25 +197,30 @@ func Test_ReloadConfig(t *testing.T) {
 }
 
 // Test_RevertWhenAdd test if the system reverting process when encounter and error
+// half of the folder should be added fail, and they should be revert as expected
 func Test_RevertWhenAdd(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	// create a new storage manager for testing mode
-	sm, err := New(TESTPATH, TST)
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+
 	if sm == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
 
+	// set where the fail should start
 	failStart := int(MaxStorageFolders) / 2
-
+	// create the folders
 	for i := 0; i < int(MaxStorageFolders); i++ {
-		f := TESTPATH + strconv.Itoa(i)
+		f := TestPath + strconv.Itoa(i)
 
+		// mark the folders fail at the failStart point
 		if i == failStart {
 			MockFails["ADD_FAIL"] = true
 		}
-
+		// call up the folder addition
 		if err := sm.AddStorageFolder(f, SectorSize*MaxSectorPerFolder); err != nil {
 			if err != ErrMock {
 				t.Error(err.Error())
@@ -243,10 +253,8 @@ func Test_RevertWhenAdd(t *testing.T) {
 // Test_DisruptAdd test if the recover could recover the adding of storage folder
 // as expected
 func Test_DisruptAdd(t *testing.T) {
-	removeFolders(TESTPATH, t)
-	defer removeFolders(TESTPATH, t)
-
-	MockFails["EXIT"] = true
+	removeFolders(TestPath, t)
+	defer removeFolders(TestPath, t)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -254,7 +262,11 @@ func Test_DisruptAdd(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		// create a new storage manager for testing mode
-		sm, err := New(TESTPATH, TST)
+		smAPI, err := New(TestPath, TST)
+		sm := smAPI.(*storageManager)
+
+		MockFails["EXIT"] = true
+
 		if sm == nil || err != nil {
 			t.Error("cannot initialize the storage manager: ", err.Error())
 		}
@@ -262,7 +274,7 @@ func Test_DisruptAdd(t *testing.T) {
 		failStart := int(MaxStorageFolders) / 2
 
 		for i := 0; i <= failStart; i++ {
-			f := TESTPATH + strconv.Itoa(i)
+			f := TestPath + strconv.Itoa(i)
 
 			if i == failStart {
 				MockFails["ADD_EXIT"] = true
@@ -284,8 +296,9 @@ func Test_DisruptAdd(t *testing.T) {
 	wg.Wait()
 
 	// restart a new storage manager for testing mode, check if recover or not
-	sm, err := New(TESTPATH, TST)
-	if sm == nil || err != nil {
+	smAPI, err := New(TestPath, TST)
+	sm := smAPI.(*storageManager)
+	if smAPI == nil || err != nil {
 		t.Error("cannot initialize the storage manager: ", err.Error())
 	}
 
@@ -354,12 +367,4 @@ func isExpectedFolderList(sm *storageManager, folders []folderPersist) error {
 	}
 
 	return nil
-}
-
-// removeFolders is a helper function to clear the data file before and after a test case execute
-func removeFolders(persistDir string, t *testing.T) {
-	// clear the testing data
-	if err := os.RemoveAll(persistDir); err != nil {
-		t.Error("cannot remove the data when testing")
-	}
 }

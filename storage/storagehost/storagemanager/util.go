@@ -68,7 +68,7 @@ func randomAvailableFolder(sfs []*storageFolder) (*storageFolder, int) {
 		}
 
 		// if the folder is already locked
-		if !sf.fLock.TryLock() {
+		if !sf.folderLock.TryLock() {
 			continue
 		}
 

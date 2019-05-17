@@ -2,24 +2,29 @@ package storagemanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 )
 
+// configPersist used to represent the data to be
+// stored in json file
 type configPersist struct {
 	SectorSalt [32]byte
 	Folders    []folderPersist
 }
 
+// folderPersist represent the folder information to be
+// stored in json file
 type folderPersist struct {
 	Index uint16
 	Path  string
 	Usage []BitVector
 }
 
+// sectorPersist represent the sector information to be stored
+// in json file
 type sectorPersist struct {
 	Count  uint16
 	Folder uint16
@@ -27,32 +32,45 @@ type sectorPersist struct {
 	Index  uint32
 }
 
-func (sm *storageManager) extractConfig() *configPersist {
+// extractConfig extract the configuration from given
+// storage manager, includes its sector salt and folder config
+func extractConfig(sm storageManager) *configPersist {
 	return &configPersist{
 		SectorSalt: sm.sectorSalt,
-		Folders:    sm.extractFolderList(),
+		Folders:    extractFolderList(sm.folders),
 	}
 }
 
-func (sm *storageManager) extractFolderList() []folderPersist {
-	folders := make([]folderPersist, len(sm.folders))
+// extractFolderList extract the configuration from given
+// folders map, folders in the map won't be made to modified
+func extractFolderList(folders map[uint16]*storageFolder) []folderPersist {
+	sfs := make([]folderPersist, len(folders))
+
+	// loop to extract each folders, the folder is pass by value
+	// guarantee not making any modification
 	var idx int
-	for _, folder := range sm.folders {
-		folders[idx] = folder.extractFolder()
+	for _, folder := range folders {
+		sfs[idx] = extractFolder(*folder)
 		idx++
 	}
-	return folders
+
+	return sfs
 }
 
-func (sf *storageFolder) extractFolder() folderPersist {
+// extractFolder extract folder's information,
+// guarantee not to make any modification on the folder passed in
+func extractFolder(sf storageFolder) folderPersist {
 	return folderPersist{
 		Index: sf.index,
 		Path:  sf.path,
-		Usage: sf.clearUsage(),
+		Usage: clearUsage(sf),
 	}
 }
 
-func (sf *storageFolder) clearUsage() []BitVector {
+// clearUsage extract the actual usage information from a folder
+// some usage is only marked to be used, but actually not, extract
+// but guarantee not to make any modification on the passed in folder
+func clearUsage(sf storageFolder) []BitVector {
 	var ss = make([]BitVector, len(sf.usage))
 
 	copy(ss, sf.usage)
@@ -68,6 +86,7 @@ func (sf *storageFolder) clearUsage() []BitVector {
 
 // syncResources loop through all the folder,
 // and synchronize the sector data and metadata
+// @ Require: the files should not be modified or use at current time
 func (sm *storageManager) syncFiles(wg *sync.WaitGroup) {
 	defer wg.Done()
 	for _, sf := range sm.folders {
@@ -95,10 +114,10 @@ func (sm *storageManager) syncFiles(wg *sync.WaitGroup) {
 			}
 		}(sf)
 	}
-
 }
 
 // synchronize the wal file
+// @ Require: the files should not be modified or use at current time
 func (sm *storageManager) syncWAL() {
 	// avoid null pointer exception
 	if sm.wal.walFileTmp == nil {
@@ -139,10 +158,4 @@ func (sm *storageManager) syncConfig() {
 		// TODO: log the failure
 		fmt.Println(err.Error())
 	}
-}
-
-func (sm *storageManager) syncConfigForce() error {
-	config := sm.extractConfig()
-	return common.SaveDxJSON(configMetadata,
-		filepath.Join(sm.persistDir, configFile), config)
 }
