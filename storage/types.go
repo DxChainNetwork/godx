@@ -118,3 +118,8 @@ type (
 		ExpectedRedundancy float64 `json:"expectedredundancy"`
 	}
 )
+
+var (
+	// 4 MB
+	SectorSize = uint64(1 << 22),
+)

@@ -22,8 +22,13 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"gitlab.com/NebulousLabs/Sia/build"
+	"gitlab.com/NebulousLabs/Sia/crypto"
+	"gitlab.com/NebulousLabs/Sia/modules"
 	"math"
 	"math/big"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -86,6 +91,7 @@ type ProtocolManager struct {
 	peers                   *peerSet
 	storageContractSessions *storage.SessionSet
 	storageContractContext  *ethdb.MemDatabase
+	storageContractContext2 Context
 	SubProtocols            []p2p.Protocol
 
 	eventMux      *event.TypeMux
@@ -343,25 +349,34 @@ func (pm *ProtocolManager) handle(p *peer) error {
 				return err
 			}
 		}
+
+		// Handle incoming messages until the connection is torn down
+		for {
+			if err := pm.handleMsg(p); err != nil {
+				p.Log().Debug("Ethereum message handling failed", "err", err)
+				return err
+			}
+		}
 	} else {
 		p.Log().Debug("Ethereum peer connected", "name", p.Name())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
 		}
-
-		if err := pm.storageContractSessions.Register(p.Peer2Session()); err != nil {
+		session := p.Peer2Session()
+		if err := pm.storageContractSessions.Register(session); err != nil {
 			p.Log().Error("Ethereum peer registration failed", "err", err)
 			return err
 		}
 		defer pm.removeStorageContactSession(p.id)
-	}
 
-	// Handle incoming messages until the connection is torn down
-	for {
-		if err := pm.handleMsg(p); err != nil {
-			p.Log().Debug("Ethereum message handling failed", "err", err)
-			return err
+		if session.Inbound() {
+			return pm.eth.storageHost.HandleSession(session)
+		} else {
+			select {
+			case err := <-session.ClientDiscChan():
+				return err
+			}
 		}
 	}
 }
@@ -935,14 +950,30 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case msg.Code == storage.StorageContractUploadRequestMsg:
-		// add data to disk block
-
-		// create merkle proof response
-
-		// send it to storage client
 
 	case msg.Code == storage.StorageContractUploadMerkleRootProofMsg:
+		// Storage Client
 		// verify merkle root proof
+		var merkleResp storage.UploadMerkleProof
+		if err := msg.Decode(&merkleResp); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+
+		// verify the proof, first by verifying the old Merkle root...
+		numSectors := contract.LastRevision().NewFileSize / modules.SectorSize
+		proofRanges := storage.CalculateProofRanges(actions, numSectors)
+		proofHashes := merkleResp.OldSubtreeHashes
+		leafHashes := merkleResp.OldLeafHashes
+		oldRoot, newRoot := contract.LastRevision().NewFileMerkleRoot, merkleResp.NewMerkleRoot
+		if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot) {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
+		// ...then by modifying the leaves and verifying the new Merkle root
+		leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
+		proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
+		if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot) {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
+		}
 
 		// assemble storage contract revision and sign it
 
@@ -1080,4 +1111,8 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 
 func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
 	return pm.storageContractSessions
+}
+
+func (pm *ProtocolManager) SaveStorageContract(peerID string, key string, data interface{}) {
+	pm.storageContractContext2.Store(peerID, key, data)
 }
