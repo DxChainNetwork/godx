@@ -16,10 +16,10 @@ import (
 
 const (
 	// OpDeleteFile is the Operation name of a deleteUpdate
-	OpDeleteFile = "delete_file" // name of the operation to delete a dxfile
+	OpDeleteFile = "delete_file"
 
 	// OpInsertFile is the Operation name of an insertUpdate
-	OpInsertFile = "insert_file" // name of the operation to create or update a dxfile
+	OpInsertFile = "insert_file"
 )
 
 // TODO: Refactor the apply update to write page updates. Each page has next Offset
@@ -63,10 +63,10 @@ func (iu *insertUpdate) encodeToWalOp() (writeaheadlog.Operation, error) {
 func (iu *insertUpdate) apply() error {
 	// open the file
 	f, err := os.OpenFile(iu.Filename, os.O_RDWR|os.O_CREATE, 0600)
-	defer f.Close()
 	if err != nil {
 		return fmt.Errorf("failed to apply insertUpdate: %v", err)
 	}
+	defer f.Close()
 	// write Data
 	if n, err := f.WriteAt(iu.Data, int64(iu.Offset)); err != nil {
 		return fmt.Errorf("failed to write insertUpdate Data: %v", err)
@@ -157,19 +157,6 @@ func (df *DxFile) createDeleteUpdate() (*deleteUpdate, error) {
 	}, nil
 }
 
-// ApplyOperations apply the operation of a dxfileUpdate
-func ApplyOperations(op writeaheadlog.Operation) error {
-	up, err := decodeFromWalOp(op)
-	if err != nil {
-		return fmt.Errorf("cannot decode operation: %v", err)
-	}
-	err = up.apply()
-	if err != nil {
-		return fmt.Errorf("cannot apply the update: %v", err)
-	}
-	return nil
-}
-
 // applyUpdates use Wal to create a transaction to apply the updates
 func (df *DxFile) applyUpdates(updates []dxfileUpdate) error {
 	if df.deleted {
@@ -234,4 +221,22 @@ func updatesToOps(updates []dxfileUpdate) ([]writeaheadlog.Operation, error) {
 		ops[i] = op
 	}
 	return ops, fullErr
+}
+
+
+func IsDxFileOperation(op writeaheadlog.Operation) bool {
+	return op.Name == OpDeleteFile || op.Name == OpInsertFile
+}
+
+// ApplyOperations apply the operation of a dxfileUpdate
+func ApplyOperation(op writeaheadlog.Operation) error {
+	up, err := decodeFromWalOp(op)
+	if err != nil {
+		return fmt.Errorf("cannot decode operation: %v", err)
+	}
+	err = up.apply()
+	if err != nil {
+		return fmt.Errorf("cannot apply the update: %v", err)
+	}
+	return nil
 }
