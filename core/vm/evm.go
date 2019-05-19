@@ -37,9 +37,6 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
-
-	// TODO: storage contract中的押金存入这个基金账户，需要创建一个账户，类似personal.newAccount的方法，必须得有一套公私钥来管理这个公共账户
-	fundAddr = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 type (
@@ -709,19 +706,15 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	fc, errGet := GetStorageContract(db, sp.ParentID)
+	sc, errGet := GetStorageContract(db, sp.ParentID)
 	if errGet != nil {
 		return nil, gasRemainCheck, errGet
 	}
 
-	// first for fundAddr,second for host
-	firstOutput := fc.ValidProofOutputs[0]
-	secondOutput := fc.ValidProofOutputs[1]
-	if !evm.StateDB.Exist(fundAddr) {
-		evm.StateDB.CreateAccount(fundAddr)
+	// effect valid proof outputs, first for renter, second for host
+	for _, vpo := range sc.ValidProofOutputs {
+		evm.StateDB.AddBalance(vpo.Address, vpo.Value)
 	}
-	evm.StateDB.AddBalance(fundAddr, firstOutput.Value)
-	evm.StateDB.AddBalance(secondOutput.Address, secondOutput.Value)
 
 	errDel := DeleteStorageContract(db, sp.ParentID)
 	if errDel != nil {
