@@ -291,6 +291,13 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight uint64) er
 		return errors.New("too late to submit storage proof")
 	}
 
+	// check signature
+	err = CheckMultiSignatures(sp, currentHeight, [][]byte{sp.Signature})
+	if err != nil {
+		log.Error("failed to check signature for storage proof", "err", err)
+		return err
+	}
+
 	// Check that the storage proof itself is valid.
 	segmentIndex, err := storageProofSegment(db, sp.ParentID, currentHeight)
 	if err != nil {
