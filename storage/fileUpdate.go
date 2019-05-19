@@ -156,10 +156,31 @@ func ApplyOperations(ops []writeaheadlog.Operation) error {
 	return fullErr
 }
 
-//// ApplyUpdates create
-//func ApplyUpdates(updates []FileUpdate) error {
-//	ops, err := updatesToOps(updates)
-//	if err != nil {
-//
-//	}
-//}
+// ApplyUpdates apply the updates on the wal
+func ApplyUpdates(wal *writeaheadlog.Wal, updates []FileUpdate) error {
+	// Decode the updates to Operations
+	ops, err := updatesToOps(updates)
+	if err != nil {
+		return fmt.Errorf("failed to encode updates: %v", err)
+	}
+	// Create the writeaheadlog transaction
+	txn, err := wal.NewTransaction(ops)
+	if err != nil {
+		return fmt.Errorf("failed to create transaction: %v", err)
+	}
+	<- txn.InitComplete
+	if txn.InitErr != nil {
+		return fmt.Errorf("failed to create transaction: %v", err)
+	}
+	if err = <-txn.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+	err = ApplyOperations(ops)
+	if err != nil {
+		return err
+	}
+	if err = txn.Release(); err != nil {
+		return fmt.Errorf("failed to release transaction: %v", err)
+	}
+	return nil
+}
