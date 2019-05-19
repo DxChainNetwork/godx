@@ -72,9 +72,6 @@ type propEvent struct {
 	block *types.Block
 	td    *big.Int
 }
-type Peer struct {
-	*peer
-}
 
 type peer struct {
 	id string
@@ -349,6 +346,11 @@ func (p *peer) SendStorageContractUpdate(data interface{}) error {
 func (p *peer) SendStorageContractUpdateHostSign(data interface{}) error {
 	p.Log().Debug("Sending storage contract update host signatures", "signature", data)
 	return p2p.Send(p.rw, storage.StorageContractUpdateHostSignMsg, data)
+}
+
+func (p *peer) SendStorageContractUploadMerkleProof(data interface{}) error {
+	p.Log().Debug("Sending storage contract upload proof", "proof", data)
+	return p2p.Send(p.rw, storage.StorageContractUploadMerkleRootProofMsg, data)
 }
 
 // Handshake executes the eth protocol handshake, negotiating version number,

@@ -2,8 +2,15 @@ package storagehost
 
 import (
 	"errors"
+	"fmt"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/p2p"
+	"gitlab.com/NebulousLabs/Sia/crypto"
+	"gitlab.com/NebulousLabs/Sia/modules"
+	"math/big"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -14,6 +21,10 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
 )
+
+var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
+	storage.StorageContractUploadRequestMsg: handleUpload,
+}
 
 // TODO: Network, Transaction, protocol related implementations BELOW:
 // TODO: check unlock hash
@@ -333,4 +344,184 @@ func (h *StorageHost) loadDefaults() {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	h.config = loadDefaultConfig()
+}
+
+func (h *StorageHost) HandleSession(s *storage.Session) error {
+	msg, err := s.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if handler, ok := handlerMap[msg.Code]; ok {
+		return handler(h, s, msg)
+	}
+	return nil
+}
+
+func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	// Read upload request
+	var uploadRequest storage.UploadRequest
+	if err := beginMsg.Decode(&uploadRequest); err != nil {
+		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
+	}
+
+	// Get revision from storage obligation
+	so, err := GetStorageObligation(h.db, uploadRequest.StorageContractID)
+	settings := h.externalConfig()
+
+	if err != nil {
+		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+	}
+
+	currentBlockHeight := h.blockHeight
+	currentRevision := so.Revision[len(so.Revision)-1]
+
+	// Process each action
+	newRoots := append([]common.Hash(nil), so.SectorRoots...)
+	sectorsChanged := make(map[uint64]struct{})
+	var bandwidthRevenue *big.Int
+	var sectorsRemoved []common.Hash
+	var sectorsGained []common.Hash
+	var gainedSectorData [][]byte
+	for _, action := range uploadRequest.Actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			// Update sector roots.
+			newRoot := storage.MerkleRoot(action.Data)
+			newRoots = append(newRoots, newRoot)
+			sectorsGained = append(sectorsGained, newRoot)
+			gainedSectorData = append(gainedSectorData, action.Data)
+
+			sectorsChanged[uint64(len(newRoots))-1] = struct{}{}
+
+			// Update finances
+			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
+
+		default:
+			return errors.New("unknown action type " + action.Type)
+		}
+	}
+
+	var storageRevenue, newCollateral *big.Int
+	if len(newRoots) > len(so.SectorRoots) {
+		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
+		blocksRemaining := so.ProofDeadline() - currentBlockHeight
+		blockBytesCurrency := new(big.Int).Mul(big.NewInt(int64(blocksRemaining)), big.NewInt(int64(bytesAdded)))
+		storageRevenue = settings.StoragePrice.Mul(blockBytesCurrency)
+		newCollateral = newCollateral.Add(settings.Collateral.Mul(blockBytesCurrency))
+	}
+
+	// If a Merkle proof was requested, construct it
+	newMerkleRoot := storage.CachedMerkleRoot(newRoots)
+
+	// Construct the new revision
+	newRevision := currentRevision
+	newRevision.NewRevisionNumber = uploadRequest.NewRevisionNumber
+	for _, action := range uploadRequest.Actions {
+		if action.Type == storage.UploadActionAppend {
+			newRevision.NewFileSize += modules.SectorSize
+		}
+	}
+	newRevision.NewFileMerkleRoot = newMerkleRoot
+	newRevision.NewValidProofOutputs = make([]types.DxcoinCharge, len(currentRevision.NewValidProofOutputs))
+	for i := range newRevision.NewValidProofOutputs {
+		newRevision.NewValidProofOutputs[i] = types.DxcoinCharge{
+			Value:   uploadRequest.NewValidProofValues[i],
+			Address: currentRevision.NewValidProofOutputs[i].Address,
+		}
+	}
+	newRevision.NewMissedProofOutputs = make([]types.DxcoinCharge, len(currentRevision.NewMissedProofOutputs))
+	for i := range newRevision.NewMissedProofOutputs {
+		newRevision.NewMissedProofOutputs[i] = types.DxcoinCharge{
+			Value:   uploadRequest.NewMissedProofValues[i],
+			Address: currentRevision.NewMissedProofOutputs[i].Address,
+		}
+	}
+
+	// Verify the new revision
+	newRevenue := settings.BaseRPCPrice.Add(storageRevenue).Add(bandwidthRevenue)
+
+	so.SectorRoots, newRoots = newRoots, so.SectorRoots
+	if err := storage.VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newCollateral); err != nil {
+		return err
+	}
+	so.SectorRoots, newRoots = newRoots, so.SectorRoots
+
+	var merkleResp storage.UploadMerkleProof
+	// Calculate which sectors changed
+	oldNumSectors := uint64(len(so.SectorRoots))
+	proofRanges := make([]storage.ProofRange, 0, len(sectorsChanged))
+	for index := range sectorsChanged {
+		if index < oldNumSectors {
+			proofRanges = append(proofRanges, storage.ProofRange{
+				Start: index,
+				End:   index + 1,
+			})
+		}
+	}
+	sort.Slice(proofRanges, func(i, j int) bool {
+		return proofRanges[i].Start < proofRanges[j].Start
+	})
+	// Record old leaf hashes for all changed sectors
+	leafHashes := make([]common.Hash, len(proofRanges))
+	for i, r := range proofRanges {
+		leafHashes[i] = so.SectorRoots[r.Start]
+	}
+
+	// Construct the merkle proof
+	merkleResp = storage.UploadMerkleProof{
+		OldSubtreeHashes: storage.MerkleDiffProof(proofRanges, oldNumSectors, nil, so.SectorRoots),
+		OldLeafHashes:    leafHashes,
+		NewMerkleRoot:    newMerkleRoot,
+	}
+
+	// Calculate bandwidth cost of proof
+	proofSize := crypto.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
+	if proofSize < modules.RPCMinLen {
+		proofSize = modules.RPCMinLen
+	}
+
+	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mul64(uint64(proofSize)))
+
+	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
+		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
+	}
+
+	var clientRevisionSign []byte
+	if msg, err := s.ReadMsg(); err != nil {
+		if err := msg.Decode(&clientRevisionSign); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	newRevision.Signatures[0] = clientRevisionSign
+
+	// Update the storage obligation
+	so.SectorRoots = newRoots
+	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
+	so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newCollateral)
+	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
+	so.Revision = append(so.Revision, newRevision)
+	err = h.modifyStorageObligation(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	if err != nil {
+		return err
+	}
+
+	// Sign host's revision and send it to client
+	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
+	wallet, err := h.am.Find(account)
+	if err != nil {
+		return err
+	}
+
+	sign, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
+	if err != nil {
+		return err
+	}
+
+	if err := s.SendStorageContractUploadHostRevisionSign(sign); err != nil {
+		return err
+	}
+
+	return nil
 }

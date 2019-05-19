@@ -497,6 +497,8 @@ func (srv *Server) Start() (err error) {
 	srv.removestatic = make(chan *enode.Node)
 	srv.addtrusted = make(chan *enode.Node)
 	srv.removetrusted = make(chan *enode.Node)
+	srv.addStorageContract = make(chan *enode.Node)
+	srv.removeStorageContract = make(chan *enode.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
@@ -1188,6 +1190,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 
 	// Run the protocol handshake with passed in ourHandshake object (protoHandshake)
 	// a list of protocols supported by the destination node will be returned
+	if c.is(storageContractConn) {
+		srv.ourHandshake.flags |= storageContractConn
+	}
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
@@ -1202,6 +1207,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// destination node supported protocol
+	if phs.flags&storageContractConn != 0 {
+		c.set(storageContractConn, true)
+	}
 	c.caps, c.name = phs.Caps, phs.Name
 
 	// check the connection again

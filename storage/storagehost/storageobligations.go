@@ -138,7 +138,7 @@ type (
 		//存储义务被分解为有序的原子扇区，每个扇区正好是4MiB。 通过保存每个扇区的根，
 		// 可以通过使用merkletree.CachedTree以低成本方式进行存储证明和对数据的修改。
 		// 可以附加，修改或删除扇区，主机可以重新计算整个文件的Merkle根，而无需太多的计算或I / O开销。
-		SectorRoots       common.Hash
+		SectorRoots       []common.Hash
 		StorageContractid common.Hash
 
 		// Variables about the file contract that enforces the storage obligation.
@@ -224,7 +224,7 @@ func deleteStorageObligation(db ethdb.Database, sc common.Hash) error {
 }
 
 // expiration returns the height at which the storage obligation expires.
-func (so StorageObligation) expiration() (number uint64) {
+func (so *StorageObligation) expiration() (number uint64) {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewWindowStart
 	}
@@ -233,7 +233,7 @@ func (so StorageObligation) expiration() (number uint64) {
 
 // fileSize returns the size of the data protected by the obligation.
 //返回受义务保护的数据大小
-func (so StorageObligation) fileSize() uint64 {
+func (so *StorageObligation) fileSize() uint64 {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewFileSize
 	}
@@ -243,13 +243,13 @@ func (so StorageObligation) fileSize() uint64 {
 // id returns the id of the storage obligation, which is defined by the file
 // contract id of the storage contract that governs the storage contract.
 //返回这个存储义务的id，该ID由管理存储合同的文件合同的文件合同ID定义
-func (so StorageObligation) id() (scid common.Hash) {
+func (so *StorageObligation) id() (scid common.Hash) {
 	return so.StorageContractid
 }
 
 // isSane checks that required assumptions about the storage obligation are
 // correct.	检查所需的存储义务假设
-func (so StorageObligation) isSane() error {
+func (so *StorageObligation) isSane() error {
 	if len(so.OriginStorage) == 0 {
 		return errInsaneOriginSetSize
 	}
@@ -263,7 +263,7 @@ func (so StorageObligation) isSane() error {
 
 // merkleRoot returns the file merkle root of a storage obligation.
 //merkleRoot 返回关于存储义务的文件的merkle root
-func (so StorageObligation) merkleRoot() common.Hash {
+func (so *StorageObligation) merkleRoot() common.Hash {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewFileMerkleRoot
 	}
@@ -273,7 +273,7 @@ func (so StorageObligation) merkleRoot() common.Hash {
 // payouts returns the set of valid payouts and missed payouts that represent
 // the latest revision for the storage obligation.
 //返回有效支付和错过支付的集合，代表存储义务的最新Revision。
-func (so StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
+func (so *StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
 	if len(so.Revision) > 0 {
 		validProofOutputs = so.Revision[len(so.Revision)-1].NewValidProofOutputs
 		missedProofOutputs = so.Revision[len(so.Revision)-1].NewMissedProofOutputs
@@ -285,7 +285,7 @@ func (so StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, m
 
 // proofDeadline returns the height by which the storage proof must be
 // submitted. 返回存储证明必须被提交的块的高度
-func (so StorageObligation) proofDeadline() uint64 {
+func (so *StorageObligation) ProofDeadline() uint64 {
 	if len(so.Revision) > 0 {
 		return so.Revision[len(so.Revision)-1].NewWindowEnd
 	}
@@ -295,7 +295,7 @@ func (so StorageObligation) proofDeadline() uint64 {
 
 // transactionID returns the ID of the transaction containing the Storage
 // contract. 返回包含存储合约的交易的hash
-func (so StorageObligation) transactionID() common.Hash {
+func (so *StorageObligation) transactionID() common.Hash {
 	//TODO 通过存储合约ID获取到交易hash
 	return common.Hash{}
 }
@@ -310,7 +310,7 @@ func (so StorageObligation) transactionID() common.Hash {
 // It is assumed the deleted obligations don't belong in the database in the first place,
 // so no financial metrics are updated.
 // 删除存储义务从数据库中，假设已删除的义务首先不属于数据库，因此不会更新财务指标。
-func (h StorageHost) deleteStorageObligations(soids []common.Hash) error {
+func (h *StorageHost) deleteStorageObligations(soids []common.Hash) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	for _, soid := range soids {
@@ -370,7 +370,7 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 		// Sanity check - the resubmission timeout needs to be smaller than storage
 		// proof window.
 		// 完整性检查 - 重新提交超时需要小于存储证明窗口。
-		if so.expiration()+resubmissionTimeout >= so.proofDeadline() {
+		if so.expiration()+resubmissionTimeout >= so.ProofDeadline() {
 			//主机配置错误 - 存储证明窗口需要足够长，以便在需要时重新提交
 			return errors.New("fill me in")
 		}
@@ -706,7 +706,7 @@ func (h *StorageHost) removeStorageObligation(so StorageObligation, sos storageO
 	// 更新义务状态，以便用户可以看到义务如何结束，并且删除扇区根源，因为它们是大型对象，一旦不再需要存储证明就没有用处。
 	h.financialMetrics.ContractCount--
 	so.ObligationStatus = sos
-	so.SectorRoots = common.Hash{}
+	so.SectorRoots = []common.Hash{}
 
 	errDb := StoreStorageObligation(h.db, so.id(), so)
 	if errDb != nil {
@@ -862,7 +862,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		}
 		// If the window has closed, the host has failed and the obligation can
 		// be removed.
-		if so.proofDeadline() < h.blockHeight {
+		if so.ProofDeadline() < h.blockHeight {
 			h.log.Info("storage proof not confirmed by deadline, id", so.id())
 			h.lock.Lock()
 			err := h.removeStorageObligation(so, obligationFailed)
@@ -880,7 +880,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		//TODO Create and build the transaction with the storage proof.
 
 		h.lock.Lock()
-		err := h.queueActionItem(so.proofDeadline(), so.id())
+		err := h.queueActionItem(so.ProofDeadline(), so.id())
 		h.lock.Unlock()
 		if err != nil {
 			h.log.Info("Error queuing action item:", err)
@@ -894,7 +894,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 	}
 
 	// Check if all items have succeeded with the required confirmations. Report
-	if so.ProofConfirmed && h.blockHeight >= so.proofDeadline() {
+	if so.ProofConfirmed && h.blockHeight >= so.ProofDeadline() {
 		h.log.Info("file contract complete, id", so.id())
 		h.lock.Lock()
 		h.removeStorageObligation(so, obligationSucceeded)
