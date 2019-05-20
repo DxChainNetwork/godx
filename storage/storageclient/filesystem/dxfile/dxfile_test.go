@@ -20,7 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
-var testDir = tempDir()
+var testDir = tempDir("dxfile")
 
 // newTestDxFile generate a random DxFile used for testing. The generated DxFile segments are empty
 func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
