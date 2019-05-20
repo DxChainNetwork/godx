@@ -6,11 +6,20 @@ package dxfile
 
 import "github.com/DxChainNetwork/godx/p2p/enode"
 
+// The larger the health value, the healthier the DxFile.
+// Health 0~100: unrecoverable from contracts
+// Health 100~200: recoverable
+// Health 200: No fix needed
+
+
 // repairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
 // to be repaired
 const repairHealthThreshold = 175
 
 // Health return check for dxFile's segments and return the health, stuckHealth, and numStuckSegments
+// Health 0~100: unrecoverable from contracts
+// Health 100~200: recoverable
+// Health 200: No fix needed
 func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) (uint32, uint32, uint32) {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -40,6 +49,9 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 }
 
 // SegmentHealth return the health of a Segment based on information provided
+// Health 0~100: unrecoverable from contracts
+// Health 100~200: recoverable
+// Health 200: No fix needed
 func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -47,7 +59,7 @@ func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, 
 	return df.segmentHealth(segmentIndex, offlineMap, goodForRenewMap)
 }
 
-// segmentHealth return the health of a Segment.
+// segmentHealth return the health of a Segment. The larger the health value, the healthier the DxFile
 // Health 0~100: unrecoverable from contracts
 // Health 100~200: recoverable
 // Health 200: No fix needed
@@ -103,6 +115,11 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 }
 
 // CmpHealth compare two health. The cmpHealth result returns the priority the health related Segment should be fixed
+// The priority is determined by the follows:
+// When the file is not recoverable from contract (health 0~99), it has the highest property to recover from disk
+// When the file is recoverable (health 100~199), it is then prioritized.
+// When the file is totally health, there is no need to recover.
+// Thus the priority of recovery is as follows:
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
 func CmpHealth(h1, h2 uint32) int {
 	if h1 == h2 {
