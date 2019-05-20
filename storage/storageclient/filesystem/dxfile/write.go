@@ -7,6 +7,7 @@ package dxfile
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"time"
 
@@ -19,7 +20,7 @@ func (df *DxFile) saveAll() error {
 	if df.deleted {
 		return errors.New("cannot save the file: file already deleted")
 	}
-	var updates []dxfileUpdate
+	var updates []storage.FileUpdate
 	// create updates for hostTable
 	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
@@ -52,7 +53,7 @@ func (df *DxFile) saveAll() error {
 	updates = append(updates, up)
 
 	// save all updates
-	return df.applyUpdates(updates)
+	return storage.ApplyUpdates(df.wal, updates)
 }
 
 // rename create a series of transactions to rename the file to a new file
@@ -60,7 +61,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 	if df.deleted {
 		return errors.New("cannot rename the file: file already deleted")
 	}
-	var updates []dxfileUpdate
+	var updates []storage.FileUpdate
 	// create updates for delete
 	du, err := df.createDeleteUpdate()
 	if err != nil {
@@ -99,7 +100,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 	}
 	updates = append(updates, up)
 	// apply updates
-	return df.applyUpdates(updates)
+	return storage.ApplyUpdates(df.wal, updates)
 }
 
 // delete create and apply the deletion update
@@ -111,7 +112,7 @@ func (df *DxFile) delete() error {
 	if err != nil {
 		return fmt.Errorf("cannot create delete update: %v", err)
 	}
-	return df.applyUpdates([]dxfileUpdate{du})
+	return storage.ApplyUpdates(df.wal, []storage.FileUpdate{du})
 }
 
 // saveSegment save the Segment with the segmentIndex, and write to file
@@ -144,7 +145,7 @@ func (df *DxFile) saveSegments(indexes []int) error {
 	}
 	updates = append(updates, up)
 	// apply the updates
-	return df.applyUpdates(updates)
+	return storage.ApplyUpdates(df.wal, updates)
 }
 
 // saveHostTableUpdate save the host table as well as the metadata
@@ -156,7 +157,7 @@ func (df *DxFile) saveHostTableUpdate() error {
 	if err != nil {
 		return err
 	}
-	return df.applyUpdates(updates)
+	return storage.ApplyUpdates(df.wal, updates)
 }
 
 // saveMetadata only save the metadata
@@ -168,12 +169,12 @@ func (df *DxFile) saveMetadata() error {
 	if err != nil {
 		return err
 	}
-	return df.applyUpdates([]dxfileUpdate{up})
+	return storage.ApplyUpdates(df.wal, []storage.FileUpdate{up})
 }
 
 // createMetadataHostTableUpdate creates the update for metadata and hostTable
-func (df *DxFile) createMetadataHostTableUpdate() ([]dxfileUpdate, error) {
-	var updates []dxfileUpdate
+func (df *DxFile) createMetadataHostTableUpdate() ([]storage.FileUpdate, error) {
+	var updates []storage.FileUpdate
 	up, hostTableSize, err := df.createHostTableUpdate()
 	if err != nil {
 		return nil, err
@@ -199,7 +200,7 @@ func (df *DxFile) createMetadataHostTableUpdate() ([]dxfileUpdate, error) {
 
 // segmentShift shift Segment in persist file to the end of the persist file to give space for hostTable.
 // Return the corresponding update and the underlying error.
-func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, error) {
+func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]storage.FileUpdate, error) {
 	f, err := os.OpenFile(df.filePath, os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open the file %v: %v", df.filePath, err)
@@ -212,7 +213,7 @@ func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]dxfileUpdate, erro
 	segmentSize := PageSize * segmentPersistNumPages(df.metadata.NumSectors)
 
 	// move the segment to the end of DxFile
-	var updates []dxfileUpdate
+	var updates []storage.FileUpdate
 	for i := 0; uint64(i) < numSegToShift; i++ {
 		seg, err := df.readSegment(f, prevOffset)
 		if err != nil {
@@ -253,7 +254,7 @@ func (df *DxFile) shiftOffset(targetHostTableSize uint64) (uint64, uint64, uint6
 }
 
 // createMetadataUpdate create an insert update for metadata
-func (df *DxFile) createMetadataUpdate() (dxfileUpdate, error) {
+func (df *DxFile) createMetadataUpdate() (storage.FileUpdate, error) {
 	df.metadata.TimeUpdate = unixNow()
 	metaBytes, err := rlp.EncodeToBytes(df.metadata)
 	if err != nil {
@@ -268,7 +269,7 @@ func (df *DxFile) createMetadataUpdate() (dxfileUpdate, error) {
 
 // createHostTableUpdate create a hostTable update. Return the insertUpdate, size of hostTable bytes
 // and the error
-func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
+func (df *DxFile) createHostTableUpdate() (storage.FileUpdate, uint64, error) {
 	df.metadata.TimeUpdate = unixNow()
 	hostTableBytes, err := rlp.EncodeToBytes(df.hostTable)
 	if err != nil {
@@ -282,7 +283,7 @@ func (df *DxFile) createHostTableUpdate() (dxfileUpdate, uint64, error) {
 }
 
 // createSegmentShiftUpdate create an Segment update
-func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfileUpdate, error) {
+func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (storage.FileUpdate, error) {
 	df.metadata.TimeModify = unixNow()
 	if segmentIndex > uint64(len(df.segments)) {
 		return nil, fmt.Errorf("unexpected Index: %d", segmentIndex)
