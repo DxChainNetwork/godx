@@ -5,6 +5,9 @@
 package storagehostmanager
 
 import (
+	"os"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
@@ -12,8 +15,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"os"
-	"sync"
 )
 
 // StorageHostManager contains necessary fields that are used to manage storage hosts
@@ -35,7 +36,7 @@ type StorageHostManager struct {
 	// maintenance related
 	initialScan     bool
 	scanWaitList    []storage.HostInfo
-	scanLookup      map[string]struct{}
+	scanLookup      map[enode.ID]struct{}
 	scanWait        bool
 	scanningWorkers int
 
@@ -49,7 +50,7 @@ type StorageHostManager struct {
 
 	// filter mode related
 	filterMode    FilterMode
-	filteredHosts map[string]enode.ID
+	filteredHosts map[enode.ID]struct{}
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
@@ -59,17 +60,16 @@ type StorageHostManager struct {
 func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		persistDir: persistDir,
-
-		rent: storage.DefaultRentPayment,
-
-		scanLookup:    make(map[string]struct{}),
-		filteredHosts: make(map[string]enode.ID),
+		persistDir:    persistDir,
+		rent:          storage.DefaultRentPayment,
+		scanLookup:    make(map[enode.ID]struct{}),
+		filterMode:    DisableFilter,
+		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
-	shm.filteredTree = shm.storageHostTree
+	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
 
 	shm.log.Info("Storage host manager initialized")
@@ -77,6 +77,8 @@ func New(persistDir string) *StorageHostManager {
 	return shm
 }
 
+// Start will start to load prior settings, start go routines to automatically save
+// the settings every 2 min, and go routine to start storage host maintenance
 func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
 	// initialization
 	shm.b = b
@@ -98,8 +100,8 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 	// automatically save the settings every 2 minutes
 	go shm.autoSaveSettings()
 
-	// subscribe consensus change
-	go shm.SubscribeChainChangEvent()
+	// subscribe block chain change event
+	go shm.subscribeChainChangEvent()
 
 	// started scan and update storage host information
 	go shm.scan()
@@ -109,6 +111,8 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 	return nil
 }
 
+// Close will send stop signal to threadmanager, terminate all the
+// running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
 }
@@ -116,9 +120,9 @@ func (shm *StorageHostManager) Close() error {
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	err := shm.storageHostTree.Insert(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID.String()]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+	_, exists := shm.filteredHosts[hi.EnodeID]
+
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {
 			err = common.ErrCompose(err, errF)
@@ -128,11 +132,11 @@ func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 }
 
 // remove will remove the host information from the storageHostTree
-func (shm *StorageHostManager) remove(enodeid string) error {
+func (shm *StorageHostManager) remove(enodeid enode.ID) error {
 	err := shm.storageHostTree.Remove(enodeid)
 	_, exists := shm.filteredHosts[enodeid]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Remove(enodeid)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)
@@ -144,9 +148,9 @@ func (shm *StorageHostManager) remove(enodeid string) error {
 // modify will modify the host information from the StorageHostTree
 func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 	err := shm.storageHostTree.HostInfoUpdate(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID.String()]
-	filterWhiteList := shm.filterMode == ActiveWhitelist
-	if filterWhiteList == exists {
+	_, exists := shm.filteredHosts[hi.EnodeID]
+
+	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.HostInfoUpdate(hi)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)

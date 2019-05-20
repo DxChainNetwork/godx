@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"github.com/DxChainNetwork/godx/cmd/utils"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"path/filepath"
 )
 
 var storageClientCommand = cli.Command{
@@ -65,7 +66,7 @@ var storageClientCommand = cli.Command{
 }
 
 func getPayment(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -80,7 +81,7 @@ func getPayment(ctx *cli.Context) error {
 }
 
 func setPayment(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -95,7 +96,7 @@ func setPayment(ctx *cli.Context) error {
 }
 
 func memoryAvailable(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -110,7 +111,7 @@ func memoryAvailable(ctx *cli.Context) error {
 }
 
 func memoryLimitation(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -124,7 +125,7 @@ func memoryLimitation(ctx *cli.Context) error {
 }
 
 func setMemoryLimit(ctx *cli.Context) error {
-	client, err := GdxAttach(ctx)
+	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
@@ -150,7 +151,7 @@ func setMemoryLimit(ctx *cli.Context) error {
 	return nil
 }
 
-func GdxAttach(ctx *cli.Context) (*rpc.Client, error) {
+func gdxAttach(ctx *cli.Context) (*rpc.Client, error) {
 	path := node.DefaultDataDir()
 	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
 		path = ctx.GlobalString(utils.DataDirFlag.Name)

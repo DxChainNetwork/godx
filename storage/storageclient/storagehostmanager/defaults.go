@@ -35,9 +35,9 @@ const (
 	//maxScanSleep            = 6 * time.Hour
 	//minScanSleep            = time.Hour + time.Minute*30
 
-	// for testing purpose
-	maxScanSleep = 5 * time.Second
-	minScanSleep = 2 * time.Second
+	// TODO (mzhang): for testing purpose
+	maxScanSleep = 30 * time.Second
+	minScanSleep = 10 * time.Second
 
 	maxWorkersAllowed = 80
 	minScans          = 12

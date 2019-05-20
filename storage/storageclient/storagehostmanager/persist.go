@@ -1,34 +1,45 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file
+
 package storagehostmanager
 
 import (
-	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// settingsMetadata contains the header and version of the JSON file
+// used as compatibility purposes
 var settingsMetadata = common.Metadata{
 	Header:  PersistStorageHostManagerHeader,
 	Version: PersistStorageHostManagerVersion,
 }
 
+// persistence is a data structure defines the what kind of information
+// will be contained in the json file
 type persistence struct {
 	StorageHostsInfo        []storage.HostInfo
 	BlockHeight             uint64
 	DisableIPViolationCheck bool
-	FilteredHosts           map[string]enode.ID
+	FilteredHosts           map[enode.ID]struct{}
 	FilterMode              FilterMode
 }
 
+// saveSettings will save the storage host configurations into the JSON file
 func (shm *StorageHostManager) saveSettings() error {
 	persist := shm.persistUpdate()
 	return common.SaveDxJSON(settingsMetadata, filepath.Join(shm.persistDir, PersistFilename), persist)
 }
 
+// persistUpdate contains the information that needs to be written into the
+// jso nfile
 func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 	return persistence{
 		StorageHostsInfo:        shm.storageHostTree.All(),
@@ -39,6 +50,8 @@ func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 	}
 }
 
+// autoSaveSettings will automatically save the configurations of the storage host manager
+// every 2 mins. It will be triggered at the time when the storage host manager got executed
 func (shm *StorageHostManager) autoSaveSettings() {
 	if err := shm.tm.Add(); err != nil {
 		log.Warn("failed to start auto save settings when initializing storage")
@@ -71,7 +84,7 @@ func (shm *StorageHostManager) loadSettings() error {
 	}
 
 	var persist persistence
-	persist.FilteredHosts = make(map[string]enode.ID)
+	persist.FilteredHosts = make(map[enode.ID]struct{})
 
 	err = common.LoadDxJSON(settingsMetadata, filepath.Join(shm.persistDir, PersistFilename), &persist)
 	if err != nil {

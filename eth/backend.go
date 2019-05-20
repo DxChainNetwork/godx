@@ -21,8 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
 	"sync"
@@ -50,11 +48,13 @@ import (
 	"github.com/DxChainNetwork/godx/miner"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -221,7 +221,12 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 
 	// new maintenance system
-	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend)
+	state, err := eth.blockchain.State()
+	if err != nil {
+		log.Error("failed to get statedb for maintenance", "error", err)
+		return nil, err
+	}
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
 
 	return eth, nil
 }
@@ -359,6 +364,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Namespace: "hostmanagerdebug",
 				Version:   "1.0",
 				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
+			}, {
+				Namespace: "hostmanager",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
 				Public:    true,
 			},
 		}...)

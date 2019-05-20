@@ -9,49 +9,53 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// HostEvaluation defines an interface that include methods that used to calculate
+// the storage host evaluation and evaluation details
 type HostEvaluation interface {
 	EvaluationDetail(eval common.BigInt, ignoreAge, ignoreUptime bool) EvaluationDetail
 	Evaluation() common.BigInt
 }
 
+// EvaluationFunc is used to calculate storage host evaluation
 type EvaluationFunc func(storage.HostInfo) HostEvaluation
 
+// EvaluationDetail contains the detailed storage host evaluation factors
 type EvaluationDetail struct {
-	Evaluation     common.BigInt `json:"score"`
+	Evaluation     common.BigInt `json:"evaluation"`
 	ConversionRate float64       `json:"conversionrate"`
 
-	AgeAdjustment              float64 `json:"ageadjustment"`
-	BurnAdjustment             float64 `json:"burnadjustment"`
-	DepositAdjustment          float64 `json:"depositeadjustment"`
-	InteractionAdjustment      float64 `json:"interactionadjustment"`
-	PriceAdjustment            float64 `json:"pricesmultiplier"`
-	StorageRemainingAdjustment float64 `json:"storageremainingadjustment"`
-	UptimeAdjustment           float64 `json:"uptimeadjustment"`
+	PresenceFactor         float64 `json:"presencefactor"`
+	DepositFactor          float64 `json:"depositfactor"`
+	InteractionFactor      float64 `json:"interactionfactor"`
+	ContractPriceFactor    float64 `json:"contractpriceFactor"`
+	StorageRemainingFactor float64 `json:"storageremainingfactor"`
+	UptimeFactor           float64 `json:"uptimefactor"`
 }
 
+// EvaluationCriteria contains statistics that used to calculate the storage host evaluation
 type EvaluationCriteria struct {
-	AgeAdjustment              float64
-	BurnAdjustment             float64
-	DepositAdjustment          float64
-	InteractionAdjustment      float64
-	PriceAdjustment            float64
-	StorageRemainingAdjustment float64
-	UptimeAdjustment           float64
+	PresenceFactor         float64
+	DepositFactor          float64
+	InteractionFactor      float64
+	ContractPriceFactor    float64
+	StorageRemainingFactor float64
+	UptimeFactor           float64
 }
 
+// Evaluation will be used to calculate the storage host evaluation
 func (ec EvaluationCriteria) Evaluation() common.BigInt {
-	total := ec.AgeAdjustment * ec.BurnAdjustment * ec.DepositAdjustment * ec.InteractionAdjustment *
-		ec.PriceAdjustment * ec.StorageRemainingAdjustment * ec.UptimeAdjustment
-
+	total := ec.PresenceFactor * ec.DepositFactor * ec.InteractionFactor *
+		ec.ContractPriceFactor * ec.StorageRemainingFactor * ec.UptimeFactor
 	return common.NewBigInt(1).MultFloat64(total)
 }
 
+// EvaluationDetail will return storage host detailed evaluation, including evaluation criteria
 func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, ignoreUptime bool) EvaluationDetail {
 	if ignoreAge {
-		ec.AgeAdjustment = 1
+		ec.PresenceFactor = 1
 	}
 	if ignoreUptime {
-		ec.UptimeAdjustment = 1
+		ec.UptimeFactor = 1
 	}
 
 	eval := ec.Evaluation()
@@ -59,19 +63,19 @@ func (ec EvaluationCriteria) EvaluationDetail(evalAll common.BigInt, ignoreAge, 
 	ratio := conversionRate(eval, evalAll)
 
 	return EvaluationDetail{
-		Evaluation:                 eval,
-		ConversionRate:             ratio,
-		AgeAdjustment:              ec.AgeAdjustment,
-		BurnAdjustment:             ec.BurnAdjustment,
-		DepositAdjustment:          ec.DepositAdjustment,
-		InteractionAdjustment:      ec.InteractionAdjustment,
-		PriceAdjustment:            ec.PriceAdjustment,
-		StorageRemainingAdjustment: ec.StorageRemainingAdjustment,
-		UptimeAdjustment:           ec.UptimeAdjustment,
+		Evaluation:             eval,
+		ConversionRate:         ratio,
+		PresenceFactor:         ec.PresenceFactor,
+		DepositFactor:          ec.DepositFactor,
+		InteractionFactor:      ec.InteractionFactor,
+		ContractPriceFactor:    ec.ContractPriceFactor,
+		StorageRemainingFactor: ec.StorageRemainingFactor,
+		UptimeFactor:           ec.UptimeFactor,
 	}
 
 }
 
+// conversionRate calculate the rate of evalAll / (eval * 50)
 func conversionRate(eval, evalAll common.BigInt) float64 {
 	// eliminate 0 for denominator
 	if evalAll.Cmp(common.NewBigInt(0)) <= 0 {
