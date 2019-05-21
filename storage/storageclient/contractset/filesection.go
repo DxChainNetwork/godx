@@ -6,6 +6,7 @@ package contractset
 
 import (
 	"errors"
+	"fmt"
 	"os"
 )
 
@@ -65,6 +66,22 @@ func (fs *fileSection) ReadAt(data []byte, offset int64) (err error) {
 	return
 }
 
+// Truncate will shrink the file to the size specified
+// the size is measured in bytes
+// for example: if size = 1, only one byte data will be remained in the file
+func (fs *fileSection) Truncate(size int64) (err error) {
+	// validation
+	if size < 0 {
+		return fmt.Errorf("the turncated file size cannot be smaller than 0")
+	}
+
+	if fs.end != remainingFile {
+		return fmt.Errorf("error truncating the file section, the section can only be truncated if it is located at the end")
+	}
+
+	return fs.f.Truncate(size)
+}
+
 // Size returns the size of the file section
 func (fs *fileSection) Size() (sectionSize int64, err error) {
 	// get the size of the file
@@ -78,11 +95,12 @@ func (fs *fileSection) Size() (sectionSize int64, err error) {
 	// get the section size
 	sectionSize = fileSize - fs.start
 
-	// validation
+	// section size cannot be smaller than 0
 	if sectionSize < 0 {
 		sectionSize = 0
 	}
 
+	// section size cannot be bigger than max end - start
 	if sectionSize > fs.end-fs.start && fs.end != remainingFile {
 		sectionSize = fs.end - fs.start
 	}
