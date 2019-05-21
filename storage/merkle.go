@@ -3,9 +3,7 @@ package storage
 import (
 	"bytes"
 	"github.com/DxChainNetwork/godx/common"
-	"gitlab.com/NebulousLabs/Sia/crypto"
 	"gitlab.com/NebulousLabs/Sia/encoding"
-	"gitlab.com/NebulousLabs/Sia/modules"
 	"gitlab.com/NebulousLabs/merkletree"
 	"golang.org/x/crypto/sha3"
 	"hash"
@@ -261,7 +259,7 @@ func NewHash() hash.Hash {
 
 func CachedMerkleRoot(roots []common.Hash) common.Hash {
 	log2SectorSize := uint64(0)
-	for 1<<log2SectorSize < (modules.SectorSize / crypto.SegmentSize) {
+	for 1<<log2SectorSize < (SectorSize / SegmentSize) {
 		log2SectorSize++
 	}
 	ct := NewCachedTree(log2SectorSize)
