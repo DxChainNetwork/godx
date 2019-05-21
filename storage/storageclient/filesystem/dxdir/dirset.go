@@ -20,7 +20,7 @@ type (
 		dirMap  map[DxPath]*dirSetEntry
 
 		lock sync.Mutex
-		wal *writeaheadlog.Wal
+		wal  *writeaheadlog.Wal
 	}
 
 	// dirSetEntry is the entry stored in the DirSet. It also keeps a map of current accessing threads
@@ -28,12 +28,12 @@ type (
 		*DxDir
 		dirSet *DirSet
 
-		threadMap map[threadID]threadInfo
+		threadMap     map[threadID]threadInfo
 		threadMapLock sync.Mutex
 	}
 
-	// DirSetEntryWithId is the entry with the threadID. It extends DxDir
-	DirSetEntryWithId struct {
+	// DirSetEntryWithID is the entry with the threadID. It extends DxDir
+	DirSetEntryWithID struct {
 		*dirSetEntry
 		threadID threadID
 	}
@@ -42,30 +42,84 @@ type (
 	threadInfo struct {
 		callingFiles []string
 		callingLines []int
-		lockTime time.Time
+		lockTime     time.Time
 	}
 
 	threadID uint64
 )
 
-// NewDirSet creates a new DirSet with the given parameters
+// NewDirSet creates a New DirSet with the given parameters
 func NewDirSet(rootDir string, wal *writeaheadlog.Wal) *DirSet {
-	return &DirSet {
+	return &DirSet{
 		rootDir: rootDir,
 		dirMap:  make(map[DxPath]*dirSetEntry),
 		wal:     wal,
 	}
 }
 
-// Open opens a new DxDir
-func (ds *DirSet) Open(path DxPath) (*DirSetEntryWithId, error) {
+// Start initialize the root directory on disk.
+func (ds *DirSet) Start() error {
+	ds.lock.Lock()
+	defer ds.lock.Unlock()
+
+	exist, err := ds.exists("")
+	if exist {
+		return nil
+	}
+	if os.IsNotExist(err) {
+		_, err = New("", dirPath(ds.rootDir), ds.wal)
+		return err
+	}
+	return err
+}
+
+// NewDxDir creates a DxDir. Return a DirSetEntryWithID that extends DxDir and the error
+func (ds *DirSet) NewDxDir(path DxPath) (*DirSetEntryWithID, error) {
+	ds.lock.Lock()
+	defer ds.lock.Unlock()
+	// Check the directory file already exists
+	exist, err := ds.exists(path)
+	if exist {
+		return nil, os.ErrExist
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	// create the dxdir
+	d, err := New(path, ds.dirPath(path), ds.wal)
+	if err != nil {
+		return nil, err
+	}
+	// create the entry and update dxdir
+	entry := ds.newDirSetEntry(d)
+	tid := randomThreadID()
+	entry.threadMap[tid] = newThread()
+	ds.dirMap[path] = entry
+	return &DirSetEntryWithID{
+		dirSetEntry: entry,
+		threadID:    tid,
+	}, nil
+}
+
+// newDirSetEntry create a New dirSetEntry with the DxDir
+func (ds *DirSet) newDirSetEntry(d *DxDir) *dirSetEntry {
+	threads := make(map[threadID]threadInfo)
+	return &dirSetEntry{
+		DxDir:     d,
+		dirSet:    ds,
+		threadMap: threads,
+	}
+}
+
+// Open opens a New DxDir. If file not exist, return an os file Not Exist error
+func (ds *DirSet) Open(path DxPath) (*DirSetEntryWithID, error) {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 	return ds.open(path)
 }
 
-// open opens the DxDir with path, add the new threadInfo to the entry
-func (ds *DirSet) open(path DxPath) (*DirSetEntryWithId, error) {
+// open opens the DxDir with path, add the New threadInfo to the entry
+func (ds *DirSet) open(path DxPath) (*DirSetEntryWithID, error) {
 	var entry *dirSetEntry
 	entry, exist := ds.dirMap[path]
 	if !exist {
@@ -80,33 +134,23 @@ func (ds *DirSet) open(path DxPath) (*DirSetEntryWithId, error) {
 	entry.threadMapLock.Lock()
 	entry.threadMap[tid] = newThread()
 	entry.threadMapLock.Unlock()
-	return &DirSetEntryWithId{
+	return &DirSetEntryWithID{
 		dirSetEntry: entry,
-		threadID: tid,
+		threadID:    tid,
 	}, nil
 }
 
-// newDirSetEntry create a new dirSetEntry with the DxDir
-func (ds *DirSet) newDirSetEntry(d *DxDir) *dirSetEntry {
-	threads := make(map[threadID]threadInfo)
-	return &dirSetEntry{
-		DxDir: d,
-		dirSet: ds,
-		threadMap: threads,
-	}
-}
-
 // Close close the entry. If all threads with the entry is closed, remove the entry from the DirSet
-func (entry *DirSetEntryWithId) Close() error {
+func (entry *DirSetEntryWithID) Close() error {
 	entry.dirSet.lock.Lock()
 	defer entry.dirSet.lock.Unlock()
 	entry.dirSet.closeEntry(entry)
 	return nil
 }
 
-// closeEntry close the DirSetEntryWithId within the DirSet. If the entry has no more
+// closeEntry close the DirSetEntryWithID within the DirSet. If the entry has no more
 // threads that holds, remove the entry from the DirSet
-func (ds *DirSet) closeEntry(entry *DirSetEntryWithId) {
+func (ds *DirSet) closeEntry(entry *DirSetEntryWithID) {
 	// delete the thread id in threadMap
 	entry.threadMapLock.Lock()
 	defer entry.threadMapLock.Unlock()
@@ -123,7 +167,8 @@ func (ds *DirSet) closeEntry(entry *DirSetEntryWithId) {
 	}
 }
 
-// Exists checks whether DxDir with path exists
+// Exists checks whether DxDir with path exists. If file not exist, return
+// an os File Not Exist error
 func (ds *DirSet) Exists(path DxPath) (bool, error) {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
@@ -144,7 +189,7 @@ func (ds *DirSet) exists(path DxPath) (bool, error) {
 	return false, err
 }
 
-// Delete delete the dxdir
+// Delete delete the dxdir. If file not exist, return os.ErrNotExist
 func (ds *DirSet) Delete(path DxPath) error {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
@@ -164,7 +209,33 @@ func (ds *DirSet) Delete(path DxPath) error {
 	defer ds.closeEntry(entry)
 	entry.threadMapLock.Lock()
 	defer entry.threadMapLock.Unlock()
-	return entry.Delete()
+	err = entry.Delete()
+	if err != nil {
+		return err
+	}
+	delete(ds.dirMap, path)
+	return nil
+}
+
+// UpdateMetadata update the metadata of the dxdir specified by DxPath
+func (ds *DirSet) UpdateMetadata(path DxPath, metadata Metadata) error {
+	ds.lock.Lock()
+	defer ds.lock.Unlock()
+	// Check whether the dxdir exists
+	exist, err := ds.exists(path)
+	if !exist || os.IsNotExist(err) {
+		return os.ErrNotExist
+	}
+	if err != nil {
+		return err
+	}
+	// Open the entry, and apply the updates
+	entry, err := ds.open(path)
+	if err != nil {
+		return err
+	}
+	defer ds.closeEntry(entry)
+	return entry.UpdateMetadata(metadata)
 }
 
 func (ds *DirSet) dirFilePath(path DxPath) string {
@@ -178,13 +249,13 @@ func (ds *DirSet) dirPath(path DxPath) dirPath {
 
 // newThread create the threadInfo by calling runtime.Caller
 func newThread() threadInfo {
-	ti := threadInfo {
-		callingFiles: make([]string, threadDepth + 1),
+	ti := threadInfo{
+		callingFiles: make([]string, threadDepth+1),
 		callingLines: make([]int, threadDepth+1),
-		lockTime: time.Now(),
+		lockTime:     time.Now(),
 	}
-	for i := 0 ; i <= threadDepth; i++ {
-		_, ti.callingFiles[i], ti.callingLines[i], _ = runtime.Caller(2+i)
+	for i := 0; i <= threadDepth; i++ {
+		_, ti.callingFiles[i], ti.callingLines[i], _ = runtime.Caller(2 + i)
 	}
 	return ti
 }

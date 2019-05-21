@@ -68,7 +68,7 @@ func (d *DxDir) delete() error {
 }
 
 // load load the DxDir metadata
-func load(path dirPath,  wal *writeaheadlog.Wal) (*DxDir, error) {
+func load(path dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
 	// Open the file
 	f, err := os.OpenFile(filepath.Join(string(path), dirFileName), os.O_RDONLY, 0600)
 	if err != nil {

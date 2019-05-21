@@ -1,7 +1,6 @@
 package dxdir
 
 import (
-	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"os"
@@ -15,8 +14,6 @@ const (
 
 	defaultHealth = uint32(200)
 )
-
-var ErrDirExist = errors.New("file already exists")
 
 type (
 	// DxDir is the data structure for the directory for the meta info for a directory.
@@ -70,28 +67,32 @@ type (
 	DxPath string
 )
 
-//new create a DxDir with representing the dirPath metadata.
+//New create a DxDir with representing the dirPath metadata.
 //Note that the only access method should be from dirSet
-func new(dxPath DxPath, sysPath dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
-	if _, exist := os.Stat(filepath.Join(string(sysPath), dirFileName)); exist {
-		return nil, ErrDirExist
+func New(dxPath DxPath, sysPath dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
+	_, err := os.Stat(filepath.Join(string(sysPath), dirFileName))
+	if err == nil {
+		return nil, os.ErrExist
 	}
-	if err := os.MkdirAll(string(dirPath), 0700); err != nil {
+	if !os.IsNotExist(err) {
 		return nil, err
 	}
-	metadata := &Metadata {
-		Health: defaultHealth,
+	if err = os.MkdirAll(string(sysPath), 0700); err != nil {
+		return nil, err
+	}
+	metadata := &Metadata{
+		Health:      defaultHealth,
 		StuckHealth: defaultHealth,
-		TimeModify: uint64(time.Now().Unix()),
-		DxPath: dxPath,
+		TimeModify:  uint64(time.Now().Unix()),
+		DxPath:      dxPath,
 	}
-	d := &DxDir {
+	d := &DxDir{
 		metadata: metadata,
-		deleted: false,
-		wal: wal,
-		dirPath: sysPath,
+		deleted:  false,
+		wal:      wal,
+		dirPath:  sysPath,
 	}
-	err := d.save()
+	err = d.save()
 	if err != nil {
 		return nil, fmt.Errorf("cannot create the dxdir: %v", err)
 	}
@@ -122,13 +123,16 @@ func (d *DxDir) Metadata() Metadata {
 	return *d.metadata
 }
 
-func (d *DxDir) DxPath() string {
+// DxPath return the DxPath of the Dxdir
+func (d *DxDir) DxPath() DxPath {
 	d.lock.RLock()
 	defer d.lock.RUnlock()
 
 	return d.metadata.DxPath
 }
 
+// UpdateMetadata update the metadata with the given metadata.
+// Not the DxPath field is not updated
 func (d *DxDir) UpdateMetadata(metadata Metadata) error {
 	d.lock.Lock()
 	defer d.lock.Unlock()

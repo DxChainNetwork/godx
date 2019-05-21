@@ -31,7 +31,7 @@ func tempDir(dirs ...string) string {
 }
 
 func newWal(t *testing.T) *writeaheadlog.Wal {
-	wal, txns, err := writeaheadlog.New(filepath.Join(testDir, t.Name() + ".wal"))
+	wal, txns, err := writeaheadlog.New(filepath.Join(testDir, t.Name()+".wal"))
 	if err != nil {
 		panic(err)
 	}
@@ -96,26 +96,17 @@ func TestDxDir_SaveDeleteLoad(t *testing.T) {
 
 func randomDxDir(t *testing.T) *DxDir {
 	dxPath := t.Name()
-	dirPath := filepath.Join(testDir, dxPath)
-	if err := os.MkdirAll(dirPath, 0700); err != nil {
+	dir := filepath.Join(testDir, dxPath)
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	wal := newWal(t)
-	m := &Metadata {
-		NumFiles:randomUint64(),
-		TotalSize:randomUint64(),
-		Health:randomUint32(),
-		StuckHealth:randomUint32(),
-		MinRedundancy:randomUint32(),
-		TimeLastHealthCheck:randomUint64(),
-		TimeModify:randomUint64(),
-		NumStuckSegments:randomUint64(),
-		DxPath:dxPath,
-	}
-	return &DxDir {
+	m := randomMetadata()
+	m.DxPath = DxPath(dxPath)
+	return &DxDir{
 		metadata: m,
-		wal: wal,
-		dirPath: dirPath,
+		wal:      wal,
+		dirPath:  dirPath(dir),
 	}
 }
 
@@ -130,11 +121,31 @@ func randomUint32() uint32 {
 }
 
 // randomDxPath creates a random DxPath which is a string of byte slice of length 16
-func randomDxPath() string {
+func randomDxPath(depth int) DxPath {
+	path := ""
 	b := make([]byte, 16)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic(err)
+	for i := 0; i != depth; i++ {
+		if len(path) != 0 {
+			path += "/"
+		}
+		_, err := rand.Read(b)
+		if err != nil {
+			panic(err)
+		}
+		path += common.Bytes2Hex(b)
 	}
-	return common.Bytes2Hex(b)
+	return DxPath(path)
+}
+
+func randomMetadata() *Metadata {
+	return &Metadata{
+		NumFiles:            randomUint64(),
+		TotalSize:           randomUint64(),
+		Health:              randomUint32(),
+		StuckHealth:         randomUint32(),
+		MinRedundancy:       randomUint32(),
+		TimeLastHealthCheck: randomUint64(),
+		TimeModify:          randomUint64(),
+		NumStuckSegments:    randomUint64(),
+	}
 }
