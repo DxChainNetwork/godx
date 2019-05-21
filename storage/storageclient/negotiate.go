@@ -76,3 +76,25 @@ func RenterPayoutsPreTax(host HostDBEntry, funding, basePrice, baseCollateral *b
 	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
 	return
 }
+
+func NewRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
+	rev := current
+
+	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
+	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 3)
+	copy(rev.NewValidProofOutputs, current.NewValidProofOutputs)
+	copy(rev.NewMissedProofOutputs, current.NewMissedProofOutputs)
+
+	// move valid payout from renter to host
+	rev.NewValidProofOutputs[0].Value = current.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
+	rev.NewValidProofOutputs[1].Value = current.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
+
+	// move missed payout from renter to void
+	rev.NewMissedProofOutputs[0].Value = current.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
+	rev.NewMissedProofOutputs[2].Value = current.NewMissedProofOutputs[2].Value.Add(current.NewMissedProofOutputs[2].Value, cost)
+
+	// increment revision number
+	rev.NewRevisionNumber++
+
+	return rev
+}

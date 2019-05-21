@@ -96,6 +96,7 @@ type Session struct {
 
 	version int
 
+	host       HostInfo
 	clientDisc chan error
 }
 
@@ -110,6 +111,10 @@ func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 }
 func (s *Session) ClientDiscChan() chan error {
 	return s.clientDisc
+}
+
+func (s *Session) HostInfo() *HostInfo {
+	return &s.host
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {
@@ -132,13 +137,23 @@ func (s *Session) SendStorageContractUpdateHostSign(data interface{}) error {
 	return p2p.Send(s.rw, StorageContractUpdateHostSignMsg, data)
 }
 
+func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
+	s.Log().Debug("Sending storage contract upload request", "request", data)
+	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
+}
+
 func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
 	s.Log().Debug("Sending storage contract upload proof", "proof", data)
 	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
 }
 
+func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
+	s.Log().Debug("Sending storage contract upload client revision sign", "sign", data)
+	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
+}
+
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage host revision sign", "proof", data)
+	s.Log().Debug("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
 }
 

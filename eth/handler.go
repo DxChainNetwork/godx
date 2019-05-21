@@ -22,13 +22,8 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
-	"gitlab.com/NebulousLabs/Sia/build"
-	"gitlab.com/NebulousLabs/Sia/crypto"
-	"gitlab.com/NebulousLabs/Sia/modules"
 	"math"
 	"math/big"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -954,26 +949,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	case msg.Code == storage.StorageContractUploadMerkleRootProofMsg:
 		// Storage Client
 		// verify merkle root proof
-		var merkleResp storage.UploadMerkleProof
-		if err := msg.Decode(&merkleResp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-
-		// verify the proof, first by verifying the old Merkle root...
-		numSectors := contract.LastRevision().NewFileSize / modules.SectorSize
-		proofRanges := storage.CalculateProofRanges(actions, numSectors)
-		proofHashes := merkleResp.OldSubtreeHashes
-		leafHashes := merkleResp.OldLeafHashes
-		oldRoot, newRoot := contract.LastRevision().NewFileMerkleRoot, merkleResp.NewMerkleRoot
-		if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot) {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		// ...then by modifying the leaves and verifying the new Merkle root
-		leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
-		proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
-		if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot) {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
 
 		// assemble storage contract revision and sign it
 

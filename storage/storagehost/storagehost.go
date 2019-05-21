@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p"
-	"gitlab.com/NebulousLabs/Sia/crypto"
-	"gitlab.com/NebulousLabs/Sia/modules"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -394,20 +392,20 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 			sectorsChanged[uint64(len(newRoots))-1] = struct{}{}
 
 			// Update finances
-			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
+			bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.UploadBandwidthPrice.MultUint64(storage.SectorSize).BigIntPtr())
 
 		default:
 			return errors.New("unknown action type " + action.Type)
 		}
 	}
 
-	var storageRevenue, newCollateral *big.Int
+	var storageRevenue, newDeposit *big.Int
 	if len(newRoots) > len(so.SectorRoots) {
 		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
 		blocksRemaining := so.ProofDeadline() - currentBlockHeight
 		blockBytesCurrency := new(big.Int).Mul(big.NewInt(int64(blocksRemaining)), big.NewInt(int64(bytesAdded)))
-		storageRevenue = settings.StoragePrice.Mul(blockBytesCurrency)
-		newCollateral = newCollateral.Add(settings.Collateral.Mul(blockBytesCurrency))
+		storageRevenue = new(big.Int).Mul(blockBytesCurrency, settings.StoragePrice.BigIntPtr())
+		newDeposit = newDeposit.Add(newDeposit, new(big.Int).Mul(blockBytesCurrency, settings.Deposit.BigIntPtr()))
 	}
 
 	// If a Merkle proof was requested, construct it
@@ -418,7 +416,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	newRevision.NewRevisionNumber = uploadRequest.NewRevisionNumber
 	for _, action := range uploadRequest.Actions {
 		if action.Type == storage.UploadActionAppend {
-			newRevision.NewFileSize += modules.SectorSize
+			newRevision.NewFileSize += storage.SectorSize
 		}
 	}
 	newRevision.NewFileMerkleRoot = newMerkleRoot
@@ -438,10 +436,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Verify the new revision
-	newRevenue := settings.BaseRPCPrice.Add(storageRevenue).Add(bandwidthRevenue)
+	newRevenue := new(big.Int).Add(storageRevenue.Add(storageRevenue, bandwidthRevenue), settings.BaseRPCPrice.BigIntPtr())
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
-	if err := storage.VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newCollateral); err != nil {
+	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -475,12 +473,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Calculate bandwidth cost of proof
-	proofSize := crypto.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
-	if proofSize < modules.RPCMinLen {
-		proofSize = modules.RPCMinLen
-	}
+	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
 
-	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mul64(uint64(proofSize)))
+	bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
 		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
@@ -499,7 +494,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Update the storage obligation
 	so.SectorRoots = newRoots
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
-	so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newCollateral)
+	so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
 	so.Revision = append(so.Revision, newRevision)
 	err = h.modifyStorageObligation(so, sectorsRemoved, sectorsGained, gainedSectorData)

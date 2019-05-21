@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -15,6 +16,9 @@ type EthBackend interface {
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	SetupConnection(hostEnodeUrl string) (*Session, error)
 	Disconnect(hostEnodeUrl string) error
+
+	AccountManager() *accounts.Manager
+	GetCurrentBlockHeight() uint64
 }
 
 type ClientBackend interface {

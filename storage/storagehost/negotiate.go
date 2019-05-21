@@ -1,52 +1,22 @@
-package storage
+/*
+ * // Copyright 2019 DxChain, All rights reserved.
+ * // Use of this source code is governed by an Apache
+ * // License 2.0 that can be found in the LICENSE file.
+ */
+
+package storagehost
 
 import (
+	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
-	"gitlab.com/NebulousLabs/Sia/modules"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
-)
-
-const (
-	UploadActionAppend = "Append"
-	UploadActionTrim   = "Trim"
-	UploadActionSwap   = "Swap"
-	UploadActionUpdate = "Update"
-)
-
-type (
-	// UploadRequest contains the request parameters for RPCUpload.
-	UploadRequest struct {
-		StorageContractID common.Hash
-		Actions           []UploadAction
-
-		NewRevisionNumber    uint64
-		NewValidProofValues  []*big.Int
-		NewMissedProofValues []*big.Int
-	}
-
-	// UploadAction is a generic Write action. The meaning of each field
-	// depends on the Type of the action.
-	UploadAction struct {
-		Type string
-		A, B uint64
-		Data []byte
-	}
-
-	// UploadMerkleProof contains the optional Merkle proof for response data
-	// for RPCUpload.
-	UploadMerkleProof struct {
-		OldSubtreeHashes []common.Hash
-		OldLeafHashes    []common.Hash
-		NewMerkleRoot    common.Hash
-	}
 )
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
-func VerifyRevision(so *storagehost.StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
+func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
 	// Check that the revision is well-formed.
 	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 3 {
 		return errBadContractOutputCounts
@@ -82,7 +52,7 @@ func VerifyRevision(so *storagehost.StorageObligation, revision *types.StorageCo
 	if oldFCR.NewRevisionNumber >= revision.NewRevisionNumber {
 		return errBadRevisionNumber
 	}
-	if revision.NewFileSize != uint64(len(so.SectorRoots))*modules.SectorSize {
+	if revision.NewFileSize != uint64(len(so.SectorRoots))*storage.SectorSize {
 		return errBadFileSize
 	}
 	if oldFCR.NewWindowStart != revision.NewWindowStart {
@@ -95,33 +65,33 @@ func VerifyRevision(so *storagehost.StorageObligation, revision *types.StorageCo
 		return errBadUnlockHash
 	}
 
-	// Determine the amount that was transferred from the renter.
+	// Determine the amount that was transferred from the client.
 	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
-		return extendErr("renter increased its valid proof output: ", errHighRenterValidOutput)
+		return fmt.Errorf("client increased its valid proof output: %v", errHighRenterValidOutput)
 	}
 	fromRenter := new(big.Int).Sub(oldFCR.NewValidProofOutputs[0].Value, revision.NewValidProofOutputs[0].Value)
 	// Verify that enough money was transferred.
 	if fromRenter.Cmp(expectedExchange) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromRenter)
-		return extendErr(s, errHighRenterValidOutput)
+		return ExtendErr(s, errHighRenterValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
 	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
-		return extendErr("host valid proof output was decreased: ", errLowHostValidOutput)
+		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
 	toHost := new(big.Int).Sub(revision.NewValidProofOutputs[1].Value, oldFCR.NewValidProofOutputs[1].Value)
 	// Verify that enough money was transferred.
-	if !toHost.Equals(fromRenter) {
+	if toHost.Cmp(fromRenter) != 0 {
 		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
-		return extendErr(s, errLowHostValidOutput)
+		return ExtendErr(s, errLowHostValidOutput)
 	}
 
 	// If the renter's valid proof output is larger than the renter's missed
 	// proof output, the renter has incentive to see the host fail. Make sure
 	// that this incentive is not present.
 	if revision.NewValidProofOutputs[0].Value.Cmp(revision.NewMissedProofOutputs[0].Value) > 0 {
-		return extendErr("renter has incentive to see host fail: ", errHighRenterMissedOutput)
+		return ExtendErr("client has incentive to see host fail: ", errHighRenterMissedOutput)
 	}
 
 	// Check that the host is not going to be posting more collateral than is
@@ -131,7 +101,7 @@ func VerifyRevision(so *storagehost.StorageObligation, revision *types.StorageCo
 		collateral := new(big.Int).Sub(oldFCR.NewMissedProofOutputs[1].Value, revision.NewMissedProofOutputs[1].Value)
 		if collateral.Cmp(expectedCollateral) > 0 {
 			s := fmt.Sprintf("host expected to post at most %v collateral, but contract has host posting %v: ", expectedCollateral, collateral)
-			return extendErr(s, errLowHostMissedOutput)
+			return ExtendErr(s, errLowHostMissedOutput)
 		}
 	}
 
@@ -141,7 +111,7 @@ func VerifyRevision(so *storagehost.StorageObligation, revision *types.StorageCo
 	}
 
 	// The Merkle root is checked last because it is the most expensive check.
-	if revision.NewFileMerkleRoot != cachedMerkleRoot(so.SectorRoots) {
+	if revision.NewFileMerkleRoot != storage.CachedMerkleRoot(so.SectorRoots) {
 		return errBadFileMerkleRoot
 	}
 

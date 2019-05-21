@@ -8,14 +8,13 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
-	"math/big"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
@@ -179,7 +178,7 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 	return nil
 }
 
-func (s *StorageClient) FormContract(params ContractParams) error {
+func (sc *StorageClient) FormContract(params ContractParams) error {
 	// Extract vars from params, for convenience.
 	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
@@ -207,7 +206,7 @@ func (s *StorageClient) FormContract(params ContractParams) error {
 	renterAddr := common.Address{}
 	hostAddr := common.Address{}
 	// Create file contract.
-	sc := types.StorageContract{
+	_sc := types.StorageContract{
 		FileSize:         0,
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
@@ -248,12 +247,12 @@ func (s *StorageClient) FormContract(params ContractParams) error {
 	//}()
 
 	// setup connection with storage host
-	peer, err := s.ethBackend.SetupConnection(host.NetAddress)
-	defer s.ethBackend.Disconnect(host.NetAddress)
+	peer, err := sc.ethBackend.SetupConnection(host.NetAddress)
+	defer sc.ethBackend.Disconnect(host.NetAddress)
 
 	// Send the FormContract request.
 	req := FormContractRequest{
-		StorageContract: sc,
+		StorageContract: _sc,
 		RenterKey:       uc.PublicKeys[0],
 	}
 
@@ -268,7 +267,7 @@ func (s *StorageClient) FormContract(params ContractParams) error {
 
 	// TODO: 等待与host协商完成的通知 channel，然后直接发送 form contract交易就好
 	negotiationFinish := make(chan struct{})
-	sendAPI := NewStorageContractTxAPI(s.b)
+	sendAPI := NewStorageContractTxAPI(sc.b)
 	for {
 		select {
 		case <-negotiationFinish:
@@ -309,5 +308,133 @@ func (s *StorageClient) FormContract(params ContractParams) error {
 	//if err != nil {
 	//	return RenterContract{}, err
 	//}
+	return nil
+}
+
+func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
+	return sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+}
+
+func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
+	// Retrieve the contract
+	// client.contractManager.GetContract()
+	contractRevision := &types.StorageContractRevision{}
+
+	// Calculate price per sector
+	hostInfo := session.HostInfo()
+	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
+	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
+	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
+	sectorDeposit := hostInfo.Deposit.MultUint64(blockBytes)
+
+	// calculate the new Merkle root set and total cost/collateral
+	var bandwidthPrice, storagePrice, deposit *big.Int
+	newFileSize := contractRevision.NewFileSize
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, sectorBandwidthPrice.BigIntPtr())
+			newFileSize += storage.SectorSize
+		}
+	}
+
+	if newFileSize > contractRevision.NewFileSize {
+		addedSectors := (newFileSize - contractRevision.NewFileSize) / storage.SectorSize
+		storagePrice = sectorStoragePrice.MultUint64(addedSectors).BigIntPtr()
+		deposit = sectorDeposit.MultUint64(addedSectors).BigIntPtr()
+	}
+
+	// estimate cost of Merkle proof
+	proofSize := storage.HashSize * (128 + len(actions))
+	bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
+
+	cost := new(big.Int).Add(bandwidthPrice.Add(bandwidthPrice, storagePrice), hostInfo.BaseRPCPrice.BigIntPtr())
+
+	// check that enough funds are available
+	if contractRevision.NewValidProofOutputs[0].Value.Cmp(cost) < 0 {
+		return errors.New("contract has insufficient funds to support upload")
+	}
+	if contractRevision.NewMissedProofOutputs[1].Value.Cmp(deposit) < 0 {
+		return errors.New("contract has insufficient collateral to support upload")
+	}
+
+	// create the revision; we will update the Merkle root later
+	rev := NewRevision(*contractRevision, cost)
+	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
+	rev.NewMissedProofOutputs[2].Value = rev.NewMissedProofOutputs[2].Value.Add(rev.NewMissedProofOutputs[2].Value, deposit)
+	rev.NewFileSize = newFileSize
+
+	// create the request
+	req := storage.UploadRequest{
+		Actions:           actions,
+		NewRevisionNumber: rev.NewRevisionNumber,
+	}
+	req.NewValidProofValues = make([]*big.Int, len(rev.NewValidProofOutputs))
+	for i, o := range rev.NewValidProofOutputs {
+		req.NewValidProofValues[i] = o.Value
+	}
+	req.NewMissedProofValues = make([]*big.Int, len(rev.NewMissedProofOutputs))
+	for i, o := range rev.NewMissedProofOutputs {
+		req.NewMissedProofValues[i] = o.Value
+	}
+
+	// 1. Send storage upload request
+	if err := session.SendStorageContractUploadRequest(req); err != nil {
+		return err
+	}
+
+	// 2. Read merkle proof response from host
+	var merkleResp storage.UploadMerkleProof
+	if msg, err := session.ReadMsg(); err != nil {
+		return err
+	} else {
+		if err := msg.Decode(&merkleResp); err != nil {
+			return err
+		}
+	}
+
+	// Verify merkle proof
+	numSectors := contractRevision.NewFileSize / storage.SectorSize
+	proofRanges := storage.CalculateProofRanges(actions, numSectors)
+	proofHashes := merkleResp.OldSubtreeHashes
+	leafHashes := merkleResp.OldLeafHashes
+	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
+	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot) {
+		return errors.New("invalid Merkle proof for old root")
+	}
+	// ...then by modifying the leaves and verifying the new Merkle root
+	leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
+	proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
+	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot) {
+		return errors.New("invalid Merkle proof for new root")
+	}
+
+	// Update the revision, sign it, and send it
+	rev.NewFileMerkleRoot = newRoot
+
+	var clientRevisionSign []byte
+	// TODO get account and sign revision
+	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		return err
+	}
+	rev.Signatures[0] = clientRevisionSign
+
+	// read the host's signature
+	var hostRevisionSig []byte
+	if msg, err := session.ReadMsg(); err != nil {
+		return err
+	} else {
+		if err := msg.Decode(&hostRevisionSig); err != nil {
+			return err
+		}
+	}
+	rev.Signatures[1] = clientRevisionSign
+
+	// TODO update contract
+	//err = sc.commitUpload(walTxn, txn, crypto.Hash{}, storagePrice, bandwidthPrice)
+	//if err != nil {
+	//	return modules.RenterContract{}, err
+	//}
+
 	return nil
 }

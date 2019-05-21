@@ -121,5 +121,6 @@ type (
 
 var (
 	// 4 MB
-	SectorSize = uint64(1 << 22),
+	SectorSize = uint64(1 << 22)
+	HashSize   = 32
 )
