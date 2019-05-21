@@ -11,7 +11,6 @@ import "github.com/DxChainNetwork/godx/p2p/enode"
 // Health 100~200: recoverable
 // Health 200: No fix needed
 
-
 // repairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
 // to be repaired
 const repairHealthThreshold = 175
@@ -121,6 +120,9 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 // When the file is totally health, there is no need to recover.
 // Thus the priority of recovery is as follows:
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
+// If h1 == h2, return 0
+// If h1 < h2, return -1
+// If h1 > h2, return 1
 func CmpHealth(h1, h2 uint32) int {
 	if h1 == h2 {
 		return 0
