@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -120,6 +121,54 @@ func (ds *DirSet) closeEntry(entry *DirSetEntryWithId) {
 	if len(currentEntry.threadMap) == 0 {
 		delete(ds.dirMap, entry.metadata.DxPath)
 	}
+}
+
+// Exists checks whether DxDir with path exists
+func (ds *DirSet) Exists(path DxPath) (bool, error) {
+	ds.lock.Lock()
+	defer ds.lock.Unlock()
+
+	return ds.exists(path)
+}
+
+// exists checks whether DxDir with path exist
+func (ds *DirSet) exists(path DxPath) (bool, error) {
+	_, exists := ds.dirMap[path]
+	if exists {
+		return exists, nil
+	}
+	_, err := os.Stat(ds.dirFilePath(path))
+	if err == nil {
+		return true, nil
+	}
+	return false, err
+}
+
+// Delete delete the dxdir
+func (ds *DirSet) Delete(path DxPath) error {
+	ds.lock.Lock()
+	defer ds.lock.Unlock()
+	// check whether exists
+	exists, err := ds.exists(path)
+	if !exists && os.IsNotExist(err) {
+		return os.ErrNotExist
+	}
+	if err != nil {
+		return err
+	}
+	// open the entry
+	entry, err := ds.open(path)
+	if err != nil {
+		return err
+	}
+	defer ds.closeEntry(entry)
+	entry.threadMapLock.Lock()
+	defer entry.threadMapLock.Unlock()
+	return entry.Delete()
+}
+
+func (ds *DirSet) dirFilePath(path DxPath) string {
+	return filepath.Join(string(path), string(path), dirFileName)
 }
 
 // dirPath convert the DxPath concatenate with root path to dirPath
