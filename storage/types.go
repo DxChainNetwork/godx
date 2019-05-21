@@ -5,10 +5,12 @@
 package storage
 
 import (
+	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
@@ -118,3 +120,37 @@ type (
 		ExpectedRedundancy float64 `json:"expectedredundancy"`
 	}
 )
+
+// Storage Contract Related
+type (
+	ContractID common.Hash
+
+	ContractStatus struct {
+		UploadAbility bool
+		RenewAbility  bool
+		Canceled      bool
+	}
+
+	ContractMetaData struct {
+		ID                 ContractID
+		EnodeID            enode.ID
+		StorageTransaction types.Transaction
+		StartHeight        uint64
+		EndHeight          uint64
+		ClientBalance      common.BigInt
+
+		UploadCost   common.BigInt
+		DownloadCost common.BigInt
+		StorageCost  common.BigInt
+		TotalCost    common.BigInt
+
+		GasFee      common.BigInt
+		ContractFee common.BigInt
+
+		Status ContractStatus
+	}
+)
+
+func (ci ContractID) String() string {
+	return hexutil.Encode(ci[:])
+}
