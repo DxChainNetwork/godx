@@ -18,5 +18,13 @@ const (
 	persistWalName = "contractset.wal"
 
 	dbContractHeader = "contractheader"
-	dbContractRoot   = "roots"
+	dbMerkleRoot     = "roots"
+)
+
+const (
+	merkleRootsCacheHeight = 7
+
+	// merkleRootsPerCache is the number of merkle roots in a cached subTree of
+	// merkleRootsCacheHeight height.
+	merkleRootsPerCache = 1 << merkleRootsCacheHeight
 )

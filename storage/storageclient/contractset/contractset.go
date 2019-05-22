@@ -96,6 +96,10 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 	}
 
 	// TODO (mzhang): generate contract roots information and store them in db
+	//merkleRoots := newMerkleRoots
+	//for _, roots := range roots {
+	//
+	//}
 
 	return
 }

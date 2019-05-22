@@ -67,12 +67,12 @@ func TestDB_StoreFetchDeleteContractRoots(t *testing.T) {
 	roots := contractRootsGenerator()
 
 	// store the contract roots
-	if err := db.StoreContractRoots(ch.ID, roots); err != nil {
+	if err := db.StoreMerkleRoots(ch.ID, roots); err != nil {
 		t.Fatalf("failed to save the storage contract roots information into database: %s", err.Error())
 	}
 
 	// fetch the contract roots
-	roots1, err := db.FetchContractRoots(ch.ID)
+	roots1, err := db.FetchMerkleRoots(ch.ID)
 	if err != nil {
 		t.Fatalf("failed to fetch the storage contract roots: %s", err.Error())
 	}
@@ -83,11 +83,11 @@ func TestDB_StoreFetchDeleteContractRoots(t *testing.T) {
 	}
 
 	// delete the contract roots
-	if err := db.DeleteContractRoots(ch.ID); err != nil {
+	if err := db.DeleteMerkleRoots(ch.ID); err != nil {
 		t.Fatalf("failed to delete the contract roots information from the db: %s", err.Error())
 	}
 
-	if _, err := db.FetchContractRoots(ch.ID); err == nil {
+	if _, err := db.FetchMerkleRoots(ch.ID); err == nil {
 		t.Errorf("error: the contract roots info should be deleted from the db")
 	}
 }
@@ -136,6 +136,57 @@ func TestDB_StoreFetchDeleteAll(t *testing.T) {
 	// validation
 	if _, _, err := db.FetchAll(ch.ID); err == nil {
 		t.Errorf("information are not supposed to be fetched, they are all deleted")
+	}
+}
+
+func TestDB_StoreSingleRoot(t *testing.T) {
+	db, err := OpenDB(testDB)
+	if err != nil {
+		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
+	}
+	defer db.Close()
+
+	id := storageContractIDGenerator()
+	root1 := randomHashGenerator()
+	root2 := randomHashGenerator()
+	roots := []common.Hash{root1, root2}
+
+	// insert root1
+	if err := db.StoreSingleRoot(id, root1); err != nil {
+		t.Fatalf("failed to insert root1: %s", err.Error())
+	}
+
+	retrieve1, err := db.FetchMerkleRoots(id)
+	if err != nil {
+		t.Fatalf("failed to retrieve merkle root: %s", err.Error())
+	}
+
+	if len(retrieve1) != 1 {
+		t.Fatalf("the num of roots is supposed to be 1")
+	}
+
+	if retrieve1[0] != root1 {
+		t.Fatalf("failed to retrieve merkle root, expected %v, got %v",
+			root1, retrieve1[0])
+	}
+
+	// insert root2
+	if err := db.StoreSingleRoot(id, root2); err != nil {
+		t.Fatalf("failed to insert root2: %s", err.Error())
+	}
+
+	retrieve2, err := db.FetchMerkleRoots(id)
+	if err != nil {
+		t.Fatalf("failed to retrieve merkle root: %s", err.Error())
+	}
+
+	if len(retrieve2) != 2 {
+		t.Fatalf("the num of roots is supposed to be 2")
+	}
+
+	if !hashSliceComparator(retrieve2, roots) {
+		t.Errorf("failed to retrieve merkle root information, expected %v, got %v",
+			retrieve2, roots)
 	}
 }
 

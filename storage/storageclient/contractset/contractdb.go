@@ -37,7 +37,7 @@ func (db *DB) StoreAll(ch ContractHeader, roots []common.Hash) (err error) {
 	}
 
 	// store contract roots information
-	if err = db.StoreContractRoots(ch.ID, roots); err != nil {
+	if err = db.StoreMerkleRoots(ch.ID, roots); err != nil {
 		return
 	}
 
@@ -53,7 +53,7 @@ func (db *DB) FetchAll(id storage.ContractID) (ch ContractHeader, roots []common
 	}
 
 	// fetch contract roots information from the database
-	if roots, err = db.FetchContractRoots(id); err != nil {
+	if roots, err = db.FetchMerkleRoots(id); err != nil {
 		return
 	}
 
@@ -69,7 +69,7 @@ func (db *DB) DeleteAll(id storage.ContractID) (err error) {
 	}
 
 	// delete contract roots information from the database
-	if err = db.DeleteContractRoots(id); err != nil {
+	if err = db.DeleteMerkleRoots(id); err != nil {
 		return
 	}
 
@@ -97,10 +97,10 @@ func (db *DB) StoreContractHeader(ch ContractHeader) (err error) {
 	return
 }
 
-// StoreContractRoots will store the contract roots information into the database
-func (db *DB) StoreContractRoots(id storage.ContractID, roots []common.Hash) (err error) {
+// StoreMerkleRoots will store the contract roots information into the database
+func (db *DB) StoreMerkleRoots(id storage.ContractID, roots []common.Hash) (err error) {
 	// get the roots key and rlp encode contract roots
-	rootsKey, err := makeKey(id, dbContractRoot)
+	rootsKey, err := makeKey(id, dbMerkleRoot)
 	if err != nil {
 		return
 	}
@@ -111,6 +111,27 @@ func (db *DB) StoreContractRoots(id storage.ContractID, roots []common.Hash) (er
 
 	// store the contract root information
 	if err = db.lvl.Put(rootsKey, blob, nil); err != nil {
+		return
+	}
+	return
+}
+
+// StoreSingleRoot will store one root into the database. If the contract id already
+// have merkle roots stored in the database, append the new root into it. Otherwise
+// store the root as a new root
+func (db *DB) StoreSingleRoot(id storage.ContractID, root common.Hash) (err error) {
+	// try to retrieve the roots first
+	oldRoots, err := db.FetchMerkleRoots(id)
+	if err != nil && err != errors.ErrNotFound {
+		return
+	} else if err == nil {
+		// meaning there are roots saved using the contract id before
+		oldRoots = append(oldRoots, root)
+	} else {
+		oldRoots = []common.Hash{root}
+	}
+
+	if err = db.StoreMerkleRoots(id, oldRoots); err != nil {
 		return
 	}
 	return
@@ -139,11 +160,11 @@ func (db *DB) FetchContractHeader(id storage.ContractID) (ch ContractHeader, err
 	return
 }
 
-// FetchContractRoots will retrieve the contract roots information based on the contract
+// FetchMerkleRoots will retrieve the contract roots information based on the contract
 // id provided
-func (db *DB) FetchContractRoots(id storage.ContractID) (roots []common.Hash, err error) {
+func (db *DB) FetchMerkleRoots(id storage.ContractID) (roots []common.Hash, err error) {
 	// generate the key based on the storage contract ID
-	key, err := makeKey(id, dbContractRoot)
+	key, err := makeKey(id, dbMerkleRoot)
 	if err != nil {
 		return
 	}
@@ -172,10 +193,10 @@ func (db *DB) DeleteContractHeader(id storage.ContractID) (err error) {
 	return db.lvl.Delete(key, nil)
 }
 
-// DeleteContractRoots will delete the contract roots information
+// DeleteMerkleRoots will delete the contract roots information
 // from the contractsetdb, based on the contract id provided
-func (db *DB) DeleteContractRoots(id storage.ContractID) (err error) {
-	key, err := makeKey(id, dbContractRoot)
+func (db *DB) DeleteMerkleRoots(id storage.ContractID) (err error) {
+	key, err := makeKey(id, dbMerkleRoot)
 	if err != nil {
 		return
 	}
