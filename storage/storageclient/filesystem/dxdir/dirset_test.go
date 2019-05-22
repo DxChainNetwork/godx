@@ -119,6 +119,7 @@ func TestNewDirSet_OpenClose(t *testing.T) {
 func TestDirSet_Delete(t *testing.T) {
 	ds, entry := newTestDirSet(t)
 	path := entry.DxPath()
+	// After deletion, the file should not exist, and marked as deleted
 	if err := ds.Delete(path); err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +130,7 @@ func TestDirSet_Delete(t *testing.T) {
 	if !entry.Deleted() {
 		t.Errorf("After deletion, file not deleted")
 	}
+	// There are no more entries in the map
 	if len(ds.dirMap) != 0 {
 		t.Errorf("The file should have been deleted from ds,dirMap")
 	}
@@ -147,9 +149,11 @@ func TestDirSet_UpdateMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	newMeta.DxPath = path
+	// After update, the metadata should be the same
 	if !reflect.DeepEqual(*newMeta, entry.Metadata()) {
 		t.Errorf("After update metadata, not equal. \n\tGot %+v, \n\tExpect %+v", entry.metadata, newMeta)
 	}
+	// Close the entry, and reopen it. Recovered DxDir should have the same metadata
 	if err := entry.Close(); err != nil {
 		t.Fatal(err)
 	}

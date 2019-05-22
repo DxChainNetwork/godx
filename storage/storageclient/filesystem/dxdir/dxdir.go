@@ -1,7 +1,6 @@
 package dxdir
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"os"
 	"path/filepath"
@@ -94,7 +93,7 @@ func New(dxPath DxPath, sysPath dirPath, wal *writeaheadlog.Wal) (*DxDir, error)
 	}
 	err = d.save()
 	if err != nil {
-		return nil, fmt.Errorf("cannot create the dxdir: %v", err)
+		return nil, err
 	}
 	return d, nil
 }

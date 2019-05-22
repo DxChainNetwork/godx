@@ -1,6 +1,7 @@
 package dxdir
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,12 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+)
+
+var (
+	// ErrAlreadyDeleted is the error that happens when save or delete a DxDir
+	// that is already deleted
+	ErrAlreadyDeleted = errors.New("DxDir has already been deleted")
 )
 
 // EncodeRLP define the RLP rule for DxDir. Only the metadata is RLP encoded.
@@ -50,6 +57,9 @@ func (d *DxDir) createDeleteUpdate() (storage.FileUpdate, error) {
 
 // save save the current DxDir to disk
 func (d *DxDir) save() error {
+	if d.deleted {
+		return ErrAlreadyDeleted
+	}
 	fu, err := d.createInsertUpdate()
 	if err != nil {
 		return err
@@ -59,6 +69,9 @@ func (d *DxDir) save() error {
 
 // delete create and apply the delete update
 func (d *DxDir) delete() error {
+	if d.deleted {
+		return ErrAlreadyDeleted
+	}
 	d.deleted = true
 	fu, err := d.createDeleteUpdate()
 	if err != nil {
