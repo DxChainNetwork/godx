@@ -48,6 +48,8 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 	}
 
 	// initialize DB
+	// TODO (mzhang): remember to close the database, db should be closed in upper
+	// function call
 	db, err := OpenDB(filepath.Join(persistDir, persistDBName))
 	if err != nil {
 		return
@@ -74,7 +76,7 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 // loadContract will load contracts information from the database
 // as well as applying un-applied transactions read from the writeaheadlog file
 func (*StorageContractSet) loadContract(txns []*writeaheadlog.Transaction) (err error) {
-	// TODO (mzhang): continue with this function
+	// TODO (mzhang): WIP
 	return
 }
 
@@ -87,6 +89,13 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 	}
 
 	// save the contract header and roots information
+	if err = scs.db.StoreContractHeader(ch); err != nil {
+		err = fmt.Errorf("failed to store contract header information into database: %s",
+			err.Error())
+		return
+	}
+
+	// TODO (mzhang): generate contract roots information and store them in db
 
 	return
 }
@@ -125,28 +134,24 @@ func (scs *StorageContractSet) Return(c *Contract) (err error) {
 // the contract must be acquired using the Acquire function
 func (scs *StorageContractSet) Delete(c *Contract) (err error) {
 	scs.lock.Lock()
+	defer scs.lock.Unlock()
+
+	// check if the contract existed in the contract set
 	_, exists := scs.contracts[c.header.ID]
 	if !exists {
 		err = errors.New("the contract does not exist while deleting the contract")
-		scs.lock.Unlock()
 		return
 	}
 
-	// delete saved contract information
+	// delete memory contract information
 	delete(scs.contracts, c.header.ID)
 	delete(scs.enodeID, c.header.EnodeID)
-	scs.lock.Unlock()
 
 	c.lock.Unlock()
 
-	// delete the storage contract file
-	path := filepath.Join(scs.persistDir, c.header.ID.String()+contractFileExtension)
-	if err := c.headerFile.Close(); err != nil {
-		err = errors.New(fmt.Sprintf("failed to close the headerfile: %s", err))
-	}
-
-	if err := os.Remove(path); err != nil {
-		err = common.ErrCompose(errors.New(fmt.Sprintf("failed to remove the storage contract file: %s", err)))
+	// delete disk contract information
+	if err = scs.db.DeleteAll(c.header.ID); err != nil {
+		return
 	}
 
 	return

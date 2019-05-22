@@ -28,6 +28,54 @@ func (db *DB) Close() {
 	db.lvl.Close()
 }
 
+// StoreAll will store both contract header and contract roots information into
+// the contract set database
+func (db *DB) StoreAll(ch ContractHeader, roots []common.Hash) (err error) {
+	// store contract header information
+	if err = db.StoreContractHeader(ch); err != nil {
+		return
+	}
+
+	// store contract roots information
+	if err = db.StoreContractRoots(ch.ID, roots); err != nil {
+		return
+	}
+
+	return
+}
+
+// FetchAll will fetch both contract header and contract roots information from the
+// contract set database
+func (db *DB) FetchAll(id storage.ContractID) (ch ContractHeader, roots []common.Hash, err error) {
+	// fetch contract header information from the database
+	if ch, err = db.FetchContractHeader(id); err != nil {
+		return
+	}
+
+	// fetch contract roots information from the database
+	if roots, err = db.FetchContractRoots(id); err != nil {
+		return
+	}
+
+	return
+}
+
+// DeleteAll will delete both contract header and contract roots information from the
+// contract set database
+func (db *DB) DeleteAll(id storage.ContractID) (err error) {
+	// delete contract header information from the database
+	if err = db.DeleteContractHeader(id); err != nil {
+		return
+	}
+
+	// delete contract roots information from the database
+	if err = db.DeleteContractRoots(id); err != nil {
+		return
+	}
+
+	return
+}
+
 // StoreContractHeader will stored the contract header information into the database
 func (db *DB) StoreContractHeader(ch ContractHeader) (err error) {
 
@@ -111,6 +159,27 @@ func (db *DB) FetchContractRoots(id storage.ContractID) (roots []common.Hash, er
 		return
 	}
 	return
+}
+
+// DeleteContractHeader will delete the contract header information
+// from the contractsetdb, based on the contract id provided
+func (db *DB) DeleteContractHeader(id storage.ContractID) (err error) {
+	key, err := makeKey(id, dbContractHeader)
+	if err != nil {
+		return
+	}
+
+	return db.lvl.Delete(key, nil)
+}
+
+// DeleteContractRoots will delete the contract roots information
+// from the contractsetdb, based on the contract id provided
+func (db *DB) DeleteContractRoots(id storage.ContractID) (err error) {
+	key, err := makeKey(id, dbContractRoot)
+	if err != nil {
+		return
+	}
+	return db.lvl.Delete(key, nil)
 }
 
 // newPersistentDB will initialize a new DB object which is used
