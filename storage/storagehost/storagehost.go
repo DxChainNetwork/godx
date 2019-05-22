@@ -1,11 +1,14 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/p2p"
 	"math/big"
+	"math/bits"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,14 +17,17 @@ import (
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.StorageContractUploadRequestMsg: handleUpload,
+	storage.StorageContractUploadRequestMsg:   handleUpload,
+	storage.StorageContractDownloadRequestMsg: handleDownload,
 }
 
 // TODO: Network, Transaction, protocol related implementations BELOW:
@@ -519,4 +525,197 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	return nil
+}
+
+func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+
+	// TODO: 在提供下载传输前，是否需要延长下连接的写超时
+	//s.extendDeadline(modules.NegotiateDownloadTime)
+
+	// read the download request.
+	var req storage.DownloadRequest
+	err := beginMsg.Decode(req)
+	if err != nil {
+		return err
+	}
+
+	//TODO: as soon as renter complete downloading data from host, will send RPCStop msg.
+	stopSignal := make(chan error, 1)
+	//go func() {
+	//	var id types.Specifier
+	//	err := s.readResponse(&id, modules.RPCMinLen)
+	//	if err != nil {
+	//		stopSignal <- err
+	//	} else if id != modules.RPCLoopReadStop {
+	//		stopSignal <- errors.New("expected 'stop' from renter, got " + id.String())
+	//	} else {
+	//		stopSignal <- nil
+	//	}
+	//}()
+
+	// get storage obligation
+	so, err := GetStorageObligation(h.db, req.StorageContractID)
+	if err != nil {
+		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+	}
+
+	// Check the contract is locked.
+	if len(so.OriginStorage) == 0 {
+		err := errors.New("no contract locked")
+
+		// TODO: 是否需要将err发送给对方？？？Sia中host这里处理下载请求中，出现的error基本都是发送给renter
+		//s.WriteError(err)
+		<-stopSignal
+		return err
+	}
+
+	//TODO: 获取host的私钥、配置，最新的revision，Read some internal fields for later.
+	h.lock.RLock()
+	settings := h.externalConfig()
+	h.lock.RUnlock()
+
+	currentRevision := so.Revision[len(so.Revision)-1]
+
+	// Validate the request.
+	for _, sec := range req.Sections {
+		var err error
+		switch {
+		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
+			err = errors.New("download request has invalid sector bounds")
+		case sec.Length == 0:
+			err = errors.New("length cannot be zero")
+		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
+			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
+		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
+			err = errors.New("wrong number of valid proof values")
+		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
+			err = errors.New("wrong number of missed proof values")
+		}
+		if err != nil {
+
+			// TODO: 是否需要将err发送给对方？？？Sia中host这里处理下载请求中，出现的error基本都是发送给renter
+			return err
+		}
+	}
+
+	// construct the new revision
+	newRevision := currentRevision
+	newRevision.NewRevisionNumber = req.NewRevisionNumber
+	newRevision.NewValidProofOutputs = make([]types.DxcoinCharge, len(currentRevision.NewValidProofOutputs))
+	for i := range newRevision.NewValidProofOutputs {
+		newRevision.NewValidProofOutputs[i] = types.DxcoinCharge{
+			Value:   req.NewValidProofValues[i],
+			Address: currentRevision.NewValidProofOutputs[i].Address,
+		}
+	}
+	newRevision.NewMissedProofOutputs = make([]types.DxcoinCharge, len(currentRevision.NewMissedProofOutputs))
+	for i := range newRevision.NewMissedProofOutputs {
+		newRevision.NewMissedProofOutputs[i] = types.DxcoinCharge{
+			Value:   req.NewMissedProofValues[i],
+			Address: currentRevision.NewMissedProofOutputs[i].Address,
+		}
+	}
+
+	// calculate expected cost and verify against renter's revision
+	var estBandwidth uint64
+	sectorAccesses := make(map[common.Hash]struct{})
+	for _, sec := range req.Sections {
+		// use the worst-case proof size of 2*tree depth (this occurs when
+		// proving across the two leaves in the center of the tree)
+		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
+		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
+		sectorAccesses[sec.MerkleRoot] = struct{}{}
+	}
+	if estBandwidth < storage.RPCMinLen {
+		estBandwidth = storage.RPCMinLen
+	}
+
+	// TODO: 计算总花费
+	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
+	sectorAccessCost := settings.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
+	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
+	err = VerifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
+	if err != nil {
+		// TODO:
+		return err
+	}
+
+	// Sign the new revision.
+	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
+	wallet, err := h.am.Find(account)
+	if err != nil {
+		// TODO:
+		return err
+	}
+
+	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
+	if err != nil {
+		// TODO:
+		return err
+	}
+
+	// Update the storage obligation.
+	paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
+	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
+	so.Revision = append(so.Revision, newRevision)
+	h.lock.Lock()
+	err = h.modifyStorageObligation(so, nil, nil, nil)
+	h.lock.Unlock()
+	if err != nil {
+		//TODO:
+		return err
+	}
+
+	// enter response loop
+	for i, sec := range req.Sections {
+
+		// TODO: Fetch the requested data.
+		//sectorData, err := h.ReadSector(sec.MerkleRoot)
+		//if err != nil {
+		//	//TODO:
+		//	return err
+		//}
+		sectorData := []byte{}
+		data := sectorData[sec.Offset : sec.Offset+sec.Length]
+
+		// Construct the Merkle proof, if requested.
+		var proof []common.Hash
+		if req.MerkleProof {
+
+			// TODO: 计算merkle证明
+			//proofStart := int(sec.Offset) / crypto.SegmentSize
+			//proofEnd := int(sec.Offset+sec.Length) / crypto.SegmentSize
+			//proof = crypto.MerkleRangeProof(sectorData, proofStart, proofEnd)
+			proof = []common.Hash{}
+		}
+
+		// Send the response. If the renter sent a stop signal, or this is the
+		// final response, include our signature in the response.
+		resp := storage.DownloadResponse{
+			Signature:   nil,
+			Data:        data,
+			MerkleProof: proof,
+		}
+		select {
+		case err := <-stopSignal:
+			if err != nil {
+				return err
+			}
+			resp.Signature = hostSig
+
+			// send data to client
+			return s.SendStorageContractDownloadData(resp)
+		default:
+		}
+		if i == len(req.Sections)-1 {
+			resp.Signature = hostSig
+		}
+
+		// send data to client
+		if err := s.SendStorageContractDownloadData(resp); err != nil {
+			return err
+		}
+	}
+	// The stop signal must arrive before RPC is complete.
+	return <-stopSignal
 }

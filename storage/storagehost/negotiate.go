@@ -1,17 +1,16 @@
-/*
- * // Copyright 2019 DxChain, All rights reserved.
- * // Use of this source code is governed by an Apache
- * // License 2.0 that can be found in the LICENSE file.
- */
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
 
 package storagehost
 
 import (
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/storage"
-	"math/big"
 )
 
 // verifyRevision checks that the revision pays the host correctly, and that
@@ -115,5 +114,101 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 		return errBadFileMerkleRoot
 	}
 
+	return nil
+}
+
+// verifyPaymentRevision verifies that the revision being provided to pay for
+// the data has transferred the expected amount of money from the renter to the
+// host.
+func VerifyPaymentRevision(existingRevision, paymentRevision types.StorageContractRevision, blockHeight uint64, expectedTransfer *big.Int) error {
+	// Check that the revision is well-formed.
+	if len(paymentRevision.NewValidProofOutputs) != 2 || len(paymentRevision.NewMissedProofOutputs) != 3 {
+		return errBadContractOutputCounts
+	}
+
+	// Check that the time to finalize and submit the file contract revision
+	// has not already passed.
+	if existingRevision.NewWindowStart-revisionSubmissionBuffer <= blockHeight {
+		return errLateRevision
+	}
+
+	// Host payout addresses shouldn't change
+	if paymentRevision.NewValidProofOutputs[1].Address != existingRevision.NewValidProofOutputs[1].Address {
+		return errors.New("host payout address changed")
+	}
+	if paymentRevision.NewMissedProofOutputs[1].Address != existingRevision.NewMissedProofOutputs[1].Address {
+		return errors.New("host payout address changed")
+	}
+	// Make sure the lost collateral still goes to the void
+	if paymentRevision.NewMissedProofOutputs[2].Address != existingRevision.NewMissedProofOutputs[2].Address {
+		return errors.New("lost collateral address was changed")
+	}
+
+	// Determine the amount that was transferred from the renter.
+	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
+		return ExtendErr("renter increased its valid proof output: ", errHighRenterValidOutput)
+	}
+	fromRenter := existingRevision.NewValidProofOutputs[0].Value.Sub(existingRevision.NewValidProofOutputs[0].Value, paymentRevision.NewValidProofOutputs[0].Value)
+	// Verify that enough money was transferred.
+	if fromRenter.Cmp(expectedTransfer) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedTransfer, fromRenter)
+		return ExtendErr(s, errHighRenterValidOutput)
+	}
+
+	// Determine the amount of money that was transferred to the host.
+	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
+		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
+	}
+	toHost := paymentRevision.NewValidProofOutputs[1].Value.Sub(paymentRevision.NewValidProofOutputs[1].Value, existingRevision.NewValidProofOutputs[1].Value)
+	// Verify that enough money was transferred.
+	if toHost.Cmp(fromRenter) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+		return ExtendErr(s, errLowHostValidOutput)
+	}
+
+	// If the renter's valid proof output is larger than the renter's missed
+	// proof output, the renter has incentive to see the host fail. Make sure
+	// that this incentive is not present.
+	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
+		return ExtendErr("renter has incentive to see host fail: ", errHighRenterMissedOutput)
+	}
+
+	// Check that the host is not going to be posting collateral.
+	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) < 0 {
+		collateral := existingRevision.NewMissedProofOutputs[1].Value.Sub(existingRevision.NewMissedProofOutputs[1].Value, paymentRevision.NewMissedProofOutputs[1].Value)
+		s := fmt.Sprintf("host not expecting to post any collateral, but contract has host posting %v collateral: ", collateral)
+		return ExtendErr(s, errLowHostMissedOutput)
+	}
+
+	// Check that the revision count has increased.
+	if paymentRevision.NewRevisionNumber <= existingRevision.NewRevisionNumber {
+		return errBadRevisionNumber
+	}
+
+	// Check that all of the non-volatile fields are the same.
+	if paymentRevision.ParentID != existingRevision.ParentID {
+		return errBadParentID
+	}
+	if paymentRevision.UnlockConditions.UnlockHash() != existingRevision.UnlockConditions.UnlockHash() {
+		return errBadUnlockConditions
+	}
+	if paymentRevision.NewFileSize != existingRevision.NewFileSize {
+		return errBadFileSize
+	}
+	if paymentRevision.NewFileMerkleRoot != existingRevision.NewFileMerkleRoot {
+		return errBadFileMerkleRoot
+	}
+	if paymentRevision.NewWindowStart != existingRevision.NewWindowStart {
+		return errBadWindowStart
+	}
+	if paymentRevision.NewWindowEnd != existingRevision.NewWindowEnd {
+		return errBadWindowEnd
+	}
+	if paymentRevision.NewUnlockHash != existingRevision.NewUnlockHash {
+		return errBadUnlockHash
+	}
+	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) != 0 {
+		return errLowHostMissedOutput
+	}
 	return nil
 }
