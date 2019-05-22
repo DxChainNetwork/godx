@@ -124,7 +124,7 @@ type (
 	// It has two fields, one indicating whether the host if offline or not,
 	// One indicating whether the contract with the host is good for renew.
 	HostHealthInfo struct {
-		Offline bool
+		Offline      bool
 		GoodForRenew bool
 	}
 

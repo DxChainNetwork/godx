@@ -35,6 +35,7 @@ func (df *DxFile) saveAll() error {
 
 	// create updates for segments
 	for i := range df.segments {
+		df.pruneSegment(i)
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
 		if err != nil {
@@ -84,6 +85,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 
 	// create updates for segments
 	for i := range df.segments {
+		df.pruneSegment(i)
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
 		if err != nil {
@@ -299,7 +301,7 @@ func (df *DxFile) createSegmentUpdate(segmentIndex uint64, offset uint64) (dxfil
 	}
 	// if the Segment does not fit in, prune Sectors with unused hosts
 	if limit := PageSize * segmentPersistNumPages(df.metadata.NumSectors); uint64(len(segBytes)) > limit {
-		return nil, fmt.Errorf("Segment bytes exceed limit: %d > %d", len(segBytes), limit)
+		return nil, fmt.Errorf("segment bytes exceed limit: %d > %d", len(segBytes), limit)
 	}
 	if int64(offset) < 0 {
 		return nil, fmt.Errorf("uint64 overflow: %v", int64(offset))

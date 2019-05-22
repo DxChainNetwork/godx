@@ -114,6 +114,9 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		NumSectors:      numSectors,
 		ECExtra:         extra,
 	}
+	if err := md.validate(); err != nil {
+		return nil, err
+	}
 	// create the DxFile
 	df := &DxFile{
 		metadata:    md,
@@ -125,6 +128,7 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 		erasureCode: erasureCode,
 		cipherKey:   cipherKey,
 	}
+
 	// initialize the segments.
 	df.segments = make([]*Segment, md.numSegments())
 	for i := range df.segments {

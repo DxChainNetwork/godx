@@ -143,7 +143,10 @@ func (md Metadata) validate() error {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
 	}
 	if md.SegmentOffset%PageSize != 0 {
-		return fmt.Errorf("Segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+	}
+	if md.MinSectors == 0 || md.NumSectors <= md.MinSectors {
+		return fmt.Errorf("MinSectors/NumSectors unexpected: %d / %d", md.MinSectors, md.NumSectors)
 	}
 	return nil
 }

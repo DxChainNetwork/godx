@@ -68,9 +68,6 @@ func (df *DxFile) segmentHealth(segmentIndex int, table storage.HostHealthInfoTa
 	numSectors := df.metadata.NumSectors
 	minSectors := df.metadata.MinSectors
 	goodSectors, _ := df.goodSectors(segmentIndex, table)
-	if uint32(goodSectors) > numSectors || goodSectors < 0 {
-		panic("unexpected number of goodSectors")
-	}
 	var score uint32
 	if uint32(goodSectors) > minSectors {
 		score = 100 + (uint32(goodSectors)-minSectors)*100/(numSectors-minSectors)
