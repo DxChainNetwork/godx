@@ -36,26 +36,21 @@ func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
 	}
 	defer f.Close()
 	// load data
-	err = df.loadMetadata(f)
-	if err != nil {
+	if err = df.loadMetadata(f); err != nil {
 		return nil, fmt.Errorf("cannot load metadata: %v", err)
 	}
-	err = df.loadHostAddresses(f)
-	if err != nil {
+	if err = df.loadHostAddresses(f); err != nil {
 		return nil, fmt.Errorf("cannot load host addresses: %v", err)
 	}
-	err = df.loadSegments(f)
-	if err != nil {
+	if err = df.loadSegments(f); err != nil {
 		return nil, fmt.Errorf("cannot load segments: %v", err)
 	}
 	// New erasure code
-	df.erasureCode, err = df.metadata.newErasureCode()
-	if err != nil {
+	if df.erasureCode, err = df.metadata.newErasureCode(); err != nil {
 		return nil, fmt.Errorf("cannot new erasureCode: %v", err)
 	}
 	// New cipher key
-	df.cipherKey, err = df.metadata.newCipherKey()
-	if err != nil {
+	if df.cipherKey, err = df.metadata.newCipherKey(); err != nil {
 		return nil, fmt.Errorf("cannot new cipherKey: %v", err)
 	}
 	return df, nil

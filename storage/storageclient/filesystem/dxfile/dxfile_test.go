@@ -191,14 +191,14 @@ func TestDelete(t *testing.T) {
 // TestMarkAllUnhealthySegmentsAsStuck test df.MarkAllUnhealthySegmentsAsStuck
 func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 	for i := 0; i != 10; i++ {
-		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
+		df, table := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
 			2, 1000, 3, 3)
-		err := df.MarkAllUnhealthySegmentsAsStuck(offline, goodForRenew)
+		err := df.MarkAllUnhealthySegmentsAsStuck(table)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for i, seg := range df.segments {
-			segHealth := df.segmentHealth(i, offline, goodForRenew)
+			segHealth := df.segmentHealth(i, table)
 			if segHealth < repairHealthThreshold && !seg.Stuck {
 				t.Errorf("Segment with health %d should have been marked as Stuck", segHealth)
 			}
@@ -218,14 +218,14 @@ func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 // TestMarkAllHealthySegmentsAsUnstuck test MarkAllHealthySegmentsAsUnstuck
 func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
 	for i := 0; i != 10; i++ {
-		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
+		df, table := newTestDxFileWithMaps(t, sectorSize*10*20, 10, 30, erasurecode.ECTypeStandard,
 			1, 100, 100, 100)
-		err := df.MarkAllHealthySegmentsAsUnstuck(offline, goodForRenew)
+		err := df.MarkAllHealthySegmentsAsUnstuck(table)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for i, seg := range df.segments {
-			segHealth := df.segmentHealth(i, offline, goodForRenew)
+			segHealth := df.segmentHealth(i, table)
 			if segHealth == 200 && seg.Stuck {
 				t.Errorf("Segment with health %d should have been marked as non-Stuck", segHealth)
 			}
@@ -265,9 +265,9 @@ func TestRedundancy(t *testing.T) {
 	}
 	for i, test := range tests {
 		fileSize := sectorSize * uint64(test.minSector) * test.numSegments
-		df, offline, goodForRenew := newTestDxFileWithMaps(t, fileSize, test.minSector, test.numSector,
+		df, table := newTestDxFileWithMaps(t, fileSize, test.minSector, test.numSector,
 			test.ecCodeType, test.stuckRate, test.absentRate, test.offlineRate, test.badForRenewRate)
-		red := df.Redundancy(offline, goodForRenew)
+		red := df.Redundancy(table)
 		t.Logf("test %d give redundancy %d\n", i, red)
 		if red < test.expectMinRedundancy || red > test.expectMaxRedundancy {
 			t.Errorf("test %d: redundancy give value %d not between %d ~ %d", i, red, test.expectMinRedundancy, test.expectMaxRedundancy)

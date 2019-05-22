@@ -11,6 +11,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
@@ -142,7 +143,10 @@ func (md Metadata) validate() error {
 		return fmt.Errorf("SegmentOffset not larger than hostTableOffset: %d <= %d", md.SegmentOffset, md.HostTableOffset)
 	}
 	if md.SegmentOffset%PageSize != 0 {
-		return fmt.Errorf("Segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+		return fmt.Errorf("segment Offset not divisible by PageSize %d %% %d != 0", md.SegmentOffset, PageSize)
+	}
+	if md.MinSectors == 0 || md.NumSectors <= md.MinSectors {
+		return fmt.Errorf("MinSectors/NumSectors unexpected: %d / %d", md.MinSectors, md.NumSectors)
 	}
 	return nil
 }
@@ -180,7 +184,8 @@ func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
 		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
 		return minSectors, numSectors, extraBytes
 	default:
-		panic("erasure code type not recognized")
+		log.Crit("Unknown erasure code type ")
+		return 0, 0, []byte{}
 	}
 }
 

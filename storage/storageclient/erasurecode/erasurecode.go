@@ -52,7 +52,12 @@ type ErasureCoder interface {
 // New returns a new ErasureCoder. Type supported are ECTypeStandard, and ECTypeShard.
 // The two parameters followed is parameters used for erasure code: num of data sectors and total
 // number of sectors. Additional arguments could be attached for param specification.
+// Note in this implementation, the following condition must be met:
+// numSectors > minSectors > 0
 func New(ecType uint8, minSectors uint32, numSectors uint32, extra ...interface{}) (ErasureCoder, error) {
+	if minSectors == 0 || minSectors > numSectors {
+		return nil, fmt.Errorf("invalid minSectors/numSectors: %d/%d", minSectors, numSectors)
+	}
 	switch ecType {
 	case (&standardErasureCode{}).Type():
 		return newStandardErasureCode(minSectors, numSectors)

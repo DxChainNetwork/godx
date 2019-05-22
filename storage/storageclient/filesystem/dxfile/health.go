@@ -4,7 +4,9 @@
 
 package dxfile
 
-import "github.com/DxChainNetwork/godx/p2p/enode"
+import (
+	"github.com/DxChainNetwork/godx/storage"
+)
 
 // The larger the health value, the healthier the DxFile.
 // Health 0~100: unrecoverable from contracts
@@ -19,7 +21,7 @@ const repairHealthThreshold = 175
 // Health 0~100: unrecoverable from contracts
 // Health 100~200: recoverable
 // Health 200: No fix needed
-func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) (uint32, uint32, uint32) {
+func (df *DxFile) Health(table storage.HostHealthInfoTable) (uint32, uint32, uint32) {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
@@ -34,7 +36,7 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 	// health, stuckHealth should be the minimum value of the segment health
 	var numStuckSegments uint32
 	for i, seg := range df.segments {
-		segHealth := df.segmentHealth(i, offline, goodForRenew)
+		segHealth := df.segmentHealth(i, table)
 		if seg.Stuck {
 			numStuckSegments++
 			if segHealth < stuckHealth {
@@ -51,24 +53,21 @@ func (df *DxFile) Health(offline map[enode.ID]bool, goodForRenew map[enode.ID]bo
 // Health 0~100: unrecoverable from contracts
 // Health 100~200: recoverable
 // Health 200: No fix needed
-func (df *DxFile) SegmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
+func (df *DxFile) SegmentHealth(segmentIndex int, table storage.HostHealthInfoTable) uint32 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
-	return df.segmentHealth(segmentIndex, offlineMap, goodForRenewMap)
+	return df.segmentHealth(segmentIndex, table)
 }
 
 // segmentHealth return the health of a Segment. The larger the health value, the healthier the DxFile
 // Health 0~100: unrecoverable from contracts
 // Health 100~200: recoverable
 // Health 200: No fix needed
-func (df *DxFile) segmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
+func (df *DxFile) segmentHealth(segmentIndex int, table storage.HostHealthInfoTable) uint32 {
 	numSectors := df.metadata.NumSectors
 	minSectors := df.metadata.MinSectors
-	goodSectors, _ := df.goodSectors(segmentIndex, offlineMap, goodForRenewMap)
-	if uint32(goodSectors) > numSectors || goodSectors < 0 {
-		panic("unexpected number of goodSectors")
-	}
+	goodSectors, _ := df.goodSectors(segmentIndex, table)
 	var score uint32
 	if uint32(goodSectors) > minSectors {
 		score = 100 + (uint32(goodSectors)-minSectors)*100/(numSectors-minSectors)
@@ -80,7 +79,7 @@ func (df *DxFile) segmentHealth(segmentIndex int, offlineMap map[enode.ID]bool, 
 
 // goodSectors return the number of Sectors goodForRenew and numSectorsGoodForUpload with the
 // given offlineMap and goodForRenewMap
-func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) (uint32, uint32) {
+func (df *DxFile) goodSectors(segmentIndex int, table storage.HostHealthInfoTable) (uint32, uint32) {
 	numSectorsGoodForRenew := uint64(0)
 	numSectorsGoodForUpload := uint64(0)
 
@@ -88,16 +87,12 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 		foundGoodForRenew := false
 		foundOnline := false
 		for _, sector := range sectors {
-			offline, exist1 := offlineMap[sector.HostID]
-			goodForRenew, exist2 := goodForRenewMap[sector.HostID]
-			if exist1 != exist2 {
-				panic("consistency error: offlineMap should have same key as goodForRenewMap")
-			}
-			if !exist1 || offline {
-				// Sector not known, continue
+			info, exist := table[sector.HostID]
+			if !exist || info.Offline {
+				// sector not known in table or host is offline, continue to next entry
 				continue
 			}
-			if goodForRenew {
+			if info.GoodForRenew {
 				foundGoodForRenew = true
 				break
 			}

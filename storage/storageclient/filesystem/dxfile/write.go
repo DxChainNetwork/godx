@@ -36,6 +36,7 @@ func (df *DxFile) saveAll() error {
 
 	// create updates for segments
 	for i := range df.segments {
+		df.pruneSegment(i)
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
 		if err != nil {
@@ -85,6 +86,7 @@ func (df *DxFile) rename(dxPath string, newFilePath string) error {
 
 	// create updates for segments
 	for i := range df.segments {
+		df.pruneSegment(i)
 		offset := df.metadata.SegmentOffset + uint64(i)*segmentPersistSize
 		update, err := df.createSegmentUpdate(uint64(i), offset)
 		if err != nil {

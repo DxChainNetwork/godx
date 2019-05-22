@@ -5,7 +5,7 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"testing"
@@ -68,39 +68,46 @@ func TestSegmentHealth(t *testing.T) {
 				},
 				segments: []*Segment{seg},
 			}
-			offlineMap, goodForRenewMap := make(map[enode.ID]bool), make(map[enode.ID]bool)
+			table := make(storage.HostHealthInfoTable)
 			for _, sectors := range seg.Sectors {
 				for _, sector := range sectors {
-					offlineMap[sector.HostID] = false
-					goodForRenewMap[sector.HostID] = true
+					table[sector.HostID] = storage.HostHealthInfo{
+						Offline:      false,
+						GoodForRenew: true,
+					}
 				}
 			}
 			for i := 0; i != test.numMiss; i++ {
-				for k := range offlineMap {
-					delete(offlineMap, k)
-					delete(goodForRenewMap, k)
+				for k := range table {
+					delete(table, k)
 					break
 				}
 			}
 			for i := 0; i != test.numOffline; i++ {
-				for k := range offlineMap {
-					if offlineMap[k] {
+				for k := range table {
+					if table[k].Offline {
 						continue
 					}
-					offlineMap[k] = true
+					table[k] = storage.HostHealthInfo{
+						Offline:      true,
+						GoodForRenew: table[k].GoodForRenew,
+					}
 					break
 				}
 			}
 			for i := 0; i != test.numBadForRenew; i++ {
-				for k := range goodForRenewMap {
-					if !goodForRenewMap[k] {
+				for k := range table {
+					if !table[k].GoodForRenew {
 						continue
 					}
-					goodForRenewMap[k] = false
+					table[k] = storage.HostHealthInfo{
+						Offline:      table[k].Offline,
+						GoodForRenew: false,
+					}
 					break
 				}
 			}
-			health := df.SegmentHealth(0, offlineMap, goodForRenewMap)
+			health := df.SegmentHealth(0, table)
 			if health < test.expectMin || health > test.expectMax {
 				t.Errorf("test %d: health %d not between %d ~ %d", index, health, test.expectMin, test.expectMax)
 			}
@@ -114,13 +121,13 @@ func TestHealth(t *testing.T) {
 	numSectors := uint32(30)
 	minSectors := uint32(10)
 	for i := 0; i != 10; i++ {
-		df, offline, goodForRenew := newTestDxFileWithMaps(t, sectorSize*20*uint64(minSectors), minSectors, numSectors, erasurecode.ECTypeStandard, 2, 10, 3, 3)
+		df, table := newTestDxFileWithMaps(t, sectorSize*20*uint64(minSectors), minSectors, numSectors, erasurecode.ECTypeStandard, 2, 10, 3, 3)
 		var numExpectStuck int
-		health, stuckHealth, numStuckSegments := df.Health(offline, goodForRenew)
+		health, stuckHealth, numStuckSegments := df.Health(table)
 		var minStuckSegmentFound, minUnstuckSegmentFound bool
 		var haveStuckSegment, haveUnstuckSegment bool
 		for i, seg := range df.segments {
-			segHealth := df.SegmentHealth(i, offline, goodForRenew)
+			segHealth := df.SegmentHealth(i, table)
 			if seg.Stuck {
 				if !haveStuckSegment {
 					haveStuckSegment = true
@@ -158,15 +165,14 @@ func TestHealth(t *testing.T) {
 
 // newTestDxFileWithMaps create a new DxFile along with offlineMao and goodForRenewMap for test purpose.
 // The offlineMap, goodForRenewMap, or stuck is random selected by stuckRate, absentRate, offlineRate, and badForRenewMap
-func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8, stuckRate, absentRate, offlineRate, badForRenewRate int) (*DxFile, map[enode.ID]bool, map[enode.ID]bool) {
+func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8, stuckRate, absentRate, offlineRate, badForRenewRate int) (*DxFile, storage.HostHealthInfoTable) {
 	rand.Seed(time.Now().UnixNano())
 	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
 	if err != nil {
 		t.Fatal(err)
 	}
 	numSegments := df.metadata.numSegments()
-	offline := make(map[enode.ID]bool)
-	goodForRenew := make(map[enode.ID]bool)
+	table := make(storage.HostHealthInfoTable)
 	for j := 0; j != int(numSegments); j++ {
 		seg := randomSegment(numSectors)
 		seg.Index = uint64(j)
@@ -182,16 +188,14 @@ func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors
 				if absentRate != 0 && rand.Intn(absentRate) == 0 {
 					continue
 				}
+				var info storage.HostHealthInfo
 				if offlineRate != 0 && rand.Intn(offlineRate) == 0 {
-					offline[sector.HostID] = true
-				} else {
-					offline[sector.HostID] = false
+					info.Offline = true
 				}
-				if badForRenewRate != 0 && rand.Intn(badForRenewRate) == 0 {
-					goodForRenew[sector.HostID] = false
-				} else {
-					goodForRenew[sector.HostID] = true
+				if badForRenewRate == 0 || rand.Intn(badForRenewRate) != 0 {
+					info.GoodForRenew = true
 				}
+				table[sector.HostID] = info
 			}
 		}
 	}
@@ -199,5 +203,5 @@ func newTestDxFileWithMaps(t *testing.T, fileSize uint64, minSectors, numSectors
 	if err != nil {
 		t.Fatal(err)
 	}
-	return df, offline, goodForRenew
+	return df, table
 }

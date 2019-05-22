@@ -9,9 +9,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// TODO: Refactor the apply update to write page updates. Each page has next Offset
-// 		 Each read will stop at next Offset == -1. Call it paged file.
-
 // createInsertUpdate create a DxFile insertion update.
 func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*storage.InsertUpdate, error) {
 	// check validity of the Offset variable
