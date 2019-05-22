@@ -91,7 +91,7 @@ func TestCodeByName(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		code := CodeByName(test.cipherName)
+		code := CipherCodeByName(test.cipherName)
 		if code != test.cipherCode {
 			t.Errorf("Test %d. Expect %v, Got %v", i, test.cipherCode, code)
 		}
