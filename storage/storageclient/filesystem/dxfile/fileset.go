@@ -172,7 +172,7 @@ func (fs *FileSet) Delete(dxPath string) error {
 	return nil
 }
 
-// Exists return whether the dxPath exists (cached or on disk)
+// Exists is the public function that returns whether the dxPath exists (cached then on disk)
 func (fs *FileSet) Exists(dxPath string) bool {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
@@ -180,6 +180,7 @@ func (fs *FileSet) Exists(dxPath string) bool {
 	return fs.exists(dxPath)
 }
 
+// Exists return whether the dxPath exists (cached then on disk)
 func (fs *FileSet) exists(dxPath string) bool {
 	entry, exists := fs.filesMap[dxPath]
 	if exists {
