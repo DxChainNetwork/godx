@@ -11,6 +11,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
@@ -180,7 +181,8 @@ func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
 		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
 		return minSectors, numSectors, extraBytes
 	default:
-		panic("erasure code type not recognized")
+		log.Crit("Unknown erasure code type ")
+		return 0, 0, []byte{}
 	}
 }
 

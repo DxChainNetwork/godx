@@ -7,6 +7,7 @@ package dxfile
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"os"
 	"path/filepath"
@@ -210,7 +211,7 @@ func (df *DxFile) HostIDs() []enode.ID {
 }
 
 // MarkAllHealthySegmentsAsUnstuck mark all health > 100 segments as unstuck
-func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) error {
+func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(table storage.HostHealthInfoTable) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
 	if df.deleted {
@@ -222,7 +223,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goo
 		if !df.segments[i].Stuck {
 			continue
 		}
-		segHealth := df.segmentHealth(i, offline, goodForRenew)
+		segHealth := df.segmentHealth(i, table)
 		if segHealth < 200 {
 			continue
 		}
@@ -243,7 +244,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(offline map[enode.ID]bool, goo
 
 // MarkAllUnhealthySegmentsAsStuck mark all unhealthy segments (health smaller than repairHealthThreshold)
 // as Stuck
-func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(offline map[enode.ID]bool, goodForRenew map[enode.ID]bool) error {
+func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(table storage.HostHealthInfoTable) error {
 	df.lock.Lock()
 	defer df.lock.Unlock()
 	if df.deleted {
@@ -256,7 +257,7 @@ func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(offline map[enode.ID]bool, goo
 		if df.segments[i].Stuck {
 			continue
 		}
-		segHealth := df.segmentHealth(i, offline, goodForRenew)
+		segHealth := df.segmentHealth(i, table)
 		if segHealth >= repairHealthThreshold {
 			continue
 		}
@@ -297,14 +298,14 @@ func (df *DxFile) SectorsOfSegmentIndex(index int) ([][]*Sector, error) {
 
 // Redundancy return the redundancy of a dxfile.
 // The redundancy is goodSectors * 100 / minSectors.
-func (df *DxFile) Redundancy(offlineMap map[enode.ID]bool, goodForRenewMap map[enode.ID]bool) uint32 {
+func (df *DxFile) Redundancy(table storage.HostHealthInfoTable) uint32 {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
 	minRedundancy := uint32(math.MaxUint32)
 	minRedundancyNoRenew := uint32(math.MaxUint32)
 	for segIndex := range df.segments {
-		numSectorsRenew, numSectorsNoRenew := df.goodSectors(segIndex, offlineMap, goodForRenewMap)
+		numSectorsRenew, numSectorsNoRenew := df.goodSectors(segIndex, table)
 		redundancy := numSectorsRenew * 100 / df.metadata.MinSectors
 		if redundancy < minRedundancy {
 			minRedundancy = redundancy
