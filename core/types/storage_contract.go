@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 type StorageContractRLPHash interface {
@@ -237,4 +238,22 @@ func (sp StorageProof) RLPHash() common.Hash {
 		sp.Segment,
 		sp.HashSet,
 	})
+}
+
+// 真正放进交易payload字段的内容是 StorageContractSet
+type StorageContractSet struct {
+	HostAnnounce            HostAnnouncement
+	StorageContract         StorageContract
+	StorageContractRevision StorageContractRevision
+	StorageProof            StorageProof
+}
+
+func ResolveStorageContractSet(tx *Transaction) (*StorageContractSet, error) {
+	payload := tx.Data()
+	sc := StorageContractSet{}
+	err := rlp.DecodeBytes(payload, &sc)
+	if err != nil {
+		return nil, err
+	}
+	return &sc, nil
 }
