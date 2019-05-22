@@ -22,7 +22,7 @@ type FileContractRevision struct{}
 
 type Contract struct {
 	headerLock  sync.Mutex
-	header      contractHeader
+	header      ContractHeader
 	merkleRoots *merkleroots
 
 	// whenever changes are going to be made on a contract
@@ -39,10 +39,10 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	meta = storage.ContractMetaData{
-		ID:                 c.header.ID,
-		EnodeID:            c.header.EnodeID,
-		StorageTransaction: c.header.StorageTransaction,
-		StartHeight:        c.header.StartHeight,
+		ID:                     c.header.ID,
+		EnodeID:                c.header.EnodeID,
+		LatestContractRevision: c.header.LatestContractRevision,
+		StartHeight:            c.header.StartHeight,
 
 		// TODO (mzhang): add EndHeight calculation
 

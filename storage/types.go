@@ -132,12 +132,12 @@ type (
 	}
 
 	ContractMetaData struct {
-		ID                 ContractID
-		EnodeID            enode.ID
-		StorageTransaction types.Transaction
-		StartHeight        uint64
-		EndHeight          uint64
-		ClientBalance      common.BigInt
+		ID                     ContractID
+		EnodeID                enode.ID
+		LatestContractRevision types.StorageContractRevision
+		StartHeight            uint64
+		EndHeight              uint64
+		ClientBalance          common.BigInt
 
 		UploadCost   common.BigInt
 		DownloadCost common.BigInt

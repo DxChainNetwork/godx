@@ -99,6 +99,8 @@ func TestFileSection_ReadWriteValidation(t *testing.T) {
 		t.Fatalf("%s", err.Error())
 	}
 
+	defer fs.Close()
+
 	if err := fs.readWriteValidation(-100, length); err == nil {
 		t.Fatalf("by providing negative offset, the error should occur")
 	}

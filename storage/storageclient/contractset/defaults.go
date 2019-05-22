@@ -6,9 +6,17 @@ package contractset
 
 const (
 	contractFileExtension = ".contract"
-	storagecontractSetWal = "storagecontractset.wal"
+	contractSetWal        = "storagecontractset.wal"
 )
 
 const (
 	remainingFile = -1
+)
+
+const (
+	persistDBName  = "contractset.db"
+	persistWalName = "contractset.wal"
+
+	dbContractHeader = "contractheader"
+	dbContractRoot   = "roots"
 )

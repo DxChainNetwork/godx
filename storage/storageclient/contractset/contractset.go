@@ -26,17 +26,67 @@ type RateLimit struct{}
 // ************************************************************************
 
 type StorageContractSet struct {
-	contracts map[storage.ContractID]*Contract
-	enodeID   map[enode.ID]storage.ContractID
-	dir       string
-	lock      sync.Mutex
-	rl        *RateLimit
-	wal       *writeaheadlog.Wal
+	contracts  map[storage.ContractID]*Contract
+	enodeID    map[enode.ID]storage.ContractID
+	persistDir string
+	db         *DB
+	lock       sync.Mutex
+	rl         *RateLimit
+	wal        *writeaheadlog.Wal
+}
+
+func New(persistDir string) (scs *StorageContractSet, err error) {
+	// initialize the directory
+	if err = os.MkdirAll(persistDir, 0700); err != nil {
+		return
+	}
+
+	// initialize wal
+	wal, txns, err := writeaheadlog.New(filepath.Join(persistDir, persistWalName))
+	if err != nil {
+		return
+	}
+
+	// initialize DB
+	db, err := OpenDB(filepath.Join(persistDir, persistDBName))
+	if err != nil {
+		return
+	}
+
+	scs = &StorageContractSet{
+		contracts:  make(map[storage.ContractID]*Contract),
+		enodeID:    make(map[enode.ID]storage.ContractID),
+		persistDir: persistDir,
+		db:         db,
+		wal:        wal,
+	}
+
+	// TODO (mzhang): Set rate limit
+
+	// load the contracts from the database
+	if err = scs.loadContract(txns); err != nil {
+		return
+	}
+
+	return
+}
+
+// loadContract will load contracts information from the database
+// as well as applying un-applied transactions read from the writeaheadlog file
+func (*StorageContractSet) loadContract(txns []*writeaheadlog.Transaction) (err error) {
+	// TODO (mzhang): continue with this function
+	return
 }
 
 // InsertContract will insert the formed or renewed contract into the storage contract set
 // allow contract manager further to maintain them
-func (scs *StorageContractSet) InsertContract(ch contractHeader, roots []common.Hash) (cm storage.ContractMetaData, err error) {
+func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.Hash) (cm storage.ContractMetaData, err error) {
+	// contract header validation
+	if err = ch.validation(); err != nil {
+		return
+	}
+
+	// save the contract header and roots information
 
 	return
 }
@@ -90,7 +140,7 @@ func (scs *StorageContractSet) Delete(c *Contract) (err error) {
 	c.lock.Unlock()
 
 	// delete the storage contract file
-	path := filepath.Join(scs.dir, c.header.ID.String()+contractFileExtension)
+	path := filepath.Join(scs.persistDir, c.header.ID.String()+contractFileExtension)
 	if err := c.headerFile.Close(); err != nil {
 		err = errors.New(fmt.Sprintf("failed to close the headerfile: %s", err))
 	}
