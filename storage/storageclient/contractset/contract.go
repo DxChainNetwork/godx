@@ -14,7 +14,6 @@ import (
 // ************************************************************************
 //                             MOCKED DATA
 // ************************************************************************
-type merkleroots struct{}
 type FileContractRevision struct{}
 
 // ************************************************************************
@@ -23,18 +22,19 @@ type FileContractRevision struct{}
 type Contract struct {
 	headerLock  sync.Mutex
 	header      ContractHeader
-	merkleRoots *merkleroots
+	merkleRoots *merkleRoots
 
 	// whenever changes are going to be made on a contract
 	// the changes will be saved in this field first
 	// in case power-off is encountered. Prevent data lose
 	unappliedTxns []*writeaheadlog.Transaction
 
-	headerFile *fileSection
-	wal        *writeaheadlog.Wal
-	lock       sync.Mutex
+	db   *DB
+	wal  *writeaheadlog.Wal
+	lock sync.Mutex
 }
 
+// Metadata will generate contract meta data based on the contract information
 func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 	c.lock.Lock()
 	defer c.lock.Unlock()

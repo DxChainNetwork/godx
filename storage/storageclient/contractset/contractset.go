@@ -26,13 +26,13 @@ type RateLimit struct{}
 // ************************************************************************
 
 type StorageContractSet struct {
-	contracts  map[storage.ContractID]*Contract
-	enodeID    map[enode.ID]storage.ContractID
-	persistDir string
-	db         *DB
-	lock       sync.Mutex
-	rl         *RateLimit
-	wal        *writeaheadlog.Wal
+	contracts        map[storage.ContractID]*Contract
+	hostToContractID map[enode.ID]storage.ContractID
+	persistDir       string
+	db               *DB
+	lock             sync.Mutex
+	rl               *RateLimit
+	wal              *writeaheadlog.Wal
 }
 
 func New(persistDir string) (scs *StorageContractSet, err error) {
@@ -48,35 +48,27 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 	}
 
 	// initialize DB
-	// TODO (mzhang): remember to close the database, db should be closed in upper
-	// function call
+	// TODO (mzhang): remember to close the database, db should be closed in upper function call
 	db, err := OpenDB(filepath.Join(persistDir, persistDBName))
 	if err != nil {
 		return
 	}
 
 	scs = &StorageContractSet{
-		contracts:  make(map[storage.ContractID]*Contract),
-		enodeID:    make(map[enode.ID]storage.ContractID),
-		persistDir: persistDir,
-		db:         db,
-		wal:        wal,
+		contracts:        make(map[storage.ContractID]*Contract),
+		hostToContractID: make(map[enode.ID]storage.ContractID),
+		persistDir:       persistDir,
+		db:               db,
+		wal:              wal,
 	}
 
 	// TODO (mzhang): Set rate limit
 
 	// load the contracts from the database
-	if err = scs.loadContract(txns); err != nil {
+	if err = scs.loadPriorContract(txns); err != nil {
 		return
 	}
 
-	return
-}
-
-// loadContract will load contracts information from the database
-// as well as applying un-applied transactions read from the writeaheadlog file
-func (*StorageContractSet) loadContract(txns []*writeaheadlog.Transaction) (err error) {
-	// TODO (mzhang): WIP
 	return
 }
 
@@ -95,11 +87,30 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 		return
 	}
 
-	// TODO (mzhang): generate contract roots information and store them in db
-	//merkleRoots := newMerkleRoots
-	//for _, roots := range roots {
-	//
-	//}
+	// add the root to db as well as memory merkle tree
+	merkleRoots := newMerkleRoots(scs.db)
+	for _, root := range roots {
+		if err = merkleRoots.push(ch.ID, root); err != nil {
+			return
+		}
+	}
+
+	// initialize contract
+	c := &Contract{
+		header:      ch,
+		merkleRoots: merkleRoots,
+		db:          scs.db,
+		wal:         scs.wal,
+	}
+
+	// get the contract meta data
+	cm = c.Metadata()
+
+	// save the contract into the contract set
+	scs.lock.Lock()
+	defer scs.lock.Unlock()
+	scs.contracts[c.header.ID] = c
+	scs.hostToContractID[c.header.EnodeID] = c.header.ID
 
 	return
 }
@@ -149,12 +160,12 @@ func (scs *StorageContractSet) Delete(c *Contract) (err error) {
 
 	// delete memory contract information
 	delete(scs.contracts, c.header.ID)
-	delete(scs.enodeID, c.header.EnodeID)
+	delete(scs.hostToContractID, c.header.EnodeID)
 
 	c.lock.Unlock()
 
 	// delete disk contract information
-	if err = scs.db.DeleteAll(c.header.ID); err != nil {
+	if err = scs.db.DeleteHeaderAndRoots(c.header.ID); err != nil {
 		return
 	}
 
@@ -195,6 +206,20 @@ func (scs *StorageContractSet) RetrieveAllMetaData() (cms []storage.ContractMeta
 	for _, contract := range scs.contracts {
 		cms = append(cms, contract.Metadata())
 	}
+
+	return
+}
+
+// loadContract will load contracts information from the database
+// as well as applying un-applied transactions read from the writeaheadlog file
+func (scs *StorageContractSet) loadPriorContract(txns []*writeaheadlog.Transaction) (err error) {
+	// 1. load storage header from the database
+
+	// 2. load merkleRoots from the database
+
+	// 3. apply un-applied WAL transaction
+
+	// 4. update the contract set
 
 	return
 }

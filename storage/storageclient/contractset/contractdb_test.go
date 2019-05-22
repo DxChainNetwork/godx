@@ -6,6 +6,7 @@ package contractset
 
 import (
 	"crypto/rand"
+	"fmt"
 	mathRand "math/rand"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 )
 
 var testDB = "./testdata/contractsetdb"
+var testDB1 = "./testdata/contractsetdb1"
 var ch = contractHeaderGenerator()
 
 func TestDB_StoreFetchDeleteContractHeader(t *testing.T) {
@@ -25,6 +27,7 @@ func TestDB_StoreFetchDeleteContractHeader(t *testing.T) {
 		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
 	}
 	defer db.Close()
+	defer db.EmptyDB()
 
 	// store the contract header
 	if err := db.StoreContractHeader(ch); err != nil {
@@ -63,6 +66,7 @@ func TestDB_StoreFetchDeleteContractRoots(t *testing.T) {
 		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
 	}
 	defer db.Close()
+	defer db.EmptyDB()
 
 	roots := contractRootsGenerator()
 
@@ -98,15 +102,16 @@ func TestDB_StoreFetchDeleteAll(t *testing.T) {
 		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
 	}
 	defer db.Close()
+	defer db.EmptyDB()
 
 	// store all
 	roots := contractRootsGenerator()
-	if err := db.StoreAll(ch, roots); err != nil {
+	if err := db.StoreHeaderAndRoots(ch, roots); err != nil {
 		t.Fatalf("failed to save information into database: %s", err.Error())
 	}
 
 	// fetch all
-	ch1, roots1, err := db.FetchAll(ch.ID)
+	ch1, roots1, err := db.FetchHeaderAndRoots(ch.ID)
 	if err != nil {
 		t.Fatalf("failed to retrieve information from the database: %s", err.Error())
 	}
@@ -129,12 +134,12 @@ func TestDB_StoreFetchDeleteAll(t *testing.T) {
 	}
 
 	// delete all
-	if err := db.DeleteAll(ch.ID); err != nil {
+	if err := db.DeleteHeaderAndRoots(ch.ID); err != nil {
 		t.Errorf("failed to delete information from the database: %s", err.Error())
 	}
 
 	// validation
-	if _, _, err := db.FetchAll(ch.ID); err == nil {
+	if _, _, err := db.FetchHeaderAndRoots(ch.ID); err == nil {
 		t.Errorf("information are not supposed to be fetched, they are all deleted")
 	}
 }
@@ -145,6 +150,7 @@ func TestDB_StoreSingleRoot(t *testing.T) {
 		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
 	}
 	defer db.Close()
+	defer db.EmptyDB()
 
 	id := storageContractIDGenerator()
 	root1 := randomHashGenerator()
@@ -190,6 +196,63 @@ func TestDB_StoreSingleRoot(t *testing.T) {
 	}
 }
 
+func TestDB_FetchAllHeaderRoots(t *testing.T) {
+	db, err := OpenDB(testDB)
+	if err != nil {
+		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
+	}
+	defer db.Close()
+	defer db.EmptyDB()
+
+	// generate a bunch of contract header information
+	chs := contractHeaderBatchGenerator(10)
+	rts := contractRootBatchGenerator(10)
+
+	// store data into the db
+	for i := 0; i < 10; i++ {
+		if err := db.StoreHeaderAndRoots(chs[i], rts[i]); err != nil {
+			t.Fatalf("failed to insert header and roots into the db: %s", err.Error())
+		}
+	}
+
+	var chs1 []ContractHeader
+	var rts1 [][]common.Hash
+
+	// fetch all headers and do validation
+	if chs1, err = db.FetchAllHeader(); err != nil {
+		t.Fatalf("failed to fetch all headers: %s", err.Error())
+	}
+
+	if err := headerSliceValidation(chs, chs1); err != nil {
+		t.Fatalf("fetch header slice validatiaon failed: %s", err.Error())
+	}
+
+	// fetch all roots and do validation
+	if rts1, err = db.FetchAllRoots(); err != nil {
+		t.Fatalf("failed to fetch all roots: %s", err.Error())
+	}
+
+	if err := rootsSliceValidation(rts, rts1); err != nil {
+		t.Fatalf("fetch roots slice validation failed: %s", err.Error())
+	}
+
+	// fetch all contract header and merkle roots information
+	var chs2 []ContractHeader
+	var rts2 [][]common.Hash
+
+	if chs2, rts2, err = db.FetchAll(); err != nil {
+		t.Fatalf("failed to fetch all data: %s", err.Error())
+	}
+
+	if err := headerSliceValidation(chs, chs2); err != nil {
+		t.Fatalf("fetchall header slice validataion failed: %s", err.Error())
+	}
+
+	if err := rootsSliceValidation(rts, rts2); err != nil {
+		t.Fatalf("fetchall roots slice validation failed: %s", err.Error())
+	}
+}
+
 /*
  _____  _____  _______      __  _______ ______      ______ _    _ _   _  _____ _______ _____ ____  _   _
 |  __ \|  __ \|_   _\ \    / /\|__   __|  ____|    |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
@@ -199,6 +262,71 @@ func TestDB_StoreSingleRoot(t *testing.T) {
 |_|    |_|  \_\_____|   \/_/    \_\_|  |______|    |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
 
 */
+
+func headerSliceValidation(original []ContractHeader, fetched []ContractHeader) (err error) {
+	if len(original) != len(fetched) {
+		return fmt.Errorf("the expected amount of header fetched is %v, got %v",
+			len(original), len(fetched))
+	}
+
+	for _, ch := range original {
+		validate := false
+		for _, ch1 := range fetched {
+			if ch.ID == ch1.ID {
+				validate = true
+				break
+			}
+		}
+
+		if !validate {
+			return fmt.Errorf("the fetched header information changed, %v cannot be found",
+				ch.ID)
+		}
+	}
+
+	return
+}
+
+func rootsSliceValidation(original [][]common.Hash, fetched [][]common.Hash) (err error) {
+	if len(original) != len(fetched) {
+		return fmt.Errorf("the expected amount of roots fetched is %v, got %v",
+			len(original), len(fetched))
+	}
+
+	for _, rt := range original {
+		validate := false
+		for _, rt1 := range fetched {
+			if hashSliceComparator(rt, rt1) {
+				validate = true
+				break
+			}
+		}
+
+		if !validate {
+			return fmt.Errorf("the fetched roots information changed, %v cannot be found",
+				rt)
+		}
+	}
+
+	return
+}
+
+func contractHeaderBatchGenerator(num int) (chs []ContractHeader) {
+	for i := 0; i < num; i++ {
+		chs = append(chs, contractHeaderGenerator())
+	}
+
+	return
+}
+
+func contractRootBatchGenerator(num int) (allRoots [][]common.Hash) {
+	for i := 0; i < num; i++ {
+		croots := contractRootsGenerator()
+		allRoots = append(allRoots, croots)
+	}
+
+	return
+}
 
 func contractHeaderGenerator() (ch ContractHeader) {
 	// generate the private key
@@ -230,6 +358,11 @@ func contractRootsGenerator() (roots []common.Hash) {
 }
 
 func hashSliceComparator(a []common.Hash, b []common.Hash) (equal bool) {
+
+	if len(a) != len(b) {
+		return false
+	}
+
 	for index, data := range a {
 		if data != b[index] {
 			return false

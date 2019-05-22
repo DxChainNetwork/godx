@@ -17,8 +17,8 @@ const (
 	persistDBName  = "contractset.db"
 	persistWalName = "contractset.wal"
 
-	dbContractHeader = "contractheader"
-	dbMerkleRoot     = "roots"
+	dbContractHeader = ":contractheader"
+	dbMerkleRoot     = ":roots"
 )
 
 const (
@@ -27,4 +27,15 @@ const (
 	// merkleRootsPerCache is the number of merkle roots in a cached subTree of
 	// merkleRootsCacheHeight height.
 	merkleRootsPerCache = 1 << merkleRootsCacheHeight
+
+	SectorSize  = uint64(1 << 22) // 4 MiB
+	SegmentSize = 64
 )
+
+var sectorHeight = func() uint64 {
+	height := uint64(0)
+	for 1<<height < (SectorSize / SegmentSize) {
+		height++
+	}
+	return height
+}()

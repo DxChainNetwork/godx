@@ -1,6 +1,7 @@
 package contractset
 
 import (
+	"bytes"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
@@ -28,9 +29,9 @@ func (db *DB) Close() {
 	db.lvl.Close()
 }
 
-// StoreAll will store both contract header and contract roots information into
+// StoreHeaderAndRoots will store both contract header and contract roots information into
 // the contract set database
-func (db *DB) StoreAll(ch ContractHeader, roots []common.Hash) (err error) {
+func (db *DB) StoreHeaderAndRoots(ch ContractHeader, roots []common.Hash) (err error) {
 	// store contract header information
 	if err = db.StoreContractHeader(ch); err != nil {
 		return
@@ -44,9 +45,9 @@ func (db *DB) StoreAll(ch ContractHeader, roots []common.Hash) (err error) {
 	return
 }
 
-// FetchAll will fetch both contract header and contract roots information from the
+// FetchHeaderAndRoots will fetch both contract header and contract roots information from the
 // contract set database
-func (db *DB) FetchAll(id storage.ContractID) (ch ContractHeader, roots []common.Hash, err error) {
+func (db *DB) FetchHeaderAndRoots(id storage.ContractID) (ch ContractHeader, roots []common.Hash, err error) {
 	// fetch contract header information from the database
 	if ch, err = db.FetchContractHeader(id); err != nil {
 		return
@@ -60,9 +61,9 @@ func (db *DB) FetchAll(id storage.ContractID) (ch ContractHeader, roots []common
 	return
 }
 
-// DeleteAll will delete both contract header and contract roots information from the
+// DeleteHeaderAndRoots will delete both contract header and contract roots information from the
 // contract set database
-func (db *DB) DeleteAll(id storage.ContractID) (err error) {
+func (db *DB) DeleteHeaderAndRoots(id storage.ContractID) (err error) {
 	// delete contract header information from the database
 	if err = db.DeleteContractHeader(id); err != nil {
 		return
@@ -71,6 +72,85 @@ func (db *DB) DeleteAll(id storage.ContractID) (err error) {
 	// delete contract roots information from the database
 	if err = db.DeleteMerkleRoots(id); err != nil {
 		return
+	}
+
+	return
+}
+
+// FetchAll will fetch all contract header and merkle roots information
+func (db *DB) FetchAll() (chs []ContractHeader, allRoots [][]common.Hash, err error) {
+	iter := db.lvl.NewIterator(nil, nil)
+	for iter.Next() {
+		var ch ContractHeader
+		var roots []common.Hash
+
+		// get the contract header value
+		if bytes.HasSuffix(iter.Key(), []byte(dbContractHeader)) {
+			if err = rlp.DecodeBytes(iter.Value(), &ch); err != nil {
+				return
+			}
+
+			// append the value into the list
+			chs = append(chs, ch)
+		}
+
+		if bytes.HasSuffix(iter.Key(), []byte(dbMerkleRoot)) {
+			if err = rlp.DecodeBytes(iter.Value(), &roots); err != nil {
+				return
+			}
+			allRoots = append(allRoots, roots)
+		}
+	}
+
+	return
+}
+
+// FetchAllHeader will fetch all contract header information from the database
+func (db *DB) FetchAllHeader() (chs []ContractHeader, err error) {
+	iter := db.lvl.NewIterator(nil, nil)
+	for iter.Next() {
+		if !bytes.HasSuffix(iter.Key(), []byte(dbContractHeader)) {
+			continue
+		}
+
+		// has suffix, contract header information
+		var ch ContractHeader
+		if err = rlp.DecodeBytes(iter.Value(), &ch); err != nil {
+			return
+		}
+
+		chs = append(chs, ch)
+	}
+	return
+}
+
+// FetchAllRoots will fetch all merkle roots information from the database
+func (db *DB) FetchAllRoots() (allRoots [][]common.Hash, err error) {
+	iter := db.lvl.NewIterator(nil, nil)
+	for iter.Next() {
+		if !bytes.HasSuffix(iter.Key(), []byte(dbMerkleRoot)) {
+			continue
+		}
+
+		// has suffix, merkle roots information
+		var roots []common.Hash
+		if err = rlp.DecodeBytes(iter.Value(), &roots); err != nil {
+			return
+		}
+
+		allRoots = append(allRoots, roots)
+	}
+
+	return
+}
+
+// EmptyDB will clear all db entries
+func (db *DB) EmptyDB() (err error) {
+	iter := db.lvl.NewIterator(nil, nil)
+	for iter.Next() {
+		if err = db.lvl.Delete(iter.Key(), nil); err != nil {
+			return
+		}
 	}
 
 	return

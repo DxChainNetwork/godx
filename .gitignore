@@ -21,3 +21,6 @@ vendor/*
 *.o
 *.a
 *.so
+
+# test generated data
+storage/storageclient/contractset/testdata/contractsetdb/*
