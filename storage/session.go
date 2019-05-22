@@ -14,10 +14,10 @@ import (
 const (
 	// Storage Contract Negotiate Protocol belonging to eth/64
 	// Storage Contract Creation/Renew Code Msg
-	StorageContractCreationMsg         = 0x11
-	StorageContractCreationHostSignMsg = 0x12
-	StorageContractUpdateMsg           = 0x13
-	StorageContractUpdateHostSignMsg   = 0x14
+	StorageContractCreationMsg                   = 0x11
+	StorageContractCreationHostSignMsg           = 0x12
+	StorageContractCreationClientRevisionSignMsg = 0x13
+	StorageContractCreationHostRevisionSignMsg   = 0x14
 
 	// Upload/Download Data Segment Code Msg
 	StorageContractUploadRequestMsg         = 0x15
@@ -127,14 +127,14 @@ func (s *Session) SendStorageContractCreationHostSign(data interface{}) error {
 	return p2p.Send(s.rw, StorageContractCreationHostSignMsg, data)
 }
 
-func (s *Session) SendStorageContractUpdate(data interface{}) error {
-	s.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
-	return p2p.Send(s.rw, StorageContractUpdateMsg, data)
+func (s *Session) SendStorageContractCreationClientRevisionSign(data interface{}) error {
+	s.Log().Debug("Sending storage contract update to storage host by storage client", "data", data)
+	return p2p.Send(s.rw, StorageContractCreationClientRevisionSignMsg, data)
 }
 
-func (s *Session) SendStorageContractUpdateHostSign(data interface{}) error {
+func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) error {
 	s.Log().Debug("Sending storage contract update host signatures", "signature", data)
-	return p2p.Send(s.rw, StorageContractUpdateHostSignMsg, data)
+	return p2p.Send(s.rw, StorageContractCreationHostRevisionSignMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {

@@ -2,12 +2,14 @@ package storagehost
 
 import (
 	"errors"
+	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/rpc"
 	"math/big"
 )
 
 var (
+
 	// errBadContractOutputCounts is returned if the presented file contract
 	// revision has the wrong number of outputs for either the valid or the
 	// missed proof outputs.
@@ -130,6 +132,15 @@ var (
 	// errUnknownModification is returned if the host receives a modification
 	// action from the renter that it does not understand.
 	errUnknownModification = ErrorRevision("renter is attempting an action that the host does not understand")
+
+	// errCollateralBudgetExceeded is returned if the host does not have enough
+	// room in the collateral budget to accept a particular file contract.
+	errCollateralBudgetExceeded = errors.New("host has reached its collateral budget and cannot accept the file contract")
+
+	// errMaxCollateralReached is returned if a file contract is provided which
+	// would require the host to supply more collateral than the host allows
+	// per file contract.
+	errMaxCollateralReached = errors.New("file contract proposal expects the host to pay more than the maximum allowed collateral")
 )
 
 func ExtendErr(s string, err error) error {
@@ -141,9 +152,8 @@ func ExtendErr(s string, err error) error {
 	case ErrorRevision:
 		return ErrorRevision(s) + v
 	default:
-		return errors.New(s + err.Error())
+		return fmt.Errorf("%v: %v", s, err)
 	}
-
 }
 
 type (
@@ -174,9 +184,14 @@ type (
 		UploadBandwidthRevenue            big.Int `json:"uploadbandwidthrevenue"`
 	}
 
-	ErrorRevision string
+	ErrorRevision       string
+	ErrorCreateContract string
 )
 
 func (e ErrorRevision) Error() string {
 	return "revision error: " + string(e)
+}
+
+func (e ErrorCreateContract) Error() string {
+	return "create contract error:" + string(e)
 }

@@ -9,12 +9,13 @@ import (
 )
 
 type ContractParams struct {
-	Allowance    Allowance
-	HostEnodeUrl string
-	Funding      *big.Int
-	StartHeight  uint64
-	EndHeight    uint64
-	Host         HostDBEntry
+	Allowance       Allowance
+	HostEnodeUrl    string
+	Funding         *big.Int
+	StartHeight     uint64
+	EndHeight       uint64
+	ClientPublicKey ecdsa.PublicKey
+	Host            HostDBEntry
 }
 
 // An Allowance dictates how much the Renter is allowed to spend in a given

@@ -7,9 +7,12 @@
 package storagehost
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 )
@@ -28,7 +31,7 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 		return errLateRevision
 	}
 
-	oldFCR := so.Revision[len(so.Revision)-1]
+	oldFCR := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Host payout addresses shouldn't change
 	if revision.NewValidProofOutputs[1].Address != oldFCR.NewValidProofOutputs[1].Address {
@@ -36,10 +39,6 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	}
 	if revision.NewMissedProofOutputs[1].Address != oldFCR.NewMissedProofOutputs[1].Address {
 		return errors.New("host payout address changed")
-	}
-	// Make sure the lost collateral still goes to the void
-	if revision.NewMissedProofOutputs[2].Address != oldFCR.NewMissedProofOutputs[2].Address {
-		return errors.New("lost collateral address was changed")
 	}
 
 	// Check that all non-volatile fields are the same.
@@ -113,6 +112,105 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	// The Merkle root is checked last because it is the most expensive check.
 	if revision.NewFileMerkleRoot != storage.CachedMerkleRoot(so.SectorRoots) {
 		return errBadFileMerkleRoot
+	}
+
+	return nil
+}
+
+func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *ecdsa.PublicKey, hostPK *ecdsa.PublicKey) error {
+	h.lock.RLock()
+	blockHeight := h.blockHeight
+	lockedStorageDeposit := h.financialMetrics.LockedStorageDeposit
+	hostAddress := crypto.PubkeyToAddress(*hostPK)
+	config := h.config
+	externalConfig := h.externalConfig()
+	h.lock.RUnlock()
+
+	// A new file contract should have a file size of zero
+	if sc.FileSize != 0 {
+		return errBadFileSize
+	}
+
+	if sc.FileMerkleRoot != (common.Hash{}) {
+		return errBadFileMerkleRoot
+	}
+
+	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
+	if sc.WindowStart <= blockHeight+revisionSubmissionBuffer {
+		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the revisionSubmissionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, revisionSubmissionBuffer, sc.WindowStart, blockHeight+revisionSubmissionBuffer)
+		return errEarlyWindow
+	}
+
+	// WindowEnd must be at least settings.WindowSize blocks after WindowStart
+	if sc.WindowEnd < sc.WindowStart+config.WindowSize {
+		return errSmallWindow
+	}
+
+	// WindowStart must not be more than settings.MaxDuration blocks into the future
+	if sc.WindowStart > blockHeight+config.MaxDuration {
+		return errLongDuration
+	}
+
+	// ValidProofOutputs should have 2 outputs (client + host) and missed
+	// outputs should have 2 (client + host)
+	if len(sc.ValidProofOutputs) != 2 || len(sc.MissedProofOutputs) != 2 {
+		return errBadContractOutputCounts
+	}
+	// The unlock hashes of the valid and missed proof outputs for the host
+	// must match the host's unlock hash
+	if sc.ValidProofOutputs[1].Address != hostAddress || sc.MissedProofOutputs[1].Address != hostAddress {
+		return errBadPayoutUnlockHashes
+	}
+	// Check that the payouts for the valid proof outputs and the missed proof
+	// outputs are the same - this is important because no data has been added
+	// to the file contract yet.
+	if sc.ValidProofOutputs[1].Value.Cmp(sc.MissedProofOutputs[1].Value) != 0 {
+		return errMismatchedHostPayouts
+	}
+	// Check that there's enough payout for the host to cover at least the
+	// contract price. This will prevent negative currency panics when working
+	// with the collateral.
+	if sc.ValidProofOutputs[1].Value.Cmp(externalConfig.ContractPrice.BigIntPtr()) < 0 {
+		return errLowHostValidOutput
+	}
+	// Check that the collateral does not exceed the maximum amount of
+	// collateral allowed.
+	depositMinusContractPrice := new(big.Int).Sub(sc.ValidProofOutputs[1].Value, externalConfig.ContractPrice.BigIntPtr())
+	if depositMinusContractPrice.Cmp(&config.MaxDeposit) > 0 {
+		return errMaxCollateralReached
+	}
+	// Check that the host has enough room in the collateral budget to add this
+	// collateral.
+	if new(big.Int).Add(&lockedStorageDeposit, depositMinusContractPrice).Cmp(&config.DepositBudget) > 0 {
+		return errCollateralBudgetExceeded
+	}
+
+	// The unlock hash for the file contract must match the unlock hash that
+	// the host knows how to spend.
+	expectedUH := types.UnlockConditions{
+		PublicKeys: []ecdsa.PublicKey{
+			*clientPK,
+			*hostPK,
+		},
+		SignaturesRequired: 2,
+	}.UnlockHash()
+	if sc.UnlockHash != expectedUH {
+		return errBadUnlockHash
+	}
+
+	return nil
+}
+
+func FinalizeStorageObligation(h *StorageHost, so StorageObligation) error {
+	// Get a lock on the storage obligation
+	lockErr := h.managedTryLockStorageObligation(so.id(), storage.ObligationLockTimeout)
+	if lockErr != nil {
+		return lockErr
+	}
+	defer h.managedUnlockStorageObligation(so.id())
+
+	if err := h.managedAddStorageObligation(so); err != nil {
+		return err
 	}
 
 	return nil

@@ -4,7 +4,10 @@
 
 package storage
 
-import "github.com/DxChainNetwork/godx/common"
+import (
+	"github.com/DxChainNetwork/godx/common"
+	"time"
+)
 
 // TODO (mzhang): the blocks time is dependent on block frequency. Normally, it will be 10 min/b
 // but discuss with the team
@@ -14,6 +17,8 @@ var (
 	BlocksPerWeek  = 7 * BlocksPerDay
 	BlocksPerMonth = 30 * BlocksPerDay
 	BlocksPerYear  = 365 * BlocksPerDay
+
+	ObligationLockTimeout = 60 * time.Second
 )
 
 // TODO (mzhang): Discuss with team, came up with reasonable default value

@@ -9,16 +9,17 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
-	"math/big"
-
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"math/big"
 	"path/filepath"
 	"sync"
 
@@ -178,13 +179,11 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 	return nil
 }
 
-func (sc *StorageClient) FormContract(params ContractParams) error {
-	// Extract vars from params, for convenience.
-	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
+func (sc *StorageClient) ContractCreate(params ContractParams) error {
+	// Extract vars from params, for convenience
+	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
-	// TODO: 以太坊中交易手续费是在交易执行中扣除了，这里不需要考虑交易手续费？？？
-
-	// Calculate the payouts for the renter, host, and whole contract.
+	// Calculate the payouts for the renter, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
 	renterPayout, hostPayout, _, err := RenterPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
@@ -192,21 +191,19 @@ func (sc *StorageClient) FormContract(params ContractParams) error {
 		return err
 	}
 
-	// TODO: 获取renter的public key.
-	renterPubkey := ecdsa.PublicKey{}
 	uc := types.UnlockConditions{
 		PublicKeys: []ecdsa.PublicKey{
-			renterPubkey,
+			clientPublicKey,
 			host.PublicKey,
 		},
 		SignaturesRequired: 2,
 	}
 
-	// TODO: 计算renter和host的账户地址
-	renterAddr := common.Address{}
-	hostAddr := common.Address{}
-	// Create file contract.
-	_sc := types.StorageContract{
+	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
+	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
+
+	// Create storage contract
+	storageContract := types.StorageContract{
 		FileSize:         0,
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
@@ -216,24 +213,15 @@ func (sc *StorageClient) FormContract(params ContractParams) error {
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
-			// Outputs need to account for tax.
-			{Value: renterPayout, Address: renterAddr}, // This is the renter payout, but with tax applied.
-			// Collateral is returned to host.
+			// Deposit is returned to client
+			{Value: renterPayout, Address: clientAddr},
+			// Deposit is returned to host
 			{Value: hostPayout, Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			// Same as above.
-			{Value: renterPayout, Address: renterAddr},
-			// Same as above.
+			{Value: renterPayout, Address: clientAddr},
 			{Value: hostPayout, Address: hostAddr},
-			// Once we start doing revisions, we'll move some coins to the host and some to the void.
-			{Value: zeroValue, Address: common.Address{}},
 		},
-	}
-
-	scBytes, err := rlp.EncodeToBytes(sc)
-	if err != nil {
-		return err
 	}
 
 	// TODO: 记录与当前host协商交互的结果，用于后续健康度检查
@@ -246,46 +234,93 @@ func (sc *StorageClient) FormContract(params ContractParams) error {
 	//	}
 	//}()
 
-	// setup connection with storage host
-	peer, err := sc.ethBackend.SetupConnection(host.NetAddress)
+	// Setup connection with storage host
+	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
 	defer sc.ethBackend.Disconnect(host.NetAddress)
 
-	// Send the FormContract request.
-	req := FormContractRequest{
-		StorageContract: _sc,
-		RenterKey:       uc.PublicKeys[0],
+	// Send the ContractCreate request
+	req := storage.ContractCreateRequest{
+		StorageContract: storageContract,
+		ClientPK:        uc.PublicKeys[0],
 	}
 
-	rlpBytes, err := rlp.EncodeToBytes(req)
-	if err != nil {
+	if err := session.SendStorageContractCreation(req); err != nil {
 		return err
 	}
 
-	if err := peer.SendStorageContractCreation(rlpBytes); err != nil {
-		return err
-	}
-
-	// TODO: 等待与host协商完成的通知 channel，然后直接发送 form contract交易就好
-	negotiationFinish := make(chan struct{})
-	sendAPI := NewStorageContractTxAPI(sc.b)
-	for {
-		select {
-		case <-negotiationFinish:
-			args := SendStorageContractTxArgs{
-				From: renterAddr,
-			}
-			addr := common.Address{}
-			addr.SetBytes([]byte{10})
-			args.To = &addr
-			args.Input = (*hexutil.Bytes)(&scBytes)
-			ctx := context.Background()
-			sendAPI.SendFormContractTX(ctx, args)
-		default:
+	var hostSign []byte
+	if msg, err := session.ReadMsg(); err != nil {
+		if err := msg.Decode(&hostSign); err != nil {
+			return err
 		}
+	} else {
+		return err
+	}
+	storageContract.Signatures[1] = hostSign
+
+	// Assemble init revision and sign it
+	storageContractRevision := types.StorageContractRevision{
+		ParentID:          storageContract.RLPHash(),
+		UnlockConditions:  uc,
+		NewRevisionNumber: 1,
+
+		NewFileSize:           storageContract.FileSize,
+		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+		NewWindowStart:        storageContract.WindowStart,
+		NewWindowEnd:          storageContract.WindowEnd,
+		NewValidProofOutputs:  storageContract.ValidProofOutputs,
+		NewMissedProofOutputs: storageContract.MissedProofOutputs,
+		NewUnlockHash:         storageContract.UnlockHash,
 	}
 
+	account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
+	wallet, err := sc.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		return storagehost.ExtendErr("find client account error", err)
+	}
+
+	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
+	if err != nil {
+		return storagehost.ExtendErr("client sign contract error", err)
+	}
+	storageContract.Signatures[0] = clientContractSign
+
+	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+	if err != nil {
+		return storagehost.ExtendErr("client sign revision error", err)
+	}
+	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
+
+	clientSigns := storage.ContractCreateSignature{ContractSign: clientContractSign, RevisionSign: clientRevisionSign}
+	if err := session.SendStorageContractCreationClientRevisionSign(clientSigns); err != nil {
+		return storagehost.ExtendErr("send revision sign by client error", err)
+	}
+
+	var hostRevisionSign []byte
+	if msg, err := session.ReadMsg(); err != nil {
+		if err := msg.Decode(&hostRevisionSign); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+
+	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
 		return err
+	}
+
+	sendAPI := NewStorageContractTxAPI(sc.b)
+	args := SendStorageContractTxArgs{
+		From: clientAddr,
+	}
+	addr := common.Address{}
+	addr.SetBytes([]byte{10})
+	args.To = &addr
+	args.Input = (*hexutil.Bytes)(&scBytes)
+	ctx := context.Background()
+	if _, err := sendAPI.SendFormContractTX(ctx, args); err != nil {
+		return storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
 	// TODO: 构造这个合约信息.
@@ -317,7 +352,7 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
 	// Retrieve the contract
-	// client.contractManager.GetContract()
+	// TODO client.contractManager.GetContract()
 	contractRevision := &types.StorageContractRevision{}
 
 	// Calculate price per sector
@@ -327,7 +362,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
 	sectorDeposit := hostInfo.Deposit.MultUint64(blockBytes)
 
-	// calculate the new Merkle root set and total cost/collateral
+	// Calculate the new Merkle root set and total cost/collateral
 	var bandwidthPrice, storagePrice, deposit *big.Int
 	newFileSize := contractRevision.NewFileSize
 	for _, action := range actions {
@@ -344,13 +379,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		deposit = sectorDeposit.MultUint64(addedSectors).BigIntPtr()
 	}
 
-	// estimate cost of Merkle proof
+	// Estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
 	bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
 
 	cost := new(big.Int).Add(bandwidthPrice.Add(bandwidthPrice, storagePrice), hostInfo.BaseRPCPrice.BigIntPtr())
 
-	// check that enough funds are available
+	// Check that enough funds are available
 	if contractRevision.NewValidProofOutputs[0].Value.Cmp(cost) < 0 {
 		return errors.New("contract has insufficient funds to support upload")
 	}
@@ -358,14 +393,14 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return errors.New("contract has insufficient collateral to support upload")
 	}
 
-	// create the revision; we will update the Merkle root later
+	// Create the revision; we will update the Merkle root later
 	rev := NewRevision(*contractRevision, cost)
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
-	rev.NewMissedProofOutputs[2].Value = rev.NewMissedProofOutputs[2].Value.Add(rev.NewMissedProofOutputs[2].Value, deposit)
 	rev.NewFileSize = newFileSize
 
-	// create the request
+	// Create the request
 	req := storage.UploadRequest{
+		StorageContractID: contractRevision.ParentID,
 		Actions:           actions,
 		NewRevisionNumber: rev.NewRevisionNumber,
 	}
@@ -419,7 +454,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 	rev.Signatures[0] = clientRevisionSign
 
-	// read the host's signature
+	// Read the host's signature
 	var hostRevisionSig []byte
 	if msg, err := session.ReadMsg(); err != nil {
 		return err

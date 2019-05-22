@@ -7,6 +7,7 @@ package storagehost
 import (
 	"errors"
 	"math/big"
+	"reflect"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -28,6 +29,8 @@ const (
 	PrefixStorageObligation = "storageobligation-"
 	PrefixHeight            = "height-"
 )
+
+var EmptyStorageContract = types.StorageContract{}
 
 const (
 	obligationUnresolved storageObligationStatus = iota // Indicatees that an unitialized value was used. Unresolved
@@ -77,13 +80,9 @@ var (
 	//原始交易存储义务集应在最终交易中具有一个文件合同
 	errInsaneOriginSetFileContract = errors.New("origin transaction set of storage obligation should have one file contract in the final transaction")
 
-	// errInsaneOriginSetSize is returned if the origin transaction set of a
-	// storage obligation is empty - there should be a file contract associated
-	// with every storage obligation.
-	// 如果存储义务的原始事务集为空，则返回errInsaneOriginSetSize  - 应该存在与每个存储义务关联的文件协定。
-
-	//原始交易存储义务集的大小为零
-	errInsaneOriginSetSize = errors.New("origin transaction set of storage obligation is size zero")
+	// original storage contract of storage obligation is empty - there should be a file contract associated
+	// with every storage obligation
+	ErrEmptyOriginStorageContract = errors.New("origin storage contract of storage obligation is empty")
 
 	// errInsaneRevisionSetRevisionCount is returned if the final transaction
 	// in the revision transaction set of a storage obligation has more or less
@@ -91,7 +90,7 @@ var (
 	// 如果存储义务的修订事务集中的最终事务具有多于或少于一个文件合同修订，则返回错误信号恢复设置。
 
 	//修订交易存储义务集应在最终交易中有一个文件合同修订
-	errInsaneRevisionSetRevisionCount = errors.New("revision transaction set of storage obligation should have one file contract revision in the final transaction")
+	ErrEmptyRevisionSet = errors.New("storage contract revisions of storage obligation should have one file contract revision in the final transaction")
 
 	// errInsaneStorageObligationRevision is returned if there is an attempted
 	// storage obligation revision which does not have sensical inputs.
@@ -139,7 +138,7 @@ type (
 		// 可以通过使用merkletree.CachedTree以低成本方式进行存储证明和对数据的修改。
 		// 可以附加，修改或删除扇区，主机可以重新计算整个文件的Merkle根，而无需太多的计算或I / O开销。
 		SectorRoots       []common.Hash
-		StorageContractid common.Hash
+		StorageContractID common.Hash
 
 		// Variables about the file contract that enforces the storage obligation.
 		// The origin an revision transaction are stored as a set, where the set
@@ -162,9 +161,9 @@ type (
 		// 协商高度指定协商文件合同的块高度。
 		// 如果原始交易集未被足够快地接受到区块链上，则合同将从主机中删除。
 		// 原始和修订事务集包含合同+修订以及所有父事务。 父母是必要的，因为重新启动后，事务池可能会被清空。
-		NegotiationHeight uint64
-		OriginStorage     []types.StorageContract
-		Revision          []types.StorageContractRevision
+		NegotiationHeight        uint64
+		OriginStorageContract    types.StorageContract
+		StorageContractRevisions []types.StorageContractRevision
 
 		// Variables indicating whether the critical transactions in a storage
 		// obligation have been confirmed on the blockchain.
@@ -225,37 +224,37 @@ func deleteStorageObligation(db ethdb.Database, sc common.Hash) error {
 
 // expiration returns the height at which the storage obligation expires.
 func (so *StorageObligation) expiration() (number uint64) {
-	if len(so.Revision) > 0 {
-		return so.Revision[len(so.Revision)-1].NewWindowStart
+	if len(so.StorageContractRevisions) > 0 {
+		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewWindowStart
 	}
-	return so.OriginStorage[0].WindowStart
+	return so.OriginStorageContract.WindowStart
 }
 
 // fileSize returns the size of the data protected by the obligation.
 //返回受义务保护的数据大小
 func (so *StorageObligation) fileSize() uint64 {
-	if len(so.Revision) > 0 {
-		return so.Revision[len(so.Revision)-1].NewFileSize
+	if len(so.StorageContractRevisions) > 0 {
+		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileSize
 	}
-	return so.OriginStorage[0].FileSize
+	return so.OriginStorageContract.FileSize
 }
 
 // id returns the id of the storage obligation, which is defined by the file
 // contract id of the storage contract that governs the storage contract.
 //返回这个存储义务的id，该ID由管理存储合同的文件合同的文件合同ID定义
 func (so *StorageObligation) id() (scid common.Hash) {
-	return so.StorageContractid
+	return so.StorageContractID
 }
 
 // isSane checks that required assumptions about the storage obligation are
 // correct.	检查所需的存储义务假设
 func (so *StorageObligation) isSane() error {
-	if len(so.OriginStorage) == 0 {
-		return errInsaneOriginSetSize
+	if reflect.DeepEqual(so.OriginStorageContract, EmptyStorageContract) {
+		return ErrEmptyOriginStorageContract
 	}
 
-	if len(so.Revision) == 0 {
-		return errInsaneRevisionSetRevisionCount
+	if len(so.StorageContractRevisions) == 0 {
+		return ErrEmptyRevisionSet
 	}
 
 	return nil
@@ -264,32 +263,32 @@ func (so *StorageObligation) isSane() error {
 // merkleRoot returns the file merkle root of a storage obligation.
 //merkleRoot 返回关于存储义务的文件的merkle root
 func (so *StorageObligation) merkleRoot() common.Hash {
-	if len(so.Revision) > 0 {
-		return so.Revision[len(so.Revision)-1].NewFileMerkleRoot
+	if len(so.StorageContractRevisions) > 0 {
+		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileMerkleRoot
 	}
-	return so.OriginStorage[len(so.OriginStorage)-1].FileMerkleRoot
+	return so.OriginStorageContract.FileMerkleRoot
 }
 
 // payouts returns the set of valid payouts and missed payouts that represent
 // the latest revision for the storage obligation.
 //返回有效支付和错过支付的集合，代表存储义务的最新Revision。
 func (so *StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
-	if len(so.Revision) > 0 {
-		validProofOutputs = so.Revision[len(so.Revision)-1].NewValidProofOutputs
-		missedProofOutputs = so.Revision[len(so.Revision)-1].NewMissedProofOutputs
+	if len(so.StorageContractRevisions) > 0 {
+		validProofOutputs = so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewValidProofOutputs
+		missedProofOutputs = so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewMissedProofOutputs
 	}
-	validProofOutputs = so.OriginStorage[len(so.OriginStorage)-1].ValidProofOutputs
-	missedProofOutputs = so.OriginStorage[len(so.OriginStorage)-1].MissedProofOutputs
+	validProofOutputs = so.OriginStorageContract.ValidProofOutputs
+	missedProofOutputs = so.OriginStorageContract.MissedProofOutputs
 	return
 }
 
 // proofDeadline returns the height by which the storage proof must be
 // submitted. 返回存储证明必须被提交的块的高度
 func (so *StorageObligation) ProofDeadline() uint64 {
-	if len(so.Revision) > 0 {
-		return so.Revision[len(so.Revision)-1].NewWindowEnd
+	if len(so.StorageContractRevisions) > 0 {
+		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewWindowEnd
 	}
-	return so.OriginStorage[len(so.OriginStorage)-1].WindowEnd
+	return so.OriginStorageContract.WindowEnd
 
 }
 
@@ -387,7 +386,7 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 				// 并且应该使用新的到期高度重新添加该扇区。 如果在任何时候出现错误，则应删除所有扇区。
 			}
 
-			errPut := StoreStorageObligation(h.db, so.StorageContractid, so)
+			errPut := StoreStorageObligation(h.db, so.StorageContractID, so)
 			if errPut != nil {
 				return errPut
 			}
@@ -416,10 +415,6 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 	if err != nil {
 		return err
 	}
-
-	//TODO Check that the transaction is fully valid and submit it to the
-	// transaction pool.
-	// 检查事务是否完全有效并将其提交到事务池。
 
 	//TODO Queue the action items.
 	// 排队执行项目。
@@ -601,7 +596,7 @@ func (h *StorageHost) PruneStaleStorageObligations() error {
 		//@xiaofeiliu
 		//	if (h.blockHeight > so.NegotiationHeight+40) && !conf {
 		if h.blockHeight > so.NegotiationHeight+RespendTimeout {
-			scids = append(scids, so.StorageContractid)
+			scids = append(scids, so.StorageContractID)
 		}
 
 	}
@@ -807,9 +802,9 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 	}
 
 	// Check if the file contract revision is ready for submission. Check for death.
-	if !so.RevisionConfirmed && len(so.Revision) > 0 && h.blockHeight >= so.expiration()-revisionSubmissionBuffer {
+	if !so.RevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-revisionSubmissionBuffer {
 		// Sanity check - there should be a file contract revision.
-		rtsLen := len(so.Revision)
+		rtsLen := len(so.StorageContractRevisions)
 		if rtsLen < 1 {
 			h.log.Info("transaction revision marked as unconfirmed, yet there is no transaction revision")
 			return

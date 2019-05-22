@@ -1,9 +1,11 @@
 package storagehost
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p"
 	"math/big"
 	"os"
@@ -21,6 +23,7 @@ import (
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
+	storage.StorageContractCreationMsg:      handleContractCreate,
 	storage.StorageContractUploadRequestMsg: handleUpload,
 }
 
@@ -90,14 +93,17 @@ type StorageHost struct {
 	// things for thread safety
 	lock sync.RWMutex
 	tm   tm.ThreadManager
+
+	ethBackend storage.EthBackend
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
 // manager as a member variable in side the StorageHost
-func (h *StorageHost) Start(eth Backend) {
+func (h *StorageHost) Start(eth storage.EthBackend) {
 	// TODO: Start Load all APIs and make them mapping
 	// init the account manager
 	h.am = eth.AccountManager()
+	h.ethBackend = eth
 }
 
 // New Initialize the Host, including init the structure
@@ -355,6 +361,117 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	return nil
 }
 
+func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	if !h.externalConfig().AcceptingContracts {
+		return errors.New("host is not accepting new contracts")
+	}
+
+	var req storage.ContractCreateRequest
+	if err := beginMsg.Decode(&req); err != nil {
+		return err
+	}
+
+	sc := req.StorageContract
+	clientPK := req.ClientPK
+
+	// Check host balance >= storage contract cost
+	hostAddress := sc.ValidProofOutputs[1].Address
+	stateDB, err := h.ethBackend.GetBlockChain().State()
+	if err != nil {
+		return ExtendErr("get state db error", err)
+	}
+	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
+		return ExtendErr("host balance insufficient", err)
+	}
+
+	account := accounts.Account{Address: hostAddress}
+	wallet, err := h.ethBackend.AccountManager().Find(account)
+
+	if err != nil {
+		return ExtendErr("find host account error", err)
+	}
+	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
+	if err != nil {
+		return ExtendErr("host account sign storage contract error", err)
+	}
+
+	// Ecrecover host pk for setup unlock conditions
+	// TODO host cache it's pk ?
+	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
+	if err != nil {
+		return ExtendErr("Ecrecover pk from sign error", err)
+	}
+
+	// Check an incoming storage contract matches the host's expectations for a valid contract
+	if err := VerifyStorageContract(h, &sc, &clientPK, hostPK); err != nil {
+		return ExtendErr("host verify storage contract failed", err)
+	}
+
+	sc.Signatures[1] = hostContractSign
+
+	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
+		return ExtendErr("send storage contract create sign by host", err)
+	}
+
+	var clientContractAndRevisionSigns storage.ContractCreateSignature
+	if msg, err := s.ReadMsg(); err != nil {
+		if err := msg.Decode(&clientContractAndRevisionSigns); err != nil {
+			return err
+		}
+	} else {
+		return err
+	}
+	sc.Signatures[0] = clientContractAndRevisionSigns.ContractSign
+
+	// Reconstruct revision locally by host
+	storageContractRevision := types.StorageContractRevision{
+		ParentID: sc.RLPHash(),
+		UnlockConditions: types.UnlockConditions{
+			PublicKeys: []ecdsa.PublicKey{
+				clientPK,
+				*hostPK,
+			},
+			SignaturesRequired: 2,
+		},
+		NewRevisionNumber: 1,
+
+		NewFileSize:           sc.FileSize,
+		NewFileMerkleRoot:     sc.FileMerkleRoot,
+		NewWindowStart:        sc.WindowStart,
+		NewWindowEnd:          sc.WindowEnd,
+		NewValidProofOutputs:  sc.ValidProofOutputs,
+		NewMissedProofOutputs: sc.MissedProofOutputs,
+		NewUnlockHash:         sc.UnlockHash,
+	}
+
+	// Sign revision by storage host
+	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+	if err != nil {
+		return ExtendErr("host sign revison error", err)
+	}
+
+	storageContractRevision.Signatures = [][]byte{clientContractAndRevisionSigns.RevisionSign, hostRevisionSign}
+
+	so := StorageObligation{
+		SectorRoots: nil,
+
+		ContractCost:            h.externalConfig().ContractPrice.BigIntPtr(),
+		LockedCollateral:        new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
+		PotentialStorageRevenue: big.NewInt(0),
+		RiskedCollateral:        big.NewInt(0),
+
+		NegotiationHeight:        h.blockHeight,
+		OriginStorageContract:    sc,
+		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
+	}
+
+	if err := FinalizeStorageObligation(h, so); err != nil {
+		return ExtendErr("finalize storage obligation error", err)
+	}
+
+	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
+}
+
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Read upload request
 	var uploadRequest storage.UploadRequest
@@ -371,7 +488,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	currentBlockHeight := h.blockHeight
-	currentRevision := so.Revision[len(so.Revision)-1]
+	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Process each action
 	newRoots := append([]common.Hash(nil), so.SectorRoots...)
@@ -437,7 +554,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// Verify the new revision
 	newRevenue := new(big.Int).Add(storageRevenue.Add(storageRevenue, bandwidthRevenue), settings.BaseRPCPrice.BigIntPtr())
-
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		return err
@@ -496,7 +612,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
 	so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
-	so.Revision = append(so.Revision, newRevision)
+	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	err = h.modifyStorageObligation(so, sectorsRemoved, sectorsGained, gainedSectorData)
 	if err != nil {
 		return err

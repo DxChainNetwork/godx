@@ -328,31 +328,6 @@ func (p *peer) RequestReceipts(hashes []common.Hash) error {
 	return p2p.Send(p.rw, GetReceiptsMsg, hashes)
 }
 
-func (p *peer) SendStorageContractCreation(data interface{}) error {
-	p.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
-	return p2p.Send(p.rw, storage.StorageContractCreationMsg, data)
-}
-
-func (p *peer) SendStorageContractCreationHostSign(data interface{}) error {
-	p.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
-	return p2p.Send(p.rw, storage.StorageContractCreationHostSignMsg, data)
-}
-
-func (p *peer) SendStorageContractUpdate(data interface{}) error {
-	p.Log().Debug("Sending storage contract update to storage host from storage client", "data", data)
-	return p2p.Send(p.rw, storage.StorageContractUpdateMsg, data)
-}
-
-func (p *peer) SendStorageContractUpdateHostSign(data interface{}) error {
-	p.Log().Debug("Sending storage contract update host signatures", "signature", data)
-	return p2p.Send(p.rw, storage.StorageContractUpdateHostSignMsg, data)
-}
-
-func (p *peer) SendStorageContractUploadMerkleProof(data interface{}) error {
-	p.Log().Debug("Sending storage contract upload proof", "proof", data)
-	return p2p.Send(p.rw, storage.StorageContractUploadMerkleRootProofMsg, data)
-}
-
 // Handshake executes the eth protocol handshake, negotiating version number,
 // network IDs, difficulties, head and genesis blocks.
 func (p *peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis common.Hash) error {

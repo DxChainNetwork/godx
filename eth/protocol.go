@@ -80,11 +80,6 @@ const (
 	ErrSuspendedPeer
 )
 
-const (
-	StorageContractContextKey         = "storage_contract"
-	StorageContractRevisionContextKey = "storage_contract_revision"
-)
-
 func (e errCode) String() string {
 	return errorToString[int(e)]
 }

@@ -14,6 +14,7 @@ type EthBackend interface {
 	GetStorageHostSetting(peerID string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
+	GetBlockChain() *core.BlockChain
 	SetupConnection(hostEnodeUrl string) (*Session, error)
 	Disconnect(hostEnodeUrl string) error
 

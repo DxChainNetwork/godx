@@ -1,34 +1,11 @@
 package storageclient
 
 import (
-	"crypto/ecdsa"
 	"errors"
-	"io"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rlp"
 )
-
-// LoopFormContractRequest contains the request parameters for RPCLoopFormContract.
-type FormContractRequest struct {
-	StorageContract types.StorageContract
-	RenterKey       ecdsa.PublicKey
-}
-
-func (fcr *FormContractRequest) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	if err := s.Decode(&fcr); err != nil {
-		return err
-	}
-	log.Debug("rlp decode form contract request", "encode_size", rlp.ListSize(size))
-	return nil
-}
-
-func (fcr *FormContractRequest) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, fcr)
-}
 
 // calculate renter and host collateral
 func RenterPayoutsPreTax(host HostDBEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (renterPayout, hostPayout, hostCollateral *big.Int, err error) {
@@ -91,7 +68,6 @@ func NewRevision(current types.StorageContractRevision, cost *big.Int) types.Sto
 
 	// move missed payout from renter to void
 	rev.NewMissedProofOutputs[0].Value = current.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
-	rev.NewMissedProofOutputs[2].Value = current.NewMissedProofOutputs[2].Value.Add(current.NewMissedProofOutputs[2].Value, cost)
 
 	// increment revision number
 	rev.NewRevisionNumber++

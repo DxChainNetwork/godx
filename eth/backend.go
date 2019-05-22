@@ -532,6 +532,7 @@ func (s *Ethereum) EthVersion() int                    { return int(s.protocolMa
 func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *Ethereum) GetCurrentBlockHeight() uint64      { return s.blockchain.CurrentHeader().Number.Uint64() }
+func (s *Ethereum) GetBlockChain() *core.BlockChain    { return s.blockchain }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
