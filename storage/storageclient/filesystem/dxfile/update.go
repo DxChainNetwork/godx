@@ -22,9 +22,6 @@ const (
 	OpInsertFile = "insert_file" // name of the operation to create or update a dxfile
 )
 
-// TODO: Refactor the apply update to write page updates. Each page has next Offset
-// 		 Each read will stop at next Offset == -1. Call it paged file.
-
 // dxfileUpdate defines the update interface for dxfile update.
 // Two types of update is supported: insertUpdate and deleteUpdate
 type dxfileUpdate interface {
