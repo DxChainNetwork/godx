@@ -113,16 +113,17 @@ func (df *DxFile) goodSectors(segmentIndex int, offlineMap map[enode.ID]bool, go
 	return uint32(numSectorsGoodForRenew), uint32(numSectorsGoodForUpload)
 }
 
-// CmpHealthPriority compare two health. The cmpHealth result returns the priority the health related Segment should be fixed
+// CmpHealthPriority compare two health. The compare result returns the priority the health related Segment should be fixed
 // The priority is determined by the follows:
 // When the file is not recoverable from contract (health 0~99), it has the highest property to recover from disk
 // When the file is recoverable (health 100~199), it is then prioritized.
 // When the file is totally health, there is no need to recover.
 // Thus the priority of recovery is as follows:
 // 200 < 100 < 150 < 199 < 0 < 50 < 99
-// If h1 == h2, return 0
-// If h1 < h2, return -1
-// If h1 > h2, return 1
+// In the following expression p(h) means the priority of the health
+// If p(h1) == p(h2), return 0
+// If p(h1) < p(h2), return -1
+// If p(h1) > p(h2), return 1
 func CmpHealthPriority(h1, h2 uint32) int {
 	if h1 == h2 {
 		return 0
