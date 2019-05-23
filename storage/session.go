@@ -7,8 +7,9 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/p2p"
 )
 
 const (
@@ -19,14 +20,16 @@ const (
 	StorageContractCreationClientRevisionSignMsg = 0x13
 	StorageContractCreationHostRevisionSignMsg   = 0x14
 
-	// Upload/Download Data Segment Code Msg
+	// Upload Data Segment Code Msg
 	StorageContractUploadRequestMsg         = 0x15
 	StorageContractUploadMerkleRootProofMsg = 0x16
 	StorageContractUploadClientRevisionMsg  = 0x17
 	StorageContractUploadHostRevisionMsg    = 0x18
-	StorageContractDownloadRequestMsg       = 0x19
-	StorageContractDownloadDataMsg          = 0x20
-	StorageContractDownloadHostRevisionMsg  = 0x21
+
+	// Download Data Segment Code Msg
+	StorageContractDownloadRequestMsg      = 0x19
+	StorageContractDownloadDataMsg         = 0x20
+	StorageContractDownloadHostRevisionMsg = 0x21
 )
 
 type SessionSet struct {
@@ -137,6 +140,8 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 	return p2p.Send(s.rw, StorageContractCreationHostRevisionSignMsg, data)
 }
 
+// upload protocol
+
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
 	s.Log().Debug("Sending storage contract upload request", "request", data)
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
@@ -155,6 +160,18 @@ func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) 
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
 	s.Log().Debug("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
+}
+
+// download protocol
+
+func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
+	s.Log().Debug("Sending storage contract download request", "request", data)
+	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
+}
+
+func (s *Session) SendStorageContractDownloadData(data interface{}) error {
+	s.Log().Debug("Sending storage contract download data", "data", data)
+	return p2p.Send(s.rw, StorageContractDownloadDataMsg, data)
 }
 
 func (s *Session) ReadMsg() (*p2p.Msg, error) {
