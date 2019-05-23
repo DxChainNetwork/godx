@@ -66,9 +66,6 @@ type Backend interface {
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
-	// TODO (jacky): File Management Related
-
-	// TODO (jacky): File Download Related
 
 	// TODO (jacky): File Upload Related
 
@@ -81,7 +78,14 @@ type StorageClient struct {
 	contractManager    *contractManager
 	storageHostManager *storagehostmanager.StorageHostManager
 
-	// TODO (jacky): workerpool
+	// Download management. The heap has a separate mutex because it is always
+	// accessed in isolation.
+	downloadHeapMu sync.Mutex           // Used to protect the downloadHeap.
+	downloadHeap   *downloadSegmentHeap // A heap of priority-sorted segments to download.
+	newDownloads   chan struct{}        // Used to notify download loop that new downloads are available.
+
+	// List of workers that can be used for uploading and/or downloading.
+	workerPool map[common.Hash]*worker
 
 	// Cache the hosts from the last price estimation result
 	lastEstimationStorageHost []StorageHostEntry
@@ -114,6 +118,9 @@ func New(persistDir string) (*StorageClient, error) {
 	sc := &StorageClient{
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
+		newDownloads:   make(chan struct{}, 1),
+		downloadHeap:   new(downloadSegmentHeap),
+		workerPool:     make(map[common.Hash]*worker),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
