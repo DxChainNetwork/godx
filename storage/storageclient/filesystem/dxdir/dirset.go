@@ -7,8 +7,8 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -19,8 +19,8 @@ const threadDepth = 3
 type (
 	// DirSet is the manager of all DxDirs
 	DirSet struct {
-		rootDir string
-		dirMap  map[DxPath]*dirSetEntry
+		rootDir storage.SysPath
+		dirMap  map[storage.DxPath]*dirSetEntry
 
 		lock sync.Mutex
 		wal  *writeaheadlog.Wal
@@ -53,17 +53,17 @@ type (
 
 // NewDirSet creates a New DirSet with the given parameters. If the root DxDir not exist,
 // create a new DxDir
-func NewDirSet(rootDir string, wal *writeaheadlog.Wal) (*DirSet, error) {
+func NewDirSet(rootDir storage.SysPath, wal *writeaheadlog.Wal) (*DirSet, error) {
 	ds := &DirSet{
 		rootDir: rootDir,
-		dirMap:  make(map[DxPath]*dirSetEntry),
+		dirMap:  make(map[storage.DxPath]*dirSetEntry),
 		wal:     wal,
 	}
-	exist := ds.exists("")
+	exist := ds.exists(storage.RootDxPath())
 	if exist {
 		return ds, nil
 	}
-	_, err := New("", dirPath(ds.rootDir), ds.wal)
+	_, err := New(storage.RootDxPath(), ds.rootDir, ds.wal)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func NewDirSet(rootDir string, wal *writeaheadlog.Wal) (*DirSet, error) {
 }
 
 // NewDxDir creates a DxDir. Return a DirSetEntryWithID that extends DxDir and the error
-func (ds *DirSet) NewDxDir(path DxPath) (*DirSetEntryWithID, error) {
+func (ds *DirSet) NewDxDir(path storage.DxPath) (*DirSetEntryWithID, error) {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 	// Check the directory file already exists
@@ -81,7 +81,7 @@ func (ds *DirSet) NewDxDir(path DxPath) (*DirSetEntryWithID, error) {
 		return nil, os.ErrExist
 	}
 	// create the dxdir
-	d, err := New(path, ds.dirPath(path), ds.wal)
+	d, err := New(path, ds.rootDir, ds.wal)
 	if err != nil {
 		return nil, err
 	}
@@ -107,18 +107,18 @@ func (ds *DirSet) newDirSetEntry(d *DxDir) *dirSetEntry {
 }
 
 // Open opens a New DxDir. If file not exist, return an os file Not Exist error
-func (ds *DirSet) Open(path DxPath) (*DirSetEntryWithID, error) {
+func (ds *DirSet) Open(path storage.DxPath) (*DirSetEntryWithID, error) {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 	return ds.open(path)
 }
 
 // open opens the DxDir with path, add the New threadInfo to the entry
-func (ds *DirSet) open(path DxPath) (*DirSetEntryWithID, error) {
+func (ds *DirSet) open(path storage.DxPath) (*DirSetEntryWithID, error) {
 	var entry *dirSetEntry
 	entry, exist := ds.dirMap[path]
 	if !exist {
-		d, err := load(ds.dirPath(path), ds.wal)
+		d, err := load(ds.dirFilePath(path), ds.wal)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +164,7 @@ func (ds *DirSet) closeEntry(entry *DirSetEntryWithID) {
 
 // Exists checks whether DxDir with path exists. If file not exist, return
 // an os File Not Exist error
-func (ds *DirSet) Exists(path DxPath) bool {
+func (ds *DirSet) Exists(path storage.DxPath) bool {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 
@@ -172,12 +172,12 @@ func (ds *DirSet) Exists(path DxPath) bool {
 }
 
 // exists checks whether DxDir with path exist
-func (ds *DirSet) exists(path DxPath) bool {
+func (ds *DirSet) exists(path storage.DxPath) bool {
 	_, exists := ds.dirMap[path]
 	if exists {
 		return true
 	}
-	_, err := os.Stat(ds.dirFilePath(path))
+	_, err := os.Stat(string(ds.dirFilePath(path)))
 	if err == nil {
 		return true
 	}
@@ -185,7 +185,7 @@ func (ds *DirSet) exists(path DxPath) bool {
 }
 
 // Delete delete the dxdir. If file not exist, return os.ErrNotExist
-func (ds *DirSet) Delete(path DxPath) error {
+func (ds *DirSet) Delete(path storage.DxPath) error {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 	// check whether exists
@@ -210,7 +210,7 @@ func (ds *DirSet) Delete(path DxPath) error {
 }
 
 // UpdateMetadata update the metadata of the dxdir specified by DxPath
-func (ds *DirSet) UpdateMetadata(path DxPath, metadata Metadata) error {
+func (ds *DirSet) UpdateMetadata(path storage.DxPath, metadata Metadata) error {
 	ds.lock.Lock()
 	defer ds.lock.Unlock()
 	// Check whether the dxdir exists
@@ -227,16 +227,8 @@ func (ds *DirSet) UpdateMetadata(path DxPath, metadata Metadata) error {
 	return entry.UpdateMetadata(metadata)
 }
 
-func (ds *DirSet) dirFilePath(path DxPath) string {
-	if len(path) == 0 {
-		return filepath.Join(string(ds.rootDir), dirFileName)
-	}
-	return filepath.Join(string(ds.rootDir), string(path), dirFileName)
-}
-
-// dirPath convert the DxPath concatenate with root path to dirPath
-func (ds *DirSet) dirPath(path DxPath) dirPath {
-	return dirPath(filepath.Join(ds.rootDir, string(path)))
+func (ds *DirSet) dirFilePath(path storage.DxPath) storage.SysPath {
+	return ds.rootDir.Join(path, dirFileName)
 }
 
 // newThread create the threadInfo by calling runtime.Caller
