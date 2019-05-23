@@ -77,6 +77,17 @@ func (db *DB) DeleteHeaderAndRoots(id storage.ContractID) (err error) {
 	return
 }
 
+// FetchAllContractID will fetch all contract ID stored in the contract set db
+func (db *DB) FetchAllContractID() (ids []storage.ContractID) {
+	iter := db.lvl.NewIterator(nil, nil)
+	for iter.Next() {
+		id, _ := splitKey(iter.Key())
+		ids = append(ids, id)
+	}
+
+	return
+}
+
 // FetchAll will fetch all contract header and merkle roots information
 func (db *DB) FetchAll() (chs []ContractHeader, allRoots [][]common.Hash, err error) {
 	iter := db.lvl.NewIterator(nil, nil)
@@ -315,5 +326,13 @@ func makeKey(id storage.ContractID, field string) (key []byte, err error) {
 
 	// make the key
 	key = append(key, append(id[:], field...)...)
+	return
+}
+
+// splitKey will split the storage contract id and field
+func splitKey(key []byte) (id storage.ContractID, field string) {
+	copy(id[:], key[:len(id)])
+	field = string(key[len(id):])
+
 	return
 }

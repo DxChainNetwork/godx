@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
@@ -32,18 +31,11 @@ type StorageContractSet struct {
 	db               *DB
 	lock             sync.Mutex
 	rl               *RateLimit
-	wal              *writeaheadlog.Wal
 }
 
 func New(persistDir string) (scs *StorageContractSet, err error) {
 	// initialize the directory
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
-		return
-	}
-
-	// initialize wal
-	wal, txns, err := writeaheadlog.New(filepath.Join(persistDir, persistWalName))
-	if err != nil {
 		return
 	}
 
@@ -59,13 +51,12 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 		hostToContractID: make(map[enode.ID]storage.ContractID),
 		persistDir:       persistDir,
 		db:               db,
-		wal:              wal,
 	}
 
 	// TODO (mzhang): Set rate limit
 
 	// load the contracts from the database
-	if err = scs.loadPriorContract(txns); err != nil {
+	if err = scs.loadContract(); err != nil {
 		return
 	}
 
@@ -100,7 +91,6 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 		header:      ch,
 		merkleRoots: merkleRoots,
 		db:          scs.db,
-		wal:         scs.wal,
 	}
 
 	// get the contract meta data
@@ -212,14 +202,39 @@ func (scs *StorageContractSet) RetrieveAllMetaData() (cms []storage.ContractMeta
 
 // loadContract will load contracts information from the database
 // as well as applying un-applied transactions read from the writeaheadlog file
-func (scs *StorageContractSet) loadPriorContract(txns []*writeaheadlog.Transaction) (err error) {
-	// 1. load storage header from the database
+func (scs *StorageContractSet) loadContract() (err error) {
+	// get all the contract id
+	ids := scs.db.FetchAllContractID()
 
-	// 2. load merkleRoots from the database
+	// iterate through all contract id
+	var ch ContractHeader
+	var roots []common.Hash
 
-	// 3. apply un-applied WAL transaction
+	for _, id := range ids {
+		if ch, err = scs.db.FetchContractHeader(id); err != nil {
+			return
+		}
 
-	// 4. update the contract set
+		if roots, err = scs.db.FetchMerkleRoots(id); err != nil {
+			return
+		}
+
+		// load merkle roots
+		mr := loadMerkleRoots(scs.db, roots)
+
+		// initialize contract
+		c := &Contract{
+			header:      ch,
+			merkleRoots: mr,
+			db:          scs.db,
+		}
+
+		// update contract set
+		scs.contracts[id] = c
+		scs.hostToContractID[c.header.EnodeID] = c.header.ID
+
+		return
+	}
 
 	return
 }

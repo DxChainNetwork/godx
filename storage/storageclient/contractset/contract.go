@@ -5,10 +5,9 @@
 package contractset
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
 	"sync"
-
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 )
 
 // ************************************************************************
@@ -24,14 +23,31 @@ type Contract struct {
 	header      ContractHeader
 	merkleRoots *merkleRoots
 
-	// whenever changes are going to be made on a contract
-	// the changes will be saved in this field first
-	// in case power-off is encountered. Prevent data lose
-	unappliedTxns []*writeaheadlog.Transaction
-
 	db   *DB
-	wal  *writeaheadlog.Wal
 	lock sync.Mutex
+}
+
+func (c *Contract) UpdateStatus(status storage.ContractStatus) (err error) {
+	// get the contract header
+	c.headerLock.Lock()
+	contractHeader := c.header
+	c.headerLock.Unlock()
+
+	// update the status field
+	contractHeader.Status = status
+
+	// update db
+	// TODO (mzhang): implement db update methods, instead of storing it directly
+	if err = c.db.StoreContractHeader(contractHeader); err != nil {
+		return fmt.Errorf("failed to save the status into db: %s", err.Error())
+	}
+
+	// update the contract
+	c.headerLock.Lock()
+	c.header = contractHeader
+	c.headerLock.Unlock()
+
+	return
 }
 
 // Metadata will generate contract meta data based on the contract information

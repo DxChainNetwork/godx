@@ -5,17 +5,7 @@
 package contractset
 
 const (
-	contractFileExtension = ".contract"
-	contractSetWal        = "storagecontractset.wal"
-)
-
-const (
-	remainingFile = -1
-)
-
-const (
-	persistDBName  = "contractset.db"
-	persistWalName = "contractset.wal"
+	persistDBName = "contractset.db"
 
 	dbContractHeader = ":contractheader"
 	dbMerkleRoot     = ":roots"

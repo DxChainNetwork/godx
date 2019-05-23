@@ -71,6 +71,17 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 	}
 }
 
+func loadMerkleRoots(db *DB, roots []common.Hash) (mr *merkleRoots) {
+	// initialize merkle roots
+	mr = &merkleRoots{
+		db: db,
+	}
+
+	mr.appendRootMemory(roots...)
+
+	return
+}
+
 // TODO (mzhang): WIP
 func cachedMerkleRoot(roots []common.Hash) (root common.Hash) {
 	return
