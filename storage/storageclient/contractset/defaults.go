@@ -5,7 +5,8 @@
 package contractset
 
 const (
-	persistDBName = "contractset.db"
+	persistDBName  = "contractset.db"
+	persistWalName = "contractset.wal"
 
 	dbContractHeader = ":contractheader"
 	dbMerkleRoot     = ":roots"
@@ -21,6 +22,11 @@ const (
 	SectorSize  = uint64(1 << 22) // 4 MiB
 	SegmentSize = 64
 )
+
+//const (
+//	contractHeaderUpdate = "contractheader"
+//	merkleRootUpdate     = "roots"
+//)
 
 var sectorHeight = func() uint64 {
 	height := uint64(0)

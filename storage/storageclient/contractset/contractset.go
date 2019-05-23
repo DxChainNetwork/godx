@@ -7,12 +7,14 @@ package contractset
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // ************************************************************************
@@ -31,6 +33,7 @@ type StorageContractSet struct {
 	db               *DB
 	lock             sync.Mutex
 	rl               *RateLimit
+	wal              *writeaheadlog.Wal
 }
 
 func New(persistDir string) (scs *StorageContractSet, err error) {
@@ -46,17 +49,24 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 		return
 	}
 
+	// initialize wal
+	wal, walTxns, err := writeaheadlog.New(filepath.Join(persistDir, persistWalName))
+	if err != nil {
+		return
+	}
+
 	scs = &StorageContractSet{
 		contracts:        make(map[storage.ContractID]*Contract),
 		hostToContractID: make(map[enode.ID]storage.ContractID),
 		persistDir:       persistDir,
 		db:               db,
+		wal:              wal,
 	}
 
 	// TODO (mzhang): Set rate limit
 
 	// load the contracts from the database
-	if err = scs.loadContract(); err != nil {
+	if err = scs.loadContract(walTxns); err != nil {
 		return
 	}
 
@@ -91,6 +101,7 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 		header:      ch,
 		merkleRoots: merkleRoots,
 		db:          scs.db,
+		wal:         scs.wal,
 	}
 
 	// get the contract meta data
@@ -200,9 +211,13 @@ func (scs *StorageContractSet) RetrieveAllMetaData() (cms []storage.ContractMeta
 	return
 }
 
-// loadContract will load contracts information from the database
-// as well as applying un-applied transactions read from the writeaheadlog file
-func (scs *StorageContractSet) loadContract() (err error) {
+// TODO (mzhang): view
+// TODO (mzhang): viewAll
+// TODO (mzhang): close
+
+// loadContract will load contracts information from the database, it will also
+// filter out the un-applied transaction for the particular contract
+func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction) (err error) {
 	// get all the contract id
 	ids := scs.db.FetchAllContractID()
 
@@ -211,10 +226,12 @@ func (scs *StorageContractSet) loadContract() (err error) {
 	var roots []common.Hash
 
 	for _, id := range ids {
+		// get the contract header based on the contract id
 		if ch, err = scs.db.FetchContractHeader(id); err != nil {
 			return
 		}
 
+		// get the merkle roots based on the contract id
 		if roots, err = scs.db.FetchMerkleRoots(id); err != nil {
 			return
 		}
@@ -222,11 +239,14 @@ func (scs *StorageContractSet) loadContract() (err error) {
 		// load merkle roots
 		mr := loadMerkleRoots(scs.db, roots)
 
+		// TODO (mzhang): un-applied WAL transaction will be ignored
+
 		// initialize contract
 		c := &Contract{
 			header:      ch,
 			merkleRoots: mr,
 			db:          scs.db,
+			wal:         scs.wal,
 		}
 
 		// update contract set

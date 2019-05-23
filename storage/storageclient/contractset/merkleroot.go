@@ -28,6 +28,23 @@ func newMerkleRoots(db *DB) (mk *merkleRoots) {
 	}
 }
 
+func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
+	// input validation
+	if len(roots) != merkleRootsPerCache {
+		log.Crit("failed to create the cachedSubTree using the root provided")
+	}
+
+	// create the cachedSubTree
+	return &cachedSubTree{
+		height: int(merkleRootsCacheHeight + sectorHeight),
+		sum:    cachedMerkleRoot(roots),
+	}
+}
+
+func (mr *merkleRoots) insert(index int, root common.Hash) (err error) {
+	return
+}
+
 func (mr *merkleRoots) push(id storage.ContractID, root common.Hash) (err error) {
 	// validation
 	if len(mr.uncachedRoots) == merkleRootsPerCache {
@@ -46,6 +63,17 @@ func (mr *merkleRoots) push(id storage.ContractID, root common.Hash) (err error)
 	return
 }
 
+func loadMerkleRoots(db *DB, roots []common.Hash) (mr *merkleRoots) {
+	// initialize merkle roots
+	mr = &merkleRoots{
+		db: db,
+	}
+
+	mr.appendRootMemory(roots...)
+
+	return
+}
+
 // appendRootMemory will store the root in the uncached roots field
 // if the number of uncached roots reached a limit, then those
 // roots will be build up to a cachedSubTree
@@ -58,31 +86,12 @@ func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) {
 	}
 }
 
-func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
-	// input validation
-	if len(roots) != merkleRootsPerCache {
-		log.Crit("failed to create the cachedSubTree using the root provided")
-	}
-
-	// create the cachedSubTree
-	return &cachedSubTree{
-		height: int(merkleRootsCacheHeight + sectorHeight),
-		sum:    cachedMerkleRoot(roots),
-	}
-}
-
-func loadMerkleRoots(db *DB, roots []common.Hash) (mr *merkleRoots) {
-	// initialize merkle roots
-	mr = &merkleRoots{
-		db: db,
-	}
-
-	mr.appendRootMemory(roots...)
-
-	return
-}
-
 // TODO (mzhang): WIP
 func cachedMerkleRoot(roots []common.Hash) (root common.Hash) {
 	return
+}
+
+// len returns the current number of merkle roots inserted
+func (mr *merkleRoots) len() int {
+	return mr.numMerkleRoots
 }
