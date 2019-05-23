@@ -12,54 +12,54 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
+// calculateEvaluationFunc will generate the function that returns the storage host evaluation
+// for each factor
 func (hm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) storagehosttree.EvaluationFunc {
 	return func(info storage.HostInfo) storagehosttree.HostEvaluation {
 		return storagehosttree.EvaluationCriteria{
-			AgeAdjustment:              hm.ageAdjustment(info),
-			BurnAdjustment:             1,
-			DepositAdjustment:          hm.depositAdjustment(info, rent),
-			InteractionAdjustment:      hm.interactionAdjustment(info),
-			PriceAdjustment:            hm.priceAdjustment(info, rent),
-			StorageRemainingAdjustment: hm.storageRemainingAdjustment(info),
-			UptimeAdjustment:           hm.uptimeAdjustment(info),
+			PresenceFactor:         hm.presenceFactorCalc(info),
+			DepositFactor:          hm.depositFactorCalc(info, rent),
+			InteractionFactor:      hm.interactionFactorCalc(info),
+			ContractPriceFactor:    hm.contractPriceFactorCalc(info, rent),
+			StorageRemainingFactor: hm.storageRemainingFactorCalc(info),
+			UptimeFactor:           hm.uptimeFactorCalc(info),
 		}
 	}
 }
 
-func (hm *StorageHostManager) ageAdjustment(info storage.HostInfo) float64 {
-	// TODO (mzhang): the value need to be discussed with the team
+// presenceFactorCalc calculates the factor value based on the existence of the
+// storage host. The earlier it was discovered, the presence factor will be higher
+func (hm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 {
 	var base float64 = 1
-	if hm.blockHeight >= info.FirstSeen {
-		age := hm.blockHeight - info.FirstSeen
-		if age < 12000 {
-			base = base * 2 / 3
-		}
-		if age < 6000 {
-			base = base / 2
-		}
-		if age < 4000 {
-			base = base / 2
-		}
-		if age < 2000 {
-			base = base / 2
-		}
-		if age < 1000 {
-			base = base / 3
-		}
-		if age < 576 {
-			base = base / 3
-		}
-		if age < 288 {
-			base = base / 3
-		}
-		if age < 144 {
-			base = base / 3
-		}
+
+	switch presence := hm.blockHeight - info.FirstSeen; {
+	case presence < 0:
+		return base
+	case presence < 144:
+		return base / 972
+	case presence < 288:
+		return base / 324
+	case presence < 576:
+		return base / 108
+	case presence < 1000:
+		return base / 36
+	case presence < 2000:
+		return base / 12
+	case presence < 4000:
+		return base / 6
+	case presence < 6000:
+		return base / 3
+	case presence < 12000:
+		return base * 2 / 3
 	}
+
 	return base
 }
 
-func (hm *StorageHostManager) depositAdjustment(info storage.HostInfo, rent storage.RentPayment) float64 {
+// depostFactor calculates the factor value based on the storage host's deposit setting. The higher
+// the deposit is, the higher evaluation it will get
+func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
+
 	// make sure RentPayment's fields are non zeros
 	rentPaymentValidation(storage.RentPayment{})
 
@@ -95,17 +95,18 @@ func (hm *StorageHostManager) depositAdjustment(info storage.HostInfo, rent stor
 	return smallWeight * largeWeight
 }
 
-func (hm *StorageHostManager) interactionAdjustment(info storage.HostInfo) float64 {
+// interactionFactorCalc calculates the factor value based on the historical success interactions
+// and failed interactions. More success interactions will cause higher evaluation
+func (hm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float64 {
 	hs := info.HistoricSuccessfulInteractions + 30
 	hf := info.HistoricFailedInteractions + 1
 	ratio := hs / (hs + hf)
 	return math.Pow(ratio, interactionExponentiation)
 }
 
-func (hm *StorageHostManager) priceAdjustment(info storage.HostInfo, rent storage.RentPayment) float64 {
-	// TODO (mzhang): gas estimation is ignored for now, no big effect on the result. Is it necessary
-	// to add it back?
-
+// contractPriceFactorCalc calculates the factor value based on the contract price that storage host requested
+// the lower the price is, the higher the storage host evaluation will be
+func (hm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
 	// make sure the rent has non-zero fields
 	rentPaymentValidation(rent)
 
@@ -148,45 +149,39 @@ func (hm *StorageHostManager) priceAdjustment(info storage.HostInfo, rent storag
 	return 1 / (smallWeight * largeWeight)
 }
 
-func (hm *StorageHostManager) storageRemainingAdjustment(info storage.HostInfo) float64 {
+// storageRemainingFactorCalc calculates the factor value based on the storage remaining, the more storage
+// space the storage host remained, higher evaluation it will got
+func (hm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo) float64 {
 	var base float64 = 1
 
-	if info.RemainingStorage < 100*minStorage {
-		base = base / 2
+	switch rs := info.RemainingStorage; {
+	case rs < minStorage:
+		return base / 1024
+	case rs < 2*minStorage:
+		return base / 512
+	case rs < 3*minStorage:
+		return base / 256
+	case rs < 5*minStorage:
+		return base / 128
+	case rs < 10*minStorage:
+		return base / 64
+	case rs < 15*minStorage:
+		return base / 32
+	case rs < 20*minStorage:
+		return base / 16
+	case rs < 40*minStorage:
+		return base / 8
+	case rs < 80*minStorage:
+		return base / 4
+	case rs < 100*minStorage:
+		return base / 2
 	}
-	if info.RemainingStorage < 80*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 40*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 20*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 15*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 10*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 5*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 3*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < 2*minStorage {
-		base = base / 2
-	}
-	if info.RemainingStorage < minStorage {
-		base = base / 2
-	}
+
 	return base
 }
 
-// uptimeAdjustment will punish the storage host who are frequently been offline
-func (hm *StorageHostManager) uptimeAdjustment(info storage.HostInfo) float64 {
-
+// uptimeFactorCalc will punish the storage host who are frequently been offline
+func (hm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
 	switch length := len(info.ScanRecords); length {
 	case 0:
 		return 0.25
@@ -208,6 +203,7 @@ func (hm *StorageHostManager) uptimeAdjustment(info storage.HostInfo) float64 {
 	}
 }
 
+// uptimeEvaluation will evaluate the uptime the storage host has
 func (hm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 	downtime := info.HistoricDowntime
 	uptime := info.HistoricUptime
@@ -253,6 +249,8 @@ func (hm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 	return math.Pow(uptimeRatio, exp)
 }
 
+// rentPaymentValidation will validate the rent payment provided by the storage client
+// eliminate any zero values by changing them to one
 func rentPaymentValidation(rent storage.RentPayment) {
 	if rent.StorageHosts == 0 {
 		rent.StorageHosts = 1

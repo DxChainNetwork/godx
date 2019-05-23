@@ -12,13 +12,13 @@ import (
 // Filter defines IP filter map. For any IP addresses with same IP Network will be marked
 // and filter needed. IP address can be extracted from the enode information
 type Filter struct {
-	filter map[string]struct{}
+	filterPool map[string]struct{}
 }
 
 // NewFilter will create and initialize a Filter object
 func NewFilter() *Filter {
 	return &Filter{
-		filter: make(map[string]struct{}),
+		filterPool: make(map[string]struct{}),
 	}
 }
 
@@ -30,7 +30,7 @@ func (f *Filter) Add(ip string) {
 	}
 
 	// add the IP Network to the filter
-	f.filter[ipnet.String()] = struct{}{}
+	f.filterPool[ipnet.String()] = struct{}{}
 }
 
 // Filtered will check if an IP address uses a IP Network that is already in used
@@ -41,7 +41,7 @@ func (f *Filter) Filtered(ip string) bool {
 		return false
 	}
 
-	if _, exists := f.filter[ipnet.String()]; exists {
+	if _, exists := f.filterPool[ipnet.String()]; exists {
 		return true
 	}
 
@@ -50,7 +50,7 @@ func (f *Filter) Filtered(ip string) bool {
 
 // Reset will clear the filter
 func (f *Filter) Reset() {
-	f.filter = make(map[string]struct{})
+	f.filterPool = make(map[string]struct{})
 }
 
 // IPNetwork will return the IP network used by an IP address

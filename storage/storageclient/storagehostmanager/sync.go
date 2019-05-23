@@ -1,12 +1,19 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file
+
 package storagehostmanager
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
-func (shm *StorageHostManager) SubscribeChainChangEvent() {
+// subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
+// once received, a function will be triggered to analyze those blocks
+func (shm *StorageHostManager) subscribeChainChangEvent() {
 	if err := shm.tm.Add(); err != nil {
 		return
 	}
@@ -18,18 +25,21 @@ func (shm *StorageHostManager) SubscribeChainChangEvent() {
 	for {
 		select {
 		case change := <-chainChanges:
-			go shm.analyzeChainEventChange(change)
+			shm.analyzeChainEventChange(change)
 		case <-shm.tm.StopChan():
 			return
 		}
 	}
 }
 
+// analyzeChainEventChange will analyze block changing event and update the corresponded
+// storage host manager field (blockheight)
 func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEvent) {
 
 	revert := len(change.RevertedBlockHashes)
 	apply := len(change.AppliedBlockHashes)
 
+	// TODO (mzhang): delete those Println after finished debugging
 	fmt.Println("Applied Blocks", apply)
 	fmt.Println("Reverted Blocks", revert)
 
@@ -48,6 +58,9 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	}
 
 	for i := 0; i < apply; i++ {
+
+		// TODO (mzhang): delete those Println after finished debugging
+
 		fmt.Println(shm.blockHeight)
 		shm.lock.Lock()
 		shm.blockHeight++
@@ -67,8 +80,10 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	}
 }
 
-// TODO (mzhang): wait for the storage host announce data structure
+// analyzeTransactions will get the transaction from the block, analyze them
+// to acquire any host announcement
 func (shm *StorageHostManager) analyzeTransactions(txs types.Transactions) {
+	// TODO (mzhang): wait for the storage host announce data structure
 	//for _, tx := range txs {
 	//
 	//}

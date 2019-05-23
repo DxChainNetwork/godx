@@ -6,10 +6,11 @@ package core
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 	"sync"
 
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -39,6 +40,7 @@ type Backend interface {
 
 type MaintenanceSystem struct {
 	backend Backend
+	state   *state.StateDB
 
 	// Subscription for new canonical chain event
 	canonicalChainSub event.Subscription
@@ -49,9 +51,10 @@ type MaintenanceSystem struct {
 	wg               sync.WaitGroup
 }
 
-func NewMaintenanceSystem(backend Backend) *MaintenanceSystem {
+func NewMaintenanceSystem(backend Backend, state *state.StateDB) *MaintenanceSystem {
 	m := &MaintenanceSystem{
 		backend:          backend,
+		state:            state,
 		canonicalChainCh: make(chan CanonicalChainHeadEvent, canonicalChainEvChanHeadSize),
 		quitCh:           make(chan struct{}),
 	}
@@ -70,7 +73,7 @@ func (m *MaintenanceSystem) maintenanceLoop() {
 		select {
 		case ev := <-m.canonicalChainCh:
 			db := m.backend.ChainDb()
-			err := applyMaintenance(db, ev.Block)
+			err := m.applyMaintenance(db, ev.Block)
 			if err != nil {
 				log.Error("failed to apply maintenace", "error", err)
 				return
@@ -92,7 +95,7 @@ func (m *MaintenanceSystem) Stop() {
 	m.wg.Wait()
 }
 
-func applyMissedStorageProof(db ethdb.Database, height uint64, fcid common.Hash) error {
+func (m *MaintenanceSystem) applyMissedStorageProof(db ethdb.Database, height uint64, fcid common.Hash) error {
 
 	// check if fileContract of this fcid exists
 	fc, err := vm.GetStorageContract(db, fcid)
@@ -112,13 +115,20 @@ func applyMissedStorageProof(db ethdb.Database, height uint64, fcid common.Hash)
 	vm.DeleteStorageContract(db, fcid)
 	vm.DeleteExpireStorageContract(db, fcid, height)
 
+	// effect the missed proof output
+	mpos := fc.MissedProofOutputs
+	for _, mpo := range mpos {
+		m.state.AddBalance(mpo.Address, mpo.Value)
+	}
+	m.state.Finalise(true)
+
 	return nil
 }
 
 // applyStorageContractMaintenance looks for all of the file contracts that have
 // expired without an appropriate storage proof, and calls 'applyMissedProof'
 // for the file contract.
-func applyStorageContractMaintenance(db ethdb.Database, block *types.Block) error {
+func (m *MaintenanceSystem) applyStorageContractMaintenance(db ethdb.Database, block *types.Block) error {
 	ldb, ok := db.(*ethdb.LDBDatabase)
 	if !ok {
 		return errors.New("not persistent db")
@@ -134,7 +144,7 @@ func applyStorageContractMaintenance(db ethdb.Database, block *types.Block) erro
 			log.Warn("split empty file contract ID")
 			continue
 		}
-		err := applyMissedStorageProof(db, uint64(height), fcID)
+		err := m.applyMissedStorageProof(db, uint64(height), fcID)
 		if err != nil {
 			return err
 		}
@@ -143,8 +153,8 @@ func applyStorageContractMaintenance(db ethdb.Database, block *types.Block) erro
 	return nil
 }
 
-func applyMaintenance(db ethdb.Database, block *types.Block) error {
-	err := applyStorageContractMaintenance(db, block)
+func (m *MaintenanceSystem) applyMaintenance(db ethdb.Database, block *types.Block) error {
+	err := m.applyStorageContractMaintenance(db, block)
 	if err != nil {
 		return err
 	}

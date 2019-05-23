@@ -9,22 +9,33 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// node defines the storage host tree node
 type node struct {
 	parent *node
 	left   *node
 	right  *node
 
-	count     int
-	occupied  bool
+	// count includes the amount of storage hosts including the sum of all its' children
+	// and the node itself
+	count int
+
+	// indicates if the node contained any storage host information
+	occupied bool
+
+	// total evaluation of the storage hosts, including the sum of all its' child's
+	// evaluation and the evaluation of node it self
 	evalTotal common.BigInt
 	entry     *nodeEntry
 }
 
+// nodeEntry is the information stored in a storage host tree node
 type nodeEntry struct {
 	storage.HostInfo
 	eval common.BigInt
 }
 
+// nodeEntries defines a collection of node entry that implemented the sorting methods
+// the sorting will be ranked from the higher evaluation to lower evaluation
 type nodeEntries []nodeEntry
 
 // the storage host with higher weight will placed in the front of the list

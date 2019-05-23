@@ -1,12 +1,14 @@
 package storagehostmanager
 
 import (
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"time"
+
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
+// hostInfoUpdate will update the storage host information based on the external settings
 func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 
 	if err != nil && !shm.b.Online() {
@@ -14,7 +16,7 @@ func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 	}
 
 	// get the storage host from the tree and update the storage host information
-	storedInfo, exists := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID.String())
+	storedInfo, exists := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
 	if exists {
 		storedInfo.HostExtConfig = hi.HostExtConfig
 		storedInfo.IPNetwork = hi.IPNetwork
@@ -56,7 +58,7 @@ func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 	recentUp := err == nil
 	if !recentUp && len(storedInfo.ScanRecords) > minScans &&
 		time.Now().Sub(storedInfo.ScanRecords[0].Timestamp) > maxDowntime {
-		err := shm.remove(storedInfo.EnodeID.String())
+		err := shm.remove(storedInfo.EnodeID)
 		if err != nil {
 			log.Error("failed to remove the storage host from the tree: %s", storedInfo.EnodeID.String())
 		}
@@ -93,6 +95,7 @@ func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 
 }
 
+// hostHistoricInteractionsUpdate will update storage host historical interactions
 func hostHistoricInteractionsUpdate(hi *storage.HostInfo, blockHeight uint64) {
 	// avoid update that happened in the future
 	// and avoid update that complete already
