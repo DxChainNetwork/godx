@@ -1,13 +1,18 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storage
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/godx/common"
-	"gitlab.com/NebulousLabs/Sia/encoding"
-	"gitlab.com/NebulousLabs/merkletree"
-	"golang.org/x/crypto/sha3"
 	"hash"
 	"sort"
+
+	"github.com/DxChainNetwork/Sia/encoding"
+	"github.com/DxChainNetwork/godx/common"
+	"gitlab.com/NebulousLabs/merkletree"
+	"golang.org/x/crypto/sha3"
 )
 
 const (

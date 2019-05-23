@@ -8,9 +8,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/p2p"
 	"math/big"
 	"math/bits"
 	"os"
@@ -22,8 +19,11 @@ import (
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
 )
@@ -686,7 +686,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	//TODO: 获取host的私钥、配置，最新的revision，Read some internal fields for later.
 	h.lock.RLock()
 	settings := h.externalConfig()
 	h.lock.RUnlock()
@@ -747,7 +746,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		estBandwidth = storage.RPCMinLen
 	}
 
-	// TODO: 计算总花费
+	// calculate total cost
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessCost := settings.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
@@ -798,11 +797,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// Construct the Merkle proof, if requested.
 		var proof []common.Hash
 		if req.MerkleProof {
-
-			// TODO: 计算merkle证明
-			//proofStart := int(sec.Offset) / crypto.SegmentSize
-			//proofEnd := int(sec.Offset+sec.Length) / crypto.SegmentSize
-			//proof = crypto.MerkleRangeProof(sectorData, proofStart, proofEnd)
+			proofStart := int(sec.Offset) / storage.SegmentSize
+			proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
+			proof = storage.MerkleRangeProof(sectorData, proofStart, proofEnd)
 			proof = []common.Hash{}
 		}
 

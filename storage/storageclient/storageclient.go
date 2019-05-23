@@ -23,18 +23,20 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
-
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 var (
 	zeroValue = new(big.Int).SetInt64(0)
+
+	extraRatio = 0.02
 )
 
 // ************** MOCKING DATA *****************
@@ -508,6 +510,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	var estProofHashes uint64
 	if req.MerkleProof {
+
 		// use the worst-case proof size of 2*tree depth (this occurs when
 		// proving across the two leaves in the center of the tree)
 		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
@@ -524,7 +527,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
 
-	// TODO: 获取最新的storage contractlast revision
+	// TODO: 获取最新的storage contract last revision
 	lastRevision := types.StorageContractRevision{}
 
 	// calculate price
@@ -539,7 +542,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// To mitigate small errors (e.g. differing block heights), fudge the
 	// price and collateral by 0.2%.
-	price = price.MultFloat64(1 + 0.02)
+	price = price.MultFloat64(1 + extraRatio)
 
 	// create the download revision and sign it
 	newRevision := storage.NewDownloadRevision(lastRevision, price.BigIntPtr())
@@ -574,22 +577,26 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	//	return err
 	//}
 
-	// TODO: Increase Successful/Failed interactions accordingly
-	//defer func() {
-	//	if err != nil {
-	//		s.hdb.IncrementFailedInteractions(contract.HostPublicKey())
-	//	} else {
-	//		s.hdb.IncrementSuccessfulInteractions(contract.HostPublicKey())
-	//	}
-	//}()
+	// Increase Successful/Failed interactions accordingly
+	defer func() {
+		hostPubkey := lastRevision.UnlockConditions.PublicKeys[1]
+		pubkeyBytes := crypto.FromECDSAPub(&hostPubkey)
+		pubkeyHex := hexutil.Encode(pubkeyBytes)
+		hostID := enode.HexID(pubkeyHex)
+		if err != nil {
+			client.storageHostManager.IncrementFailedInteractions(hostID)
+		} else {
+			client.storageHostManager.IncrementSuccessfulInteractions(hostID)
+		}
+	}()
 
-	// Disrupt before sending the signed revision to the host.
+	// TODO: Disrupt before sending the signed revision to the host.
 	//if s.deps.Disrupt("InterruptDownloadBeforeSendingRevision") {
 	//	return errors.New("InterruptDownloadBeforeSendingRevision disrupt")
 	//}
 
 	// send download request
-	//extendDeadline(s.conn, modules.NegotiateDownloadTime)
+	//TODO: extendDeadline(s.conn, modules.NegotiateDownloadTime)
 	err = s.SendStorageContractDownloadRequest(req)
 	if err != nil {
 		return err
@@ -606,10 +613,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		// TODO: 是否需要发送stop消息通知host
 		//s.writeResponse(modules.RPCLoopReadStop, nil)
 	}()
+
 	// ensure we send DownloadStop before returning
 	defer close(doneChan)
 
-	// TODO: 逐个读取host发送过来的data数据
 	// read responses
 	var hostSig []byte
 	for _, sec := range req.Sections {
@@ -636,11 +643,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 					return errors.New("host provided incorrect sector data or Merkle proof")
 				}
 			}
+
 			// write sector data
 			if _, err := w.Write(resp.Data); err != nil {
 				return err
 			}
 		}
+
 		// If the host sent a signature, exit the loop; they won't be sending any more data
 		if len(resp.Signature) > 0 {
 			hostSig = resp.Signature
@@ -649,7 +658,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	if hostSig == nil {
 
-		// TODO: 如果下载数据都收到了，但是host那边的签名还没有收到，那么还需要等待读取以下host发送的签名
 		// the host is required to send a signature; if they haven't sent one
 		// yet, they should send an empty response containing just the signature.
 		var resp storage.DownloadResponse
@@ -667,7 +675,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	newRevision.Signatures[1] = hostSig
 
-	// Disrupt before commiting.
+	// TODO: Disrupt before commiting.
 	//if s.deps.Disrupt("InterruptDownloadAfterSendingRevision") {
 	//	return errors.New("InterruptDownloadAfterSendingRevision disrupt")
 	//}

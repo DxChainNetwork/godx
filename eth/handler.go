@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"math/big"
 	"sync"
@@ -41,6 +40,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (
@@ -750,13 +750,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			p.MarkTransaction(tx.Hash())
 		}
 		pm.txpool.AddRemotes(txs)
-
-	case msg.Code == storage.StorageContractDownloadRequestMsg:
-		// retrieve data from disk and send it to client
-
-	case msg.Code == storage.StorageContractDownloadDataMsg:
-
-	case msg.Code == storage.StorageContractDownloadHostRevisionMsg:
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
