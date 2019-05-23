@@ -132,3 +132,13 @@ type (
 	// It is a map from host id to HostHealthInfo
 	HostHealthInfoTable map[enode.ID]HostHealthInfo
 )
+
+var (
+	// 4 MB
+	SectorSize = uint64(1 << 22)
+	HashSize   = 32
+
+	// RPCMinLen is the minimum size of an RPC message. If an encoded message
+	// would be smaller than RPCMinLen, it is padded with random data.
+	RPCMinLen = uint64(4096)
+)

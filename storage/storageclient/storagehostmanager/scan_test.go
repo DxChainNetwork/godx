@@ -98,10 +98,8 @@ type storageClientBackendTestData struct{}
 
 func newHostManagerTestData() *StorageHostManager {
 	shm := &StorageHostManager{
-		b: &storageClientBackendTestData{},
-
-		rent: storage.DefaultRentPayment,
-
+		b:             &storageClientBackendTestData{},
+		rent:          storage.DefaultRentPayment,
 		scanLookup:    make(map[enode.ID]struct{}),
 		filteredHosts: make(map[enode.ID]struct{}),
 	}

@@ -7,8 +7,8 @@ package storagehostmanager
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -50,6 +50,24 @@ func (api *PublicStorageHostManagerAPI) ActiveStorageHosts() (activeStorageHosts
 func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []storage.HostInfo) {
 	return api.shm.storageHostTree.All()
 }
+
+// TODO: (mzhang) search based on the public key
+
+// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
+// that are used to configure settings
+type PrivateStorageHostManagerAPI struct {
+	shm *StorageHostManager
+}
+
+// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
+// which implemented a bunch of API methods
+func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
+	return &PrivateStorageHostManagerAPI{
+		shm: shm,
+	}
+}
+
+// TODO: (mzhang) private method, set filter mode
 
 // StorageHost will return a specific host detailed information from the storage host pool
 func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {

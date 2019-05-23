@@ -8,6 +8,7 @@ import "time"
 
 // Those values are used to calculate the storage host evaluation
 const (
+	// TODO (mzhang): discuss those values with the team
 	priceFloor                = float64(0.1)
 	depositFloor              = priceFloor * 2
 	depositExponentialSmall   = 4

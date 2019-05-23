@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -18,6 +19,12 @@ type EthBackend interface {
 	GetStorageHostSetting(peerID string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
+	GetBlockChain() *core.BlockChain
+	SetupConnection(hostEnodeUrl string) (*Session, error)
+	Disconnect(hostEnodeUrl string) error
+
+	AccountManager() *accounts.Manager
+	GetCurrentBlockHeight() uint64
 }
 
 // ClientBackend is an interface that used to provide necessary functions

@@ -60,6 +60,7 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	for i := 0; i < apply; i++ {
 
 		// TODO (mzhang): delete those Println after finished debugging
+
 		fmt.Println(shm.blockHeight)
 		shm.lock.Lock()
 		shm.blockHeight++

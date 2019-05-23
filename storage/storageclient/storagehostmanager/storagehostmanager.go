@@ -60,10 +60,8 @@ type StorageHostManager struct {
 func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		persistDir: persistDir,
-
-		rent: storage.DefaultRentPayment,
-
+		persistDir:    persistDir,
+		rent:          storage.DefaultRentPayment,
 		scanLookup:    make(map[enode.ID]struct{}),
 		filterMode:    DisableFilter,
 		filteredHosts: make(map[enode.ID]struct{}),

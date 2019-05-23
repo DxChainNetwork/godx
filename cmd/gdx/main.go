@@ -207,6 +207,7 @@ func init() {
 		dumpConfigCommand,
 		// See storageclientcmd.go
 		storageClientCommand,
+
 		// see shmtest.go
 		hostManagerTestCommand,
 		// see storagehostmanagercmd.go

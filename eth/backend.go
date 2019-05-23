@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
 	"sync"
@@ -49,11 +48,13 @@ import (
 	"github.com/DxChainNetwork/godx/miner"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -189,7 +190,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth, eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
 		return nil, err
 	}
 
@@ -540,6 +541,8 @@ func (s *Ethereum) IsListening() bool                  { return true } // Always
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *Ethereum) GetCurrentBlockHeight() uint64      { return s.blockchain.CurrentHeader().Number.Uint64() }
+func (s *Ethereum) GetBlockChain() *core.BlockChain    { return s.blockchain }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
@@ -605,6 +608,55 @@ func (s *Ethereum) Stop() error {
 
 	// stop maintenance
 	s.maintenance.Stop()
+	return nil
+}
+
+func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+	if s.netRPCService == nil {
+		return nil, fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.AddStorageContractPeer(node); err != nil {
+		return nil, err
+	}
+
+	timer := time.NewTimer(time.Second * 3)
+
+	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
+	var conn *storage.Session
+	for {
+		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
+		if conn != nil {
+			return conn, nil
+		}
+
+		select {
+		case <-timer.C:
+			s.netRPCService.RemoveStorageContractPeer(node)
+			return nil, fmt.Errorf("setup connection timeout")
+		default:
+		}
+	}
+}
+
+func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
+	if s.netRPCService == nil {
+		return fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
+		return err
+	}
 	return nil
 }
 

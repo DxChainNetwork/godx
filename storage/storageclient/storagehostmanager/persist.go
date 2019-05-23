@@ -5,12 +5,12 @@
 package storagehostmanager
 
 import (
-	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
