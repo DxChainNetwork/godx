@@ -24,13 +24,13 @@ var (
 )
 
 type (
-	// DxPath is the file path or directory path relates to the root directory of the DxFiles.
+	// DxPath is the file Path or directory Path relates to the root directory of the DxFiles.
 	// It is used in storage client and storage client's file system
 	DxPath struct {
-		path string
+		Path string
 	}
 
-	// SysPath is the actual system path of a file or a directory.
+	// SysPath is the actual system Path of a file or a directory.
 	SysPath string
 )
 
@@ -62,10 +62,10 @@ func clean(s string) string {
 
 // validate checks the validity of the dp. It is only used in newDxPath
 func (dp DxPath) validate() error {
-	if dp.path == "" {
+	if dp.Path == "" {
 		return ErrEmptyDxPath
 	}
-	for _, pathElem := range strings.Split(dp.path, "/") {
+	for _, pathElem := range strings.Split(dp.Path, "/") {
 		if pathElem == "." || pathElem == ".." {
 			return errors.New("dxpath could not contain . or .. elements")
 		}
@@ -83,15 +83,15 @@ func (dp DxPath) validate() error {
 
 // IsRoot checks whether a DxPath is a root directory
 func (dp DxPath) IsRoot() bool {
-	return dp.path == ""
+	return dp.Path == ""
 }
 
-// SysPath return the system path of the DxPath. It concatenate the input rootDir and DxPath
+// SysPath return the system Path of the DxPath. It concatenate the input rootDir and DxPath
 func (dp DxPath) SysPath(rootDir SysPath) SysPath {
 	if dp.IsRoot() {
 		return rootDir
 	}
-	return SysPath(filepath.Join(string(rootDir), dp.path))
+	return SysPath(filepath.Join(string(rootDir), dp.Path))
 }
 
 // Parent returns the parent DxPath of the DxPath.
@@ -100,19 +100,29 @@ func (dp DxPath) Parent() (DxPath, error) {
 	if dp.IsRoot() {
 		return DxPath{}, ErrAlreadyRoot
 	}
-	par := filepath.Dir(dp.path)
+	par := filepath.Dir(dp.Path)
 	if par == "." {
 		return RootDxPath(), nil
 	}
 	return DxPath{par}, nil
 }
 
-// RootDxPath return the special root DxPath which has path as empty string
+// RootDxPath return the special root DxPath which has Path as empty string
 func RootDxPath() DxPath {
 	return DxPath{""}
 }
 
 // Equals check whether the two DxPath are equal
 func (dp DxPath) Equals(dp2 DxPath) bool {
-	return dp.path == dp2.path
+	return dp.Path == dp2.Path
+}
+
+// Join join the receiver syspath with DxPath and some extrafields.
+func (sp SysPath) Join(dp DxPath, extra ...string) SysPath {
+	path := []string{string(sp)}
+	if len(dp.Path) != 0 {
+		path = append(path, dp.Path)
+	}
+	path = append(path, extra...)
+	return SysPath(filepath.Join(path...))
 }

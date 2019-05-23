@@ -6,7 +6,10 @@
 
 package storage
 
-import "testing"
+import (
+	"github.com/DxChainNetwork/godx/rlp"
+	"testing"
+)
 
 func TestNewDxPath(t *testing.T) {
 	tests := []struct {
@@ -14,20 +17,20 @@ func TestNewDxPath(t *testing.T) {
 		valid bool
 	}{
 		{"valid/siapath", true},
-		{"\\some\\windows\\path", true}, // clean converts OS separators
+		{"\\some\\windows\\Path", true}, // clean converts OS separators
 		{"../../../directory/traversal", false},
 		{"testpath", true},
 		{"valid/siapath/../with/directory/traversal", false},
 		{"/usr/bin/", true},
 		{"validpath/test", true},
 		{"..validpath/..test", true},
-		{"./invalid/path", false},
-		{".../path", true},
-		{"valid./path", true},
-		{"valid../path", true},
-		{"valid/path./test", true},
-		{"valid/path../test", true},
-		{"test/path", true},
+		{"./invalid/Path", false},
+		{".../Path", true},
+		{"valid./Path", true},
+		{"valid../Path", true},
+		{"valid/Path./test", true},
+		{"valid/Path../test", true},
+		{"test/Path", true},
 		{"/leading/slash", true}, // clean will trim leading slashes so this is a valid input
 		{"foo/./bar", false},
 		{"", false},
@@ -88,6 +91,63 @@ func TestDxPath_Parent(t *testing.T) {
 		}
 		if err == nil && !parent.Equals(expect) {
 			t.Errorf("test %d: expect %v, got %v", i, expect, parent)
+		}
+	}
+}
+
+func TestSysPath_Join(t *testing.T) {
+	tests := []struct {
+		sp     SysPath
+		dp     DxPath
+		extra  []string
+		expect SysPath
+	}{
+		{"/usr/bin/data", DxPath{"test"}, []string{".dxdir"}, "/usr/bin/data/test/.dxdir"},
+		{"", RootDxPath(), []string{""}, ""},
+		{"", DxPath{"testfile"}, []string{".dxdir"}, "testfile/.dxdir"},
+	}
+	for i, test := range tests {
+		got := test.sp.Join(test.dp, test.extra...)
+		if got != test.expect {
+			t.Errorf("test %d: Expect %v, Got %v", i, test.expect, got)
+		}
+	}
+}
+
+func TestDxPath_EncodeRLP_DecodeRLP(t *testing.T) {
+	tests := []struct {
+		s string
+	}{
+		{"valid/siapath"},
+		{"\\some\\windows\\Path"},
+		{"testpath"},
+		{"/usr/bin/"},
+		{"validpath/test"},
+		{"..validpath/..test"},
+		{".../Path"},
+		{"valid./Path"},
+		{"valid../Path"},
+		{"valid/Path./test"},
+		{"valid/Path../test"},
+		{"test/Path"},
+		{"/leading/slash"},
+		{"blank/end/"},
+	}
+	for _, test := range tests {
+		dp, err := NewDxPath(test.s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b, err := rlp.EncodeToBytes(dp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var recovered DxPath
+		if err := rlp.DecodeBytes(b, &recovered); err != nil {
+			t.Fatal(err)
+		}
+		if !recovered.Equals(dp) {
+			t.Errorf("not equal. Expect %v, got %v", test.s, recovered.Path)
 		}
 	}
 }
