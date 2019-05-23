@@ -1,7 +1,9 @@
 package storagehostmanager
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"time"
@@ -143,4 +145,49 @@ func hostHistoricInteractionsUpdate(hi *storage.HostInfo, blockHeight uint64) {
 	hi.RecentFailedInteractions = 0
 
 	hi.LastHistoricUpdate = blockHeight
+}
+
+// IncrementSuccessfulInteractions will update both storage host's historical interactions
+// and recent successful interactions
+func (shm *StorageHostManager) IncrementSuccessfulInteractions(id enode.ID) {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	// get the storage host
+	host, exists := shm.storageHostTree.RetrieveHostInfo(id)
+	if !exists {
+		shm.log.Warn("failed to get the storage host information while trying to increase the successful interactions")
+		return
+	}
+	// update the historical interactions
+	hostHistoricInteractionsUpdate(&host, shm.blockHeight)
+
+	// update the recent successful interactions, recalculate the storage host evaluation
+	host.RecentSuccessfulInteractions++
+
+	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
+		shm.log.Error(fmt.Sprintf("failed to update successful interactions %s", err.Error()))
+	}
+}
+
+// IncrementFailedInteractions will update both storage host's historical interactions
+// and recent failed interactions
+func (shm *StorageHostManager) IncrementFailedInteractions(id enode.ID) {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	// get the storage host information
+	host, exists := shm.storageHostTree.RetrieveHostInfo(id)
+	if !exists || !shm.b.Online() {
+		return
+	}
+
+	// update the historical interactions
+	hostHistoricInteractionsUpdate(&host, shm.blockHeight)
+
+	// update the recent failed interactions, recalculate the storage host evaluation
+	host.RecentFailedInteractions++
+	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
+		shm.log.Error(fmt.Sprintf("failed to update failed interactions %s", err.Error()))
+	}
 }

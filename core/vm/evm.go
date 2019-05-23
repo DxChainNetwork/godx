@@ -37,9 +37,6 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
-
-	// TODO: storage contract中的押金存入这个基金账户，需要创建一个账户，类似personal.newAccount的方法，必须得有一套公私钥来管理这个公共账户
-	fundAddr = common.HexToAddress("0x0000000000000000000000000000000000000000")
 )
 
 type (
@@ -505,22 +502,19 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		err      error
 	)
 
-	HostInfo := types.HostAnnouncement{}
-	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &HostInfo)
+	scSet := types.StorageContractSet{}
+	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		return nil, gasDecode, errDec
 	}
 
+	HostInfo := scSet.HostAnnounce
 	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, HostInfo, uint64(0), [][]byte{HostInfo.Signature})
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check signature for host announce", "err", errCheck)
 		return nil, gasCheck, errCheck
-	} else {
-
-		//TODO: 和off chain那边对接，存储到hostDB
-		log.Info("success to host announce", "NatAddress", HostInfo.NetAddress)
 	}
 
 	// go back state DB if something is wrong above
@@ -551,12 +545,14 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}()
 
 	// rlp decode and calculate gas used
-	storageContract := types.StorageContract{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &storageContract)
+	scSet := types.StorageContractSet{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
 	errDecode, _ := resultDecode[0].(error)
 	if errDecode != nil {
 		return nil, gasRemainDecode, errDecode
 	}
+
+	storageContract := scSet.StorageContract
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
@@ -617,16 +613,18 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		err      error
 	)
 
-	storageContractReversion := types.StorageContractRevision{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &storageContractReversion)
+	scSet := types.StorageContractSet{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDecode, errDec
 	}
 
+	storageContractRevision := scSet.StorageContractRevision
+
 	// check file contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, storageContractReversion, uint64(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, evm, storageContractRevision, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check file contract reversion", "err", errCheck)
@@ -634,23 +632,23 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	scID := storageContractReversion.ParentID
+	scID := storageContractRevision.ParentID
 	oldStorageContract, errGet := GetStorageContract(db, scID)
 	if errGet != nil {
 		return nil, gasRemainCheck, errGet
 	}
 
 	newStorageContract := types.StorageContract{
-		FileSize:           storageContractReversion.NewFileSize,
-		FileMerkleRoot:     storageContractReversion.NewFileMerkleRoot,
-		WindowStart:        storageContractReversion.NewWindowStart,
-		WindowEnd:          storageContractReversion.NewWindowEnd,
+		FileSize:           storageContractRevision.NewFileSize,
+		FileMerkleRoot:     storageContractRevision.NewFileMerkleRoot,
+		WindowStart:        storageContractRevision.NewWindowStart,
+		WindowEnd:          storageContractRevision.NewWindowEnd,
 		RenterCollateral:   oldStorageContract.RenterCollateral,
 		HostCollateral:     oldStorageContract.HostCollateral,
-		ValidProofOutputs:  storageContractReversion.NewValidProofOutputs,
-		MissedProofOutputs: storageContractReversion.NewMissedProofOutputs,
-		UnlockHash:         storageContractReversion.NewUnlockHash,
-		RevisionNumber:     storageContractReversion.NewRevisionNumber,
+		ValidProofOutputs:  storageContractRevision.NewValidProofOutputs,
+		MissedProofOutputs: storageContractRevision.NewMissedProofOutputs,
+		UnlockHash:         storageContractRevision.NewUnlockHash,
+		RevisionNumber:     storageContractRevision.NewRevisionNumber,
 	}
 
 	DeleteStorageContract(db, scID)
@@ -694,13 +692,14 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		err      error
 	)
 
-	sp := types.StorageProof{}
-	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &sp)
+	scSet := types.StorageContractSet{}
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
 
+	sp := scSet.StorageProof
 	currentHeight := evm.BlockNumber.Uint64()
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, evm, sp, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
@@ -709,19 +708,15 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	fc, errGet := GetStorageContract(db, sp.ParentID)
+	sc, errGet := GetStorageContract(db, sp.ParentID)
 	if errGet != nil {
 		return nil, gasRemainCheck, errGet
 	}
 
-	// first for fundAddr,second for host
-	firstOutput := fc.ValidProofOutputs[0]
-	secondOutput := fc.ValidProofOutputs[1]
-	if !evm.StateDB.Exist(fundAddr) {
-		evm.StateDB.CreateAccount(fundAddr)
+	// effect valid proof outputs, first for renter, second for host
+	for _, vpo := range sc.ValidProofOutputs {
+		evm.StateDB.AddBalance(vpo.Address, vpo.Value)
 	}
-	evm.StateDB.AddBalance(fundAddr, firstOutput.Value)
-	evm.StateDB.AddBalance(secondOutput.Address, secondOutput.Value)
 
 	errDel := DeleteStorageContract(db, sp.ParentID)
 	if errDel != nil {

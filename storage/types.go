@@ -154,3 +154,17 @@ type (
 func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
 }
+
+type (
+	// HostHealthInfo is the file structure used for DxFile health update.
+	// It has two fields, one indicating whether the host if offline or not,
+	// One indicating whether the contract with the host is good for renew.
+	HostHealthInfo struct {
+		Offline      bool
+		GoodForRenew bool
+	}
+
+	// HostHealthInfoTable is the map the is passed into DxFile health update.
+	// It is a map from host id to HostHealthInfo
+	HostHealthInfoTable map[enode.ID]HostHealthInfo
+)
