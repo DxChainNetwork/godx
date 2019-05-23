@@ -51,7 +51,7 @@ type (
 		wal     *writeaheadlog.Wal
 
 		// filePath is full file path
-		filePath string
+		filePath storage.SysPath
 
 		//cached field
 		erasureCode erasurecode.ErasureCoder
@@ -84,7 +84,7 @@ type (
 // sourcePath is the file of the original data. wal is the writeaheadlog.
 // erasureCode is the erasure coder for encoding. cipherKey is the key for encryption.
 // fileSize is the size of the original data file. fileMode is the file privilege mode (e.g. 0777)
-func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
+func New(filePath storage.SysPath, dxPath storage.DxPath, sourcePath storage.SysPath, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
 	currentTime := uint64(time.Now().Unix())
 	// create the params for erasureCode and cipherKey
 	minSectors, numSectors, extra := erasureCodeToParams(erasureCode)
@@ -138,11 +138,11 @@ func New(filePath string, dxPath string, sourcePath string, wal *writeaheadlog.W
 }
 
 // Rename rename the DxFile, remove the previous dxfile and create a new file
-func (df *DxFile) Rename(newDxFile string, newDxFilename string) error {
+func (df *DxFile) Rename(newDxFile storage.DxPath, newDxFilename storage.SysPath) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
-	dir, _ := filepath.Split(newDxFilename)
+	dir, _ := filepath.Split(string(newDxFilename))
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}

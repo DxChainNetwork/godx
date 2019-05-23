@@ -7,16 +7,16 @@ package dxfile
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/common"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/twofishgcm"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
@@ -86,13 +86,17 @@ func TestSegment_EncodeRLP_DecodeRLP(t *testing.T) {
 
 // TestMetadata_EncodeRLP_DecodeRLP test the RLP decode and encode rule for Metadata
 func TestMetadata_EncodeRLP_DecodeRLP(t *testing.T) {
+	path, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
 	meta := Metadata{
 		HostTableOffset:     PageSize,
 		SegmentOffset:       2 * PageSize,
 		FileSize:            randomUint64(),
 		SectorSize:          randomUint64(),
-		LocalPath:           filepath.Join(testDir, t.Name()),
-		DxPath:              t.Name(),
+		LocalPath:           testDir.Join(path),
+		DxPath:              path,
 		CipherKeyCode:       crypto.GCMCipherCode,
 		CipherKey:           randomBytes(twofishgcm.GCMCipherKeyLength),
 		TimeModify:          uint64(time.Now().Unix()),

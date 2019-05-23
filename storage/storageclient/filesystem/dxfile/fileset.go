@@ -10,9 +10,9 @@ import (
 	"errors"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -32,11 +32,11 @@ var (
 type (
 	// FileSet is the set of DxFile
 	FileSet struct {
-		// filesDir is the file directory for dxfile
-		filesDir string
+		// rootDir is the file directory for dxfile
+		rootDir storage.SysPath
 
 		// filesMap is the mapping from dxPath to contents
-		filesMap map[string]*fileSetEntry
+		filesMap map[storage.DxPath]*fileSetEntry
 
 		lock sync.Mutex
 		wal  *writeaheadlog.Wal
@@ -67,18 +67,18 @@ type (
 	}
 )
 
-// NewFileSet create a new DxFileSet with provided filesDir and wal.
-func NewFileSet(filesDir string, wal *writeaheadlog.Wal) *FileSet {
+// NewFileSet create a new DxFileSet with provided rootDir and wal.
+func NewFileSet(rootDir storage.SysPath, wal *writeaheadlog.Wal) *FileSet {
 	return &FileSet{
-		filesDir: filesDir,
-		filesMap: make(map[string]*fileSetEntry),
+		rootDir:  rootDir,
+		filesMap: make(map[storage.DxPath]*fileSetEntry),
 		wal:      wal,
 	}
 }
 
 // NewDxFile create a DxFile based on the params given. Return a FileSetEntryWithID that has been
 // registered with threadID in FileSetEntry
-func (fs *FileSet) NewDxFile(dxPath string, sourcePath string, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*FileSetEntryWithID, error) {
+func (fs *FileSet) NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*FileSetEntryWithID, error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	exists := fs.exists(dxPath)
@@ -86,8 +86,7 @@ func (fs *FileSet) NewDxFile(dxPath string, sourcePath string, force bool, erasu
 		return nil, ErrFileExist
 	}
 	// Create a new DxFile
-	filePath := filepath.Join(fs.filesDir, dxPath)
-	df, err := New(filePath, dxPath, sourcePath, fs.wal, erasureCode, cipherKey, fileSize, fileMode)
+	df, err := New(fs.filepath(dxPath), dxPath, sourcePath, fs.wal, erasureCode, cipherKey, fileSize, fileMode)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +116,7 @@ func (entry *FileSetEntryWithID) CopyEntry() *FileSetEntryWithID {
 }
 
 // Open open a DxFile with dxPath, return the FileSetEntry, along with the threadID
-func (fs *FileSet) Open(dxPath string) (*FileSetEntryWithID, error) {
+func (fs *FileSet) Open(dxPath storage.DxPath) (*FileSetEntryWithID, error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	return fs.open(dxPath)
@@ -125,11 +124,11 @@ func (fs *FileSet) Open(dxPath string) (*FileSetEntryWithID, error) {
 
 // open is the helper function for open the DxFile specified by input dxPath.
 // return an entry with registered with id.
-func (fs *FileSet) open(dxPath string) (*FileSetEntryWithID, error) {
+func (fs *FileSet) open(dxPath storage.DxPath) (*FileSetEntryWithID, error) {
 	entry, exist := fs.filesMap[dxPath]
 	if !exist {
 		// file not loaded or not exist. Try to read DxFile from disk.
-		df, err := readDxFile(filepath.Join(fs.filesDir, dxPath), fs.wal)
+		df, err := readDxFile(fs.filepath(dxPath), fs.wal)
 		if os.IsNotExist(err) {
 			return nil, ErrUnknownFile
 		}
@@ -154,7 +153,7 @@ func (fs *FileSet) open(dxPath string) (*FileSetEntryWithID, error) {
 }
 
 // Delete delete a file with dxPath from the file set. Also the DxFile specified by dxPath on disk is also deleted
-func (fs *FileSet) Delete(dxPath string) error {
+func (fs *FileSet) Delete(dxPath storage.DxPath) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -173,7 +172,7 @@ func (fs *FileSet) Delete(dxPath string) error {
 }
 
 // Exists is the public function that returns whether the dxPath exists (cached then on disk)
-func (fs *FileSet) Exists(dxPath string) bool {
+func (fs *FileSet) Exists(dxPath storage.DxPath) bool {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -181,17 +180,17 @@ func (fs *FileSet) Exists(dxPath string) bool {
 }
 
 // Exists return whether the dxPath exists (cached then on disk)
-func (fs *FileSet) exists(dxPath string) bool {
+func (fs *FileSet) exists(dxPath storage.DxPath) bool {
 	entry, exists := fs.filesMap[dxPath]
 	if exists {
 		return !entry.Deleted()
 	}
-	_, err := os.Stat(filepath.Join(fs.filesDir, dxPath))
+	_, err := os.Stat(string(fs.filepath(dxPath)))
 	return !os.IsNotExist(err)
 }
 
 // Rename rename the file with dxPath to newDxPath.
-func (fs *FileSet) Rename(dxPath, newDxPath string) error {
+func (fs *FileSet) Rename(dxPath, newDxPath storage.DxPath) error {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 
@@ -208,7 +207,7 @@ func (fs *FileSet) Rename(dxPath, newDxPath string) error {
 	fs.filesMap[newDxPath] = entry.fileSetEntry
 	delete(fs.filesMap, dxPath)
 
-	return entry.Rename(newDxPath, filepath.Join(fs.filesDir, newDxPath))
+	return entry.Rename(newDxPath, fs.filepath(newDxPath))
 }
 
 // Close close a FileSetEntryWithID
@@ -241,6 +240,10 @@ func (fs *FileSet) closeEntry(entry *FileSetEntryWithID) {
 	if len(currentEntry.threadMap) == 0 {
 		delete(fs.filesMap, entry.metadata.DxPath)
 	}
+}
+
+func (fs *FileSet) filepath(path storage.DxPath) storage.SysPath {
+	return fs.rootDir.Join(path)
 }
 
 // newThreadinfo created a threadInfo entry for the threadMap

@@ -9,9 +9,9 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -38,8 +38,13 @@ func newTestFileSet(t *testing.T) (*FileSetEntryWithID, *FileSet) {
 
 // newWal create a new Wal object for testing purpose
 func newWal(t *testing.T) (*writeaheadlog.Wal, string) {
-	walPath := filepath.Join(testDir, t.Name()+"wal")
-	wal, recoveredTxns, err := writeaheadlog.New(walPath)
+	path, err := storage.NewDxPath(t.Name() + ".wal")
+	if err != nil {
+		panic(err)
+	}
+	walPath := testDir.Join(path)
+
+	wal, recoveredTxns, err := writeaheadlog.New(string(walPath))
 	if err != nil {
 		panic(err)
 	}
@@ -49,17 +54,21 @@ func newWal(t *testing.T) (*writeaheadlog.Wal, string) {
 			panic(err)
 		}
 	}
-	return wal, walPath
+	return wal, string(walPath)
 }
 
 // randomDxPath creates a random DxPath which is a string of byte slice of length 16
-func randomDxPath() string {
+func randomDxPath() storage.DxPath {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
 		panic(err)
 	}
-	return common.Bytes2Hex(b)
+	path, err := storage.NewDxPath(common.Bytes2Hex(b))
+	if err != nil {
+		panic(err)
+	}
+	return path
 }
 
 // TestCopyEntry test FileSet.CopyEntry
@@ -109,7 +118,7 @@ func TestFileSet_NewDxFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(testDir, newEntry.metadata.DxPath)); err != nil {
+	if _, err := os.Stat(string(testDir.Join(newEntry.metadata.DxPath))); err != nil {
 		t.Errorf("Creating a DxFile, the file does not exist: %v", err)
 	}
 }
@@ -172,7 +181,7 @@ func TestFileSet_DeleteOpen(t *testing.T) {
 	if exist {
 		t.Errorf("File should have been deleted")
 	}
-	if _, err := os.Stat(filepath.Join(testDir, dxPath)); !os.IsNotExist(err) {
+	if _, err := os.Stat(string(testDir.Join(dxPath))); !os.IsNotExist(err) {
 		t.Errorf("After delete, previous dxPath file should not exist: %v", err)
 	}
 	// Open the file now, the file should be deleted
@@ -213,10 +222,10 @@ func TestFileSet_RenameOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(testDir, prevDxPath)); !os.IsNotExist(err) {
+	if _, err := os.Stat(string(testDir.Join(prevDxPath))); !os.IsNotExist(err) {
 		t.Errorf("After rename, previous dxPath file should not exist: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(testDir, newDxPath)); err != nil {
+	if _, err := os.Stat(string(testDir.Join(newDxPath))); err != nil {
 		t.Errorf("After rename, the new dxPath file should exist: %v", err)
 	}
 	if len(fs.filesMap) != 1 {
