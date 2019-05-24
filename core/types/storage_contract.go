@@ -6,13 +6,10 @@ package types
 
 import (
 	"crypto/ecdsa"
-	"io"
 	"math/big"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rlp"
 )
 
 type StorageContractRLPHash interface {
@@ -161,19 +158,6 @@ type StorageContract struct {
 	RevisionNumber uint64 `json:"revisionnumber"`
 
 	Signatures [][]byte
-}
-
-func (sc *StorageContract) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	if err := s.Decode(&sc); err != nil {
-		return err
-	}
-	log.Debug("rlp decode storage contract", "encode_size", rlp.ListSize(size))
-	return nil
-}
-
-func (sc *StorageContract) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, sc)
 }
 
 type StorageContractRevision struct {

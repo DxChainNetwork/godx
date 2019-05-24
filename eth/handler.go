@@ -751,13 +751,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		pm.txpool.AddRemotes(txs)
 
-	case msg.Code == storage.StorageContractDownloadRequestMsg:
-		// retrieve data from disk and send it to client
-
-	case msg.Code == storage.StorageContractDownloadDataMsg:
-
-	case msg.Code == storage.StorageContractDownloadHostRevisionMsg:
-
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
