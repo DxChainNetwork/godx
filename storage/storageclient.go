@@ -5,6 +5,8 @@
 package storage
 
 import (
+	"crypto/ecdsa"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -35,4 +37,39 @@ type ClientBackend interface {
 	GetStorageHostSetting(peerID string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
+}
+
+// A StorageClientContract contains metadata about a storage contract. It is read-only;
+// modifying a StorageClientContract does not modify the actual storage contract.
+type ClientContract struct {
+	ID            common.Hash
+	HostPublicKey *ecdsa.PublicKey
+	Transaction   types.Transaction
+
+	StartHeight uint64
+	EndHeight   uint64
+
+	// ClientFunds is the amount remaining in the contract that the client can spend.
+	ClientFunds common.BigInt
+
+	// The StorageContract does not indicate what funds were spent on, so we have
+	// to track the various costs manually.
+	DownloadSpending common.BigInt
+	StorageSpending  common.BigInt
+	UploadSpending   common.BigInt
+
+	// Utility contains utility information about the client.
+	Utility ContractUtility
+
+	// TotalCost indicates the amount of money that the client spent and/or
+	// locked up while forming a contract.
+	TotalCost common.BigInt
+}
+
+// ContractUtility contains metrics internal to the contractor that reflect the
+// utility of a given contract.
+type ContractUtility struct {
+	GoodForUpload bool
+	GoodForRenew  bool
+	Locked        bool // Locked utilities can only be set to false.
 }

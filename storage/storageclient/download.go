@@ -43,11 +43,11 @@ type (
 
 		// Retrieval settings for the file.
 		staticLatencyTarget time.Duration // In milliseconds. Lower latency results in lower total system throughput.
-		staticOverdrive     int           // How many extra pieces to download to prevent slow hosts from being a bottleneck.
+		staticOverdrive     int           // How many extra sectors to download to prevent slow hosts from being a bottleneck.
 		staticPriority      uint64        // Downloads with higher priority will complete first.
 
 		// Utilities.
-		log           *log.Logger                  // Same log as the renter.
+		log           log.Logger                   // Same log as the renter.
 		memoryManager *memorymanager.MemoryManager // Same memoryManager used across the renter.
 		mu            sync.Mutex                   // Unique to the download object.
 	}
@@ -63,7 +63,7 @@ type (
 		length        uint64        // Length of download. Cannot be 0.
 		needsMemory   bool          // Whether new memory needs to be allocated to perform the download.
 		offset        uint64        // Offset within the file to start the download. Must be less than the total filesize.
-		overdrive     int           // How many extra pieces to download to prevent slow hosts from being a bottleneck.
+		overdrive     int           // How many extra sectors to download to prevent slow hosts from being a bottleneck.
 		priority      uint64        // Files with a higher priority will be downloaded first.
 	}
 
@@ -72,3 +72,67 @@ type (
 	// way it's possible to add custom behavior for failing downloads.
 	downloadCompleteFunc func(error) error
 )
+
+// fail will mark the download as complete, but with the provided error.
+// If the download has already failed, the error will be updated to be a
+// concatenation of the previous error and the new error.
+func (d *download) fail(err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	// If the download is already complete, extend the error.
+	complete := d.staticComplete()
+	if complete && d.err != nil {
+		return
+	} else if complete && d.err == nil {
+		d.log.Crit("download is marked as completed without error, but the func of fail was called with err", "error", err)
+		return
+	}
+
+	// Mark the download as complete and set the error.
+	d.err = err
+	d.markComplete()
+}
+
+// staticComplete is a helper function to indicate whether or not the download
+// has completed.
+func (d *download) staticComplete() bool {
+	select {
+	case <-d.completeChan:
+		return true
+	default:
+		return false
+	}
+}
+
+// markComplete is a helper method which closes the completeChan and and
+// executes the downloadCompleteFuncs. The completeChan should always be closed
+// using this method.
+func (d *download) markComplete() {
+	// Avoid calling markComplete multiple times. In a production build
+	// build.Critical won't panic which is fine since we set
+	// downloadCompleteFunc to nil after executing them. We still don't want to
+	// close the completeChan again though to avoid a crash.
+	if d.staticComplete() {
+		d.log.Warn("Can't call markComplete multiple times")
+	} else {
+		defer close(d.completeChan)
+	}
+	// Execute the downloadCompleteFuncs before closing the channel. This gives
+	// the initiator of the download the nice guarantee that waiting for the
+	// completeChan to be closed also means that the downloadCompleteFuncs are
+	// done.
+	var errs []error
+	for _, f := range d.downloadCompleteFuncs {
+		err := f(d.err)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+	// Log potential errors.
+	if len(errs) != 0 {
+		d.log.Error("Failed to execute at least one downloadCompleteFunc", "error", errs)
+	}
+	// Set downloadCompleteFuncs to nil to avoid executing them multiple times.
+	d.downloadCompleteFuncs = nil
+}

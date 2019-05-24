@@ -109,6 +109,9 @@ type StorageClient struct {
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
+
+	wg     sync.WaitGroup
+	quitCh chan struct{}
 }
 
 // New initializes StorageClient object
@@ -121,6 +124,7 @@ func New(persistDir string) (*StorageClient, error) {
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
 		workerPool:     make(map[common.Hash]*worker),
+		quitCh:         make(chan struct{}, 1),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -159,6 +163,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 		return err
 	}
 
+	// active the work pool to get a worker for a upload/download task.
+	sc.activateWorkerPool()
+
 	// TODO (mzhang): Subscribe consensus change
 
 	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
@@ -173,6 +180,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 func (sc *StorageClient) Close() error {
 	err := sc.storageHostManager.Close()
 	errSC := sc.tm.Stop()
+	close(sc.quitCh)
 	return common.ErrCompose(err, errSC)
 }
 
