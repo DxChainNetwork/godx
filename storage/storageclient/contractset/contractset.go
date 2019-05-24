@@ -43,7 +43,6 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 	}
 
 	// initialize DB
-	// TODO (mzhang): remember to close the database, db should be closed in upper function call
 	db, err := OpenDB(filepath.Join(persistDir, persistDBName))
 	if err != nil {
 		return
@@ -70,6 +69,13 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 		return
 	}
 
+	return
+}
+
+// Close will close the database and closing the writeaheadlog
+func (scs *StorageContractSet) Close() (err error) {
+	scs.db.Close()
+	_, err = scs.wal.CloseIncomplete()
 	return
 }
 
@@ -184,7 +190,7 @@ func (scs *StorageContractSet) IDs() (ids []storage.ContractID) {
 }
 
 // RetrieveMetaData will return ContractMetaData based on the contract id provided
-func (scs *StorageContractSet) RetrieveMetaData(id storage.ContractID) (cm storage.ContractMetaData, exist bool) {
+func (scs *StorageContractSet) RetrieveContractMetaData(id storage.ContractID) (cm storage.ContractMetaData, exist bool) {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
 
@@ -199,7 +205,7 @@ func (scs *StorageContractSet) RetrieveMetaData(id storage.ContractID) (cm stora
 
 // RetrieveAllMetaData will return all ContractMetaData stored in the contract set
 // in the form of list
-func (scs *StorageContractSet) RetrieveAllMetaData() (cms []storage.ContractMetaData) {
+func (scs *StorageContractSet) RetrieveAllContractsMetaData() (cms []storage.ContractMetaData) {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
 
@@ -210,10 +216,6 @@ func (scs *StorageContractSet) RetrieveAllMetaData() (cms []storage.ContractMeta
 
 	return
 }
-
-// TODO (mzhang): view
-// TODO (mzhang): viewAll
-// TODO (mzhang): close
 
 // loadContract will load contracts information from the database, it will also
 // filter out the un-applied transaction for the particular contract
@@ -239,7 +241,9 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		// load merkle roots
 		mr := loadMerkleRoots(scs.db, roots)
 
-		// TODO (mzhang): un-applied WAL transaction will be ignored
+		// TODO (mzhang): currently, un-applied WAL transaction will be ignored
+		// in the future, they should be handled, however, the negotiation process
+		// needs to be modified
 
 		// initialize contract
 		c := &Contract{

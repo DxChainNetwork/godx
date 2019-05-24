@@ -13,10 +13,11 @@ const (
 )
 
 const (
+	// the height of the merkle tree is 7, meaning it can store
+	// 128 merkle roots
 	merkleRootsCacheHeight = 7
 
-	// merkleRootsPerCache is the number of merkle roots in a cached subTree of
-	// merkleRootsCacheHeight height.
+	// number of merkle roots in a cached tree is 128
 	merkleRootsPerCache = 1 << merkleRootsCacheHeight
 
 	SectorSize  = uint64(1 << 22) // 4 MiB

@@ -164,12 +164,9 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 		return
 	}
 
-	// clear all un-applied transactions
-	// TODO (mzhang): should I only remove only upload transaction from the list, not all of them?
-	// This remove include both upload and download
-	c.lock.Lock()
+	// the reason un-appliedTxns are all emptied is that only one of the operation (upload or download)
+	// can be executed at a time. Therefore, the recorded un-appliedTxns will be applied
 	c.unappliedTxns = nil
-	c.lock.Unlock()
 
 	return
 }
@@ -194,9 +191,8 @@ func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.
 		return
 	}
 
-	// clear all un-applied transactions
-	// TODO (mzhang): should I only remove only download transaction from the list, not all of them?
-	// This remove include both upload and download
+	// the reason un-appliedTxns are all emptied is that only one of the operation (upload or download)
+	// can be executed at a time. Therefore, the recorded un-appliedTxns will be applied
 	c.unappliedTxns = nil
 
 	return
@@ -204,7 +200,6 @@ func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.
 
 // CommitTxns will apply all un-applied transactions
 func (c *Contract) CommitTxns() (err error) {
-	// TODO (mzhang): this is not thread safe
 	// loop through all un-applied transactions
 	for _, t := range c.unappliedTxns {
 		for _, op := range t.Operations {
@@ -234,7 +229,6 @@ func (c *Contract) CommitTxns() (err error) {
 	}
 
 	// empty all un-applied transactions
-	// TODO (mzhang): should I only remove the commited transactions instead of all transactions?
 	c.unappliedTxns = nil
 	return
 }
