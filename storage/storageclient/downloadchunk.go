@@ -5,10 +5,15 @@
 package storageclient
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage"
+
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -16,10 +21,10 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
-// downloadPieceInfo contains all the information required to download and
-// recover a piece of a segment from a host. It is a value in a map where the key
+// downloadSectorInfo contains all the information required to download and
+// recover a sector of a segment from a host. It is a value in a map where the key
 // is the file contract id.
-type downloadPieceInfo struct {
+type downloadSectorInfo struct {
 	index uint64
 	root  common.Hash
 }
@@ -32,9 +37,9 @@ type unfinishedDownloadSegment struct {
 	masterKey   crypto.CipherKey
 
 	// Fetch + Write instructions - read only or otherwise thread safe.
-	staticSegmentIndex uint64                       // Required for deriving the encryption keys for each piece.
-	staticCacheID      string                       // Used to uniquely identify a segment in the segment cache.
-	staticSegmentMap   map[string]downloadPieceInfo // Maps from host PubKey to the info for the piece associated with that host
+	staticSegmentIndex uint64                        // Required for deriving the encryption keys for each sector.
+	staticCacheID      string                        // Used to uniquely identify a segment in the segment cache.
+	staticSegmentMap   map[string]downloadSectorInfo // Maps from host PubKey to the info for the sector associated with that host
 	staticSegmentSize  uint64
 	staticFetchLength  uint64 // Length within the logical segment to fetch.
 	staticFetchOffset  uint64 // Offset within the logical segment that is being downloaded.
@@ -48,10 +53,10 @@ type unfinishedDownloadSegment struct {
 	staticPriority      uint64
 
 	// Download segment state - need mutex to access.
-	completedsectors    []bool    // Which sectors were downloaded successfully.
+	completedSectors    []bool    // Which sectors were downloaded successfully.
 	failed              bool      // Indicates if the segment has been marked as failed.
 	physicalSegmentData [][]byte  // Used to recover the logical data.
-	pieceUsage          []bool    // Which sectors are being actively fetched.
+	sectorUsage         []bool    // Which sectors are being actively fetched.
 	sectorsCompleted    uint32    // Number of sectors that have successfully completed.
 	sectorsRegistered   uint32    // Number of sectors that workers are actively fetching.
 	recoveryComplete    bool      // Whether or not the recovery has completed and the segment memory released.
@@ -162,4 +167,119 @@ func (uds *unfinishedDownloadSegment) returnMemory() {
 		uds.download.memoryManager.Return(uds.memoryAllocated - maxMemory)
 		uds.memoryAllocated = maxMemory
 	}
+}
+
+// markSectorCompleted marks the sector with sectorIndex as completed.
+func (uds *unfinishedDownloadSegment) markSectorCompleted(sectorIndex uint64) {
+	uds.completedSectors[sectorIndex] = true
+	uds.sectorsCompleted++
+	completed := uint32(0)
+	for _, b := range uds.completedSectors {
+		if b {
+			completed++
+		}
+	}
+	if completed != uds.sectorsCompleted {
+		log.Debug(fmt.Sprintf("sectors completed and completedSectors out of sync %v != %v",
+			completed, uds.sectorsCompleted))
+	}
+}
+
+// recoverLogicalData will take all of the sectors that have been
+// downloaded and encode them into the logical data which is then written to the
+// underlying writer for the download.
+func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
+
+	// ensure cleanup occurs after the data is recovered, whether recovery succeeds or fails.
+	defer uds.cleanUp()
+
+	// calculate the number of bytes we need to recover
+	btr := bytesToRecover(uds.staticFetchOffset, uds.staticFetchLength, uds.staticSegmentSize, uds.erasureCode)
+
+	// recover the sectors into the logical segment data.
+	recoverWriter := new(bytes.Buffer)
+	err := uds.erasureCode.Recover(uds.physicalSegmentData, int(btr), recoverWriter)
+	if err != nil {
+		uds.mu.Lock()
+		uds.fail(err)
+		uds.mu.Unlock()
+		return errors.New(fmt.Sprintf("unable to recover segment,error: %v", err))
+	}
+
+	// clear out the physical segments, we do not need them anymore.
+	for i := range uds.physicalSegmentData {
+		uds.physicalSegmentData[i] = nil
+	}
+
+	// get recovered data
+	recoveredData := recoverWriter.Bytes()
+
+	// TODO: 确认下，是否需要这个缓存，原来Sia中做这个缓存主要是为了方便外部rpc请求查询下载记录
+	// add the segment to the cache.
+	//if uds.download.staticDestinationType == destinationTypeSeekStream {
+	//	// We only cache streaming segments since browsers and media players tend
+	//	// to only request a few kib at once when streaming data. That way we can
+	//	// prevent scheduling the same segment for download over and over.
+	//	uds.staticStreamCache.Add(uds.staticCacheID, recoveredData)
+	//}
+
+	// write the bytes to the requested output.
+	start := recoveredDataOffset(uds.staticFetchOffset, uds.erasureCode)
+	end := start + uds.staticFetchLength
+	_, err = uds.destination.WriteAt(recoveredData[start:end], uds.staticWriteOffset)
+	if err != nil {
+		uds.mu.Lock()
+		uds.fail(err)
+		uds.mu.Unlock()
+		return errors.New(fmt.Sprintf("unable to write to download destination,error: %v", err))
+	}
+	recoverWriter = nil
+
+	uds.mu.Lock()
+	uds.recoveryComplete = true
+	uds.mu.Unlock()
+
+	// update the download and signal completion of this segment.
+	uds.download.mu.Lock()
+	defer uds.download.mu.Unlock()
+	uds.download.segmentsRemaining--
+	if uds.download.segmentsRemaining == 0 {
+		uds.download.markComplete()
+		return err
+	}
+	return nil
+}
+
+// returns the number of bytes we need to recover from the erasure coded segments.
+func bytesToRecover(segmentFetchOffset, segmentFetchLength, segmentSize uint64, rs erasurecode.ErasureCoder) uint64 {
+
+	// TODO: 确认下，是否不支持部分编码？？
+	// If partialDecoding is not available we downloaded the whole sector and
+	// recovered the whole segment.
+	//if !rs.SupportsPartialEncoding() {
+	//	return segmentSize
+	//}
+
+	// Else we need to calculate how much data we need to recover.
+	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
+	_, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
+	return numSegments * recoveredSegmentSize
+
+}
+
+// recoveredDataOffset translates the fetch offset of the segment into the offset
+// within the recovered data.
+func recoveredDataOffset(segmentFetchOffset uint64, rs erasurecode.ErasureCoder) uint64 {
+
+	// TODO: 确认下，是否不支持部分编码？？
+	// If partialDecoding is not available we downloaded the whole sector and
+	// recovered the whole chunk which means the offset and length are actually
+	// equal to the segmentFetchOffset and segmentFetchLength.
+	//if !rs.SupportsPartialEncoding() {
+	//	return chunkFetchOffset
+	//}
+
+	// Else we need to adjust the offset a bit.
+	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
+	return segmentFetchOffset % recoveredSegmentSize
 }

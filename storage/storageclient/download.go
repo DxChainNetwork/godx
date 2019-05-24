@@ -74,8 +74,6 @@ type (
 )
 
 // fail will mark the download as complete, but with the provided error.
-// If the download has already failed, the error will be updated to be a
-// concatenation of the previous error and the new error.
 func (d *download) fail(err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -94,8 +92,7 @@ func (d *download) fail(err error) {
 	d.markComplete()
 }
 
-// staticComplete is a helper function to indicate whether or not the download
-// has completed.
+// staticComplete is a helper function to indicate whether or not the download has completed.
 func (d *download) staticComplete() bool {
 	select {
 	case <-d.completeChan:
@@ -105,23 +102,14 @@ func (d *download) staticComplete() bool {
 	}
 }
 
-// markComplete is a helper method which closes the completeChan and and
-// executes the downloadCompleteFuncs. The completeChan should always be closed
-// using this method.
+// markComplete is a helper method which closes the completeChan and and executes the downloadCompleteFuncs.
 func (d *download) markComplete() {
-	// Avoid calling markComplete multiple times. In a production build
-	// build.Critical won't panic which is fine since we set
-	// downloadCompleteFunc to nil after executing them. We still don't want to
-	// close the completeChan again though to avoid a crash.
 	if d.staticComplete() {
 		d.log.Warn("Can't call markComplete multiple times")
 	} else {
 		defer close(d.completeChan)
 	}
-	// Execute the downloadCompleteFuncs before closing the channel. This gives
-	// the initiator of the download the nice guarantee that waiting for the
-	// completeChan to be closed also means that the downloadCompleteFuncs are
-	// done.
+
 	var errs []error
 	for _, f := range d.downloadCompleteFuncs {
 		err := f(d.err)
@@ -129,10 +117,11 @@ func (d *download) markComplete() {
 			errs = append(errs, err)
 		}
 	}
-	// Log potential errors.
+
 	if len(errs) != 0 {
 		d.log.Error("Failed to execute at least one downloadCompleteFunc", "error", errs)
 	}
-	// Set downloadCompleteFuncs to nil to avoid executing them multiple times.
+
+	// set downloadCompleteFuncs to nil to avoid executing them multiple times.
 	d.downloadCompleteFuncs = nil
 }

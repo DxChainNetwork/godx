@@ -5,12 +5,15 @@
 package storageclient
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/rpc"
@@ -97,4 +100,11 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 // GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
+}
+
+// covert pubkey to hex string
+func PubkeyToHex(pubkey *ecdsa.PublicKey) string {
+	pubkeyBytes := crypto.FromECDSAPub(pubkey)
+	pubkeyHex := hexutil.Encode(pubkeyBytes)
+	return pubkeyHex
 }

@@ -109,9 +109,6 @@ type StorageClient struct {
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
-
-	wg     sync.WaitGroup
-	quitCh chan struct{}
 }
 
 // New initializes StorageClient object
@@ -124,7 +121,6 @@ func New(persistDir string) (*StorageClient, error) {
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
 		workerPool:     make(map[common.Hash]*worker),
-		quitCh:         make(chan struct{}, 1),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -166,6 +162,19 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
+	// loop to download
+	go sc.downloadLoop()
+
+	// kill workers on shutdown.
+	sc.tm.OnStop(func() error {
+		sc.lock.Lock()
+		for _, worker := range sc.workerPool {
+			close(worker.killChan)
+		}
+		sc.lock.Unlock()
+		return nil
+	})
+
 	// TODO (mzhang): Subscribe consensus change
 
 	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
@@ -180,7 +189,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 func (sc *StorageClient) Close() error {
 	err := sc.storageHostManager.Close()
 	errSC := sc.tm.Stop()
-	close(sc.quitCh)
 	return common.ErrCompose(err, errSC)
 }
 
@@ -595,8 +603,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
 		hostPubkey := lastRevision.UnlockConditions.PublicKeys[1]
-		pubkeyBytes := crypto.FromECDSAPub(&hostPubkey)
-		pubkeyHex := hexutil.Encode(pubkeyBytes)
+		pubkeyHex := PubkeyToHex(&hostPubkey)
 		hostID := enode.HexID(pubkeyHex)
 		if err != nil {
 			client.storageHostManager.IncrementFailedInteractions(hostID)
@@ -705,7 +712,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 // Download calls the Read RPC with a single section and returns the
 // requested data. A Merkle proof is always requested.
-func (client *StorageClient) Downlaod(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
+func (client *StorageClient) Download(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
