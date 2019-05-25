@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	dirFileName = ".dxdir"
+	DirFileName = ".dxdir"
 
-	defaultHealth = uint32(200)
+	DefaultHealth = uint32(200)
 )
 
 type (
@@ -56,7 +56,7 @@ type (
 		TimeModify uint64
 
 		// NumStuckSegments is the total number of segments that is stuck
-		NumStuckSegments uint64
+		NumStuckSegments uint32
 
 		// DxPath is the DxPath which is the path related to the root directory
 		DxPath storage.DxPath
@@ -69,7 +69,7 @@ type (
 //New create a DxDir with representing the dirPath metadata.
 //Note that the only access method should be from dirSet
 func New(dxPath storage.DxPath, rootPath storage.SysPath, wal *writeaheadlog.Wal) (*DxDir, error) {
-	filePath := rootPath.Join(dxPath, dirFileName)
+	filePath := rootPath.Join(dxPath, DirFileName)
 	_, err := os.Stat(string(filePath))
 	if err == nil {
 		return nil, os.ErrExist
@@ -81,8 +81,8 @@ func New(dxPath storage.DxPath, rootPath storage.SysPath, wal *writeaheadlog.Wal
 		return nil, err
 	}
 	metadata := &Metadata{
-		Health:      defaultHealth,
-		StuckHealth: defaultHealth,
+		Health:      DefaultHealth,
+		StuckHealth: DefaultHealth,
 		TimeModify:  uint64(time.Now().Unix()),
 		DxPath:      dxPath,
 		RootPath:    rootPath,

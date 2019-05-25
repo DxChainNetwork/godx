@@ -120,7 +120,7 @@ func randomDxDir(t *testing.T) *DxDir {
 	return &DxDir{
 		metadata:    m,
 		wal:         wal,
-		dirFilePath: testDir.Join(dxPath, dirFileName),
+		dirFilePath: testDir.Join(dxPath, DirFileName),
 	}
 }
 
@@ -165,6 +165,6 @@ func randomMetadata() *Metadata {
 		MinRedundancy:       randomUint32(),
 		TimeLastHealthCheck: randomUint64(),
 		TimeModify:          randomUint64(),
-		NumStuckSegments:    randomUint64(),
+		NumStuckSegments:    randomUint32(),
 	}
 }

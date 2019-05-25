@@ -243,7 +243,7 @@ func (fs *FileSet) closeEntry(entry *FileSetEntryWithID) {
 }
 
 func (fs *FileSet) filepath(path storage.DxPath) storage.SysPath {
-	return fs.rootDir.Join(path)
+	return fs.rootDir.Join(path) + storage.DxFileExt
 }
 
 // newThreadinfo created a threadInfo entry for the threadMap

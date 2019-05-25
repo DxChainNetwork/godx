@@ -228,7 +228,7 @@ func (ds *DirSet) UpdateMetadata(path storage.DxPath, metadata Metadata) error {
 }
 
 func (ds *DirSet) dirFilePath(path storage.DxPath) storage.SysPath {
-	return ds.rootDir.Join(path, dirFileName)
+	return ds.rootDir.Join(path, DirFileName)
 }
 
 // newThread create the threadInfo by calling runtime.Caller

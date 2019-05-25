@@ -117,6 +117,11 @@ func (dp DxPath) Equals(dp2 DxPath) bool {
 	return dp.Path == dp2.Path
 }
 
+// Join join the DxPath with s
+func (dp DxPath) Join(s string) (DxPath, error) {
+	return NewDxPath(filepath.Join(dp.Path, s))
+}
+
 // Join join the receiver syspath with DxPath and some extrafields.
 func (sp SysPath) Join(dp DxPath, extra ...string) SysPath {
 	path := []string{string(sp)}

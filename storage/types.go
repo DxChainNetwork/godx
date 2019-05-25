@@ -12,6 +12,11 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
+const (
+	// DxFileExt is the extension of DxFile
+	DxFileExt = ".dxfile"
+)
+
 type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {

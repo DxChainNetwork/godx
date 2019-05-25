@@ -118,7 +118,7 @@ func TestFileSet_NewDxFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(string(testDir.Join(newEntry.metadata.DxPath))); err != nil {
+	if _, err := os.Stat(string(testDir.Join(newEntry.metadata.DxPath)) + storage.DxFileExt); err != nil {
 		t.Errorf("Creating a DxFile, the file does not exist: %v", err)
 	}
 }
@@ -225,7 +225,7 @@ func TestFileSet_RenameOpen(t *testing.T) {
 	if _, err := os.Stat(string(testDir.Join(prevDxPath))); !os.IsNotExist(err) {
 		t.Errorf("After rename, previous dxPath file should not exist: %v", err)
 	}
-	if _, err := os.Stat(string(testDir.Join(newDxPath))); err != nil {
+	if _, err := os.Stat(string(testDir.Join(newDxPath)) + storage.DxFileExt); err != nil {
 		t.Errorf("After rename, the new dxPath file should exist: %v", err)
 	}
 	if len(fs.filesMap) != 1 {

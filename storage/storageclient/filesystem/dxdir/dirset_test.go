@@ -43,9 +43,9 @@ func TestNewDirSet(t *testing.T) {
 	if _, err = os.Stat(string(ds.rootDir.Join(storage.RootDxPath()))); err != nil {
 		t.Fatal("after start, the root dir is not initialized")
 	}
-	_, err = os.Stat(string(ds.rootDir.Join(storage.RootDxPath(), dirFileName)))
+	_, err = os.Stat(string(ds.rootDir.Join(storage.RootDxPath(), DirFileName)))
 	if err != nil {
-		t.Fatalf("file not exist: %v", ds.rootDir.Join(storage.RootDxPath(), dirFileName))
+		t.Fatalf("file not exist: %v", ds.rootDir.Join(storage.RootDxPath(), DirFileName))
 	}
 	// Create a new DirSet with the same directory, no error should be reported
 	_, err = NewDirSet(testDirSetDir, ds.wal)
