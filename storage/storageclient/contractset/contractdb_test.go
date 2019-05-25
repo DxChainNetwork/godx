@@ -337,11 +337,14 @@ func contractHeaderGenerator() (ch ContractHeader) {
 			ParentID:          randomHashGenerator(),
 			NewRevisionNumber: 15,
 		},
-		PrivateKey:   "12345",
+		PrivateKey:   "12345678910",
 		StartHeight:  100,
 		DownloadCost: common.RandomBigInt(),
 		UploadCost:   common.RandomBigInt(),
 		TotalCost:    common.RandomBigInt(),
+		StorageCost:  common.RandomBigInt(),
+		GasFee:       common.RandomBigInt(),
+		ContractFee:  common.RandomBigInt(),
 	}
 
 	return

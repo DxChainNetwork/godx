@@ -7,12 +7,12 @@ package contractset
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/rlp"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -36,6 +36,14 @@ type walRootsEntry struct {
 	ID    storage.ContractID
 	Root  common.Hash
 	Index uint64
+}
+
+// Status will return the current status of the contract
+func (c *Contract) Status() (stats storage.ContractStatus) {
+	c.headerLock.Lock()
+	defer c.headerLock.Unlock()
+
+	return c.header.Status
 }
 
 // UpdateStatus will update the current contract status
@@ -101,8 +109,8 @@ func (c *Contract) RecordUploadPreRev(rev types.StorageContractRevision, root co
 	return
 }
 
-// RecordUploadPreRev will record pre-revision contract revision after file download operation,
-// which is not stored in the database. once negotiation has completed, CommitUpload
+// RecordDownloadPreRev will record pre-revision contract revision after file download operation,
+// which is not stored in the database. once negotiation has completed, CommitDownload
 // will be called to record the actual contract revision and store it into database
 func (c *Contract) RecordDownloadPreRev(rev types.StorageContractRevision, bandwidthCost common.BigInt) (t *writeaheadlog.Transaction, err error) {
 	// get the storage contract header information from the memory
@@ -267,9 +275,8 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 		LatestContractRevision: c.header.LatestContractRevision,
 		StartHeight:            c.header.StartHeight,
 
-		// TODO (mzhang): add EndHeight calculation
-
-		// TODO (mzhang): add ClientBalance calculation
+		EndHeight:     c.header.LatestContractRevision.NewWindowStart,
+		ClientBalance: c.header.LatestContractRevision.NewValidProofOutputs[0].Value,
 
 		UploadCost:   c.header.UploadCost,
 		DownloadCost: c.header.DownloadCost,
@@ -280,14 +287,6 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 		Status:       c.header.Status,
 	}
 	return
-}
-
-// Status will return the current status of the contract
-func (c *Contract) Status() (stats storage.ContractStatus) {
-	c.headerLock.Lock()
-	defer c.headerLock.Unlock()
-
-	return c.header.Status
 }
 
 // contractHeaderUpdate will update contract header information in both db and mermory
