@@ -125,3 +125,29 @@ func (d *download) markComplete() {
 	// set downloadCompleteFuncs to nil to avoid executing them multiple times.
 	d.downloadCompleteFuncs = nil
 }
+
+// returns the error encountered by a download
+func (d *download) Err() (err error) {
+	d.mu.Lock()
+	err = d.err
+	d.mu.Unlock()
+	return err
+}
+
+// registers a function to be called when the download is completed
+func (d *download) OnComplete(f downloadCompleteFunc) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.onComplete(f)
+}
+
+// the same effect as OnComplete
+func (d *download) onComplete(f downloadCompleteFunc) {
+	select {
+	case <-d.completeChan:
+		err := f(d.err)
+		d.log.Error("Failed to execute downloadCompleteFunc", "error", err)
+	default:
+	}
+	d.downloadCompleteFuncs = append(d.downloadCompleteFuncs, f)
+}

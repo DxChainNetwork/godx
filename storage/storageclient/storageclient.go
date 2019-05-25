@@ -9,11 +9,17 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"math/bits"
+	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
+	"time"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -109,6 +115,9 @@ type StorageClient struct {
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
+
+	// file management.
+	staticFileSet *dxfile.FileSet
 }
 
 // New initializes StorageClient object
@@ -727,4 +736,290 @@ func (client *StorageClient) Download(s *storage.Session, root common.Hash, offs
 	var buf bytes.Buffer
 	err := client.Read(s, &buf, req, nil)
 	return buf.Bytes(), err
+}
+
+// newDownload creates and initializes a download task based on the provided parameters from outer request
+func (client *StorageClient) newDownload(params downloadParams) (*download, error) {
+
+	// params validation.
+	if params.file == nil {
+		return nil, errors.New("no file provided when requesting download")
+	}
+	if params.length < 0 {
+		return nil, errors.New("download length must be zero or a positive whole number")
+	}
+	if params.offset < 0 {
+		return nil, errors.New("download offset cannot be a negative number")
+	}
+	if params.offset+params.length > params.file.FileSize() {
+		return nil, errors.New("download is requesting data past the boundary of the file")
+	}
+
+	// instantiate the download object.
+	d := &download{
+		completeChan:          make(chan struct{}),
+		staticStartTime:       time.Now(),
+		destination:           params.destination,
+		destinationString:     params.destinationString,
+		staticDestinationType: params.destinationType,
+		staticLatencyTarget:   params.latencyTarget,
+		staticLength:          params.length,
+		staticOffset:          params.offset,
+		staticOverdrive:       params.overdrive,
+		staticDxFilePath:      params.file.DxPath(),
+		staticPriority:        params.priority,
+		log:                   client.log,
+		memoryManager:         client.memoryManager,
+	}
+
+	// set the end time of the download when it's done.
+	d.onComplete(func(_ error) error {
+		d.endTime = time.Now()
+		return nil
+	})
+
+	// nothing more to do for 0-byte files or 0-length downloads.
+	if d.staticLength == 0 {
+		d.markComplete()
+		return d, nil
+	}
+
+	// determine which segments to download.
+	minSegment, minSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
+	maxSegment, maxSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
+
+	// if the maxSegmentOffset is exactly 0 we need to subtract 1 segment. e.g. if
+	// the segmentSize is 100 bytes and we want to download 100 bytes from offset
+	// 0, maxSegment would be 1 and maxSegmentOffset would be 0. We want maxSegment
+	// to be 0 though since we don't actually need any data from segment 1.
+	if maxSegment > 0 && maxSegmentOffset == 0 {
+		maxSegment--
+	}
+
+	// make sure the requested segments are within the boundaries.
+	if minSegment == params.file.NumSegments() || maxSegment == params.file.NumSegments() {
+		return nil, errors.New("download is requesting a segment that is past the boundary of the file")
+	}
+
+	// for each segment, assemble a mapping from the contract id to the index of
+	// the sector within the segment that the contract is responsible for.
+	segmentMaps := make([]map[string]downloadSectorInfo, maxSegment-minSegment+1)
+	for segmentIndex := minSegment; segmentIndex <= maxSegment; segmentIndex++ {
+		segmentMaps[segmentIndex-minSegment] = make(map[string]downloadSectorInfo)
+		sectors, err := params.file.Sectors(uint64(segmentIndex))
+		if err != nil {
+			return nil, err
+		}
+		for sectorIndex, sectorSet := range sectors {
+			for _, sector := range sectorSet {
+
+				// sanity check - a worker should not have two sectors for the same segment.
+				_, exists := segmentMaps[segmentIndex-minSegment][sector.HostID.String()]
+				if exists {
+					client.log.Error("ERROR: Worker has multiple sectors uploaded for the same segment.")
+				}
+				segmentMaps[segmentIndex-minSegment][sector.HostID.String()] = downloadSectorInfo{
+					index: uint64(sectorIndex),
+					root:  sector.MerkleRoot,
+				}
+			}
+		}
+	}
+
+	// where to write a segment within the download destination
+	writeOffset := int64(0)
+	d.segmentsRemaining += maxSegment - minSegment + 1
+
+	// queue the downloads for each segment.
+	for i := minSegment; i <= maxSegment; i++ {
+		uds := &unfinishedDownloadSegment{
+			destination:        params.destination,
+			erasureCode:        params.file.ErasureCode(),
+			masterKey:          params.file.CipherKey(),
+			staticSegmentIndex: i,
+			staticCacheID:      fmt.Sprintf("%v:%v", d.staticDxFilePath, i),
+			staticSegmentMap:   segmentMaps[i-minSegment],
+			staticSegmentSize:  params.file.SegmentSize(),
+			staticSectorSize:   params.file.SectorSize(),
+
+			// increase target by 25ms per segment
+			staticLatencyTarget: params.latencyTarget + (25 * time.Duration(i-minSegment)),
+			staticNeedsMemory:   params.needsMemory,
+			staticPriority:      params.priority,
+			completedSectors:    make([]bool, params.file.ErasureCode().NumSectors()),
+			physicalSegmentData: make([][]byte, params.file.ErasureCode().NumSectors()),
+			sectorUsage:         make([]bool, params.file.ErasureCode().NumSectors()),
+			download:            d,
+			renterFile:          params.file,
+			staticStreamCache:   client.streamCache,
+		}
+
+		// set the offset within the segment that we start downloading from
+		if i == minSegment {
+			uds.staticFetchOffset = minSegmentOffset
+		} else {
+			uds.staticFetchOffset = 0
+		}
+
+		// set the number of bytes to fetch within the segment that we start downloading from
+		if i == maxSegment && maxSegmentOffset != 0 {
+			uds.staticFetchLength = maxSegmentOffset - uds.staticFetchOffset
+		} else {
+			uds.staticFetchLength = params.file.SegmentSize() - uds.staticFetchOffset
+		}
+
+		// set the writeOffset within the destination for where the data be written.
+		uds.staticWriteOffset = writeOffset
+		writeOffset += int64(uds.staticFetchLength)
+
+		uds.staticOverdrive = uint32(params.overdrive)
+
+		// add this segment to the segment heap, and notify the download loop a new task
+		client.addSegmentToDownloadHeap(uds)
+		select {
+		case client.newDownloads <- struct{}{}:
+		default:
+		}
+	}
+	return d, nil
+}
+
+// managedDownload performs a file download and returns the download object
+func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters) (*download, error) {
+	entry, err := client.staticFileSet.Open(p.DxFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer entry.Close()
+	defer entry.SetTimeAccess(time.Now())
+
+	// validate download parameters.
+	isHTTPResp := p.Httpwriter != nil
+	if p.Async && isHTTPResp {
+		return nil, errors.New("cannot async download to http response")
+	}
+	if isHTTPResp && p.Destination != "" {
+		return nil, errors.New("destination cannot be specified when downloading to http response")
+	}
+	if !isHTTPResp && p.Destination == "" {
+		return nil, errors.New("destination not supplied")
+	}
+	if p.Destination != "" && !filepath.IsAbs(p.Destination) {
+		return nil, errors.New("destination must be an absolute path")
+	}
+
+	if p.Offset == entry.FileSize() && entry.FileSize() != 0 {
+		return nil, errors.New("offset equals filesize")
+	}
+
+	// if length == 0, download the rest file.
+	if p.Length == 0 {
+		if p.Offset > entry.FileSize() {
+			return nil, errors.New("offset cannot be greater than file size")
+		}
+		p.Length = entry.FileSize() - p.Offset
+	}
+
+	// check whether offset and length is valid
+	if p.Offset < 0 || p.Offset+p.Length > entry.FileSize() {
+		return nil, fmt.Errorf("offset and length combination invalid, max byte is at index %d", entry.FileSize()-1)
+	}
+
+	// instantiate the correct downloadWriter implementation
+	var dw downloadDestination
+	var destinationType string
+	if isHTTPResp {
+		dw = newDownloadDestinationWriter(p.Httpwriter)
+		destinationType = "http stream"
+	} else {
+		osFile, err := os.OpenFile(p.Destination, os.O_CREATE|os.O_WRONLY, entry.FileMode())
+		if err != nil {
+			return nil, err
+		}
+		dw = osFile
+		destinationType = "file"
+	}
+
+	if isHTTPResp {
+		w, ok := p.Httpwriter.(http.ResponseWriter)
+		if ok {
+			w.Header().Set("Content-Length", fmt.Sprint(p.Length))
+		}
+	}
+
+	// create the download object.
+	d, err := client.newDownload(downloadParams{
+		destination:       dw,
+		destinationType:   destinationType,
+		destinationString: p.Destination,
+		file:              entry.DxFile.Snapshot(),
+		latencyTarget:     25e3 * time.Millisecond,
+		length:            p.Length,
+		needsMemory:       true,
+		offset:            p.Offset,
+		overdrive:         3,
+		priority:          5,
+	})
+	if closer, ok := dw.(io.Closer); err != nil && ok {
+		closeErr := closer.Close()
+		if closeErr != nil {
+			return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close error: %v", err, closeErr))
+		}
+		return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close successfully", err))
+	} else if err != nil {
+		return nil, err
+	}
+
+	// register some cleanup for when the download is done.
+	d.OnComplete(func(_ error) error {
+		if closer, ok := dw.(io.Closer); ok {
+			return closer.Close()
+		}
+		return nil
+	})
+
+	// TODO: 是否需要保存下载历史
+	// Add the download object to the download history if it's not a stream.
+	//if destinationType != destinationTypeSeekStream {
+	//	r.downloadHistoryMu.Lock()
+	//	r.downloadHistory = append(r.downloadHistory, d)
+	//	r.downloadHistoryMu.Unlock()
+	//}
+
+	return d, nil
+}
+
+// NOTE: DownloadSync and DownloadAsync can directly be accessed to outer request via RPC or IPC ...
+
+// performs a file download and blocks until the download is finished.
+func (client *StorageClient) DownloadSync(p storage.ClientDownloadParameters) error {
+	if err := client.tm.Add(); err != nil {
+		return err
+	}
+	defer client.tm.Done()
+
+	d, err := client.managedDownload(p)
+	if err != nil {
+		return err
+	}
+
+	// block until the download has completed
+	select {
+	case <-d.completeChan:
+		return d.Err()
+	case <-client.tm.StopChan():
+		return errors.New("download interrupted by shutdown")
+	}
+}
+
+// performs a file download without blocking until the download is finished
+func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) error {
+	if err := client.tm.Add(); err != nil {
+		return err
+	}
+	defer client.tm.Done()
+
+	_, err := client.managedDownload(p)
+	return err
 }

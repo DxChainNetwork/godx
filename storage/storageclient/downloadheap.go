@@ -167,6 +167,21 @@ func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownlo
 	c.lock.Unlock()
 
 	// if there are no workers, there will be no workers to attempt to clean up
-	// the chunk, so we must make sure that cleanUp is called at least once on the segment.
+	// the segment, so we must make sure that cleanUp is called at least once on the segment.
 	uds.cleanUp()
+}
+
+// addSegmentToDownloadHeap will add a segment to the download heap
+func (c *StorageClient) addSegmentToDownloadHeap(uds *unfinishedDownloadSegment) {
+
+	// the sole purpose of the heap is to block workers from receiving a segment until memory has been allocated
+	if !uds.staticNeedsMemory {
+		c.distributeDownloadSegmentToWorkers(uds)
+		return
+	}
+
+	// put the segment into the segment heap.
+	c.downloadHeapMu.Lock()
+	c.downloadHeap.Push(uds)
+	c.downloadHeapMu.Unlock()
 }

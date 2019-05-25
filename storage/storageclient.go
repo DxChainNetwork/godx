@@ -6,6 +6,7 @@ package storage
 
 import (
 	"crypto/ecdsa"
+	"io"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -72,4 +73,15 @@ type ContractUtility struct {
 	GoodForUpload bool
 	GoodForRenew  bool
 	Locked        bool // Locked utilities can only be set to false.
+}
+
+// ClientDownloadParameters defines the parameters passed to the client's
+// Download method.
+type ClientDownloadParameters struct {
+	Async       bool
+	Httpwriter  io.Writer
+	Length      uint64
+	Offset      uint64
+	DxFilePath  string
+	Destination string
 }
