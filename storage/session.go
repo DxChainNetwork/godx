@@ -120,6 +120,15 @@ func (s *Session) HostInfo() *HostInfo {
 	return &s.host
 }
 
+// RW() and SetRW() for only test
+func (s *Session) RW() p2p.MsgReadWriter {
+	return s.rw
+}
+
+func (s *Session) SetRW(rw p2p.MsgReadWriter) {
+	s.rw = rw
+}
+
 func (s *Session) SendStorageContractCreation(data interface{}) error {
 	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
 	return p2p.Send(s.rw, StorageContractCreationMsg, data)

@@ -228,6 +228,12 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		},
 	}
 
+	account := accounts.Account{Address: clientAddr}
+	wallet, err := sc.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		return storagehost.ExtendErr("find client account error", err)
+	}
+
 	// TODO: 记录与当前host协商交互的结果，用于后续健康度检查
 	//defer func() {
 	//	if err != nil {
@@ -240,12 +246,20 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 
 	// Setup connection with storage host
 	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
+	if err != nil {
+		return storagehost.ExtendErr("setup connection with host failed", err)
+	}
 	defer sc.ethBackend.Disconnect(host.NetAddress)
+
+	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
+	if err != nil {
+		return storagehost.ExtendErr("contract sign by client failed", err)
+	}
 
 	// Send the ContractCreate request
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
-		ClientPK:        uc.PublicKeys[0],
+		Sign:            clientContractSign,
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {
@@ -277,16 +291,6 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
 
-	account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
-	wallet, err := sc.ethBackend.AccountManager().Find(account)
-	if err != nil {
-		return storagehost.ExtendErr("find client account error", err)
-	}
-
-	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("client sign contract error", err)
-	}
 	storageContract.Signatures[0] = clientContractSign
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
@@ -295,8 +299,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
-	clientSigns := storage.ContractCreateSignature{ContractSign: clientContractSign, RevisionSign: clientRevisionSign}
-	if err := session.SendStorageContractCreationClientRevisionSign(clientSigns); err != nil {
+	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
 		return storagehost.ExtendErr("send revision sign by client error", err)
 	}
 

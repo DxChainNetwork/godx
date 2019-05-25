@@ -373,13 +373,18 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		return errors.New("host is not accepting new contracts")
 	}
 
+	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
 		return err
 	}
 
 	sc := req.StorageContract
-	clientPK := req.ClientPK
+	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
+	if err != nil {
+		return ExtendErr("recover publicKey from signature failed", err)
+	}
+	sc.Signatures[0] = req.Sign
 
 	// Check host balance >= storage contract cost
 	hostAddress := sc.ValidProofOutputs[1].Address
@@ -410,32 +415,32 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
-	if err := VerifyStorageContract(h, &sc, &clientPK, hostPK); err != nil {
+	if err := VerifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
 		return ExtendErr("host verify storage contract failed", err)
 	}
 
+	// 2. After check, send host contract sign to client
 	sc.Signatures[1] = hostContractSign
-
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
 		return ExtendErr("send storage contract create sign by host", err)
 	}
 
-	var clientContractAndRevisionSigns storage.ContractCreateSignature
+	// 3. Wait for the client revision sign
+	var clientRevisionSign []byte
 	if msg, err := s.ReadMsg(); err != nil {
-		if err := msg.Decode(&clientContractAndRevisionSigns); err != nil {
+		if err := msg.Decode(&clientRevisionSign); err != nil {
 			return err
 		}
 	} else {
 		return err
 	}
-	sc.Signatures[0] = clientContractAndRevisionSigns.ContractSign
 
 	// Reconstruct revision locally by host
 	storageContractRevision := types.StorageContractRevision{
 		ParentID: sc.RLPHash(),
 		UnlockConditions: types.UnlockConditions{
 			PublicKeys: []ecdsa.PublicKey{
-				clientPK,
+				*clientPK,
 				*hostPK,
 			},
 			SignaturesRequired: 2,
@@ -457,7 +462,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		return ExtendErr("host sign revison error", err)
 	}
 
-	storageContractRevision.Signatures = [][]byte{clientContractAndRevisionSigns.RevisionSign, hostRevisionSign}
+	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
 	so := StorageObligation{
 		SectorRoots: nil,
