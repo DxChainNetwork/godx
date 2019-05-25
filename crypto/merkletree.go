@@ -106,6 +106,16 @@ func MerkleRoot(b []byte) (h common.Hash) {
 	return mt.Root()
 }
 
+// CachedMerkleTreeRoot will return the merkle root of the cached merkle tree
+func CachedMerkleTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
+	cmt := NewCachedMerkleTree(height)
+	for _, r := range roots {
+		cmt.Push(r)
+	}
+
+	return cmt.Root()
+}
+
 // MerkleProof will return the hash proof set of the merkle proof based on the data provided.
 // proofData represents the data that needs to be hashed and combined with the data hashes
 // in the proof set to check the integrity of the data

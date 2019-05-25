@@ -5,17 +5,19 @@
 package contractset
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// merkleRoots contained a bunch of uploaded data merkle roots
 type merkleRoots struct {
 	cachedSubTrees []*cachedSubTree
 	uncachedRoots  []common.Hash
 	numMerkleRoots int
 	db             *DB
+	id             storage.ContractID
 }
 
 type cachedSubTree struct {
@@ -23,9 +25,10 @@ type cachedSubTree struct {
 	sum    common.Hash
 }
 
-func newMerkleRoots(db *DB) (mk *merkleRoots) {
+func newMerkleRoots(db *DB, id storage.ContractID) (mk *merkleRoots) {
 	return &merkleRoots{
 		db: db,
+		id: id,
 	}
 }
 
@@ -35,82 +38,40 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 		log.Crit("failed to create the cachedSubTree using the root provided")
 	}
 
-	// create the cachedSubTree
+	// create the cachedSubTree, where the height of the sub tree
+	// will be the height of the cached tree + the height of the
+	// merkle tree constructed by the data sector, which are both
+	// constant
 	return &cachedSubTree{
 		height: int(merkleRootsCacheHeight + sectorHeight),
-		sum:    cachedMerkleRoot(roots),
+		sum:    crypto.CachedMerkleTreeRoot(roots, sectorHeight),
 	}
 }
 
-func (mr *merkleRoots) insert(id storage.ContractID, index int, root common.Hash) (err error) {
-	for index > mr.numMerkleRoots {
-		if err := mr.push(id, common.Hash{}); err != nil {
-			return fmt.Errorf("failed to add roots: %s", err.Error())
-		}
+// loadMerkleRoots will load all merkle roots saved in the dab, which
+// will then be saved into the memory
+func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *merkleRoots) {
+	// initialize merkle roots
+	mr = &merkleRoots{
+		db: db,
+		id: id,
 	}
 
-	// if same, push to the merkle tree
-	if index == mr.numMerkleRoots {
-		return mr.push(id, root)
-	}
-
-	// index < mr.numMerkleRoots
-	roots, err := mr.db.FetchMerkleRoots(id)
-	if err != nil {
-		return fmt.Errorf("failed to fetch merkle roots: %s", err.Error())
-	}
-
-	// before accessing the root with the index, check the length again
-	if len(roots)-1 <= index {
-		return mr.insert(id, mr.numMerkleRoots, root)
-	}
-
-	// replace the root and store the value into the database
-	roots[index] = root
-	if err = mr.db.StoreMerkleRoots(id, roots); err != nil {
-		return
-	}
-
-	// check if the root is cached, update the record in memory
-	position, cached := mr.isCached(index)
-	if !cached {
-		mr.uncachedRoots[position] = root
-		return
-	}
-
-	// otherwise, cached tree reconstruction is required
-	if err = mr.reconstructCachedTree(position); err != nil {
-		return fmt.Errorf("failed to reconstruct the cached tree: %s", err.Error())
-	}
+	mr.appendRootMemory(roots...)
 
 	return
 }
 
-func (mr *merkleRoots) reconstructCachedTree(position int) (err error) {
-	return
-}
-
-// isCached check if the root with the index is already constructed
-// as a sub tree. if the index is cached, meaning the root with the index
-// has been contracted as a sub tree
-func (mr *merkleRoots) isCached(index int) (position int, cached bool) {
-	if index/merkleRootsPerCache == len(mr.cachedSubTrees) {
-		// un-cached
-		return index - len(mr.cachedSubTrees)*merkleRootsPerCache, false
-	}
-
-	// cached
-	return index / merkleRootsPerCache, true
-}
-
-func (mr *merkleRoots) push(id storage.ContractID, root common.Hash) (err error) {
+// push will store the root passed in into database first, then it will
+// be saved into the memory
+func (mr *merkleRoots) push(root common.Hash) (err error) {
 	// validation
 	if len(mr.uncachedRoots) == merkleRootsPerCache {
 		log.Crit("the number of uncachedRoots is too big, they should be cached")
 	}
 
 	// store the root into the database
-	if err = mr.db.StoreSingleRoot(id, root); err != nil {
+	if err = mr.db.StoreSingleRoot(mr.id, root); err != nil {
 		return
 	}
 
@@ -118,17 +79,6 @@ func (mr *merkleRoots) push(id storage.ContractID, root common.Hash) (err error)
 	mr.appendRootMemory(root)
 
 	mr.numMerkleRoots++
-
-	return
-}
-
-func loadMerkleRoots(db *DB, roots []common.Hash) (mr *merkleRoots) {
-	// initialize merkle roots
-	mr = &merkleRoots{
-		db: db,
-	}
-
-	mr.appendRootMemory(roots...)
 
 	return
 }
@@ -146,8 +96,40 @@ func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) {
 	}
 }
 
-// TODO (mzhang): WIP
-func cachedMerkleRoot(roots []common.Hash) (root common.Hash) {
+// newMerkleRootPreview will display the new merkle root when a newRoot is passed in.
+// Note: this is only a preview, root will not be saved into the memory nor db
+func (mr *merkleRoots) newMerkleRootPreview(newRoot common.Hash) (mroot common.Hash, err error) {
+	// create a new cached merkle tree
+	ct := crypto.NewCachedMerkleTree(sectorHeight)
+
+	// append all cachedSubTrees first
+	for _, sub := range mr.cachedSubTrees {
+		if err = ct.PushSubTree(sub.height, sub.sum); err != nil {
+			return
+		}
+	}
+
+	// append uncached root
+	for _, root := range mr.uncachedRoots {
+		ct.Push(root)
+	}
+
+	// push the newRoot and calculate the merkle root
+	ct.Push(newRoot)
+	mroot = ct.Root()
+	return
+}
+
+// roots will return all roots saved in the database which belongs to the contract id
+func (mr *merkleRoots) roots() (roots []common.Hash, err error) {
+	if roots, err = mr.db.FetchMerkleRoots(mr.id); err != nil {
+		return
+	}
+
+	if len(roots) != mr.numMerkleRoots {
+		log.Crit("Error: the length of retrieved merkle roots does not match with the number of merkle roots stored in the memory")
+	}
+
 	return
 }
 

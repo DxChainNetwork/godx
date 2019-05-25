@@ -121,7 +121,7 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 	for piece := 0; piece < 50; piece++ {
 		roots := randomHashSliceGenerator(piece)
 
-		mr := merkleCachedTreeRoot(roots)
+		mr := CachedMerkleTreeRoot(roots, sectorHeight)
 
 		for startProof := 0; startProof < piece; startProof++ {
 			for endProof := startProof + 1; endProof < piece-1; endProof++ {
@@ -144,7 +144,7 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 
 func TestMerkleDiffProofVerification(t *testing.T) {
 	roots := randomHashSliceGenerator(50)
-	mr := merkleCachedTreeRoot(roots)
+	mr := CachedMerkleTreeRoot(roots, sectorHeight)
 	rangeSet := []merkletree.LeafRange{
 		merkletree.LeafRange{Start: 1, End: 2},
 		merkletree.LeafRange{Start: 10, End: 20},
@@ -202,15 +202,6 @@ var sectorHeight = func() uint64 {
 	}
 	return height
 }()
-
-func merkleCachedTreeRoot(roots []common.Hash) (root common.Hash) {
-	cmt := NewCachedMerkleTree(sectorHeight)
-	for _, r := range roots {
-		cmt.Push(r)
-	}
-
-	return cmt.Root()
-}
 
 func merkleLeaves(data []byte) (leaves [][]byte) {
 	// length of the data pieces should be equivalent to the number of leaves of the merkle tree

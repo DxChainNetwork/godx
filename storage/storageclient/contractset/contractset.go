@@ -17,15 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// ************************************************************************
-//                             MOCKED DATA
-// ************************************************************************
-
-type RateLimit struct{}
-
-// ************************************************************************
-// ************************************************************************
-
 type StorageContractSet struct {
 	contracts        map[storage.ContractID]*Contract
 	hostToContractID map[enode.ID]storage.ContractID
@@ -62,7 +53,8 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 		wal:              wal,
 	}
 
-	// TODO (mzhang): Set rate limit
+	// initialize rateLimit object
+	scs.rl = NewRateLimit(0, 0, 0)
 
 	// load the contracts from the database
 	if err = scs.loadContract(walTxns); err != nil {
@@ -95,9 +87,9 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 	}
 
 	// add the root to db as well as memory merkle tree
-	merkleRoots := newMerkleRoots(scs.db)
+	merkleRoots := newMerkleRoots(scs.db, ch.ID)
 	for _, root := range roots {
-		if err = merkleRoots.push(ch.ID, root); err != nil {
+		if err = merkleRoots.push(root); err != nil {
 			return
 		}
 	}
@@ -189,6 +181,16 @@ func (scs *StorageContractSet) IDs() (ids []storage.ContractID) {
 	return
 }
 
+// SetRateLimit will set the rate limit based on the value user provided
+func (scs *StorageContractSet) SetRateLimit(readBPS, writeBPS int64, packetSize uint64) {
+	scs.rl.SetRateLimit(readBPS, writeBPS, packetSize)
+}
+
+// RetrieveRateLimit will retrieve the current rate limit settings
+func (scs *StorageContractSet) RetrieveRateLimit() (readBPS, writeBPS int64, packetSize uint64) {
+	return scs.rl.RetrieveRateLimit()
+}
+
 // RetrieveMetaData will return ContractMetaData based on the contract id provided
 func (scs *StorageContractSet) RetrieveContractMetaData(id storage.ContractID) (cm storage.ContractMetaData, exist bool) {
 	scs.lock.Lock()
@@ -239,7 +241,7 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		}
 
 		// load merkle roots
-		mr := loadMerkleRoots(scs.db, roots)
+		mr := loadMerkleRoots(scs.db, id, roots)
 
 		// TODO (mzhang): currently, un-applied WAL transaction will be ignored
 		// in the future, they should be handled, however, the negotiation process

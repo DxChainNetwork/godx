@@ -155,8 +155,7 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 		return fmt.Errorf("during the upload commiting, %s", err.Error())
 	}
 
-	// TODO (mzhang): double check if the insert method is really needed
-	if err = c.merkleRoots.push(contractHeader.ID, root); err != nil {
+	if err = c.merkleRoots.push(root); err != nil {
 		return fmt.Errorf("failed to save the root into db while commit upload: %s", err.Error())
 	}
 
@@ -218,7 +217,7 @@ func (c *Contract) CommitTxns() (err error) {
 				if err = rlp.DecodeBytes(op.Data, &walRoot); err != nil {
 					return
 				}
-				if err = c.merkleRoots.push(walRoot.ID, walRoot.Root); err != nil {
+				if err = c.merkleRoots.push(walRoot.Root); err != nil {
 					return
 				}
 			}
