@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package filesystem
 
 import (
@@ -14,7 +18,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
@@ -116,7 +119,7 @@ func (fs *FileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadl
 	if err != nil {
 		return nil, err
 	}
-	txn, err := fs.dirMetadataWal.NewTransaction([]writeaheadlog.Operation{op})
+	txn, err := fs.updateWal.NewTransaction([]writeaheadlog.Operation{op})
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +143,18 @@ func createWalOp(path storage.DxPath) (writeaheadlog.Operation, error) {
 		Name: dirMetadataUpdateName,
 		Data: b,
 	}, nil
+}
+
+// decodeWalOp decode the wal.Operation to DxPath
+func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
+	if operation.Name != dirMetadataUpdateName {
+		return storage.DxPath{}, fmt.Errorf("unknown operation name for updateWal [%s]", operation.Name)
+	}
+	var s string
+	if err := rlp.DecodeBytes(operation.Data, &s); err != nil {
+		return storage.DxPath{}, err
+	}
+	return storage.NewDxPath(s)
 }
 
 // applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a
@@ -188,7 +203,7 @@ func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadl
 	}()
 	err = fs.tm.Add()
 	if err != nil {
-		err = fmt.Errorf("cannot create a dirMetadataUpdate: %v", err)
+		err = errStopped
 		return
 	}
 	fs.unfinishedUpdates[path] = update
@@ -217,10 +232,14 @@ func (update *dirMetadataUpdate) stopAndRedo() {
 // and save to dxdir. This is the core function of this file
 func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	var err error
+	// Call cleanUp to clean up the update
+	defer update.cleanUp(fs, err)
 
+	if fs.disrupt("no repair") {
+		err = fmt.Errorf("disrupted no repair")
+		return
+	}
 	for {
-		// TODO: Calculate the metadata and apply
-
 		// Termination. Only happens when redo value is redoNotNeeded
 		select {
 		case <-update.stop:
@@ -232,8 +251,6 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			break
 		}
 	}
-	// Call cleanUp to clean up the update
-	update.cleanUp(fs, err)
 	return
 }
 
@@ -276,9 +293,9 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	if err != nil {
 		// error handling. Currently just log the error
 		if fails == numConsecutiveFailRelease {
-			log.Crit("cannot update the metadata", err)
+			fs.logger.Error("cannot update the metadata:", "err", err)
 		} else {
-			log.Warn("cannot update the metadata", err)
+			fs.logger.Warn("cannot update the metadata", "err", err)
 		}
 	} else {
 		if update.dxPath.IsRoot() {
@@ -287,11 +304,11 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		}
 		parent, err := update.dxPath.Parent()
 		if err != nil {
-			log.Warn("cannot create parent directory of %v: %v", update.dxPath.Path, err)
+			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "err", err)
 			return
 		}
 		if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
-			log.Warn("cannot update parent directory of %v: %v", &update.dxPath.Path, err)
+			fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
 		}
 
 	}
@@ -314,12 +331,12 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 		RootPath:            fs.rootDir,
 	}
 	// Read all files and directories under the path
-	fileinfos, err := ioutil.ReadDir(string(fs.rootDir.Join(update.dxPath)))
+	fileInfos, err := ioutil.ReadDir(string(fs.rootDir.Join(update.dxPath)))
 	if err != nil {
 		return nil, err
 	}
 	// Iterate over all files under the directory
-	for _, file := range fileinfos {
+	for _, file := range fileInfos {
 		// If there is a stop signal, return the error of errStopped
 		select {
 		case <-update.stop:
@@ -332,14 +349,14 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 			// File type DxFile
 			md, err = fs.calculateDxFileMetadata(update.dxPath, file.Name())
 			if err != nil {
-				log.Warn("cannot calculate the file metadata for %v: %v", update.dxPath, err)
+				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath, "err", err)
 				continue
 			}
 		} else if file.IsDir() {
 			// File type DxDir
 			md, err = fs.calculateDxDirMetadata(update.dxPath, file.Name())
 			if err != nil {
-				log.Warn("cannot calculate the file metadata for %v: %v", update.dxPath, err)
+				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath, "err", err)
 				continue
 			}
 		} else {

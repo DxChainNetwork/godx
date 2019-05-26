@@ -4,10 +4,5 @@
 
 package filesystem
 
-import (
-	"testing"
-)
-
-func TestCalculateDxFileMetadata(t *testing.T) {
-
-}
+// disrupterNoLoop is the disrupter to be used no starting the update loop
+var disrupterNoLoop = newNormalDisrupter("no loop")
