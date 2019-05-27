@@ -369,6 +369,10 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+
+	// this RPC call contains two request/response exchanges.
+	s.SetDeadLine(storage.FormContractTime)
+
 	if !h.externalConfig().AcceptingContracts {
 		return errors.New("host is not accepting new contracts")
 	}
@@ -480,6 +484,8 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 }
 
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetDeadLine(storage.ContractRevisionTime)
+
 	// Read upload request
 	var uploadRequest storage.UploadRequest
 	if err := beginMsg.Decode(&uploadRequest); err != nil {
@@ -645,9 +651,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 }
 
 func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-
-	// TODO: 在提供下载传输前，是否需要延长下连接的写超时
-	//s.extendDeadline(modules.NegotiateDownloadTime)
+	s.SetDeadLine(storage.DownloadTime)
 
 	// read the download request.
 	var req storage.DownloadRequest
@@ -736,8 +740,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
 	for _, sec := range req.Sections {
-		// use the worst-case proof size of 2*tree depth (this occurs when
-		// proving across the two leaves in the center of the tree)
+
+		// use the worst-case proof size of 2*tree depth.
+		// this occurs when proving across the two leaves in the center of the tree.
 		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
@@ -770,7 +775,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	// Update the storage obligation.
+	// update the storage obligation.
 	paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
@@ -794,7 +799,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		sectorData := []byte{}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
-		// Construct the Merkle proof, if requested.
+		// construct the Merkle proof, if requested.
 		var proof []common.Hash
 		if req.MerkleProof {
 			proofStart := int(sec.Offset) / storage.SegmentSize
@@ -803,8 +808,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			proof = []common.Hash{}
 		}
 
-		// Send the response. If the renter sent a stop signal, or this is the
-		// final response, include our signature in the response.
+		// send the response. If the client sent a stop signal, or this is the final response, include host's signature in the response.
 		resp := storage.DownloadResponse{
 			Signature:   nil,
 			Data:        data,
@@ -830,6 +834,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			return err
 		}
 	}
-	// The stop signal must arrive before RPC is complete.
+
+	// the stop signal must arrive before RPC is complete.
 	return <-stopSignal
 }

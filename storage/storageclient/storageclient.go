@@ -19,8 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
@@ -34,6 +32,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -453,7 +452,22 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
+	defer func() {
+
+		// TODO: 统计host的健康度
+		// Increase Successful/Failed interactions accordingly
+		//if err != nil {
+		//	sc.storageHostManager.IncrementFailedInteractions(hostID)
+		//} else {
+		//	sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
+		//}
+
+		// reset deadline
+		session.SetDeadLine(time.Hour)
+	}()
+
 	// 1. Send storage upload request
+	session.SetDeadLine(storage.ContractRevisionTime)
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
 		return err
 	}
@@ -520,10 +534,11 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 // cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
 
-	// TODO: Reset deadline when finished.
-	//defer extendDeadline(s.conn, time.Hour)
+	// reset deadline when finished.
+	// if client has download the data, but not sent stopping or completing signal to host, the conn should be disconnected after 1 hour.
+	defer s.SetDeadLine(time.Hour)
 
-	// Sanity-check the request.
+	// sanity check the request.
 	for _, sec := range req.Sections {
 		if uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize {
 			return errors.New("illegal offset and/or length")
@@ -627,7 +642,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	//}
 
 	// send download request
-	//TODO: extendDeadline(s.conn, modules.NegotiateDownloadTime)
+	s.SetDeadLine(storage.DownloadTime)
 	err = s.SendStorageContractDownloadRequest(req)
 	if err != nil {
 		return err

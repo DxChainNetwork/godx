@@ -6,12 +6,14 @@ package storage
 
 import (
 	"crypto/ecdsa"
+	"io"
+	"math/big"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
-	"io"
-	"math/big"
 )
 
 const (
@@ -19,6 +21,20 @@ const (
 	UploadActionTrim   = "Trim"
 	UploadActionSwap   = "Swap"
 	UploadActionUpdate = "Update"
+)
+
+const (
+	// the amount of time that the client and host have to negotiate a download request batch.
+	// the time is set high enough that two nodes can complete the negotiation.
+	DownloadTime = 600 * time.Second
+
+	// the minimum amount of time that the client and host have to negotiate a storage contract revision.
+	// the time is set high enough that a full 4MB can be piped through a connection.
+	ContractRevisionTime = 600 * time.Second
+
+	// the amount of time that the client and host have to negotiate a new storage contract.
+	// the time is set high enough that a node can make the multiple required round trips to complete the negotiation.
+	FormContractTime = 360 * time.Second
 )
 
 type (

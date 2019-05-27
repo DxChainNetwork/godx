@@ -542,3 +542,7 @@ func (p *Peer) Info() *PeerInfo {
 	}
 	return info
 }
+
+func (p *Peer) GetConn() net.Conn {
+	return p.rw.GetNetConn()
+}

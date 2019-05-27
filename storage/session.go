@@ -7,7 +7,9 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"net"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/p2p"
 )
@@ -118,6 +120,20 @@ func (s *Session) ClientDiscChan() chan error {
 
 func (s *Session) HostInfo() *HostInfo {
 	return &s.host
+}
+
+func (s *Session) getConn() net.Conn {
+	return s.Peer.GetConn()
+}
+
+// set the read and write deadline in connection
+func (s *Session) SetDeadLine(d time.Duration) error {
+	conn := s.getConn()
+	err := conn.SetDeadline(time.Now().Add(d))
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {

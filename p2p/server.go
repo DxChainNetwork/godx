@@ -297,6 +297,10 @@ func (c *conn) set(f connFlag, val bool) {
 	}
 }
 
+func (c *conn) GetNetConn() net.Conn {
+	return c.fd
+}
+
 // Peers returns all connected peers.
 // by passing the peerOp function to srv.peerOp channel
 // what peerOp function did here is take a map of peers and
