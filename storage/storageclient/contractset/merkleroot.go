@@ -51,6 +51,7 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 // loadMerkleRoots will load all merkle roots saved in the dab, which
 // will then be saved into the memory
 func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *merkleRoots) {
+
 	// initialize merkle roots
 	mr = &merkleRoots{
 		db: db,
@@ -58,6 +59,7 @@ func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *me
 	}
 
 	mr.appendRootMemory(roots...)
+	mr.numMerkleRoots = len(roots)
 
 	return
 }

@@ -7,7 +7,7 @@ package contractset
 import "github.com/DxChainNetwork/godx/crypto"
 
 const (
-	persistDBName  = "contractset.db"
+	persistDBName  = "contractsetdb"
 	persistWalName = "contractset.wal"
 
 	dbContractHeader = ":contractheader"

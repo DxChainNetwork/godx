@@ -81,6 +81,10 @@ func (db *DB) DeleteHeaderAndRoots(id storage.ContractID) (err error) {
 func (db *DB) FetchAllContractID() (ids []storage.ContractID) {
 	iter := db.lvl.NewIterator(nil, nil)
 	for iter.Next() {
+		if bytes.HasSuffix(iter.Key(), []byte(dbMerkleRoot)) {
+			continue
+		}
+
 		id, _ := splitKey(iter.Key())
 		ids = append(ids, id)
 	}

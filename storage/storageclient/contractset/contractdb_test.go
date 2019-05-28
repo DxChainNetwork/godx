@@ -5,8 +5,10 @@
 package contractset
 
 import (
+	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
+	"math/big"
 	mathRand "math/rand"
 	"testing"
 	"time"
@@ -253,6 +255,27 @@ func TestDB_FetchAllHeaderRoots(t *testing.T) {
 	}
 }
 
+func TestDB_FetchAllContractID(t *testing.T) {
+	db, err := OpenDB(testDB)
+	if err != nil {
+		t.Fatalf("failed to open / create a contractset database: %s", err.Error())
+	}
+	defer db.Close()
+	defer db.EmptyDB()
+
+	// insert contract header and contra
+	if err := testDataInsert(db, 50, 50); err != nil {
+		t.Fatalf("failed to insert data into the database")
+	}
+
+	// fetch all contract id
+	ids := db.FetchAllContractID()
+	if len(ids) != 50 {
+		t.Fatalf("number of contract length, does not match. Expected %v, got %v",
+			50, len(ids))
+	}
+}
+
 /*
  _____  _____  _______      __  _______ ______      ______ _    _ _   _  _____ _______ _____ ____  _   _
 |  __ \|  __ \|_   _\ \    / /\|__   __|  ____|    |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
@@ -336,6 +359,15 @@ func contractHeaderGenerator() (ch ContractHeader) {
 		LatestContractRevision: types.StorageContractRevision{
 			ParentID:          randomHashGenerator(),
 			NewRevisionNumber: 15,
+			NewValidProofOutputs: []types.DxcoinCharge{
+				{randomAddressGenerator(), big.NewInt(0)},
+			},
+			UnlockConditions: types.UnlockConditions{
+				PublicKeys: []ecdsa.PublicKey{
+					{nil, nil, nil},
+					{nil, nil, nil},
+				},
+			},
 		},
 		PrivateKey:   "12345678910",
 		StartHeight:  100,
@@ -386,5 +418,27 @@ func storageContractIDGenerator() (id storage.ContractID) {
 
 func randomHashGenerator() (h common.Hash) {
 	rand.Read(h[:])
+	return
+}
+
+func testDataInsert(db *DB, contractCount, rootCount int) (err error) {
+	// insert contract header and contract root information into the db and memory
+	for i := 0; i < contractCount; i++ {
+		// generate contract header
+		ch := contractHeaderGenerator()
+
+		// generate contract root
+		rts := rootsGenerator(rootCount)
+
+		// store the information into the database
+		if err = db.StoreHeaderAndRoots(ch, rts); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func randomAddressGenerator() (a common.Address) {
+	rand.Read(a[:])
 	return
 }

@@ -154,7 +154,6 @@ func TestMerkleRoot_newMerkleRootPreview(t *testing.T) {
 */
 
 func rootsGenerator(rootCount int) (roots []common.Hash) {
-
 	for i := 0; i < rootCount; i++ {
 		roots = append(roots, randomHashGenerator())
 	}

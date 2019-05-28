@@ -259,7 +259,6 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		scs.contracts[id] = c
 		scs.hostToContractID[c.header.EnodeID] = c.header.ID
 
-		return
 	}
 
 	return
