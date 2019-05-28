@@ -12,7 +12,7 @@ import (
 )
 
 // calculate renter and host collateral
-func RenterPayoutsPreTax(host HostDBEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (renterPayout, hostPayout, hostCollateral *big.Int, err error) {
+func RenterPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (renterPayout, hostPayout, hostCollateral *big.Int, err error) {
 
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {

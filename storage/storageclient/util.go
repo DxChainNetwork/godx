@@ -10,12 +10,13 @@ import (
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -102,9 +103,12 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 	return sc.storageHostManager
 }
 
-// covert pubkey to hex string
-func PubkeyToHex(pubkey *ecdsa.PublicKey) string {
-	pubkeyBytes := crypto.FromECDSAPub(pubkey)
-	pubkeyHex := hexutil.Encode(pubkeyBytes)
-	return pubkeyHex
+// calculate Enode.ID, reference:
+// p2p/discover/node.go:41
+// p2p/discover/node.go:59
+func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
+	var pubBytes [64]byte
+	math.ReadBits(pubkey.X, pubBytes[:len(pubBytes)/2])
+	math.ReadBits(pubkey.Y, pubBytes[len(pubBytes)/2:])
+	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }

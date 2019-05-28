@@ -19,7 +19,7 @@ type ContractParams struct {
 	StartHeight     uint64
 	EndHeight       uint64
 	ClientPublicKey ecdsa.PublicKey
-	Host            HostDBEntry
+	Host            StorageHostEntry
 }
 
 // An Allowance dictates how much the Renter is allowed to spend in a given
@@ -47,7 +47,7 @@ type Allowance struct {
 
 // A HostDBEntry represents one host entry in the Renter's host DB. It
 // aggregates the host's external settings and metrics with its public key.
-type HostDBEntry struct {
+type StorageHostEntry struct {
 	HostExternalSettings
 
 	// FirstSeen is the last block height at which this host was announced.

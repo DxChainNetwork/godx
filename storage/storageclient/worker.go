@@ -215,11 +215,14 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	fetchOffset, fetchLength := sectorOffsetAndLength(uds.staticFetchOffset, uds.staticFetchLength, uds.erasureCode)
 
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
-	root := uds.staticSegmentMap[hostPubkeyHex].root
+	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
+	root := uds.staticSegmentMap[hostEnodeID.String()].root
 
-	// TODO: 获取连接session
-	session := &storage.Session{}
+	// TODO: 获取host netAddress
+	// Setup connection
+	hostNetAddress := ""
+	session, err := w.client.ethBackend.SetupConnection(hostNetAddress)
+	defer w.client.ethBackend.Disconnect(hostNetAddress)
 
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
@@ -233,7 +236,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.staticSectorSize)
 
 	// calculate a seed for twofishgcm
-	sectorIndex := uds.staticSegmentMap[hostPubkeyHex].index
+	sectorIndex := uds.staticSegmentMap[hostEnodeID.String()].index
 	segmentIndexBytes := make([]byte, 8)
 	binary.PutUvarint(segmentIndexBytes, uds.staticSegmentIndex)
 	sectorIndexBytes := make([]byte, 8)
@@ -292,8 +295,8 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.staticComplete()
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
 
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
-	sectorData, workerHasSector := uds.staticSegmentMap[hostPubkeyHex]
+	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
+	sectorData, workerHasSector := uds.staticSegmentMap[hostEnodeID.String()]
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
 
@@ -378,8 +381,8 @@ func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasu
 func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
-	sectorIndex := uds.staticSegmentMap[hostPubkeyHex].index
+	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
+	sectorIndex := uds.staticSegmentMap[hostEnodeID.String()].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
 }

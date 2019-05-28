@@ -27,7 +27,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
@@ -49,7 +48,6 @@ var (
 type (
 	contractManager   struct{}
 	StorageContractID struct{}
-	StorageHostEntry  struct{}
 	Wal               struct{}
 )
 
@@ -259,18 +257,21 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		},
 	}
 
-	// TODO: 记录与当前host协商交互的结果，用于后续健康度检查
-	//defer func() {
-	//	if err != nil {
-	//		hdb.IncrementFailedInteractions(host.PublicKey)
-	//		err = errors.Extend(err, modules.ErrHostFault)
-	//	} else {
-	//		hdb.IncrementSuccessfulInteractions(host.PublicKey)
-	//	}
-	//}()
+	// Increase Successful/Failed interactions accordingly
+	defer func() {
+		hostID := PubkeyToEnodeID(&host.PublicKey)
+		if err != nil {
+			sc.storageHostManager.IncrementFailedInteractions(hostID)
+		} else {
+			sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
+		}
+	}()
 
 	// Setup connection with storage host
 	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
+	if err != nil {
+		return err
+	}
 	defer sc.ethBackend.Disconnect(host.NetAddress)
 
 	// Send the ContractCreate request
@@ -304,10 +305,9 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
-		ParentID:          storageContract.RLPHash(),
-		UnlockConditions:  uc,
-		NewRevisionNumber: 1,
-
+		ParentID:              storageContract.RLPHash(),
+		UnlockConditions:      uc,
+		NewRevisionNumber:     1,
 		NewFileSize:           storageContract.FileSize,
 		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
 		NewWindowStart:        storageContract.WindowStart,
@@ -402,7 +402,7 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
 	return sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
 }
 
-func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
+func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
 
 	// TODO: 获取最新的storage contract revision
 	// Retrieve the contract
@@ -467,15 +467,23 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
+	// TODO: 记录上传信息，断点续传
+	// record the change we are about to make to the contract. If we lose power
+	// mid-revision, this allows us to restore either the pre-revision or
+	// post-revision contract.
+	//walTxn, err := sc.recordUploadIntent(rev, crypto.Hash{}, storagePrice, bandwidthPrice)
+	//if err != nil {
+	//	return err
+	//}
+
 	defer func() {
 
-		// TODO: 统计host的健康度
 		// Increase Successful/Failed interactions accordingly
-		//if err != nil {
-		//	sc.storageHostManager.IncrementFailedInteractions(hostID)
-		//} else {
-		//	sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
-		//}
+		if err != nil {
+			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+		} else {
+			sc.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+		}
 
 		// reset deadline
 		session.SetDeadLine(time.Hour)
@@ -658,13 +666,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		hostPubkey := lastRevision.UnlockConditions.PublicKeys[1]
-		pubkeyHex := PubkeyToHex(&hostPubkey)
-		hostID := enode.HexID(pubkeyHex)
 		if err != nil {
-			client.storageHostManager.IncrementFailedInteractions(hostID)
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else {
-			client.storageHostManager.IncrementSuccessfulInteractions(hostID)
+			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
 
