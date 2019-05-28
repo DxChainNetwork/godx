@@ -72,9 +72,6 @@ type unfinishedDownloadSegment struct {
 
 	// The SiaFile from which data is being downloaded.
 	renterFile *dxfile.Snapshot
-
-	// Caching related fields
-	staticStreamCache *streamCache
 }
 
 // removeWorker will decrement a worker from the set of remaining workers
@@ -213,15 +210,6 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 
 	// get recovered data
 	recoveredData := recoverWriter.Bytes()
-
-	// TODO: 确认下，是否需要这个缓存，原来Sia中做这个缓存主要是为了方便外部rpc请求查询下载记录
-	// add the segment to the cache.
-	//if uds.download.staticDestinationType == destinationTypeSeekStream {
-	//	// We only cache streaming segments since browsers and media players tend
-	//	// to only request a few kib at once when streaming data. That way we can
-	//	// prevent scheduling the same segment for download over and over.
-	//	uds.staticStreamCache.Add(uds.staticCacheID, recoveredData)
-	//}
 
 	// write the bytes to the requested output.
 	start := recoveredDataOffset(uds.staticFetchOffset, uds.erasureCode)

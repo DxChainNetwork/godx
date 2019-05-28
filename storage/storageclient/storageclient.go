@@ -50,7 +50,6 @@ type (
 	contractManager   struct{}
 	StorageContractID struct{}
 	StorageHostEntry  struct{}
-	streamCache       struct{}
 	Wal               struct{}
 )
 
@@ -101,11 +100,10 @@ type StorageClient struct {
 	staticFilesDir string
 
 	// Utilities
-	streamCache *streamCache
-	log         log.Logger
-	lock        sync.Mutex
-	tm          threadmanager.ThreadManager
-	wal         Wal
+	log  log.Logger
+	lock sync.Mutex
+	tm   threadmanager.ThreadManager
+	wal  Wal
 
 	// information on network, block chain, and etc.
 	info       ParsedAPI
@@ -904,7 +902,6 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 			sectorUsage:         make([]bool, params.file.ErasureCode().NumSectors()),
 			download:            d,
 			renterFile:          params.file,
-			staticStreamCache:   client.streamCache,
 		}
 
 		// set the offset within the segment that we start downloading from
@@ -1031,14 +1028,6 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 		}
 		return nil
 	})
-
-	// TODO: 是否需要保存下载历史
-	// Add the download object to the download history if it's not a stream.
-	//if destinationType != destinationTypeSeekStream {
-	//	r.downloadHistoryMu.Lock()
-	//	r.downloadHistory = append(r.downloadHistory, d)
-	//	r.downloadHistoryMu.Unlock()
-	//}
 
 	return d, nil
 }

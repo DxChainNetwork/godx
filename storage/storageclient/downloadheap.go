@@ -89,13 +89,6 @@ LOOP:
 				break
 			}
 
-			// TODO: 确认下是否丢弃检测缓存已经存在这个segment。
-			//  Sia代码中这个Retrieve实现已经被注释掉，它的commit说明是：由于部分下载而导致缓存失效！！！
-			// check if we got the segment cached already.
-			//if c.staticStreamCache.Retrieve(nextSegment) {
-			//	continue
-			//}
-
 			// get the required memory to download this segment.
 			if !c.acquireMemoryForDownloadSegment(nextSegment) {
 				return
