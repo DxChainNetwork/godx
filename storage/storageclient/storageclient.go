@@ -286,13 +286,22 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	var hostSign []byte
-	if msg, err := session.ReadMsg(); err != nil {
-		if err := msg.Decode(&hostSign); err != nil {
-			return err
-		}
-	} else {
+	msg, err := session.ReadMsg()
+	if err != nil {
 		return err
 	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostSign); err != nil {
+		return err
+	}
+
 	storageContract.Signatures[1] = hostSign
 
 	// Assemble init revision and sign it
@@ -334,11 +343,19 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	var hostRevisionSign []byte
-	if msg, err := session.ReadMsg(); err != nil {
-		if err := msg.Decode(&hostRevisionSign); err != nil {
-			return err
-		}
-	} else {
+	msg, err = session.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostRevisionSign); err != nil {
 		return err
 	}
 
@@ -474,12 +491,20 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// 2. Read merkle proof response from host
 	var merkleResp storage.UploadMerkleProof
-	if msg, err := session.ReadMsg(); err != nil {
+	msg, err := session.ReadMsg()
+	if err != nil {
 		return err
-	} else {
-		if err := msg.Decode(&merkleResp); err != nil {
-			return err
-		}
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&merkleResp); err != nil {
+		return err
 	}
 
 	// Verify merkle proof
@@ -510,13 +535,22 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// Read the host's signature
 	var hostRevisionSig []byte
-	if msg, err := session.ReadMsg(); err != nil {
+	msg, err = session.ReadMsg()
+	if err != nil {
 		return err
-	} else {
-		if err := msg.Decode(&hostRevisionSig); err != nil {
-			return err
-		}
 	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostRevisionSig); err != nil {
+		return err
+	}
+
 	rev.Signatures[1] = clientRevisionSign
 
 	// TODO update contract
@@ -636,11 +670,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		}
 	}()
 
-	// TODO: Disrupt before sending the signed revision to the host.
-	//if s.deps.Disrupt("InterruptDownloadBeforeSendingRevision") {
-	//	return errors.New("InterruptDownloadBeforeSendingRevision disrupt")
-	//}
-
 	// send download request
 	s.SetDeadLine(storage.DownloadTime)
 	err = s.SendStorageContractDownloadRequest(req)
@@ -656,8 +685,8 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		case <-doneChan:
 		}
 
-		// TODO: 是否需要发送stop消息通知host
-		//s.writeResponse(modules.RPCLoopReadStop, nil)
+		// if negotiation is canceled or done, client should send stop msg to host
+		s.SendStopMsg()
 	}()
 
 	// ensure we send DownloadStop before returning
@@ -670,6 +699,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		msg, err := s.ReadMsg()
 		if err != nil {
 			return err
+		}
+
+		// if host send some negotiation error, client should handler it
+		if msg.Code == storage.NegotiationErrorMsg {
+			var negotiationErr error
+			msg.Decode(&negotiationErr)
+			return negotiationErr
 		}
 
 		err = msg.Decode(&resp)
@@ -712,6 +748,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return err
 		}
 
+		// if host send some negotiation error, client should handler it
+		if msg.Code == storage.NegotiationErrorMsg {
+			var negotiationErr error
+			msg.Decode(&negotiationErr)
+			return negotiationErr
+		}
+
 		err = msg.Decode(&resp)
 		if err != nil {
 			return err
@@ -720,11 +763,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		hostSig = resp.Signature
 	}
 	newRevision.Signatures[1] = hostSig
-
-	// TODO: Disrupt before commiting.
-	//if s.deps.Disrupt("InterruptDownloadAfterSendingRevision") {
-	//	return errors.New("InterruptDownloadAfterSendingRevision disrupt")
-	//}
 
 	// TODO: update contract and metrics
 	//if err := sc.commitDownload(walTxn, txn, price); err != nil {
