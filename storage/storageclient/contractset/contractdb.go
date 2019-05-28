@@ -2,8 +2,8 @@ package contractset
 
 import (
 	"bytes"
+	"encoding/json"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
@@ -101,7 +101,7 @@ func (db *DB) FetchAll() (chs []ContractHeader, allRoots [][]common.Hash, err er
 
 		// get the contract header value
 		if bytes.HasSuffix(iter.Key(), []byte(dbContractHeader)) {
-			if err = rlp.DecodeBytes(iter.Value(), &ch); err != nil {
+			if err = json.Unmarshal(iter.Value(), &ch); err != nil {
 				return
 			}
 
@@ -110,7 +110,7 @@ func (db *DB) FetchAll() (chs []ContractHeader, allRoots [][]common.Hash, err er
 		}
 
 		if bytes.HasSuffix(iter.Key(), []byte(dbMerkleRoot)) {
-			if err = rlp.DecodeBytes(iter.Value(), &roots); err != nil {
+			if err = json.Unmarshal(iter.Value(), &roots); err != nil {
 				return
 			}
 			allRoots = append(allRoots, roots)
@@ -130,7 +130,7 @@ func (db *DB) FetchAllHeader() (chs []ContractHeader, err error) {
 
 		// has suffix, contract header information
 		var ch ContractHeader
-		if err = rlp.DecodeBytes(iter.Value(), &ch); err != nil {
+		if err = json.Unmarshal(iter.Value(), &ch); err != nil {
 			return
 		}
 
@@ -149,7 +149,7 @@ func (db *DB) FetchAllRoots() (allRoots [][]common.Hash, err error) {
 
 		// has suffix, merkle roots information
 		var roots []common.Hash
-		if err = rlp.DecodeBytes(iter.Value(), &roots); err != nil {
+		if err = json.Unmarshal(iter.Value(), &roots); err != nil {
 			return
 		}
 
@@ -174,12 +174,12 @@ func (db *DB) EmptyDB() (err error) {
 // StoreContractHeader will stored the contract header information into the database
 func (db *DB) StoreContractHeader(ch ContractHeader) (err error) {
 
-	// get the header key and rlp encode the header
+	// get the header key and json encode the header
 	headerKey, err := makeKey(ch.ID, dbContractHeader)
 	if err != nil {
 		return
 	}
-	blob, err := rlp.EncodeToBytes(ch)
+	blob, err := json.Marshal(ch)
 	if err != nil {
 		return
 	}
@@ -194,12 +194,12 @@ func (db *DB) StoreContractHeader(ch ContractHeader) (err error) {
 
 // StoreMerkleRoots will store the contract roots information into the database
 func (db *DB) StoreMerkleRoots(id storage.ContractID, roots []common.Hash) (err error) {
-	// get the roots key and rlp encode contract roots
+	// get the roots key and json encode contract roots
 	rootsKey, err := makeKey(id, dbMerkleRoot)
 	if err != nil {
 		return
 	}
-	blob, err := rlp.EncodeToBytes(roots)
+	blob, err := json.Marshal(roots)
 	if err != nil {
 		return
 	}
@@ -247,8 +247,8 @@ func (db *DB) FetchContractHeader(id storage.ContractID) (ch ContractHeader, err
 		return
 	}
 
-	// rlp decode the data
-	if err = rlp.DecodeBytes(blob, &ch); err != nil {
+	// json decode the data
+	if err = json.Unmarshal(blob, &ch); err != nil {
 		return
 	}
 
@@ -270,8 +270,8 @@ func (db *DB) FetchMerkleRoots(id storage.ContractID) (roots []common.Hash, err 
 		return
 	}
 
-	// rlp decode the data
-	if err = rlp.DecodeBytes(blob, &roots); err != nil {
+	// json decode the data
+	if err = json.Unmarshal(blob, &roots); err != nil {
 		return
 	}
 	return

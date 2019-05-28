@@ -5,6 +5,7 @@
 package contractset
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -12,7 +13,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -214,7 +214,7 @@ func (c *Contract) CommitTxns() (err error) {
 			// update contract header
 			case dbContractHeader:
 				var walHeader walContractHeaderEntry
-				if err = rlp.DecodeBytes(op.Data, &walHeader); err != nil {
+				if err = json.Unmarshal(op.Data, &walHeader); err != nil {
 					return
 				}
 				if err = c.contractHeaderUpdate(walHeader.Header); err != nil {
@@ -222,7 +222,7 @@ func (c *Contract) CommitTxns() (err error) {
 				}
 			case dbMerkleRoot:
 				var walRoot walRootsEntry
-				if err = rlp.DecodeBytes(op.Data, &walRoot); err != nil {
+				if err = json.Unmarshal(op.Data, &walRoot); err != nil {
 					return
 				}
 				if err = c.merkleRoots.push(walRoot.Root); err != nil {
@@ -310,8 +310,8 @@ func (c *Contract) contractHeaderWalOP(ch ContractHeader) (op writeaheadlog.Oper
 	contractID := c.header.ID
 	c.headerLock.Unlock()
 
-	// rlp encode the data that is going to be saved in the wal
-	data, err := rlp.EncodeToBytes(walContractHeaderEntry{
+	// json encode the data that is going to be saved in the wal
+	data, err := json.Marshal(walContractHeaderEntry{
 		ID:     contractID,
 		Header: ch,
 	})
@@ -337,8 +337,8 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 	contractID := c.header.ID
 	c.headerLock.Unlock()
 
-	// rlp encode the data that is going to be saved in the wal
-	data, err := rlp.EncodeToBytes(walRootsEntry{
+	// json encode the data that is going to be saved in the wal
+	data, err := json.Marshal(walRootsEntry{
 		ID:    contractID,
 		Index: uint64(rootCount),
 		Root:  root,

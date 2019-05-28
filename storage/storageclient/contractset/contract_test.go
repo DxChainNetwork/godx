@@ -5,8 +5,8 @@
 package contractset
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/DxChainNetwork/godx/rlp"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -96,10 +96,10 @@ func TestContract_RecordUploadPreRev(t *testing.T) {
 	for i, op := range txns[0].Operations {
 		switch op.Name {
 		case dbContractHeader:
-			if err := rlp.DecodeBytes(op.Data, &walCh1); err != nil {
+			if err := json.Unmarshal(op.Data, &walCh1); err != nil {
 				t.Fatalf("failed to decode contract header 1: %s", err.Error())
 			}
-			if err := rlp.DecodeBytes(wt.Operations[i].Data, &walCh2); err != nil {
+			if err := json.Unmarshal(wt.Operations[i].Data, &walCh2); err != nil {
 				t.Fatalf("failed to decode contract header 2: %s", err.Error())
 			}
 
@@ -107,11 +107,11 @@ func TestContract_RecordUploadPreRev(t *testing.T) {
 				t.Fatalf("two contract headers are not equal to each other: %s", err.Error())
 			}
 		case dbMerkleRoot:
-			if err := rlp.DecodeBytes(op.Data, &walR1); err != nil {
+			if err := json.Unmarshal(op.Data, &walR1); err != nil {
 				t.Fatalf("failed to decode roots information 1: %s", err.Error())
 			}
 
-			if err := rlp.DecodeBytes(wt.Operations[i].Data, &walR2); err != nil {
+			if err := json.Unmarshal(wt.Operations[i].Data, &walR2); err != nil {
 				t.Fatalf("failed to decode roots information 2: %s", err.Error())
 			}
 

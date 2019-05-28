@@ -12,16 +12,28 @@ import (
 )
 
 func TestMerkleRoot_Push(t *testing.T) {
+
 	// initialize storage contract id and new merkle root object
 	id := storageContractIDGenerator()
 	mk, err := newTestMerkleRoots(id)
 
 	if err != nil {
-		t.Fatalf("failed to create and initialize ")
+		t.Fatalf("failed to create and initialize %s", err.Error())
 	}
 
 	defer mk.db.Close()
 
+	// check if the db is empty, if not, empty the database
+	chs, rts, err := mk.db.FetchAll()
+	if err != nil {
+		t.Fatalf("failed to fetch all data")
+	}
+
+	if len(chs) != 0 || len(rts) != 0 {
+		mk.db.EmptyDB()
+	}
+
+	// push data
 	for i := 1; i < 400; i++ {
 		rootsOrign := rootsGenerator(i)
 
@@ -101,7 +113,7 @@ func TestMerkleRoot_newMerkleRootPreview(t *testing.T) {
 	mk, err := newTestMerkleRoots(id)
 
 	if err != nil {
-		t.Fatalf("failed to create and initialize ")
+		t.Fatalf("failed to create and initialize: %s", err.Error())
 	}
 
 	defer mk.db.Close()

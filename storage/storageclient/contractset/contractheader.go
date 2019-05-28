@@ -44,13 +44,6 @@ type ContractHeader struct {
 	Status storage.ContractStatus
 }
 
-//type RLPContractHeader struct {
-//	ID      storage.ContractID
-//	EnodeID enode.ID
-//
-//	// TODO (mzhang): storage contract revision
-//}
-
 func (ch *ContractHeader) validation() (err error) {
 	if ch.LatestContractRevision.NewRevisionNumber > 0 &&
 		len(ch.LatestContractRevision.NewValidProofOutputs) > 0 &&
@@ -61,7 +54,3 @@ func (ch *ContractHeader) validation() (err error) {
 	err = errors.New("invalid contract header")
 	return
 }
-
-//func (ch *ContractHeader) ConvertRLP() (err error) {
-//
-//}
