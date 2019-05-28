@@ -16,6 +16,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// Contract is a data structure that stored the contract information
 type Contract struct {
 	headerLock    sync.Mutex
 	header        ContractHeader
@@ -240,7 +241,7 @@ func (c *Contract) CommitTxns() (err error) {
 	return
 }
 
-// RevisionValidation will validate the storage host revision passed in, check if
+// LatestRevisionValidation will validate the storage host revision passed in, check if
 // they have the same latest revision
 func (c *Contract) LatestRevisionValidation(rev types.StorageContractRevision) (err error) {
 	myRev := c.header.LatestContractRevision
@@ -304,6 +305,7 @@ func (c *Contract) contractHeaderUpdate(newHeader ContractHeader) (err error) {
 	return
 }
 
+// contractHeaderWalOp will create and initialize the contract header write ahead log operation
 func (c *Contract) contractHeaderWalOP(ch ContractHeader) (op writeaheadlog.Operation, err error) {
 	// get the contract id
 	c.headerLock.Lock()
@@ -331,6 +333,7 @@ func (c *Contract) contractHeaderWalOP(ch ContractHeader) (op writeaheadlog.Oper
 	return
 }
 
+// merkleRootWalOp will create and initialize the merkle root write ahead log operation
 func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeaheadlog.Operation, err error) {
 	// retrieve contract id
 	c.headerLock.Lock()

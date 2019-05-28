@@ -6,6 +6,7 @@ package contractset
 
 import "github.com/DxChainNetwork/godx/crypto"
 
+// defines the database and file related constants
 const (
 	persistDBName  = "contractsetdb"
 	persistWalName = "contractset.wal"
@@ -22,15 +23,14 @@ const (
 	// number of merkle roots in a cached tree is 128
 	merkleRootsPerCache = 1 << merkleRootsCacheHeight
 
-	SectorSize    = uint64(1 << 22) // 4 MiB
+	// SectorSize is used to define the size of data sector, which is 4 MiB
+	SectorSize    = uint64(1 << 22)
 	remainingFile = -1
 )
 
 // sectorHeight is the height of the merkle tree constructed
 // based on the data uploaded. Data uploaded will be divided
 // into data pieces based on the MerkleLeafSize
-//
-// based on the number of leaf, calculate the height of the tree
 var sectorHeight = func() uint64 {
 	height := uint64(0)
 	for 1<<height < (SectorSize / crypto.MerkleLeafSize) {

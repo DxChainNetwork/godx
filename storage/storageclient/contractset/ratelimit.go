@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 )
 
+// RateLimit is the data structure that defines the read and write speed limit in terms
+// of bytes per second. It also defines the packet size per transfer.
 type RateLimit struct {
 	atomicReadBPS    int64
 	atomicWriteBPS   int64

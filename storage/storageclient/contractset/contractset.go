@@ -17,6 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// StorageContractSet is used to record all contract signed by the storage client
 type StorageContractSet struct {
 	contracts        map[storage.ContractID]*Contract
 	hostToContractID map[enode.ID]storage.ContractID
@@ -27,6 +28,8 @@ type StorageContractSet struct {
 	wal              *writeaheadlog.Wal
 }
 
+// New will initialize the StorageContractSet object, as well as
+// loading the data that already stored in the database
 func New(persistDir string) (scs *StorageContractSet, err error) {
 	// initialize the directory
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
@@ -191,7 +194,7 @@ func (scs *StorageContractSet) RetrieveRateLimit() (readBPS, writeBPS int64, pac
 	return scs.rl.RetrieveRateLimit()
 }
 
-// RetrieveMetaData will return ContractMetaData based on the contract id provided
+// RetrieveContractMetaData will return ContractMetaData based on the contract id provided
 func (scs *StorageContractSet) RetrieveContractMetaData(id storage.ContractID) (cm storage.ContractMetaData, exist bool) {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
@@ -205,7 +208,7 @@ func (scs *StorageContractSet) RetrieveContractMetaData(id storage.ContractID) (
 	return
 }
 
-// RetrieveAllMetaData will return all ContractMetaData stored in the contract set
+// RetrieveAllContractsMetaData will return all ContractMetaData stored in the contract set
 // in the form of list
 func (scs *StorageContractSet) RetrieveAllContractsMetaData() (cms []storage.ContractMetaData) {
 	scs.lock.Lock()

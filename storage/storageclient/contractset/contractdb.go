@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+// DB is the database wrapper that is used to store the contract set information
 type DB struct {
 	lvl *leveldb.DB
 }
