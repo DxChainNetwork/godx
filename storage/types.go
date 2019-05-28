@@ -137,7 +137,10 @@ type (
 		LatestContractRevision types.StorageContractRevision
 		StartHeight            uint64
 		EndHeight              uint64
-		ClientBalance          common.BigInt
+
+		// TODO (mzhang): is it necessary to convert this type to
+		// common.BigInt type? for calculation convenience
+		ClientBalance *big.Int
 
 		UploadCost   common.BigInt
 		DownloadCost common.BigInt

@@ -28,7 +28,9 @@ const (
 
 // sectorHeight is the height of the merkle tree constructed
 // based on the data uploaded. Data uploaded will be divided
-// into data pieces based on the
+// into data pieces based on the MerkleLeafSize
+//
+// based on the number of leaf, calculate the height of the tree
 var sectorHeight = func() uint64 {
 	height := uint64(0)
 	for 1<<height < (SectorSize / crypto.MerkleLeafSize) {
