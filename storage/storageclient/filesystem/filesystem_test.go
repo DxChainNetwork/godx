@@ -46,6 +46,8 @@ func TestNewFileSystemEmptyStartClose(t *testing.T) {
 	}
 }
 
+// TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
+// under different contractor under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	// fileSize: 11 segments for erasure params 10 / 30
 	fileSize := uint64(1 << 22 * 10 * 10)
@@ -156,18 +158,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 					t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
 				}
 			}
-			fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
-			fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
-			if dxfile.CmpHealthPriority(fHealth, health) > 0 {
-				health = fHealth
-			}
-			if dxfile.CmpHealthPriority(fStuckHealth, stuckHealth) > 0 {
-				stuckHealth = fStuckHealth
-			}
-			numStuckSegments += fNumStuckSegments
-			if fMinRedundancy < minRedundancy {
-				minRedundancy = fMinRedundancy
-			}
+			health, stuckHealth, numStuckSegments, minRedundancy = fs.healthParamsUpdate(df, health, stuckHealth, numStuckSegments, minRedundancy)
 			if err = df.Close(); err != nil {
 				t.Fatal(err)
 			}
@@ -217,7 +208,24 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	}
 }
 
-// waitForExecution is the function that wait for update execution
+// healthParamsUpdate calculate and update the health parameters
+func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
+	fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
+	fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
+	if dxfile.CmpHealthPriority(fHealth, health) > 0 {
+		health = fHealth
+	}
+	if dxfile.CmpHealthPriority(fStuckHealth, stuckHealth) > 0 {
+		stuckHealth = fStuckHealth
+	}
+	numStuckSegments += fNumStuckSegments
+	if fMinRedundancy < minRedundancy {
+		minRedundancy = fMinRedundancy
+	}
+	return health, stuckHealth, numStuckSegments, minRedundancy
+}
+
+// waitForExecution is the helper function that wait for update execution
 func (fs *FileSystem) waitForExecution(t *testing.T) {
 	c := make(chan struct{})
 	// Wait until update complete
