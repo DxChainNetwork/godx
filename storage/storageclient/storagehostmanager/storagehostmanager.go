@@ -119,6 +119,11 @@ func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
 }
 
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
+func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
+	return shm.storageHostTree.RetrieveHostInfo(id)
+}
+
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	err := shm.storageHostTree.Insert(hi)
