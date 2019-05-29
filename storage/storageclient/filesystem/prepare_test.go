@@ -84,24 +84,33 @@ type randomContractor struct {
 	onlineRate       float32 // onlineRate is the rate the the id is online
 	goodForRenewRate float32 // goodForRenewRate is the rate of goodForRenew
 
-	table storage.HostHealthInfoTable // If previously stored the table, do not random again
-	once  sync.Once                   // Only initialize the HostHealthInfoTable once
-	lock  sync.Mutex                  // lock is the mutex to protect the table field
+	missed map[enode.ID]struct{}       // missed node should be forever missed
+	table  storage.HostHealthInfoTable // If previously stored the table, do not random again
+	once   sync.Once                   // Only initialize the HostHealthInfoTable once
+	lock   sync.Mutex                  // lock is the mutex to protect the table field
 }
 
 func (c *randomContractor) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
 	c.once.Do(func() {
 		c.table = make(storage.HostHealthInfoTable)
+		c.missed = make(map[enode.ID]struct{})
 	})
 	rand.Seed(time.Now().UnixNano())
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	table := make(storage.HostHealthInfoTable)
 	for _, id := range ids {
-		c.lock.Lock()
-		if _, exist := c.table[id]; exist {
+		// previously missed id will be forever missed
+		if _, exist := c.missed[id]; exist {
 			continue
 		}
-		c.lock.Unlock()
+		if _, exist := c.table[id]; exist {
+			table[id] = c.table[id]
+			continue
+		}
 		num := rand.Float32()
 		if num < c.missRate {
+			c.missed[id] = struct{}{}
 			continue
 		}
 		num = rand.Float32()
@@ -113,12 +122,11 @@ func (c *randomContractor) HostHealthMapByID(ids []enode.ID) storage.HostHealthI
 		if num < c.goodForRenewRate {
 			goodForRenew = true
 		}
-		c.lock.Lock()
 		c.table[id] = storage.HostHealthInfo{
 			Offline:      offline,
 			GoodForRenew: goodForRenew,
 		}
-		c.lock.Unlock()
+		table[id] = c.table[id]
 	}
-	return c.table
+	return table
 }

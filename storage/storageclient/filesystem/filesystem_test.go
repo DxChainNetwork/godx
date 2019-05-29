@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -225,8 +226,8 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 				goodForRenewRate: 0.9,
 			},
 			rootMetadata: &dxdir.Metadata{
-				NumFiles:  1,
-				TotalSize: fileSize,
+				NumFiles:  10,
+				TotalSize: fileSize * 10,
 				DxPath:    storage.RootDxPath(),
 			},
 		},
@@ -240,6 +241,7 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 		var health, stuckHealth, numStuckSegments, minRedundancy uint32
+		health, stuckHealth, numStuckSegments, minRedundancy = 200, 200, 0, 300
 		for fileIndex := 0; fileIndex != test.numFiles; fileIndex++ {
 			path, err := commonPath.Join(randomDxPath(t, 1).Path)
 			if err != nil {
@@ -249,13 +251,13 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 			if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
 				t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
 			}
-			fHealth, fStuckHealthm, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
+			fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
 			fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
-			if fHealth < health {
+			if dxfile.CmpHealthPriority(fHealth, health) > 0 {
 				health = fHealth
 			}
-			if fStuckHealthm < stuckHealth {
-				stuckHealth = fStuckHealthm
+			if dxfile.CmpHealthPriority(fStuckHealth, stuckHealth) > 0 {
+				stuckHealth = fStuckHealth
 			}
 			numStuckSegments += fNumStuckSegments
 			if fMinRedundancy < minRedundancy {
@@ -304,27 +306,28 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 		}
 		dir, err := fs.DirSet.Open(rootPath)
 		if err != nil {
-			t.Fatalf("depth %d cannot open dir path %v: %v", index, rootPath.Path, err)
+			t.Fatalf("test %d cannot open dir path %v: %v", index, rootPath.Path, err)
 		}
 		md := dir.Metadata()
 		if err = checkMetadataSimpleEqual(md, *test.rootMetadata); err != nil {
 			t.Fatal(err)
 		}
 		if md.Health != health {
-			t.Errorf("Health unexpected. Expect %v, got %v", health, md.Health)
+			t.Errorf("test %d Health unexpected. Expect %v, got %v", index, health, md.Health)
 		}
 		if md.StuckHealth != stuckHealth {
-			t.Errorf("StuckHealth unexpected. Expect %v, got %v", stuckHealth, md.StuckHealth)
+			t.Errorf("test %d StuckHealth unexpected. Expect %v, got %v", index, stuckHealth, md.StuckHealth)
 		}
 		if md.NumStuckSegments != numStuckSegments {
-			t.Errorf("numStuckSegmetns unexpected. Expect %v, Got %v", numStuckSegments, md.NumStuckSegments)
+			t.Errorf("test %d numStuckSegmetns unexpected. Expect %v, Got %v", index, numStuckSegments, md.NumStuckSegments)
 		}
 		if md.MinRedundancy != minRedundancy {
-			t.Errorf("minRedundancy unexpected. Expect %v, Got %v", minRedundancy, md.MinRedundancy)
+			t.Errorf("test %d minRedundancy unexpected. Expect %v, Got %v", index, minRedundancy, md.MinRedundancy)
 		}
 		if err = dir.Close(); err != nil {
 			t.Fatal(err)
 		}
+		fs.postTestCheck(t, true, true, nil)
 	}
 }
 
