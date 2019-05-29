@@ -172,9 +172,13 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 		return
 	}
 
-	// the reason un-appliedTxns are all emptied is that only one of the operation (upload or download)
-	// can be executed at a time. Therefore, the recorded un-appliedTxns will be applied
-	c.unappliedTxns = nil
+	// remove the transaction that committed
+	for i, txn := range c.unappliedTxns {
+		if txn == t {
+			c.unappliedTxns = append(c.unappliedTxns[:i], c.unappliedTxns[i+1:]...)
+			break
+		}
+	}
 
 	return
 }
@@ -199,9 +203,13 @@ func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.
 		return
 	}
 
-	// the reason un-appliedTxns are all emptied is that only one of the operation (upload or download)
-	// can be executed at a time. Therefore, the recorded un-appliedTxns will be applied
-	c.unappliedTxns = nil
+	// remove the transaction that committed
+	for i, txn := range c.unappliedTxns {
+		if txn == t {
+			c.unappliedTxns = append(c.unappliedTxns[:i], c.unappliedTxns[i+1:]...)
+			break
+		}
+	}
 
 	return
 }
