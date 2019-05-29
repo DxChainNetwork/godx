@@ -249,7 +249,7 @@ func TestStorageContractSet_Acquire(t *testing.T) {
 	}
 
 	if err := scs.Delete(c); err != nil {
-		t.Fatalf("failed to delete the contract")
+		t.Fatalf("failed to delete the contract: %s", err.Error())
 	}
 
 	if _, exists := scs.contracts[ch.ID]; exists {

@@ -40,7 +40,7 @@ func TestMerkleRoot_Push(t *testing.T) {
 		// push the rootsOrign
 		for _, r := range rootsOrign {
 			if err := mk.push(r); err != nil {
-				t.Fatalf("failed to push the root: %v", r)
+				t.Fatalf("failed to push the root %v: %s", r, err.Error())
 			}
 		}
 
@@ -125,7 +125,7 @@ func TestMerkleRoot_newMerkleRootPreview(t *testing.T) {
 		// push the roots
 		for _, r := range originalRoots {
 			if err := mk.push(r); err != nil {
-				t.Fatalf("failed to push the root: %v", r)
+				t.Fatalf("failed to push the root %v: %s", r, err.Error())
 			}
 		}
 

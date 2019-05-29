@@ -265,7 +265,7 @@ func TestDB_FetchAllContractID(t *testing.T) {
 
 	// insert contract header and contra
 	if err := testDataInsert(db, 50, 50); err != nil {
-		t.Fatalf("failed to insert data into the database")
+		t.Fatalf("failed to insert data into the database: %s", err.Error())
 	}
 
 	// fetch all contract id

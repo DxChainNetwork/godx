@@ -21,7 +21,7 @@ import (
 func TestContract_UpdateStatus(t *testing.T) {
 	contract, err := newContract()
 	if err != nil {
-		t.Fatalf("failed to generate new contract")
+		t.Fatalf("failed to generate new contract: %s", err.Error())
 	}
 
 	defer contract.db.Close()
@@ -54,7 +54,7 @@ func TestContract_UpdateStatus(t *testing.T) {
 func TestContract_RecordUploadPreRev(t *testing.T) {
 	contract, err := newContract()
 	if err != nil {
-		t.Fatalf("failed to generate new contract")
+		t.Fatalf("failed to generate new contract: %s", err.Error())
 	}
 
 	defer contract.db.Close()
@@ -126,7 +126,7 @@ func TestContract_RecordUploadPreRev(t *testing.T) {
 func TestContract_CommitUpload(t *testing.T) {
 	contract, err := newContract()
 	if err != nil {
-		t.Fatalf("failed to generate new contract")
+		t.Fatalf("failed to generate new contract: %s", err.Error())
 	}
 
 	defer contract.db.Close()
