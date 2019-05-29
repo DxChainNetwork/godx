@@ -31,16 +31,16 @@ const (
 	updateWalName = "update.wal"
 )
 
-// FileSystem is the structure for a file system that include a fileSet and a dirSet
+// FileSystem is the structure for a file system that include a FileSet and a DirSet
 type FileSystem struct {
 	// rootDir is the root directory of the file system
 	rootDir storage.SysPath
 
-	// fileSet is the FileSet from module dxfile
-	fileSet *dxfile.FileSet
+	// FileSet is the FileSet from module dxfile
+	FileSet *dxfile.FileSet
 
-	// dirSet is the DirSet from module dxdir
-	dirSet *dxdir.DirSet
+	// DirSet is the DirSet from module dxdir
+	DirSet *dxdir.DirSet
 
 	// contractor is the contractor used to give health info for the file system
 	contractor contractor
@@ -80,11 +80,12 @@ func New(rootDir storage.SysPath, contractor contractor) *FileSystem {
 func newFileSystem(rootDir storage.SysPath, contractor contractor, disrupter disrupter) *FileSystem {
 	// create the FileSystem
 	return &FileSystem{
-		rootDir:    rootDir,
-		contractor: contractor,
-		tm:         &threadmanager.ThreadManager{},
-		logger:     log.New("filesystem"),
-		disrupter:  disrupter,
+		rootDir:           rootDir,
+		contractor:        contractor,
+		tm:                &threadmanager.ThreadManager{},
+		logger:            log.New("filesystem"),
+		disrupter:         disrupter,
+		unfinishedUpdates: make(map[storage.DxPath]*dirMetadataUpdate),
 	}
 }
 
@@ -99,12 +100,12 @@ func (fs *FileSystem) Start() error {
 	if err := fs.loadUpdateWal(); err != nil {
 		return fmt.Errorf("cannot start the file system: %v", err)
 	}
-	// load fs.dirSet
+	// load fs.DirSet
 	var err error
-	if fs.dirSet, err = dxdir.NewDirSet(fs.rootDir, fs.fileWal); err != nil {
-		return fmt.Errorf("cannot start the file system dirSet: %v", err)
+	if fs.DirSet, err = dxdir.NewDirSet(fs.rootDir, fs.fileWal); err != nil {
+		return fmt.Errorf("cannot start the file system DirSet: %v", err)
 	}
-	fs.fileSet = dxfile.NewFileSet(fs.rootDir, fs.fileWal)
+	fs.FileSet = dxfile.NewFileSet(fs.rootDir, fs.fileWal)
 	// Start the repair loop
 	go fs.loopRepairUnfinishedDirMetadataUpdate()
 	return nil
@@ -158,12 +159,22 @@ func (fs *FileSystem) loadUpdateWal() error {
 
 // Close will terminate all threads opened by file system
 func (fs *FileSystem) Close() error {
+	var fullErr error
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	for _, update := range fs.unfinishedUpdates {
 		close(update.stop)
 	}
-	return fs.tm.Stop()
+	// close wal
+	err := fs.fileWal.Close()
+	if err != nil {
+		fullErr = common.ErrCompose(fullErr, err)
+	}
+	err = fs.updateWal.Close()
+	if err != nil {
+		fullErr = common.ErrCompose(fullErr, err)
+	}
+	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
 // loopRepairUnfinishedDirMetadataUpdate is the permanent loop for repairing the unfinished
@@ -175,9 +186,6 @@ func (fs *FileSystem) loopRepairUnfinishedDirMetadataUpdate() {
 	}
 	defer fs.tm.Done()
 
-	if fs.disrupt("no loop") {
-		return
-	}
 	for {
 		// Stop when dxchain is stopped. Start when interval repairUnfinishedLoopInterval
 		// reached
@@ -222,6 +230,7 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 	return err
 }
 
+// disrupt is the wrapper to disrupt with fs.disrupter
 func (fs *FileSystem) disrupt(s string) bool {
 	return fs.disrupter.disrupt(s)
 }

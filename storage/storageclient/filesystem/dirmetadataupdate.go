@@ -97,6 +97,9 @@ type (
 // The actual metadata update is executed in a thread updateDirMetadata
 func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	// Initialize the dirMetadataUpdate, that is, recordDirMetadataUpdate
+	if fs.disrupter.disrupt("InitAndUpdateDirMetadata") {
+		return errDisrupted
+	}
 	txn, err := fs.recordDirMetadataIntent(path)
 	if err != nil {
 		return fmt.Errorf("cannot update metadata at %v", path.Path)
@@ -235,18 +238,24 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	// Call cleanUp to clean up the update
 	defer update.cleanUp(fs, err)
 
-	if fs.disrupt("no repair") {
-		err = fmt.Errorf("disrupted no repair")
-		return
-	}
 	for {
-		// Termination. Only happens when redo value is redoNotNeeded
+		// store the value of redo as not needed
+		atomic.StoreUint32(&update.redo, redoNotNeeded)
 		select {
 		case <-update.stop:
-			err = common.ErrCompose(err, errStopped)
-			break
+			err = errStopped
+			return
 		default:
 		}
+		md, err := fs.LoopDirAndCalculateDirMetadata(update)
+		if err != nil {
+			return
+		}
+		err = fs.applyDxDirMetadata(update.dxPath, md)
+		if err != nil {
+			return
+		}
+		// Termination. Only happens when redo value is redoNotNeeded
 		if atomic.LoadUint32(&update.redo) == redoNotNeeded {
 			break
 		}
@@ -275,7 +284,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	}
 	fails := atomic.LoadUint32(&update.consecutiveFails)
 	var release bool
-	if fails == numConsecutiveFailRelease || err == nil {
+	if fails >= numConsecutiveFailRelease || err == nil {
 		release = true
 	}
 
@@ -290,12 +299,12 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		err = common.ErrCompose(err, update.walTxn.Release())
 		update.lock.Unlock()
 	}
-	if err != nil {
+	if err != nil || !release {
 		// error handling. Currently just log the error
-		if fails == numConsecutiveFailRelease {
-			fs.logger.Error("cannot update the metadata:", "err", err)
+		if fails >= numConsecutiveFailRelease {
+			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "err", err)
 		} else {
-			fs.logger.Warn("cannot update the metadata", "err", err)
+			fs.logger.Warn("cannot update the metadata. Try later", "err", err)
 		}
 	} else {
 		if update.dxPath.IsRoot() {
@@ -378,7 +387,7 @@ func (fs *FileSystem) calculateDxFileMetadata(path storage.DxPath, filename stri
 		return nil, err
 	}
 	// Open the DxPath
-	file, err := fs.fileSet.Open(fileDxPath)
+	file, err := fs.FileSet.Open(fileDxPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open DxPath %v: %v", fileDxPath.Path, err)
 	}
@@ -419,10 +428,10 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 	if err != nil {
 		return nil, err
 	}
-	d, err := fs.dirSet.Open(path)
+	d, err := fs.DirSet.Open(path)
 	if os.IsNotExist(err) {
 		// The .dxdir not exist. Create a new one
-		d, err = fs.dirSet.NewDxDir(path)
+		d, err = fs.DirSet.NewDxDir(path)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create the .dxdir file for file %v: %v", path.Path, err)
 		}
@@ -440,6 +449,28 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 		numStuckSegments:    rawMetadata.NumStuckSegments,
 		timeLastHealthCheck: time.Unix(int64(d.Metadata().TimeLastHealthCheck), 0),
 	}, nil
+}
+
+// applyDxDirMetadata apply the calculated metadata to the dxdir path
+func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata) error {
+	var d *dxdir.DirSetEntryWithID
+	var err error
+	if !fs.DirSet.Exists(path) {
+		d, err = fs.DirSet.NewDxDir(path)
+		if err != nil {
+			return err
+		}
+	} else {
+		d, err = fs.DirSet.Open(path)
+		if err != nil {
+			return err
+		}
+	}
+	err = d.UpdateMetadata(*md)
+	if err != nil {
+		return err
+	}
+	return d.Close()
 }
 
 // applyMetadataForUpdateToMetadata apply a metadataForUpdate to dxdir.Metadata

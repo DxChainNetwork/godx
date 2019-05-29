@@ -5,6 +5,16 @@
 package filesystem
 
 import (
+	"crypto/rand"
+	"fmt"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -12,7 +22,9 @@ import (
 // TestNewFileSystemEmptyStart test the situation of creating a new file system in
 // an empty directory
 func TestNewFileSystemEmptyStartClose(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, nil, make(disrupter))
+	fs := newEmptyTestFileSystem(t, "", nil, make(disrupter))
+	fs.disrupter.registerDisruptFunc("InitAndUpdateDirMetadata", makeBlockDisruptFunc(fs.tm.StopChan(),
+		func() bool { return false }))
 	if fs.rootDir != tempDir(t.Name()) {
 		t.Errorf("fs.rootDir not expected. Expect %v, Got %v", tempDir(t.Name()), fs.rootDir)
 	}
@@ -31,4 +43,389 @@ func TestNewFileSystemEmptyStartClose(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Errorf("close not immediate shutdown")
 	}
+}
+
+// TestFileSystem_SingleFileUpdateDirMetadata test the scenario of updating a single directory metadata
+func TestFileSystem_SingleFileUpdateDirMetadata(t *testing.T) {
+	// fileSize: 11 segments for erasure params 10 / 30
+	fileSize := uint64(1 << 22 * 10 * 10)
+	tests := []struct {
+		contractor      contractor
+		markStuck       bool // whether to execute MarkAllUnhealthySegmentsAsStuck. There is difference in Health, stuckHealth, and numStuckSegments
+		metadata        *dxdir.Metadata
+		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
+	}{
+		{
+			contractor: &alwaysSuccessContractor{},
+			markStuck:  true,
+			metadata: &dxdir.Metadata{
+				NumFiles:         1,
+				TotalSize:        fileSize,
+				Health:           200,
+				StuckHealth:      200,
+				MinRedundancy:    30 / 10 * 100,
+				NumStuckSegments: 0,
+			},
+			cmpMetadataFunc: checkMetadataEqual,
+		},
+		{
+			contractor: &alwaysFailContractor{},
+			markStuck:  false,
+			metadata: &dxdir.Metadata{
+				NumFiles:         1,
+				TotalSize:        fileSize,
+				Health:           0, // all sectors has not been marked as stuck
+				StuckHealth:      200,
+				MinRedundancy:    0,
+				NumStuckSegments: 0,
+			},
+			cmpMetadataFunc: checkMetadataEqual,
+		},
+		{
+			contractor: &alwaysFailContractor{},
+			markStuck:  true,
+			metadata: &dxdir.Metadata{
+				NumFiles:         1,
+				TotalSize:        fileSize,
+				Health:           200,
+				StuckHealth:      0, // all sectors has been marked as stuck
+				MinRedundancy:    0,
+				NumStuckSegments: 11,
+			},
+			cmpMetadataFunc: checkMetadataEqual,
+		},
+		{
+			contractor: &randomContractor{
+				missRate:         0.1,
+				onlineRate:       0.9,
+				goodForRenewRate: 0.9,
+			},
+			markStuck: false,
+			metadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
+			},
+			cmpMetadataFunc: checkMetadataSimpleEqual,
+		},
+	}
+	for index, test := range tests {
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, make(disrupter))
+		test.metadata.RootPath = fs.rootDir
+
+		path := randomDxPath(t, 3)
+
+		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+		if test.markStuck {
+			if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+				t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
+			}
+		}
+
+		if err = df.Close(); err != nil {
+			t.Fatal(err)
+		}
+		par, err := path.Parent()
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = fs.InitAndUpdateDirMetadata(par)
+		if err != nil {
+			t.Fatal(err)
+		}
+		c := make(chan struct{})
+		// Wait until update complete
+		go func() {
+			defer close(c)
+			for {
+				if len(fs.unfinishedUpdates) == 0 {
+					// There might be case the child directory completed update while
+					// the parent update is not in unfinishedUpdates
+					<-time.After(10 * time.Millisecond)
+					if len(fs.unfinishedUpdates) == 0 {
+						return
+					}
+					continue
+				}
+				<-time.After(10 * time.Millisecond)
+			}
+		}()
+		select {
+		case <-time.After(time.Second):
+			t.Fatal("after one second, update still not completed")
+		case <-c:
+		}
+		i := 0
+		for {
+			prePath := path.Path
+			path, err = path.Parent()
+			if err == storage.ErrAlreadyRoot {
+				break
+			}
+			test.metadata.DxPath = path
+			if err != nil {
+				t.Fatalf("depth %d calling parent on dxpath %v: %v", i, prePath, err)
+			}
+			if !fs.DirSet.Exists(path) {
+				t.Fatalf("depth %d path %s not exist", i, path.Path)
+			}
+			dir, err := fs.DirSet.Open(path)
+			if err != nil {
+				t.Fatalf("depth %d cannot open dir path %v: %v", i, path.Path, err)
+			}
+			err = test.cmpMetadataFunc(dir.Metadata(), *test.metadata)
+			if err != nil {
+				t.Errorf("test %d: metadata %d: %v", index, i, err)
+			}
+			err = dir.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			i++
+		}
+		fs.postTestCheck(t, true, true, nil)
+	}
+}
+
+func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
+	// fileSize: 11 segments for erasure params 10 / 30
+	fileSize := uint64(1 << 22 * 10 * 10)
+	tests := []struct {
+		numFiles        int // numFiles is the number of the files under the same directory
+		contractor      contractor
+		rootMetadata    *dxdir.Metadata
+		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
+	}{
+		{
+			numFiles:   10,
+			contractor: &alwaysSuccessContractor{},
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  10,
+				TotalSize: fileSize * 10,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
+			numFiles:   10,
+			contractor: &alwaysFailContractor{},
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  10,
+				TotalSize: fileSize * 10,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
+			numFiles: 10,
+			contractor: &randomContractor{
+				missRate:         0.1,
+				onlineRate:       0.9,
+				goodForRenewRate: 0.9,
+			},
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+	}
+	for index, test := range tests {
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, make(disrupter))
+		test.rootMetadata.RootPath = fs.rootDir
+		commonPath := randomDxPath(t, 2)
+		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var health, stuckHealth, numStuckSegments, minRedundancy uint32
+		for fileIndex := 0; fileIndex != test.numFiles; fileIndex++ {
+			path, err := commonPath.Join(randomDxPath(t, 1).Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+			if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+				t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
+			}
+			fHealth, fStuckHealthm, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
+			fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
+			if fHealth < health {
+				health = fHealth
+			}
+			if fStuckHealthm < stuckHealth {
+				stuckHealth = fStuckHealthm
+			}
+			numStuckSegments += fNumStuckSegments
+			if fMinRedundancy < minRedundancy {
+				minRedundancy = fMinRedundancy
+			}
+			if err = df.Close(); err != nil {
+				t.Fatal(err)
+			}
+			par, err := path.Parent()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = fs.InitAndUpdateDirMetadata(par)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		c := make(chan struct{})
+		// Wait until update complete
+		go func() {
+			defer close(c)
+			for {
+				if len(fs.unfinishedUpdates) == 0 {
+					// There might be case the child directory completed update while
+					// the parent update is not in unfinishedUpdates
+					<-time.After(10 * time.Millisecond)
+					if len(fs.unfinishedUpdates) == 0 {
+						return
+					}
+					continue
+				}
+				<-time.After(10 * time.Millisecond)
+			}
+		}()
+		select {
+		case <-time.After(time.Second):
+			t.Fatal("after one second, update still not completed")
+		case <-c:
+		}
+		// Check the metadata of the root Path
+		rootPath := storage.RootDxPath()
+		test.rootMetadata.DxPath = rootPath
+
+		if !fs.DirSet.Exists(rootPath) {
+			t.Fatalf("test %d path %s not exist", index, rootPath.Path)
+		}
+		dir, err := fs.DirSet.Open(rootPath)
+		if err != nil {
+			t.Fatalf("depth %d cannot open dir path %v: %v", index, rootPath.Path, err)
+		}
+		md := dir.Metadata()
+		if err = checkMetadataSimpleEqual(md, *test.rootMetadata); err != nil {
+			t.Fatal(err)
+		}
+		if md.Health != health {
+			t.Errorf("Health unexpected. Expect %v, got %v", health, md.Health)
+		}
+		if md.StuckHealth != stuckHealth {
+			t.Errorf("StuckHealth unexpected. Expect %v, got %v", stuckHealth, md.StuckHealth)
+		}
+		if md.NumStuckSegments != numStuckSegments {
+			t.Errorf("numStuckSegmetns unexpected. Expect %v, Got %v", numStuckSegments, md.NumStuckSegments)
+		}
+		if md.MinRedundancy != minRedundancy {
+			t.Errorf("minRedundancy unexpected. Expect %v, Got %v", minRedundancy, md.MinRedundancy)
+		}
+		if err = dir.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// postTestCheck check the post test status. Checks whether could be closed in 1 seconds,
+// whether fileWal should be empty, updateWal is empty, and the rootDir's metadata is as expected
+func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updateWalShouldEmpty bool, md *dxdir.Metadata) {
+	c := make(chan struct{})
+	go func() {
+		err := fs.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		close(c)
+	}()
+	select {
+	case <-c:
+	case <-time.After(time.Second):
+		t.Fatal("Cannot close after certain period")
+	}
+	rootDir := tempDir(t.Name())
+	// check fileWal
+	fileWal := filepath.Join(string(rootDir), fileWalName)
+	_, txns, err := writeaheadlog.New(fileWal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(txns) == 0 != fileWalShouldEmpty {
+		t.Errorf("fileWal should be empty: %v, but got %v unapplied txns.", fileWalShouldEmpty, len(txns))
+	}
+	// check updateWal
+	updateWal := filepath.Join(string(rootDir), updateWalName)
+	_, txns, err = writeaheadlog.New(updateWal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(txns) == 0 != updateWalShouldEmpty {
+		t.Errorf("updateWal should be empty: %v, but got %v unapplied txns.", updateWalShouldEmpty, len(txns))
+	}
+	// check root dxdir file have the expected metadata
+	if md != nil {
+		d, err := fs.DirSet.Open(storage.RootDxPath())
+		if err != nil {
+			t.Fatalf("cannot open the root dxdir: %v", err)
+		}
+		d.Metadata()
+	}
+}
+
+// checkMetadataEqual checks whether two metadata are the same.
+// Fields not to be checked: time fields
+// health fields to be checked is determined by checkHealth boolean
+func checkMetadataEqual(got, expect dxdir.Metadata) error {
+	if err := checkMetadataSimpleEqual(got, expect); err != nil {
+		return err
+	}
+	if got.Health != expect.Health {
+		return fmt.Errorf("health not expected. Expect %d, got %d", expect.Health, got.Health)
+	}
+	if got.StuckHealth != expect.StuckHealth {
+		return fmt.Errorf("stuck health not expected. Expect %d, Got %d", expect.StuckHealth, got.StuckHealth)
+	}
+	if got.MinRedundancy != expect.MinRedundancy {
+		return fmt.Errorf("min redundancy not expected. Expect %d, got %d", expect.MinRedundancy, got.MinRedundancy)
+	}
+	if got.NumStuckSegments != expect.NumStuckSegments {
+		return fmt.Errorf("num stuck segments not expected. Expect %d, got %d", expect.NumStuckSegments, got.NumStuckSegments)
+	}
+	return nil
+}
+
+// checkMetadataSimpleEqual is the simplified version of checkMetadataEqual.
+// It only checks for the equality of NumFiles, TotalSize, DxPath, and RootPath
+func checkMetadataSimpleEqual(got, expect dxdir.Metadata) error {
+	if got.NumFiles != expect.NumFiles {
+		return fmt.Errorf("num files not expected. expect %d, got %d", expect.NumFiles, got.NumFiles)
+	}
+	if got.TotalSize != expect.TotalSize {
+		return fmt.Errorf("total size not expected. Expect %d, got %d", expect.TotalSize, got.TotalSize)
+	}
+	if got.DxPath != expect.DxPath {
+		return fmt.Errorf("dxpath not expected. Expect %s, got %s", expect.DxPath.Path, got.DxPath.Path)
+	}
+	if got.RootPath != expect.RootPath {
+		return fmt.Errorf("root path not expected. Expect %s, got %s", expect.RootPath, got.RootPath)
+	}
+	return nil
+}
+
+func randomDxPath(t *testing.T, depth int) storage.DxPath {
+	var s string
+	for i := 0; i != depth; i++ {
+		var b [16]byte
+		_, err := rand.Read(b[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		s = filepath.Join(s, common.Bytes2Hex(b[:]))
+	}
+	path, err := storage.NewDxPath(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -28,8 +29,8 @@ type (
 	// InsertUpdate defines an update of insert Data into FileName at Offset
 	InsertUpdate struct {
 		FileName string
-		Offset uint64
-		Data []byte
+		Offset   uint64
+		Data     []byte
 	}
 
 	// DeleteUpdate defines an update of delete the FileName
@@ -41,11 +42,12 @@ type (
 // Apply execute the InsertUpdate, writing data to the location
 func (iu *InsertUpdate) Apply() (err error) {
 	// Open the file
+	err = os.MkdirAll(filepath.Dir(iu.FileName), 0700)
 	f, err := os.OpenFile(iu.FileName, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to apply InsertUpdate: %v", err)
 	}
-	defer func(){
+	defer func() {
 		err = common.ErrCompose(err, f.Close())
 	}()
 	// Write the data
@@ -168,7 +170,7 @@ func ApplyUpdates(wal *writeaheadlog.Wal, updates []FileUpdate) error {
 	if err != nil {
 		return fmt.Errorf("failed to create transaction: %v", err)
 	}
-	<- txn.InitComplete
+	<-txn.InitComplete
 	if txn.InitErr != nil {
 		return fmt.Errorf("failed to create transaction: %v", err)
 	}

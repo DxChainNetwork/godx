@@ -5,9 +5,12 @@
 package filesystem
 
 import (
+	"github.com/pkg/errors"
 	"math/rand"
 	"time"
 )
+
+var errDisrupted = errors.New("disrupted")
 
 type (
 	// disrupter is the structure used for test cases which insert disrupt point
