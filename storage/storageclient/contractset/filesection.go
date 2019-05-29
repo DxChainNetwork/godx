@@ -12,6 +12,7 @@ import (
 
 // fileSection allow a file to be divided into sections. The user is able to
 // read from or write at a particular file section
+// Deprecated: changed to DB
 type fileSection struct {
 	f     *os.File
 	start int64
@@ -20,6 +21,7 @@ type fileSection struct {
 
 // newFileSection validate the arguments passed in and initialize a new fileSection
 // object, which allows the data to be written into file sections
+// Deprecated: changed to DB
 func newFileSection(f *os.File, start, end int64) (fs *fileSection, err error) {
 	// start and end index validation
 	if start < 0 {
@@ -43,6 +45,7 @@ func newFileSection(f *os.File, start, end int64) (fs *fileSection, err error) {
 }
 
 // WriteAt will write the data into a specific file section
+// Deprecated: changed to DB
 func (fs *fileSection) WriteAt(data []byte, offset int64) (err error) {
 	// validation
 	if err = fs.readWriteValidation(offset, len(data)); err != nil {
@@ -55,6 +58,7 @@ func (fs *fileSection) WriteAt(data []byte, offset int64) (err error) {
 }
 
 // ReadAt will read the data from a specific file section
+// Deprecated: changed to DB
 func (fs *fileSection) ReadAt(data []byte, offset int64) (err error) {
 	// validation
 	if err = fs.readWriteValidation(offset, len(data)); err != nil {
@@ -69,6 +73,7 @@ func (fs *fileSection) ReadAt(data []byte, offset int64) (err error) {
 // Truncate will shrink the file to the size specified
 // the size is measured in bytes
 // for example: if size = 1, only one byte data will be remained in the file
+// Deprecated: changed to DB
 func (fs *fileSection) Truncate(size int64) (err error) {
 	// validation
 	if size < 0 {
@@ -83,6 +88,7 @@ func (fs *fileSection) Truncate(size int64) (err error) {
 }
 
 // Size returns the size of the file section
+// Deprecated: changed to DB
 func (fs *fileSection) Size() (sectionSize int64, err error) {
 	// get the size of the file
 	fi, err := fs.f.Stat()
@@ -111,17 +117,20 @@ func (fs *fileSection) Size() (sectionSize int64, err error) {
 // Sync will force a file to be committed from the memory to disk,
 // adding more reliability to the system in case the program crashed
 // before the file closed
+// Deprecated: changed to DB
 func (fs *fileSection) Sync() (err error) {
 	return fs.f.Sync()
 }
 
 // Close will close the file
+// Deprecated: changed to DB
 func (fs *fileSection) Close() error {
 	return fs.f.Close()
 }
 
 // readWriteValidation will validate the arguments when executing writing
 // or reading operation
+// Deprecated: changed to DB
 func (fs *fileSection) readWriteValidation(offset int64, dataLength int) (err error) {
 	if offset < 0 {
 		err = errors.New("offset cannot be smaller than 0")

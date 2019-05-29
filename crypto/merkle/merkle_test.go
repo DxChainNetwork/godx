@@ -2,7 +2,7 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package crypto
+package merkle
 
 import (
 	"bytes"
@@ -64,30 +64,30 @@ func TestMerkleRootProofVerification(t *testing.T) {
 	data := []byte("Good Morning")
 
 	// create merkle root
-	mr := MerkleRoot(data)
+	mr := Root(data)
 
 	// create merkle proof
-	proofDataPiece, proofSet, numLeaves, err := MerkleProof(data, proofIndex)
+	proofDataPiece, proofSet, numLeaves, err := Proof(data, proofIndex)
 	if err != nil {
 		t.Fatalf("failed to get the merkle proof: %s", err.Error())
 	}
 
 	// verification
-	verified := VerifyMerkleDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
+	verified := VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
 	if !verified {
 		t.Errorf("expected merkle verification to be succeed, instead, got failed")
 	}
 
 	// randomly generate a merkle root, and do a test
 	randmr := randomMerkleRoot()
-	verified = VerifyMerkleDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, randmr)
+	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, randmr)
 	if verified {
 		t.Error("expected merkle verification to be failed, instead, got succeed")
 	}
 
 	// change the proofDataPiece
 	proofDataPiece[0] = 'd'
-	verified = VerifyMerkleDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
+	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
 	if verified {
 		t.Error("expected merkle verification to be failed, instead, got succeed")
 	}
@@ -95,16 +95,16 @@ func TestMerkleRootProofVerification(t *testing.T) {
 
 func TestMerkleRangeProofVerification(t *testing.T) {
 	for piece := 0; piece < 50; piece++ {
-		data := randomDataGenerator(uint64(piece * MerkleLeafSize))
-		mr := MerkleRoot(data)
+		data := randomDataGenerator(uint64(piece * LeafSize))
+		mr := Root(data)
 		for startProof := 0; startProof < piece; startProof++ {
 			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := MerkleRangeProof(data, startProof, endProof)
+				proofSet, err := RangeProof(data, startProof, endProof)
 				if err != nil {
 					t.Fatalf("failed to get merkle range proof set")
 				}
 
-				verified, err := VerifyRangeProof(data[startProof*MerkleLeafSize:endProof*MerkleLeafSize], proofSet, startProof, endProof, mr)
+				verified, err := VerifyRangeProof(data[startProof*LeafSize:endProof*LeafSize], proofSet, startProof, endProof, mr)
 				if err != nil {
 					t.Errorf("failed to obtain the range proof: %s", err.Error())
 				}
@@ -121,11 +121,11 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 	for piece := 0; piece < 50; piece++ {
 		roots := randomHashSliceGenerator(piece)
 
-		mr := CachedMerkleTreeRoot(roots, sectorHeight)
+		mr := CachedTreeRoot(roots, sectorHeight)
 
 		for startProof := 0; startProof < piece; startProof++ {
 			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := MerkleSectorRangeProof(roots, startProof, endProof)
+				proofSet, err := SectorRangeProof(roots, startProof, endProof)
 				if err != nil {
 					t.Fatalf("failed to get the merkle sector range proof set")
 				}
@@ -144,7 +144,7 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 
 func TestMerkleDiffProofVerification(t *testing.T) {
 	roots := randomHashSliceGenerator(50)
-	mr := CachedMerkleTreeRoot(roots, sectorHeight)
+	mr := CachedTreeRoot(roots, sectorHeight)
 	rangeSet := []merkletree.LeafRange{
 		merkletree.LeafRange{Start: 1, End: 2},
 		merkletree.LeafRange{Start: 10, End: 20},
@@ -152,7 +152,7 @@ func TestMerkleDiffProofVerification(t *testing.T) {
 	}
 
 	// create proofSet
-	proofSet, err := MerkleDiffProof(roots, rangeSet, uint64(50))
+	proofSet, err := DiffProof(roots, rangeSet, uint64(50))
 	if err != nil {
 		t.Fatalf("failed to create merkleDiffProof: %s", err.Error())
 	}
@@ -197,7 +197,7 @@ const (
 
 var sectorHeight = func() uint64 {
 	height := uint64(0)
-	for 1<<height < (sectorSize / MerkleLeafSize) {
+	for 1<<height < (sectorSize / LeafSize) {
 		height++
 	}
 	return height
@@ -207,7 +207,7 @@ func merkleLeaves(data []byte) (leaves [][]byte) {
 	// length of the data pieces should be equivalent to the number of leaves of the merkle tree
 	buf := bytes.NewBuffer(data)
 	for buf.Len() > 0 {
-		leaves = append(leaves, buf.Next(MerkleLeafSize))
+		leaves = append(leaves, buf.Next(LeafSize))
 	}
 
 	return

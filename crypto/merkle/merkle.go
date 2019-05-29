@@ -2,7 +2,7 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package crypto
+package merkle
 
 import (
 	"bytes"
@@ -13,63 +13,63 @@ import (
 	"github.com/DxChainNetwork/merkletree"
 )
 
-// MerkleLeafSize is the data size stored in one merkle leaf.
+// LeafSize is the data size stored in one merkle leaf.
 // the original data will be divided into pieces based on the
 // merkleRootSize, and then be pushed into the merkle tree
 const (
-	MerkleLeafSize = 64
+	LeafSize = 64
 )
 
-// MerkleTree serves as a wrapper of the merkle tree, provide a convenient way
+// Tree serves as a wrapper of the merkle tree, provide a convenient way
 // to access methods associated with the merkle tree
-type MerkleTree struct {
+type Tree struct {
 	merkletree.Tree
 }
 
-// NewMerkleTree will initialize a MerkleTree object with sha256 as
+// NewTree will initialize a Tree object with sha256 as
 // the hashing method
-func NewMerkleTree() (mk *MerkleTree) {
-	mk = &MerkleTree{
+func NewTree() (mk *Tree) {
+	mk = &Tree{
 		Tree: *merkletree.New(sha256.New()),
 	}
 	return
 }
 
 // Root will calculate and return the merkle root of the merkle tree
-func (mt *MerkleTree) Root() (h common.Hash) {
+func (mt *Tree) Root() (h common.Hash) {
 	copy(h[:], mt.Tree.Root())
 	return
 }
 
-// CachedMerkleTree is similar to MerkleTree, one obvious difference between them
+// CachedTree is similar to Tree, one obvious difference between them
 // is that cached merkle tree will not hash the data before inserting them into
 // the tree
-type CachedMerkleTree struct {
+type CachedTree struct {
 	merkletree.CachedTree
 }
 
-// NewCachedMerkleTree will create a CachedMerkleTree object with
+// NewCachedTree will create a CachedTree object with
 // sha256 as hashing method.
-func NewCachedMerkleTree(height uint64) (ct *CachedMerkleTree) {
-	ct = &CachedMerkleTree{
+func NewCachedTree(height uint64) (ct *CachedTree) {
+	ct = &CachedTree{
 		CachedTree: *merkletree.NewCachedTree(sha256.New(), height),
 	}
 	return
 }
 
 // Push will push the data into the merkle tree
-func (ct *CachedMerkleTree) Push(h common.Hash) {
+func (ct *CachedTree) Push(h common.Hash) {
 	ct.CachedTree.Push(h[:])
 }
 
 // PushSubTree will insert a sub merkle tree and trying to combine it with
 // other data
-func (ct *CachedMerkleTree) PushSubTree(height int, h common.Hash) (err error) {
+func (ct *CachedTree) PushSubTree(height int, h common.Hash) (err error) {
 	return ct.CachedTree.PushSubTree(height, h[:])
 }
 
-// Root will return the merkle root of the CachedMerkleTree
-func (ct *CachedMerkleTree) Root() (h common.Hash) {
+// Root will return the merkle root of the CachedTree
+func (ct *CachedTree) Root() (h common.Hash) {
 	copy(h[:], ct.CachedTree.Root())
 	return
 }
@@ -77,7 +77,7 @@ func (ct *CachedMerkleTree) Root() (h common.Hash) {
 // Prove will be used to generate a storage proof hash set, which is used in storage
 // obligation to submit the storageProof. The data field gives user more freedom to
 // choose which data they want to do merkle proof with
-func (ct *CachedMerkleTree) Prove(proofData []byte, cachedHashProofSet []common.Hash) (hashProofSet []common.Hash) {
+func (ct *CachedTree) Prove(proofData []byte, cachedHashProofSet []common.Hash) (hashProofSet []common.Hash) {
 	// combine base and cachedHashSet, which will be used to generate proof set
 	cachedProofSet := make([][]byte, len(cachedHashProofSet)+1)
 	cachedProofSet[0] = proofData
@@ -96,19 +96,19 @@ func (ct *CachedMerkleTree) Prove(proofData []byte, cachedHashProofSet []common.
 	return
 }
 
-// MerkleRoot will calculates the merkle root of a data
-func MerkleRoot(b []byte) (h common.Hash) {
-	mt := NewMerkleTree()
+// Root will calculates the root of a data
+func Root(b []byte) (h common.Hash) {
+	mt := NewTree()
 	buf := bytes.NewBuffer(b)
 	for buf.Len() > 0 {
-		mt.Push(buf.Next(MerkleLeafSize))
+		mt.Push(buf.Next(LeafSize))
 	}
 	return mt.Root()
 }
 
-// CachedMerkleTreeRoot will return the merkle root of the cached merkle tree
-func CachedMerkleTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
-	cmt := NewCachedMerkleTree(height)
+// CachedTreeRoot will return the root of the cached tree
+func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
+	cmt := NewCachedTree(height)
 	for _, r := range roots {
 		cmt.Push(r)
 	}
@@ -116,19 +116,19 @@ func CachedMerkleTreeRoot(roots []common.Hash, height uint64) (root common.Hash)
 	return cmt.Root()
 }
 
-// MerkleProof will return the hash proof set of the merkle proof based on the data provided.
+// Proof will return the hash proof set of the proof based on the data provided.
 // proofData represents the data that needs to be hashed and combined with the data hashes
 // in the proof set to check the integrity of the data
-func MerkleProof(data []byte, proofIndex uint64) (proofData []byte, hashProofSet []common.Hash, leavesCount uint64, err error) {
-	// create a merkle tree, and set the proofIndex
-	t := NewMerkleTree()
+func Proof(data []byte, proofIndex uint64) (proofData []byte, hashProofSet []common.Hash, leavesCount uint64, err error) {
+	// create a tree, and set the proofIndex
+	t := NewTree()
 	if err = t.SetIndex(proofIndex); err != nil {
 		return
 	}
 
 	buf := bytes.NewBuffer(data)
 	for buf.Len() > 0 {
-		t.Push(buf.Next(MerkleLeafSize))
+		t.Push(buf.Next(LeafSize))
 	}
 
 	// get the proof set
@@ -150,8 +150,8 @@ func MerkleProof(data []byte, proofIndex uint64) (proofData []byte, hashProofSet
 	return
 }
 
-// VerifyMerkleDataPiece will verify if the data piece exists in the merkle tree
-func VerifyMerkleDataPiece(dataPiece []byte, hashProofSet []common.Hash, numLeaves, proofIndex uint64, merkleRoot common.Hash) (verified bool) {
+// VerifyDataPiece will verify if the data piece exists in the merkle tree
+func VerifyDataPiece(dataPiece []byte, hashProofSet []common.Hash, numLeaves, proofIndex uint64, merkleRoot common.Hash) (verified bool) {
 	// combine data piece with hash proof set
 	proofSet := make([][]byte, len(hashProofSet)+1)
 	proofSet[0] = dataPiece
@@ -163,10 +163,10 @@ func VerifyMerkleDataPiece(dataPiece []byte, hashProofSet []common.Hash, numLeav
 	return merkletree.VerifyProof(sha256.New(), merkleRoot[:], proofSet, proofIndex, numLeaves)
 }
 
-// MerkleRangeProof will create the hashProofSet for the range of data provided
+// RangeProof will create the hashProofSet for the range of data provided
 // NOTE: proofStart and proofEnd are measured in terms of
 // merkle leaves (64), meaning data[proofStart * 64:proofEnd * 64]
-func MerkleRangeProof(data []byte, proofStart, proofEnd int) (hashPoofSet []common.Hash, err error) {
+func RangeProof(data []byte, proofStart, proofEnd int) (hashPoofSet []common.Hash, err error) {
 	// range validation
 	if err = rangeVerification(proofStart, proofEnd); err != nil {
 		err = fmt.Errorf("making the merkle range proof: %s", err.Error())
@@ -174,7 +174,7 @@ func MerkleRangeProof(data []byte, proofStart, proofEnd int) (hashPoofSet []comm
 	}
 
 	// get the proof set
-	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, merkletree.NewReaderSubtreeHasher(bytes.NewReader(data), MerkleLeafSize, sha256.New()))
+	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, merkletree.NewReaderSubtreeHasher(bytes.NewReader(data), LeafSize, sha256.New()))
 	if err != nil {
 		return
 	}
@@ -201,16 +201,16 @@ func VerifyRangeProof(dataWithinRange []byte, hashProofSet []common.Hash, proofS
 
 	// verification
 	verified, err = merkletree.VerifyRangeProof(merkletree.NewReaderLeafHasher(bytes.NewReader(dataWithinRange),
-		sha256.New(), MerkleLeafSize), sha256.New(), proofStart, proofEnd, bytesProofSet, merkleRoot[:])
+		sha256.New(), LeafSize), sha256.New(), proofStart, proofEnd, bytesProofSet, merkleRoot[:])
 
 	return
 }
 
-// MerkleSectorRangeProof is similar to MerkleRangeProof. The difference is that the latter one is
+// SectorRangeProof is similar to RangeProof. The difference is that the latter one is
 // used to create proof set for range within the  data pieces, which is divided from the data sector.
 // The former one is used to create proof set for range within data sectors in a collection of data sectors
 // stored in the contract. roots represents the collection of data sectors
-func MerkleSectorRangeProof(roots []common.Hash, proofStart, proofEnd int) (hashProofSet []common.Hash, err error) {
+func SectorRangeProof(roots []common.Hash, proofStart, proofEnd int) (hashProofSet []common.Hash, err error) {
 	// range validation
 	if err = rangeVerification(proofStart, proofEnd); err != nil {
 		err = fmt.Errorf("merkle sector range proof: %s", err)
@@ -257,9 +257,9 @@ func VerifySectorRangeProof(rootsVerify []common.Hash, hashProofSet []common.Has
 	return
 }
 
-// MerkleDiffProof is similar to MerkleSectorRangeProof, the only difference is that this function
+// DiffProof is similar to SectorRangeProof, the only difference is that this function
 // can provide multiple ranges
-func MerkleDiffProof(roots []common.Hash, rangeSet []merkletree.LeafRange, leavesCount uint64) (hashProofSet []common.Hash, err error) {
+func DiffProof(roots []common.Hash, rangeSet []merkletree.LeafRange, leavesCount uint64) (hashProofSet []common.Hash, err error) {
 	// range set validation
 	if err = rangeSetVerification(rangeSet); err != nil {
 		return
@@ -300,8 +300,8 @@ func LeavesCount(dataSize uint64) (count uint64) {
 		return 0
 	}
 
-	count = dataSize / MerkleLeafSize
-	if count == 0 || dataSize%MerkleLeafSize != 0 {
+	count = dataSize / LeafSize
+	if count == 0 || dataSize%LeafSize != 0 {
 		count++
 	}
 	return

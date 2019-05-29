@@ -4,7 +4,9 @@
 
 package contractset
 
-import "github.com/DxChainNetwork/godx/crypto"
+import (
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+)
 
 // defines the database and file related constants
 const (
@@ -30,10 +32,10 @@ const (
 
 // sectorHeight is the height of the merkle tree constructed
 // based on the data uploaded. Data uploaded will be divided
-// into data pieces based on the MerkleLeafSize
+// into data pieces based on the LeafSize
 var sectorHeight = func() uint64 {
 	height := uint64(0)
-	for 1<<height < (SectorSize / crypto.MerkleLeafSize) {
+	for 1<<height < (SectorSize / merkle.LeafSize) {
 		height++
 	}
 	return height

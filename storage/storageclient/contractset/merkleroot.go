@@ -6,7 +6,7 @@ package contractset
 
 import (
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -44,7 +44,7 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 	// constant
 	return &cachedSubTree{
 		height: int(merkleRootsCacheHeight + sectorHeight),
-		sum:    crypto.CachedMerkleTreeRoot(roots, sectorHeight),
+		sum:    merkle.CachedTreeRoot(roots, sectorHeight),
 	}
 }
 
@@ -102,7 +102,7 @@ func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) {
 // Note: this is only a preview, root will not be saved into the memory nor db
 func (mr *merkleRoots) newMerkleRootPreview(newRoot common.Hash) (mroot common.Hash, err error) {
 	// create a new cached merkle tree
-	ct := crypto.NewCachedMerkleTree(sectorHeight)
+	ct := merkle.NewCachedTree(sectorHeight)
 
 	// append all cachedSubTrees first
 	for _, sub := range mr.cachedSubTrees {
