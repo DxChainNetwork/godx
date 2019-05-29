@@ -60,6 +60,8 @@ func (fs *FileSet) NewRandomDxFile(t *testing.T, dxPath storage.DxPath, minSecto
 		t.Fatal(err)
 	}
 	// Add the segments
+	df.lock.Lock()
+	defer df.lock.Unlock()
 	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
 		seg := randomSegment(df.metadata.NumSectors)
 		seg.Index = uint64(i)

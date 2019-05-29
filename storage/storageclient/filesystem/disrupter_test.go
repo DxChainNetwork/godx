@@ -4,5 +4,5 @@
 
 package filesystem
 
-// disrupterNoLoop is the disrupter to be used no starting the update loop
+// disrupterNoLoop is the standardDisrupter to be used no starting the update loop
 var disrupterNoLoop = newNormalDisrupter("no loop")

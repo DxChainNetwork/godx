@@ -44,6 +44,10 @@ var (
 
 	// errStopped is the error that happens when the system stops during the update
 	errStopped = errors.New("file system stopped during update")
+
+	// errInterrupted is the error that happens during an update, another update interrupt
+	// and redo the update
+	errInterrupted = errors.New("file update is interrupted")
 )
 
 type (
@@ -97,9 +101,6 @@ type (
 // The actual metadata update is executed in a thread updateDirMetadata
 func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	// Initialize the dirMetadataUpdate, that is, recordDirMetadataUpdate
-	if fs.disrupter.disrupt("InitAndUpdateDirMetadata") {
-		return errDisrupted
-	}
 	txn, err := fs.recordDirMetadataIntent(path)
 	if err != nil {
 		return fmt.Errorf("cannot update metadata at %v", path.Path)
@@ -241,18 +242,31 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	for {
 		// store the value of redo as not needed
 		atomic.StoreUint32(&update.redo, redoNotNeeded)
+		if fs.disrupt("redo1") {
+			return
+		}
 		select {
 		case <-update.stop:
-			err = errStopped
+			continue
+		case <-fs.tm.StopChan():
 			return
 		default:
 		}
+		if fs.disrupt("redo2") {
+			return
+		}
 		md, err := fs.LoopDirAndCalculateDirMetadata(update)
+		if err == errInterrupted {
+			continue
+		}
 		if err != nil {
 			return
 		}
 		err = fs.applyDxDirMetadata(update.dxPath, md)
 		if err != nil {
+			return
+		}
+		if fs.disrupt("redo3") {
 			return
 		}
 		// Termination. Only happens when redo value is redoNotNeeded
@@ -350,6 +364,8 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 		select {
 		case <-update.stop:
 			return nil, errStopped
+		case <-fs.tm.StopChan():
+			return nil, errInterrupted
 		default:
 		}
 		ext := filepath.Ext(file.Name())
@@ -372,6 +388,7 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 			// Ignore all files other than DxFile and DxDir
 			continue
 		}
+		//fmt.Printf("calculating %v: %+v\n", update.dxPath.Path, md)
 		metadata = applyMetadataForUpdateToMetadata(metadata, md)
 	}
 	return metadata, nil

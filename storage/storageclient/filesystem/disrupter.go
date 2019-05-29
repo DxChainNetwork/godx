@@ -7,22 +7,59 @@ package filesystem
 import (
 	"github.com/pkg/errors"
 	"math/rand"
+	"sync"
 	"time"
 )
 
 var errDisrupted = errors.New("disrupted")
 
+// disrupter is the interface for disrupt
+type disrupter interface {
+	disrupt(s string) bool
+	registerDisruptFunc(keyword string, df disruptFunc) disrupter
+}
+
 type (
-	// disrupter is the structure used for test cases which insert disrupt point
+	// standardDisrupter is the structure used for test cases which insert disrupt point
 	// in the code. It has a mapping from keyword to the disrupt function
-	disrupter map[string]disruptFunc
+	standardDisrupter map[string]disruptFunc
 
 	// disruptFunc is the function to be called when disrupt
 	disruptFunc func() bool
+
+	// counterDisrupter is the disrupter that disrupt also return the counts of the disrupter
+	counterDisrupter struct {
+		disrupter
+		counter map[string]int
+		lock    sync.Mutex
+	}
 )
 
+// newRandomDisrupter creates a disrupt that disrupt at keyword at a probability
+// of disruptProb [0, 1]
+func newRandomDisrupter(keyword string, disruptProb float32) standardDisrupter {
+	d := make(standardDisrupter)
+	d.registerDisruptFunc(keyword, makeRandomDisruptFunc(disruptProb))
+	return d
+}
+
+// newNormalDisrupter creates a disrupt that always disrupt
+func newNormalDisrupter(keyword string) standardDisrupter {
+	d := make(standardDisrupter)
+	d.registerDisruptFunc(keyword, makeNormalDisruptFunc())
+	return d
+}
+
+// newBlockDisrupter creates a disrupt that blocks on input channel, and
+// alway return true after unblock
+func newBlockDisrupter(keyword string, c <-chan struct{}) standardDisrupter {
+	d := make(standardDisrupter)
+	d.registerDisruptFunc(keyword, makeBlockDisruptFunc(c, makeNormalDisruptFunc()))
+	return d
+}
+
 // disrupt is the disrupt function to be executed during the code execution
-func (d disrupter) disrupt(s string) bool {
+func (d standardDisrupter) disrupt(s string) bool {
 	f, exist := d[s]
 	if !exist {
 		return false
@@ -30,33 +67,29 @@ func (d disrupter) disrupt(s string) bool {
 	return f()
 }
 
-// newRandomDisrupter creates a disrupt that disrupt at keyword at a probability
-// of disruptProb [0, 1]
-func newRandomDisrupter(keyword string, disruptProb float32) disrupter {
-	d := make(disrupter)
-	d.registerDisruptFunc(keyword, makeRandomDisruptFunc(disruptProb))
-	return d
-}
-
-// newNormalDisrupter creates a disrupt that always disrupt
-func newNormalDisrupter(keyword string) disrupter {
-	d := make(disrupter)
-	d.registerDisruptFunc(keyword, makeNormalDisruptFunc())
-	return d
-}
-
-// newBlockDisrupter creates a disrupt that blocks on input channel, and
-// alway return true after unblock
-func newBlockDisrupter(keyword string, c <-chan struct{}) disrupter {
-	d := make(disrupter)
-	d.registerDisruptFunc(keyword, makeBlockDisruptFunc(c, makeNormalDisruptFunc()))
-	return d
-}
-
-// registerDisruptFunc register the disrupt function to the disrupter
-func (d disrupter) registerDisruptFunc(keyword string, df disruptFunc) disrupter {
+// registerDisruptFunc register the disrupt function to the standardDisrupter
+func (d standardDisrupter) registerDisruptFunc(keyword string, df disruptFunc) disrupter {
 	d[keyword] = df
 	return d
+}
+
+// newCounterDisrupter makes a new CounterDisrupter
+func newCounterDisrupter(sd disrupter) counterDisrupter {
+	return counterDisrupter{
+		disrupter: sd,
+		counter:   make(map[string]int),
+	}
+}
+
+// disrupt for counterDisrupter also increment the count of the string
+func (cd counterDisrupter) disrupt(s string) bool {
+	c, exist := cd.counter[s]
+	if !exist {
+		cd.counter[s] = c + 1
+	} else {
+		cd.counter[s] = 1
+	}
+	return cd.disrupter.disrupt(s)
 }
 
 // makeRandomDisruptFunc makes a random disrupt function that will disrupt

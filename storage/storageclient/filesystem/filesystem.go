@@ -65,18 +65,18 @@ type FileSystem struct {
 	// log is the logger used for file system
 	logger log.Logger
 
-	// disrupter is the disrupter used for test cases. In production environment,
-	// it should always be an empty disrupter
+	// standardDisrupter is the standardDisrupter used for test cases. In production environment,
+	// it should always be an empty standardDisrupter
 	disrupter disrupter
 }
 
 // NewFileSystem is the public function used for creating a production FileSystem
 func New(rootDir storage.SysPath, contractor contractor) *FileSystem {
-	d := make(disrupter)
+	d := make(standardDisrupter)
 	return newFileSystem(rootDir, contractor, d)
 }
 
-// newFileSystem creates a new file system with the disrupter
+// newFileSystem creates a new file system with the standardDisrupter
 func newFileSystem(rootDir storage.SysPath, contractor contractor, disrupter disrupter) *FileSystem {
 	// create the FileSystem
 	return &FileSystem{
@@ -230,7 +230,7 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 	return err
 }
 
-// disrupt is the wrapper to disrupt with fs.disrupter
+// disrupt is the wrapper to disrupt with fs.standardDisrupter
 func (fs *FileSystem) disrupt(s string) bool {
 	return fs.disrupter.disrupt(s)
 }
