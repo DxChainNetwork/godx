@@ -46,163 +46,30 @@ func TestNewFileSystemEmptyStartClose(t *testing.T) {
 	}
 }
 
-// TestFileSystem_SingleFileUpdateDirMetadata test the scenario of updating a single directory metadata
-func TestFileSystem_SingleFileUpdateDirMetadata(t *testing.T) {
-	// fileSize: 11 segments for erasure params 10 / 30
-	fileSize := uint64(1 << 22 * 10 * 10)
-	tests := []struct {
-		contractor      contractor
-		markStuck       bool // whether to execute MarkAllUnhealthySegmentsAsStuck. There is difference in Health, stuckHealth, and numStuckSegments
-		metadata        *dxdir.Metadata
-		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
-	}{
-		{
-			contractor: &alwaysSuccessContractor{},
-			markStuck:  true,
-			metadata: &dxdir.Metadata{
-				NumFiles:         1,
-				TotalSize:        fileSize,
-				Health:           200,
-				StuckHealth:      200,
-				MinRedundancy:    30 / 10 * 100,
-				NumStuckSegments: 0,
-			},
-			cmpMetadataFunc: checkMetadataEqual,
-		},
-		{
-			contractor: &alwaysFailContractor{},
-			markStuck:  false,
-			metadata: &dxdir.Metadata{
-				NumFiles:         1,
-				TotalSize:        fileSize,
-				Health:           0, // all sectors has not been marked as stuck
-				StuckHealth:      200,
-				MinRedundancy:    0,
-				NumStuckSegments: 0,
-			},
-			cmpMetadataFunc: checkMetadataEqual,
-		},
-		{
-			contractor: &alwaysFailContractor{},
-			markStuck:  true,
-			metadata: &dxdir.Metadata{
-				NumFiles:         1,
-				TotalSize:        fileSize,
-				Health:           200,
-				StuckHealth:      0, // all sectors has been marked as stuck
-				MinRedundancy:    0,
-				NumStuckSegments: 11,
-			},
-			cmpMetadataFunc: checkMetadataEqual,
-		},
-		{
-			contractor: &randomContractor{
-				missRate:         0.1,
-				onlineRate:       0.9,
-				goodForRenewRate: 0.9,
-			},
-			markStuck: false,
-			metadata: &dxdir.Metadata{
-				NumFiles:  1,
-				TotalSize: fileSize,
-			},
-			cmpMetadataFunc: checkMetadataSimpleEqual,
-		},
-	}
-	for index, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, make(disrupter))
-		test.metadata.RootPath = fs.rootDir
-
-		path := randomDxPath(t, 3)
-
-		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
-		if err != nil {
-			t.Fatal(err)
-		}
-		df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
-		if test.markStuck {
-			if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
-				t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
-			}
-		}
-
-		if err = df.Close(); err != nil {
-			t.Fatal(err)
-		}
-		par, err := path.Parent()
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = fs.InitAndUpdateDirMetadata(par)
-		if err != nil {
-			t.Fatal(err)
-		}
-		c := make(chan struct{})
-		// Wait until update complete
-		go func() {
-			defer close(c)
-			for {
-				if len(fs.unfinishedUpdates) == 0 {
-					// There might be case the child directory completed update while
-					// the parent update is not in unfinishedUpdates
-					<-time.After(10 * time.Millisecond)
-					if len(fs.unfinishedUpdates) == 0 {
-						return
-					}
-					continue
-				}
-				<-time.After(10 * time.Millisecond)
-			}
-		}()
-		select {
-		case <-time.After(time.Second):
-			t.Fatal("after one second, update still not completed")
-		case <-c:
-		}
-		i := 0
-		for {
-			prePath := path.Path
-			path, err = path.Parent()
-			if err == storage.ErrAlreadyRoot {
-				break
-			}
-			test.metadata.DxPath = path
-			if err != nil {
-				t.Fatalf("depth %d calling parent on dxpath %v: %v", i, prePath, err)
-			}
-			if !fs.DirSet.Exists(path) {
-				t.Fatalf("depth %d path %s not exist", i, path.Path)
-			}
-			dir, err := fs.DirSet.Open(path)
-			if err != nil {
-				t.Fatalf("depth %d cannot open dir path %v: %v", i, path.Path, err)
-			}
-			err = test.cmpMetadataFunc(dir.Metadata(), *test.metadata)
-			if err != nil {
-				t.Errorf("test %d: metadata %d: %v", index, i, err)
-			}
-			err = dir.Close()
-			if err != nil {
-				t.Fatal(err)
-			}
-			i++
-		}
-		fs.postTestCheck(t, true, true, nil)
-	}
-}
-
-func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
+func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	// fileSize: 11 segments for erasure params 10 / 30
 	fileSize := uint64(1 << 22 * 10 * 10)
 	tests := []struct {
 		numFiles        int // numFiles is the number of the files under the same directory
 		contractor      contractor
+		markStuck       bool // flag indicates whether markAllUnhealthyAsStuck called
 		rootMetadata    *dxdir.Metadata
 		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
 	}{
 		{
+			numFiles:   1,
+			contractor: &alwaysSuccessContractor{},
+			markStuck:  true,
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
 			numFiles:   10,
 			contractor: &alwaysSuccessContractor{},
+			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
 				TotalSize: fileSize * 10,
@@ -210,11 +77,46 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 			},
 		},
 		{
+			numFiles:   1,
+			contractor: &alwaysSuccessContractor{},
+			markStuck:  true,
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
+			numFiles:   1,
+			contractor: &alwaysSuccessContractor{},
+			markStuck:  false,
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
 			numFiles:   10,
 			contractor: &alwaysFailContractor{},
+			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
 				TotalSize: fileSize * 10,
+				DxPath:    storage.RootDxPath(),
+			},
+		},
+		{
+			numFiles: 1,
+			contractor: &randomContractor{
+				missRate:         0.1,
+				onlineRate:       0.9,
+				goodForRenewRate: 0.9,
+			},
+			markStuck: true,
+			rootMetadata: &dxdir.Metadata{
+				NumFiles:  1,
+				TotalSize: fileSize,
 				DxPath:    storage.RootDxPath(),
 			},
 		},
@@ -225,6 +127,7 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 				onlineRate:       0.9,
 				goodForRenewRate: 0.9,
 			},
+			markStuck: true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
 				TotalSize: fileSize * 10,
@@ -248,8 +151,10 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 				t.Fatal(err)
 			}
 			df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
-			if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
-				t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
+			if test.markStuck {
+				if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+					t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
+				}
 			}
 			fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
 			fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
@@ -275,28 +180,9 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		c := make(chan struct{})
-		// Wait until update complete
-		go func() {
-			defer close(c)
-			for {
-				if len(fs.unfinishedUpdates) == 0 {
-					// There might be case the child directory completed update while
-					// the parent update is not in unfinishedUpdates
-					<-time.After(10 * time.Millisecond)
-					if len(fs.unfinishedUpdates) == 0 {
-						return
-					}
-					continue
-				}
-				<-time.After(10 * time.Millisecond)
-			}
-		}()
-		select {
-		case <-time.After(time.Second):
-			t.Fatal("after one second, update still not completed")
-		case <-c:
-		}
+		// wait until updates complete
+		fs.waitForExecution(t)
+
 		// Check the metadata of the root Path
 		rootPath := storage.RootDxPath()
 		test.rootMetadata.DxPath = rootPath
@@ -328,6 +214,32 @@ func TestFileSystem_MultipleUpdatesUnderSameDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 		fs.postTestCheck(t, true, true, nil)
+	}
+}
+
+// waitForExecution is the function that wait for update execution
+func (fs *FileSystem) waitForExecution(t *testing.T) {
+	c := make(chan struct{})
+	// Wait until update complete
+	go func() {
+		defer close(c)
+		for {
+			if len(fs.unfinishedUpdates) == 0 {
+				// There might be case the child directory completed update while
+				// the parent update is not in unfinishedUpdates
+				<-time.After(10 * time.Millisecond)
+				if len(fs.unfinishedUpdates) == 0 {
+					return
+				}
+				continue
+			}
+			<-time.After(10 * time.Millisecond)
+		}
+	}()
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("after one second, update still not completed")
+	case <-c:
 	}
 }
 
