@@ -58,7 +58,7 @@ type worker struct {
 // update the worker pool to match.
 func (c *StorageClient) activateWorkerPool() {
 
-	// TODO: 获取renter签订的所有合约，fileContractID ==》fileContract
+	// TODO: 获取client签订的所有合约，fileContractID ==》fileContract
 	contractMap := make(map[common.Hash]storage.ClientContract)
 	//contractSlice := c.contractManager.Contracts()
 	//for i := 0; i < len(contractSlice); i++ {
@@ -106,10 +106,12 @@ func (c *StorageClient) activateWorkerPool() {
 	c.lock.Unlock()
 }
 
-// workLoop repeatedly issues task to a worker, stopping when the worker
-// is killed or when the thread group is closed.
+// workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
+
+	// TODO: kill上传任务
 	//defer w.managedKillUploading()
+
 	defer w.killDownloading()
 
 	for {
@@ -145,8 +147,7 @@ func (w *worker) workLoop() {
 	}
 }
 
-// killDownloading will drop all of the download task given to the worker,
-// and set a signal to prevent the worker from accepting more download task.
+// drop all of the download task given to the worker.
 func (w *worker) killDownloading() {
 	w.downloadMu.Lock()
 	var removedSegments []*unfinishedDownloadSegment
@@ -161,16 +162,13 @@ func (w *worker) killDownloading() {
 	}
 }
 
-// queueDownloadSegment adds a segment to the worker's queue.
+// add a segment to the worker's queue.
 func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
-	// Accept the segment unless the worker has been terminated. Accepting the
-	// segment needs to happen under the same lock as fetching the termination
-	// status.
 	w.downloadMu.Lock()
 	terminated := w.downloadTerminated
 	if !terminated {
-		// Accept the segment and issue a notification to the master thread that
-		// there is a new download.
+
+		// accept the segment and notify client that there is a new download.
 		w.downloadSegments = append(w.downloadSegments, uds)
 		select {
 		case w.downloadChan <- struct{}{}:
@@ -179,15 +177,13 @@ func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
 	}
 	w.downloadMu.Unlock()
 
-	// If the worker has terminated, remove it from the uds. This call needs to
-	// happen without holding the worker lock.
+	// if the worker has terminated, remove it from the uds
 	if terminated {
 		uds.removeWorker()
 	}
 }
 
-// nextDownloadSegment will pull the next potential segment out of the work
-// queue for downloading.
+// pull the next potential segment out of the work queue for downloading.
 func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	w.downloadMu.Lock()
 	defer w.downloadMu.Unlock()
@@ -268,7 +264,8 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	uds.markSectorCompleted(sectorIndex)
 	uds.sectorsRegistered--
 
-	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need, we can recover the original data
+	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need,
+	// we can recover the original data
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 
 		// this a accumulation processing, every time we receive a sector
@@ -287,12 +284,10 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	uds.mu.Unlock()
 }
 
-// processDownloadSegment will take a potential download segment, figure out if
-// there is work to do, and then perform any registration or processing with the
-// segment before returning the segment to the caller.
+// check the given download segment whether there is work to do, and update its info
 func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinishedDownloadSegment {
 	uds.mu.Lock()
-	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.staticComplete()
+	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.isComplete()
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
 
 	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
@@ -300,8 +295,8 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
 
-	// if the given segment downloading complete/fail, or no sector associated with host for downloading, or the sector has completed,
-	// the worker should be removed.
+	// if the given segment downloading complete/fail, or no sector associated with host for downloading,
+	// or the sector has completed, the worker should be removed.
 	if segmentComplete || segmentFailed || w.onDownloadCooldown() || !workerHasSector || sectorCompleted {
 		uds.mu.Unlock()
 		uds.removeWorker()
@@ -326,8 +321,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 		return uds
 	}
 
-	// worker is not needed unless another worker fails, so put this worker on standby for this segment.
-	// the worker is still available to help with the download, so the worker is not removed from the segment.
+	// put this worker on standby for this segment, we can use it to download later.
 	uds.workersStandby = append(uds.workersStandby, w)
 	return nil
 }
@@ -341,16 +335,14 @@ func (w *worker) onDownloadCooldown() bool {
 	return time.Now().Before(w.ownedDownloadRecentFailure.Add(requiredCooldown))
 }
 
-// sectorOffsetAndLength translates the fetch offset and length of the segment
-// into the offset and length of the sector we need to download for a
-// successful recovery of the requested data.
+// calculate the offset and length of the sector we need to download for a successful recovery of the requested data.
 func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 	segmentIndex, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
 	return uint64(segmentIndex * storage.SegmentSize), uint64(numSegments * storage.SegmentSize)
 }
 
-// segmentsForRecovery calculates the first segment and how many segments we
-// need in total to recover the requested data.
+// calculates how many segments we need in total to recover the requested data,
+// and the first segment.
 func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 
 	// TODO: 确认下擦除🐴是否支持部分编码
@@ -375,9 +367,10 @@ func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasu
 	return startSegment, endSegment - startSegment
 }
 
-// unregisterWorker will remove the worker from an unfinished download
-// segment, and then un-register the sectors that it grabbed. This function should
-// only be called when a worker download fails.
+// remove the worker from an unfinished download segment,
+// and then un-register the sectors that it grabbed.
+//
+// NOTE: This function should only be called when a worker download fails.
 func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--

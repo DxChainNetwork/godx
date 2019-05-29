@@ -13,63 +13,102 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 )
 
-// A download is a file download that has been queued by the renter.
+// a file download that has been queued by the client.
 type (
 	download struct {
-		// Data progress variables.
-		atomicDataReceived         uint64 // Incremented as data completes, will stop at 100% file progress.
-		atomicTotalDataTransferred uint64 // Incremented as data arrives, includes overdrive, contract negotiation, etc.
 
-		// Other progress variables.
-		segmentsRemaining uint64        // Number of segments whose downloads are incomplete.
-		completeChan      chan struct{} // Closed once the download is complete.
-		err               error         // Only set if there was an error which prevented the download from completing.
+		// incremented as data completes, will stop at 100% file progress.
+		atomicDataReceived uint64
 
-		// downloadCompleteFunc is a slice of functions which are called when
-		// completeChan is closed.
+		// incremented as data arrives, include everything from connection.
+		atomicTotalDataTransferred uint64
+
+		// the number of incomplete segments for this download
+		segmentsRemaining uint64
+		completeChan      chan struct{}
+		err               error
+
+		// a slice of functions which are called when completeChan is closed.
 		downloadCompleteFuncs []downloadCompleteFunc
 
-		// Timestamp information.
-		endTime         time.Time // Set immediately before closing 'completeChan'.
-		staticStartTime time.Time // Set immediately when the download object is created.
+		// download completed time
+		endTime time.Time
 
-		// Basic information about the file.
-		destination           downloadDestination
-		destinationString     string // The string reported to the user to indicate the download's destination.
-		staticDestinationType string // "memory buffer", "http stream", "file", etc.
-		staticLength          uint64 // Length to download starting from the offset.
-		staticOffset          uint64 // Offset within the file to start the download.
-		staticDxFilePath      string // The path of the dxfile at the time the download started.
+		// download created time
+		startTime time.Time
 
-		// Retrieval settings for the file.
-		staticLatencyTarget time.Duration // In milliseconds. Lower latency results in lower total system throughput.
-		staticOverdrive     int           // How many extra sectors to download to prevent slow hosts from being a bottleneck.
-		staticPriority      uint64        // Downloads with higher priority will complete first.
+		// where to write the downloaded data
+		destination downloadDestination
+
+		// the destination need to report to user
+		destinationString string
+
+		// how to write the downloaded data,
+		// like that "file", "buffer", "http stream" ...
+		destinationType string
+
+		// the length of data to download
+		length uint64
+
+		// the start index in file to download.
+		offset uint64
+
+		// the file path for downloading
+		dxFilePath string
+
+		// In milliseconds.
+		latencyTarget time.Duration
+
+		// the number of extra sectors to download,
+		// this can detect "Low performance host" for client.
+		overdrive int
+
+		// higher priority will complete first.
+		priority uint64
 
 		// Utilities.
-		log           log.Logger                   // Same log as the renter.
-		memoryManager *memorymanager.MemoryManager // Same memoryManager used across the renter.
-		mu            sync.Mutex                   // Unique to the download object.
+		log           log.Logger
+		memoryManager *memorymanager.MemoryManager
+		mu            sync.Mutex
 	}
 
-	// downloadParams is the set of parameters to use when downloading a file.
+	// parameters to use when downloading a file.
 	downloadParams struct {
-		destination       downloadDestination // The place to write the downloaded data.
-		destinationType   string              // "file", "buffer", "http stream", etc.
-		destinationString string              // The string to report to the user for the destination.
-		file              *dxfile.Snapshot    // The file to download.
 
-		latencyTarget time.Duration // Workers above this latency will be automatically put on standby initially.
-		length        uint64        // Length of download. Cannot be 0.
-		needsMemory   bool          // Whether new memory needs to be allocated to perform the download.
-		offset        uint64        // Offset within the file to start the download. Must be less than the total filesize.
-		overdrive     int           // How many extra sectors to download to prevent slow hosts from being a bottleneck.
-		priority      uint64        // Files with a higher priority will be downloaded first.
+		// where to write the downloaded data
+		destination downloadDestination
+
+		// how to write the downloaded data,
+		// like that "file", "buffer", "http stream" ...
+		destinationType string
+
+		// the destination need to report to user
+		destinationString string
+
+		// the file to download
+		file *dxfile.Snapshot
+
+		// worker with higher latency will be put standby
+		latencyTarget time.Duration
+
+		// the length of data to download
+		length uint64
+
+		// whether need to allocate memory for this download
+		needsMemory bool
+
+		// the start index in file to download.
+		offset uint64
+
+		// the number of extra sectors to download,
+		// this can detect "Low performance host" for client.
+		overdrive int
+
+		// higher priority download first
+		priority uint64
 	}
 
-	// downloadCompleteFunc is a function called upon completion of the
-	// download. It accepts an error as an argument and returns an error. That
-	// way it's possible to add custom behavior for failing downloads.
+	// a function type that is called when the download completed.
 	downloadCompleteFunc func(error) error
 )
 
@@ -79,7 +118,7 @@ func (d *download) fail(err error) {
 	defer d.mu.Unlock()
 
 	// If the download is already complete, extend the error.
-	complete := d.staticComplete()
+	complete := d.isComplete()
 	if complete && d.err != nil {
 		return
 	} else if complete && d.err == nil {
@@ -92,8 +131,8 @@ func (d *download) fail(err error) {
 	d.markComplete()
 }
 
-// staticComplete is a helper function to indicate whether or not the download has completed.
-func (d *download) staticComplete() bool {
+// return whether or not the download has completed.
+func (d *download) isComplete() bool {
 	select {
 	case <-d.completeChan:
 		return true
@@ -102,9 +141,9 @@ func (d *download) staticComplete() bool {
 	}
 }
 
-// markComplete is a helper method which closes the completeChan and and executes the downloadCompleteFuncs.
+// mark the download complete and executes the downloadCompleteFuncs.
 func (d *download) markComplete() {
-	if d.staticComplete() {
+	if d.isComplete() {
 		d.log.Warn("Can't call markComplete multiple times")
 	} else {
 		defer close(d.completeChan)
@@ -135,14 +174,9 @@ func (d *download) Err() (err error) {
 }
 
 // registers a function to be called when the download is completed
-func (d *download) OnComplete(f downloadCompleteFunc) {
+func (d *download) onComplete(f downloadCompleteFunc) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.onComplete(f)
-}
-
-// the same effect as OnComplete
-func (d *download) onComplete(f downloadCompleteFunc) {
 	select {
 	case <-d.completeChan:
 		err := f(d.err)

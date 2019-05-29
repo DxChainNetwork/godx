@@ -756,7 +756,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}
 
-	// calculate expected cost and verify against renter's revision
+	// calculate expected cost and verify against client's revision
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
 	for _, sec := range req.Sections {

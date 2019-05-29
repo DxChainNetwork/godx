@@ -22,8 +22,7 @@ import (
 )
 
 // downloadSectorInfo contains all the information required to download and
-// recover a sector of a segment from a host. It is a value in a map where the key
-// is the file contract id.
+// recover a sector of a segment from a host.
 type downloadSectorInfo struct {
 	index uint64
 	root  common.Hash
@@ -71,11 +70,10 @@ type unfinishedDownloadSegment struct {
 	mu       sync.Mutex
 
 	// The SiaFile from which data is being downloaded.
-	renterFile *dxfile.Snapshot
+	clientFile *dxfile.Snapshot
 }
 
-// removeWorker will decrement a worker from the set of remaining workers
-// in the uds. After a worker has been removed, the uds needs to be cleaned up.
+// removeWorker will remove a worker from the set of remaining workers in the uds
 func (uds *unfinishedDownloadSegment) removeWorker() {
 	uds.mu.Lock()
 	uds.workersRemaining--
@@ -84,9 +82,10 @@ func (uds *unfinishedDownloadSegment) removeWorker() {
 }
 
 // cleanUp will check if the download has failed, and if not it will add
-// any standby workers which need to be added. Calling cleanUp too many
-// times is not harmful, however missing a call to cleanUp can lead to
-// dealocks.
+// any standby workers which need to be added.
+//
+// NOTE: Calling cleanUp too many times is not harmful,
+// however missing a call to cleanUp can lead to dealocks.
 func (uds *unfinishedDownloadSegment) cleanUp() {
 	// Check if the segment is newly failed.
 	uds.mu.Lock()
@@ -126,9 +125,7 @@ func (uds *unfinishedDownloadSegment) cleanUp() {
 	}
 }
 
-// fail will set the segment status to failed. The physical segment memory will be
-// wiped and any memory allocation will be returned to the client. The download
-// as a whole will be failed as well.
+// fail will set the segment status to failed
 func (uds *unfinishedDownloadSegment) fail(err error) {
 	uds.failed = true
 	uds.recoveryComplete = true
@@ -140,25 +137,26 @@ func (uds *unfinishedDownloadSegment) fail(err error) {
 }
 
 // returnMemory will check on the status of all the workers and sectors, and
-// determine how much memory is safe to return to the client. This should be
-// called each time a worker returns, and also after the segment is recovered.
+// determine how much memory is safe to return to the client.
+//
+// NOTE: This should be called each time a worker returns, and also after the segment is recovered.
 func (uds *unfinishedDownloadSegment) returnMemory() {
-	// The maximum amount of memory is the sectors completed plus the number of
-	// workers remaining.
+
+	// the maximum amount of memory is the sectors completed plus the number of workers remaining.
 	maxMemory := uint64(uds.workersRemaining+uds.sectorsCompleted) * uds.staticSectorSize
+
 	// If enough sectors have completed, max memory is the number of registered
 	// sectors plus the number of completed sectors.
 	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
-		// uds.sectorsRegistered is guaranteed to be at most equal to the number
-		// of overdrive sectors, meaning it will be equal to or less than
-		// initialMemory.
 		maxMemory = uint64(uds.sectorsCompleted+uds.sectorsRegistered) * uds.staticSectorSize
 	}
+
 	// If the segment recovery has completed, the maximum number of sectors is the
 	// number of registered.
 	if uds.recoveryComplete {
 		maxMemory = uint64(uds.sectorsRegistered) * uds.staticSectorSize
 	}
+
 	// Return any memory we don't need.
 	if uint64(uds.memoryAllocated) > maxMemory {
 		uds.download.memoryManager.Return(uds.memoryAllocated - maxMemory)

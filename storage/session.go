@@ -142,6 +142,8 @@ func (s *Session) SetDeadLine(d time.Duration) error {
 	return nil
 }
 
+// form contract protocol
+
 func (s *Session) SendStorageContractCreation(data interface{}) error {
 	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
 	return p2p.Send(s.rw, StorageContractCreationMsg, data)

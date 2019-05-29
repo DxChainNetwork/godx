@@ -216,10 +216,10 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
-	// Calculate the payouts for the renter, host, and whole contract
+	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	renterPayout, hostPayout, _, err := RenterPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
+	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
 	if err != nil {
 		return err
 	}
@@ -241,18 +241,18 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		RenterCollateral: types.DxcoinCollateral{types.DxcoinCharge{Value: renterPayout}},
-		HostCollateral:   types.DxcoinCollateral{types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: renterPayout, Address: clientAddr},
+			{Value: clientPayout, Address: clientAddr},
 			// Deposit is returned to host
 			{Value: hostPayout, Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: renterPayout, Address: clientAddr},
+			{Value: clientPayout, Address: clientAddr},
 			{Value: hostPayout, Address: hostAddr},
 		},
 	}
@@ -393,7 +393,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	// TODO: 保存这个合约信息到本地
 	//meta, err := cs.managedInsertContract(header, nil) // no Merkle roots yet
 	//if err != nil {
-	//	return RenterContract{}, err
+	//	return ClientContract{}, err
 	//}
 	return nil
 }
@@ -562,7 +562,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	// TODO update contract
 	//err = sc.commitUpload(walTxn, txn, crypto.Hash{}, storagePrice, bandwidthPrice)
 	//if err != nil {
-	//	return modules.RenterContract{}, err
+	//	return modules.ClientContract{}, err
 	//}
 
 	return nil
@@ -570,8 +570,9 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 // download
 
-// Read calls the Read RPC, writing the requested data to w. The RPC can be
-// cancelled (with a granularity of one section) via the cancel channel.
+// calls the Read RPC, writing the requested data to w.
+//
+// NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
 
 	// reset deadline when finished.
@@ -632,7 +633,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	price = price.MultFloat64(1 + extraRatio)
 
 	// create the download revision and sign it
-	newRevision := storage.NewDownloadRevision(lastRevision, price.BigIntPtr())
+	newRevision := NewRevision(lastRevision, price.BigIntPtr())
 
 	// client sign the revision
 	am := client.ethBackend.AccountManager()
@@ -658,7 +659,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	req.Signature = sig[:]
 
-	// TODO: 记录renter对合约的修改，以防节点断电或其他异常导致的revision被中断，下次节点启动就可以继续完成这个revision，相当于断点续传
+	// TODO: 记录client对合约的修改，以防节点断电或其他异常导致的revision被中断，下次节点启动就可以继续完成这个revision，相当于断点续传
 	//walTxn, err := sc.recordDownloadIntent(newRevision, price)
 	//if err != nil {
 	//	return err
@@ -775,8 +776,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	return nil
 }
 
-// Download calls the Read RPC with a single section and returns the
-// requested data. A Merkle proof is always requested.
+// calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
 func (client *StorageClient) Download(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
@@ -813,19 +813,19 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 	// instantiate the download object.
 	d := &download{
-		completeChan:          make(chan struct{}),
-		staticStartTime:       time.Now(),
-		destination:           params.destination,
-		destinationString:     params.destinationString,
-		staticDestinationType: params.destinationType,
-		staticLatencyTarget:   params.latencyTarget,
-		staticLength:          params.length,
-		staticOffset:          params.offset,
-		staticOverdrive:       params.overdrive,
-		staticDxFilePath:      params.file.DxPath(),
-		staticPriority:        params.priority,
-		log:                   client.log,
-		memoryManager:         client.memoryManager,
+		completeChan:      make(chan struct{}),
+		startTime:         time.Now(),
+		destination:       params.destination,
+		destinationString: params.destinationString,
+		destinationType:   params.destinationType,
+		latencyTarget:     params.latencyTarget,
+		length:            params.length,
+		offset:            params.offset,
+		overdrive:         params.overdrive,
+		dxFilePath:        params.file.DxPath(),
+		priority:          params.priority,
+		log:               client.log,
+		memoryManager:     client.memoryManager,
 	}
 
 	// set the end time of the download when it's done.
@@ -835,7 +835,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	})
 
 	// nothing more to do for 0-byte files or 0-length downloads.
-	if d.staticLength == 0 {
+	if d.length == 0 {
 		d.markComplete()
 		return d, nil
 	}
@@ -844,21 +844,16 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	minSegment, minSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
 	maxSegment, maxSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
 
-	// if the maxSegmentOffset is exactly 0 we need to subtract 1 segment. e.g. if
-	// the segmentSize is 100 bytes and we want to download 100 bytes from offset
-	// 0, maxSegment would be 1 and maxSegmentOffset would be 0. We want maxSegment
-	// to be 0 though since we don't actually need any data from segment 1.
 	if maxSegment > 0 && maxSegmentOffset == 0 {
 		maxSegment--
 	}
 
-	// make sure the requested segments are within the boundaries.
+	// check the requested segment number
 	if minSegment == params.file.NumSegments() || maxSegment == params.file.NumSegments() {
 		return nil, errors.New("download is requesting a segment that is past the boundary of the file")
 	}
 
-	// for each segment, assemble a mapping from the contract id to the index of
-	// the sector within the segment that the contract is responsible for.
+	// map from the host id to the index of the sector within the segment.
 	segmentMaps := make([]map[string]downloadSectorInfo, maxSegment-minSegment+1)
 	for segmentIndex := minSegment; segmentIndex <= maxSegment; segmentIndex++ {
 		segmentMaps[segmentIndex-minSegment] = make(map[string]downloadSectorInfo)
@@ -893,7 +888,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 			erasureCode:        params.file.ErasureCode(),
 			masterKey:          params.file.CipherKey(),
 			staticSegmentIndex: i,
-			staticCacheID:      fmt.Sprintf("%v:%v", d.staticDxFilePath, i),
+			staticCacheID:      fmt.Sprintf("%v:%v", d.dxFilePath, i),
 			staticSegmentMap:   segmentMaps[i-minSegment],
 			staticSegmentSize:  params.file.SegmentSize(),
 			staticSectorSize:   params.file.SectorSize(),
@@ -906,7 +901,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 			physicalSegmentData: make([][]byte, params.file.ErasureCode().NumSectors()),
 			sectorUsage:         make([]bool, params.file.ErasureCode().NumSectors()),
 			download:            d,
-			renterFile:          params.file,
+			clientFile:          params.file,
 		}
 
 		// set the offset within the segment that we start downloading from
@@ -950,7 +945,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	defer entry.SetTimeAccess(time.Now())
 
 	// validate download parameters.
-	isHTTPResp := p.Httpwriter != nil
+	isHTTPResp := p.HttpWriter != nil
 	if p.Async && isHTTPResp {
 		return nil, errors.New("cannot async download to http response")
 	}
@@ -985,7 +980,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	var dw downloadDestination
 	var destinationType string
 	if isHTTPResp {
-		dw = newDownloadDestinationWriter(p.Httpwriter)
+		dw = newDownloadWriter(p.HttpWriter)
 		destinationType = "http stream"
 	} else {
 		osFile, err := os.OpenFile(p.Destination, os.O_CREATE|os.O_WRONLY, entry.FileMode())
@@ -997,7 +992,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	}
 
 	if isHTTPResp {
-		w, ok := p.Httpwriter.(http.ResponseWriter)
+		w, ok := p.HttpWriter.(http.ResponseWriter)
 		if ok {
 			w.Header().Set("Content-Length", fmt.Sprint(p.Length))
 		}
@@ -1027,7 +1022,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	}
 
 	// register some cleanup for when the download is done.
-	d.OnComplete(func(_ error) error {
+	d.onComplete(func(_ error) error {
 		if closer, ok := dw.(io.Closer); ok {
 			return closer.Close()
 		}

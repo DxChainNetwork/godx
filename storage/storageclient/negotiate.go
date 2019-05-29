@@ -11,8 +11,8 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
-// calculate renter and host collateral
-func RenterPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (renterPayout, hostPayout, hostCollateral *big.Int, err error) {
+// calculate client and host collateral
+func ClientPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
 
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
@@ -25,25 +25,19 @@ func RenterPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollater
 		return
 	}
 
-	// Calculate renterPayout.
-	renterPayout = new(big.Int).Sub(funding, host.ContractPrice)
-	renterPayout = renterPayout.Sub(renterPayout, basePrice)
+	// Calculate clientPayout.
+	clientPayout = new(big.Int).Sub(funding, host.ContractPrice)
+	clientPayout = clientPayout.Sub(clientPayout, basePrice)
 
-	// Calculate hostCollateral by calculating the maximum amount of storage
-	// the renter can afford with 'funding' and calculating how much collateral
-	// the host wouldl have to put into the contract for that. We also add a
-	// potential baseCollateral.
-	maxStorageSizeTime := new(big.Int).Div(renterPayout, host.StoragePrice)
+	// Calculate hostCollateral
+	maxStorageSizeTime := new(big.Int).Div(clientPayout, host.StoragePrice)
 	maxStorageSizeTime = maxStorageSizeTime.Mul(maxStorageSizeTime, host.Collateral)
 	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
-
-	// Don't add more collateral than 10x the collateral for the expected
-	// storage to save on fees.
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(period))
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(expectedStorage))
-	maxRenterCollateral := host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(5))
-	if hostCollateral.Cmp(maxRenterCollateral) > 0 {
-		hostCollateral = maxRenterCollateral
+	maxClientCollateral := host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(5))
+	if hostCollateral.Cmp(maxClientCollateral) > 0 {
+		hostCollateral = maxClientCollateral
 	}
 
 	// Don't add more collateral than the host is willing to put into a single
@@ -58,19 +52,20 @@ func RenterPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollater
 	return
 }
 
+// update current storage contract revision with its revision number incremented, and cost transferred from the client to the host.
 func NewRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
 	rev := current
 
 	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
-	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 3)
+	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 2)
 	copy(rev.NewValidProofOutputs, current.NewValidProofOutputs)
 	copy(rev.NewMissedProofOutputs, current.NewMissedProofOutputs)
 
-	// move valid payout from renter to host
+	// move valid payout from client to host
 	rev.NewValidProofOutputs[0].Value = current.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
 	rev.NewValidProofOutputs[1].Value = current.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
 
-	// move missed payout from renter to void
+	// move missed payout from client to void, mean that will burn missed payout of client
 	rev.NewMissedProofOutputs[0].Value = current.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
 
 	// increment revision number

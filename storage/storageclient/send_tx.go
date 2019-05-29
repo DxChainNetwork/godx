@@ -28,7 +28,7 @@ func NewStorageContractTxAPI(b Backend) *StorageContractTxAPI {
 	return &StorageContractTxAPI{b, nonceLock}
 }
 
-// TODO: 上层storage contract交易调用这个接口发送交易，只需要传送 from、to、input（rlp编码过的）
+// send form contract tx，only need from、to、input（rlp encoded）
 func (sc *StorageContractTxAPI) SendFormContractTX(ctx context.Context, args SendStorageContractTxArgs) (common.Hash, error) {
 	account := accounts.Account{Address: args.From}
 	wallet, err := sc.b.AccountManager().Find(account)
@@ -71,6 +71,7 @@ type SendStorageContractTxArgs struct {
 	Input    *hexutil.Bytes  `json:"input"`
 }
 
+// construct tx with args
 func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Backend) (*types.Transaction, error) {
 	args.Gas = new(hexutil.Uint64)
 	*(*uint64)(args.Gas) = 90000

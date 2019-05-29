@@ -11,11 +11,9 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 )
 
-// downloadSegmentHeap is a heap that is sorted first by file priority, then by
-// the start time of the download, and finally by the index of the segment.  As
-// downloads are queued, they are added to the downloadSegmentHeap. As resources
-// become available to execute downloads, segments are pulled off of the heap and
-// distributed to workers.
+// download tasks are added to the downloadSegmentHeap.
+// As resources become available to execute downloads,
+// segments are pulled off of the heap and distributed to workers.
 type downloadSegmentHeap []*unfinishedDownloadSegment
 
 func (dch downloadSegmentHeap) Len() int {
@@ -30,8 +28,8 @@ func (dch downloadSegmentHeap) Less(i, j int) bool {
 	}
 
 	// For equal priority, sort by start time.
-	if dch[i].download.staticStartTime != dch[j].download.staticStartTime {
-		return dch[i].download.staticStartTime.Before(dch[j].download.staticStartTime)
+	if dch[i].download.startTime != dch[j].download.startTime {
+		return dch[i].download.startTime.Before(dch[j].download.startTime)
 	}
 
 	// For equal start time, sort by segmentIndex.
@@ -54,8 +52,7 @@ func (dch *downloadSegmentHeap) Pop() interface{} {
 	return x
 }
 
-// downloadLoop utilizes the worker pool to make progress on any queued
-// downloads.
+// downloadLoop utilizes the worker pool to make progress on any queued downloads.
 func (c *StorageClient) downloadLoop() {
 	err := c.tm.Add()
 	if err != nil {
@@ -128,7 +125,7 @@ func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
 			return nil
 		}
 		nextSegment := heap.Pop(c.downloadHeap).(*unfinishedDownloadSegment)
-		if !nextSegment.download.staticComplete() {
+		if !nextSegment.download.isComplete() {
 			return nextSegment
 		}
 	}
