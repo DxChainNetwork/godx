@@ -214,11 +214,18 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
 	root := uds.staticSegmentMap[hostEnodeID.String()].root
 
-	// TODO: 获取host netAddress
 	// Setup connection
-	hostNetAddress := ""
-	session, err := w.client.ethBackend.SetupConnection(hostNetAddress)
-	defer w.client.ethBackend.Disconnect(hostNetAddress)
+	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(hostEnodeID)
+	if !exist {
+		w.client.log.Error("the host not exist in client", "host_id", hostEnodeID.String())
+		return
+	}
+	session, err := w.client.ethBackend.SetupConnection(hostInfo.EnodeURL)
+	if err != nil {
+		w.client.log.Error("failed to connect host for file downloading", "host_url", hostInfo.EnodeURL)
+		return
+	}
+	defer w.client.ethBackend.Disconnect(hostInfo.EnodeURL)
 
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))

@@ -557,7 +557,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
-	rev.Signatures[1] = clientRevisionSign
+	rev.Signatures[1] = hostRevisionSig
 
 	// TODO update contract
 	//err = sc.commitUpload(walTxn, txn, crypto.Hash{}, storagePrice, bandwidthPrice)
