@@ -117,7 +117,6 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 // load or use the default config, init db and ext.
 func New(persistDir string) (*StorageHost, error) {
 	// do a host creation, but incomplete config
-
 	host := StorageHost{
 		log:        log.New(),
 		persistDir: persistDir,
