@@ -17,6 +17,7 @@ var errDisrupted = errors.New("disrupted")
 type disrupter interface {
 	disrupt(s string) bool
 	registerDisruptFunc(keyword string, df disruptFunc) disrupter
+	registered(keyword string) bool
 }
 
 type (
@@ -73,6 +74,12 @@ func (d standardDisrupter) registerDisruptFunc(keyword string, df disruptFunc) d
 	return d
 }
 
+// registered return whether the input keyword is registered
+func (d standardDisrupter) registered(s string) bool {
+	_, exist := d[s]
+	return exist
+}
+
 // newCounterDisrupter makes a new CounterDisrupter
 func newCounterDisrupter(sd disrupter) counterDisrupter {
 	return counterDisrupter{
@@ -83,13 +90,28 @@ func newCounterDisrupter(sd disrupter) counterDisrupter {
 
 // disrupt for counterDisrupter also increment the count of the string
 func (cd counterDisrupter) disrupt(s string) bool {
-	c, exist := cd.counter[s]
-	if !exist {
-		cd.counter[s] = c + 1
-	} else {
-		cd.counter[s] = 1
+	cd.lock.Lock()
+	defer cd.lock.Unlock()
+	if cd.disrupter.registered(s) {
+		c, exist := cd.counter[s]
+		if !exist {
+			cd.counter[s] = 1
+		} else {
+			cd.counter[s] = c + 1
+		}
 	}
 	return cd.disrupter.disrupt(s)
+}
+
+// count return how many times a specified string has been accessed
+func (cd counterDisrupter) count(s string) int {
+	cd.lock.Lock()
+	defer cd.lock.Unlock()
+
+	if !cd.disrupter.registered(s) {
+		return 0
+	}
+	return cd.counter[s]
 }
 
 // makeRandomDisruptFunc makes a random disrupt function that will disrupt

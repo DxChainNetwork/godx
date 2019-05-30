@@ -205,8 +205,7 @@ func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadl
 			atomic.StoreUint32(&update.updateInProgress, 0)
 		}
 	}()
-	err = fs.tm.Add()
-	if err != nil {
+	if err = fs.tm.Add(); err != nil {
 		err = errStopped
 		return
 	}
@@ -237,12 +236,15 @@ func (update *dirMetadataUpdate) stopAndRedo() {
 func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	var err error
 	// Call cleanUp to clean up the update
-	defer update.cleanUp(fs, err)
+	defer func() {
+		update.cleanUp(fs, err)
+	}()
 
 	for {
 		// store the value of redo as not needed
 		atomic.StoreUint32(&update.redo, redoNotNeeded)
-		if fs.disrupt("redo1") {
+		if fs.disrupt("cmaa1") {
+			err = errDisrupted
 			return
 		}
 		select {
@@ -252,7 +254,8 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		default:
 		}
-		if fs.disrupt("redo2") {
+		if fs.disrupt("cmaa2") {
+			err = errDisrupted
 			return
 		}
 		md, err := fs.LoopDirAndCalculateDirMetadata(update)
@@ -266,7 +269,8 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 		if err != nil {
 			return
 		}
-		if fs.disrupt("redo3") {
+		if fs.disrupt("cmaa3") {
+			err = errDisrupted
 			return
 		}
 		// Termination. Only happens when redo value is redoNotNeeded
@@ -297,10 +301,8 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		atomic.AddUint32(&update.consecutiveFails, 1)
 	}
 	fails := atomic.LoadUint32(&update.consecutiveFails)
-	var release bool
-	if fails >= numConsecutiveFailRelease || err == nil {
-		release = true
-	}
+
+	release := fails >= numConsecutiveFailRelease || err == nil
 
 	// 3. If no error happened, delete the entry in fs.unfinishedUpdates.
 	// 4. If no error happened, Release the transaction
@@ -313,14 +315,9 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		err = common.ErrCompose(err, update.walTxn.Release())
 		update.lock.Unlock()
 	}
-	if err != nil || !release {
-		// error handling. Currently just log the error
-		if fails >= numConsecutiveFailRelease {
-			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "err", err)
-		} else {
-			fs.logger.Warn("cannot update the metadata. Try later", "err", err)
-		}
-	} else {
+
+	if err == nil {
+		// no error happend. Continue to update parent
 		if update.dxPath.IsRoot() {
 			// dxPath is already root. return
 			return
@@ -333,7 +330,14 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
 			fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
 		}
-
+	} else {
+		if release {
+			// released updates failed more than numConsecutiveFailRelease times
+			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "err", err)
+		} else {
+			// unreleased updates
+			fs.logger.Warn("cannot update the metadata. Try later", "err", err)
+		}
 	}
 }
 

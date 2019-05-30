@@ -24,6 +24,9 @@ const (
 	// repairUnfinishedLoopInterval is the interval between two repairUnfinishedDirMetadataUpdate
 	repairUnfinishedLoopInterval = time.Second
 
+	// filesDirectory is the directory to put all files
+	filesDirectory = "files"
+
 	// fileWalName is the fileName for the fileWal
 	fileWalName = "file.wal"
 
@@ -33,8 +36,11 @@ const (
 
 // FileSystem is the structure for a file system that include a FileSet and a DirSet
 type FileSystem struct {
-	// rootDir is the root directory of the file system
+	// rootDir is the root directory where the files locates
 	rootDir storage.SysPath
+
+	// persistDir is the directory of containing the persist files
+	persistDir storage.SysPath
 
 	// FileSet is the FileSet from module dxfile
 	FileSet *dxfile.FileSet
@@ -71,16 +77,17 @@ type FileSystem struct {
 }
 
 // NewFileSystem is the public function used for creating a production FileSystem
-func New(rootDir storage.SysPath, contractor contractor) *FileSystem {
+func New(persistDir string, contractor contractor) *FileSystem {
 	d := make(standardDisrupter)
-	return newFileSystem(rootDir, contractor, d)
+	return newFileSystem(persistDir, contractor, d)
 }
 
 // newFileSystem creates a new file system with the standardDisrupter
-func newFileSystem(rootDir storage.SysPath, contractor contractor, disrupter disrupter) *FileSystem {
+func newFileSystem(persistDir string, contractor contractor, disrupter disrupter) *FileSystem {
 	// create the FileSystem
 	return &FileSystem{
-		rootDir:           rootDir,
+		rootDir:           storage.SysPath(filepath.Join(persistDir, filesDirectory)),
+		persistDir:        storage.SysPath(persistDir),
 		contractor:        contractor,
 		tm:                &threadmanager.ThreadManager{},
 		logger:            log.New("filesystem"),
@@ -113,7 +120,7 @@ func (fs *FileSystem) Start() error {
 
 // loadFileWal read the fileWal
 func (fs *FileSystem) loadFileWal() error {
-	fileWalPath := filepath.Join(string(fs.rootDir), fileWalName)
+	fileWalPath := filepath.Join(string(fs.persistDir), fileWalName)
 	fileWal, unappliedTxns, err := writeaheadlog.New(fileWalPath)
 	if err != nil {
 		return fmt.Errorf("cannot start load system fileWal: %v", err)
@@ -134,7 +141,7 @@ func (fs *FileSystem) loadFileWal() error {
 
 // loadUpdateWal load the update Wal from disk, and apply unfinished updates
 func (fs *FileSystem) loadUpdateWal() error {
-	updateWalPath := filepath.Join(string(fs.rootDir), updateWalName)
+	updateWalPath := filepath.Join(string(fs.persistDir), updateWalName)
 	updateWal, unappliedTxns, err := writeaheadlog.New(updateWalPath)
 	if err != nil {
 		return fmt.Errorf("cannot start file system updateWal: %v", err)
@@ -162,9 +169,6 @@ func (fs *FileSystem) Close() error {
 	var fullErr error
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	for _, update := range fs.unfinishedUpdates {
-		close(update.stop)
-	}
 	// close wal
 	err := fs.fileWal.Close()
 	if err != nil {
@@ -195,7 +199,7 @@ func (fs *FileSystem) loopRepairUnfinishedDirMetadataUpdate() {
 		case <-time.After(repairUnfinishedLoopInterval):
 		}
 		err := fs.repairUnfinishedDirMetadataUpdate()
-		if err != nil {
+		if err != nil && err != errStopped {
 			fs.logger.Warn("loop repair error", "err", err)
 		}
 	}
@@ -216,7 +220,7 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 		// If the program already stopped, return
 		select {
 		case <-fs.tm.StopChan():
-			return err
+			return errStopped
 		default:
 		}
 		// Check whether need to init and update the dirMetadata
@@ -225,7 +229,7 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 			continue
 		}
 		// InitAndUpdate all unfinished dirMetadataUpdates
-		err = common.ErrCompose(err, fs.InitAndUpdateDirMetadata(path))
+		err = common.ErrCompose(err, fs.updateDirMetadata(path, nil))
 	}
 	return err
 }

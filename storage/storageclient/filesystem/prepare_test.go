@@ -39,7 +39,7 @@ func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contrac
 	} else {
 		rootDir = tempDir(t.Name(), extraNaming)
 	}
-	fs := newFileSystem(rootDir, contractor, disrupter)
+	fs := newFileSystem(string(rootDir), contractor, disrupter)
 	err := fs.Start()
 	if err != nil {
 		t.Fatal(err)

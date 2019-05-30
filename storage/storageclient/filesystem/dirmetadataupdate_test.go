@@ -6,6 +6,7 @@ package filesystem
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/common/math"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -24,6 +25,9 @@ import (
 // TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
 // under different contractor under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipped for short tests")
+	}
 	// fileSize: 11 segments for erasure params 10 / 30
 	fileSize := uint64(1 << 22 * 10 * 10)
 	tests := []struct {
@@ -201,15 +205,16 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 	tests := []struct {
 		disruptKeyword string
 	}{
-		{"redo1"},
-		{"redo2"},
-		{"redo3"},
+		{"cmaa1"},
+		{"cmaa2"},
+		{"cmaa3"},
 	}
 	for index, test := range tests {
 		// make the disrupter
 		c := make(chan struct{})
 		var dr disrupter
-		dr = make(standardDisrupter).registerDisruptFunc(test.disruptKeyword, makeBlockDisruptFunc(c, func() bool { return false }))
+		dr = make(standardDisrupter).registerDisruptFunc(test.disruptKeyword,
+			makeBlockDisruptFunc(c, func() bool { return false }))
 		dr = newCounterDisrupter(dr)
 
 		// create FileSystem and create a new DxFile
@@ -226,9 +231,11 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
 
 		// calculate the metadata to expect at root
-		healthTable := fs.contractor.HostHealthMapByID(df.HostIDs())
-		health, stuckHealth, numStuckSegments := df.Health(healthTable)
-		minRedundancy := df.Redundancy(healthTable)
+		var health, stuckHealth, numStuckSegments, minRedundancy uint32
+		health, stuckHealth, numStuckSegments, minRedundancy = 200, 200, 0, 300
+
+		health, stuckHealth, numStuckSegments, minRedundancy = fs.healthParamsUpdate(df, health, stuckHealth, numStuckSegments, minRedundancy)
+
 		if err = df.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -239,7 +246,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 			StuckHealth:      stuckHealth,
 			MinRedundancy:    minRedundancy,
 			NumStuckSegments: numStuckSegments,
-			DxPath:           path,
+			DxPath:           storage.RootDxPath(),
 			RootPath:         fs.rootDir,
 		}
 
@@ -279,13 +286,153 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		if !exist {
 			t.Fatalf("test %d: not disrupted for keyword: %v", index, test.disruptKeyword)
 		}
-		if num != 1 {
-			t.Errorf("test %d: not single execution of the disrupt: %v", index, num)
+		if num != 2 {
+			t.Errorf("test %d: not twice execution of the disrupt: %v", index, num)
 		}
 		fs.postTestCheck(t, true, true, expectMd)
 	}
-
 }
+
+// TestFileSystem_SingleFail test the senario for a single fail for an update.
+// After the process, the root metadata should be updated as expected
+func TestFileSystem_SingleFail(t *testing.T) {
+	// make the disrupter that will only block for once
+	var once sync.Once
+	var dr disrupter
+	dr = make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool {
+		block := false
+		once.Do(func() {
+			block = true
+		})
+		return block
+	})
+	dr = newCounterDisrupter(dr)
+
+	// create FileSystem and create a new DxFile
+	ct := &alwaysFailContractor{}
+	fs := newEmptyTestFileSystem(t, "", ct, dr)
+	path := storage.RootDxPath()
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileSize := uint64(1 << 22 * 10 * 10)
+	path, err = path.Join(randomDxPath(t, 1).Path)
+	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+
+	// calculate the metadata to expect at root
+	var health, stuckHealth, numStuckSegments, minRedundancy uint32
+	health, stuckHealth, numStuckSegments, minRedundancy = 200, 200, 0, 300
+	health, stuckHealth, numStuckSegments, minRedundancy = fs.healthParamsUpdate(df, health, stuckHealth, numStuckSegments, minRedundancy)
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+	expectMd := &dxdir.Metadata{
+		NumFiles:         1,
+		TotalSize:        fileSize,
+		Health:           health,
+		StuckHealth:      stuckHealth,
+		MinRedundancy:    minRedundancy,
+		NumStuckSegments: numStuckSegments,
+		DxPath:           storage.RootDxPath(),
+		RootPath:         fs.rootDir,
+	}
+	// start the dir update
+	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Now the update should be in the unfinishedUpdates and waiting to be executed again
+	func() {
+		fs.lock.Lock()
+		defer fs.lock.Unlock()
+
+		if len(fs.unfinishedUpdates) != 1 {
+			t.Fatalf("unfinishedUpdates have length expect %v, got %v", 1, len(fs.unfinishedUpdates))
+		}
+
+		if _, exist := fs.unfinishedUpdates[storage.RootDxPath()]; !exist {
+			t.Fatal("update not exist in fs.unfinishedUpdates")
+		}
+	}()
+	// This might take some time to wait for the loop repair to complete
+	fs.waitForUpdatesComplete(t)
+
+	// Check that the disrupter has been accessed twice
+	cdr := dr.(counterDisrupter)
+	num := cdr.count("cmaa1")
+	if num != 2 {
+		t.Errorf("disrupt should be accessed twice. But instead got %d", num)
+	}
+	fs.postTestCheck(t, true, true, expectMd)
+}
+
+// TestFileSystem_ConsecutiveFails test the scenario of when updating a file, the file fails
+// three times. In this case, the dxdir metadata will not be updated and have the default value
+func TestFileSystem_ConsecutiveFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip for short")
+	}
+	// make the disrupter. Always fails
+	dr := make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool { return true })
+	cdr := newCounterDisrupter(dr)
+
+	// create FileSystem and create a new DxFile
+	ct := &alwaysFailContractor{}
+	fs := newEmptyTestFileSystem(t, "", ct, cdr)
+	path := storage.RootDxPath()
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileSize := uint64(1 << 22 * 10 * 10)
+	path, err = path.Join(randomDxPath(t, 1).Path)
+	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Since it is expected not to be updated successfully, the root metadata should be of default value
+	expectMd := &dxdir.Metadata{
+		NumFiles:         0,
+		TotalSize:        0,
+		Health:           dxdir.DefaultHealth,
+		StuckHealth:      dxdir.DefaultHealth,
+		MinRedundancy:    math.MaxUint32,
+		NumStuckSegments: 0,
+		DxPath:           storage.RootDxPath(),
+		RootPath:         fs.rootDir,
+	}
+	// start the dir update
+	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Now the update should be in the unfinishedUpdates and waiting to be executed again
+	func() {
+		fs.lock.Lock()
+		defer fs.lock.Unlock()
+
+		if len(fs.unfinishedUpdates) != 1 {
+			t.Fatalf("unfinishedUpdates have length expect %v, got %v", 1, len(fs.unfinishedUpdates))
+		}
+
+		if _, exist := fs.unfinishedUpdates[storage.RootDxPath()]; !exist {
+			t.Fatal("update not exist in fs.unfinishedUpdates")
+		}
+	}()
+	// This might take some time to wait for the loop repair to complete
+	fs.waitForUpdatesComplete(t)
+
+	// Check that the disrupter has been accessed twice
+	num := cdr.count("cmaa1")
+	if num != numConsecutiveFailRelease {
+		t.Errorf("disrupt should be accessed twice. But instead got %d", num)
+	}
+	fs.postTestCheck(t, true, true, expectMd)
+}
+
+func TestFileSystem_
 
 // healthParamsUpdate calculate and update the health parameters
 func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
@@ -352,9 +499,9 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 	case <-time.After(time.Second):
 		t.Fatal("Cannot close after certain period")
 	}
-	rootDir := fs.rootDir
+	persistDir := fs.persistDir
 	// check fileWal
-	fileWal := filepath.Join(string(rootDir), fileWalName)
+	fileWal := filepath.Join(string(persistDir), fileWalName)
 	_, txns, err := writeaheadlog.New(fileWal)
 	if err != nil {
 		t.Fatal(err)
@@ -363,7 +510,7 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 		t.Errorf("fileWal should be empty: %v, but got %v unapplied txns.", fileWalShouldEmpty, len(txns))
 	}
 	// check updateWal
-	updateWal := filepath.Join(string(rootDir), updateWalName)
+	updateWal := filepath.Join(string(persistDir), updateWalName)
 	_, txns, err = writeaheadlog.New(updateWal)
 	if err != nil {
 		t.Fatal(err)
@@ -377,7 +524,9 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 		if err != nil {
 			t.Fatalf("cannot open the root dxdir: %v", err)
 		}
-		d.Metadata()
+		if err = checkMetadataEqual(d.Metadata(), *md); err != nil {
+			t.Error(err)
+		}
 	}
 }
 

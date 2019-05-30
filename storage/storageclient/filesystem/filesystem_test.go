@@ -19,9 +19,6 @@ func TestNewFileSystemEmptyStartClose(t *testing.T) {
 	fs := newEmptyTestFileSystem(t, "", nil, make(standardDisrupter))
 	fs.disrupter.registerDisruptFunc("InitAndUpdateDirMetadata", makeBlockDisruptFunc(fs.tm.StopChan(),
 		func() bool { return false }))
-	if fs.rootDir != tempDir(t.Name()) {
-		t.Errorf("fs.rootDir not expected. Expect %v, Got %v", tempDir(t.Name()), fs.rootDir)
-	}
 	if len(fs.unfinishedUpdates) != 0 {
 		t.Errorf("empty start should have 0 unfinished updates. Got %v", len(fs.unfinishedUpdates))
 	}

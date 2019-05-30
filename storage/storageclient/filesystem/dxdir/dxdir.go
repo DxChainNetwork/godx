@@ -4,6 +4,7 @@
 package dxdir
 
 import (
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
@@ -81,11 +82,12 @@ func New(dxPath storage.DxPath, rootPath storage.SysPath, wal *writeaheadlog.Wal
 		return nil, err
 	}
 	metadata := &Metadata{
-		Health:      DefaultHealth,
-		StuckHealth: DefaultHealth,
-		TimeModify:  uint64(time.Now().Unix()),
-		DxPath:      dxPath,
-		RootPath:    rootPath,
+		Health:        DefaultHealth,
+		StuckHealth:   DefaultHealth,
+		MinRedundancy: math.MaxUint32,
+		TimeModify:    uint64(time.Now().Unix()),
+		DxPath:        dxPath,
+		RootPath:      rootPath,
 	}
 	d := &DxDir{
 		metadata:    metadata,
