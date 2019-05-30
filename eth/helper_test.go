@@ -3,6 +3,8 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"github.com/DxChainNetwork/godx/node"
+	"io/ioutil"
 	"math/big"
 	"sort"
 	"sync"
@@ -47,7 +49,30 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(nil, gspec.Config, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, nil)
+	workspace, err := ioutil.TempDir("", "console-tester-")
+	stack, err := node.New(&node.Config{DataDir: workspace, UseLightweightKDF: true, Name: "storage contract"})
+	if err != nil {
+		return nil, nil, err
+	}
+	ethConf := &Config{
+		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
+		Etherbase: common.HexToAddress("0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"),
+		Ethash: ethash.Config{
+			PowMode: ethash.ModeTest,
+		},
+	}
+	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return New(ctx, ethConf) }); err != nil {
+		return nil, nil, err
+	}
+	// Start the node and assemble the JavaScript console around it
+	if err = stack.Start(); err != nil {
+		return nil, nil, err
+	}
+
+	var ethereum *Ethereum
+	stack.Service(&ethereum)
+
+	pm, err := NewProtocolManager(ethereum, gspec.Config, mode, DefaultConfig.NetworkId, evmux, &testTxPool{added: newtx}, engine, blockchain, db, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -144,6 +169,40 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 			errc <- p2p.DiscQuitting
 		}
 	}()
+	tp := &testPeer{app: app, net: net, peer: peer}
+	// Execute any implicitly requested handshakes and return
+	if shake {
+		var (
+			genesis = pm.blockchain.Genesis()
+			head    = pm.blockchain.CurrentHeader()
+			td      = pm.blockchain.GetTd(head.Hash(), head.Number.Uint64())
+		)
+		tp.handshake(nil, td, head.Hash(), genesis.Hash())
+	}
+	return tp, errc
+}
+
+func newStorageContractTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*testPeer, <-chan error) {
+	app, net := p2p.MsgPipe()
+	// Generate a random id and create the peer
+	var id enode.ID
+	rand.Read(id[:])
+
+	peer := pm.newPeer(version, p2p.NewPeer(id, name, nil), net)
+	peer.Peer.Set(1<<2, true)
+	peer.Peer.Set(1<<4, true)
+
+	// Start the peer on a new thread
+	errc := make(chan error, 1)
+	go func() {
+		select {
+		case pm.newPeerCh <- peer:
+			errc <- pm.handle(peer)
+		case <-pm.quitSync:
+			errc <- p2p.DiscQuitting
+		}
+	}()
+
 	tp := &testPeer{app: app, net: net, peer: peer}
 	// Execute any implicitly requested handshakes and return
 	if shake {

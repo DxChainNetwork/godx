@@ -5,7 +5,6 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"math/big"
 	"time"
 
@@ -37,12 +36,7 @@ type (
 	// ContractCreateRequest contains storage contract info and client pk
 	ContractCreateRequest struct {
 		StorageContract types.StorageContract
-		ClientPK        ecdsa.PublicKey
-	}
-
-	ContractCreateSignature struct {
-		ContractSign []byte
-		RevisionSign []byte
+		Sign            []byte
 	}
 
 	// UploadRequest contains the request parameters for RPCUpload.
