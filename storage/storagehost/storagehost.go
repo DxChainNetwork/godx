@@ -419,7 +419,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	// Ecrecover host pk for setup unlock conditions
-	// TODO host cache it's pk ?
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
 		s.SendErrorMsg(err)

@@ -209,10 +209,10 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	// whether download success or fail, we should remove the worker at last
 	defer uds.removeWorker()
 
-	fetchOffset, fetchLength := sectorOffsetAndLength(uds.staticFetchOffset, uds.staticFetchLength, uds.erasureCode)
+	fetchOffset, fetchLength := sectorOffsetAndLength(uds.fetchOffset, uds.fetchLength, uds.erasureCode)
 
 	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	root := uds.staticSegmentMap[hostEnodeID.String()].root
+	root := uds.segmentMap[hostEnodeID.String()].root
 
 	// Setup connection
 	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(hostEnodeID)
@@ -236,12 +236,12 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	// record the amount of all data transferred between download connection
-	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.staticSectorSize)
+	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.sectorSize)
 
 	// calculate a seed for twofishgcm
-	sectorIndex := uds.staticSegmentMap[hostEnodeID.String()].index
+	sectorIndex := uds.segmentMap[hostEnodeID.String()].index
 	segmentIndexBytes := make([]byte, 8)
-	binary.PutUvarint(segmentIndexBytes, uds.staticSegmentIndex)
+	binary.PutUvarint(segmentIndexBytes, uds.segmentIndex)
 	sectorIndexBytes := make([]byte, 8)
 	binary.PutUvarint(sectorIndexBytes, sectorIndex)
 	seed := crypto.Keccak256(segmentIndexBytes, sectorIndexBytes)
@@ -276,14 +276,14 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 
 		// this a accumulation processing, every time we receive a sector
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.staticFetchLength/uint64(uds.erasureCode.MinSectors()))
+		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength/uint64(uds.erasureCode.MinSectors()))
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
 	}
 	if uds.sectorsCompleted == uds.erasureCode.MinSectors() {
 
 		// client maybe receive a not integral sector
-		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.staticFetchLength / uint64(uds.erasureCode.MinSectors()))
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.staticFetchLength-addedReceivedData)
+		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.fetchLength / uint64(uds.erasureCode.MinSectors()))
+		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength-addedReceivedData)
 
 		// recover the logical data
 		go uds.recoverLogicalData()
@@ -298,7 +298,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
 
 	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	sectorData, workerHasSector := uds.staticSegmentMap[hostEnodeID.String()]
+	sectorData, workerHasSector := uds.segmentMap[hostEnodeID.String()]
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
 
@@ -317,7 +317,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 
 	sectorTaken := uds.sectorUsage[sectorData.index]
 	sectorsInProgress := uds.sectorsRegistered + uds.sectorsCompleted
-	desiredSectorsInProgress := uds.erasureCode.MinSectors() + uds.staticOverdrive
+	desiredSectorsInProgress := uds.erasureCode.MinSectors() + uds.overdrive
 	workersDesired := sectorsInProgress < desiredSectorsInProgress && !sectorTaken
 
 	// if need more sector, and the sector has not been fetched yet,
@@ -352,26 +352,8 @@ func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs era
 // and the first segment.
 func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 
-	// TODO: 确认下擦除🐴是否支持部分编码
-	// If partialDecoding is not available we need to download the whole
-	// sector.
-	//if !rs.SupportsPartialEncoding() {
-	//	return 0, uint64(storage.SectorSize) / storage.SegmentSize
-	//}
-
-	// Else we need to figure out what segments of the piece we need to
-	// download for the recovered data to contain the data we want.
-	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
-
-	// Calculate the offset of the download.
-	startSegment := segmentFetchOffset / recoveredSegmentSize
-
-	// Calculate the length of the download.
-	endSegment := (segmentFetchOffset + segmentFetchLength) / recoveredSegmentSize
-	if (segmentFetchOffset+segmentFetchLength)%recoveredSegmentSize != 0 {
-		endSegment++
-	}
-	return startSegment, endSegment - startSegment
+	// not support partial encoding
+	return 0, uint64(storage.SectorSize) / storage.SegmentSize
 }
 
 // remove the worker from an unfinished download segment,
@@ -382,7 +364,7 @@ func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--
 	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	sectorIndex := uds.staticSegmentMap[hostEnodeID.String()].index
+	sectorIndex := uds.segmentMap[hostEnodeID.String()].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
 }

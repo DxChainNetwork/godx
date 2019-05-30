@@ -884,19 +884,18 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	// queue the downloads for each segment.
 	for i := minSegment; i <= maxSegment; i++ {
 		uds := &unfinishedDownloadSegment{
-			destination:        params.destination,
-			erasureCode:        params.file.ErasureCode(),
-			masterKey:          params.file.CipherKey(),
-			staticSegmentIndex: i,
-			staticCacheID:      fmt.Sprintf("%v:%v", d.dxFilePath, i),
-			staticSegmentMap:   segmentMaps[i-minSegment],
-			staticSegmentSize:  params.file.SegmentSize(),
-			staticSectorSize:   params.file.SectorSize(),
+			destination:  params.destination,
+			erasureCode:  params.file.ErasureCode(),
+			masterKey:    params.file.CipherKey(),
+			segmentIndex: i,
+			segmentMap:   segmentMaps[i-minSegment],
+			segmentSize:  params.file.SegmentSize(),
+			sectorSize:   params.file.SectorSize(),
 
 			// increase target by 25ms per segment
-			staticLatencyTarget: params.latencyTarget + (25 * time.Duration(i-minSegment)),
-			staticNeedsMemory:   params.needsMemory,
-			staticPriority:      params.priority,
+			latencyTarget:       params.latencyTarget + (25 * time.Duration(i-minSegment)),
+			needsMemory:         params.needsMemory,
+			priority:            params.priority,
 			completedSectors:    make([]bool, params.file.ErasureCode().NumSectors()),
 			physicalSegmentData: make([][]byte, params.file.ErasureCode().NumSectors()),
 			sectorUsage:         make([]bool, params.file.ErasureCode().NumSectors()),
@@ -906,23 +905,23 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 		// set the offset within the segment that we start downloading from
 		if i == minSegment {
-			uds.staticFetchOffset = minSegmentOffset
+			uds.fetchOffset = minSegmentOffset
 		} else {
-			uds.staticFetchOffset = 0
+			uds.fetchOffset = 0
 		}
 
 		// set the number of bytes to fetch within the segment that we start downloading from
 		if i == maxSegment && maxSegmentOffset != 0 {
-			uds.staticFetchLength = maxSegmentOffset - uds.staticFetchOffset
+			uds.fetchLength = maxSegmentOffset - uds.fetchOffset
 		} else {
-			uds.staticFetchLength = params.file.SegmentSize() - uds.staticFetchOffset
+			uds.fetchLength = params.file.SegmentSize() - uds.fetchOffset
 		}
 
 		// set the writeOffset within the destination for where the data be written.
-		uds.staticWriteOffset = writeOffset
-		writeOffset += int64(uds.staticFetchLength)
+		uds.writeOffset = writeOffset
+		writeOffset += int64(uds.fetchLength)
 
-		uds.staticOverdrive = uint32(params.overdrive)
+		uds.overdrive = uint32(params.overdrive)
 
 		// add this segment to the segment heap, and notify the download loop a new task
 		client.addSegmentToDownloadHeap(uds)

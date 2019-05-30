@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -21,59 +19,80 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
-// downloadSectorInfo contains all the information required to download and
-// recover a sector of a segment from a host.
+// the information of a sector of a segment to download
 type downloadSectorInfo struct {
 	index uint64
 	root  common.Hash
 }
 
-// unfinishedDownloadSegment contains a segment for a download that is in progress.
+// represent a unfinished download task
 type unfinishedDownloadSegment struct {
-	// Fetch + Write instructions - read only or otherwise thread safe.
-	destination downloadDestination // Where to write the recovered logical segment.
+
+	// where to write the recovered logical data
+	destination downloadDestination
 	erasureCode erasurecode.ErasureCoder
 	masterKey   crypto.CipherKey
 
-	// Fetch + Write instructions - read only or otherwise thread safe.
-	staticSegmentIndex uint64                        // Required for deriving the encryption keys for each sector.
-	staticCacheID      string                        // Used to uniquely identify a segment in the segment cache.
-	staticSegmentMap   map[string]downloadSectorInfo // Maps from host PubKey to the info for the sector associated with that host
-	staticSegmentSize  uint64
-	staticFetchLength  uint64 // Length within the logical segment to fetch.
-	staticFetchOffset  uint64 // Offset within the logical segment that is being downloaded.
-	staticSectorSize   uint64
-	staticWriteOffset  int64 // Offset within the writer to write the completed data.
+	// required for deriving the encryption keys for each sector
+	segmentIndex uint64
 
-	// Fetch + Write instructions - read only or otherwise thread safe.
-	staticLatencyTarget time.Duration
-	staticNeedsMemory   bool // Set to true if memory was not pre-allocated for this segment.
-	staticOverdrive     uint32
-	staticPriority      uint64
+	// maps from host id to the downloadSectorInfo
+	segmentMap  map[string]downloadSectorInfo
+	segmentSize uint64
 
-	// Download segment state - need mutex to access.
-	completedSectors    []bool    // Which sectors were downloaded successfully.
-	failed              bool      // Indicates if the segment has been marked as failed.
-	physicalSegmentData [][]byte  // Used to recover the logical data.
-	sectorUsage         []bool    // Which sectors are being actively fetched.
-	sectorsCompleted    uint32    // Number of sectors that have successfully completed.
-	sectorsRegistered   uint32    // Number of sectors that workers are actively fetching.
-	recoveryComplete    bool      // Whether or not the recovery has completed and the segment memory released.
-	workersRemaining    uint32    // Number of workers still able to fetch the segment.
-	workersStandby      []*worker // Set of workers that are able to work on this download, but are not needed unless other workers fail.
+	// the length of segment to fetch
+	fetchLength uint64
 
-	// Memory management variables.
+	// where is the logical segment being downloaded at
+	fetchOffset uint64
+	sectorSize  uint64
+
+	// where to write the completed data for the writer
+	writeOffset int64
+
+	latencyTarget time.Duration
+	needsMemory   bool
+	overdrive     uint32
+	priority      uint64
+
+	// which sectors in the segment were successfully downloaded
+	completedSectors []bool
+
+	// whether or not the segment successfully downloaded
+	failed bool
+
+	// th data used to recover the logical data
+	physicalSegmentData [][]byte
+
+	// which sectors in the segment are fetching
+	sectorUsage []bool
+
+	// how many sectors are successfully completed
+	sectorsCompleted uint32
+
+	// how many sectors are fetching
+	sectorsRegistered uint32
+
+	// whether or not the recovery has completed for this download task
+	recoveryComplete bool
+
+	// the number of workers still able to fetch the segment
+	workersRemaining uint32
+
+	// backup workers that can be used to download when other workers fail
+	workersStandby []*worker
+
+	// record how much memory allocated
 	memoryAllocated uint64
 
-	// The download object, mostly to update download progress.
+	// used to update download progress
 	download *download
 	mu       sync.Mutex
 
-	// The SiaFile from which data is being downloaded.
 	clientFile *dxfile.Snapshot
 }
 
-// removeWorker will remove a worker from the set of remaining workers in the uds
+// remove a worker from the set of remaining workers in the uds
 func (uds *unfinishedDownloadSegment) removeWorker() {
 	uds.mu.Lock()
 	uds.workersRemaining--
@@ -84,41 +103,38 @@ func (uds *unfinishedDownloadSegment) removeWorker() {
 // cleanUp will check if the download has failed, and if not it will add
 // any standby workers which need to be added.
 //
-// NOTE: Calling cleanUp too many times is not harmful,
+// NOTE: calling cleanUp too many times is not harmful,
 // however missing a call to cleanUp can lead to dealocks.
 func (uds *unfinishedDownloadSegment) cleanUp() {
-	// Check if the segment is newly failed.
+
+	// check if the segment is newly failed.
 	uds.mu.Lock()
 	if uds.workersRemaining+uds.sectorsCompleted < uds.erasureCode.MinSectors() && !uds.failed {
 		uds.fail(errors.New("not enough workers to continue download"))
 	}
-	// Return any excess memory.
+	// return any excess memory.
 	uds.returnMemory()
 
-	// Nothing to do if the segment has failed.
+	// nothing to do if the segment has failed.
 	if uds.failed {
 		uds.mu.Unlock()
 		return
 	}
 
-	// Check whether standby workers are required.
+	// check whether standby workers are required.
 	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors()
-	desiredsectorsRegistered := uds.erasureCode.MinSectors() + uds.staticOverdrive - uds.sectorsCompleted
-	standbyWorkersRequired := !segmentComplete && uds.sectorsRegistered < desiredsectorsRegistered
+	desiredSectorsRegistered := uds.erasureCode.MinSectors() + uds.overdrive - uds.sectorsCompleted
+	standbyWorkersRequired := !segmentComplete && uds.sectorsRegistered < desiredSectorsRegistered
 	if !standbyWorkersRequired {
 		uds.mu.Unlock()
 		return
 	}
 
-	// Assemble a list of standby workers, release the uds lock, and then queue
-	// the segment into the workers. The lock needs to be released early because
-	// holding the uds lock and the worker lock at the same time is a deadlock
-	// risk (they interact with eachother, call functions on eachother).
 	var standbyWorkers []*worker
 	for i := 0; i < len(uds.workersStandby); i++ {
 		standbyWorkers = append(standbyWorkers, uds.workersStandby[i])
 	}
-	uds.workersStandby = uds.workersStandby[:0] // Workers have been taken off of standby.
+	uds.workersStandby = uds.workersStandby[:0]
 	uds.mu.Unlock()
 	for i := 0; i < len(standbyWorkers); i++ {
 		standbyWorkers[i].queueDownloadSegment(uds)
@@ -132,7 +148,7 @@ func (uds *unfinishedDownloadSegment) fail(err error) {
 	for i := range uds.physicalSegmentData {
 		uds.physicalSegmentData[i] = nil
 	}
-	uds.download.fail(fmt.Errorf("segment %v failed: %v", uds.staticSegmentIndex, err))
+	uds.download.fail(fmt.Errorf("segment %v failed: %v", uds.segmentIndex, err))
 	uds.destination = nil
 }
 
@@ -143,28 +159,28 @@ func (uds *unfinishedDownloadSegment) fail(err error) {
 func (uds *unfinishedDownloadSegment) returnMemory() {
 
 	// the maximum amount of memory is the sectors completed plus the number of workers remaining.
-	maxMemory := uint64(uds.workersRemaining+uds.sectorsCompleted) * uds.staticSectorSize
+	maxMemory := uint64(uds.workersRemaining+uds.sectorsCompleted) * uds.sectorSize
 
 	// If enough sectors have completed, max memory is the number of registered
 	// sectors plus the number of completed sectors.
 	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
-		maxMemory = uint64(uds.sectorsCompleted+uds.sectorsRegistered) * uds.staticSectorSize
+		maxMemory = uint64(uds.sectorsCompleted+uds.sectorsRegistered) * uds.sectorSize
 	}
 
 	// If the segment recovery has completed, the maximum number of sectors is the
 	// number of registered.
 	if uds.recoveryComplete {
-		maxMemory = uint64(uds.sectorsRegistered) * uds.staticSectorSize
+		maxMemory = uint64(uds.sectorsRegistered) * uds.sectorSize
 	}
 
-	// Return any memory we don't need.
+	// return any memory we don't need.
 	if uint64(uds.memoryAllocated) > maxMemory {
 		uds.download.memoryManager.Return(uds.memoryAllocated - maxMemory)
 		uds.memoryAllocated = maxMemory
 	}
 }
 
-// markSectorCompleted marks the sector with sectorIndex as completed.
+// marks the sector with sectorIndex as completed.
 func (uds *unfinishedDownloadSegment) markSectorCompleted(sectorIndex uint64) {
 	uds.completedSectors[sectorIndex] = true
 	uds.sectorsCompleted++
@@ -180,16 +196,14 @@ func (uds *unfinishedDownloadSegment) markSectorCompleted(sectorIndex uint64) {
 	}
 }
 
-// recoverLogicalData will take all of the sectors that have been
-// downloaded and encode them into the logical data which is then written to the
-// underlying writer for the download.
+// recover data received from host into logical data, and write back to outer request destination
 func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 
 	// ensure cleanup occurs after the data is recovered, whether recovery succeeds or fails.
 	defer uds.cleanUp()
 
 	// calculate the number of bytes we need to recover
-	btr := bytesToRecover(uds.staticFetchOffset, uds.staticFetchLength, uds.staticSegmentSize, uds.erasureCode)
+	btr := bytesToRecover(uds.fetchOffset, uds.fetchLength, uds.segmentSize, uds.erasureCode)
 
 	// recover the sectors into the logical segment data.
 	recoverWriter := new(bytes.Buffer)
@@ -210,9 +224,9 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	recoveredData := recoverWriter.Bytes()
 
 	// write the bytes to the requested output.
-	start := recoveredDataOffset(uds.staticFetchOffset, uds.erasureCode)
-	end := start + uds.staticFetchLength
-	_, err = uds.destination.WriteAt(recoveredData[start:end], uds.staticWriteOffset)
+	start := recoveredDataOffset(uds.fetchOffset, uds.erasureCode)
+	end := start + uds.fetchLength
+	_, err = uds.destination.WriteAt(recoveredData[start:end], uds.writeOffset)
 	if err != nil {
 		uds.mu.Lock()
 		uds.fail(err)
@@ -239,33 +253,14 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 // returns the number of bytes we need to recover from the erasure coded segments.
 func bytesToRecover(segmentFetchOffset, segmentFetchLength, segmentSize uint64, rs erasurecode.ErasureCoder) uint64 {
 
-	// TODO: 确认下，是否不支持部分编码？？
-	// If partialDecoding is not available we downloaded the whole sector and
-	// recovered the whole segment.
-	//if !rs.SupportsPartialEncoding() {
-	//	return segmentSize
-	//}
-
-	// Else we need to calculate how much data we need to recover.
-	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
-	_, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
-	return numSegments * recoveredSegmentSize
+	// not support partial encoding
+	return segmentSize
 
 }
 
-// recoveredDataOffset translates the fetch offset of the segment into the offset
-// within the recovered data.
+// convert the fetch offset of the segment into the offset of the recovered data.
 func recoveredDataOffset(segmentFetchOffset uint64, rs erasurecode.ErasureCoder) uint64 {
 
-	// TODO: 确认下，是否不支持部分编码？？
-	// If partialDecoding is not available we downloaded the whole sector and
-	// recovered the whole chunk which means the offset and length are actually
-	// equal to the segmentFetchOffset and segmentFetchLength.
-	//if !rs.SupportsPartialEncoding() {
-	//	return chunkFetchOffset
-	//}
-
-	// Else we need to adjust the offset a bit.
-	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
-	return segmentFetchOffset % recoveredSegmentSize
+	// not support partial encoding
+	return segmentFetchOffset
 }

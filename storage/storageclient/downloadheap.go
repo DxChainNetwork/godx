@@ -23,8 +23,8 @@ func (dch downloadSegmentHeap) Len() int {
 func (dch downloadSegmentHeap) Less(i, j int) bool {
 
 	// First sort by priority.
-	if dch[i].staticPriority != dch[j].staticPriority {
-		return dch[i].staticPriority > dch[j].staticPriority
+	if dch[i].priority != dch[j].priority {
+		return dch[i].priority > dch[j].priority
 	}
 
 	// For equal priority, sort by start time.
@@ -33,7 +33,7 @@ func (dch downloadSegmentHeap) Less(i, j int) bool {
 	}
 
 	// For equal start time, sort by segmentIndex.
-	return dch[i].staticSegmentIndex < dch[j].staticSegmentIndex
+	return dch[i].segmentIndex < dch[j].segmentIndex
 }
 
 func (dch downloadSegmentHeap) Swap(i, j int) {
@@ -115,7 +115,7 @@ func (c *StorageClient) blockUntilOnline() bool {
 	return true
 }
 
-// nextDownloadSegment will fetch the next segment from the download heap
+// fetch the next segment from the download heap
 func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
 	c.downloadHeapMu.Lock()
 	defer c.downloadHeapMu.Unlock()
@@ -131,19 +131,16 @@ func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
 	}
 }
 
-// acquireMemoryForDownloadSegment will block until memory is available for the
-// segment to be downloaded.
+// request memory to download segment, will block until memory is available
 func (c *StorageClient) acquireMemoryForDownloadSegment(uds *unfinishedDownloadSegment) bool {
 
-	// TODO: 确认下erasure code算法是否已经优化。
-	//  按照Sia描述，这里实际上要求的内存空间是：擦除🐎恢复文件需要的最小文件量 + 设定的过载空间量
 	// the amount of memory required is equal minimum number of sectors plus the overdrive amount.
-	memoryRequired := uint64(uds.staticOverdrive+uds.erasureCode.MinSectors()) * uds.staticSectorSize
+	memoryRequired := uint64(uds.overdrive+uds.erasureCode.MinSectors()) * uds.sectorSize
 	uds.memoryAllocated = memoryRequired
 	return c.memoryManager.Request(memoryRequired, true)
 }
 
-// distributeDownloadSegmentToWorkers will take a segment and pass it out to all of the workers.
+// pass a segment out to all of the workers.
 func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownloadSegment) {
 
 	// distribute the segment to workers, marking the number of workers that have received the work.
@@ -161,11 +158,11 @@ func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownlo
 	uds.cleanUp()
 }
 
-// addSegmentToDownloadHeap will add a segment to the download heap
+// add a segment to the download heap
 func (c *StorageClient) addSegmentToDownloadHeap(uds *unfinishedDownloadSegment) {
 
 	// the sole purpose of the heap is to block workers from receiving a segment until memory has been allocated
-	if !uds.staticNeedsMemory {
+	if !uds.needsMemory {
 		c.distributeDownloadSegmentToWorkers(uds)
 		return
 	}
