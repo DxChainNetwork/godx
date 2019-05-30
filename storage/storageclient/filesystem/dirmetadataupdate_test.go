@@ -7,6 +7,7 @@ package filesystem
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common/math"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -117,8 +118,6 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 	}
 	for index, test := range tests {
-		//fmt.Println(index)
-		//fmt.Println(strings.Repeat("=", 200))
 		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, make(standardDisrupter))
 		test.rootMetadata.RootPath = fs.rootDir
 		commonPath := randomDxPath(t, 2)
@@ -432,7 +431,162 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	fs.postTestCheck(t, true, true, expectMd)
 }
 
-func TestFileSystem_
+// TestFileSystem_FailedRecover test the scenario of closing the file system when the update is
+// on going. It is supposed to be unclean shut down. And later open that file system again. Finally,
+// the result shall be as expected.
+func TestFileSystem_FailedRecover(t *testing.T) {
+	// make the disrupter. Always fails
+	dr := make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool { return true })
+
+	// create FileSystem and create a new DxFile
+	ct := &alwaysFailContractor{}
+	fs := newEmptyTestFileSystem(t, "", ct, dr)
+	path := storage.RootDxPath()
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileSize := uint64(1 << 22 * 10 * 10)
+	path, err = path.Join(randomDxPath(t, 1).Path)
+	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+
+	persistDir := fs.persistDir
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Since it is expected not to be updated successfully, the root metadata should be of default value
+	defaultMd := &dxdir.Metadata{
+		NumFiles:         0,
+		TotalSize:        0,
+		Health:           dxdir.DefaultHealth,
+		StuckHealth:      dxdir.DefaultHealth,
+		MinRedundancy:    math.MaxUint32,
+		NumStuckSegments: 0,
+		DxPath:           storage.RootDxPath(),
+		RootPath:         fs.rootDir,
+	}
+	// start the dir update
+	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Check that the disrupter has been accessed twice
+	fs.postTestCheck(t, true, false, defaultMd)
+
+	// Restart the filesystem with always success contractor. The metadata should be updated as expected
+	newFs := newFileSystem(string(persistDir), &alwaysSuccessContractor{}, make(standardDisrupter))
+	if err = newFs.Start(); err != nil {
+		t.Fatal(err)
+	}
+	expectMd := &dxdir.Metadata{
+		NumFiles:         1,
+		TotalSize:        fileSize,
+		Health:           200,
+		StuckHealth:      200,
+		MinRedundancy:    300,
+		NumStuckSegments: 0,
+		DxPath:           storage.RootDxPath(),
+		RootPath:         fs.rootDir,
+	}
+	newFs.waitForUpdatesComplete(t)
+	newFs.postTestCheck(t, true, true, expectMd)
+}
+
+// TestFileSystem_CorruptedFiles test the scenario of corrupted files.
+// Create three files:
+//  1. file with corrupted dxfile
+//  2. file with corrupted dxdir
+//  3. file with all good files
+func TestFileSystem_CorruptedFiles(t *testing.T) {
+	// create the disrupter
+	dr := make(standardDisrupter)
+
+	// create FileSystem and create a new DxFile
+	ct := &alwaysSuccessContractor{}
+	fs := newEmptyTestFileSystem(t, "", ct, dr)
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fileSize := uint64(1 << 22 * 10 * 10)
+
+	// create three files
+	// 1. corrupted dxfile
+	path := randomDxPath(t, 1)
+	corruptedDxFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err = corruptedDxFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// 2. corrupted dxdir
+	path = randomDxPath(t, 2)
+	corruptedDirFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err = corruptedDirFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// 3. Good file
+	path = randomDxPath(t, 1)
+	goodFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err = goodFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// update dxdir metadata
+	dirParent, err := corruptedDirFile.DxPath().Parent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = fs.InitAndUpdateDirMetadata(dirParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wait for the updates to complete
+	fs.waitForUpdatesComplete(t)
+
+	// corrupt the files
+	file, err := os.OpenFile(string(corruptedDxFile.FilePath()), os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteAt([]byte("!@#*&^%$#"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	corruptDxDirFile := filepath.Join(filepath.Dir(string(corruptedDirFile.FilePath())), dxdir.DirFileName)
+	file, err = os.OpenFile(corruptDxDirFile, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.WriteAt([]byte("!@#*&^%$#"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err = file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// update again
+	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs.waitForUpdatesComplete(t)
+
+	// expectMd is supposed to be the metadata of just the goodFile
+	expectMd := &dxdir.Metadata{
+		NumFiles:         1,
+		TotalSize:        fileSize,
+		Health:           dxdir.DefaultHealth,
+		StuckHealth:      dxdir.DefaultHealth,
+		MinRedundancy:    300,
+		NumStuckSegments: 0,
+		DxPath:           storage.RootDxPath(),
+		RootPath:         fs.rootDir,
+	}
+	// start the dir update
+	fs.postTestCheck(t, true, true, expectMd)
+}
 
 // healthParamsUpdate calculate and update the health parameters
 func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
@@ -490,7 +644,9 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 	go func() {
 		err := fs.Close()
 		if err != nil {
-			t.Fatal(err)
+			if fileWalShouldEmpty && updateWalShouldEmpty {
+				t.Error(err)
+			}
 		}
 		close(c)
 	}()
@@ -502,22 +658,24 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 	persistDir := fs.persistDir
 	// check fileWal
 	fileWal := filepath.Join(string(persistDir), fileWalName)
-	_, txns, err := writeaheadlog.New(fileWal)
+	wal, txns, err := writeaheadlog.New(fileWal)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(txns) == 0 != fileWalShouldEmpty {
 		t.Errorf("fileWal should be empty: %v, but got %v unapplied txns.", fileWalShouldEmpty, len(txns))
 	}
+	wal.CloseIncomplete()
 	// check updateWal
 	updateWal := filepath.Join(string(persistDir), updateWalName)
-	_, txns, err = writeaheadlog.New(updateWal)
+	wal, txns, err = writeaheadlog.New(updateWal)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(txns) == 0 != updateWalShouldEmpty {
 		t.Errorf("updateWal should be empty: %v, but got %v unapplied txns.", updateWalShouldEmpty, len(txns))
 	}
+	wal.CloseIncomplete()
 	// check root dxdir file have the expected metadata
 	if md != nil {
 		d, err := fs.DirSet.Open(storage.RootDxPath())

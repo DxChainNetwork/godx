@@ -103,16 +103,16 @@ func (fs *FileSystem) Start() error {
 	if err := fs.loadFileWal(); err != nil {
 		return fmt.Errorf("cannot start the file system: %v", err)
 	}
-	// open the updateWal
-	if err := fs.loadUpdateWal(); err != nil {
-		return fmt.Errorf("cannot start the file system: %v", err)
-	}
 	// load fs.DirSet
 	var err error
 	if fs.DirSet, err = dxdir.NewDirSet(fs.rootDir, fs.fileWal); err != nil {
 		return fmt.Errorf("cannot start the file system DirSet: %v", err)
 	}
 	fs.FileSet = dxfile.NewFileSet(fs.rootDir, fs.fileWal)
+	// open the updateWal
+	if err := fs.loadUpdateWal(); err != nil {
+		return fmt.Errorf("cannot start the file system: %v", err)
+	}
 	// Start the repair loop
 	go fs.loopRepairUnfinishedDirMetadataUpdate()
 	return nil
@@ -199,7 +199,7 @@ func (fs *FileSystem) loopRepairUnfinishedDirMetadataUpdate() {
 		case <-time.After(repairUnfinishedLoopInterval):
 		}
 		err := fs.repairUnfinishedDirMetadataUpdate()
-		if err != nil && err != errStopped {
+		if err != nil && err != errStopped && err != errUpdateAlreadyInProgress {
 			fs.logger.Warn("loop repair error", "err", err)
 		}
 	}

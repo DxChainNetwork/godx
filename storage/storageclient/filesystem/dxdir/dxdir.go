@@ -135,8 +135,8 @@ func (d *DxDir) DxPath() storage.DxPath {
 }
 
 // filePath return the actual dxdir file path of a dxdir.
-func (d *DxDir) FilePath() storage.SysPath {
-	return d.dirFilePath
+func (d *DxDir) FilePath() string {
+	return string(d.dirFilePath)
 }
 
 // UpdateMetadata update the metadata with the given metadata.

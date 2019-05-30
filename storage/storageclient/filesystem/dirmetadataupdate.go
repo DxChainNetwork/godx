@@ -109,9 +109,8 @@ func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	if err = fs.updateDirMetadata(path, txn); err != nil {
 		// tm already closed or update thread already in progress
 		if err == errUpdateAlreadyInProgress {
-			err = nil
+			err = txn.Release()
 		}
-		err = common.ErrCompose(err, txn.Release())
 		return err
 	}
 	return nil
@@ -392,7 +391,6 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 			// Ignore all files other than DxFile and DxDir
 			continue
 		}
-		//fmt.Printf("calculating %v: %+v\n", update.dxPath.Path, md)
 		metadata = applyMetadataForUpdateToMetadata(metadata, md)
 	}
 	return metadata, nil
@@ -459,6 +457,7 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 	} else if err != nil {
 		return nil, err
 	}
+	defer d.Close()
 	// No error, or the dxdir is created.
 	rawMetadata := d.Metadata()
 	return &metadataForUpdate{

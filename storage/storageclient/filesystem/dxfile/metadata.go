@@ -103,6 +103,13 @@ func (df *DxFile) DxPath() storage.DxPath {
 	return df.metadata.DxPath
 }
 
+// FilePath return the actual file path of the dxfile
+func (df *DxFile) FilePath() string {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return string(df.filePath)
+}
+
 // FileSize return the file size of the dxfile
 func (df *DxFile) FileSize() uint64 {
 	df.lock.RLock()
