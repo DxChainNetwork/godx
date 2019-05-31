@@ -16,10 +16,9 @@ func TestCreateRandomFiles(t *testing.T) {
 	// create FileSystem and create a new DxFile
 	ct := &AlwaysSuccessContractor{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
-	fmt.Println("directory:", fs.persistDir)
 	c := make(chan struct{})
 	go func() {
-		err := fs.createRandomFiles(1000, 0.5, 0.25, 5)
+		err := fs.createRandomFiles(1000, 0.8, 0.25, 5, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -27,7 +26,7 @@ func TestCreateRandomFiles(t *testing.T) {
 	}()
 	select {
 	case <-c:
-	case <-time.After(10 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatal("create random file used more than 10 seconds")
 	}
 }

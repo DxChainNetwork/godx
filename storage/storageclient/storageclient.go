@@ -138,6 +138,7 @@ func (sc *StorageClient) Close() error {
 	var fullErr error
 	// Closing the host manager
 	sc.log.Info("Closing the host manager")
+	log.Info("Closing the host manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 

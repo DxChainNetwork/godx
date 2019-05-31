@@ -4,18 +4,16 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
-	mrand "math/rand"
-	"os"
-	"path/filepath"
-	"runtime"
-	"testing"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
 )
 
 var testDir = tempDir("dxfile")
@@ -137,10 +135,18 @@ func randomHostTable(numHosts int) hostTable {
 // randomSegment create a random segment. At missRate, the sector will not present
 func randomSegment(numSectors uint32, missRate ...float32) *Segment {
 	seg := &Segment{Sectors: make([][]*Sector, numSectors)}
-	if len(missRate) != 0 {
-		mrand.Seed()
-	}
+	//var miss bool
+	//if len(missRate) != 0 {
+	//	mrand.Seed(time.Now().UnixNano())
+	//	miss = missRate[0] == 0
+	//}
 	for i := range seg.Sectors {
+		//if miss {
+		//	num := mrand.Float32()
+		//	if num < missRate[0] {
+		//		continue
+		//	}
+		//}
 		seg.Sectors[i] = append(seg.Sectors[i], randomSector())
 	}
 	return seg

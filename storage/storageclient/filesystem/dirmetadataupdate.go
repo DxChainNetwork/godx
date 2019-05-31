@@ -298,7 +298,9 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		fs.lock.Unlock()
 
 		update.lock.Lock()
-		err = common.ErrCompose(err, update.walTxn.Release())
+		if update.walTxn != nil {
+			err = common.ErrCompose(err, update.walTxn.Release())
+		}
 		update.lock.Unlock()
 	}
 

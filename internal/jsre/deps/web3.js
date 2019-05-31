@@ -5972,128 +5972,6 @@ module.exports = Shh;
 
 },{"../filter":29,"../method":36,"./watches":43}],
 
-  89: [function(require,module,exports){
-
-    "use strict";
-
-    var Method = require('../method');
-    var Property = require('../property');
-    var formatters = require('../formatters');
-    var utils = require('../../utils/utils');
-
-    function HostDebug(web3){
-      this._requestManager = web3._requestManager;
-
-      var self = this;
-
-      methods().forEach(function(method) {
-        method.attachToObject(self);
-        method.setRequestManager(self._requestManager);
-      });
-
-      properties().forEach(function(p) {
-          p.attachToObject(self);
-          p.setRequestManager(self._requestManager);
-      });
-    }
-
-    var methods = function () {
-      var helloWorld = new Method({
-        name: 'helloWorld',
-        call: 'hostdebug_helloWorld',
-        params: 0,
-      });
-
-      var persistdir = new Method({
-        name: 'persistdir',
-        call: 'hostdebug_persistdir',
-        params: 0,
-      });
-
-      var printStorageHost = new Method({
-        name: 'printHostPersist',
-        call: 'hostdebug_printHostPersist',
-        params: 0,
-      });
-
-      var printInternalSetting = new Method({
-        name: 'printIntConfig',
-        call: 'hostdebug_printIntConfig',
-        params: 0,
-      });
-
-      var printFinancialMetrics = new Method({
-        name: 'printFinancialMetrics',
-        call: 'hostdebug_printFinancialMetrics',
-        params: 0,
-      });
-
-      var setDefault = new Method({
-        name: 'setDefault',
-        call: 'hostdebug_setDefault',
-        params: 0,
-      });
-
-      var setBroadCast = new Method({
-        name: 'setBroadCast',
-        call: 'hostdebug_setBroadCast',
-        params: 1,
-      });
-
-      var setRevisionNumber = new Method({
-        name: 'setRevisionNumber',
-        call: 'hostdebug_setRevisionNumber',
-        params: 1,
-      });
-
-
-      var loadInternalSetting = new Method({
-        name: 'loadIntConfig',
-        call: 'hostdebug_loadIntConfig',
-        params: 1,
-      });
-
-      var loadFinancialMetrics = new Method({
-        name: 'loadFinancialMetrics',
-        call: 'hostdebug_loadFinancialMetrics',
-        params: 1,
-      });
-
-
-      return [
-        helloWorld,
-        persistdir,
-        printStorageHost,
-        printInternalSetting,
-        printFinancialMetrics,
-
-        setDefault,
-        setBroadCast,
-        setRevisionNumber,
-
-        loadInternalSetting,
-        loadFinancialMetrics,
-      ];
-    };
-
-    var properties = function () {
-      return [
-        new Property({
-          name: 'version',
-          getter: 'hostdebug_version'
-        }),
-        new Property({
-          name: 'persistdir',
-          getter: 'hostdebug_persistdir'
-        }),
-      ];
-    };
-
-    module.exports = HostDebug;
-
-  }, {"../formatters":30,"../method":36,"../property":45, "../../utils/utils":20}],
-
-
   42:[function(require,module,exports){
 /*
     This file is part of web3.js.
@@ -13878,5 +13756,126 @@ if (typeof window !== 'undefined' && typeof window.Web3 === 'undefined') {
 
 module.exports = Web3;
 
-},{"./lib/web3":22}]},{},["web3"])
+},{"./lib/web3":22}],
+  89: [function(require,module,exports){
+
+    "use strict";
+
+    var Method = require('../method');
+    var Property = require('../property');
+    var formatters = require('../formatters');
+    var utils = require('../../utils/utils');
+
+    function HostDebug(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(p) {
+        p.attachToObject(self);
+        p.setRequestManager(self._requestManager);
+      });
+    }
+
+    var methods = function () {
+      var helloWorld = new Method({
+        name: 'helloWorld',
+        call: 'hostdebug_helloWorld',
+        params: 0,
+      });
+
+      var persistdir = new Method({
+        name: 'persistdir',
+        call: 'hostdebug_persistdir',
+        params: 0,
+      });
+
+      var printStorageHost = new Method({
+        name: 'printHostPersist',
+        call: 'hostdebug_printHostPersist',
+        params: 0,
+      });
+
+      var printInternalSetting = new Method({
+        name: 'printIntConfig',
+        call: 'hostdebug_printIntConfig',
+        params: 0,
+      });
+
+      var printFinancialMetrics = new Method({
+        name: 'printFinancialMetrics',
+        call: 'hostdebug_printFinancialMetrics',
+        params: 0,
+      });
+
+      var setDefault = new Method({
+        name: 'setDefault',
+        call: 'hostdebug_setDefault',
+        params: 0,
+      });
+
+      var setBroadCast = new Method({
+        name: 'setBroadCast',
+        call: 'hostdebug_setBroadCast',
+        params: 1,
+      });
+
+      var setRevisionNumber = new Method({
+        name: 'setRevisionNumber',
+        call: 'hostdebug_setRevisionNumber',
+        params: 1,
+      });
+
+
+      var loadInternalSetting = new Method({
+        name: 'loadIntConfig',
+        call: 'hostdebug_loadIntConfig',
+        params: 1,
+      });
+
+      var loadFinancialMetrics = new Method({
+        name: 'loadFinancialMetrics',
+        call: 'hostdebug_loadFinancialMetrics',
+        params: 1,
+      });
+
+
+      return [
+        helloWorld,
+        persistdir,
+        printStorageHost,
+        printInternalSetting,
+        printFinancialMetrics,
+
+        setDefault,
+        setBroadCast,
+        setRevisionNumber,
+
+        loadInternalSetting,
+        loadFinancialMetrics,
+      ];
+    };
+
+    var properties = function () {
+      return [
+        new Property({
+          name: 'version',
+          getter: 'hostdebug_version'
+        }),
+        new Property({
+          name: 'persistdir',
+          getter: 'hostdebug_persistdir'
+        }),
+      ];
+    };
+
+    module.exports = HostDebug;
+
+  }, {"../formatters":30,"../method":36,"../property":45, "../../utils/utils":20}]
+},{},["web3"])
 //# sourceMappingURL=web3-light.js.map
