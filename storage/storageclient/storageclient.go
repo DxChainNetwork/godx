@@ -31,6 +31,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -87,7 +88,7 @@ type StorageClient struct {
 	newDownloads   chan struct{}        // Used to notify download loop that new downloads are available.
 
 	// List of workers that can be used for uploading and/or downloading.
-	workerPool map[common.Hash]*worker
+	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
 	lastEstimationStorageHost []StorageHostEntry
@@ -124,7 +125,7 @@ func New(persistDir string) (*StorageClient, error) {
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
-		workerPool:     make(map[common.Hash]*worker),
+		workerPool:     make(map[storage.ContractID]*worker),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -312,6 +313,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return err
 	}
 
+	storageContract.Signatures[0] = clientContractSign
 	storageContract.Signatures[1] = hostSign
 
 	// Assemble init revision and sign it
@@ -327,8 +329,6 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		NewMissedProofOutputs: storageContract.MissedProofOutputs,
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
-
-	storageContract.Signatures[0] = clientContractSign
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
@@ -375,26 +375,27 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
-	// TODO: 构造这个合约信息.
-	//header := contractHeader{
-	//	Transaction: revisionTxn,
-	//	SecretKey:   ourSK,
-	//	StartHeight: startHeight,
-	//	TotalCost:   funding,
-	//	ContractFee: host.ContractPrice,
-	//	TxnFee:      txnFee,
-	//	SiafundFee:  types.Tax(startHeight, fc.Payout),
-	//	Utility: modules.ContractUtility{
-	//		GoodForUpload: true,
-	//		GoodForRenew:  true,
-	//	},
-	//}
+	// wrap some information about this contract
+	header := contractset.ContractHeader{
+		ID:                     storage.ContractID(storageContract.ID()),
+		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		StartHeight:            startHeight,
+		EndHeight:              endHeight,
+		TotalCost:              common.NewBigInt(funding.Int64()),
+		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		LatestContractRevision: storageContractRevision,
+		Status: storage.ContractStatus{
+			UploadAbility: true,
+			Canceled:      true,
+			RenewAbility:  false,
+		},
+	}
 
-	// TODO: 保存这个合约信息到本地
-	//meta, err := cs.managedInsertContract(header, nil) // no Merkle roots yet
-	//if err != nil {
-	//	return ClientContract{}, err
-	//}
+	// store this contract info to client local
+	_, err = sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -404,13 +405,23 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
 
-	// TODO: 获取最新的storage contract revision
-	// Retrieve the contract
-	// TODO client.contractManager.GetContract()
-	contractRevision := &types.StorageContractRevision{}
+	// Retrieve the last contract revision
+	contractRevision := types.StorageContractRevision{}
+	scs := sc.storageHostManager.GetStorageContractSet()
+
+	// find the contractID formed by this host
+	hostInfo := session.HostInfo()
+	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contract, exist := scs.Acquire(contractID)
+	if !exist {
+		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+	}
+
+	defer scs.Return(contract)
+	contractHeader := contract.Header()
+	contractRevision = contractHeader.LatestContractRevision
 
 	// Calculate price per sector
-	hostInfo := session.HostInfo()
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
 	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
@@ -448,7 +459,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	// Create the revision; we will update the Merkle root later
-	rev := NewRevision(*contractRevision, cost)
+	rev := NewRevision(contractRevision, cost)
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
 	rev.NewFileSize = newFileSize
 
@@ -467,14 +478,11 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
-	// TODO: 记录上传信息，断点续传
-	// record the change we are about to make to the contract. If we lose power
-	// mid-revision, this allows us to restore either the pre-revision or
-	// post-revision contract.
-	//walTxn, err := sc.recordUploadIntent(rev, crypto.Hash{}, storagePrice, bandwidthPrice)
-	//if err != nil {
-	//	return err
-	//}
+	// record the change to this contract, that can allow us to continue this incomplete upload at last time
+	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	if err != nil {
+		return err
+	}
 
 	defer func() {
 
@@ -532,12 +540,26 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	// Update the revision, sign it, and send it
 	rev.NewFileMerkleRoot = newRoot
 
-	var clientRevisionSign []byte
-	// TODO get account and sign revision
-	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+	// get client wallet
+	am := sc.ethBackend.AccountManager()
+	clientAddr := rev.NewValidProofOutputs[0].Address
+	clientAccount := accounts.Account{Address: clientAddr}
+	clientWallet, err := am.Find(clientAccount)
+	if err != nil {
+		return err
+	}
+
+	// client sign the new revision
+	clientRevisionSign, err := clientWallet.SignHash(clientAccount, rev.RLPHash().Bytes())
+	if err != nil {
 		return err
 	}
 	rev.Signatures[0] = clientRevisionSign
+
+	// send client sig to host
+	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		return err
+	}
 
 	// Read the host's signature
 	var hostRevisionSig []byte
@@ -559,11 +581,11 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	rev.Signatures[1] = hostRevisionSig
 
-	// TODO update contract
-	//err = sc.commitUpload(walTxn, txn, crypto.Hash{}, storagePrice, bandwidthPrice)
-	//if err != nil {
-	//	return modules.ClientContract{}, err
-	//}
+	// commit upload revision
+	err = contract.CommitUpload(walTxn, rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -615,11 +637,23 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
 
-	// TODO: 获取最新的storage contract last revision
+	// Retrieve the last contract revision
 	lastRevision := types.StorageContractRevision{}
+	scs := client.storageHostManager.GetStorageContractSet()
+
+	// find the contractID formed by this host
+	hostInfo := s.HostInfo()
+	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contract, exist := scs.Acquire(contractID)
+	if !exist {
+		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+	}
+
+	defer scs.Return(contract)
+	contractHeader := contract.Header()
+	lastRevision = contractHeader.LatestContractRevision
 
 	// calculate price
-	hostInfo := s.HostInfo()
 	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessPrice := hostInfo.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
 
@@ -643,10 +677,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	sig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
+	clientSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
 		return err
 	}
+	newRevision.Signatures[0] = clientSig
 
 	req.NewRevisionNumber = newRevision.NewRevisionNumber
 	req.NewValidProofValues = make([]*big.Int, len(newRevision.NewValidProofOutputs))
@@ -657,13 +692,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	for i, nmpo := range newRevision.NewMissedProofOutputs {
 		req.NewMissedProofValues[i] = nmpo.Value
 	}
-	req.Signature = sig[:]
+	req.Signature = clientSig[:]
 
-	// TODO: 记录client对合约的修改，以防节点断电或其他异常导致的revision被中断，下次节点启动就可以继续完成这个revision，相当于断点续传
-	//walTxn, err := sc.recordDownloadIntent(newRevision, price)
-	//if err != nil {
-	//	return err
-	//}
+	// record the change to this contract
+	walTxn, err := contract.RecordDownloadPreRev(newRevision, price)
+	if err != nil {
+		return err
+	}
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
@@ -768,10 +803,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	newRevision.Signatures[1] = hostSig
 
-	// TODO: update contract and metrics
-	//if err := sc.commitDownload(walTxn, txn, price); err != nil {
-	//	return err
-	//}
+	// commit this revision
+	err = contract.CommitDownload(walTxn, newRevision, price)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

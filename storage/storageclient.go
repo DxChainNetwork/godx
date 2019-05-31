@@ -5,8 +5,9 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"io"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -42,9 +43,9 @@ type ClientBackend interface {
 
 // a metadata about a storage contract.
 type ClientContract struct {
-	ID            common.Hash
-	HostPublicKey *ecdsa.PublicKey
-	Transaction   types.Transaction
+	ContractID  common.Hash
+	HostID      enode.ID
+	Transaction types.Transaction
 
 	StartHeight uint64
 	EndHeight   uint64

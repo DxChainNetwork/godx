@@ -5,7 +5,6 @@
 package storageclient
 
 import (
-	"crypto/ecdsa"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -14,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
@@ -22,9 +22,9 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract   storage.ClientContract
-	hostPubKey *ecdsa.PublicKey
-	client     *StorageClient
+	contract storage.ClientContract
+	hostID   enode.ID
+	client   *StorageClient
 
 	// How many failures in a row?
 	ownedDownloadConsecutiveFailures int
@@ -58,21 +58,40 @@ type worker struct {
 // update the worker pool to match.
 func (c *StorageClient) activateWorkerPool() {
 
-	// TODO: 获取client签订的所有合约，fileContractID ==》fileContract
-	contractMap := make(map[common.Hash]storage.ClientContract)
-	//contractSlice := c.contractManager.Contracts()
-	//for i := 0; i < len(contractSlice); i++ {
-	//	contractMap[contractSlice[i].ID] = contractSlice[i]
-	//}
+	// get all contracts in client
+	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
 		c.lock.Lock()
 		_, exists := c.workerPool[id]
 		if !exists {
+
+			clientContract := storage.ClientContract{
+				ContractID:  common.Hash(id),
+				HostID:      contract.Header().EnodeID,
+				StartHeight: contract.Header().StartHeight,
+				EndHeight:   contract.Header().EndHeight,
+
+				// TODO: 计算、填充下这些变量
+				// the amount remaining in the contract that the client can spend.
+				//ClientFunds: common.NewBigInt(1),
+
+				// track the various costs manually.
+				//DownloadSpending: common.NewBigInt(1),
+				//StorageSpending:  common.NewBigInt(1),
+				//UploadSpending:   common.NewBigInt(1),
+
+				// record utility information about the contract.
+				//Utility ContractUtility
+
+				// the amount of money that the client spent or locked while forming a contract.
+				TotalCost: contract.Header().TotalCost,
+			}
+
 			worker := &worker{
-				contract:     contract,
-				hostPubKey:   contract.HostPublicKey,
+				contract:     clientContract,
+				hostID:       contract.Header().EnodeID,
 				downloadChan: make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
 
@@ -97,7 +116,7 @@ func (c *StorageClient) activateWorkerPool() {
 	// Remove a worker for any worker that is not in the set of new contracts.
 	c.lock.Lock()
 	for id, worker := range c.workerPool {
-		_, exists := contractMap[id]
+		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
 			delete(c.workerPool, id)
 			close(worker.killChan)
@@ -208,16 +227,13 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	// whether download success or fail, we should remove the worker at last
 	defer uds.removeWorker()
-
 	fetchOffset, fetchLength := sectorOffsetAndLength(uds.fetchOffset, uds.fetchLength, uds.erasureCode)
-
-	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	root := uds.segmentMap[hostEnodeID.String()].root
+	root := uds.segmentMap[w.hostID.String()].root
 
 	// Setup connection
-	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(hostEnodeID)
+	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
 	if !exist {
-		w.client.log.Error("the host not exist in client", "host_id", hostEnodeID.String())
+		w.client.log.Error("the host not exist in client", "host_id", w.hostID.String())
 		return
 	}
 	session, err := w.client.ethBackend.SetupConnection(hostInfo.EnodeURL)
@@ -239,7 +255,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.sectorSize)
 
 	// calculate a seed for twofishgcm
-	sectorIndex := uds.segmentMap[hostEnodeID.String()].index
+	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	segmentIndexBytes := make([]byte, 8)
 	binary.PutUvarint(segmentIndexBytes, uds.segmentIndex)
 	sectorIndexBytes := make([]byte, 8)
@@ -296,9 +312,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	uds.mu.Lock()
 	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.isComplete()
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
-
-	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	sectorData, workerHasSector := uds.segmentMap[hostEnodeID.String()]
+	sectorData, workerHasSector := uds.segmentMap[w.hostID.String()]
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
 
@@ -363,8 +377,7 @@ func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasu
 func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--
-	hostEnodeID := PubkeyToEnodeID(w.contract.HostPublicKey)
-	sectorIndex := uds.segmentMap[hostEnodeID.String()].index
+	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
 }
