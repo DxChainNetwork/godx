@@ -25,11 +25,10 @@ import (
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
-	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
@@ -43,17 +42,6 @@ var (
 
 	extraRatio = 0.02
 )
-
-// Backend allows Ethereum object to be passed in as interface
-type Backend interface {
-	APIs() []rpc.API
-	AccountManager() *accounts.Manager
-	SuggestPrice(ctx context.Context) (*big.Int, error)
-	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
-	ChainConfig() *params.ChainConfig
-	CurrentBlock() *types.Block
-	SendTx(ctx context.Context, signedTx *types.Transaction) error
-}
 
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
@@ -93,7 +81,7 @@ type StorageClient struct {
 	// information on network, block chain, and etc.
 	info       ParsedAPI
 	ethBackend storage.EthBackend
-	b          Backend
+	apiBackend ethapi.Backend
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
@@ -121,9 +109,10 @@ func New(persistDir string) (*StorageClient, error) {
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
+func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) error {
 	// get the eth backend
 	sc.ethBackend = b
+	sc.apiBackend = apiBackend
 
 	// validation
 	if server == nil {
@@ -348,7 +337,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return err
 	}
 
-	sendAPI := NewStorageContractTxAPI(sc.b)
+	sendAPI := NewStorageContractTxAPI(sc.apiBackend)
 	args := SendStorageContractTxArgs{
 		From: clientAddr,
 	}

@@ -18,12 +18,12 @@ import (
 
 // PublicTransactionPoolAPI exposes methods for the RPC interface
 type StorageContractTxAPI struct {
-	b         Backend
+	b         ethapi.Backend
 	nonceLock *ethapi.AddrLocker
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewStorageContractTxAPI(b Backend) *StorageContractTxAPI {
+func NewStorageContractTxAPI(b ethapi.Backend) *StorageContractTxAPI {
 	nonceLock := new(ethapi.AddrLocker)
 	return &StorageContractTxAPI{b, nonceLock}
 }
@@ -72,7 +72,7 @@ type SendStorageContractTxArgs struct {
 }
 
 // construct tx with args
-func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Backend) (*types.Transaction, error) {
+func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b ethapi.Backend) (*types.Transaction, error) {
 	args.Gas = new(hexutil.Uint64)
 	*(*uint64)(args.Gas) = 90000
 

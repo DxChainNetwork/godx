@@ -577,7 +577,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s, srvr)
+	err := s.storageClient.Start(s, srvr, s.APIBackend)
 	if err != nil {
 		return err
 	}
