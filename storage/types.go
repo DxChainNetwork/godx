@@ -105,7 +105,7 @@ type (
 type (
 	// RentPayment stores the StorageClient payment settings for renting the storage space from the host
 	RentPayment struct {
-		Payment      common.BigInt `json:"payment"`
+		Fund         common.BigInt `json:"fund"`
 		StorageHosts uint64        `json:"storagehosts"`
 		Period       uint64        `json:"period"`
 		RenewWindow  uint64        `json:"renewwindow"`
@@ -131,6 +131,11 @@ type (
 		Canceled      bool
 	}
 
+	RecoverableContract struct {
+		ID      ContractID
+		EnodeID enode.ID
+	}
+
 	ContractMetaData struct {
 		ID                     ContractID
 		EnodeID                enode.ID
@@ -138,19 +143,35 @@ type (
 		StartHeight            uint64
 		EndHeight              uint64
 
-		// TODO (mzhang): is it necessary to convert this type to
-		// common.BigInt type? for calculation convenience
-		ClientBalance *big.Int
+		ClientBalance common.BigInt
 
 		UploadCost   common.BigInt
 		DownloadCost common.BigInt
 		StorageCost  common.BigInt
-		TotalCost    common.BigInt
+
+		// contract available fund
+		TotalCost common.BigInt
 
 		GasFee      common.BigInt
 		ContractFee common.BigInt
 
 		Status ContractStatus
+	}
+
+	// PeriodCost specifies cost storage client needs to pay within one
+	// period cycle. It includes cost for all contracts
+	PeriodCost struct {
+		// ContractFees = ContractFee + GasFee
+		ContractFees     common.BigInt `json:"contractfees"`
+		UploadCost       common.BigInt `json:"uploadcost"`
+		DownloadCost     common.BigInt `json:"downloadcost"`
+		StorageCost      common.BigInt `json:"storagecost"`
+		PrevContractCost common.BigInt `json:"prevcontractcost"`
+
+		ContractFund             common.BigInt `json:"totalcontractfund"`
+		UnspentFund              common.BigInt `json:"unspentfund"`
+		WithheldFund             common.BigInt `json:"withheadfund"`
+		WithheldFundReleaseBlock uint64        `json:"withheldfundreleaseblock"`
 	}
 )
 

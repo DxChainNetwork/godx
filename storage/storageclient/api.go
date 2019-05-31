@@ -16,7 +16,7 @@ func NewPublicStorageClientAPI(sc *StorageClient) *PublicStorageClientAPI {
 	return &PublicStorageClientAPI{sc}
 }
 
-// Payment returns the current payment settings
+// Fund returns the current payment settings
 func (api *PublicStorageClientAPI) Payment() string {
 	return "working in progress: getting payment information"
 }

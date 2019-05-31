@@ -24,7 +24,7 @@ var (
 // TODO (mzhang): Discuss with team, came up with reasonable default value
 var (
 	DefaultRentPayment = RentPayment{
-		Payment:      common.NewBigInt(500),
+		Fund:         common.NewBigInt(500),
 		StorageHosts: 50,
 		Period:       3 * BlocksPerMonth,
 		RenewWindow:  BlocksPerMonth,

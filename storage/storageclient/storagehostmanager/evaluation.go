@@ -63,7 +63,7 @@ func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent stor
 	// make sure RentPayment's fields are non zeros
 	rentPaymentValidation(storage.RentPayment{})
 
-	contractExpectedPayment := rent.Payment.DivUint64(rent.StorageHosts)
+	contractExpectedFund := rent.Fund.DivUint64(rent.StorageHosts)
 	contractExpectedStorage := float64(rent.ExpectedStorage) * rent.ExpectedRedundancy / float64(rent.StorageHosts)
 	contractExpectedStorageTime := common.NewBigIntFloat64(contractExpectedStorage).MultUint64(rent.Period)
 
@@ -74,7 +74,7 @@ func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent stor
 		hostDeposit = possibleDeposit
 	}
 
-	cutoff := contractExpectedPayment.MultFloat64(depositFloor)
+	cutoff := contractExpectedFund.MultFloat64(depositFloor)
 
 	if hostDeposit.Cmp(cutoff) < 0 {
 		cutoff = hostDeposit
@@ -124,9 +124,9 @@ func (hm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, ren
 	hostContractPrice := contractPrice.Add(downloadPrice).Add(uploadPrice).Add(storagePrice).Float64()
 
 	// storage client expected payment per contract
-	clientContractPayment := rent.Payment.DivUint64(rent.StorageHosts)
+	clientContractFund := rent.Fund.DivUint64(rent.StorageHosts)
 
-	cutoff := clientContractPayment.MultFloat64(priceFloor).Float64()
+	cutoff := clientContractFund.MultFloat64(priceFloor).Float64()
 
 	if hostContractPrice < cutoff {
 		cutoff = hostContractPrice

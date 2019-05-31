@@ -170,6 +170,15 @@ func (x BigInt) BigIntPtr() *big.Int {
 	return &x.b
 }
 
+// PtrBigInt convert the pointer version of big.Int to BigInt type
+func PtrBigInt(x *big.Int) (y BigInt) {
+	y = BigInt{
+		b: *x,
+	}
+
+	return
+}
+
 // MarshalJSON provided JSON encoding rules for BigInt data type
 func (x BigInt) MarshalJSON() ([]byte, error) {
 	return []byte(x.b.String()), nil

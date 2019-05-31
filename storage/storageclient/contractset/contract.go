@@ -285,7 +285,7 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 		StartHeight:            c.header.StartHeight,
 
 		EndHeight:     c.header.LatestContractRevision.NewWindowStart,
-		ClientBalance: c.header.LatestContractRevision.NewValidProofOutputs[0].Value,
+		ClientBalance: common.PtrBigInt(c.header.LatestContractRevision.NewValidProofOutputs[0].Value),
 
 		UploadCost:   c.header.UploadCost,
 		DownloadCost: c.header.DownloadCost,
