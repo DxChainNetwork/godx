@@ -62,7 +62,7 @@ type protoHandshake struct {
 	Caps       []Cap  // list of protocols supported
 	ListenPort uint64
 	ID         []byte // secp256k1 public key
-
+	flags      connFlag
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
@@ -184,6 +184,11 @@ func (p *Peer) String() string {
 // if peer is inbound connection, meaning that I am trying to connect to the peer
 func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
+}
+
+// for only test
+func (p *Peer) Set(f connFlag, val bool) {
+	p.rw.set(f, val)
 }
 
 // create and initialize new peer object
@@ -496,11 +501,12 @@ type PeerInfo struct {
 	Name    string   `json:"name"`  // Name of the node, including client type, version, OS, custom data
 	Caps    []string `json:"caps"`  // Protocols advertised by this peer
 	Network struct {
-		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
-		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
-		Inbound       bool   `json:"inbound"`
-		Trusted       bool   `json:"trusted"`
-		Static        bool   `json:"static"`
+		LocalAddress    string `json:"localAddress"`  // Local endpoint of the TCP data connection
+		RemoteAddress   string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
+		Inbound         bool   `json:"inbound"`
+		Trusted         bool   `json:"trusted"`
+		Static          bool   `json:"static"`
+		StorageContract bool   `json:"storageContract"`
 	} `json:"network"`
 	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
 }
@@ -525,6 +531,7 @@ func (p *Peer) Info() *PeerInfo {
 	info.Network.Inbound = p.rw.is(inboundConn)
 	info.Network.Trusted = p.rw.is(trustedConn)
 	info.Network.Static = p.rw.is(staticDialedConn)
+	info.Network.StorageContract = p.rw.is(storageContractConn)
 
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
@@ -539,4 +546,8 @@ func (p *Peer) Info() *PeerInfo {
 		info.Protocols[proto.Name] = protoInfo
 	}
 	return info
+}
+
+func (p *Peer) GetConn() net.Conn {
+	return p.rw.GetNetConn()
 }

@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"github.com/DxChainNetwork/godx/cmd/utils"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/rpc"
 	"gopkg.in/urfave/cli.v1"
-	"path/filepath"
 )
 
 var storageClientCommand = cli.Command{

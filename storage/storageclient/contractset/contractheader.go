@@ -30,6 +30,7 @@ type ContractHeader struct {
 	PrivateKey string
 
 	StartHeight uint64
+	EndHeight   uint64
 
 	// contract cost
 	UploadCost   common.BigInt
@@ -53,4 +54,8 @@ func (ch *ContractHeader) validation() (err error) {
 
 	err = errors.New("invalid contract header")
 	return
+}
+
+func (ch *ContractHeader) GetLatestContractRevision() types.StorageContractRevision {
+	return ch.LatestContractRevision
 }

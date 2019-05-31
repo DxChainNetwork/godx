@@ -1,10 +1,10 @@
 package storagehosttree
 
 import (
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/errors"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -62,6 +62,7 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error: failed to update the storage host information %s", err.Error())
 	}
+
 	new := tree.hostPool[EnodeID[3]]
 	if archive.entry.IP == new.entry.IP {
 		t.Errorf("error: the ip address should be updated. expected: 104.238.46.129, got %s",

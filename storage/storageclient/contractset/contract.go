@@ -369,3 +369,7 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 
 	return
 }
+
+func (c *Contract) Header() ContractHeader {
+	return c.header
+}

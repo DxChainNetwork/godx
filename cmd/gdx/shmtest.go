@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -44,7 +45,6 @@ var hostManagerTestCommand = cli.Command{
 			Description: `get the storage host manager current syncing block height,
 			it should be equivalent to the current block height`,
 		},
-
 		{
 			Name:      "insert",
 			Usage:     "insert host information into the storage host manager",

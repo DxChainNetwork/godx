@@ -5,15 +5,15 @@
 package storagehostmanager
 
 import (
+	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/errors"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 	"math/rand"
 	"time"
 
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
 // scan will start the initial storage host scan and activate the auto scan service
@@ -41,7 +41,6 @@ func (shm *StorageHostManager) scan() {
 
 	// indicate the initial scan is finished
 	shm.waitScanFinish()
-
 	shm.lock.Lock()
 	shm.initialScan = true
 	shm.lock.Unlock()
@@ -86,7 +85,6 @@ func (shm *StorageHostManager) autoScan() {
 		// sleep for a random amount of time, then schedule scan again
 		rand.Seed(time.Now().UTC().UnixNano())
 		randomSleepTime := time.Duration(rand.Intn(int(maxScanSleep-minScanSleep)) + int(minScanSleep))
-
 		shm.log.Debug("Random Sleep Time:", randomSleepTime)
 
 		// sleep random amount of time
@@ -140,7 +138,6 @@ func (shm *StorageHostManager) scanStart() {
 
 	for {
 		shm.lock.Lock()
-
 		if len(shm.scanWaitList) == 0 {
 			shm.scanWait = false
 			shm.lock.Unlock()
@@ -171,7 +168,6 @@ func (shm *StorageHostManager) scanStart() {
 // it will terminate along with termination of scan start
 func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
 	shm.log.Debug("Started Scan Execution")
-
 	if err := shm.tm.Add(); err != nil {
 		return
 	}

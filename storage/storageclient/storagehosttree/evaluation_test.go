@@ -63,7 +63,6 @@ func randomCriteria() EvaluationCriteria {
 }
 
 func partialRandomCriteria() EvaluationCriteria {
-
 	return EvaluationCriteria{
 		PresenceFactor:         1,
 		DepositFactor:          randFloat64(),

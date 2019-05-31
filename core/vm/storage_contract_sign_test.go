@@ -20,7 +20,7 @@ func TestSignStorageContract(t *testing.T) {
 		FileMerkleRoot: common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7"),
 		WindowStart:    uint64(234),
 		WindowEnd:      uint64(345),
-		RenterCollateral: types.DxcoinCollateral{
+		ClientCollateral: types.DxcoinCollateral{
 			DxcoinCharge: types.DxcoinCharge{
 				Address: common.HexToAddress("0xcf1FA0d741F155Bd2cF69A5a791C81BB8222118D"),
 				Value:   new(big.Int).SetInt64(10000),
@@ -40,7 +40,7 @@ func TestSignStorageContract(t *testing.T) {
 			{Address: common.HexToAddress("0xcf1FA0d741F155Bd2cF69A5a791C81BB8222118D"),
 				Value: new(big.Int).SetInt64(10000)},
 		},
-		UnlockHash:    common.HexToHash("0x000000000000000000000000000000000000000A"),
+		UnlockHash:     common.HexToHash("0x000000000000000000000000000000000000000A"),
 		RevisionNumber: 111,
 	}
 
