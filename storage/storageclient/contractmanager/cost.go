@@ -76,7 +76,7 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 	// rise the estimation up by 33%
 	estimation = estimation.Add(estimation.DivUint64(3))
 
-	// calculate the minimum rent fund for the contract
+	// calculate the minimum rentPayment fund for the contract
 	minRentFund := rent.Fund.MultFloat64(minContractPaymentFactor).DivUint64(rent.StorageHosts)
 
 	if estimation.Cmp(minRentFund) < 0 {
@@ -122,7 +122,7 @@ func (cm *ContractManager) CalculatePeriodCost() (periodCost storage.PeriodCost)
 	}
 
 	// calculate the unspent fund
-	calculateContractUnspentFund(&periodCost, cm.rent.Fund)
+	calculateContractUnspentFund(&periodCost, cm.rentPayment.Fund)
 
 	return
 }

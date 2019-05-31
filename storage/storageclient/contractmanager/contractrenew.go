@@ -5,6 +5,8 @@
 package contractmanager
 
 import (
+	"fmt"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 )
@@ -14,10 +16,10 @@ import (
 // 		1. contracts that are about to expired. they need to be renewed
 // 		2. contracts that have insufficient amount of funding, meaning the contract is about to be
 // 		   marked as not good for data uploading
-func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contractRenewRecords, insufficientFundingRenews []contractRenewRecords) {
+func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
-	rentPayment := cm.rent
+	rentPayment := cm.rentPayment
 	cm.lock.RUnlock()
 
 	// loop through all active contracts, get the priorityRenews and emptyRenews
@@ -37,7 +39,7 @@ func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contra
 		// calculate the renewCostEstimation and update the priorityRenews
 		if currentBlockHeight+rentPayment.RenewWindow >= contract.EndHeight {
 			estimateContractRenewCost := cm.renewCostEstimation(host, contract, currentBlockHeight, rentPayment)
-			closeToExpireRenews = append(closeToExpireRenews, contractRenewRecords{
+			closeToExpireRenews = append(closeToExpireRenews, contractRenewRecord{
 				id:   contract.ID,
 				cost: estimateContractRenewCost,
 			})
@@ -54,7 +56,7 @@ func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contra
 		remainingBalancePercentage := contract.ClientBalance.Div(contract.TotalCost).Float64()
 
 		if contract.ClientBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
-			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecords{
+			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
 				id:   contract.ID,
 				cost: contract.TotalCost.MultUint64(2),
 			})
@@ -64,7 +66,9 @@ func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contra
 	return
 }
 
-func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenewRecords, insufficientFundingRenews []contractRenewRecords) {
+// resetFailedRenews will update the failedRenews list, which only includes the failedRenews
+// in the current renew lists
+func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 	cm.lock.Lock()
 	filteredFailedRenews := make(map[storage.ContractID]uint64)
 
@@ -87,4 +91,45 @@ func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenew
 	// reset the failedRenews
 	cm.failedRenews = filteredFailedRenews
 	cm.lock.Unlock()
+}
+
+// prepareContractRenew will loop through all record in the renewRecords and start to renew
+// each contract. Before contract renewing get started, the fund will be validated first.
+func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewRecord, clientRemainingFund common.BigInt) (remainingFund common.BigInt, terminate bool) {
+	// get the data needed
+	cm.lock.RLock()
+	rentPayment := cm.rentPayment
+	blockHeight := cm.blockHeight
+	currentPeriod := cm.currentPeriod
+	contractEndHeight := cm.currentPeriod + cm.rentPayment.Period + cm.rentPayment.RenewWindow
+	cm.lock.RUnlock()
+
+	for _, record := range renewRecords {
+		// verify that the cost needed for contract renew does not exceed the clientRemainingFund
+		if clientRemainingFund.Cmp(record.cost) < 0 {
+			continue
+		}
+
+		// renew the contract, get the spending for the renew
+		renewCost, err := cm.renewContract(record, currentPeriod, rentPayment, blockHeight, contractEndHeight)
+		if err != nil {
+			cm.log.Error(fmt.Sprintf("contract renew failed. id: %v, err : %v", record.id, err.Error()))
+		}
+
+		// update the remaining fund
+		remainingFund = clientRemainingFund.Sub(renewCost)
+
+		// check maintenance termination
+		if terminate = cm.checkMaintenanceTermination(); terminate {
+			return
+		}
+	}
+
+	return
+}
+
+// renewContract will start to perform contract renew operation
+func (cm *ContractManager) renewContract(record contractRenewRecord, currentPeriod uint64, rentPayment storage.RentPayment, blockHeight uint64, contractEndHeight uint64) (renewCost common.BigInt, err error) {
+	// TODO (mzhang): renewContarct
+	return
 }

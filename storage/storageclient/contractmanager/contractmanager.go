@@ -23,7 +23,7 @@ type ContractManager struct {
 	persistDir string
 
 	// expected payment from the storage client
-	rent storage.RentPayment
+	rentPayment storage.RentPayment
 
 	// storage host manager
 	hostManager *storagehostmanager.StorageHostManager
@@ -94,7 +94,7 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 }
 
 // Start will start the contract manager by loading the prior settings, subscribe the the block
-// chain change event, save the settings, and set rent payment for storage host manager
+// chain change event, save the settings, and set rentPayment payment for storage host manager
 func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 	// initialize client backend
 	cm.b = b
@@ -113,7 +113,7 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 	}
 
 	// set allowance
-	if err = cm.hostManager.SetRentPayment(cm.rent); err != nil {
+	if err = cm.hostManager.SetRentPayment(cm.rentPayment); err != nil {
 		return
 	}
 

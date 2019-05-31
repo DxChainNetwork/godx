@@ -12,6 +12,7 @@ const (
 
 const (
 	randomStorageHostsBackup = 30
+	randomStorageHostsFactor = 4
 
 	// evalFactor defines the factor that needs to be
 	// divided by the calculated min evaluation, which

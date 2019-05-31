@@ -201,7 +201,7 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 // and contract information to update the contract status
 func (cm *ContractManager) maintainContractStatus() (err error) {
 	cm.lock.RLock()
-	hostsAmount := int(cm.rent.StorageHosts)
+	hostsAmount := int(cm.rentPayment.StorageHosts)
 	cm.lock.RUnlock()
 
 	// randomly select some storage hosts, and calculate the minimum score
@@ -299,6 +299,23 @@ func (cm *ContractManager) markContractCancel(id storage.ContractID) (err error)
 	return
 }
 
+func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (err error) {
+	c, exists := cm.activeContracts.Acquire(id)
+	if !exists {
+		cm.log.Crit("the newly formed contract's status cannot be found")
+		return
+	}
+	contractStatus := c.Status()
+	contractStatus.UploadAbility = true
+	contractStatus.RenewAbility = true
+	contractStatus.Canceled = false
+	err = c.UpdateStatus(contractStatus)
+	if failedReturn := cm.activeContracts.Return(c); failedReturn != nil {
+		cm.log.Warn("the contract that is trying to be returned does not exist")
+	}
+	return
+}
+
 func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (minEval common.BigInt) {
 	minEval = cm.hostManager.Evaluation(hosts[0])
 	for i := 1; i < len(hosts); i++ {
@@ -349,8 +366,8 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// check if the contract should be renewed, if so, mark the contract upload ability to be false
 	cm.lock.RLock()
 	blockHeight := cm.blockHeight
-	renewWindow := cm.rent.RenewWindow
-	period := cm.rent.Period
+	renewWindow := cm.rentPayment.RenewWindow
+	period := cm.rentPayment.Period
 	cm.lock.RUnlock()
 
 	if blockHeight+renewWindow >= contract.EndHeight {

@@ -17,7 +17,7 @@ var settingsMetadata = common.Metadata{
 }
 
 type persistence struct {
-	Rent                 storage.RentPayment                       `json:"rent"`
+	Rent                 storage.RentPayment                       `json:"rentPayment"`
 	BlockHeight          uint64                                    `json:"blockheight"`
 	CurrentPeriod        uint64                                    `json:"currentperiod"`
 	ExpiredContracts     []storage.ContractMetaData                `json:"expiredcontracts"`
@@ -28,7 +28,7 @@ type persistence struct {
 
 func (cm *ContractManager) persistUpdate() (persist persistence) {
 	persist = persistence{
-		Rent:          cm.rent,
+		Rent:          cm.rentPayment,
 		BlockHeight:   cm.blockHeight,
 		CurrentPeriod: cm.currentPeriod,
 		RenewedFrom:   cm.renewedFrom,
@@ -71,7 +71,7 @@ func (cm *ContractManager) loadSettings() (err error) {
 
 	// data initialization
 	cm.lock.Lock()
-	cm.rent = data.Rent
+	cm.rentPayment = data.Rent
 	cm.blockHeight = data.BlockHeight
 	cm.currentPeriod = data.CurrentPeriod
 	cm.renewedFrom = data.RenewedFrom

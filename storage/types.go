@@ -168,7 +168,7 @@ type (
 		StorageCost      common.BigInt `json:"storagecost"`
 		PrevContractCost common.BigInt `json:"prevcontractcost"`
 
-		ContractFund             common.BigInt `json:"totalcontractfund"`
+		ContractFund             common.BigInt `json:"contractfund"`
 		UnspentFund              common.BigInt `json:"unspentfund"`
 		WithheldFund             common.BigInt `json:"withheadfund"`
 		WithheldFundReleaseBlock uint64        `json:"withheldfundreleaseblock"`

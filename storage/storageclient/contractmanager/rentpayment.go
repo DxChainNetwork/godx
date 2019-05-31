@@ -21,8 +21,8 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 
 	// getting the old payment
 	cm.lock.Lock()
-	oldRent := cm.rent
-	cm.rent = rent
+	oldRent := cm.rentPayment
+	cm.rentPayment = rent
 	cm.lock.Unlock()
 
 	// check if the old payment is same as new payment
@@ -48,7 +48,7 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 		cm.log.Crit("unable to save settings")
 	}
 
-	// update storage host manager rent payment
+	// update storage host manager rentPayment payment
 	// which updates the storage host evaluation function
 	if err = cm.hostManager.SetRentPayment(rent); err != nil {
 		return
