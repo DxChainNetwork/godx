@@ -44,17 +44,6 @@ var (
 	extraRatio = 0.02
 )
 
-// ************** MOCKING DATA *****************
-// *********************************************
-type (
-	contractManager   struct{}
-	StorageContractID struct{}
-	Wal               struct{}
-)
-
-// *********************************************
-// *********************************************
-
 // Backend allows Ethereum object to be passed in as interface
 type Backend interface {
 	APIs() []rpc.API
@@ -77,8 +66,6 @@ type StorageClient struct {
 	// Memory Management
 	memoryManager *memorymanager.MemoryManager
 
-	// contract manager and storage host manager
-	contractManager    *contractManager
 	storageHostManager *storagehostmanager.StorageHostManager
 
 	// Download management. The heap has a separate mutex because it is always
@@ -102,7 +89,6 @@ type StorageClient struct {
 	log  log.Logger
 	lock sync.Mutex
 	tm   threadmanager.ThreadManager
-	wal  Wal
 
 	// information on network, block chain, and etc.
 	info       ParsedAPI
