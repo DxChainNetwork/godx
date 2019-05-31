@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"math/big"
 	"runtime"
@@ -368,6 +369,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Namespace: "hostmanager",
 				Version:   "1.0",
 				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
+			}, {
+				Namespace: "filesdebug",
+				Version:   "1.0",
+				Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
 				Public:    true,
 			},
 		}...)

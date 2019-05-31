@@ -7,7 +7,30 @@ package filesystem
 import (
 	"fmt"
 	"testing"
+	"time"
 )
+
+func TestCreateRandomFiles(t *testing.T) {
+	dr := make(standardDisrupter)
+
+	// create FileSystem and create a new DxFile
+	ct := &AlwaysSuccessContractor{}
+	fs := newEmptyTestFileSystem(t, "", ct, dr)
+	fmt.Println("directory:", fs.persistDir)
+	c := make(chan struct{})
+	go func() {
+		err := fs.createRandomFiles(1000, 0.5, 0.25, 5)
+		if err != nil {
+			t.Fatal(err)
+		}
+		close(c)
+	}()
+	select {
+	case <-c:
+	case <-time.After(10 * time.Second):
+		t.Fatal("create random file used more than 10 seconds")
+	}
+}
 
 func TestDirTree_RandomPath(t *testing.T) {
 	numFiles, maxDepth := 100, 10
@@ -28,7 +51,6 @@ func TestDirTree_RandomPath(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			//fmt.Println(path.Path)
 		}
 		if err := test.checkFunc(dt); err != nil {
 			t.Errorf("test %d: %v", i, err)

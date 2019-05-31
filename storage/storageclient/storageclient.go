@@ -9,6 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"path/filepath"
 	"sync"
 
@@ -34,7 +35,7 @@ type (
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
-	// TODO (jacky): File Management Related
+	fileSystem *filesystem.FileSystem
 
 	// TODO (jacky): File Download Related
 
@@ -76,11 +77,12 @@ type StorageClient struct {
 
 // New initializes StorageClient object
 func New(persistDir string) (*StorageClient, error) {
-
-	// TODO (Jacky): data initialization
 	sc := &StorageClient{
+		// TODO(mzhang): replace the implemented contractor here
+		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractor{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
+		log:            log.New("storageclient"),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -121,7 +123,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 
 	// TODO (mzhang): Subscribe consensus change
 
-	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
 
 	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
 
@@ -131,9 +135,21 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 }
 
 func (sc *StorageClient) Close() error {
+	var fullErr error
+	// Closing the host manager
+	sc.log.Info("Closing the host manager")
 	err := sc.storageHostManager.Close()
-	errSC := sc.tm.Stop()
-	return common.ErrCompose(err, errSC)
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the file system
+	sc.log.Info("Closing the file system")
+	err = sc.fileSystem.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the thread manager
+	err = sc.tm.Stop()
+	fullErr = common.ErrCompose(fullErr, err)
+	return fullErr
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {

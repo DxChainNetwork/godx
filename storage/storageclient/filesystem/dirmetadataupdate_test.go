@@ -40,7 +40,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	}{
 		{
 			numFiles:   1,
-			contractor: &alwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractor{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -50,7 +50,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   10,
-			contractor: &alwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractor{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
@@ -60,7 +60,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &alwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractor{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -70,7 +70,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &alwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractor{},
 			markStuck:  false,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -137,7 +137,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+				df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -233,7 +233,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		}
 		fileSize := uint64(1 << 22 * 10 * 10)
 		path, err = path.Join(randomDxPath(t, 1).Path)
-		df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+		df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -328,7 +328,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +469,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +499,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	fs.postTestCheck(t, true, false, defaultMd)
 
 	// Restart the filesystem with always success contractor. The metadata should be updated as expected
-	newFs := newFileSystem(string(persistDir), &alwaysSuccessContractor{}, make(standardDisrupter))
+	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractor{}, make(standardDisrupter))
 	if err = newFs.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -529,7 +529,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	dr := make(standardDisrupter)
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysSuccessContractor{}
+	ct := &AlwaysSuccessContractor{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -540,7 +540,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	// create three files
 	// 1. corrupted dxfile
 	path := randomDxPath(t, 1)
-	corruptedDxFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	corruptedDxFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +549,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	}
 	// 2. corrupted dxdir
 	path = randomDxPath(t, 2)
-	corruptedDirFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	corruptedDirFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +558,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	}
 	// 3. Good file
 	path = randomDxPath(t, 1)
-	goodFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	goodFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

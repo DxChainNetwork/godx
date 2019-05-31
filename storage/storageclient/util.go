@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -97,4 +98,9 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 // GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
+}
+
+// GetFileSystem will get the file system
+func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
+	return sc.fileSystem
 }

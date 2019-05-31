@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// errDisrupted is the error that happens when disrupted
 var errDisrupted = errors.New("disrupted")
 
 // disrupter is the interface for disrupt
@@ -22,7 +23,9 @@ type disrupter interface {
 
 type (
 	// standardDisrupter is the structure used for test cases which insert disrupt point
-	// in the code. It has a mapping from keyword to the disrupt function
+	// in the code. It has a mapping from keyword to the disrupt function.
+	// Note the standardDisrupter does not support runtime multi-thread disruptFunc
+	// registering
 	standardDisrupter map[string]disruptFunc
 
 	// disruptFunc is the function to be called when disrupt

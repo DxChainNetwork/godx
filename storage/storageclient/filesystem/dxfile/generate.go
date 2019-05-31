@@ -4,53 +4,26 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	mrand "math/rand"
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"os"
-	"path/filepath"
-	"runtime"
-	"testing"
 )
 
 var testDir = tempDir("dxfile")
 
-// tempDir removes and creates the folder named dxfile under the temp directory.
-func tempDir(dirs ...string) storage.SysPath {
-	path := filepath.Join(os.TempDir(), "dxfile", filepath.Join(dirs...))
-	err := os.RemoveAll(path)
-	if err != nil {
-		panic(fmt.Sprintf("cannot remove all files under %v", path))
-	}
-	err = os.MkdirAll(path, 0777)
-	if err != nil {
-		panic(fmt.Sprintf("cannot create directory %v", path))
-	}
-	return storage.SysPath(path)
-}
-
-// userHomeDir returns the home directory of user
-func userHomeDir() string {
-	if runtime.GOOS == "windows" {
-		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
-		if home == "" {
-			home = os.Getenv("USERPROFILE")
-		}
-		return home
-	} else if runtime.GOOS == "linux" {
-		home := os.Getenv("XDG_CONFIG_HOME")
-		if home != "" {
-			return home
-		}
-	}
-	return os.Getenv("HOME")
-}
-
-// NewRandomDxFile creates a new random DxFile with random segments data
-func (fs *FileSet) NewRandomDxFile(dxPath storage.DxPath, minSectors, numSectors uint32, ecCode uint8, ck crypto.CipherKey, fileSize uint64) (*FileSetEntryWithID, error) {
+// NewRandomDxFile creates a new random DxFile with random segments data.
+// missRate is the params indicate the possibility that a sector of a segment is missed.
+// If not set, all sectors will be available.
+func (fs *FileSet) NewRandomDxFile(dxPath storage.DxPath, minSectors, numSectors uint32, ecCode uint8, ck crypto.CipherKey, fileSize uint64, missRate float32) (*FileSetEntryWithID, error) {
 	// create the file
 	sourcePath := storage.SysPath(filepath.Join(userHomeDir(), "temp", dxPath.Path))
 	force := false
@@ -64,7 +37,7 @@ func (fs *FileSet) NewRandomDxFile(dxPath storage.DxPath, minSectors, numSectors
 	df.lock.Lock()
 	defer df.lock.Unlock()
 	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
-		seg := randomSegment(df.metadata.NumSectors)
+		seg := randomSegment(df.metadata.NumSectors, missRate)
 		seg.Index = uint64(i)
 		df.segments[i] = seg
 		for _, sectors := range seg.Sectors {
@@ -99,6 +72,37 @@ func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32,
 	return df, nil
 }
 
+// tempDir removes and creates the folder named dxfile under the temp directory.
+func tempDir(dirs ...string) storage.SysPath {
+	path := filepath.Join(os.TempDir(), "dxfile", filepath.Join(dirs...))
+	err := os.RemoveAll(path)
+	if err != nil {
+		panic(fmt.Sprintf("cannot remove all files under %v", path))
+	}
+	err = os.MkdirAll(path, 0777)
+	if err != nil {
+		panic(fmt.Sprintf("cannot create directory %v", path))
+	}
+	return storage.SysPath(path)
+}
+
+// userHomeDir returns the home directory of user
+func userHomeDir() string {
+	if runtime.GOOS == "windows" {
+		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
+		if home == "" {
+			home = os.Getenv("USERPROFILE")
+		}
+		return home
+	} else if runtime.GOOS == "linux" {
+		home := os.Getenv("XDG_CONFIG_HOME")
+		if home != "" {
+			return home
+		}
+	}
+	return os.Getenv("HOME")
+}
+
 // newTestDxFileWithSegments generate a random DxFile with some segment data.
 func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
 	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
@@ -130,9 +134,12 @@ func randomHostTable(numHosts int) hostTable {
 	return ht
 }
 
-// randomSegment create a random segment
-func randomSegment(numSectors uint32) *Segment {
+// randomSegment create a random segment. At missRate, the sector will not present
+func randomSegment(numSectors uint32, missRate ...float32) *Segment {
 	seg := &Segment{Sectors: make([][]*Sector, numSectors)}
+	if len(missRate) != 0 {
+		mrand.Seed()
+	}
 	for i := range seg.Sectors {
 		seg.Sectors[i] = append(seg.Sectors[i], randomSector())
 	}

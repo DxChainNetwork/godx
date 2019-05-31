@@ -10,7 +10,10 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -42,7 +45,10 @@ type (
 	}
 )
 
-func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate float32, maxDepth int) error {
+// createRandomFiles create random files of numFiles. The file structure is defined randomly by
+// goDeepRate, goWideRate, and maxDepth. More info about the params please read comment at dirTree
+// missRate is the rate that a sector data is missing. Aimed for test the API of uploaded files
+func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate float32, maxDepth int, missRate float32) error {
 	dt := newDirTree(goDeepRate, goWideRate, maxDepth)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -60,7 +66,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 		go func() {
 			defer wg.Done()
 			fileSize := uint64(1 << 22 * 10)
-			dxfile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+			dxfile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
 			if err != nil {
 				errChan <- err
 				return
@@ -94,6 +100,35 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 	return nil
 }
 
+// tempDir removes and creates the folder named dxfile under the temp directory.
+func tempDir(dirs ...string) storage.SysPath {
+	path := filepath.Join(os.TempDir(), "filesystem", filepath.Join(dirs...))
+	if err := os.RemoveAll(path); err != nil {
+		panic(fmt.Sprintf("cannot remove all files under %v: %v", path, err))
+	}
+	if err := os.MkdirAll(path, 0777); err != nil {
+		panic(fmt.Sprintf("cannot create directory %v: %v", path, err))
+	}
+	return storage.SysPath(path)
+}
+
+// newEmptyTestFileSystem creates an empty file system used for testing
+func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractor, disrupter disrupter) *FileSystem {
+	var rootDir storage.SysPath
+	if len(extraNaming) == 0 {
+		rootDir = tempDir(t.Name())
+	} else {
+		rootDir = tempDir(t.Name(), extraNaming)
+	}
+	fs := newFileSystem(string(rootDir), contractor, disrupter)
+	err := fs.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fs
+}
+
+//newDirTree creates a new dirTree with the params provides
 func newDirTree(goDeepRate, goWideRate float32, maxDepth int) dirTree {
 	rand.Seed(time.Now().UnixNano())
 	return dirTree{
@@ -106,6 +141,7 @@ func newDirTree(goDeepRate, goWideRate float32, maxDepth int) dirTree {
 	}
 }
 
+// randomPath creates a random path under the based on dt settings
 func (dt dirTree) randomPath() (storage.DxPath, error) {
 	curDir := dt.root
 	for i := 0; i != dt.maxDepth+1; i++ {
