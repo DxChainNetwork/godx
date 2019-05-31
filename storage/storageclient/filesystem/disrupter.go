@@ -5,7 +5,7 @@
 package filesystem
 
 import (
-	"github.com/pkg/errors"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"

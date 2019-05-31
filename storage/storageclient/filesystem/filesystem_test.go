@@ -6,11 +6,12 @@ package filesystem
 
 import (
 	"crypto/rand"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // TestNewFileSystemEmptyStart test the situation of creating a new file system in

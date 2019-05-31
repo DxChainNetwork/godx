@@ -8,7 +8,6 @@ package filesystem
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 

@@ -32,6 +32,7 @@ func tempDir(dirs ...string) storage.SysPath {
 	return storage.SysPath(path)
 }
 
+// userHomeDir returns the home directory of user
 func userHomeDir() string {
 	if runtime.GOOS == "windows" {
 		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
@@ -49,7 +50,7 @@ func userHomeDir() string {
 }
 
 // NewRandomDxFile creates a new random DxFile with random segments data
-func (fs *FileSet) NewRandomDxFile(t *testing.T, dxPath storage.DxPath, minSectors, numSectors uint32, ecCode uint8, ck crypto.CipherKey, fileSize uint64) *FileSetEntryWithID {
+func (fs *FileSet) NewRandomDxFile(dxPath storage.DxPath, minSectors, numSectors uint32, ecCode uint8, ck crypto.CipherKey, fileSize uint64) (*FileSetEntryWithID, error) {
 	// create the file
 	sourcePath := storage.SysPath(filepath.Join(userHomeDir(), "temp", dxPath.Path))
 	force := false
@@ -57,7 +58,7 @@ func (fs *FileSet) NewRandomDxFile(t *testing.T, dxPath storage.DxPath, minSecto
 	fileMode := os.FileMode(0600)
 	df, err := fs.NewDxFile(dxPath, sourcePath, force, ec, ck, fileSize, fileMode)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	// Add the segments
 	df.lock.Lock()
@@ -73,9 +74,9 @@ func (fs *FileSet) NewRandomDxFile(t *testing.T, dxPath storage.DxPath, minSecto
 		}
 	}
 	if err = df.saveAll(); err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	return df
+	return df, nil
 }
 
 // newTestDxFile generate a random DxFile used for testing. The generated DxFile segments are empty

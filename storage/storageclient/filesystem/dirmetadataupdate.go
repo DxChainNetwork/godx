@@ -5,9 +5,10 @@
 package filesystem
 
 import (
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,25 +17,11 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-)
-
-const (
-	redoNotNeeded uint32 = iota
-	redoNeeded
-)
-
-const (
-	dirMetadataUpdateName = "dirMetadataUpdate"
-
-	// numConsecutiveFailRelease defines the time when fail reaches this number,
-	// dirMetadataUpdate is release and deleted from map
-	numConsecutiveFailRelease = 3
 )
 
 var (

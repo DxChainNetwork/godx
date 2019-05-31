@@ -6,7 +6,6 @@ package filesystem
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
@@ -137,7 +137,10 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+				df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+				if err != nil {
+					t.Fatal(err)
+				}
 				if test.markStuck {
 					if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
 						t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
@@ -162,7 +165,10 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		}
 		wg.Wait()
 		// wait until updates complete
-		fs.waitForUpdatesComplete(t)
+		err = fs.waitForUpdatesComplete()
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		// Check the metadata of the root Path
 		rootPath := storage.RootDxPath()
@@ -227,7 +233,10 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		}
 		fileSize := uint64(1 << 22 * 10 * 10)
 		path, err = path.Join(randomDxPath(t, 1).Path)
-		df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+		df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		// calculate the metadata to expect at root
 		var health, stuckHealth, numStuckSegments, minRedundancy uint32
@@ -279,7 +288,9 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		}()
 		// unblock the first update and wait the updates to complete
 		close(c)
-		fs.waitForUpdatesComplete(t)
+		if err = fs.waitForUpdatesComplete(); err != nil {
+			t.Fatal(err)
+		}
 		cdr := dr.(counterDisrupter)
 		num, exist := cdr.counter[test.disruptKeyword]
 		if !exist {
@@ -317,7 +328,10 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// calculate the metadata to expect at root
 	var health, stuckHealth, numStuckSegments, minRedundancy uint32
@@ -355,7 +369,9 @@ func TestFileSystem_SingleFail(t *testing.T) {
 		}
 	}()
 	// This might take some time to wait for the loop repair to complete
-	fs.waitForUpdatesComplete(t)
+	if err = fs.waitForUpdatesComplete(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Check that the disrupter has been accessed twice
 	cdr := dr.(counterDisrupter)
@@ -386,7 +402,10 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = df.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +440,9 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 		}
 	}()
 	// This might take some time to wait for the loop repair to complete
-	fs.waitForUpdatesComplete(t)
+	if err = fs.waitForUpdatesComplete(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Check that the disrupter has been accessed twice
 	num := cdr.count("cmaa1")
@@ -448,7 +469,10 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	persistDir := fs.persistDir
 	if err = df.Close(); err != nil {
@@ -489,7 +513,9 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 		DxPath:           storage.RootDxPath(),
 		RootPath:         fs.rootDir,
 	}
-	newFs.waitForUpdatesComplete(t)
+	if err = newFs.waitForUpdatesComplete(); err != nil {
+		t.Fatal(err)
+	}
 	newFs.postTestCheck(t, true, true, expectMd)
 }
 
@@ -514,19 +540,28 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	// create three files
 	// 1. corrupted dxfile
 	path := randomDxPath(t, 1)
-	corruptedDxFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	corruptedDxFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = corruptedDxFile.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// 2. corrupted dxdir
 	path = randomDxPath(t, 2)
-	corruptedDirFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	corruptedDirFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = corruptedDirFile.Close(); err != nil {
 		t.Fatal(err)
 	}
 	// 3. Good file
 	path = randomDxPath(t, 1)
-	goodFile := fs.FileSet.NewRandomDxFile(t, path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	goodFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err = goodFile.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -541,7 +576,9 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Wait for the updates to complete
-	fs.waitForUpdatesComplete(t)
+	if err = fs.waitForUpdatesComplete(); err != nil {
+		t.Fatal(err)
+	}
 
 	// corrupt the files
 	file, err := os.OpenFile(string(corruptedDxFile.FilePath()), os.O_RDWR, 0600)
@@ -571,7 +608,9 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fs.waitForUpdatesComplete(t)
+	if err = fs.waitForUpdatesComplete(); err != nil {
+		t.Fatal(err)
+	}
 
 	// expectMd is supposed to be the metadata of just the goodFile
 	expectMd := &dxdir.Metadata{
@@ -603,38 +642,6 @@ func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, 
 		minRedundancy = fMinRedundancy
 	}
 	return health, stuckHealth, numStuckSegments, minRedundancy
-}
-
-// waitForUpdatesComplete is the helper function that wait for update execution
-func (fs *FileSystem) waitForUpdatesComplete(t *testing.T) {
-	c := make(chan struct{})
-	// Wait until update complete
-	go func() {
-		defer close(c)
-		for {
-			<-time.After(50 * time.Millisecond)
-			fs.lock.Lock()
-			emptyUpdate := len(fs.unfinishedUpdates) == 0
-			fs.lock.Unlock()
-			if emptyUpdate {
-				// There might be case the child directory completed update while
-				// the parent update is not in unfinishedUpdates
-				<-time.After(50 * time.Millisecond)
-				fs.lock.Lock()
-				emptyUpdate = len(fs.unfinishedUpdates) == 0
-				fs.lock.Unlock()
-				if emptyUpdate {
-					return
-				}
-				continue
-			}
-		}
-	}()
-	select {
-	case <-time.After(10 * time.Second):
-		t.Fatal("after 10 seconds, update still not completed")
-	case <-c:
-	}
 }
 
 // postTestCheck check the post test status. Checks whether could be closed in 1 seconds,

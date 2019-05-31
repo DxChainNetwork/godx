@@ -20,20 +20,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
-const (
-	// repairUnfinishedLoopInterval is the interval between two repairUnfinishedDirMetadataUpdate
-	repairUnfinishedLoopInterval = time.Second
-
-	// filesDirectory is the directory to put all files
-	filesDirectory = "files"
-
-	// fileWalName is the fileName for the fileWal
-	fileWalName = "file.wal"
-
-	// updateWalName is the fileName for the updateWal
-	updateWalName = "update.wal"
-)
-
 // FileSystem is the structure for a file system that include a FileSet and a DirSet
 type FileSystem struct {
 	// rootDir is the root directory where the files locates
