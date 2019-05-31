@@ -25,3 +25,4 @@ vendor/*
 # test generated data
 storage/storageclient/contractset/testdata/contractsetdb/*
 storage/storageclient/contractset/testdata/contractset.wal
+storage/storageclient/storagehostmanager/test/*

@@ -28,22 +28,7 @@ func NewPublicStorageHostManagerAPI(shm *StorageHostManager) *PublicStorageHostM
 
 // ActiveStorageHosts returns active storage host information
 func (api *PublicStorageHostManagerAPI) ActiveStorageHosts() (activeStorageHosts []storage.HostInfo) {
-	allHosts := api.shm.storageHostTree.All()
-	// based on the host information, filter out active hosts
-	for _, host := range allHosts {
-		numScanRecords := len(host.ScanRecords)
-		if numScanRecords == 0 {
-			continue
-		}
-		if !host.ScanRecords[numScanRecords-1].Success {
-			continue
-		}
-		if !host.AcceptingContracts {
-			continue
-		}
-		activeStorageHosts = append(activeStorageHosts, host)
-	}
-	return
+	return api.shm.ActiveStorageHosts()
 }
 
 // AllStorageHosts will return all storage hosts information stored from the storage host pool
@@ -66,8 +51,6 @@ func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHos
 		shm: shm,
 	}
 }
-
-// TODO: (mzhang) private method, set filter mode
 
 // StorageHost will return a specific host detailed information from the storage host pool
 func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {
