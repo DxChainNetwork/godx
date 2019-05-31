@@ -5,7 +5,9 @@
 package storagehostmanager
 
 import (
+	"errors"
 	"os"
+	"reflect"
 	"sort"
 	"sync"
 
@@ -133,6 +135,52 @@ func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
 }
 
+// ActiveStorageHosts will return all active storage host information
+func (shm *StorageHostManager) ActiveStorageHosts() (activeStorageHosts []storage.HostInfo) {
+	allHosts := shm.storageHostTree.All()
+	// based on the host information, filter out active hosts
+	for _, host := range allHosts {
+		numScanRecords := len(host.ScanRecords)
+		if numScanRecords == 0 {
+			continue
+		}
+		if !host.ScanRecords[numScanRecords-1].Success {
+			continue
+		}
+		if !host.AcceptingContracts {
+			continue
+		}
+		activeStorageHosts = append(activeStorageHosts, host)
+	}
+	return
+}
+
+// SetRentPayment will modify the rent payment and update the storage host
+// evaluation function
+func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err error) {
+	// during initialization, the value might be empty
+	if reflect.DeepEqual(rent, storage.RentPayment{}) {
+		rent = storage.DefaultRentPayment
+	}
+
+	// update the rent
+	shm.lock.Lock()
+	shm.rent = rent
+	shm.lock.Unlock()
+
+	// update the storage host evaluation function
+	evalFunc := shm.calculateEvaluationFunc(rent)
+	shm.lock.Lock()
+	shm.evalFunc = evalFunc
+	shm.lock.Unlock()
+
+	// update the storage host tree and filtered tree evaluation func
+	err = shm.storageHostTree.SetEvaluationFunc(evalFunc)
+	err = common.ErrCompose(err, shm.filteredTree.SetEvaluationFunc(evalFunc))
+
+	return
+}
+
 // RetrieveHostInfo will acquire the storage host information based on the enode ID provided
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
 	return shm.storageHostTree.RetrieveHostInfo(id)
@@ -186,6 +234,55 @@ func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHo
 		ipFilter.Add(hi.IP)
 	}
 
+	return
+}
+
+// RetrieveRandomHosts will randomly select storage hosts from the storage host pool
+//  1. blacklist represents the storage host that are prohibited to be selected
+//  2. addrBlacklist represents for any storage host whose network address is caontine
+func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlacklist []enode.ID) (infos []storage.HostInfo, err error) {
+	shm.lock.RLock()
+	initScan := shm.initialScan
+	ipCheck := shm.ipViolationCheck
+	shm.lock.RUnlock()
+
+	// if the initialize scan is not complete
+	if !initScan {
+		err = errors.New("storage host pool initial scan is not finished")
+		return
+	}
+
+	// select random
+	if ipCheck {
+		infos = shm.filteredTree.SelectRandom(num, blacklist, addrBlacklist)
+	} else {
+		infos = shm.filteredTree.SelectRandom(num, blacklist, nil)
+	}
+
+	return
+}
+
+// Evaluation will calculate and return the evaluation of a single storage host
+func (shm *StorageHostManager) Evaluation(host storage.HostInfo) (eval common.BigInt) {
+	return shm.evalFunc(host).Evaluation()
+}
+
+// EvaluationDetail will calculate and return the evaluation detail of a single storage host
+func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail storagehosttree.EvaluationDetail) {
+	// retrieve all active storage hosts
+	activeHosts := shm.ActiveStorageHosts()
+
+	// get the total evaluation
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	totalEval := common.BigInt0
+	for _, activeHost := range activeHosts {
+		totalEval = totalEval.Add(shm.evalFunc(activeHost).Evaluation())
+	}
+
+	// compute the evaluation detail
+	detail = shm.evalFunc(host).EvaluationDetail(totalEval, false, false)
 	return
 }
 
