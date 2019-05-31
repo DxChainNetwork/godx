@@ -6,15 +6,15 @@ package storageclient
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/p2p"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"path/filepath"
 	"sync"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
@@ -138,7 +138,6 @@ func (sc *StorageClient) Close() error {
 	var fullErr error
 	// Closing the host manager
 	sc.log.Info("Closing the host manager")
-	log.Info("Closing the host manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
