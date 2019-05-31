@@ -5,12 +5,12 @@
 package storage
 
 import (
-	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
@@ -172,10 +172,13 @@ type (
 	HostHealthInfoTable map[enode.ID]HostHealthInfo
 )
 
-var (
+const (
 	// 4 MB
 	SectorSize = uint64(1 << 22)
 	HashSize   = 32
+
+	// the segment size is used when taking the Merkle root of a file.
+	SegmentSize = 64
 
 	// the minimum size of an RPC message. If an encoded message
 	// would be smaller than RPCMinLen, it is padded with random data.

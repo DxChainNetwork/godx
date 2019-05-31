@@ -25,6 +25,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
@@ -498,17 +499,26 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// Verify merkle proof
 	numSectors := contractRevision.NewFileSize / storage.SectorSize
-	proofRanges := storage.CalculateProofRanges(actions, numSectors)
+	proofRanges := CalculateProofRanges(actions, numSectors)
 	proofHashes := merkleResp.OldSubtreeHashes
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
-	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot) {
+	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
+	if err != nil {
+		sc.log.Error("something wrong for verifying diff proof", "error", err)
+	}
+	if !verified {
 		return errors.New("invalid Merkle proof for old root")
 	}
-	// ...then by modifying the leaves and verifying the new Merkle root
-	leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
-	proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
-	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot) {
+
+	// and then modify the leaves and verify the new Merkle root
+	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
+	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
+	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
+	if err != nil {
+		sc.log.Error("something wrong for verifying diff proof", "error", err)
+	}
+	if !verified {
 		return errors.New("invalid Merkle proof for new root")
 	}
 
@@ -735,7 +745,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			if req.MerkleProof {
 				proofStart := int(sec.Offset) / storage.SegmentSize
 				proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
-				if !storage.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot) {
+				verified, err := merkle.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
+				if err != nil {
+					client.log.Error("something wrong for verifying range proof", "error", err)
+				}
+				if !verified {
 					return errors.New("host provided incorrect sector data or Merkle proof")
 				}
 			}

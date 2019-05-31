@@ -21,11 +21,13 @@ import (
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
+	"github.com/DxChainNetwork/merkletree"
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
@@ -530,7 +532,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		switch action.Type {
 		case storage.UploadActionAppend:
 			// Update sector roots.
-			newRoot := storage.MerkleRoot(action.Data)
+			newRoot := merkle.Root(action.Data)
 			newRoots = append(newRoots, newRoot)
 			sectorsGained = append(sectorsGained, newRoot)
 			gainedSectorData = append(gainedSectorData, action.Data)
@@ -556,7 +558,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := storage.CachedMerkleRoot(newRoots)
+	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -594,10 +596,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var merkleResp storage.UploadMerkleProof
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
-	proofRanges := make([]storage.ProofRange, 0, len(sectorsChanged))
+	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
 	for index := range sectorsChanged {
 		if index < oldNumSectors {
-			proofRanges = append(proofRanges, storage.ProofRange{
+			proofRanges = append(proofRanges, merkletree.LeafRange{
 				Start: index,
 				End:   index + 1,
 			})
@@ -613,8 +615,13 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Construct the merkle proof
+	oldHashSet, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
+	if err != nil {
+		s.SendErrorMsg(err)
+		return err
+	}
 	merkleResp = storage.UploadMerkleProof{
-		OldSubtreeHashes: storage.MerkleDiffProof(proofRanges, oldNumSectors, nil, so.SectorRoots),
+		OldSubtreeHashes: oldHashSet,
 		OldLeafHashes:    leafHashes,
 		NewMerkleRoot:    newMerkleRoot,
 	}
@@ -827,32 +834,36 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		if req.MerkleProof {
 			proofStart := int(sec.Offset) / storage.SegmentSize
 			proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
-			proof = storage.MerkleRangeProof(sectorData, proofStart, proofEnd)
-			proof = []common.Hash{}
+			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
+			if err != nil {
+				s.SendErrorMsg(err)
+				return err
+			}
 		}
 
-		// send the response. If the client sent a stop signal, or this is the final response, include host's signature in the response.
+		// send the response.
+		// if host received a stop signal, or this is the final response, include host's signature in the response.
 		resp := storage.DownloadResponse{
 			Signature:   nil,
 			Data:        data,
 			MerkleProof: proof,
 		}
+
 		select {
 		case err := <-stopSignal:
 			if err != nil {
 				return err
 			}
-			resp.Signature = hostSig
 
-			// send data to client
+			resp.Signature = hostSig
 			return s.SendStorageContractDownloadData(resp)
 		default:
 		}
+
 		if i == len(req.Sections)-1 {
 			resp.Signature = hostSig
 		}
 
-		// send data to client
 		if err := s.SendStorageContractDownloadData(resp); err != nil {
 			s.SendErrorMsg(err)
 			return err

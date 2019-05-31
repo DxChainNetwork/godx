@@ -8,18 +8,21 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"reflect"
+	"sort"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/DxChainNetwork/merkletree"
 )
 
 // ParsedAPI will parse the APIs saved in the Ethereum
@@ -111,4 +114,81 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	math.ReadBits(pubkey.X, pubBytes[:len(pubBytes)/2])
 	math.ReadBits(pubkey.Y, pubBytes[len(pubBytes)/2:])
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
+}
+
+// calculate the proof ranges that should be used to verify a
+// pre-modification Merkle diff proof for the specified actions.
+func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkletree.LeafRange {
+	newNumSectors := oldNumSectors
+	sectorsChanged := make(map[uint64]struct{})
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			sectorsChanged[newNumSectors] = struct{}{}
+			newNumSectors++
+		}
+	}
+
+	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+	for index := range sectorsChanged {
+		if index < oldNumSectors {
+			oldRanges = append(oldRanges, merkletree.LeafRange{
+				Start: index,
+				End:   index + 1,
+			})
+		}
+	}
+	sort.Slice(oldRanges, func(i, j int) bool {
+		return oldRanges[i].Start < oldRanges[j].Start
+	})
+
+	return oldRanges
+}
+
+// modify the proof ranges produced by calculateProofRanges
+// to verify a post-modification Merkle diff proof for the specified actions.
+func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []storage.UploadAction, numSectors uint64) []merkletree.LeafRange {
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			proofRanges = append(proofRanges, merkletree.LeafRange{
+				Start: numSectors,
+				End:   numSectors + 1,
+			})
+			numSectors++
+		}
+	}
+	return proofRanges
+}
+
+// modify the leaf hashes of a Merkle diff proof to verify a
+// post-modification Merkle diff proof for the specified actions.
+func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
+	// determine which sector index corresponds to each leaf hash
+	var indices []uint64
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			indices = append(indices, numSectors)
+			numSectors++
+		}
+	}
+	sort.Slice(indices, func(i, j int) bool {
+		return indices[i] < indices[j]
+	})
+	indexMap := make(map[uint64]int, len(leafHashes))
+	for i, index := range indices {
+		if i > 0 && index == indices[i-1] {
+			continue // remove duplicates
+		}
+		indexMap[index] = i
+	}
+
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			leafHashes = append(leafHashes, merkle.Root(action.Data))
+		}
+	}
+	return leafHashes
 }
