@@ -5,7 +5,6 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"io"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -44,7 +43,7 @@ type ClientBackend interface {
 // modifying a StorageClientContract does not modify the actual storage contract.
 type ClientContract struct {
 	ID            common.Hash
-	HostPublicKey *ecdsa.PublicKey
+	HostEnodeUrl  string
 	Transaction   types.Transaction
 
 	StartHeight uint64

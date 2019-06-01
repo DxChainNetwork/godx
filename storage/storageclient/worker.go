@@ -5,7 +5,6 @@
 package storageclient
 
 import (
-	"crypto/ecdsa"
 	"encoding/binary"
 	"sync"
 	"sync/atomic"
@@ -22,9 +21,8 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract   storage.ClientContract
-	hostPubKey *ecdsa.PublicKey
-	client     *StorageClient
+	contract     storage.ClientContract
+	client       *StorageClient
 
 	// How many failures in a row?
 	ownedDownloadConsecutiveFailures int
@@ -42,12 +40,11 @@ type worker struct {
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	// TODO: Upload variables.
-	//unprocessedSegments         []*unfinishedUploadSegment // Yet unprocessed work items.
-	//uploadChan                chan struct{}            // Notifications of new work.
-	//uploadConsecutiveFailures int                      // How many times in a row uploading has failed.
-	//uploadRecentFailure       time.Time                // How recent was the last failure?
-	//uploadTerminated          bool                     // Have we stopped uploading?
+	unprocessedSegments         []*unfinishedUploadSegment // Yet unprocessed work items.
+	uploadChan                chan struct{}            // Notifications of new work.
+	uploadConsecutiveFailures int                      // How many times in a row uploading has failed.
+	uploadRecentFailure       time.Time                // How recent was the last failure?
+	uploadTerminated          bool                     // Have we stopped uploading?
 
 	// Worker will shut down if a signal is sent down this channel.
 	killChan chan struct{}
@@ -72,13 +69,9 @@ func (c *StorageClient) activateWorkerPool() {
 		if !exists {
 			worker := &worker{
 				contract:     contract,
-				hostPubKey:   contract.HostPublicKey,
 				downloadChan: make(chan struct{}, 1),
+				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-
-				// TODO: 初始化upload变量
-				//uploadChan:   make(chan struct{}, 1),
-
 				client: c,
 			}
 			c.workerPool[id] = worker
@@ -114,29 +107,26 @@ func (w *worker) workLoop() {
 
 	for {
 
-		// Perform one step of processing download task.
+		// Perform one step of processing download task
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
 			w.download(downloadSegment)
 			continue
 		}
 
-		// TODO: 执行上传任务
-		// Perform one step of processing upload task.
-		//segment, sectorIndex := w.managedNextUploadSegment()
-		//if segment != nil {
-		//	w.managedUpload(segment, sectorIndex)
-		//	continue
-		//}
+		// Perform one step of processing upload task
+		segment, sectorIndex := w.managedNextUploadSegment()
+		if segment != nil {
+			w.managedUpload(segment, sectorIndex)
+			continue
+		}
 
 		// keep listening for a new upload/download task, or a stop signal
 		select {
 		case <-w.downloadChan:
 			continue
-
-		// TODO: 监听上传任务
-		//case <-w.uploadChan:
-		//	continue
+		case <-w.uploadChan:
+			continue
 		case <-w.killChan:
 			return
 		case <-w.client.tm.StopChan():
@@ -215,8 +205,8 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	fetchOffset, fetchLength := sectorOffsetAndLength(uds.staticFetchOffset, uds.staticFetchLength, uds.erasureCode)
 
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
-	root := uds.staticSegmentMap[hostPubkeyHex].root
+	hostPubkeyHex := w.contract.HostEnodeUrl
+	root := uds.staticSegmentMap[w.contract.HostEnodeUrl].root
 
 	// TODO: 获取连接session
 	session := &storage.Session{}
@@ -292,7 +282,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.staticComplete()
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
 
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
+	hostPubkeyHex := w.contract.HostEnodeUrl
 	sectorData, workerHasSector := uds.staticSegmentMap[hostPubkeyHex]
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
@@ -378,7 +368,7 @@ func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasu
 func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--
-	hostPubkeyHex := PubkeyToHex(w.contract.HostPublicKey)
+	hostPubkeyHex := w.contract.HostEnodeUrl
 	sectorIndex := uds.staticSegmentMap[hostPubkeyHex].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()

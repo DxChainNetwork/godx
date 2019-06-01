@@ -6,10 +6,10 @@ package storage
 
 import (
 	"bytes"
+	"gitlab.com/NebulousLabs/Sia/encoding"
 	"hash"
 	"sort"
 
-	"github.com/DxChainNetwork/Sia/encoding"
 	"github.com/DxChainNetwork/godx/common"
 	"gitlab.com/NebulousLabs/merkletree"
 	"golang.org/x/crypto/sha3"

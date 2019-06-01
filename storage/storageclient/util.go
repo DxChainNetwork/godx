@@ -7,8 +7,6 @@ package storageclient
 import (
 	"crypto/ecdsa"
 	"errors"
-	"reflect"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core"
@@ -16,9 +14,15 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"io/ioutil"
+	"path/filepath"
+	"reflect"
 )
 
 // ParsedAPI will parse the APIs saved in the Ethereum
@@ -100,6 +104,103 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 // GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
+}
+// DirInfo returns the Directory Information of the siadir
+func (sc *StorageClient) DirInfo(dxPath dxdir.DxPath) (DirectoryInfo, error) {
+	entry, err := sc.staticDirSet.Open(dxPath)
+	if err != nil {
+		return DirectoryInfo{}, err
+	}
+	defer entry.Close()
+	// Grab the health information and return the Directory Info, the worst
+	// health will be returned. Depending on the directory and its contents that
+	// could either be health or stuckHealth
+	metadata := entry.Metadata()
+	return DirectoryInfo{
+		NumFiles:metadata.NumFiles,
+		NumStuckSegments:metadata.NumStuckSegments,
+		TotalSize:metadata.TotalSize,
+		Health:metadata.Health,
+		StuckHealth:metadata.StuckHealth,
+		MinRedundancy:metadata.MinRedundancy,
+		TimeLastHealthCheck:metadata.TimeLastHealthCheck,
+		TimeModify:metadata.TimeModify,
+		DxPath:metadata.DxPath,
+	}, nil
+}
+
+// DirList returns directories and files stored in the siadir as well as the
+// DirectoryInfo of the siadir
+func (sc *StorageClient) DirList(dxPath dxdir.DxPath) ([]DirectoryInfo, []FileInfo, error) {
+	if err := sc.tm.Add(); err != nil {
+		return nil, nil, err
+	}
+	defer sc.tm.Done()
+
+	var dirs []DirectoryInfo
+	var files []FileInfo
+	// Get DirectoryInfo
+	di, err := sc.DirInfo(dxPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	dirs = append(dirs, di)
+	// Read Directory
+	fileInfos, err := ioutil.ReadDir(dxPath.DxDirSysPath(sc.staticFilesDir))
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fi := range fileInfos {
+		// Check for directories
+		if fi.IsDir() {
+			dirDxPath, err := dxPath.Join(fi.Name())
+			if err != nil {
+				return nil, nil, err
+			}
+			di, err := sc.DirInfo(dirDxPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			dirs = append(dirs, di)
+			continue
+		}
+		// Ignore non siafiles
+		ext := filepath.Ext(fi.Name())
+		if ext != DxFileExtension {
+			continue
+		}
+		// Grab dxfile
+		// fileName := strings.TrimSuffix(fi.Name(), modules.SiaFileExtension)
+		// fileSiaPath, err := dxPath.Join(fileName)
+		//if err != nil {
+		//	return nil, nil, err
+		//}
+		// TODO fileinfo
+		//file, err := sc.File(fileSiaPath)
+		//if err != nil {
+		//	return nil, nil, err
+		//}
+		files = append(files, FileInfo{})
+	}
+	return dirs, files, nil
+}
+
+// TODO complete
+func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetEntryWithID) storage.HostHealthInfoTable {
+	infoMap := make(storage.HostHealthInfoTable, 1)
+
+	for _, e := range entries {
+		var used []enode.ID
+		for _, id := range e.HostIDs() {
+			used = append(used, id)
+		}
+
+		if err := e.UpdateUsedHosts(used); err != nil {
+			sc.log.Debug("Could not update used hosts:", err)
+		}
+	}
+
+	return infoMap
 }
 
 // covert pubkey to hex string

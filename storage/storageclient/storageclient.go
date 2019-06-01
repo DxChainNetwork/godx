@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"io"
 	"math/big"
 	"math/bits"
@@ -54,7 +55,6 @@ type (
 	streamCache       struct{}
 	Wal               struct{}
 )
-
 // *********************************************
 // *********************************************
 
@@ -90,6 +90,12 @@ type StorageClient struct {
 	downloadHeap   *downloadSegmentHeap // A heap of priority-sorted segments to download.
 	newDownloads   chan struct{}        // Used to notify download loop that new downloads are available.
 
+	// Upload management
+	uploadHeap uploadHeap
+
+	bubbleUpdates   map[string]bubbleStatus
+	bubbleUpdatesMu sync.Mutex
+
 	// List of workers that can be used for uploading and/or downloading.
 	workerPool map[common.Hash]*worker
 
@@ -116,8 +122,11 @@ type StorageClient struct {
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
 
-	// file management.
+	// file management
 	staticFileSet *dxfile.FileSet
+
+	// dir management
+	staticDirSet *dxdir.DirSet
 }
 
 // New initializes StorageClient object
@@ -129,6 +138,14 @@ func New(persistDir string) (*StorageClient, error) {
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
+		uploadHeap: uploadHeap{
+			heapSegments:        make(map[uploadSegmentID]struct{}),
+			repairingSegments:   make(map[uploadSegmentID]struct{}),
+			newUploads:        	 make(chan struct{}, 1),
+			repairNeeded:        make(chan struct{}, 1),
+			stuckSegmentFound:   make(chan struct{}, 1),
+			stuckSegmentSuccess: make(chan dxdir.DxPath, 1),
+		},
 		workerPool:     make(map[common.Hash]*worker),
 	}
 
@@ -173,6 +190,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 
 	// loop to download
 	go sc.downloadLoop()
+	go sc.uploadAndRepairLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {
@@ -199,6 +217,14 @@ func (sc *StorageClient) Close() error {
 	err := sc.storageHostManager.Close()
 	errSC := sc.tm.Stop()
 	return common.ErrCompose(err, errSC)
+}
+
+func (sc *StorageClient) DeleteFile(path dxdir.DxPath) error{
+	if err := sc.tm.Add(); err != nil {
+		return err
+	}
+	defer sc.tm.Done()
+	return sc.staticFileSet.Delete(path.String())
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {
@@ -384,8 +410,9 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	return nil
 }
 
-func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
-	return sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
+	err := sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+	return storage.MerkleRoot(data), err
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
