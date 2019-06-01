@@ -34,9 +34,8 @@ type ContractManager struct {
 	maintenanceWg      sync.WaitGroup
 
 	// contract related
-	activeContracts      *contractset.StorageContractSet
-	expiredContracts     map[storage.ContractID]storage.ContractMetaData
-	recoverableContracts map[storage.ContractID]storage.RecoverableContract
+	activeContracts  *contractset.StorageContractSet
+	expiredContracts map[storage.ContractID]storage.ContractMetaData
 
 	// NOTE: hostToContract mapping contains both expired and active contracts
 	hostToContract map[enode.ID]storage.ContractID
@@ -62,17 +61,16 @@ type ContractManager struct {
 func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *ContractManager, err error) {
 	// contract manager initialization
 	cm = &ContractManager{
-		persistDir:           persistDir,
-		hostManager:          hm,
-		maintenanceStop:      make(chan struct{}),
-		expiredContracts:     make(map[storage.ContractID]storage.ContractMetaData),
-		recoverableContracts: make(map[storage.ContractID]storage.RecoverableContract),
-		renewedFrom:          make(map[storage.ContractID]storage.ContractID),
-		renewedTo:            make(map[storage.ContractID]storage.ContractID),
-		failedRenews:         make(map[storage.ContractID]uint64),
-		hostToContract:       make(map[enode.ID]storage.ContractID),
-		renewing:             make(map[storage.ContractID]bool),
-		quit:                 make(chan struct{}),
+		persistDir:       persistDir,
+		hostManager:      hm,
+		maintenanceStop:  make(chan struct{}),
+		expiredContracts: make(map[storage.ContractID]storage.ContractMetaData),
+		renewedFrom:      make(map[storage.ContractID]storage.ContractID),
+		renewedTo:        make(map[storage.ContractID]storage.ContractID),
+		failedRenews:     make(map[storage.ContractID]uint64),
+		hostToContract:   make(map[enode.ID]storage.ContractID),
+		renewing:         make(map[storage.ContractID]bool),
+		quit:             make(chan struct{}),
 	}
 
 	// initialize log

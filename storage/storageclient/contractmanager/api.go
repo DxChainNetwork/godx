@@ -4,7 +4,10 @@
 
 package contractmanager
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
+)
 
 // PublicContractManagerAPI defines the object used to call eligible public
 // APIs that are used to acquire contract information that client signed
@@ -20,9 +23,9 @@ func NewPublicContractManagerAPI(cm *ContractManager) *PublicContractManagerAPI 
 	}
 }
 
-// AllContracts will return all storage contracts that the storage client has signed
-func (api *PublicContractManagerAPI) AllContracts() string {
-	return "ALL CONTRACT IS CURRENTLY WIP"
+// ActiveContracts will return all active storage contracts that the storage client has signed
+func (api *PublicContractManagerAPI) ActiveContracts() (activeContracts []storage.ContractMetaData) {
+	return api.cm.activeContracts.RetrieveAllContractsMetaData()
 }
 
 type PrivateContractManagerAPI struct {

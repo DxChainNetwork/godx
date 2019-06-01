@@ -17,13 +17,12 @@ var settingsMetadata = common.Metadata{
 }
 
 type persistence struct {
-	Rent                 storage.RentPayment                       `json:"rentPayment"`
-	BlockHeight          uint64                                    `json:"blockheight"`
-	CurrentPeriod        uint64                                    `json:"currentperiod"`
-	ExpiredContracts     []storage.ContractMetaData                `json:"expiredcontracts"`
-	RecoverableContracts []storage.RecoverableContract             `json:"recoverablecontracts"`
-	RenewedFrom          map[storage.ContractID]storage.ContractID `json:"renewedfrom"`
-	RenewedTo            map[storage.ContractID]storage.ContractID `json:"renewedto"`
+	Rent             storage.RentPayment                       `json:"rentPayment"`
+	BlockHeight      uint64                                    `json:"blockheight"`
+	CurrentPeriod    uint64                                    `json:"currentperiod"`
+	ExpiredContracts []storage.ContractMetaData                `json:"expiredcontracts"`
+	RenewedFrom      map[storage.ContractID]storage.ContractID `json:"renewedfrom"`
+	RenewedTo        map[storage.ContractID]storage.ContractID `json:"renewedto"`
 }
 
 func (cm *ContractManager) persistUpdate() (persist persistence) {
@@ -37,10 +36,6 @@ func (cm *ContractManager) persistUpdate() (persist persistence) {
 
 	for _, ec := range cm.expiredContracts {
 		persist.ExpiredContracts = append(persist.ExpiredContracts, ec)
-	}
-
-	for _, rc := range cm.recoverableContracts {
-		persist.RecoverableContracts = append(persist.RecoverableContracts, rc)
 	}
 
 	return
@@ -81,11 +76,6 @@ func (cm *ContractManager) loadSettings() (err error) {
 	for _, ec := range data.ExpiredContracts {
 		cm.expiredContracts[ec.ID] = ec
 		cm.hostToContract[ec.EnodeID] = ec.ID
-	}
-
-	// update recoverable contracts list
-	for _, rc := range data.RecoverableContracts {
-		cm.recoverableContracts[rc.ID] = rc
 	}
 	cm.lock.Unlock()
 

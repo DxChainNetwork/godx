@@ -53,3 +53,9 @@ func (api *PrivateStorageClientAPI) SetPayment() string {
 func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 	return api.sc.memoryManager.SetMemoryLimit(amount)
 }
+
+// FormContract allows storage client to configure the storage rent payment settings
+// which will be used to automatically select StorageHost
+//func (api *PrivateStorageClientAPI) FormContract() string {
+//
+//}

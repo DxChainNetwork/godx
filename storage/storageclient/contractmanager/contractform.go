@@ -29,12 +29,12 @@ func (cm *ContractManager) prepareFormContract(neededContracts int, clientRemain
 		if contractFund.Cmp(clientRemainingFund) > 0 {
 			err = fmt.Errorf("the contract fund %v is larger than client remaining fund %v. Impossible to form contract",
 				contractFund, clientRemainingFund)
-			break
+			return
 		}
 
 		// start to form contract
-		formCost, contract, err := cm.formContract(host, contractFund, contractEndHeight)
-		if err != nil {
+		formCost, contract, errFormContract := cm.formContract(host, contractFund, contractEndHeight)
+		if errFormContract != nil {
 			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, err.Error())
 			continue
 		}
