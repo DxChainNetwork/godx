@@ -6,6 +6,7 @@ package storagehostmanager
 
 import (
 	"os"
+	"sort"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -31,7 +32,7 @@ type StorageHostManager struct {
 	storageHostTree *storagehosttree.StorageHostTree
 
 	// ip violation check
-	disableIPViolationCheck bool
+	ipViolationCheck bool
 
 	// maintenance related
 	initialScan     bool
@@ -115,6 +116,62 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 // running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
+}
+
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
+func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
+	return shm.storageHostTree.RetrieveHostInfo(id)
+}
+
+// EnableIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
+// who are located in the same network, they will be marked as bad storage hosts
+func (shm *StorageHostManager) EnableIPViolationCheck() {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+	shm.ipViolationCheck = true
+}
+
+// FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same
+// network, it will be considered as badHosts if the IPViolation is enabled
+func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHostIDs []enode.ID) {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+
+	// check if the ipViolationCheck is enabled
+	if !shm.ipViolationCheck {
+		return
+	}
+
+	var hostsInfo []storage.HostInfo
+
+	// hosts validation
+	for _, id := range hostIDs {
+		hi, exists := shm.storageHostTree.RetrieveHostInfo(id)
+		if !exists {
+			badHostIDs = append(badHostIDs, id)
+			continue
+		}
+		hostsInfo = append(hostsInfo, hi)
+	}
+
+	// sort the information based on the LastIPChange time. When there are two storage hosts
+	// with same network address. The one that changes the IP earliest will not be filtered
+	// out
+	sort.Slice(hostsInfo[:], func(i, j int) bool {
+		return hostsInfo[i].LastIPNetWorkChange.Before(hostsInfo[j].LastIPNetWorkChange)
+	})
+
+	// start the filter
+	ipFilter := storagehosttree.NewFilter()
+	for _, hi := range hostsInfo {
+		if ipFilter.Filtered(hi.IP) {
+			badHostIDs = append(badHostIDs, hi.EnodeID)
+			continue
+		}
+		ipFilter.Add(hi.IP)
+	}
+
+	return
 }
 
 // insert will insert host information into the storageHostTree

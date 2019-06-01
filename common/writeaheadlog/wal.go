@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	metadataHeader = [24]byte{'u', 'x', 'c', 'h', 'a', 'i', 'n', ' ', 'w', 'r', 'i', 't', 'e', ' ', 'a', 'h',
-		'e', 'a', 'd', ' ', 'l', 'o', 'g', '\n'}
+	metadataHeader = [24]byte{'D', 'x', 'C', 'h', 'a', 'i', 'n', ' ', 'W', 'r', 'i', 't', 'e', ' ', 'A', 'h',
+		'e', 'a', 'd', ' ', 'L', 'o', 'g', '\n'}
 
 	metadataVersion = [7]byte{'v', '1', '.', '0', '.', '0', '\n'}
 )
