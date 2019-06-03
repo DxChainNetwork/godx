@@ -5,9 +5,13 @@
 package filesystem
 
 import (
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"math"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -79,4 +83,147 @@ func TestPublicFileSystemAPI_FileList(t *testing.T) {
 			t.Errorf("Test %d: size of file brief info unexpected. Expect %v, Got %v", i, test, len(res))
 		}
 	}
+}
+
+// TestPublicFileSystemAPI_Rename test the rename functionality.
+// The rename function should also update the metadata in all related directories
+func TestPublicFileSystemAPI_Rename(t *testing.T) {
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	api := NewPublicFileSystemAPI(fs)
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevPath, newPath := randomDxPath(t, 3), randomDxPath(t, 3)
+	df, err := fs.FileSet.NewRandomDxFile(prevPath, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	table := fs.contractor.HostHealthMapByID(df.HostIDs())
+	health, stuckHealth, numStuckSegments := df.Health(table)
+	redundancy := df.Redundancy(table)
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	res := api.Rename(prevPath.Path, newPath.Path)
+	if !strings.Contains(res, "File") || !strings.Contains(res, "renamed to") {
+		t.Fatalf("unexpected response message: %v", res)
+	}
+	if err := fs.waitForUpdatesComplete(1 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	// three dxdirs to check: 1. old path dxdir 2. new path dxdir 3. root dxdir
+	expectMd := dxdir.Metadata{
+		NumFiles:         1,
+		TotalSize:        1 << 22 * 100,
+		Health:           health,
+		StuckHealth:      stuckHealth,
+		MinRedundancy:    redundancy,
+		NumStuckSegments: numStuckSegments,
+		RootPath:         fs.rootDir,
+	}
+	emptyMd := dxdir.Metadata{
+		NumFiles:         0,
+		TotalSize:        0,
+		Health:           dxdir.DefaultHealth,
+		StuckHealth:      dxdir.DefaultHealth,
+		MinRedundancy:    math.MaxUint32,
+		NumStuckSegments: 0,
+		RootPath:         fs.rootDir,
+	}
+	// expected root metadata
+	expectRootMd := expectMd
+	expectRootMd.DxPath = storage.RootDxPath()
+	// expected dir metadata of new path
+	newDirPath, err := newPath.Parent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectNewDirMd := expectMd
+	expectNewDirMd.DxPath = newDirPath
+	// expected dir metadata of prev path
+	prevDirPath, err := prevPath.Parent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectPrevDirMd := emptyMd
+	expectPrevDirMd.DxPath = prevDirPath
+
+	// Check the results
+	if err = fs.checkDxDirMetadata(prevDirPath, expectPrevDirMd); err != nil {
+		t.Errorf("previous directory metadata not expected: %v", err)
+	}
+	if err = fs.checkDxDirMetadata(storage.RootDxPath(), expectRootMd); err != nil {
+		t.Errorf("root directory metadata not expected: %v", err)
+	}
+	if err = fs.checkDxDirMetadata(newDirPath, expectNewDirMd); err != nil {
+		t.Errorf("new directory metadata not expected: %v", err)
+	}
+}
+
+// TestPublicFileSystemAPI_Rename test the rename functionality.
+// The rename function should also update the metadata in all related directories
+func TestPublicFileSystemAPI_Delete(t *testing.T) {
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	api := NewPublicFileSystemAPI(fs)
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := randomDxPath(t, 3)
+	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// delete the file
+	res := api.Delete(path.Path)
+	if !strings.Contains(res, "File") || !strings.Contains(res, "deleted") {
+		t.Fatalf("unexpected response message: %v", res)
+	}
+	if err := fs.waitForUpdatesComplete(1 * time.Second); err != nil {
+		t.Fatal(err)
+	}
+	// check for metadata: 1. the directory the deleted file resides 2. the root directory
+	emptyMd := dxdir.Metadata{
+		NumFiles:         0,
+		TotalSize:        0,
+		Health:           dxdir.DefaultHealth,
+		StuckHealth:      dxdir.DefaultHealth,
+		MinRedundancy:    math.MaxUint32,
+		NumStuckSegments: 0,
+		RootPath:         fs.rootDir,
+	}
+	parDir, err := path.Parent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectParDirMd := emptyMd
+	expectParDirMd.DxPath = parDir
+
+	expectRootDirMd := emptyMd
+	expectRootDirMd.DxPath = storage.RootDxPath()
+
+	if err = fs.checkDxDirMetadata(storage.RootDxPath(), expectRootDirMd); err != nil {
+		t.Errorf("root directory metadata not expected: %v", err)
+	}
+	if err = fs.checkDxDirMetadata(parDir, expectParDirMd); err != nil {
+		t.Errorf("parent directory metadata not expected: %v", err)
+	}
+}
+
+// checkDxDirMetadata checks whether the dxdir with path has the expected metadata
+func (fs *FileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
+	dir, err := fs.DirSet.Open(path)
+	if err != nil {
+		return err
+	}
+	got := dir.Metadata()
+	if err = checkMetadataEqual(got, expectMd); err != nil {
+		return err
+	}
+	return nil
 }
