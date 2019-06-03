@@ -82,7 +82,7 @@ func New(persistDir string) (*StorageClient, error) {
 		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractor{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
-		log:            log.New("storageclient"),
+		log:            log.New(),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -137,12 +137,12 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
 func (sc *StorageClient) Close() error {
 	var fullErr error
 	// Closing the host manager
-	sc.log.Info("Closing the host manager")
+	sc.log.Info("Closing the renter host manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the file system
-	sc.log.Info("Closing the file system")
+	sc.log.Info("Closing the renter file system")
 	err = sc.fileSystem.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
