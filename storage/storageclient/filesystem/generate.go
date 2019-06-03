@@ -5,7 +5,6 @@
 package filesystem
 
 import (
-	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
@@ -65,7 +64,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 		// The default file size here is 11 segments
 		go func() {
 			defer wg.Done()
-			fileSize := uint64(1 << 22 * 10)
+			fileSize := uint64(1 << 22 * 10 * 10)
 			dxfile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
 			if err != nil {
 				errChan <- err
@@ -94,7 +93,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 	case <-wait:
 	}
 	// wait for all the updates to finish
-	if err = fs.waitForUpdatesComplete(); err != nil {
+	if err = fs.waitForUpdatesComplete(100 * time.Millisecond * time.Duration(maxDepth) * time.Duration(numFiles)); err != nil {
 		return err
 	}
 	return nil
@@ -198,7 +197,7 @@ func (dt dirTree) randomPath() (storage.DxPath, error) {
 }
 
 // waitForUpdatesComplete is the helper function that wait for update execution
-func (fs *FileSystem) waitForUpdatesComplete() error {
+func (fs *FileSystem) waitForUpdatesComplete(timeout time.Duration) error {
 	c := make(chan struct{})
 	// Wait until update complete
 	go func() {
@@ -223,8 +222,8 @@ func (fs *FileSystem) waitForUpdatesComplete() error {
 		}
 	}()
 	select {
-	case <-time.After(10 * time.Second):
-		return errors.New("after 10 seconds, update still not completed")
+	case <-time.After(timeout):
+		return fmt.Errorf("after %s, update still not completed", timeout)
 	case <-c:
 	}
 	return nil

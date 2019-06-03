@@ -245,14 +245,16 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		}
 		md, err := fs.LoopDirAndCalculateDirMetadata(update)
-		if err == errInterrupted {
+		if err == errStopped {
 			continue
 		}
 		if err != nil {
+			fmt.Println("returned 1")
 			return
 		}
 		err = fs.applyDxDirMetadata(update.dxPath, md)
 		if err != nil {
+			fmt.Println("returned 2", err.Error())
 			return
 		}
 		if fs.disrupt("cmaa3") {
@@ -403,8 +405,11 @@ func (fs *FileSystem) calculateDxFileMetadata(path storage.DxPath, filename stri
 
 	// Get the healthInfoMap, mark all healthy as unstuck, and then calculate the health
 	healthInfoTable := fs.contractor.HostHealthMapByID(file.HostIDs())
+	if err = file.MarkAllUnhealthySegmentsAsStuck(healthInfoTable); err != nil {
+		return nil, fmt.Errorf("cannot mark stuck segments for file %v: %v", fileDxPath.Path, err)
+	}
 	if err = file.MarkAllHealthySegmentsAsUnstuck(healthInfoTable); err != nil {
-		return nil, fmt.Errorf("cannot calculate DxFile metadata for file %v: %v", fileDxPath.Path, err)
+		return nil, fmt.Errorf("cannot mark unstuck segments for file %v: %v", fileDxPath.Path, err)
 	}
 	health, stuckHealth, numStuckSegments := file.Health(healthInfoTable)
 	redundancy := file.Redundancy(healthInfoTable)
@@ -462,18 +467,18 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 
 // applyDxDirMetadata apply the calculated metadata to the dxdir path
 func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata) error {
+	//fmt.Printf("applying %v health: %d\n", path.Path, md.Health)
 	var d *dxdir.DirSetEntryWithID
 	var err error
-	if !fs.DirSet.Exists(path) {
-		d, err = fs.DirSet.NewDxDir(path)
-		if err != nil {
-			return err
-		}
-	} else {
+	d, err = fs.DirSet.NewDxDir(path)
+	if err == os.ErrExist {
 		d, err = fs.DirSet.Open(path)
 		if err != nil {
 			return err
 		}
+
+	} else if err != nil {
+		return err
 	}
 	err = d.UpdateMetadata(*md)
 	if err != nil {

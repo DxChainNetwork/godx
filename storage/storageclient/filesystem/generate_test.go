@@ -11,6 +11,9 @@ import (
 )
 
 func TestCreateRandomFiles(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
 	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
@@ -18,7 +21,7 @@ func TestCreateRandomFiles(t *testing.T) {
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	c := make(chan struct{})
 	go func() {
-		err := fs.createRandomFiles(1000, 0.8, 0.25, 5, 0)
+		err := fs.createRandomFiles(100, 0.8, 0.25, 5, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -27,7 +30,7 @@ func TestCreateRandomFiles(t *testing.T) {
 	select {
 	case <-c:
 	case <-time.After(20 * time.Second):
-		t.Fatal("create random file used more than 10 seconds")
+		t.Fatal("create random file used more than 20 seconds")
 	}
 }
 

@@ -165,7 +165,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		}
 		wg.Wait()
 		// wait until updates complete
-		err = fs.waitForUpdatesComplete()
+		err = fs.waitForUpdatesComplete(10 * time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +237,9 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+			t.Fatal(err)
+		}
 		// calculate the metadata to expect at root
 		var health, stuckHealth, numStuckSegments, minRedundancy uint32
 		health, stuckHealth, numStuckSegments, minRedundancy = 200, 200, 0, 300
@@ -288,7 +290,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		}()
 		// unblock the first update and wait the updates to complete
 		close(c)
-		if err = fs.waitForUpdatesComplete(); err != nil {
+		if err = fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 			t.Fatal(err)
 		}
 		cdr := dr.(*counterDisrupter)
@@ -332,7 +334,9 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+		t.Fatal(err)
+	}
 	// calculate the metadata to expect at root
 	var health, stuckHealth, numStuckSegments, minRedundancy uint32
 	health, stuckHealth, numStuckSegments, minRedundancy = 200, 200, 0, 300
@@ -369,7 +373,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 		}
 	}()
 	// This might take some time to wait for the loop repair to complete
-	if err = fs.waitForUpdatesComplete(); err != nil {
+	if err = fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 
@@ -440,7 +444,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 		}
 	}()
 	// This might take some time to wait for the loop repair to complete
-	if err = fs.waitForUpdatesComplete(); err != nil {
+	if err = fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 
@@ -513,7 +517,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 		DxPath:           storage.RootDxPath(),
 		RootPath:         fs.rootDir,
 	}
-	if err = newFs.waitForUpdatesComplete(); err != nil {
+	if err = newFs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	newFs.postTestCheck(t, true, true, expectMd)
@@ -576,7 +580,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Wait for the updates to complete
-	if err = fs.waitForUpdatesComplete(); err != nil {
+	if err = fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 
@@ -608,7 +612,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = fs.waitForUpdatesComplete(); err != nil {
+	if err = fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 
