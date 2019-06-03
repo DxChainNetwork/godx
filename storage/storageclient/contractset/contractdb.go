@@ -3,6 +3,7 @@ package contractset
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -311,6 +312,7 @@ func newPersistentDB(path string) (db *DB, err error) {
 		lvl, err = leveldb.RecoverFile(path, nil)
 	}
 	if err != nil {
+		err = fmt.Errorf("error creating persistent db: %s", err.Error())
 		return
 	}
 

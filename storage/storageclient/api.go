@@ -56,6 +56,19 @@ func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 
 // FormContract allows storage client to configure the storage rent payment settings
 // which will be used to automatically select StorageHost
-//func (api *PrivateStorageClientAPI) FormContract() string {
+//func (api *PrivateStorageClientAPI) FormContract(rentPaymentSettings ...storage.RentPayment) (resp string) {
+//	var setting storage.RentPayment
 //
+//	switch paramLength := len(rentPaymentSettings); paramLength {
+//	case 0:
+//		setting = storage.DefaultRentPayment
+//	case 1:
+//		setting = rentPaymentSettings[0]
+//	default:
+//		return fmt.Sprintf("invalid number of rent settings provided")
+//	}
+//
+//	// rentPayment setting validation
+//
+//	return
 //}

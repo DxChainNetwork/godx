@@ -49,3 +49,8 @@ const (
 const (
 	DxFileExtension = ".dx"
 )
+
+// rentPayment filed validation min requirement
+const (
+	minHosts = 2
+)

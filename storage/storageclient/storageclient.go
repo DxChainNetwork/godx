@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"io"
 	"math/big"
 	"math/bits"
@@ -44,7 +45,7 @@ var (
 	extraRatio = 0.02
 )
 
-// StorageClient contains fileds that are used to perform StorageHost
+// StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
 
@@ -56,6 +57,7 @@ type StorageClient struct {
 	memoryManager *memorymanager.MemoryManager
 
 	storageHostManager *storagehostmanager.StorageHostManager
+	contractManager    *contractmanager.ContractManager
 
 	// Download management. The heap has a separate mutex because it is always
 	// accessed in isolation.
@@ -93,8 +95,9 @@ type StorageClient struct {
 
 // New initializes StorageClient object
 func New(persistDir string) (*StorageClient, error) {
+	var err error
 
-	// TODO (Jacky): data initialization
+	// TODO: data initialization(file management system, file upload, file download)
 	sc := &StorageClient{
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
@@ -104,13 +107,21 @@ func New(persistDir string) (*StorageClient, error) {
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
+
+	// initialize storageHostManager
 	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
+
+	// initialize storage contract manager
+	if sc.contractManager, err = contractmanager.New(sc.persistDir, sc.storageHostManager); err != nil {
+		err = fmt.Errorf("error initializing contract manager: %s", err.Error())
+		return nil, err
+	}
 
 	return sc, nil
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) error {
+func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
 	sc.ethBackend = b
 	sc.apiBackend = apiBackend
@@ -124,15 +135,19 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 	sc.p2pServer = server
 
 	// getting all needed API functions
-	err := sc.filterAPIs(b.APIs())
-	if err != nil {
-		return err
+	if err = sc.filterAPIs(b.APIs()); err != nil {
+		return
 	}
 
-	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
-	err = sc.storageHostManager.Start(sc.p2pServer, sc)
-	if err != nil {
-		return err
+	// start storageHostManager
+	if err = sc.storageHostManager.Start(sc.p2pServer, sc); err != nil {
+		return
+	}
+
+	// start contractManager
+	if err = sc.contractManager.Start(sc); err != nil {
+		err = fmt.Errorf("error starting contract manager: %s", err.Error())
+		return
 	}
 
 	// Load settings from persist file
@@ -168,6 +183,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 }
 
 func (sc *StorageClient) Close() error {
+	sc.contractManager.Stop()
 	err := sc.storageHostManager.Close()
 	errSC := sc.tm.Stop()
 	return common.ErrCompose(err, errSC)

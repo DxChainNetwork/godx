@@ -79,6 +79,7 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 	// initialize contract set
 	cs, err := contractset.New(persistDir)
 	if err != nil {
+		err = fmt.Errorf("error initialize contract set: %s", err.Error())
 		return
 	}
 	cm.activeContracts = cs

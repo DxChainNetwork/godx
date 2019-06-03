@@ -21,7 +21,7 @@ var (
 	ObligationLockTimeout = 60 * time.Second
 )
 
-// TODO (mzhang): Discuss with team, came up with reasonable default value
+// TODO (mzhang): more reasonable value needs to be discussed
 var (
 	DefaultRentPayment = RentPayment{
 		Fund:         common.NewBigInt(500),
