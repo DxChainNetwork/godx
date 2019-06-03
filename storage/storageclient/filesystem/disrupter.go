@@ -39,32 +39,38 @@ type (
 	}
 )
 
+// newStandardDisrupter creates an empty disrupter
+func newStandardDisrupter() *standardDisrupter {
+	d := make(standardDisrupter)
+	return &d
+}
+
 // newRandomDisrupter creates a disrupt that disrupt at keyword at a probability
 // of disruptProb [0, 1]
-func newRandomDisrupter(keyword string, disruptProb float32) standardDisrupter {
+func newRandomDisrupter(keyword string, disruptProb float32) *standardDisrupter {
 	d := make(standardDisrupter)
 	d.registerDisruptFunc(keyword, makeRandomDisruptFunc(disruptProb))
-	return d
+	return &d
 }
 
 // newNormalDisrupter creates a disrupt that always disrupt
-func newNormalDisrupter(keyword string) standardDisrupter {
+func newNormalDisrupter(keyword string) *standardDisrupter {
 	d := make(standardDisrupter)
 	d.registerDisruptFunc(keyword, makeNormalDisruptFunc())
-	return d
+	return &d
 }
 
 // newBlockDisrupter creates a disrupt that blocks on input channel, and
 // alway return true after unblock
-func newBlockDisrupter(keyword string, c <-chan struct{}) standardDisrupter {
+func newBlockDisrupter(keyword string, c <-chan struct{}) *standardDisrupter {
 	d := make(standardDisrupter)
 	d.registerDisruptFunc(keyword, makeBlockDisruptFunc(c, makeNormalDisruptFunc()))
-	return d
+	return &d
 }
 
 // disrupt is the disrupt function to be executed during the code execution
-func (d standardDisrupter) disrupt(s string) bool {
-	f, exist := d[s]
+func (d *standardDisrupter) disrupt(s string) bool {
+	f, exist := (*d)[s]
 	if !exist {
 		return false
 	}
@@ -72,27 +78,27 @@ func (d standardDisrupter) disrupt(s string) bool {
 }
 
 // registerDisruptFunc register the disrupt function to the standardDisrupter
-func (d standardDisrupter) registerDisruptFunc(keyword string, df disruptFunc) disrupter {
-	d[keyword] = df
+func (d *standardDisrupter) registerDisruptFunc(keyword string, df disruptFunc) disrupter {
+	(*d)[keyword] = df
 	return d
 }
 
 // registered return whether the input keyword is registered
-func (d standardDisrupter) registered(s string) bool {
-	_, exist := d[s]
+func (d *standardDisrupter) registered(s string) bool {
+	_, exist := (*d)[s]
 	return exist
 }
 
 // newCounterDisrupter makes a new CounterDisrupter
-func newCounterDisrupter(sd disrupter) counterDisrupter {
-	return counterDisrupter{
+func newCounterDisrupter(sd disrupter) *counterDisrupter {
+	return &counterDisrupter{
 		disrupter: sd,
 		counter:   make(map[string]int),
 	}
 }
 
 // disrupt for counterDisrupter also increment the count of the string
-func (cd counterDisrupter) disrupt(s string) bool {
+func (cd *counterDisrupter) disrupt(s string) bool {
 	cd.lock.Lock()
 	defer cd.lock.Unlock()
 	if cd.disrupter.registered(s) {
@@ -107,7 +113,7 @@ func (cd counterDisrupter) disrupt(s string) bool {
 }
 
 // count return how many times a specified string has been accessed
-func (cd counterDisrupter) count(s string) int {
+func (cd *counterDisrupter) count(s string) int {
 	cd.lock.Lock()
 	defer cd.lock.Unlock()
 

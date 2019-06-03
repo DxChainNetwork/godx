@@ -17,7 +17,7 @@ import (
 // TestNewFileSystemEmptyStart test the situation of creating a new file system in
 // an empty directory
 func TestNewFileSystemEmptyStartClose(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, "", nil, make(standardDisrupter))
+	fs := newEmptyTestFileSystem(t, "", nil, newStandardDisrupter())
 	fs.disrupter.registerDisruptFunc("InitAndUpdateDirMetadata", makeBlockDisruptFunc(fs.tm.StopChan(),
 		func() bool { return false }))
 	if len(fs.unfinishedUpdates) != 0 {

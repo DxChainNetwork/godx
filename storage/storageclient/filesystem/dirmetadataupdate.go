@@ -92,7 +92,7 @@ func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	if err != nil {
 		return fmt.Errorf("cannot update metadata at %v", path.Path)
 	}
-	// Apply hte update
+	// Apply the update
 	if err = fs.updateDirMetadata(path, txn); err != nil {
 		// tm already closed or update thread already in progress
 		if err == errUpdateAlreadyInProgress {
@@ -329,7 +329,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	}
 }
 
-// calculateDirMetadata loops over all files under the DxPath and calculate the updated
+// LoopDirAndCalculateDirMetadata loops over all files under the DxPath and calculate the updated
 // metadata of the update
 func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) (*dxdir.Metadata, error) {
 	// Set default metadata value

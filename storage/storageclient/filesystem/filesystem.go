@@ -6,7 +6,9 @@ package filesystem
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,9 +64,9 @@ type FileSystem struct {
 	disrupter disrupter
 }
 
-// NewFileSystem is the public function used for creating a production FileSystem
+// New is the public function used for creating a production FileSystem
 func New(persistDir string, contractor contractor) *FileSystem {
-	d := make(standardDisrupter)
+	d := newStandardDisrupter()
 	return newFileSystem(persistDir, contractor, d)
 }
 
@@ -102,6 +104,10 @@ func (fs *FileSystem) Start() error {
 	// Start the repair loop
 	go fs.loopRepairUnfinishedDirMetadataUpdate()
 	return nil
+}
+
+func (fs *FileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
+	return fs.FileSet.Open(path)
 }
 
 // loadFileWal read the fileWal
@@ -223,4 +229,99 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 // disrupt is the wrapper to disrupt with fs.standardDisrupter
 func (fs *FileSystem) disrupt(s string) bool {
 	return fs.disrupter.disrupt(s)
+}
+
+// fileList returns a brief file info list
+func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
+	if err := fs.tm.Add(); err != nil {
+		return []storage.FileBriefInfo{}, err
+	}
+	defer fs.tm.Done()
+
+	// TODO: Call contractor.HostUtilsMap here to avoid calculating the map again and
+	// 	again for each file
+	var fileList []storage.FileBriefInfo
+	err := filepath.Walk(string(fs.rootDir), func(path string, info os.FileInfo, err error) error {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Ext(path) != storage.DxFileExt {
+			return nil
+		}
+		str := strings.TrimSuffix(strings.TrimPrefix(path, string(fs.rootDir)), storage.DxFileExt)
+		dxPath, err := storage.NewDxPath(str)
+		if err != nil {
+			return err
+		}
+		fileInfo, err := fs.fileBriefInfo(dxPath, make(storage.HostHealthInfoTable))
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		fileList = append(fileList, fileInfo)
+		return nil
+	})
+	return fileList, err
+}
+
+// fileDetailedInfo returns detailed information for a file specified by the path
+// If the input table is empty, the code the query the contractor for health info
+func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error) {
+	file, err := fs.FileSet.Open(path)
+	if err != nil {
+		return storage.FileInfo{}, err
+	}
+	defer file.Close()
+
+	var onDisk bool
+	localPath := string(file.LocalPath())
+	if localPath != "" {
+		_, err = os.Stat(localPath)
+		onDisk = err == nil
+	}
+	if len(table) == 0 {
+		table = fs.contractor.HostHealthMapByID(file.HostIDs())
+	}
+	redundancy := file.Redundancy(table)
+	health, stuckHealth, numStuckSegments := file.Health(table)
+	info := storage.FileInfo{
+		Accessible:       redundancy >= 100 || onDisk,
+		FileSize:         file.FileSize(),
+		Health:           health,
+		StuckHealth:      stuckHealth,
+		NumStuckSegments: numStuckSegments,
+		Redundancy:       redundancy,
+		StoredOnDisk:     onDisk,
+		Recoverable:      redundancy >= 100,
+		DxPath:           path.Path,
+		Stuck:            numStuckSegments > 0,
+		UploadProgress:   file.UploadProgress(),
+	}
+	return info, nil
+}
+
+// fileBriefInfo returns the brief info about a file specified by the path
+// If the input table is empty, the code the query the contractor for health info
+func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileBriefInfo, error) {
+	file, err := fs.FileSet.Open(path)
+	if err != nil {
+		return storage.FileBriefInfo{}, err
+	}
+	defer file.Close()
+	if len(table) == 0 {
+		table = fs.contractor.HostHealthMapByID(file.HostIDs())
+	}
+	recoverable := file.Redundancy(table) >= 100
+
+	info := storage.FileBriefInfo{
+		Path:           path.Path,
+		UploadProgress: file.UploadProgress(),
+		Recoverable:    recoverable,
+	}
+	return info, nil
 }

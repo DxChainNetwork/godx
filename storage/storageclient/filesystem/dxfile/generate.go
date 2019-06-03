@@ -10,10 +10,12 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	mrand "math/rand"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 var testDir = tempDir("dxfile")
@@ -135,18 +137,18 @@ func randomHostTable(numHosts int) hostTable {
 // randomSegment create a random segment. At missRate, the sector will not present
 func randomSegment(numSectors uint32, missRate ...float32) *Segment {
 	seg := &Segment{Sectors: make([][]*Sector, numSectors)}
-	//var miss bool
-	//if len(missRate) != 0 {
-	//	mrand.Seed(time.Now().UnixNano())
-	//	miss = missRate[0] == 0
-	//}
+	var miss bool
+	if len(missRate) != 0 {
+		mrand.Seed(time.Now().UnixNano())
+		miss = missRate[0] >= 0
+	}
 	for i := range seg.Sectors {
-		//if miss {
-		//	num := mrand.Float32()
-		//	if num < missRate[0] {
-		//		continue
-		//	}
-		//}
+		if miss {
+			num := mrand.Float32()
+			if num < missRate[0] {
+				continue
+			}
+		}
 		seg.Sectors[i] = append(seg.Sectors[i], randomSector())
 	}
 	return seg

@@ -11,7 +11,7 @@ import (
 )
 
 func TestCreateRandomFiles(t *testing.T) {
-	dr := make(standardDisrupter)
+	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
 	ct := &AlwaysSuccessContractor{}

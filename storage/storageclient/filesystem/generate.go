@@ -57,7 +57,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 	var wg sync.WaitGroup
 	wg.Add(numFiles)
 	errChan := make(chan error)
-	for i := 0; i != numFiles; i++ {
+	for i := 0; i < numFiles; i++ {
 		path, err := dt.randomPath()
 		if err != nil {
 			return err

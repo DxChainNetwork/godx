@@ -118,7 +118,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 	}
 	for index, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, make(standardDisrupter))
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, newStandardDisrupter())
 		test.rootMetadata.RootPath = fs.rootDir
 		commonPath := randomDxPath(t, 2)
 		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -218,7 +218,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		// make the disrupter
 		c := make(chan struct{})
 		var dr disrupter
-		dr = make(standardDisrupter).registerDisruptFunc(test.disruptKeyword,
+		dr = newStandardDisrupter().registerDisruptFunc(test.disruptKeyword,
 			makeBlockDisruptFunc(c, func() bool { return false }))
 		dr = newCounterDisrupter(dr)
 
@@ -291,7 +291,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		if err = fs.waitForUpdatesComplete(); err != nil {
 			t.Fatal(err)
 		}
-		cdr := dr.(counterDisrupter)
+		cdr := dr.(*counterDisrupter)
 		num, exist := cdr.counter[test.disruptKeyword]
 		if !exist {
 			t.Fatalf("test %d: not disrupted for keyword: %v", index, test.disruptKeyword)
@@ -309,7 +309,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	// make the disrupter that will only block for once
 	var once sync.Once
 	var dr disrupter
-	dr = make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool {
+	dr = newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool {
 		block := false
 		once.Do(func() {
 			block = true
@@ -374,7 +374,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	}
 
 	// Check that the disrupter has been accessed twice
-	cdr := dr.(counterDisrupter)
+	cdr := dr.(*counterDisrupter)
 	num := cdr.count("cmaa1")
 	if num != 2 {
 		t.Errorf("disrupt should be accessed twice. But instead got %d", num)
@@ -389,7 +389,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 		t.Skip("skip for short")
 	}
 	// make the disrupter. Always fails
-	dr := make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool { return true })
+	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 	cdr := newCounterDisrupter(dr)
 
 	// create FileSystem and create a new DxFile
@@ -457,7 +457,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 // the result shall be as expected.
 func TestFileSystem_FailedRecover(t *testing.T) {
 	// make the disrupter. Always fails
-	dr := make(standardDisrupter).registerDisruptFunc("cmaa1", func() bool { return true })
+	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 
 	// create FileSystem and create a new DxFile
 	ct := &alwaysFailContractor{}
@@ -499,7 +499,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	fs.postTestCheck(t, true, false, defaultMd)
 
 	// Restart the filesystem with always success contractor. The metadata should be updated as expected
-	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractor{}, make(standardDisrupter))
+	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractor{}, newStandardDisrupter())
 	if err = newFs.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -526,7 +526,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 //  3. file with all good files
 func TestFileSystem_CorruptedFiles(t *testing.T) {
 	// create the disrupter
-	dr := make(standardDisrupter)
+	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
 	ct := &AlwaysSuccessContractor{}
