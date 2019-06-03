@@ -189,7 +189,50 @@ func (sc *StorageClient) Close() error {
 	return common.ErrCompose(err, errSC)
 }
 
-func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {
+// SetClientSettings will config the client setting based on the value provided
+// it will set the bandwidth limit, rentPayment, and ipViolation check
+// By setting the rentPayment, the contract maintenance
+func (sc *StorageClient) SetClientSettings(settings storage.ClientSetting) (err error) {
+	// making sure the entire program will only be terminated after finish the SetClientSettings
+	// operation
+	if err = sc.tm.Add(); err != nil {
+		return
+	}
+	defer sc.tm.Done()
+
+	// input validation
+	if settings.MaxUploadSpeed < 0 || settings.MaxDownloadSpeed < 0 {
+		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
+			settings.MaxUploadSpeed, settings.MaxDownloadSpeed)
+	}
+
+	// set the rent payment
+	if err = sc.contractManager.SetRentPayment(settings.RentPayment); err != nil {
+		return
+	}
+
+	// set upload/download (write/read) bandwidth limits
+	if err = sc.setBandwidthLimits(settings.MaxDownloadSpeed, settings.MaxUploadSpeed); err != nil {
+		return
+	}
+
+	// set the ip violation check
+	sc.storageHostManager.SetIPViolationCheck(settings.EnableIPViolation)
+
+	// update and save the persist
+	sc.persist.MaxDownloadSpeed = settings.MaxDownloadSpeed
+	sc.persist.MaxUploadSpeed = settings.MaxUploadSpeed
+	if err = sc.saveSettings(); err != nil {
+		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+	}
+
+	// active the worker pool
+	sc.activateWorkerPool()
+	return
+}
+
+// setBandwidthLimits specifies the data upload and downloading speed limit
+func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit int64) (err error) {
 	// validation
 	if uploadSpeedLimit < 0 || downloadSpeedLimit < 0 {
 		return errors.New("upload/download speed limit cannot be negative")
@@ -197,9 +240,9 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 
 	// Update the contract settings accordingly
 	if uploadSpeedLimit == 0 && downloadSpeedLimit == 0 {
-		// TODO (mzhang): update contract settings using contract manager
+		sc.contractManager.SetRateLimits(0, 0, 0)
 	} else {
-		// TODO (mzhang): update contract settings to the loaded data
+		sc.contractManager.SetRateLimits(downloadSpeedLimit, uploadSpeedLimit, DefaultPacketSize)
 	}
 
 	return nil

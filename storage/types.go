@@ -103,24 +103,32 @@ type (
 	}
 )
 
-type (
-	// RentPayment stores the StorageClient payment settings for renting the storage space from the host
-	RentPayment struct {
-		Fund         common.BigInt `json:"fund"`
-		StorageHosts uint64        `json:"storagehosts"`
-		Period       uint64        `json:"period"`
-		RenewWindow  uint64        `json:"renewwindow"`
+// RentPayment stores the StorageClient payment settings for renting the storage space from the host
+type RentPayment struct {
+	Fund         common.BigInt `json:"fund"`
+	StorageHosts uint64        `json:"storagehosts"`
+	Period       uint64        `json:"period"`
+	RenewWindow  uint64        `json:"renewwindow"`
 
-		// ExpectedStorage is amount of data expected to be stored
-		ExpectedStorage uint64 `json:"expectedstorage"`
-		// ExpectedUpload is expected amount of data upload before redundancy / block
-		ExpectedUpload uint64 `json:"expectedupload"`
-		// ExpectedDownload is expected amount of data downloaded / block
-		ExpectedDownload uint64 `json:"expecteddownload"`
-		// ExpectedRedundancy is the average redundancy of files uploaded
-		ExpectedRedundancy float64 `json:"expectedredundancy"`
-	}
-)
+	// ExpectedStorage is amount of data expected to be stored
+	ExpectedStorage uint64 `json:"expectedstorage"`
+	// ExpectedUpload is expected amount of data upload before redundancy / block
+	ExpectedUpload uint64 `json:"expectedupload"`
+	// ExpectedDownload is expected amount of data downloaded / block
+	ExpectedDownload uint64 `json:"expecteddownload"`
+	// ExpectedRedundancy is the average redundancy of files uploaded
+	ExpectedRedundancy float64 `json:"expectedredundancy"`
+}
+
+// ClientSetting defines the settings that client used to create contract with other peers,
+// where EnableIPViolation specifies if the host with same network IP addresses will be filtered
+// out or not
+type ClientSetting struct {
+	RentPayment       RentPayment `json:"rentpayment"`
+	EnableIPViolation bool        `json:"enableipviolation"`
+	MaxUploadSpeed    int64       `json:"maxuploadspeed"`
+	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
+}
 
 // Storage Contract Related
 type (

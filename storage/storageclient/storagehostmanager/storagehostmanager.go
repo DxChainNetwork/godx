@@ -171,12 +171,12 @@ func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInf
 	return shm.storageHostTree.RetrieveHostInfo(id)
 }
 
-// EnableIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
+// SetIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
 // who are located in the same network, they will be marked as bad storage hosts
-func (shm *StorageHostManager) EnableIPViolationCheck() {
+func (shm *StorageHostManager) SetIPViolationCheck(violationCheck bool) {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
-	shm.ipViolationCheck = true
+	shm.ipViolationCheck = violationCheck
 }
 
 // FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same

@@ -102,7 +102,7 @@ func TestStorageHostManager_FilterIPViolationHosts(t *testing.T) {
 	}
 
 	// enable ip violation check
-	shmtest1.EnableIPViolationCheck()
+	shmtest1.SetIPViolationCheck(true)
 	badHosts = shmtest1.FilterIPViolationHosts(hostIDs)
 	if len(badHosts) != 2 {
 		t.Fatalf("the filter mode is enabled, the number of bad hosts is expected to be 2, got %v",

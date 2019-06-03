@@ -18,7 +18,7 @@ const (
 const (
 	DefaultMaxDownloadSpeed = 0
 	DefaultMaxUploadSpeed   = 0
-	DefaultStreamCacheSize  = 2
+	DefaultPacketSize       = 4 * 4096
 
 	// frequency to check whether storage client is online
 	OnlineCheckFrequency = time.Second * 10
