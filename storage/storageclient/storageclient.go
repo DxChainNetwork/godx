@@ -384,7 +384,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	// store this contract info to client local
-	_, err = sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
+	_, err = sc.contractManager.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
 		return err
 	}
@@ -399,7 +399,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// Retrieve the last contract revision
 	contractRevision := types.StorageContractRevision{}
-	scs := sc.storageHostManager.GetStorageContractSet()
+	scs := sc.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
 	hostInfo := session.HostInfo()
@@ -640,7 +640,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// Retrieve the last contract revision
 	lastRevision := types.StorageContractRevision{}
-	scs := client.storageHostManager.GetStorageContractSet()
+	scs := client.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
 	hostInfo := s.HostInfo()

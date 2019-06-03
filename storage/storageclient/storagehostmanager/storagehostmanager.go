@@ -17,7 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
@@ -58,9 +57,6 @@ type StorageHostManager struct {
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
-
-	// storage contract set
-	scs contractset.StorageContractSet
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
@@ -78,17 +74,6 @@ func New(persistDir string) *StorageHostManager {
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
 	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
-
-	// init storage contract set
-	scs, err := contractset.New(persistDir)
-	if err != nil {
-		shm.log.Error("failed to new storage contract set", "error", err)
-	}
-
-	// New func maybe return error and not nil StorageContractSet
-	if scs != nil {
-		shm.scs = *scs
-	}
 
 	shm.log.Info("Storage host manager initialized")
 
@@ -326,9 +311,4 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
-}
-
-// get storage contract set
-func (shm *StorageHostManager) GetStorageContractSet() *contractset.StorageContractSet {
-	return &shm.scs
 }

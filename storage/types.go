@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
@@ -177,6 +178,19 @@ type (
 
 func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
+}
+
+func StringToContractID(s string) (id ContractID, err error) {
+	// decode the string to byte slice
+	decodedString, err := hexutil.Decode(s)
+	if err != nil {
+		err = fmt.Errorf("failed to convert the string %s back to contractID: %s", s, err.Error())
+		return
+	}
+
+	// convert the byte slice to ContractID
+	copy(id[:], decodedString)
+	return
 }
 
 type (

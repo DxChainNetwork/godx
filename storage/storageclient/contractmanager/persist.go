@@ -5,6 +5,7 @@
 package contractmanager
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
@@ -17,12 +18,12 @@ var settingsMetadata = common.Metadata{
 }
 
 type persistence struct {
-	Rent             storage.RentPayment                       `json:"rentPayment"`
-	BlockHeight      uint64                                    `json:"blockheight"`
-	CurrentPeriod    uint64                                    `json:"currentperiod"`
-	ExpiredContracts []storage.ContractMetaData                `json:"expiredcontracts"`
-	RenewedFrom      map[storage.ContractID]storage.ContractID `json:"renewedfrom"`
-	RenewedTo        map[storage.ContractID]storage.ContractID `json:"renewedto"`
+	Rent             storage.RentPayment           `json:"rentPayment"`
+	BlockHeight      uint64                        `json:"blockheight"`
+	CurrentPeriod    uint64                        `json:"currentperiod"`
+	ExpiredContracts []storage.ContractMetaData    `json:"expiredcontracts"`
+	RenewedFrom      map[string]storage.ContractID `json:"renewedfrom"`
+	RenewedTo        map[string]storage.ContractID `json:"renewedto"`
 }
 
 func (cm *ContractManager) persistUpdate() (persist persistence) {
@@ -30,10 +31,21 @@ func (cm *ContractManager) persistUpdate() (persist persistence) {
 		Rent:          cm.rentPayment,
 		BlockHeight:   cm.blockHeight,
 		CurrentPeriod: cm.currentPeriod,
-		RenewedFrom:   cm.renewedFrom,
-		RenewedTo:     cm.renewedTo,
+		RenewedFrom:   make(map[string]storage.ContractID),
+		RenewedTo:     make(map[string]storage.ContractID),
 	}
 
+	// update the renewedFrom
+	for key, value := range cm.renewedFrom {
+		persist.RenewedFrom[key.String()] = value
+	}
+
+	// update the renewedTo
+	for key, value := range cm.renewedTo {
+		persist.RenewedTo[key.String()] = value
+	}
+
+	// update the expiredContracts
 	for _, ec := range cm.expiredContracts {
 		persist.ExpiredContracts = append(persist.ExpiredContracts, ec)
 	}
@@ -41,6 +53,7 @@ func (cm *ContractManager) persistUpdate() (persist persistence) {
 	return
 }
 
+// saveSettings will store all the persistence data into the JSON file
 func (cm *ContractManager) saveSettings() (err error) {
 	cm.lock.Lock()
 	data := cm.persistUpdate()
@@ -69,8 +82,32 @@ func (cm *ContractManager) loadSettings() (err error) {
 	cm.rentPayment = data.Rent
 	cm.blockHeight = data.BlockHeight
 	cm.currentPeriod = data.CurrentPeriod
-	cm.renewedFrom = data.RenewedFrom
-	cm.renewedTo = data.RenewedTo
+
+	// update the RenewedFrom
+	for key, value := range data.RenewedFrom {
+		// convert the string to contract id
+		id, err := storage.StringToContractID(key)
+		if err != nil {
+			cm.log.Warn(fmt.Sprintf("contractmanager loadsettings renewedFrom: %s", err.Error()))
+			continue
+		}
+
+		// update the renewedFrom
+		cm.renewedFrom[id] = value
+	}
+
+	// update the RenewedTo
+	for key, value := range data.RenewedTo {
+		// convert the string to contract id
+		id, err := storage.StringToContractID(key)
+		if err != nil {
+			cm.log.Warn(fmt.Sprintf("contractmanager loadsettings renewedTo: %s", err.Error()))
+			continue
+		}
+
+		// update the renewedFrom
+		cm.renewedTo[id] = value
+	}
 
 	// update expired contract list and hostToContract mapping
 	for _, ec := range data.ExpiredContracts {

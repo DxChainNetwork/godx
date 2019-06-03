@@ -136,3 +136,11 @@ func (cm *ContractManager) Stop() {
 	// log info
 	log.Info("ContractManager is stopped")
 }
+
+func (cm *ContractManager) SetRateLimits(readBPS int64, writeBPS int64, packetSize uint64) {
+	cm.activeContracts.SetRateLimit(readBPS, writeBPS, packetSize)
+}
+
+func (cm *ContractManager) GetStorageContractSet() (contractSet *contractset.StorageContractSet) {
+	return cm.activeContracts
+}

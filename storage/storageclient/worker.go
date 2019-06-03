@@ -59,7 +59,7 @@ type worker struct {
 func (c *StorageClient) activateWorkerPool() {
 
 	// get all contracts in client
-	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
+	contractMap := c.contractManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
