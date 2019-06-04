@@ -12,10 +12,10 @@ import (
 
 func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) {
 	if cm.b.Syncing() {
-		return errors.New("must finish block chain syncing first")
+		return errors.New("setrentpayment can only be done once the blockchain finished syncing")
 	}
 
-	if err = rentPaymentValidation(rent); err != nil {
+	if err = RentPaymentValidation(rent); err != nil {
 		return
 	}
 
@@ -70,7 +70,14 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 	return
 }
 
-func rentPaymentValidation(rent storage.RentPayment) (err error) {
+// AcquireRentPayment will return the RentPayment settings
+func (cm *ContractManager) AcquireRentPayment() (rentPayment storage.RentPayment) {
+	return cm.rentPayment
+}
+
+// RentPaymentValidation will validate the rentPayment. All fields must be
+// non-zero value
+func RentPaymentValidation(rent storage.RentPayment) (err error) {
 	if rent.StorageHosts == 0 {
 		return errors.New("amount of storage hosts cannot be set to 0")
 	} else if rent.Period == 0 {

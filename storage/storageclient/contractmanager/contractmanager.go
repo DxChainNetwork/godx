@@ -141,6 +141,10 @@ func (cm *ContractManager) SetRateLimits(readBPS int64, writeBPS int64, packetSi
 	cm.activeContracts.SetRateLimit(readBPS, writeBPS, packetSize)
 }
 
+func (cm *ContractManager) RetrieveRateLimit() (readBPS, writeBPS int64, packetSize uint64) {
+	return cm.activeContracts.RetrieveRateLimit()
+}
+
 func (cm *ContractManager) GetStorageContractSet() (contractSet *contractset.StorageContractSet) {
 	return cm.activeContracts
 }
