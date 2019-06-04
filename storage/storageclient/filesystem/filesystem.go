@@ -5,6 +5,8 @@
 package filesystem
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -181,12 +183,60 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 			if dxfile.CmpHealthPriority(dHealth, health) < 0 {
 				continue
 			} else {
+				if err = curDir.Close(); err != nil {
+					return nil, common.ErrCompose(err, d.Close())
+				}
 				curDir = d
 				goto LOOP
 			}
 		}
 		// Loops over. No file founded in the directory
 		return nil, ErrNoRepairNeeded
+	}
+}
+
+// RandomStuckDirectory randomly pick a stuck directory to fix
+func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
+	path := storage.RootDxPath()
+	curDir, err := fs.DirSet.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	// create the random index
+	numStuckSegments := curDir.Metadata().NumStuckSegments
+	if numStuckSegments == 0 {
+		return nil, ErrNoRepairNeeded
+	}
+	index := randomUint32() % numStuckSegments
+	// permanent loop to find the directory
+	for {
+	LOOP:
+		select {
+		case <-fs.tm.StopChan():
+			return nil, errStopped
+		default:
+		}
+		dirs, _, err := fs.dirsAndFiles(curDir.DxPath())
+		if err != nil {
+			return nil, err
+		}
+		for dirPath := range dirs {
+			d, err := fs.DirSet.Open(dirPath)
+			if err != nil {
+				continue
+			}
+			dNumStuckSegments := d.Metadata().NumStuckSegments
+			if index < dNumStuckSegments {
+				// This is the directory to go deep into
+				curDir.Close()
+				curDir = d
+				goto LOOP
+			} else {
+				d.Close()
+			}
+		}
+		// All curDir passed, still not found the directory, return the current directory
+		return curDir, nil
 	}
 }
 
@@ -426,4 +476,11 @@ func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealt
 		Recoverable:    recoverable,
 	}
 	return info, nil
+}
+
+// randomUint32 create a random number uint32
+func randomUint32() uint32 {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return binary.LittleEndian.Uint32(b)
 }
