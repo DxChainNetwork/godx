@@ -244,7 +244,7 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
-		md, err := fs.LoopDirAndCalculateDirMetadata(update)
+		md, err := fs.loopDirAndCalculateDirMetadata(update)
 		if err == errInterrupted {
 			continue
 		}
@@ -329,9 +329,9 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	}
 }
 
-// LoopDirAndCalculateDirMetadata loops over all files under the DxPath and calculate the updated
+// loopDirAndCalculateDirMetadata loops over all files under the DxPath and calculate the updated
 // metadata of the update
-func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) (*dxdir.Metadata, error) {
+func (fs *FileSystem) loopDirAndCalculateDirMetadata(update *dirMetadataUpdate) (*dxdir.Metadata, error) {
 	// Set default metadata value
 	metadata := &dxdir.Metadata{
 		NumFiles:            0,
