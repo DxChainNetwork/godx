@@ -195,7 +195,8 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 	}
 }
 
-// RandomStuckDirectory randomly pick a stuck directory to fix
+// RandomStuckDirectory randomly pick a stuck directory to fix. The possibility to pick
+// is proportion to the value of numStuckSegments
 func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 	path := storage.RootDxPath()
 	curDir, err := fs.DirSet.Open(path)
@@ -232,6 +233,7 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 				curDir = d
 				goto LOOP
 			} else {
+				index -= dNumStuckSegments
 				d.Close()
 			}
 		}
