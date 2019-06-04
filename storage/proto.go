@@ -21,6 +21,9 @@ const (
 
 const (
 
+	// the amount of time that host provide host settings
+	HostSettingTime = 60 * time.Second
+
 	// the amount of time that the client and host have to negotiate a download request batch.
 	DownloadTime = 600 * time.Second
 

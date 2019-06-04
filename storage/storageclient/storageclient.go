@@ -255,7 +255,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	if err != nil {
 		return storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer sc.ethBackend.Disconnect(host.NetAddress)
+	defer sc.ethBackend.Disconnect(session, host.NetAddress)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
