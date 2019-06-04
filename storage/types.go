@@ -130,6 +130,32 @@ type ClientSetting struct {
 	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
 }
 
+// both RentPaymentAPI and ClientSettingAPI are used for API configurations
+type (
+	RentPaymentAPI struct {
+		Fund         string `json:"fund"`
+		StorageHosts string `json:"storagehosts"`
+		Period       string `json:"period"`
+		RenewWindow  string `json:"renewwindow"`
+
+		// ExpectedStorage is amount of data expected to be stored
+		ExpectedStorage string `json:"expectedstorage"`
+		// ExpectedUpload is expected amount of data upload before redundancy / block
+		ExpectedUpload string `json:"expectedupload"`
+		// ExpectedDownload is expected amount of data downloaded / block
+		ExpectedDownload string `json:"expecteddownload"`
+		// ExpectedRedundancy is the average redundancy of files uploaded
+		ExpectedRedundancy string `json:"expectedredundancy"`
+	}
+
+	ClientSettingAPI struct {
+		RentPayment       RentPaymentAPI `json:"rentpayment"`
+		EnableIPViolation string         `json:"enableipviolation"`
+		MaxUploadSpeed    string         `json:"maxuploadspeed"`
+		MaxDownloadSpeed  string         `json:"maxdownloadspeed"`
+	}
+)
+
 // Storage Contract Related
 type (
 	ContractID common.Hash

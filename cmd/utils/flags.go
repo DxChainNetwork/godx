@@ -113,6 +113,61 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	PeriodFlag = cli.StringFlag{
+		Name:  "p",
+		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, days, weeks, and years",
+	}
+
+	HostsFlag = cli.StringFlag{
+		Name:  "h",
+		Usage: "the host flag is used to define how many hosts that storage client wanted to sign contract with, the value must be greater than 1",
+	}
+
+	RenewFlag = cli.StringFlag{
+		Name:  "r",
+		Usage: "the renew flag is used to define the automatically contract renew window. The smaller the value is, more frequent the contract will get renewed",
+	}
+
+	FundFlag = cli.StringFlag{
+		Name:  "f",
+		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
+	}
+
+	ExpectedStorageFlag = cli.StringFlag{
+		Name:  "es",
+		Usage: "the expected storage flag is used to define the expected storage",
+	}
+
+	ExpectedUploadFlag = cli.StringFlag{
+		Name:  "eu",
+		Usage: "the expected upload flag is used to define the expected amount of data that is going to be uploaded",
+	}
+
+	ExpectedDownloadFlag = cli.StringFlag{
+		Name:  "ed",
+		Usage: "the expected download flag is used to define the expected amount of data that is going to be downloaded",
+	}
+
+	ExpectedRedundancyFlag = cli.StringFlag{
+		Name:  "er",
+		Usage: "the expected redundancy flag defines the expected data redundancies. The higher the value is, the safer the data are",
+	}
+
+	MaxUploadLimitFlag = cli.StringFlag{
+		Name:  "mu",
+		Usage: "the max upload limit flag defines the maximum upload speed",
+	}
+
+	MaxDownloadLimitFlag = cli.StringFlag{
+		Name:  "md",
+		Usage: "the max download limit flag defines the maximum download speed",
+	}
+
+	IPViolationFlag = cli.BoolFlag{
+		Name:  "ipcheck",
+		Usage: "the ip violation flag defines if the ip violation check will be enabled or not. By enabling the ip violation check, storage hosts under the same network address cannot be selected together",
+	}
+
 	StorageHostManagerEnodeFlag = cli.StringFlag{
 		Name:  "enodeid",
 		Usage: "used to query the storage host information based on the enode id",

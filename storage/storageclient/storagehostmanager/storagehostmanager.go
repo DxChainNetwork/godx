@@ -179,6 +179,13 @@ func (shm *StorageHostManager) SetIPViolationCheck(violationCheck bool) {
 	shm.ipViolationCheck = violationCheck
 }
 
+// RetrieveIPViolationCheckSetting will return the current tipViolationCheck
+func (shm *StorageHostManager) RetrieveIPViolationCheckSetting() (violationCheck bool) {
+	shm.lock.RLock()
+	shm.lock.RUnlock()
+	return shm.ipViolationCheck
+}
+
 // FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same
 // network, it will be considered as badHosts if the IPViolation is enabled
 func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHostIDs []enode.ID) {

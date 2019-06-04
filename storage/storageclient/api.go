@@ -4,6 +4,10 @@
 
 package storageclient
 
+import (
+	"fmt"
+)
+
 // PublicStorageClientAPI defines the object used to call eligible public APIs
 // are used to acquire information
 type PublicStorageClientAPI struct {
@@ -54,21 +58,19 @@ func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 	return api.sc.memoryManager.SetMemoryLimit(amount)
 }
 
-// FormContract allows storage client to configure the storage rent payment settings
-// which will be used to automatically select StorageHost
-//func (api *PrivateStorageClientAPI) FormContract(rentPaymentSettings ...storage.RentPayment) (resp string) {
-//	var setting storage.RentPayment
-//
-//	switch paramLength := len(rentPaymentSettings); paramLength {
-//	case 0:
-//		setting = storage.DefaultRentPayment
-//	case 1:
-//		setting = rentPaymentSettings[0]
-//	default:
-//		return fmt.Sprintf("invalid number of rent settings provided")
-//	}
-//
-//	// rentPayment setting validation
-//
-//	return
-//}
+// SetClientSetting will configure the client setting based on the user input data
+func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (resp string) {
+	clientSetting, err := api.sc.parseClientSetting(settings)
+	if err != nil {
+		resp = fmt.Sprintf("form contract failed, failed to parse the client settings: %s", err.Error())
+	}
+
+	if err := api.sc.SetClientSetting(clientSetting); err != nil {
+		resp = fmt.Sprintf("form contract failed, failed to set the client settings: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("successfully set client setting with value: %v, contracts will be formed automatically.",
+		clientSetting)
+	return
+}

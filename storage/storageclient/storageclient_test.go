@@ -27,7 +27,7 @@ package storageclient
 //		// generate random client settings data, and call set client settings
 //		settings := randomClientSettingsGenerator()
 //
-//		if err := sc.SetClientSettings(settings); err != nil {
+//		if err := sc.SetClientSetting(settings); err != nil {
 //			// if the error is expected, continue to the next one
 //			if settingValidation(settings) {
 //				continue

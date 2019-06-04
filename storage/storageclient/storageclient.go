@@ -189,11 +189,11 @@ func (sc *StorageClient) Close() error {
 	return common.ErrCompose(err, errSC)
 }
 
-// SetClientSettings will config the client setting based on the value provided
+// SetClientSetting will config the client setting based on the value provided
 // it will set the bandwidth limit, rentPayment, and ipViolation check
 // By setting the rentPayment, the contract maintenance
-func (sc *StorageClient) SetClientSettings(settings storage.ClientSetting) (err error) {
-	// making sure the entire program will only be terminated after finish the SetClientSettings
+func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
+	// making sure the entire program will only be terminated after finish the SetClientSetting
 	// operation
 	if err = sc.tm.Add(); err != nil {
 		return
@@ -201,33 +201,45 @@ func (sc *StorageClient) SetClientSettings(settings storage.ClientSetting) (err 
 	defer sc.tm.Done()
 
 	// input validation
-	if settings.MaxUploadSpeed < 0 || settings.MaxDownloadSpeed < 0 {
+	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
 		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
-			settings.MaxUploadSpeed, settings.MaxDownloadSpeed)
+			setting.MaxUploadSpeed, setting.MaxDownloadSpeed)
 	}
 
 	// set the rent payment
-	if err = sc.contractManager.SetRentPayment(settings.RentPayment); err != nil {
+	if err = sc.contractManager.SetRentPayment(setting.RentPayment); err != nil {
 		return
 	}
 
 	// set upload/download (write/read) bandwidth limits
-	if err = sc.setBandwidthLimits(settings.MaxDownloadSpeed, settings.MaxUploadSpeed); err != nil {
+	if err = sc.setBandwidthLimits(setting.MaxDownloadSpeed, setting.MaxUploadSpeed); err != nil {
 		return
 	}
 
 	// set the ip violation check
-	sc.storageHostManager.SetIPViolationCheck(settings.EnableIPViolation)
+	sc.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
 
 	// update and save the persist
-	sc.persist.MaxDownloadSpeed = settings.MaxDownloadSpeed
-	sc.persist.MaxUploadSpeed = settings.MaxUploadSpeed
+	sc.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
+	sc.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = sc.saveSettings(); err != nil {
 		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
 	}
 
 	// active the worker pool
 	sc.activateWorkerPool()
+	return
+}
+
+// RetrieveClientSetting will return the current storage client setting
+func (sc *StorageClient) RetrieveClientSetting() (setting storage.ClientSetting) {
+	maxDownloadSpeed, maxUploadSpeed, _ := sc.contractManager.RetrieveRateLimit()
+	setting = storage.ClientSetting{
+		RentPayment:       sc.contractManager.AcquireRentPayment(),
+		EnableIPViolation: sc.storageHostManager.RetrieveIPViolationCheckSetting(),
+		MaxUploadSpeed:    maxUploadSpeed,
+		MaxDownloadSpeed:  maxDownloadSpeed,
+	}
 	return
 }
 
