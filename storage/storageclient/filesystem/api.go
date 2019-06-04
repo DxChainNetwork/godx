@@ -9,13 +9,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-const (
-	defaultGoDeepRate = float32(0.7)
-	defaultGoWideRate = float32(0.5)
-	defaultMaxDepth   = 3
-	defaultMissRate   = float32(0.1)
-)
-
 // PublicFileSystemDebugAPI is the APIs for the file system
 type PublicFileSystemDebugAPI struct {
 	fs *FileSystem

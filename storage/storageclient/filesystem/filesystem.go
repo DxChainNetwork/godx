@@ -84,7 +84,7 @@ func newFileSystem(persistDir string, contractor contractor, disrupter disrupter
 		persistDir:        storage.SysPath(persistDir),
 		contractor:        contractor,
 		tm:                &threadmanager.ThreadManager{},
-		logger:            log.New("filesystem"),
+		logger:            log.New("module", "filesystem"),
 		disrupter:         disrupter,
 		unfinishedUpdates: make(map[storage.DxPath]*dirMetadataUpdate),
 	}

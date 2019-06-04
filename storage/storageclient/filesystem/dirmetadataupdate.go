@@ -366,14 +366,17 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 			// File type DxFile
 			md, err = fs.calculateDxFileMetadata(update.dxPath, file.Name())
 			if err != nil {
-				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath, "err", err)
+				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath.Path, "err", err)
 				continue
 			}
 		} else if file.IsDir() {
 			// File type DxDir
 			md, err = fs.calculateDxDirMetadata(update.dxPath, file.Name())
+			if err == os.ErrExist {
+				continue
+			}
 			if err != nil {
-				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath, "err", err)
+				fs.logger.Warn("cannot calculate the file metadata", "path", update.dxPath.Path, "err", err)
 				continue
 			}
 		} else {
@@ -443,6 +446,9 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 	if os.IsNotExist(err) {
 		// The .dxdir not exist. Create a new one
 		d, err = fs.DirSet.NewDxDir(path)
+		if os.IsExist(err) {
+			return nil, os.ErrExist
+		}
 		if err != nil {
 			return nil, fmt.Errorf("cannot create the .dxdir file for file %v: %v", path.Path, err)
 		}

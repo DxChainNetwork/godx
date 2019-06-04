@@ -32,3 +32,11 @@ const (
 	// updateWalName is the fileName for the updateWal
 	updateWalName = "update.wal"
 )
+
+const (
+	// constants used in create random files
+	defaultGoDeepRate = float32(0.7)
+	defaultGoWideRate = float32(0.5)
+	defaultMaxDepth   = 3
+	defaultMissRate   = float32(0.1)
+)
