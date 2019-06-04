@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -21,7 +20,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -338,16 +336,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return err
 	}
 
-	sendAPI := NewStorageContractTxAPI(sc.apiBackend)
-	args := SendStorageContractTxArgs{
-		From: clientAddr,
-	}
-	addr := common.Address{}
-	addr.SetBytes([]byte{10})
-	args.To = &addr
-	args.Input = (*hexutil.Bytes)(&scBytes)
-	ctx := context.Background()
-	if _, err := sendAPI.SendFormContractTX(ctx, args); err != nil {
+	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scBytes); err != nil {
 		return storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
