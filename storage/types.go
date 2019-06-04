@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
@@ -124,6 +126,43 @@ type (
 	}
 )
 
+// Storage Contract Related
+type (
+	ContractID common.Hash
+
+	ContractStatus struct {
+		UploadAbility bool
+		RenewAbility  bool
+		Canceled      bool
+	}
+
+	ContractMetaData struct {
+		ID                     ContractID
+		EnodeID                enode.ID
+		LatestContractRevision types.StorageContractRevision
+		StartHeight            uint64
+		EndHeight              uint64
+
+		// TODO (mzhang): is it necessary to convert this type to
+		// common.BigInt type? for calculation convenience
+		ClientBalance *big.Int
+
+		UploadCost   common.BigInt
+		DownloadCost common.BigInt
+		StorageCost  common.BigInt
+		TotalCost    common.BigInt
+
+		GasFee      common.BigInt
+		ContractFee common.BigInt
+
+		Status ContractStatus
+	}
+)
+
+func (ci ContractID) String() string {
+	return hexutil.Encode(ci[:])
+}
+
 type (
 	// HostHealthInfo is the file structure used for DxFile health update.
 	// It has two fields, one indicating whether the host if offline or not,
@@ -158,4 +197,17 @@ type (
 		UploadProgress float64 `json:"uploadProgress"`
 		Recoverable    bool    `json:"recoverable"`
 	}
+)
+
+const (
+	// 4 MB
+	SectorSize = uint64(1 << 22)
+	HashSize   = 32
+
+	// the segment size is used when taking the Merkle root of a file.
+	SegmentSize = 64
+
+	// the minimum size of an RPC message. If an encoded message
+	// would be smaller than RPCMinLen, it is padded with random data.
+	RPCMinLen = uint64(4096)
 )

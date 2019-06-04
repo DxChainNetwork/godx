@@ -59,6 +59,7 @@ func (hm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 
 // depostFactor calculates the factor value based on the storage host's deposit setting. The higher
 // the deposit is, the higher evaluation it will get
 func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
+
 	// make sure RentPayment's fields are non zeros
 	rentPaymentValidation(storage.RentPayment{})
 
@@ -181,7 +182,6 @@ func (hm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo) 
 
 // uptimeFactorCalc will punish the storage host who are frequently been offline
 func (hm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
-
 	switch length := len(info.ScanRecords); length {
 	case 0:
 		return 0.25

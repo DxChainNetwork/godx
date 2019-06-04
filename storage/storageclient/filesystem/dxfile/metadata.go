@@ -5,11 +5,12 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"time"
 
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
@@ -122,7 +123,7 @@ func (df *DxFile) TimeModify() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeModify) < 0 {
-		panic("TimeModify uint64 overflow")
+		log.Crit("TimeModify uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeModify), 0)
 }
@@ -132,7 +133,7 @@ func (df *DxFile) TimeAccess() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeAccess) < 0 {
-		panic("TimeAccess uint64 overflow")
+		log.Crit("TimeAccess uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeAccess), 0)
 }
@@ -150,7 +151,7 @@ func (df *DxFile) TimeUpdate() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeUpdate) < 0 {
-		panic("TimeUpdate uint64 overflow")
+		log.Crit("TimeUpdate uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeUpdate), 0)
 }
@@ -160,7 +161,7 @@ func (df *DxFile) TimeCreate() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeCreate) < 0 {
-		panic("TimeCreate uint64 overflow")
+		log.Crit("TimeCreate uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeCreate), 0)
 }
@@ -170,7 +171,7 @@ func (df *DxFile) TimeLastHealthCheck() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeRecentRepair) < 0 {
-		panic("TimeRecentRepair uint64 overflow")
+		log.Crit("TimeRecentRepair uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
@@ -188,7 +189,7 @@ func (df *DxFile) LastTimeRecentRepair() time.Time {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	if int64(df.metadata.TimeRecentRepair) < 0 {
-		panic("TimeRecentRepair uint64 overflow")
+		log.Crit("TimeRecentRepair uint64 overflow")
 	}
 	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
@@ -220,7 +221,7 @@ func (df *DxFile) CipherKey() crypto.CipherKey {
 	key, err := crypto.NewCipherKey(df.metadata.CipherKeyCode, df.metadata.CipherKey)
 	if err != nil {
 		// this should never happen
-		panic(err.Error())
+		log.Crit("New Cipher Key return an error: %v", err)
 	}
 	return key
 }
@@ -237,7 +238,7 @@ func (df *DxFile) ErasureCode() erasurecode.ErasureCoder {
 		df.metadata.ECExtra)
 	if err != nil {
 		// this shall not happen
-		panic(err.Error())
+		log.Crit("New erasure code return an error: %v", err)
 	}
 	return ec
 }

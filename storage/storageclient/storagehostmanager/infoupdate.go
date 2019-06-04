@@ -2,11 +2,12 @@ package storagehostmanager
 
 import (
 	"fmt"
+	"math"
+	"time"
+
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"math"
-	"time"
 )
 
 // hostInfoUpdate will update the storage host information based on the external settings

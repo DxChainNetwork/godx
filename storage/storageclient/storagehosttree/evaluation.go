@@ -46,7 +46,6 @@ type EvaluationCriteria struct {
 func (ec EvaluationCriteria) Evaluation() common.BigInt {
 	total := ec.PresenceFactor * ec.DepositFactor * ec.InteractionFactor *
 		ec.ContractPriceFactor * ec.StorageRemainingFactor * ec.UptimeFactor
-
 	return common.NewBigInt(1).MultFloat64(total)
 }
 

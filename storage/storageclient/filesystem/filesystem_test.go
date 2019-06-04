@@ -110,17 +110,18 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 // TestFileSystem_RandomStuckDirectory test the functionality of TestFileSystem.RandomStuckDirectory
 func TestFileSystem_RandomStuckDirectory(t *testing.T) {
 	tests := []struct {
+		numFiles  int
 		missRate  float32
 		expectErr error
 	}{
-		{1, nil},
-		{0, ErrNoRepairNeeded},
+		{10, 1, nil},
+		{10, 0, ErrNoRepairNeeded},
 	}
 	for i, test := range tests {
 		dr := newStandardDisrupter()
 		ct := &AlwaysSuccessContractor{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
-		if err := fs.createRandomFiles(100, 0.8, 0.3, 5, test.missRate); err != nil {
+		if err := fs.createRandomFiles(test.numFiles, 0.8, 0.3, 5, test.missRate); err != nil {
 			t.Fatal(err)
 		}
 		dir, err := fs.RandomStuckDirectory()

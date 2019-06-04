@@ -5,7 +5,10 @@
 package storagehostmanager
 
 import (
+	"errors"
 	"os"
+	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -14,6 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
@@ -31,7 +35,7 @@ type StorageHostManager struct {
 	storageHostTree *storagehosttree.StorageHostTree
 
 	// ip violation check
-	disableIPViolationCheck bool
+	ipViolationCheck bool
 
 	// maintenance related
 	initialScan     bool
@@ -54,16 +58,17 @@ type StorageHostManager struct {
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
+
+	// storage contract set
+	scs contractset.StorageContractSet
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
 func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		persistDir: persistDir,
-
-		rent: storage.DefaultRentPayment,
-
+		persistDir:    persistDir,
+		rent:          storage.DefaultRentPayment,
 		scanLookup:    make(map[enode.ID]struct{}),
 		filterMode:    DisableFilter,
 		filteredHosts: make(map[enode.ID]struct{}),
@@ -73,6 +78,17 @@ func New(persistDir string) *StorageHostManager {
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
 	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
+
+	// init storage contract set
+	scs, err := contractset.New(persistDir)
+	if err != nil {
+		shm.log.Error("failed to new storage contract set", "error", err)
+	}
+
+	// New func maybe return error and not nil StorageContractSet
+	if scs != nil {
+		shm.scs = *scs
+	}
 
 	shm.log.Info("Storage host manager initialized")
 
@@ -119,6 +135,157 @@ func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
 }
 
+// ActiveStorageHosts will return all active storage host information
+func (shm *StorageHostManager) ActiveStorageHosts() (activeStorageHosts []storage.HostInfo) {
+	allHosts := shm.storageHostTree.All()
+	// based on the host information, filter out active hosts
+	for _, host := range allHosts {
+		numScanRecords := len(host.ScanRecords)
+		if numScanRecords == 0 {
+			continue
+		}
+		if !host.ScanRecords[numScanRecords-1].Success {
+			continue
+		}
+		if !host.AcceptingContracts {
+			continue
+		}
+		activeStorageHosts = append(activeStorageHosts, host)
+	}
+	return
+}
+
+// SetRentPayment will modify the rent payment and update the storage host
+// evaluation function
+func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err error) {
+	// during initialization, the value might be empty
+	if reflect.DeepEqual(rent, storage.RentPayment{}) {
+		rent = storage.DefaultRentPayment
+	}
+
+	// update the rent
+	shm.lock.Lock()
+	shm.rent = rent
+	shm.lock.Unlock()
+
+	// update the storage host evaluation function
+	evalFunc := shm.calculateEvaluationFunc(rent)
+	shm.lock.Lock()
+	shm.evalFunc = evalFunc
+	shm.lock.Unlock()
+
+	// update the storage host tree and filtered tree evaluation func
+	err = shm.storageHostTree.SetEvaluationFunc(evalFunc)
+	err = common.ErrCompose(err, shm.filteredTree.SetEvaluationFunc(evalFunc))
+
+	return
+}
+
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
+func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
+	return shm.storageHostTree.RetrieveHostInfo(id)
+}
+
+// EnableIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
+// who are located in the same network, they will be marked as bad storage hosts
+func (shm *StorageHostManager) EnableIPViolationCheck() {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+	shm.ipViolationCheck = true
+}
+
+// FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same
+// network, it will be considered as badHosts if the IPViolation is enabled
+func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHostIDs []enode.ID) {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+
+	// check if the ipViolationCheck is enabled
+	if !shm.ipViolationCheck {
+		return
+	}
+
+	var hostsInfo []storage.HostInfo
+
+	// hosts validation
+	for _, id := range hostIDs {
+		hi, exists := shm.storageHostTree.RetrieveHostInfo(id)
+		if !exists {
+			badHostIDs = append(badHostIDs, id)
+			continue
+		}
+		hostsInfo = append(hostsInfo, hi)
+	}
+
+	// sort the information based on the LastIPChange time. When there are two storage hosts
+	// with same network address. The one that changes the IP earliest will not be filtered
+	// out
+	sort.Slice(hostsInfo[:], func(i, j int) bool {
+		return hostsInfo[i].LastIPNetWorkChange.Before(hostsInfo[j].LastIPNetWorkChange)
+	})
+
+	// start the filter
+	ipFilter := storagehosttree.NewFilter()
+	for _, hi := range hostsInfo {
+		if ipFilter.Filtered(hi.IP) {
+			badHostIDs = append(badHostIDs, hi.EnodeID)
+			continue
+		}
+		ipFilter.Add(hi.IP)
+	}
+
+	return
+}
+
+// RetrieveRandomHosts will randomly select storage hosts from the storage host pool
+//  1. blacklist represents the storage host that are prohibited to be selected
+//  2. addrBlacklist represents for any storage host whose network address is caontine
+func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlacklist []enode.ID) (infos []storage.HostInfo, err error) {
+	shm.lock.RLock()
+	initScan := shm.initialScan
+	ipCheck := shm.ipViolationCheck
+	shm.lock.RUnlock()
+
+	// if the initialize scan is not complete
+	if !initScan {
+		err = errors.New("storage host pool initial scan is not finished")
+		return
+	}
+
+	// select random
+	if ipCheck {
+		infos = shm.filteredTree.SelectRandom(num, blacklist, addrBlacklist)
+	} else {
+		infos = shm.filteredTree.SelectRandom(num, blacklist, nil)
+	}
+
+	return
+}
+
+// Evaluation will calculate and return the evaluation of a single storage host
+func (shm *StorageHostManager) Evaluation(host storage.HostInfo) (eval common.BigInt) {
+	return shm.evalFunc(host).Evaluation()
+}
+
+// EvaluationDetail will calculate and return the evaluation detail of a single storage host
+func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail storagehosttree.EvaluationDetail) {
+	// retrieve all active storage hosts
+	activeHosts := shm.ActiveStorageHosts()
+
+	// get the total evaluation
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	totalEval := common.BigInt0
+	for _, activeHost := range activeHosts {
+		totalEval = totalEval.Add(shm.evalFunc(activeHost).Evaluation())
+	}
+
+	// compute the evaluation detail
+	detail = shm.evalFunc(host).EvaluationDetail(totalEval, false, false)
+	return
+}
+
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	err := shm.storageHostTree.Insert(hi)
@@ -159,4 +326,9 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
+}
+
+// get storage contract set
+func (shm *StorageHostManager) GetStorageContractSet() *contractset.StorageContractSet {
+	return &shm.scs
 }

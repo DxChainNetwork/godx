@@ -264,7 +264,7 @@ func randomThreadID() uint64 {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
 	if err != nil {
-		panic("cannot create random thread id")
+		return 0
 	}
 	return binary.LittleEndian.Uint64(b)
 }

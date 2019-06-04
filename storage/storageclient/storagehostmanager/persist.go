@@ -5,12 +5,12 @@
 package storagehostmanager
 
 import (
-	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -25,11 +25,11 @@ var settingsMetadata = common.Metadata{
 // persistence is a data structure defines the what kind of information
 // will be contained in the json file
 type persistence struct {
-	StorageHostsInfo        []storage.HostInfo
-	BlockHeight             uint64
-	DisableIPViolationCheck bool
-	FilteredHosts           map[enode.ID]struct{}
-	FilterMode              FilterMode
+	StorageHostsInfo []storage.HostInfo
+	BlockHeight      uint64
+	IPViolationCheck bool
+	FilteredHosts    map[enode.ID]struct{}
+	FilterMode       FilterMode
 }
 
 // saveSettings will save the storage host configurations into the JSON file
@@ -42,11 +42,11 @@ func (shm *StorageHostManager) saveSettings() error {
 // jso nfile
 func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 	return persistence{
-		StorageHostsInfo:        shm.storageHostTree.All(),
-		BlockHeight:             shm.blockHeight,
-		DisableIPViolationCheck: shm.disableIPViolationCheck,
-		FilteredHosts:           shm.filteredHosts,
-		FilterMode:              shm.filterMode,
+		StorageHostsInfo: shm.storageHostTree.All(),
+		BlockHeight:      shm.blockHeight,
+		IPViolationCheck: shm.ipViolationCheck,
+		FilteredHosts:    shm.filteredHosts,
+		FilterMode:       shm.filterMode,
 	}
 }
 
@@ -93,7 +93,7 @@ func (shm *StorageHostManager) loadSettings() error {
 
 	// assign those values to StorageHostManager
 	shm.blockHeight = persist.BlockHeight
-	shm.disableIPViolationCheck = persist.DisableIPViolationCheck
+	shm.ipViolationCheck = persist.IPViolationCheck
 	shm.filteredHosts = persist.FilteredHosts
 	shm.filterMode = persist.FilterMode
 

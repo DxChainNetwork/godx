@@ -69,6 +69,9 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 // TestPublicFileSystemAPI_FileList test the functionality of PublicFileSystemAPI.FileList
 func TestPublicFileSystemAPI_FileList(t *testing.T) {
 	tests := []int{1, 10, 100}
+	if testing.Short() {
+		tests = tests[:1]
+	}
 	for i, test := range tests {
 		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractor{}, newStandardDisrupter())
 		api := NewPublicFileSystemAPI(fs)
