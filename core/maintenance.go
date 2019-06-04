@@ -89,10 +89,10 @@ func (m *MaintenanceSystem) maintenanceLoop() {
 }
 
 func (m *MaintenanceSystem) Stop() {
-	log.Info("maintenance stopping ...")
 	m.canonicalChainSub.Unsubscribe()
 	close(m.quitCh)
 	m.wg.Wait()
+	log.Info("maintenance stopped")
 }
 
 func (m *MaintenanceSystem) applyMissedStorageProof(db ethdb.Database, height uint64, fcid common.Hash) error {

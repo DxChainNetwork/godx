@@ -85,6 +85,7 @@ type StorageClient struct {
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
 
+	// TODO: 需要初始化这个变量，不然调用下载的RPC会报空指针
 	// file management.
 	staticFileSet *dxfile.FileSet
 }

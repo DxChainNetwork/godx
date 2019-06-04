@@ -4,6 +4,8 @@
 
 package storageclient
 
+import "github.com/DxChainNetwork/godx/storage"
+
 // PublicStorageClientAPI defines the object used to call eligible public APIs
 // are used to acquire information
 type PublicStorageClientAPI struct {
@@ -29,6 +31,29 @@ func (api *PublicStorageClientAPI) MemoryAvailable() uint64 {
 // MemoryLimit returns max memory allowed
 func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
+}
+
+// download remote file by sync mode
+//
+// NOTE: RPC not support async download, because it is one time connection, should block until download task done.
+func (api *PublicStorageClientAPI) DownloadSync(length, offset uint64, destination, dxFilePath string) error {
+	p := storage.ClientDownloadParameters{
+		Async:  false,
+		Length: length,
+		Offset: offset,
+
+		// where to write the downloaded files, need to specify from outer request
+		// NOTE: can not get httpWriter from here，so choose the destination dir to write the downloaded files.
+		Destination: destination,
+
+		// where to download th remote file, need to specify from outer request
+		DxFilePath: dxFilePath,
+	}
+	err := api.sc.DownloadSync(p)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs

@@ -5638,6 +5638,12 @@ module.exports = Net;
                 name: 'setMemoryLimit',
                 call: 'storageclient_setMemoryLimit',
                 params: 1,
+            });
+
+            var downloadSync = new Method({
+              name: 'downloadSync',
+              call: 'storageclient_downloadSync',
+              params: 4,
             })
 
             return [
@@ -5646,6 +5652,7 @@ module.exports = Net;
                 memory,
                 memorylimit,
                 setMemoryLimit,
+                downloadSync,
             ];
         };
 

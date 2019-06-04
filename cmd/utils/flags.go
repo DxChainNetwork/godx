@@ -20,7 +20,6 @@ package utils
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -57,6 +56,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/nat"
 	"github.com/DxChainNetwork/godx/p2p/netutil"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -129,6 +129,30 @@ var (
 		Name:  "memorylimit",
 		Usage: "Memory limitation for storage client",
 		Value: storageclient.DefaultMaxMemory,
+	}
+
+	DownloadLengthFlag = cli.Uint64Flag{
+		Name:  "length",
+		Usage: "length to download file for storage client",
+		Value: storageclient.DefaultDownloadLength,
+	}
+
+	DownloadOffsetFlag = cli.Uint64Flag{
+		Name:  "offset",
+		Usage: "offset to download file for storage client",
+		Value: storageclient.DefaultDownloadOffset,
+	}
+
+	DownloadDestinationFlag = cli.StringFlag{
+		Name:  "destination",
+		Usage: "destination to write the downloaded file",
+		Value: filepath.Join(node.DefaultDataDir(), "downloadfiles"),
+	}
+
+	DownloadDxFilePathFlag = cli.StringFlag{
+		Name:  "dxfilepath",
+		Usage: "dxfilepath store the downloaded file",
+		Value: storageclient.DefaultDownloadDxFilePath,
 	}
 
 	// General settings
