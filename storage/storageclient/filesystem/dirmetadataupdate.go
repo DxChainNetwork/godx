@@ -245,16 +245,14 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		}
 		md, err := fs.LoopDirAndCalculateDirMetadata(update)
-		if err == errStopped {
+		if err == errInterrupted {
 			continue
 		}
 		if err != nil {
-			fmt.Println("returned 1")
 			return
 		}
 		err = fs.applyDxDirMetadata(update.dxPath, md)
 		if err != nil {
-			fmt.Println("returned 2", err.Error())
 			return
 		}
 		if fs.disrupt("cmaa3") {
@@ -357,9 +355,9 @@ func (fs *FileSystem) LoopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 		// If there is a stop signal, return the error of errStopped
 		select {
 		case <-update.stop:
-			return nil, errStopped
-		case <-fs.tm.StopChan():
 			return nil, errInterrupted
+		case <-fs.tm.StopChan():
+			return nil, errStopped
 		default:
 		}
 		ext := filepath.Ext(file.Name())
@@ -480,11 +478,12 @@ func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata
 	} else if err != nil {
 		return err
 	}
+	defer d.Close()
 	err = d.UpdateMetadata(*md)
 	if err != nil {
 		return err
 	}
-	return d.Close()
+	return nil
 }
 
 // applyMetadataForUpdateToMetadata apply a metadataForUpdate to dxdir.Metadata

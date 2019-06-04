@@ -150,7 +150,7 @@ func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 		}
 		for i, seg := range df.segments {
 			segHealth := df.segmentHealth(i, table)
-			if segHealth < repairHealthThreshold && !seg.Stuck {
+			if segHealth < 100 && !seg.Stuck {
 				t.Errorf("Segment with health %d should have been marked as Stuck", segHealth)
 			}
 		}

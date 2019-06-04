@@ -9,6 +9,13 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+const (
+	defaultGoDeepRate = float32(0.7)
+	defaultGoWideRate = float32(0.5)
+	defaultMaxDepth   = 3
+	defaultMissRate   = float32(0.1)
+)
+
 // PublicFileSystemDebugAPI is the APIs for the file system
 type PublicFileSystemDebugAPI struct {
 	fs *FileSystem
@@ -29,8 +36,9 @@ func NewPublicFileSystemDebugAPI(fs *FileSystem) *PublicFileSystemDebugAPI {
 //  maxDepth is the maximum directory depth that a file could reach
 //  missRate is a number between 0 and 1 that defines the possibility that file's sector
 //     	is missing
+// Now the params are default to some preset values. These values could be easily changed
 func (api *PublicFileSystemDebugAPI) CreateRandomFiles(numFiles int) string {
-	goDeepRate, goWideRate, maxDepth, missRate := float32(0.7), float32(0.5), 3, float32(0.1)
+	goDeepRate, goWideRate, maxDepth, missRate := defaultGoDeepRate, defaultGoWideRate, defaultMaxDepth, defaultMissRate
 	err := api.fs.createRandomFiles(numFiles, goDeepRate, goWideRate, maxDepth, missRate)
 	if err != nil {
 		return fmt.Sprintf("Cannot create random files: %v", err)

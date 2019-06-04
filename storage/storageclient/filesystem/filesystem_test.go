@@ -6,7 +6,12 @@ package filesystem
 
 import (
 	"crypto/rand"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -34,6 +39,71 @@ func TestNewFileSystemEmptyStartClose(t *testing.T) {
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Errorf("close not immediate shutdown")
+	}
+}
+
+// TestFileSystem_SelectDxFileToFix test the functionality of selecting a dxfile with the worst health
+func TestFileSystem_SelectDxFileToFix(t *testing.T) {
+	tests := []struct {
+		numFiles int
+	}{
+		{1},
+		{10},
+		{1000},
+	}
+	if testing.Short() {
+		tests = tests[:1]
+	}
+	for i, test := range tests {
+		// Create a random file system with random files, and random contractor
+		dr := newStandardDisrupter()
+		ct := &randomContractor{
+			missRate:         0.1,
+			onlineRate:       0.8,
+			goodForRenewRate: 0.8,
+		}
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), ct, dr)
+		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileSize := uint64(1 << 22 * 10 * 10)
+		var minHealth = dxdir.DefaultHealth
+		for i := 0; i != test.numFiles; i++ {
+			path := randomDxPath(t, 5)
+			file, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			table := fs.contractor.HostHealthMapByID(file.HostIDs())
+			if err = file.MarkAllUnhealthySegmentsAsStuck(table); err != nil {
+				t.Fatal(err)
+			}
+			if err = file.MarkAllHealthySegmentsAsUnstuck(table); err != nil {
+				t.Fatal(err)
+			}
+			if err := fs.InitAndUpdateDirMetadata(file.DxPath()); err != nil {
+				t.Fatal(err)
+			}
+			fHealth, _, _ := file.Health(table)
+			if dxfile.CmpHealthPriority(fHealth, minHealth) >= 0 {
+				minHealth = fHealth
+			}
+		}
+		if err := fs.waitForUpdatesComplete(10 * time.Second); err != nil {
+			t.Fatal(err)
+		}
+		f, err := fs.SelectDxFileToFix()
+		if err == ErrNoRepairNeeded && dxfile.CmpHealthPriority(minHealth, dxdir.DefaultHealth) <= 0 {
+			// no repair needed
+			continue
+		} else if err == nil {
+			if f.GetHealth() != minHealth {
+				t.Errorf("SelectDxFileToFix got file not with expected health. Got %v, Expect %v", f.GetHealth(), minHealth)
+			}
+		} else {
+			t.Fatalf("SelectDxFileToFix return unexpected error: %v", err)
+		}
 	}
 }
 

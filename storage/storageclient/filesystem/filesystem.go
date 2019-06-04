@@ -5,7 +5,9 @@
 package filesystem
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,6 +23,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
+
+var ErrNoRepairNeeded = errors.New("no repair needed")
 
 // FileSystem is the structure for a file system that include a FileSet and a DirSet
 type FileSystem struct {
@@ -106,8 +110,123 @@ func (fs *FileSystem) Start() error {
 	return nil
 }
 
+// OpenFile opens the DxFile specified by the path
 func (fs *FileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
 	return fs.FileSet.Open(path)
+}
+
+// Close will terminate all threads opened by file system
+func (fs *FileSystem) Close() error {
+	var fullErr error
+	fs.lock.Lock()
+	defer fs.lock.Unlock()
+	// close wal
+	err := fs.fileWal.Close()
+	if err != nil {
+		fullErr = common.ErrCompose(fullErr, err)
+	}
+	err = fs.updateWal.Close()
+	if err != nil {
+		fullErr = common.ErrCompose(fullErr, err)
+	}
+	return common.ErrCompose(fullErr, fs.tm.Stop())
+}
+
+// SelectDxFileToFix selects a file with the health with the health of highest priority to repair
+func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
+	curDir, err := fs.DirSet.Open(storage.RootDxPath())
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		curDir.Close()
+	}()
+	for {
+	LOOP:
+		health := curDir.Metadata().Health
+		if err = curDir.Close(); err != nil {
+			return nil, err
+		}
+		// If the health is larger than the threshold, no repair is needed
+		if dxfile.CmpHealthPriority(health, dxfile.RepairHealthThreshold) <= 0 {
+			return nil, ErrNoRepairNeeded
+		}
+		// Get dirs and files o the directory
+		dirs, files, err := fs.dirsAndFiles(curDir.DxPath())
+		if err != nil {
+			return nil, err
+		}
+		// Loop over files and compare the health
+		for file := range files {
+			df, err := fs.OpenFile(file)
+			if err != nil {
+				fs.logger.Warn("file system open file", "path", file, "err", err)
+				continue
+			}
+			fHealth := df.GetHealth()
+			if dxfile.CmpHealthPriority(fHealth, health) >= 0 {
+				// This is the file we want to repair
+				return df, nil
+			}
+			df.Close()
+		}
+		// Loop over dirs and compare with the health
+		for dir := range dirs {
+			d, err := fs.DirSet.Open(dir)
+			if err != nil {
+				fs.logger.Warn("file system open curDir", "path", dir, "err", err)
+				continue
+			}
+			dHealth := d.Metadata().Health
+			if dxfile.CmpHealthPriority(dHealth, health) < 0 {
+				continue
+			} else {
+				curDir = d
+				goto LOOP
+			}
+		}
+		// Loops over. No file founded in the directory
+		return nil, ErrNoRepairNeeded
+	}
+}
+
+// dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
+// The returned type map is to add the randomness in file selection
+func (fs *FileSystem) dirsAndFiles(path storage.DxPath) (map[storage.DxPath]struct{}, map[storage.DxPath]struct{}, error) {
+	fileInfos, err := ioutil.ReadDir(string(fs.rootDir.Join(path)))
+	if err != nil {
+		return nil, nil, err
+	}
+	dirs, files := make(map[storage.DxPath]struct{}), make(map[storage.DxPath]struct{})
+	// iterate over all files
+	for _, file := range fileInfos {
+		select {
+		case <-fs.tm.StopChan():
+			return nil, nil, errStopped
+		default:
+		}
+		ext := filepath.Ext(file.Name())
+		if ext == storage.DxFileExt {
+			filenameNoSuffix := strings.TrimSuffix(file.Name(), storage.DxFileExt)
+			fileDxPath, err := path.Join(filenameNoSuffix)
+			if err != nil {
+				fs.logger.Warn("invalid DxPath name", "name", filenameNoSuffix)
+				continue
+			}
+			files[fileDxPath] = struct{}{}
+		} else if file.IsDir() {
+			dirDxPath, err := path.Join(file.Name())
+			if err != nil {
+				fs.logger.Warn("invalid DxPath name", "name", file.Name())
+				continue
+			}
+			dirs[dirDxPath] = struct{}{}
+		} else {
+			// Unrecognized file type
+			continue
+		}
+	}
+	return dirs, files, nil
 }
 
 // loadFileWal read the fileWal
@@ -154,23 +273,6 @@ func (fs *FileSystem) loadUpdateWal() error {
 	}
 	fs.updateWal = updateWal
 	return nil
-}
-
-// Close will terminate all threads opened by file system
-func (fs *FileSystem) Close() error {
-	var fullErr error
-	fs.lock.Lock()
-	defer fs.lock.Unlock()
-	// close wal
-	err := fs.fileWal.Close()
-	if err != nil {
-		fullErr = common.ErrCompose(fullErr, err)
-	}
-	err = fs.updateWal.Close()
-	if err != nil {
-		fullErr = common.ErrCompose(fullErr, err)
-	}
-	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
 // loopRepairUnfinishedDirMetadataUpdate is the permanent loop for repairing the unfinished

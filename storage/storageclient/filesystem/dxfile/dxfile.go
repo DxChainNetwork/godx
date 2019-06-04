@@ -246,7 +246,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(table storage.HostHealthInfoTa
 	return err
 }
 
-// MarkAllUnhealthySegmentsAsStuck mark all unhealthy segments (health smaller than repairHealthThreshold)
+// MarkAllUnhealthySegmentsAsStuck mark all unhealthy segments (health smaller than RepairHealthThreshold)
 // as Stuck
 func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(table storage.HostHealthInfoTable) error {
 	df.lock.Lock()
@@ -254,7 +254,7 @@ func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(table storage.HostHealthInfoTa
 	if df.deleted {
 		return fmt.Errorf("file %v is deleted", df.metadata.DxPath)
 	}
-	// loop over segments. If segment health is smaller than repairHealthThreshold,
+	// loop over segments. If segment health is smaller than RepairHealthThreshold,
 	// mark the segment as stuck.
 	indexes := make([]int, 0, len(df.segments))
 	for i := range df.segments {
@@ -262,7 +262,7 @@ func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(table storage.HostHealthInfoTa
 			continue
 		}
 		segHealth := df.segmentHealth(i, table)
-		if segHealth >= repairHealthThreshold {
+		if segHealth >= 100 {
 			continue
 		}
 		df.segments[i].Stuck = true
@@ -325,6 +325,38 @@ func (df *DxFile) Redundancy(table storage.HostHealthInfoTable) uint32 {
 		return minRedundancyNoRenew
 	}
 	return minRedundancy
+}
+
+// GetHealth return the health in the metadata
+func (df *DxFile) GetHealth() uint32 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.Health
+}
+
+// GetStuckHealth return the stuck health in the metadata
+func (df *DxFile) GetStuckHealth() uint32 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.StuckHealth
+}
+
+// GetNumStuckSegments return NumStuckSegments in the metadata
+func (df *DxFile) GetNumStuckSegments() uint32 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.NumStuckSegments
+}
+
+// GetRedundancy return the last redundancy in the metadata
+func (df *DxFile) GetRedundancy() uint32 {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+
+	return df.metadata.LastRedundancy
 }
 
 // SetStuckByIndex set a Segment of Index to the value of Stuck.

@@ -9,13 +9,13 @@ import (
 )
 
 // The larger the health value, the healthier the DxFile.
-// Health 0~100: unrecoverable from contracts
-// Health 100~200: recoverable
+// Health 0 ~ 100: unrecoverable from contracts
+// Health 100 ~ 200: recoverable
 // Health 200: No fix needed
 
-// repairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
+// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
 // to be repaired
-const repairHealthThreshold = 175
+const RepairHealthThreshold = 175
 
 // Health return check for dxFile's segments and return the health, stuckHealth, and numStuckSegments
 // Health 0~100: unrecoverable from contracts
@@ -113,29 +113,31 @@ func (df *DxFile) goodSectors(segmentIndex int, table storage.HostHealthInfoTabl
 // When the file is not recoverable from contract (health 0~99), it has the highest property to recover from disk
 // When the file is recoverable (health 100~199), it is then prioritized.
 // When the file is totally health, there is no need to recover.
-// Thus the priority of recovery is as follows:
-// 200 < 100 < 150 < 199 < 0 < 50 < 99
+// Thus the priority of recovery is as follows: 175 == RepairHealthThreshold
+// (175 ~ 200) < (0 ~ 99) < 174 < 100
 // In the following expression p(h) means the priority of the health
 // If p(h1) == p(h2), return 0
 // If p(h1) < p(h2), return -1
 // If p(h1) > p(h2), return 1
 func CmpHealthPriority(h1, h2 uint32) int {
-	if h1 == h2 {
+	noFix1, noFix2 := h1 >= RepairHealthThreshold, h2 >= RepairHealthThreshold
+	canFix1, canFix2 := h1 >= 100, h2 >= 100
+	if h1 == h2 || (noFix1 && noFix2) || (!canFix1 && !canFix2) {
 		return 0
 	}
-	if h1 == 200 || h2 == 200 {
-		if h1 == 200 {
+	if noFix1 || noFix2 {
+		if noFix1 {
 			return -1
 		}
 		return 1
 	}
-	if (h1 >= 100) == (h2 >= 100) {
-		if h1 < h2 {
+	if !canFix1 || !canFix2 {
+		if !canFix1 {
 			return -1
 		}
 		return 1
 	}
-	if h1 >= 100 {
+	if h1 > h2 {
 		return -1
 	}
 	return 1
