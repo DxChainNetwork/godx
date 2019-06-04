@@ -8,6 +8,8 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/merkletree"
 	"math/big"
 	"math/bits"
 	"os"
@@ -507,7 +509,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		switch action.Type {
 		case storage.UploadActionAppend:
 			// Update sector roots.
-			newRoot := storage.MerkleRoot(action.Data)
+			newRoot := merkle.Root(action.Data)
 			newRoots = append(newRoots, newRoot)
 			sectorsGained = append(sectorsGained, newRoot)
 			gainedSectorData = append(gainedSectorData, action.Data)
@@ -532,7 +534,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := storage.CachedMerkleRoot(newRoots)
+	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -569,10 +571,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var merkleResp storage.UploadMerkleProof
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
-	proofRanges := make([]storage.ProofRange, 0, len(sectorsChanged))
+	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
 	for index := range sectorsChanged {
 		if index < oldNumSectors {
-			proofRanges = append(proofRanges, storage.ProofRange{
+			proofRanges = append(proofRanges, merkletree.LeafRange{
 				Start: index,
 				End:   index + 1,
 			})
@@ -586,10 +588,14 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	for i, r := range proofRanges {
 		leafHashes[i] = so.SectorRoots[r.Start]
 	}
+	oldSubtreeHashes, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
+	if err != nil {
+		return err
+	}
 
 	// Construct the merkle proof
 	merkleResp = storage.UploadMerkleProof{
-		OldSubtreeHashes: storage.MerkleDiffProof(proofRanges, oldNumSectors, nil, so.SectorRoots),
+		OldSubtreeHashes: oldSubtreeHashes,
 		OldLeafHashes:    leafHashes,
 		NewMerkleRoot:    newMerkleRoot,
 	}
@@ -699,7 +705,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("download request has invalid sector bounds")
 		case sec.Length == 0:
 			err = errors.New("length cannot be zero")
-		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
+		case req.MerkleProof && (sec.Offset % merkle.LeafSize != 0 || sec.Length % merkle.LeafSize != 0):
 			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
 			err = errors.New("wrong number of valid proof values")
@@ -737,7 +743,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	for _, sec := range req.Sections {
 		// use the worst-case proof size of 2*tree depth (this occurs when
 		// proving across the two leaves in the center of the tree)
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
+		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
@@ -796,10 +802,12 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// Construct the Merkle proof, if requested.
 		var proof []common.Hash
 		if req.MerkleProof {
-			proofStart := int(sec.Offset) / storage.SegmentSize
-			proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
-			proof = storage.MerkleRangeProof(sectorData, proofStart, proofEnd)
-			proof = []common.Hash{}
+			proofStart := int(sec.Offset) / merkle.LeafSize
+			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
+			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Send the response. If the renter sent a stop signal, or this is the

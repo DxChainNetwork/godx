@@ -731,9 +731,9 @@ func (sc *StorageClient) threadedStuckFileLoop() {
 		hosts := sc.refreshHostsAndWorkers()
 
 		// Add stuck Segment to upload heap
-		sc.managedBuildSegmentHeap(dirDxPath, hosts, targetStuckSegments)
+		sc.createSegmentHeap(dirDxPath, hosts, targetStuckSegments)
 
-		sc.managedRepairLoop(hosts)
+		sc.uploadLoop(hosts)
 
 		// Call bubble once all Segments have been popped off heap
 		sc.threadedBubbleMetadata(dirDxPath)

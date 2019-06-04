@@ -10,6 +10,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"io"
 	"math/big"
@@ -412,7 +413,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 
 func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
 	err := sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
-	return storage.MerkleRoot(data), err
+	return merkle.Root(data), err
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
@@ -501,14 +502,14 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	proofHashes := merkleResp.OldSubtreeHashes
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
-	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot) {
-		return errors.New("invalid Merkle proof for old root")
+	if verified, err := merkle.VerifyDiffProof(proofRanges,numSectors,proofHashes, leafHashes, oldRoot); !verified || err != nil {
+		return errors.New("invalid merkle proof for old root")
 	}
 	// ...then by modifying the leaves and verifying the new Merkle root
 	leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
-	if !storage.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot) {
-		return errors.New("invalid Merkle proof for new root")
+	if verified, err := merkle.VerifyDiffProof(proofRanges,numSectors,proofHashes, leafHashes, newRoot); !verified || err != nil {
+		return errors.New("invalid merkle proof for new root")
 	}
 
 	// Update the revision, sign it, and send it
@@ -546,7 +547,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 // Read calls the Read RPC, writing the requested data to w. The RPC can be
 // cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
-
 	// TODO: Reset deadline when finished.
 	//defer extendDeadline(s.conn, time.Hour)
 
@@ -556,7 +556,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return errors.New("illegal offset and/or length")
 		}
 		if req.MerkleProof {
-			if sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0 {
+			if sec.Offset % merkle.LeafSize != 0 || sec.Length % merkle.LeafSize != 0 {
 				return errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 			}
 		}
@@ -572,7 +572,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 		// use the worst-case proof size of 2*tree depth (this occurs when
 		// proving across the two leaves in the center of the tree)
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
+		estHashesPerProof := 2 * bits.Len64(storage.SectorSize / merkle.LeafSize)
 		estProofHashes = uint64(len(req.Sections) * estHashesPerProof)
 	}
 	estBandwidth := totalLength + estProofHashes*uint64(storage.HashSize)
@@ -695,9 +695,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 				return errors.New("host did not send enough sector data")
 			}
 			if req.MerkleProof {
-				proofStart := int(sec.Offset) / storage.SegmentSize
-				proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
-				if !storage.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot) {
+				proofStart := int(sec.Offset) / merkle.LeafSize
+				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
+				verified, err := merkle.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
+				if !verified || err != nil {
 					return errors.New("host provided incorrect sector data or Merkle proof")
 				}
 			}

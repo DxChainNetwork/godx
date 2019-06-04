@@ -82,11 +82,13 @@ var (
 	// chunks.
 	RepairStuckSegmentInterval = 10 * time.Minute
 
-	// uploadAndRepairErrorSleepDuration indicats how long a repair process
+	// uploadAndRepairErrorSleepDuration indicates how long a repair process
 	// should sleep before retrying if there is an error fetching the metadata
 	// of the root directory of the renter's filesystem.
 	UploadAndRepairErrorSleepDuration = 15 * time.Minute
 
+	// RemoteRepairDownloadThreshold indicates the threshold in percent under
+	// which the renter starts repairing a file that is not available on disk
 	RemoteRepairDownloadThreshold = 0.25
 
 	UploadFailureCoolDown = 1 * time.Minute

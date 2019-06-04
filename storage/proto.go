@@ -8,10 +8,13 @@ import (
 	"crypto/ecdsa"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/merkletree"
 	"io"
 	"math/big"
+	"sort"
 )
 
 const (
@@ -129,4 +132,82 @@ func newRevision(current types.StorageContractRevision, cost *big.Int) types.Sto
 // downloading data.
 func NewDownloadRevision(current types.StorageContractRevision, downloadCost *big.Int) types.StorageContractRevision {
 	return newRevision(current, downloadCost)
+}
+
+
+// calculateProofRanges returns the proof ranges that should be used to verify a
+// pre-modification Merkle diff proof for the specified actions.
+func CalculateProofRanges(actions []UploadAction, oldNumSectors uint64) []merkletree.LeafRange {
+	newNumSectors := oldNumSectors
+	sectorsChanged := make(map[uint64]struct{})
+	for _, action := range actions {
+		switch action.Type {
+		case UploadActionAppend:
+			sectorsChanged[newNumSectors] = struct{}{}
+			newNumSectors++
+		}
+	}
+
+	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+	for index := range sectorsChanged {
+		if index < oldNumSectors {
+			oldRanges = append(oldRanges, merkletree.LeafRange{
+				Start: index,
+				End:   index + 1,
+			})
+		}
+	}
+	sort.Slice(oldRanges, func(i, j int) bool {
+		return oldRanges[i].Start < oldRanges[j].Start
+	})
+
+	return oldRanges
+}
+
+// modifyProofRanges modifies the proof ranges produced by calculateProofRanges
+// to verify a post-modification Merkle diff proof for the specified actions.
+func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []UploadAction, numSectors uint64) []merkletree.LeafRange {
+	for _, action := range actions {
+		switch action.Type {
+		case UploadActionAppend:
+			proofRanges = append(proofRanges, merkletree.LeafRange{
+				Start: numSectors,
+				End:   numSectors + 1,
+			})
+			numSectors++
+		}
+	}
+	return proofRanges
+}
+
+// modifyLeaves modifies the leaf hashes of a Merkle diff proof to verify a
+// post-modification Merkle diff proof for the specified actions.
+func ModifyLeaves(leafHashes []common.Hash, actions []UploadAction, numSectors uint64) []common.Hash {
+	// determine which sector index corresponds to each leaf hash
+	var indices []uint64
+	for _, action := range actions {
+		switch action.Type {
+		case UploadActionAppend:
+			indices = append(indices, numSectors)
+			numSectors++
+		}
+	}
+	sort.Slice(indices, func(i, j int) bool {
+		return indices[i] < indices[j]
+	})
+	indexMap := make(map[uint64]int, len(leafHashes))
+	for i, index := range indices {
+		if i > 0 && index == indices[i-1] {
+			continue // remove duplicates
+		}
+		indexMap[index] = i
+	}
+
+	for _, action := range actions {
+		switch action.Type {
+		case UploadActionAppend:
+			leafHashes = append(leafHashes, merkle.Root(action.Data))
+		}
+	}
+	return leafHashes
 }

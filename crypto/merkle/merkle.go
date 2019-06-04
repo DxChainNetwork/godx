@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"
 )
 
@@ -109,6 +110,19 @@ func Root(b []byte) (h common.Hash) {
 // CachedTreeRoot will return the root of the cached tree
 func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
 	cmt := NewCachedTree(height)
+	for _, r := range roots {
+		cmt.Push(r)
+	}
+
+	return cmt.Root()
+}
+
+func CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
+	log2SectorSize := uint64(0)
+	for 1<<log2SectorSize < (storage.SectorSize / LeafSize) {
+		log2SectorSize++
+	}
+	cmt := NewCachedTree(log2SectorSize)
 	for _, r := range roots {
 		cmt.Push(r)
 	}

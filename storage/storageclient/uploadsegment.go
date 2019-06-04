@@ -122,9 +122,8 @@ func (uc *unfinishedUploadSegment) SegmentComplete() bool {
 	return false
 }
 
-// managedDistributeSegmentToWorkers will take a Segment with fully prepared
-// physical data and distribute it to the worker pool.
-func (sc *StorageClient) managedDistributeSegmentToWorkers(uc *unfinishedUploadSegment) {
+// distributeSegment distribute segment to the workers in the pool
+func (sc *StorageClient) distributeSegment(uc *unfinishedUploadSegment) {
 	// Add Segment to repairingSegments map
 	sc.uploadHeap.mu.Lock()
 	_, exists := sc.uploadHeap.repairingSegments[uc.id]
@@ -159,7 +158,7 @@ func (sc *StorageClient) managedDownloadLogicalSegmentData(segment *unfinishedUp
 		downloadLength = segment.fileEntry.FileSize() % segment.length
 	}
 
-	// Create the download.
+	// Create the download
 	buf := NewDownloadDestinationBuffer(segment.length, segment.fileEntry.SectorSize())
 	d, err := sc.newDownload(downloadParams{
 		destination:     buf,
@@ -203,9 +202,9 @@ func (sc *StorageClient) managedDownloadLogicalSegmentData(segment *unfinishedUp
 	return nil
 }
 
-// threadedFetchAndRepairSegment will fetch the logical data for a Segment, create
-// the physical pieces for the Segment, and then distribute them.
-func (sc *StorageClient) threadedFetchAndRepairSegment(segment *unfinishedUploadSegment) {
+// uploadSegment will fetch the logical data for a segment, create
+// the physical pieces for the segment, and then distribute them.
+func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 	err := sc.tm.Add()
 	if err != nil {
 		return
@@ -236,35 +235,28 @@ func (sc *StorageClient) threadedFetchAndRepairSegment(segment *unfinishedUpload
 	// fails before the erasure coding occurs.
 	defer sc.managedCleanUpUploadSegment(segment)
 
-	// Fetch the logical data for the Segment.
-	err = sc.managedFetchLogicalSegmentData(segment)
+	// Retrieve the logical data for the Segment.
+	err = sc.retrieveLogicalSegmentData(segment)
 	if err != nil {
-		// Logical data is not available, cannot upload. Segment will not be
-		// distributed to workers, therefore set workersRemaining equal to zero.
-		// The erasure coding memory has not been released yet, be sure to
-		// release that as well.
+		// retrieve logical data failed, interrupt upload and release memory
 		segment.logicalSegmentData = nil
 		segment.workersRemaining = 0
 		sc.memoryManager.Return(erasureCodingMemory + pieceCompletedMemory)
 		segment.memoryReleased += erasureCodingMemory + pieceCompletedMemory
-		sc.log.Debug("Fetching logical data of a Segment failed:", err)
+		sc.log.Debug("retrieve logical data of a segment failed:", err)
 		return
 	}
 
-	// Create the physical pieces for the data. Immediately release the logical data.
-	//
-	// TODO: The logical data is the first few Segments of the physical data. If
-	// the memory is not being handled cleanly here, we should leverage that
-	// fact to reduce the total memory required to create the physical data.
-	// That will also change the amount of memory we need to allocate, and the
-	// number of times we need to return memory.
-	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segment.logicalSegmentData)
+	// Encode the physical sectors from content bytes of file
+	segmentBytes := make([]byte, uint64(len(segment.logicalSegmentData)) * storage.SectorSize)
+	for _, b := range segment.logicalSegmentData{
+		segmentBytes = append(segmentBytes, b...)
+	}
+	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
 	segment.logicalSegmentData = nil
 	sc.memoryManager.Return(erasureCodingMemory)
 	segment.memoryReleased += erasureCodingMemory
 	if err != nil {
-		// Physical data is not available, cannot upload. Segment will not be
-		// distributed to workers, therefore set workersRemaining equal to zero.
 		segment.workersRemaining = 0
 		sc.memoryManager.Return(pieceCompletedMemory)
 		segment.memoryReleased += pieceCompletedMemory
@@ -303,37 +295,26 @@ func (sc *StorageClient) threadedFetchAndRepairSegment(segment *unfinishedUpload
 		segment.memoryReleased += pieceCompletedMemory
 	}
 
-	sc.managedDistributeSegmentToWorkers(segment)
+	sc.distributeSegment(segment)
 }
 
-// managedFetchLogicalSegmentData will get the raw data for a Segment, pulling it from disk if
-// possible but otherwise queueing a download.
-//
-// Segment.data should be passed as 'nil' to the download, to keep memory usage as
-// light as possible.
-func (sc *StorageClient) managedFetchLogicalSegmentData(Segment *unfinishedUploadSegment) error {
-	// Only download this file if more than 25% of the redundancy is missing.
-	numParityPieces := float64(Segment.piecesNeeded - Segment.minimumPieces)
+// retrieveLogicalSegmentData will get the raw data from disk if possible otherwise queueing a download
+func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
+	numParityPieces := float64(segment.piecesNeeded - segment.minimumPieces)
 	minMissingPiecesToDownload := int(numParityPieces * RemoteRepairDownloadThreshold)
-	download := Segment.piecesCompleted+minMissingPiecesToDownload < Segment.piecesNeeded
+	download := segment.piecesCompleted + minMissingPiecesToDownload < segment.piecesNeeded
 
-	// Download the Segment if it's not on disk.
-	if Segment.fileEntry.LocalPath() == "" && download {
-		return sc.managedDownloadLogicalSegmentData(Segment)
-	} else if Segment.fileEntry.LocalPath() == "" {
+	// Download the segment if it's not on disk.
+	if segment.fileEntry.LocalPath() == "" && download {
+		return sc.managedDownloadLogicalSegmentData(segment)
+	} else if segment.fileEntry.LocalPath() == "" {
 		return errors.New("file not available locally")
 	}
 
-	// Try to read the data from disk. If that fails at any point, prefer to
-	// download the Segment.
-	//
-	// TODO: Might want to remove the file from the renter tracking if the disk
-	// loading fails. Should do this after we swap the file format, the tracking
-	// data for the file should reside in the file metadata and not in a
-	// separate struct.
-	osFile, err := os.Open(Segment.fileEntry.LocalPath())
+	// Try to read the file content from disk. If failed, go through download
+	osFile, err := os.Open(segment.fileEntry.LocalPath())
 	if err != nil && download {
-		return sc.managedDownloadLogicalSegmentData(Segment)
+		return sc.managedDownloadLogicalSegmentData(segment)
 	} else if err != nil {
 		return errors.New("failed to open file locally")
 	}
@@ -341,19 +322,18 @@ func (sc *StorageClient) managedFetchLogicalSegmentData(Segment *unfinishedUploa
 	// TODO: Once we have enabled support for small Segments, we should stop
 	// needing to ignore the EOF errors, because the Segment size should always
 	// match the tail end of the file. Until then, we ignore io.EOF.
-	buf := NewDownloadDestinationBuffer(Segment.length, Segment.fileEntry.SectorSize())
-	sr := io.NewSectionReader(osFile, Segment.offset, int64(Segment.length))
+	buf := NewDownloadDestinationBuffer(segment.length, segment.fileEntry.SectorSize())
+	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && download {
 		sc.log.Debug("failed to read file, downloading instead:", err)
-		return sc.managedDownloadLogicalSegmentData(Segment)
+		return sc.managedDownloadLogicalSegmentData(segment)
 	} else if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		sc.log.Debug("failed to read file locally:", err)
 		return errors.New("failed to read file locally")
 	}
-	Segment.logicalSegmentData = buf.buf
+	segment.logicalSegmentData = buf.buf
 
-	// Data successfully read from disk.
 	return nil
 }
 
@@ -430,11 +410,8 @@ func (sc *StorageClient) managedCleanUpUploadSegment(uc *unfinishedUploadSegment
 	}
 }
 
-// managedSetStuckAndClose sets the unfinishedUploadSegment's stuck status,
-// triggers threadedBubble to update the directory, and then closes the
-// fileEntry
-func (sc *StorageClient) managedSetStuckAndClose(uc *unfinishedUploadSegment, stuck bool) error {
-	// Update Segment stuck status
+// setStuckAndClose sets the unfinishedUploadSegment's stuck status
+func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck bool) error {
 	err := uc.fileEntry.SetStuckByIndex(int(uc.index), stuck)
 	if err != nil {
 		return fmt.Errorf("unable to update Segment stuck status for file %v: %v", uc.fileEntry.DxPath(), err)
