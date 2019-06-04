@@ -88,6 +88,23 @@ func (api *PublicFileSystemAPI) FileList() []storage.FileBriefInfo {
 	return fileList
 }
 
+// Uploads is the API function that return all files currently uploading in progress
+func (api *PublicFileSystemAPI) Uploads() []storage.FileBriefInfo {
+	rawFileList, err := api.fs.fileList()
+	if err != nil {
+		api.fs.logger.Warn("cannot get the file list", "error", err.Error())
+		return []storage.FileBriefInfo{}
+	}
+	var fileList []storage.FileBriefInfo
+	for _, file := range rawFileList {
+		if file.UploadProgress >= 100 {
+			continue
+		}
+		fileList = append(fileList, file)
+	}
+	return fileList
+}
+
 // Rename is the API function that rename a file from prevPath to newPath
 func (api *PublicFileSystemAPI) Rename(prevPath, newPath string) string {
 	prevDxPath, err := storage.NewDxPath(prevPath)

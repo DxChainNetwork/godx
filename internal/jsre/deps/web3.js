@@ -13941,10 +13941,17 @@ module.exports = Web3;
         params: 1,
       })
 
+      var uploads = new Method({
+        name: 'uploads',
+        call: 'files_uploads',
+        params: 0,
+      })
+
       return [
         fileInfo,
         rename,
         deletion,
+          uploads
       ];
     };
 
