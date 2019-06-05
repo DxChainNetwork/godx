@@ -13,27 +13,6 @@ import (
 	"strings"
 )
 
-var currencyIndexMap = map[string]int{
-	"ndx": 0,
-	"udx": 1,
-	"mdx": 2,
-	"dx":  3,
-	"Kdx": 4,
-	"Mdx": 5,
-	"Gdx": 6,
-}
-
-var dataSizeMultiplier = map[string]uint64{
-	"kb":  1e3,
-	"mb":  1e6,
-	"gb":  1e9,
-	"tb":  1e12,
-	"kib": 1 << 10,
-	"mib": 1 << 20,
-	"gib": 1 << 30,
-	"tib": 1 << 40,
-}
-
 func parseClientSetting(settings map[string]string, prevSetting storage.ClientSetting) (clientSetting storage.ClientSetting, err error) {
 	// get the previous settings
 	clientSetting = prevSetting
@@ -117,9 +96,13 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 				break
 			}
 			clientSetting.MaxDownloadSpeed = downloadSpeed
+
+		default:
+			err = fmt.Errorf("the key entered: %s is not valid. Here is a list of available keys: %+v",
+				key, keys)
+			return
 		}
 	}
-
 	return
 }
 
@@ -359,7 +342,7 @@ func formatString(s string) (formatted string) {
 	return s
 }
 
-func clientSettingValidation(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
+func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
 	if setting.RentPayment.Fund.IsEqual(common.BigInt0) {
 		setting.RentPayment.Fund = storage.DefaultRentPayment.Fund
 	}

@@ -54,3 +54,27 @@ const (
 const (
 	minHosts = 2
 )
+
+var currencyIndexMap = map[string]int{
+	"ndx": 0,
+	"udx": 1,
+	"mdx": 2,
+	"dx":  3,
+	"Kdx": 4,
+	"Mdx": 5,
+	"Gdx": 6,
+}
+
+var dataSizeMultiplier = map[string]uint64{
+	"kb":  1e3,
+	"mb":  1e6,
+	"gb":  1e9,
+	"tb":  1e12,
+	"kib": 1 << 10,
+	"mib": 1 << 20,
+	"gib": 1 << 30,
+	"tib": 1 << 40,
+}
+
+var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",
+	"redundancy", "violation", "uploadspeed", "downloadspeed"}

@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // PublicStorageClientAPI defines the object used to call eligible public APIs
@@ -59,23 +60,22 @@ func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 }
 
 // SetClientSetting will configure the client setting based on the user input data
-func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (resp string) {
+func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (currentSetting storage.ClientSetting, err error) {
 	prevClientSetting := api.sc.RetrieveClientSetting()
-	clientSetting, err := parseClientSetting(settings, prevClientSetting)
+	currentSetting, err = parseClientSetting(settings, prevClientSetting)
 	if err != nil {
-		resp = fmt.Sprintf("form contract failed, failed to parse the client settings: %s", err.Error())
-	}
-
-	// validation, for any 0 value, set them to default value
-	clientSetting = clientSettingValidation(clientSetting)
-
-	// call set client setting methods
-	if err := api.sc.SetClientSetting(clientSetting); err != nil {
-		resp = fmt.Sprintf("form contract failed, failed to set the client settings: %s", err.Error())
+		err = fmt.Errorf("form contract failed, failed to parse the client settings: %s", err.Error())
 		return
 	}
 
-	resp = fmt.Sprintf("successfully set client setting with value: %v, contracts will be formed automatically.",
-		clientSetting)
+	// validation, for any 0 value, set them to default value
+	currentSetting = clientSettingGetDefault(currentSetting)
+
+	// call set client setting methods
+	if err = api.sc.SetClientSetting(currentSetting); err != nil {
+		err = fmt.Errorf("failed to set the client settings: %s", err.Error())
+		return
+	}
+	fmt.Println("Successfully set the client setting: ")
 	return
 }

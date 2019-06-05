@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",
-	"redundancy", "violation", "uploadspeed", "downloadspeed"}
-
 func TestStorageClient_ParseClientSetting(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
