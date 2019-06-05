@@ -14,7 +14,6 @@ import (
 	"os"
 )
 
-
 // Upload instructs the renter to start tracking a file. The renter will
 // automatically upload and repair tracked files using a background loop.
 func (sc *StorageClient) Upload(up FileUploadParams) error {
@@ -41,7 +40,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	// Delete existing file if Override mode
 	if up.Mode == Override {
 		if err := sc.DeleteFile(up.DxPath); err != nil && err != dxdir.ErrUnknownPath {
-			return fmt.Errorf( "cannot to delete existing file, error: %v", err)
+			return fmt.Errorf("cannot to delete existing file, error: %v", err)
 		}
 	}
 
@@ -53,7 +52,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	// TODO sc.contractManager.Contracts()
 	numContracts := uint32(100) // len(sc.contractManager.Contracts())
 	requiredContracts := (up.ErasureCode.NumSectors() + up.ErasureCode.MinSectors()) / 2
-	if numContracts < requiredContracts{
+	if numContracts < requiredContracts {
 		return fmt.Errorf("not enough contracts to upload file: got %v, needed %v", numContracts, (up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors())/2)
 	}
 
@@ -64,7 +63,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	// Try to create the directory. If ErrPathOverload is returned it already exists.
 	dxDirEntry, err := sc.staticDirSet.NewDxDir(dirDxPath)
 	if err != dxdir.ErrPathOverload && err != nil {
-		return fmt.Errorf( "unable to create dx directory for new file, error: %v", err)
+		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
 		dxDirEntry.Close()
 	}
@@ -87,7 +86,6 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	// Bubble the health of the DxFile directory to ensure the health is
 	// updated with the new file
 	go sc.threadedBubbleMetadata(dirDxPath)
-
 
 	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
 

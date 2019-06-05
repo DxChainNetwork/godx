@@ -8,21 +8,19 @@ import (
 	"time"
 )
 
-// managedDropSegment will remove a worker from the responsibility of tracking a Segment.
-//
+// dropSegment will remove a worker from the responsibility of tracking a segment
 // This function is managed instead of static because it is against convention
 // to be calling functions on other objects (in this case, the renter) while
-// holding a lock.
-func (w *worker) managedDropSegment(uc *unfinishedUploadSegment) {
+// holding a lock
+func (w *worker) dropSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
 	uc.workersRemaining--
 	uc.mu.Unlock()
-	w.client.managedCleanUpUploadSegment(uc)
+	w.client.cleanUpUploadSegment(uc)
 }
 
-// managedDropUploadSegments will release all of the upload Segments that the worker
-// has received.
-func (w *worker) managedDropUploadSegments() {
+// dropUploadSegments will release all of the upload segments that the worker has received.
+func (w *worker) dropUploadSegments() {
 	// Make a copy of the slice under lock, clear the slice, then drop the
 	// Segments without a lock (managed function).
 	var SegmentsToDrop []*unfinishedUploadSegment
@@ -34,28 +32,27 @@ func (w *worker) managedDropUploadSegments() {
 	w.mu.Unlock()
 
 	for i := 0; i < len(SegmentsToDrop); i++ {
-		w.managedDropSegment(SegmentsToDrop[i])
+		w.dropSegment(SegmentsToDrop[i])
 		w.client.log.Debug("dropping Segment because the worker is dropping all Segments", w.contract.HostEnodeUrl)
 	}
 }
 
-// managedKillUploading will disable all uploading for the worker.
-func (w *worker) managedKillUploading() {
-	// Mark the worker as disabled so that incoming Segments are rejected.
+// killUploading will disable all uploading for the worker
+func (w *worker) killUploading() {
+	// Mark the worker as disabled so that incoming segments are rejected
 	w.mu.Lock()
 	w.uploadTerminated = true
 	w.mu.Unlock()
 
-	// After the worker is marked as disabled, clear out all of the Segments.
-	w.managedDropUploadSegments()
+	// After the worker is marked as disabled, clear out all of the segments
+	w.dropUploadSegments()
 }
 
-// managedNextUploadSegment will pull the next potential Segment out of the worker's
-// work queue for uploading.
-func (w *worker) managedNextUploadSegment() (nextSegment *unfinishedUploadSegment, pieceIndex uint64) {
-	// Loop through the unprocessed Segments and find some work to do.
+// nextUploadSegment will pull the next segment from the worker's upload list
+func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, pieceIndex uint64) {
+	// Loop through the unprocessed segments and find some work to do
 	for {
-		// Pull a Segment off of the unprocessed Segments stack.
+		// Pull a segment off of the unprocessed segments stack
 		w.mu.Lock()
 		if len(w.unprocessedSegments) <= 0 {
 			w.mu.Unlock()
@@ -65,28 +62,27 @@ func (w *worker) managedNextUploadSegment() (nextSegment *unfinishedUploadSegmen
 		w.unprocessedSegments = w.unprocessedSegments[1:]
 		w.mu.Unlock()
 
-		// Process the Segment and return it if valid.
-		nextSegment, pieceIndex := w.managedProcessUploadSegment(segment)
+		// Process the segment and return it if valid
+		nextSegment, pieceIndex := w.preProcessUploadSegment(segment)
 		if nextSegment != nil {
 			return nextSegment, pieceIndex
 		}
 	}
-	return nil, 0 // no work found
+	return nil, 0
 }
 
-// managedQueueUploadSegment will take a Segment and add it to the worker's repair
-// stack.
-func (w *worker) managedQueueUploadSegment(uc *unfinishedUploadSegment) {
-
+// AppendUploadSegment - Append a segment to the heap to the unprocessedSegments of work
+// and the signal the uploadChan
+func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
 	utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostPublicKey)
 	goodForUpload := exists && utility.GoodForUpload
 	w.mu.Lock()
-	onCoolDown := w.onUploadCooldown()
+	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 	if !goodForUpload || uploadTerminated || onCoolDown {
 		w.mu.Unlock()
-		w.managedDropSegment(uc)
-		w.client.log.Debug("Dropping Segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostEnodeUrl)
+		w.dropSegment(uc)
+		w.client.log.Debug("Dropping segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostEnodeUrl)
 		return
 	}
 	w.unprocessedSegments = append(w.unprocessedSegments, uc)
@@ -100,22 +96,22 @@ func (w *worker) managedQueueUploadSegment(uc *unfinishedUploadSegment) {
 }
 
 // managedUpload will perform some upload work.
-func (w *worker) managedUpload(uc *unfinishedUploadSegment, pieceIndex uint64) {
+func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Open an editing connection to the host
 	// TODO 考虑要不要复用client与host之间的session connection
 	//e, err := w.renter.hostContractor.Editor(w.contract.HostPublicKey, w.renter.tg.StopChan())
 	session, err := w.client.ethBackend.SetupConnection(w.contract.HostEnodeUrl)
 	if err != nil {
 		w.client.log.Debug("Worker failed to acquire an editor:", err)
-		w.managedUploadFailed(uc, pieceIndex)
+		w.uploadFailed(uc, sectorIndex)
 		return
 	}
 	defer w.client.ethBackend.Disconnect(w.contract.HostEnodeUrl)
 
-	root, err := w.client.Append(session, uc.physicalSegmentData[pieceIndex])
+	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
 		w.client.log.Debug("Worker failed to upload via the editor:", err)
-		w.managedUploadFailed(uc, pieceIndex)
+		w.uploadFailed(uc, sectorIndex)
 		return
 	}
 	w.mu.Lock()
@@ -123,71 +119,69 @@ func (w *worker) managedUpload(uc *unfinishedUploadSegment, pieceIndex uint64) {
 	w.mu.Unlock()
 
 	// Add piece to renterFile
-	err = uc.fileEntry.AddSector(enode.HexID(w.contract.HostEnodeUrl), root, int(uc.index), int(pieceIndex))
+	err = uc.fileEntry.AddSector(enode.HexID(w.contract.HostEnodeUrl), root, int(uc.index), int(sectorIndex))
 	if err != nil {
 		w.client.log.Debug("Worker failed to add new piece to SiaFile:", err)
-		w.managedUploadFailed(uc, pieceIndex)
+		w.uploadFailed(uc, sectorIndex)
 		return
 	}
 
 	// Upload is complete. Update the state of the Segment and the renter's memory
 	// available to reflect the completed upload.
 	uc.mu.Lock()
-	releaseSize := len(uc.physicalSegmentData[pieceIndex])
+	releaseSize := len(uc.physicalSegmentData[sectorIndex])
 	uc.piecesRegistered--
 	uc.piecesCompleted++
-	uc.physicalSegmentData[pieceIndex] = nil
+	uc.physicalSegmentData[sectorIndex] = nil
 	uc.memoryReleased += uint64(releaseSize)
 	uc.mu.Unlock()
 	w.client.memoryManager.Return(uint64(releaseSize))
-	w.client.managedCleanUpUploadSegment(uc)
+	w.client.cleanUpUploadSegment(uc)
 }
 
-// onUploadCooldown returns true if the worker is on cooldown from failed
+// onUploadCoolDown returns true if the worker is on coolDown from failed
 // uploads.
-func (w *worker) onUploadCooldown() bool {
-	requiredCooldown := UploadFailureCoolDown
+func (w *worker) onUploadCoolDown() bool {
+	requiredCoolDown := UploadFailureCoolDown
 	for i := 0; i < w.uploadConsecutiveFailures && i < MaxConsecutivePenalty; i++ {
-		requiredCooldown *= 2
+		requiredCoolDown *= 2
 	}
-	return time.Now().Before(w.uploadRecentFailure.Add(requiredCooldown))
+	return time.Now().Before(w.uploadRecentFailure.Add(requiredCoolDown))
 }
 
-// managedProcessUploadSegment will process a Segment from the worker Segment queue.
-func (w *worker) managedProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegment *unfinishedUploadSegment, pieceIndex uint64) {
-	// Determine the usability value of this worker.
-	utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostEnodeUrl)
+// preProcessUploadSegment will pre-process a segment from the worker segment queue
+func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegment *unfinishedUploadSegment, pieceIndex uint64) {
+	// Determine the usability value of this worker
+	utility, exists := w.client.contractManager.hostContractor.ContractUtility(w.contract.HostEnodeUrl)
 	goodForUpload := exists && utility.GoodForUpload
 	w.mu.Lock()
-	onCooldown := w.onUploadCooldown()
+	onCoolDown := w.onUploadCoolDown()
 	w.mu.Unlock()
 
-	// Determine what sort of help this Segment needs.
+	// Determine what sort of help this segment needs
 	uc.mu.Lock()
 	_, candidateHost := uc.unusedHosts[w.contract.HostEnodeUrl]
-	SegmentComplete := uc.piecesNeeded <= uc.piecesCompleted
+	segmentComplete := uc.piecesNeeded <= uc.piecesCompleted
 	needsHelp := uc.piecesNeeded > uc.piecesCompleted+uc.piecesRegistered
-	// If the Segment does not need help from this worker, release the Segment.
-	if SegmentComplete || !candidateHost || !goodForUpload || onCooldown {
-		// This worker no longer needs to track this Segment.
+	// If the Segment does not need help from this worker, release the segment
+	if segmentComplete || !candidateHost || !goodForUpload || onCoolDown {
+		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
-		w.managedDropSegment(uc)
-		w.client.log.Debug("Worker dropping a Segment while processing", SegmentComplete, !candidateHost, !goodForUpload, onCooldown, w.contract.HostEnodeUrl)
+		w.dropSegment(uc)
+		w.client.log.Debug("Worker dropping a Segment while processing", segmentComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostEnodeUrl)
 		return nil, 0
 	}
 
-	// If the worker does not need help, add the worker to the sent of standby
-	// Segments.
+	// If the worker does not need help, add the worker to the sent of standby segments
 	if !needsHelp {
 		uc.workersStandby = append(uc.workersStandby, w)
 		uc.mu.Unlock()
-		w.client.managedCleanUpUploadSegment(uc)
+		w.client.cleanUpUploadSegment(uc)
 		return nil, 0
 	}
 
 	// If the Segment needs help from this worker, find a piece to upload and
-	// return the stats for that piece.
-	//
+	// return the stats for that piece
 	// Select a piece and mark that a piece has been selected.
 	index := -1
 	for i := 0; i < len(uc.pieceUsage); i++ {
@@ -199,7 +193,7 @@ func (w *worker) managedProcessUploadSegment(uc *unfinishedUploadSegment) (nextS
 	}
 	if index == -1 {
 		uc.mu.Unlock()
-		w.managedDropSegment(uc)
+		w.dropSegment(uc)
 		return nil, 0
 	}
 	delete(uc.unusedHosts, w.contract.HostEnodeUrl)
@@ -209,12 +203,11 @@ func (w *worker) managedProcessUploadSegment(uc *unfinishedUploadSegment) (nextS
 	return uc, uint64(index)
 }
 
-// managedUploadFailed is called if a worker failed to upload part of an unfinished
-// Segment.
-func (w *worker) managedUploadFailed(uc *unfinishedUploadSegment, pieceIndex uint64) {
+// uploadFailed is called if a worker failed to upload part of an unfinished segment
+func (w *worker) uploadFailed(uc *unfinishedUploadSegment, pieceIndex uint64) {
 	// Mark the failure in the worker if the gateway says we are online. It's
 	// not the worker's fault if we are offline.
-	if w.client.Online(){
+	if w.client.Online() {
 		w.mu.Lock()
 		w.uploadRecentFailure = time.Now()
 		w.uploadConsecutiveFailures++
@@ -229,8 +222,8 @@ func (w *worker) managedUploadFailed(uc *unfinishedUploadSegment, pieceIndex uin
 
 	// Notify the standby workers of the Segment
 	uc.managedNotifyStandbyWorkers()
-	w.client.managedCleanUpUploadSegment(uc)
+	w.client.cleanUpUploadSegment(uc)
 
 	// Because the worker is now on cooldown, drop all remaining Segments.
-	w.managedDropUploadSegments()
+	w.dropUploadSegments()
 }

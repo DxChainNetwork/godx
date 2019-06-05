@@ -18,8 +18,8 @@ import (
 
 // uploadSegmentID is a unique identifier for each Segment in the renter.
 type uploadSegmentID struct {
-	fid 	dxfile.FileID // Unique to each file.
-	index   uint64 // Unique to each Segment within a file.
+	fid   dxfile.FileID // Unique to each file.
+	index uint64        // Unique to each Segment within a file.
 }
 
 // unfinishedUploadSegment contains a Segment from the filesystem that has not
@@ -103,7 +103,7 @@ func (uc *unfinishedUploadSegment) managedNotifyStandbyWorkers() {
 	uc.mu.Unlock()
 
 	for i := 0; i < len(standbyWorkers); i++ {
-		standbyWorkers[i].managedQueueUploadSegment(uc)
+		standbyWorkers[i].AppendUploadSegment(uc)
 	}
 }
 
@@ -132,10 +132,7 @@ func (sc *StorageClient) distributeSegment(uc *unfinishedUploadSegment) {
 	}
 	sc.uploadHeap.mu.Unlock()
 
-	// Give the Segment to each worker, marking the number of workers that have
-	// received the Segment. The workers cannot be interacted with while the
-	// renter is holding a lock, so we need to build a list of workers while
-	// under lock and then launch work jobs after that.
+	// Distribute the segment to each worker in the work pool, marking the number of workers that have received the segment
 	sc.lock.Lock()
 	uc.workersRemaining += len(sc.workerPool)
 	workers := make([]*worker, 0, len(sc.workerPool))
@@ -144,8 +141,10 @@ func (sc *StorageClient) distributeSegment(uc *unfinishedUploadSegment) {
 	}
 	sc.lock.Unlock()
 
+	// TODO If we have 100 workers, but upload this file needs 30 workers ?
+	// Is it necessary to distribute the segment to each worker ?
 	for _, worker := range workers {
-		worker.managedQueueUploadSegment(uc)
+		worker.AppendUploadSegment(uc)
 	}
 }
 
@@ -154,7 +153,7 @@ func (sc *StorageClient) distributeSegment(uc *unfinishedUploadSegment) {
 // returned.
 func (sc *StorageClient) managedDownloadLogicalSegmentData(segment *unfinishedUploadSegment) error {
 	downloadLength := segment.length
-	if segment.index == uint64(segment.fileEntry.NumSegments()-1) && segment.fileEntry.FileSize() % segment.length != 0 {
+	if segment.index == uint64(segment.fileEntry.NumSegments()-1) && segment.fileEntry.FileSize()%segment.length != 0 {
 		downloadLength = segment.fileEntry.FileSize() % segment.length
 	}
 
@@ -233,7 +232,7 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 	// 'workersRemaining' to zero if the repair fails before being distributed
 	// to workers. Erasure coding memory is released manually if the repair
 	// fails before the erasure coding occurs.
-	defer sc.managedCleanUpUploadSegment(segment)
+	defer sc.cleanUpUploadSegment(segment)
 
 	// Retrieve the logical data for the Segment.
 	err = sc.retrieveLogicalSegmentData(segment)
@@ -248,8 +247,8 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 	}
 
 	// Encode the physical sectors from content bytes of file
-	segmentBytes := make([]byte, uint64(len(segment.logicalSegmentData)) * storage.SectorSize)
-	for _, b := range segment.logicalSegmentData{
+	segmentBytes := make([]byte, uint64(len(segment.logicalSegmentData))*storage.SectorSize)
+	for _, b := range segment.logicalSegmentData {
 		segmentBytes = append(segmentBytes, b...)
 	}
 	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
@@ -302,7 +301,7 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
 	numParityPieces := float64(segment.piecesNeeded - segment.minimumPieces)
 	minMissingPiecesToDownload := int(numParityPieces * RemoteRepairDownloadThreshold)
-	download := segment.piecesCompleted + minMissingPiecesToDownload < segment.piecesNeeded
+	download := segment.piecesCompleted+minMissingPiecesToDownload < segment.piecesNeeded
 
 	// Download the segment if it's not on disk.
 	if segment.fileEntry.LocalPath() == "" && download {
@@ -337,10 +336,10 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	return nil
 }
 
-// managedCleanUpUploadSegment will check the state of the Segment and perform any
-// cleanup required. This can include returning rememory and releasing the Segment
-// from the map of active Segments in the Segment heap.
-func (sc *StorageClient) managedCleanUpUploadSegment(uc *unfinishedUploadSegment) {
+// cleanUpUploadSegment will check the state of the segment and perform any
+// cleanup required. This can include returning memory and releasing the segment
+// from the map of active segments in the segment heap.
+func (sc *StorageClient) cleanUpUploadSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
 	piecesAvailable := 0
 	var memoryReleased uint64
@@ -417,7 +416,7 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 		return fmt.Errorf("unable to update Segment stuck status for file %v: %v", uc.fileEntry.DxPath(), err)
 	}
 
-	dxPath, err:= dxdir.NewDxPath(uc.fileEntry.DxPath())
+	dxPath, err := dxdir.NewDxPath(uc.fileEntry.DxPath())
 	if err != nil {
 		return err
 	}
@@ -449,7 +448,7 @@ func (sc *StorageClient) managedUpdateUploadSegmentStuckStatus(uc *unfinishedUpl
 	uc.mu.Unlock()
 
 	// Determine if repair was successful
-	successfulRepair := (1 - RemoteRepairDownloadThreshold)*float64(piecesNeeded) <= float64(piecesCompleted)
+	successfulRepair := (1-RemoteRepairDownloadThreshold)*float64(piecesNeeded) <= float64(piecesCompleted)
 
 	// Check if renter is shutting down
 	var renterError bool
@@ -479,7 +478,7 @@ func (sc *StorageClient) managedUpdateUploadSegmentStuckStatus(uc *unfinishedUpl
 		sc.log.Debug("WARN: could not set Segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
 	}
 
-	dxPath, err:= dxdir.NewDxPath(uc.fileEntry.DxPath())
+	dxPath, err := dxdir.NewDxPath(uc.fileEntry.DxPath())
 	if err != nil {
 		return
 	}

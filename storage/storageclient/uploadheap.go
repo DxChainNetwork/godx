@@ -75,8 +75,8 @@ type uploadHeap struct {
 	repairingSegments map[uploadSegmentID]struct{}
 
 	// Control channels
-	newUploads        	chan struct{}
-	repairNeeded      	chan struct{}
+	newUploads          chan struct{}
+	repairNeeded        chan struct{}
 	stuckSegmentFound   chan struct{}
 	stuckSegmentSuccess chan dxdir.DxPath
 
@@ -113,7 +113,6 @@ func (uh *uploadHeap) pop() (uc *unfinishedUploadSegment) {
 	uh.mu.Unlock()
 	return uc
 }
-
 
 func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWithID, hosts map[string]struct{}, target repairTarget, hostHealthInfoTable storage.HostHealthInfoTable) []*unfinishedUploadSegment {
 	if len(sc.workerPool) < int(entry.ErasureCode().MinSectors()) {
@@ -157,15 +156,15 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 			fileEntry: entry.CopyEntry(),
 
 			id: uploadSegmentID{
-				fid: 	 fid,
-				index:   uint64(index),
+				fid:   fid,
+				index: uint64(index),
 			},
 
 			index:  uint64(index),
 			length: entry.SegmentSize(),
 			offset: int64(uint64(index) * entry.SegmentSize()),
 
-			memoryNeeded:  entry.SectorSize() * uint64(entry.ErasureCode().NumSectors()+entry.ErasureCode().MinSectors()) + uint64(entry.ErasureCode().NumSectors()) * uint64(entry.CipherKey().Overhead()),
+			memoryNeeded:  entry.SectorSize()*uint64(entry.ErasureCode().NumSectors()+entry.ErasureCode().MinSectors()) + uint64(entry.ErasureCode().NumSectors())*uint64(entry.CipherKey().Overhead()),
 			minimumPieces: int(entry.ErasureCode().MinSectors()),
 			piecesNeeded:  int(entry.ErasureCode().NumSectors()),
 			stuck:         entry.GetStuckByIndex(index),
@@ -413,12 +412,10 @@ func (sc *StorageClient) createSegmentHeap(dirDxPath dxdir.DxPath, hosts map[str
 }
 
 // doPrepareNextSegment takes the next segment from the segment heap and prepares it for upload
-func (sc *StorageClient) doPrepareNextSegment(uuc *unfinishedUploadSegment, hosts map[string]struct{}) error {
-	// Grab the next Segment, loop until we have enough memory, update the amount
-	// of memory available, and then spin up a thread to asynchronously handle
-	// the rest of the segment tasks.
+func (sc *StorageClient) doPrepareNextSegment(uuc *unfinishedUploadSegment) error {
+	// Block until there is enough memory, and then upload segment asynchronously
 	if !sc.memoryManager.Request(uuc.memoryNeeded, false) {
-		return errors.New("can't get enough memory")
+		return errors.New("can't obtain enough memory")
 	}
 
 	// Don't block the outer loop
@@ -426,15 +423,16 @@ func (sc *StorageClient) doPrepareNextSegment(uuc *unfinishedUploadSegment, host
 	return nil
 }
 
-// managedRefreshHostsAndWorkers will reset the set of hosts and the set of
-// workers for the renter.
+// refreshHostsAndWorkers will reset the set of hosts and the set of
+// workers for the storage client
 func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	currentContracts := sc.contractManager.Contracts()
 	hosts := make(map[string]struct{})
 	for _, contract := range currentContracts {
 		hosts[contract] = struct{}{}
 	}
-	// Refresh the worker pool as well.
+
+	// Refresh the worker pool
 	sc.activateWorkerPool()
 	return hosts
 }
@@ -443,7 +441,7 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 // loop will continue until the renter stops, there are no more Segments, or
 // enough time has passed indicated by the rebuildHeapSignal
 func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
-	var consecutiveSegmentRepairs int
+	var consecutiveSegmentUploads int
 	rebuildHeapSignal := time.After(RebuildSegmentHeapInterval)
 	for {
 		select {
@@ -459,46 +457,41 @@ func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
 			return
 		}
 
-		// Check if there is work by trying to pop of the next segment from the heap
+		// Pop the next segment and check whether is empty
 		nextSegment := sc.uploadHeap.pop()
 		if nextSegment == nil {
 			return
 		}
-		sc.log.Debug("Sending next segment to the workers", nextSegment.id)
 
-		// Make sure we have enough workers for this Segment to reach minimum
-		// redundancy. Otherwise we ignore this segment for now, mark it as stuck
-		// and let the stuck loop work on it
+		sc.log.Debug("Sending next segment to the workers", nextSegment.id)
+		// If the num of workers in worker pool is not enough to cover the tasks, we will
+		// mark the segment as stuck
 		sc.lock.Lock()
 		availableWorkers := len(sc.workerPool)
 		sc.lock.Unlock()
 		if availableWorkers < nextSegment.minimumPieces {
-			// Not enough available workers, mark as stuck and close
-			sc.log.Debug("Setting Segment  as stuck because there are not enough good workers", nextSegment.id)
+			sc.log.Debug("Setting segment as stuck because there are not enough good workers", nextSegment.id)
 			err := sc.setStuckAndClose(nextSegment, true)
 			if err != nil {
-				sc.log.Debug("WARN: unable to mark Segment as stuck and close:", err)
+				sc.log.Debug("Unable to mark segment as stuck and close:", err)
 			}
 			continue
 		}
 
 		// doPrepareNextSegment block until enough memory of segment and then distribute it to the workers
-		err := sc.doPrepareNextSegment(nextSegment, hosts)
+		err := sc.doPrepareNextSegment(nextSegment)
 		if err != nil {
-			sc.log.Debug("WARN: unable to prepare next Segment without issues", err, nextSegment.id)
+			sc.log.Debug("Unable to prepare next segment without issues", err, nextSegment.id)
 			err = sc.setStuckAndClose(nextSegment, true)
 			if err != nil {
-				sc.log.Debug("WARN: unable to mark Segment as stuck and close:", err)
+				sc.log.Debug("Unable to mark segment as stuck and close:", err)
 			}
 			continue
 		}
-		consecutiveSegmentRepairs++
+		consecutiveSegmentUploads++
 
 		// Check if enough segments are currently being repaired
-		if consecutiveSegmentRepairs >= MaxConsecutiveSegmentRepairs {
-			// Pull all of the Segments out of the heap and return. Save the stuck
-			// Segments, as this is the repair loop and we aren't trying to erase
-			// the stuck segments
+		if consecutiveSegmentUploads >= MaxConsecutiveSegmentUploads {
 			var stuckSegments []*unfinishedUploadSegment
 			for sc.uploadHeap.len() > 0 {
 				if c := sc.uploadHeap.pop(); c.stuck {
@@ -507,10 +500,9 @@ func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
 			}
 			for _, ss := range stuckSegments {
 				if !sc.uploadHeap.push(ss) {
-					// Segment wasn't added to the heap. Close the file
 					err := ss.fileEntry.Close()
 					if err != nil {
-						sc.log.Debug("WARN: unable to close file:", err)
+						sc.log.Debug("Unable to close file:", err)
 					}
 				}
 			}
@@ -541,8 +533,6 @@ func (sc *StorageClient) doUploadAndRepair() error {
 	sc.uploadHeap.mu.Unlock()
 	if heapLen == 0 {
 		sc.log.Debug("No Segments added to the heap for repair from `%v` even through health was %v", dirDxPath, dirHealth)
-		// Call threadedBubble to make sure that directory information is
-		// accurate
 		sc.threadedBubbleMetadata(dirDxPath)
 		return nil
 	}
@@ -556,7 +546,6 @@ func (sc *StorageClient) doUploadAndRepair() error {
 	sc.threadedBubbleMetadata(dirDxPath)
 	return nil
 }
-
 
 func (sc *StorageClient) uploadAndRepairLoop() {
 	err := sc.tm.Add()

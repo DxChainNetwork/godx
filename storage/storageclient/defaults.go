@@ -52,7 +52,6 @@ const (
 	DxFileExtension = ".dx"
 )
 
-
 // Default params about upload/download process
 var (
 	// fileRepairInterval defines how long the renter should wait before
@@ -63,9 +62,8 @@ var (
 	// in between checking the health of a file or directory.
 	HealthCheckInterval = 1 * time.Hour
 
-	// maxConsecutiveChunkRepairs is the maximum number of chunks we want to pop of
-	// the repair heap before rebuilding the heap.
-	MaxConsecutiveSegmentRepairs = 100
+	// MaxConsecutiveSegmentUploads is the maximum number of segment before rebuilding the heap.
+	MaxConsecutiveSegmentUploads = 100
 
 	// offlineCheckFrequency is how long the renter will wait to check the
 	// online status if it is offline.
@@ -92,4 +90,4 @@ var (
 	RemoteRepairDownloadThreshold = 0.25
 
 	UploadFailureCoolDown = 1 * time.Minute
- )
+)

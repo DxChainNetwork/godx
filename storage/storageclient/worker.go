@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,8 +22,8 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract     storage.ClientContract
-	client       *StorageClient
+	contract storage.ClientContract
+	client   *StorageClient
 
 	// How many failures in a row?
 	ownedDownloadConsecutiveFailures int
@@ -40,11 +41,11 @@ type worker struct {
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	unprocessedSegments         []*unfinishedUploadSegment // Yet unprocessed work items.
-	uploadChan                chan struct{}            // Notifications of new work.
-	uploadConsecutiveFailures int                      // How many times in a row uploading has failed.
-	uploadRecentFailure       time.Time                // How recent was the last failure?
-	uploadTerminated          bool                     // Have we stopped uploading?
+	unprocessedSegments       []*unfinishedUploadSegment // Yet unprocessed work items.
+	uploadChan                chan struct{}              // Notifications of new work.
+	uploadConsecutiveFailures int                        // How many times in a row uploading has failed.
+	uploadRecentFailure       time.Time                  // How recent was the last failure?
+	uploadTerminated          bool                       // Have we stopped uploading?
 
 	// Worker will shut down if a signal is sent down this channel.
 	killChan chan struct{}
@@ -72,7 +73,7 @@ func (c *StorageClient) activateWorkerPool() {
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-				client: c,
+				client:       c,
 			}
 			c.workerPool[id] = worker
 			if err := c.tm.Add(); err != nil {
@@ -102,11 +103,11 @@ func (c *StorageClient) activateWorkerPool() {
 // workLoop repeatedly issues task to a worker, stopping when the worker
 // is killed or when the thread group is closed.
 func (w *worker) workLoop() {
-	//defer w.managedKillUploading()
+	defer w.killUploading()
 	defer w.killDownloading()
 
+	// TODO - Evaluate this concurrent architecture
 	for {
-
 		// Perform one step of processing download task
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
@@ -115,9 +116,9 @@ func (w *worker) workLoop() {
 		}
 
 		// Perform one step of processing upload task
-		segment, sectorIndex := w.managedNextUploadSegment()
+		segment, sectorIndex := w.nextUploadSegment()
 		if segment != nil {
-			w.managedUpload(segment, sectorIndex)
+			w.upload(segment, sectorIndex)
 			continue
 		}
 
@@ -131,6 +132,52 @@ func (w *worker) workLoop() {
 			return
 		case <-w.client.tm.StopChan():
 			return
+		}
+	}
+}
+
+// We split upload and download loop into two separate goroutine, and we will retrieve all available segments once,
+// Last continue to wait for fresh segments
+func (w *worker) UploadWorkLoop() {
+	defer w.killUploading()
+	for {
+		// Block util a new upload task, or a stop signal
+		select {
+		case <-w.uploadChan:
+		case <-w.killChan:
+			return
+		case <-w.client.tm.StopChan():
+			return
+		}
+
+		// Loop process upload task
+		for {
+			segment, sectorIndex := w.nextUploadSegment()
+			if segment != nil {
+				go w.upload(segment, sectorIndex)
+			}
+		}
+	}
+}
+
+func (w *worker) DownloadWorkLoop() {
+	defer w.killDownloading()
+	for {
+		// Block util a new download task, or a stop signal
+		select {
+		case <-w.downloadChan:
+		case <-w.killChan:
+			return
+		case <-w.client.tm.StopChan():
+			return
+		}
+
+		// Loop process download task
+		for {
+			downloadSegment := w.nextDownloadSegment()
+			if downloadSegment != nil {
+				go w.download(downloadSegment)
+			}
 		}
 	}
 }
@@ -237,7 +284,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	if uint64(fetchOffset/storage.SegmentSize) == 0 {
+	if uint64(fetchOffset/merkle.LeafSize) == 0 {
 		w.client.log.Error("twofish doesn't support a blockIndex != 0")
 		return
 	}
@@ -333,7 +380,7 @@ func (w *worker) onDownloadCooldown() bool {
 // successful recovery of the requested data.
 func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 	segmentIndex, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
-	return uint64(segmentIndex * storage.SegmentSize), uint64(numSegments * storage.SegmentSize)
+	return uint64(segmentIndex * merkle.LeafSize), uint64(numSegments * merkle.LeafSize)
 }
 
 // segmentsForRecovery calculates the first segment and how many segments we
@@ -349,7 +396,7 @@ func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasu
 
 	// Else we need to figure out what segments of the piece we need to
 	// download for the recovered data to contain the data we want.
-	recoveredSegmentSize := uint64(rs.MinSectors() * storage.SegmentSize)
+	recoveredSegmentSize := uint64(rs.MinSectors() * merkle.LeafSize)
 
 	// Calculate the offset of the download.
 	startSegment := segmentFetchOffset / recoveredSegmentSize
