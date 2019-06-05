@@ -23,8 +23,9 @@ import (
 // StorageHostManager contains necessary fields that are used to manage storage hosts
 // establishing connection with them and getting their settings
 type StorageHostManager struct {
-	// storage client backend
-	b storage.ClientBackend
+	// storage client and eth backend
+	b   storage.ClientBackend
+	eth storage.EthBackend
 
 	// peer to peer communication
 	p2pServer *p2p.Server

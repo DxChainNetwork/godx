@@ -241,7 +241,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		w.client.log.Error("failed to connect host for file downloading", "host_url", hostInfo.EnodeURL)
 		return
 	}
-	defer w.client.ethBackend.Disconnect(hostInfo.EnodeURL)
+	defer w.client.ethBackend.Disconnect(session, hostInfo.EnodeURL)
 
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))

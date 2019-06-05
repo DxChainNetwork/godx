@@ -373,3 +373,7 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 func (c *Contract) Header() ContractHeader {
 	return c.header
 }
+
+func (c *Contract) MerkelRoots() ([]common.Hash, error) {
+	return c.merkleRoots.roots()
+}

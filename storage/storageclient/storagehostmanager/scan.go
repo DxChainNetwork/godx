@@ -5,13 +5,11 @@
 package storagehostmanager
 
 import (
-	"errors"
 	"fmt"
 	"math/rand"
 	"time"
 
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
@@ -233,20 +231,10 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 // retrieveHostSetting will establish connection to the corresponded storage host
 // and get its configurations
 func (shm *StorageHostManager) retrieveHostConfig(hi storage.HostInfo) (storage.HostExtConfig, error) {
-	// establish connection to the peer
-	node, err := enode.ParseV4(hi.EnodeURL)
-	if err != nil {
-		return storage.HostExtConfig{}, errors.New("invalid enode")
-	}
-	shm.p2pServer.AddPeer(node)
-
-	// extract peer ID
-	peerID := fmt.Sprintf("%x", hi.EnodeID.Bytes()[:8])
-
 	var config storage.HostExtConfig
 
 	// send message, and get host setting
-	err = shm.b.GetStorageHostSetting(peerID, &config)
+	err := shm.b.GetStorageHostSetting(hi.EnodeURL, &config)
 	return config, err
 }
 
