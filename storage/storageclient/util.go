@@ -130,11 +130,11 @@ func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) 
 	}
 
 	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
-	for index := range sectorsChanged {
-		if index < oldNumSectors {
+	for sectorNum := range sectorsChanged {
+		if sectorNum < oldNumSectors {
 			oldRanges = append(oldRanges, merkletree.LeafRange{
-				Start: index,
-				End:   index + 1,
+				Start: sectorNum,
+				End:   sectorNum + 1,
 			})
 		}
 	}
@@ -164,26 +164,6 @@ func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []storage.Upl
 // modify the leaf hashes of a Merkle diff proof to verify a
 // post-modification Merkle diff proof for the specified actions.
 func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
-	// determine which sector index corresponds to each leaf hash
-	var indices []uint64
-	for _, action := range actions {
-		switch action.Type {
-		case storage.UploadActionAppend:
-			indices = append(indices, numSectors)
-			numSectors++
-		}
-	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
-	indexMap := make(map[uint64]int, len(leafHashes))
-	for i, index := range indices {
-		if i > 0 && index == indices[i-1] {
-			continue // remove duplicates
-		}
-		indexMap[index] = i
-	}
-
 	for _, action := range actions {
 		switch action.Type {
 		case storage.UploadActionAppend:
