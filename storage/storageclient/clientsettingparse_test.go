@@ -132,3 +132,115 @@ func TestParsePeriodRenew(t *testing.T) {
 		}
 	}
 }
+
+func TestParseExpectedStorage(t *testing.T) {
+	var tables = []struct {
+		dataSize string
+		parsed   uint64
+		err      bool
+	}{
+		{"256b", 256, false},
+		{"1000 b", 1000, false},
+		{"431 KB", 431 * 1e3, false},
+		{"486 mB", 486 * 1e6, false},
+		{"1025 gb", 1025 * 1e9, false},
+		{"3 tB", 3 * 1e12, false},
+		{"431 mib", 431 * 1 << 20, false},
+		{"572 tib", 572 * 1 << 40, false},
+		{"572 tibb", 0, true},
+	}
+
+	for _, table := range tables {
+		result, err := parseExpectedStorage(table.dataSize)
+		if err != nil && table.err {
+			continue
+		} else if err != nil {
+			t.Fatalf("error parsing the expected storage: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("error parsing: expected parsed storage size %+v, got %+v",
+				table.parsed, result)
+		}
+	}
+}
+
+func TestParseExpectedUpload(t *testing.T) {
+	var tables = []struct {
+		dataSize string
+		parsed   uint64
+	}{
+		{"256b", 256 / storage.BlocksPerMonth},
+		{"1000 b", 1000 / storage.BlocksPerMonth},
+		{"431 KB", 431 * 1e3 / storage.BlocksPerMonth},
+		{"486 mB", 486 * 1e6 / storage.BlocksPerMonth},
+		{"1025 gb", 1025 * 1e9 / storage.BlocksPerMonth},
+		{"3 tB", 3 * 1e12 / storage.BlocksPerMonth},
+		{"431 mib", 431 * 1 << 20 / storage.BlocksPerMonth},
+		{"572 tib", 572 * 1 << 40 / storage.BlocksPerMonth},
+	}
+
+	for _, table := range tables {
+		result, err := parseExpectedUpload(table.dataSize)
+		if err != nil {
+			t.Fatalf("error parsing the expected upload: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("error parsing: expected parsed upload size %+v, got %+v",
+				table.parsed, result)
+		}
+	}
+}
+
+func TestParseExpectedRedundancy(t *testing.T) {
+	var tables = []struct {
+		redundancy string
+		parsed     float64
+		err        bool
+	}{
+		{"3.5", 3.5, false},
+		{"4.0", 4.0, false},
+		{"abcdefg", 0, true},
+	}
+
+	for _, table := range tables {
+		result, err := parseExpectedRedundancy(table.redundancy)
+		if err != nil && table.err {
+			continue
+		} else if err != nil {
+			t.Fatalf("error parsing the expected redundancy: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("error parsing: expected parsed redundancy %+v, got %+v",
+				table.parsed, result)
+		}
+	}
+}
+
+func TestParseEnableIPViolation(t *testing.T) {
+	var tables = []struct {
+		enable string
+		parsed bool
+		err    bool
+	}{
+		{"true", true, false},
+		{"false", false, false},
+		{"1", false, true},
+	}
+
+	for _, table := range tables {
+		result, err := parseEnableIPViolation(table.enable)
+		if err != nil && table.err {
+			continue
+		} else if err != nil {
+			t.Fatalf("error parsing the ip violation enable: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("error parsing: expected parsed ip violation enable %t, got %t", table.parsed,
+				result)
+		}
+	}
+}

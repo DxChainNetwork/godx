@@ -24,7 +24,6 @@ var currencyIndexMap = map[string]int{
 }
 
 var dataSizeMultiplier = map[string]uint64{
-	"b":   1,
 	"kb":  1e3,
 	"mb":  1e6,
 	"gb":  1e9,
@@ -261,9 +260,11 @@ func parsePeriodAndRenew(periodRenew string) (parsed uint64, err error) {
 func convertUint64(data string, factor uint64, unit string) (parsed uint64, err error) {
 	var parsedInt int64
 
+	// remove the unit from the string
 	data = strings.TrimSuffix(data, unit)
+
 	if parsedInt, err = strconv.ParseInt(data, 10, 64); err != nil {
-		err = fmt.Errorf("error parsing the storage hsots: %s", err.Error())
+		err = fmt.Errorf("error parsing to uint64, invalid unit: %s", err.Error())
 		return
 	}
 
@@ -285,6 +286,10 @@ func dataSizeConverter(dataSize string) (parsed uint64, err error) {
 		if strings.HasSuffix(dataSize, unit) {
 			return convertUint64(dataSize, multiplier, unit)
 		}
+	}
+
+	if strings.HasSuffix(dataSize, "b") {
+		return convertUint64(dataSize, 1, "b")
 	}
 
 	err = fmt.Errorf("data provided does not have valid unit: %s", dataSize)
@@ -312,6 +317,11 @@ func parseExpectedDownload(download string) (parsed uint64, err error) {
 }
 
 func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
+	if parsed, err = strconv.ParseFloat(redundancy, 64); err != nil {
+		err = fmt.Errorf("error parsing the redundancy into float64: %s", err.Error())
+		return
+	}
+
 	return
 }
 
