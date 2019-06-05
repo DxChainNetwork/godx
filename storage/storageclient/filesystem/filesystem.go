@@ -43,8 +43,8 @@ type FileSystem struct {
 	// DirSet is the DirSet from module dxdir
 	DirSet *dxdir.DirSet
 
-	// contractor is the contractor used to give health info for the file system
-	contractor contractor
+	// contractManager is the contractManager used to give health info for the file system
+	contractManager contractManager
 
 	// fileWal is the wal responsible for storage.InsertUpdate / storage.DeleteUpdate
 	// that is used in dxfile and dxdir
@@ -72,13 +72,13 @@ type FileSystem struct {
 }
 
 // New is the public function used for creating a production FileSystem
-func New(persistDir string, contractor contractor) *FileSystem {
+func New(persistDir string, contractor contractManager) *FileSystem {
 	d := newStandardDisrupter()
 	return newFileSystem(persistDir, contractor, d)
 }
 
 // newFileSystem creates a new file system with the standardDisrupter
-func newFileSystem(persistDir string, contractor contractor, disrupter disrupter) *FileSystem {
+func newFileSystem(persistDir string, contractor contractManager, disrupter disrupter) *FileSystem {
 	// create the FileSystem
 	return &FileSystem{
 		rootDir:           storage.SysPath(filepath.Join(persistDir, filesDirectory)),
@@ -393,7 +393,7 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 	}
 	defer fs.tm.Done()
 
-	// TODO: Call contractor.HostUtilsMap here to avoid calculating the map again and
+	// TODO: Call contractManager.HostUtilsMap here to avoid calculating the map again and
 	// 	again for each file
 	var fileList []storage.FileBriefInfo
 	err := filepath.Walk(string(fs.rootDir), func(path string, info os.FileInfo, err error) error {
@@ -425,7 +425,7 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 }
 
 // fileDetailedInfo returns detailed information for a file specified by the path
-// If the input table is empty, the code the query the contractor for health info
+// If the input table is empty, the code the query the contractManager for health info
 func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error) {
 	file, err := fs.FileSet.Open(path)
 	if err != nil {
@@ -458,7 +458,7 @@ func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHe
 }
 
 // fileBriefInfo returns the brief info about a file specified by the path
-// If the input table is empty, the code the query the contractor for health info
+// If the input table is empty, the code the query the contractManager for health info
 func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileBriefInfo, error) {
 	file, err := fs.FileSet.Open(path)
 	if err != nil {

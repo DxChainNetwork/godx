@@ -112,7 +112,7 @@ func tempDir(dirs ...string) storage.SysPath {
 }
 
 // newEmptyTestFileSystem creates an empty file system used for testing
-func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractor, disrupter disrupter) *FileSystem {
+func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractManager, disrupter disrupter) *FileSystem {
 	var rootDir storage.SysPath
 	if len(extraNaming) == 0 {
 		rootDir = tempDir(t.Name())

@@ -55,9 +55,9 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 		tests = tests[:1]
 	}
 	for i, test := range tests {
-		// Create a random file system with random files, and random contractor
+		// Create a random file system with random files, and random contractManager
 		dr := newStandardDisrupter()
-		ct := &randomContractor{
+		ct := &randomContractManager{
 			missRate:         0.1,
 			onlineRate:       0.8,
 			goodForRenewRate: 0.8,
@@ -119,7 +119,7 @@ func TestFileSystem_RandomStuckDirectory(t *testing.T) {
 	}
 	for i, test := range tests {
 		dr := newStandardDisrupter()
-		ct := &AlwaysSuccessContractor{}
+		ct := &AlwaysSuccessContractManager{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
 		if err := fs.createRandomFiles(test.numFiles, 0.8, 0.3, 5, test.missRate); err != nil {
 			t.Fatal(err)

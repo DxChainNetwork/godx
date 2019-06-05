@@ -17,7 +17,7 @@ func TestCreateRandomFiles(t *testing.T) {
 	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
-	ct := &AlwaysSuccessContractor{}
+	ct := &AlwaysSuccessContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	c := make(chan struct{})
 	go func() {

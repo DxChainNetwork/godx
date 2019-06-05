@@ -99,7 +99,7 @@ type StorageClient struct {
 func New(persistDir string) (*StorageClient, error) {
 	sc := &StorageClient{
 		// TODO(mzhang): replace the implemented contractor here
-		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractor{}),
+		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractManager{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 		log:            log.New(),

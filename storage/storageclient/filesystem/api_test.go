@@ -35,7 +35,7 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 		tests = tests[:len(tests)-1]
 	}
 	for i, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractor{}, newStandardDisrupter())
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 		goDeepRate, goWideRate, maxDepth, missRate := float32(0.7), float32(0.5), 3, float32(test.missRate)
 		err := fs.createRandomFiles(int(test.numFiles), goDeepRate, goWideRate, maxDepth, missRate)
 		if err != nil {
@@ -73,7 +73,7 @@ func TestPublicFileSystemAPI_FileList(t *testing.T) {
 		tests = tests[:1]
 	}
 	for i, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractor{}, newStandardDisrupter())
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 		api := NewPublicFileSystemAPI(fs)
 		// create random files
 		goDeepRate, goWideRate, maxDepth, missRate := float32(0.7), float32(0.5), 3, float32(0.1)
@@ -91,7 +91,7 @@ func TestPublicFileSystemAPI_FileList(t *testing.T) {
 // TestPublicFileSystemAPI_Rename test the rename functionality.
 // The rename function should also update the metadata in all related directories
 func TestPublicFileSystemAPI_Rename(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	api := NewPublicFileSystemAPI(fs)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestPublicFileSystemAPI_Rename(t *testing.T) {
 // TestPublicFileSystemAPI_Rename test the rename functionality.
 // The rename function should also update the metadata in all related directories
 func TestPublicFileSystemAPI_Delete(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	api := NewPublicFileSystemAPI(fs)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {

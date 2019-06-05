@@ -24,7 +24,7 @@ import (
 )
 
 // TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
-// under different contractor under the same directory.
+// under different contractManager under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipped for short tests")
@@ -33,14 +33,14 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	fileSize := uint64(1 << 22 * 10 * 10)
 	tests := []struct {
 		numFiles        int // numFiles is the number of the files under the same directory
-		contractor      contractor
+		contractor      contractManager
 		markStuck       bool // flag indicates whether markAllUnhealthyAsStuck called
 		rootMetadata    *dxdir.Metadata
 		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
 	}{
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -50,7 +50,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   10,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
@@ -60,7 +60,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -70,7 +70,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  false,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -80,7 +80,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   10,
-			contractor: &alwaysFailContractor{},
+			contractor: &alwaysFailContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
@@ -90,7 +90,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles: 1,
-			contractor: &randomContractor{
+			contractor: &randomContractManager{
 				missRate:         0.1,
 				onlineRate:       0.9,
 				goodForRenewRate: 0.9,
@@ -104,7 +104,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles: 100,
-			contractor: &randomContractor{
+			contractor: &randomContractManager{
 				missRate:         0.1,
 				onlineRate:       0.9,
 				goodForRenewRate: 0.9,
@@ -223,7 +223,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		dr = newCounterDisrupter(dr)
 
 		// create FileSystem and create a new DxFile
-		ct := &alwaysFailContractor{}
+		ct := &alwaysFailContractManager{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
 
 		path := storage.RootDxPath()
@@ -321,7 +321,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	dr = newCounterDisrupter(dr)
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -397,7 +397,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	cdr := newCounterDisrupter(dr)
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, cdr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -464,7 +464,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -502,8 +502,8 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	// Check that the disrupter has been accessed twice
 	fs.postTestCheck(t, true, false, defaultMd)
 
-	// Restart the filesystem with always success contractor. The metadata should be updated as expected
-	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractor{}, newStandardDisrupter())
+	// Restart the filesystem with always success contractManager. The metadata should be updated as expected
+	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	if err = newFs.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +533,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
-	ct := &AlwaysSuccessContractor{}
+	ct := &AlwaysSuccessContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
