@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"testing"
 )
@@ -73,5 +74,61 @@ func TestParseFundFail(t *testing.T) {
 			t.Errorf("error is expected with the input %s", failedCase)
 		}
 
+	}
+}
+
+func TestParseStorageHosts(t *testing.T) {
+	var tables = []struct {
+		hosts  string
+		parsed uint64
+	}{
+		{"1231231", 1231231},
+		{"34123431324", 34123431324},
+		{"023123131", 23123131},
+	}
+
+	for _, table := range tables {
+		result, err := parseStorageHosts(table.hosts)
+		if err != nil {
+			t.Fatalf("failed to parse the storage hosts: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("by using %s as input, expected parsed value %v, got %v",
+				table.hosts, table.parsed, result)
+		}
+	}
+}
+
+func TestParsePeriodRenew(t *testing.T) {
+	var tables = []struct {
+		period string
+		parsed uint64
+		err    bool
+	}{
+		{"100 d", 100 * storage.BlocksPerDay, false},
+		{"182 h", 182 * storage.BlockPerHour, false},
+		{"179 W", 179 * storage.BlocksPerWeek, false},
+		{"3000 M", 3000 * storage.BlocksPerMonth, false},
+		{"10 y", 10 * storage.BlocksPerYear, false},
+		{"10000 b", 10000, false},
+		{"10000 J", 0, true},
+		{"100u0 d", 0, true},
+	}
+
+	for _, table := range tables {
+		result, err := parsePeriodAndRenew(table.period)
+		if err != nil && table.err {
+			continue
+		}
+
+		if err != nil {
+			t.Fatalf("error is not expected, got error: %s", err.Error())
+		}
+
+		if result != table.parsed {
+			t.Errorf("input %+v, epxected parsed value %+v, got %+v",
+				table.period, table.parsed, result)
+		}
 	}
 }

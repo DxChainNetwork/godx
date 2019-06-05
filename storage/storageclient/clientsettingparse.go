@@ -9,6 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,18 @@ var currencyIndexMap = map[string]int{
 	"Kdx": 4,
 	"Mdx": 5,
 	"Gdx": 6,
+}
+
+var dataSizeMultiplier = map[string]uint64{
+	"b":   1,
+	"kb":  1e3,
+	"mb":  1e6,
+	"gb":  1e9,
+	"tb":  1e12,
+	"kib": 1 << 10,
+	"mib": 1 << 20,
+	"gib": 1 << 30,
+	"tib": 1 << 40,
 }
 
 func (sc *StorageClient) parseClientSetting(settings map[string]string) (clientSetting storage.ClientSetting, err error) {
@@ -44,14 +57,14 @@ func (sc *StorageClient) parseClientSetting(settings map[string]string) (clientS
 			clientSetting.RentPayment.StorageHosts = hosts
 
 		case key == "period":
-			period, err := parsePeriod(value)
+			period, err := parsePeriodAndRenew(value)
 			if err != nil {
 				break
 			}
 			clientSetting.RentPayment.Period = period
 
 		case key == "renew":
-			renew, err := parseRenewWindow(value)
+			renew, err := parsePeriodAndRenew(value)
 			if err != nil {
 				break
 			}
@@ -111,7 +124,15 @@ func (sc *StorageClient) parseClientSetting(settings map[string]string) (clientS
 	return
 }
 
+// parseFund will parse the user string input, and convert it into common.BigInt
+// type in terms of hump, which is the smallest currency unit
 func parseFund(fund string) (parsed common.BigInt, err error) {
+
+	// verify the length first
+	if len(fund) < 3 {
+		err = fmt.Errorf("currency unit is expected")
+		return
+	}
 
 	// remove all white spaces, and convert the character d and x to lower case
 	fund = strings.Replace(fund, " ", "", -1)
@@ -146,6 +167,7 @@ func parseFund(fund string) (parsed common.BigInt, err error) {
 	return
 }
 
+// stringToBigInt will convert the string to common.BigInt type
 func stringToBigInt(unit, fund string, index int) (parsed common.BigInt, err error) {
 	var bigInt = new(big.Int)
 
@@ -180,6 +202,8 @@ func containsDigitOnly(s string) (digitOnly bool) {
 	return strings.IndexFunc(s, notDigit) == -1
 }
 
+// fundUnitConversion will convert the fund into unit hump, which is the smallest
+// currency unit
 func fundUnitConversion(index int, fund *big.Int) (converted common.BigInt) {
 	exp := 24 + 3*(index-3)
 	mag := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(exp)), nil)
@@ -187,27 +211,103 @@ func fundUnitConversion(index int, fund *big.Int) (converted common.BigInt) {
 	return
 }
 
+// parseStorageHosts will parse the string version of storage hosts into uint64 type
 func parseStorageHosts(hosts string) (parsed uint64, err error) {
+	var parsedInt int64
+	if parsedInt, err = strconv.ParseInt(hosts, 10, 64); err != nil {
+		err = fmt.Errorf("error parsing the storage hsots: %s", err.Error())
+		return
+	}
+	parsed = uint64(parsedInt)
 	return
 }
 
-func parsePeriod(period string) (parsed uint64, err error) {
-	return
+// parsePeriodAndRenew will parse the string version of period into uint64 type based on the
+// unit provided. The supported units are blocks, hour, day, week, month, year
+func parsePeriodAndRenew(periodRenew string) (parsed uint64, err error) {
+	// format the string
+	periodRenew = strings.Replace(periodRenew, " ", "", -1)
+	periodRenew = strings.ToLower(periodRenew)
+	unit := string(periodRenew[len(periodRenew)-1])
+
+	switch {
+	case unit == "h":
+		// convert the time hour to number of blocks
+		return convertUint64(periodRenew, storage.BlockPerHour, "h")
+	case unit == "b":
+		// return the number of blocks directly
+		return convertUint64(periodRenew, 1, "b")
+	case unit == "d":
+		// convert the time day to number of blocks
+		return convertUint64(periodRenew, storage.BlocksPerDay, "d")
+
+	case unit == "w":
+		// convert the time week to number of blocks
+		return convertUint64(periodRenew, storage.BlocksPerWeek, "w")
+
+	case unit == "m":
+		// convert the time month to number of blocks
+		return convertUint64(periodRenew, storage.BlocksPerMonth, "m")
+
+	case unit == "y":
+		// convert the time year to number of blocks
+		return convertUint64(periodRenew, storage.BlocksPerYear, "y")
+	default:
+		err = fmt.Errorf("the unit provided is not valid: %s", unit)
+		return
+	}
 }
 
-func parseRenewWindow(renew string) (parsed uint64, err error) {
+func convertUint64(data string, factor uint64, unit string) (parsed uint64, err error) {
+	var parsedInt int64
+
+	data = strings.TrimSuffix(data, unit)
+	if parsedInt, err = strconv.ParseInt(data, 10, 64); err != nil {
+		err = fmt.Errorf("error parsing the storage hsots: %s", err.Error())
+		return
+	}
+
+	parsed = uint64(parsedInt) * factor
 	return
 }
 
 func parseExpectedStorage(storage string) (parsed uint64, err error) {
+	return dataSizeConverter(storage)
+}
+
+func dataSizeConverter(dataSize string) (parsed uint64, err error) {
+	// string format
+	dataSize = strings.Replace(dataSize, " ", "", -1)
+	dataSize = strings.ToLower(dataSize)
+
+	// convert the data size into bytes
+	for unit, multiplier := range dataSizeMultiplier {
+		if strings.HasSuffix(dataSize, unit) {
+			return convertUint64(dataSize, multiplier, unit)
+		}
+	}
+
+	err = fmt.Errorf("data provided does not have valid unit: %s", dataSize)
 	return
 }
 
 func parseExpectedUpload(upload string) (parsed uint64, err error) {
+	if parsed, err = dataSizeConverter(upload); err != nil {
+		return
+	}
+
+	// in terms of bytes / month
+	parsed = parsed / storage.BlocksPerMonth
 	return
 }
 
 func parseExpectedDownload(download string) (parsed uint64, err error) {
+	if parsed, err = dataSizeConverter(download); err != nil {
+		return
+	}
+
+	// in terms of bytes / month
+	parsed = parsed / storage.BlocksPerMonth
 	return
 }
 
@@ -216,13 +316,35 @@ func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
 }
 
 func parseEnableIPViolation(enable string) (parsed bool, err error) {
-	return
+	// format the string
+	enable = formatString(enable)
+
+	// convert the string into boolean
+	switch {
+	case enable == "true":
+		return true, nil
+	case enable == "false":
+		return false, nil
+	default:
+		err = fmt.Errorf("failed to convert the string %s into boolean", enable)
+		return
+	}
 }
 
 func parseMaxUploadSpeed(uploadSpeed string) (parsed int64, err error) {
-	return
+	// in terms of bytes/seconds
+	uploadSpeed = formatString(uploadSpeed)
+	return strconv.ParseInt(uploadSpeed, 10, 64)
 }
 
 func parseMaxDownloadSpeed(downloadSpeed string) (parsed int64, err error) {
-	return
+	// in terms of bytes/seconds
+	formatString(downloadSpeed)
+	return strconv.ParseInt(downloadSpeed, 10, 64)
+}
+
+func formatString(s string) (formatted string) {
+	s = strings.Replace(s, " ", "", -1)
+	s = strings.ToLower(s)
+	return s
 }
