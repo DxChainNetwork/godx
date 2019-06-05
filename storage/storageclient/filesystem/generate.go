@@ -65,7 +65,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 		go func() {
 			defer wg.Done()
 			fileSize := uint64(1 << 22 * 10 * 10)
-			dxfile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
+			dxfile, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
 			if err != nil {
 				errChan <- err
 				return

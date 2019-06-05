@@ -71,11 +71,11 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 		var minHealth = dxdir.DefaultHealth
 		for i := 0; i != test.numFiles; i++ {
 			path := randomDxPath(t, 5)
-			file, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+			file, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
-			table := fs.contractor.HostHealthMapByID(file.HostIDs())
+			table := fs.contractManager.HostHealthMapByID(file.HostIDs())
 			if err = file.MarkAllUnhealthySegmentsAsStuck(table); err != nil {
 				t.Fatal(err)
 			}

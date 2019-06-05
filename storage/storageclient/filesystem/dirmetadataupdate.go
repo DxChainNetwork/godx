@@ -337,10 +337,10 @@ func (fs *FileSystem) loopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 		TimeModify:          uint64(time.Now().Unix()),
 		NumStuckSegments:    0,
 		DxPath:              update.dxPath,
-		RootPath:            fs.rootDir,
+		RootPath:            fs.fileRootDir,
 	}
 	// Read all files and directories under the path
-	fileInfos, err := ioutil.ReadDir(string(fs.rootDir.Join(update.dxPath)))
+	fileInfos, err := ioutil.ReadDir(string(fs.fileRootDir.Join(update.dxPath)))
 	if err != nil {
 		return nil, err
 	}
@@ -392,14 +392,14 @@ func (fs *FileSystem) calculateDxFileMetadata(path storage.DxPath, filename stri
 		return nil, err
 	}
 	// Open the DxPath
-	file, err := fs.FileSet.Open(fileDxPath)
+	file, err := fs.fileSet.Open(fileDxPath)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open DxPath %v: %v", fileDxPath.Path, err)
 	}
 	defer file.Close()
 
 	// Get the healthInfoMap, mark all healthy as unstuck, and then calculate the health
-	healthInfoTable := fs.contractor.HostHealthMapByID(file.HostIDs())
+	healthInfoTable := fs.contractManager.HostHealthMapByID(file.HostIDs())
 	if err = file.MarkAllUnhealthySegmentsAsStuck(healthInfoTable); err != nil {
 		return nil, fmt.Errorf("cannot mark stuck segments for file %v: %v", fileDxPath.Path, err)
 	}
@@ -436,10 +436,10 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 	if err != nil {
 		return nil, err
 	}
-	d, err := fs.DirSet.Open(path)
+	d, err := fs.dirSet.Open(path)
 	if os.IsNotExist(err) {
 		// The .dxdir not exist. Create a new one
-		d, err = fs.DirSet.NewDxDir(path)
+		d, err = fs.dirSet.NewDxDir(path)
 		if os.IsExist(err) {
 			return nil, os.ErrExist
 		}
@@ -468,9 +468,9 @@ func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata
 	//fmt.Printf("applying %v health: %d\n", path.Path, md.Health)
 	var d *dxdir.DirSetEntryWithID
 	var err error
-	d, err = fs.DirSet.NewDxDir(path)
+	d, err = fs.dirSet.NewDxDir(path)
 	if err == os.ErrExist {
-		d, err = fs.DirSet.Open(path)
+		d, err = fs.dirSet.Open(path)
 		if err != nil {
 			return err
 		}
