@@ -12,9 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -66,10 +66,7 @@ type (
 
 		// walTxn is the wal transaction associated with dirMetadataUpdate.
 		// It is stored when first time the goroutine is established.
-		walTxn *writeaheadlog.Transaction
-
-		// lock is the field to protest walTxn.
-		lock sync.Mutex
+		walTxn unsafe.Pointer
 	}
 
 	// metadataForUpdate contains the least information for dxdir update
@@ -198,9 +195,7 @@ func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadl
 	fs.unfinishedUpdates[path] = update
 	// If the input walTxn is not nil, update the walTxn field
 	if walTxn != nil {
-		update.lock.Lock()
-		update.walTxn = walTxn
-		update.lock.Unlock()
+		atomic.StorePointer(&update.walTxn, unsafe.Pointer(walTxn))
 	}
 	go fs.calculateMetadataAndApply(update)
 	return
@@ -297,11 +292,10 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 		delete(fs.unfinishedUpdates, update.dxPath)
 		fs.lock.Unlock()
 
-		update.lock.Lock()
-		if update.walTxn != nil {
-			err = common.ErrCompose(err, update.walTxn.Release())
+		txn := (*writeaheadlog.Transaction)(atomic.LoadPointer(&update.walTxn))
+		if txn != nil {
+			err = common.ErrCompose(err, txn.Release())
 		}
-		update.lock.Unlock()
 	}
 
 	if err == nil {
