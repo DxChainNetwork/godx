@@ -189,7 +189,7 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 	return nil
 }
 
-func (sc *StorageClient) ContractCreate(params ContractParams) error {
+func (sc *StorageClient) ContractCreate(params ContractParams) (storage.ContractMetaData, error) {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
@@ -198,7 +198,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
 	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
 	if err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	uc := types.UnlockConditions{
@@ -247,19 +247,19 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	account := accounts.Account{Address: clientAddr}
 	wallet, err := sc.ethBackend.AccountManager().Find(account)
 	if err != nil {
-		return storagehost.ExtendErr("find client account error", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
 	}
 
 	// Setup connection with storage host
 	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
 	if err != nil {
-		return storagehost.ExtendErr("setup connection with host failed", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
 	defer sc.ethBackend.Disconnect(host.NetAddress)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
-		return storagehost.ExtendErr("contract sign by client failed", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("contract sign by client failed", err)
 	}
 
 	// Send the ContractCreate request
@@ -269,24 +269,24 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	var hostSign []byte
 	msg, err := session.ReadMsg()
 	if err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.NegotiationErrorMsg {
 		var negotiationErr error
 		msg.Decode(&negotiationErr)
-		return negotiationErr
+		return storage.ContractMetaData{}, negotiationErr
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	storageContract.Signatures[0] = clientContractSign
@@ -308,34 +308,34 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		return storagehost.ExtendErr("client sign revision error", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
 	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
-		return storagehost.ExtendErr("send revision sign by client error", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
 
 	var hostRevisionSign []byte
 	msg, err = session.ReadMsg()
 	if err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.NegotiationErrorMsg {
 		var negotiationErr error
 		msg.Decode(&negotiationErr)
-		return negotiationErr
+		return storage.ContractMetaData{}, negotiationErr
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
-		return err
+		return storage.ContractMetaData{}, err
 	}
 
 	sendAPI := NewStorageContractTxAPI(sc.apiBackend)
@@ -348,7 +348,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	args.Input = (*hexutil.Bytes)(&scBytes)
 	ctx := context.Background()
 	if _, err := sendAPI.SendFormContractTX(ctx, args); err != nil {
-		return storagehost.ExtendErr("Send storage contract transaction error", err)
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
 	// wrap some information about this contract
@@ -367,11 +367,11 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	// store this contract info to client local
-	_, err = sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
-	if err != nil {
-		return err
+	meta, errInsert := sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
+	if errInsert != nil {
+		return storage.ContractMetaData{}, errInsert
 	}
-	return nil
+	return meta, nil
 }
 
 func (sc *StorageClient) ContracteRenew(oldContract *contractset.Contract, params ContractParams) (storage.ContractMetaData, error) {
