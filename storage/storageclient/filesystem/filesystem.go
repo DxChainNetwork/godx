@@ -26,6 +26,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
+// ErrNoRepairNeeded is the error that no repair is needed
 var ErrNoRepairNeeded = errors.New("no repair needed")
 
 // FileSystem is the structure for a file system that include a FileSet and a DirSet
