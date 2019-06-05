@@ -266,3 +266,13 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 
 	return
 }
+
+// get all contracts of client
+func (scs *StorageContractSet) Contracts() map[storage.ContractID]*Contract {
+	return scs.contracts
+}
+
+// get the contractID by hostID
+func (scs *StorageContractSet) GetContractIDByHostID(hostID enode.ID) storage.ContractID {
+	return scs.hostToContractID[hostID]
+}

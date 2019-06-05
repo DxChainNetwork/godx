@@ -5,7 +5,8 @@
 package storage
 
 import (
-	"crypto/ecdsa"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
@@ -24,17 +25,27 @@ const (
 	UploadActionUpdate = "Update"
 )
 
+const (
+
+	// the amount of time that host provide host settings
+	HostSettingTime = 60 * time.Second
+
+	// the amount of time that the client and host have to negotiate a download request batch.
+	DownloadTime = 600 * time.Second
+
+	// the minimum amount of time that the client and host have to negotiate a storage contract revision.
+	ContractRevisionTime = 600 * time.Second
+
+	// the amount of time that the client and host have to negotiate a new storage contract.
+	FormContractTime = 360 * time.Second
+)
+
 type (
 	// Structure about 'Storage Create' protocol
 	// ContractCreateRequest contains storage contract info and client pk
 	ContractCreateRequest struct {
 		StorageContract types.StorageContract
-		ClientPK        ecdsa.PublicKey
-	}
-
-	ContractCreateSignature struct {
-		ContractSign []byte
-		RevisionSign []byte
+		Sign            []byte
 	}
 
 	// UploadRequest contains the request parameters for RPCUpload.
@@ -133,7 +144,6 @@ func newRevision(current types.StorageContractRevision, cost *big.Int) types.Sto
 func NewDownloadRevision(current types.StorageContractRevision, downloadCost *big.Int) types.StorageContractRevision {
 	return newRevision(current, downloadCost)
 }
-
 
 // calculateProofRanges returns the proof ranges that should be used to verify a
 // pre-modification Merkle diff proof for the specified actions.

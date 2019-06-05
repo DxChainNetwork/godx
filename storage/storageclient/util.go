@@ -7,11 +7,15 @@ package storageclient
 import (
 	"crypto/ecdsa"
 	"errors"
+	"reflect"
+	"sort"
+
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -20,9 +24,9 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/DxChainNetwork/merkletree"
 	"io/ioutil"
 	"path/filepath"
-	"reflect"
 )
 
 // ParsedAPI will parse the APIs saved in the Ethereum
@@ -91,8 +95,8 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
-func (sc *StorageClient) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
-	return sc.ethBackend.GetStorageHostSetting(peerID, config)
+func (sc *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+	return sc.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
@@ -105,6 +109,7 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
 }
+
 // DirInfo returns the Directory Information of the siadir
 func (sc *StorageClient) DirInfo(dxPath dxdir.DxPath) (DirectoryInfo, error) {
 	entry, err := sc.staticDirSet.Open(dxPath)
@@ -117,15 +122,15 @@ func (sc *StorageClient) DirInfo(dxPath dxdir.DxPath) (DirectoryInfo, error) {
 	// could either be health or stuckHealth
 	metadata := entry.Metadata()
 	return DirectoryInfo{
-		NumFiles:metadata.NumFiles,
-		NumStuckSegments:metadata.NumStuckSegments,
-		TotalSize:metadata.TotalSize,
-		Health:metadata.Health,
-		StuckHealth:metadata.StuckHealth,
-		MinRedundancy:metadata.MinRedundancy,
-		TimeLastHealthCheck:metadata.TimeLastHealthCheck,
-		TimeModify:metadata.TimeModify,
-		DxPath:metadata.DxPath,
+		NumFiles:            metadata.NumFiles,
+		NumStuckSegments:    metadata.NumStuckSegments,
+		TotalSize:           metadata.TotalSize,
+		Health:              metadata.Health,
+		StuckHealth:         metadata.StuckHealth,
+		MinRedundancy:       metadata.MinRedundancy,
+		TimeLastHealthCheck: metadata.TimeLastHealthCheck,
+		TimeModify:          metadata.TimeModify,
+		DxPath:              metadata.DxPath,
 	}, nil
 }
 
@@ -203,9 +208,89 @@ func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetE
 	return infoMap
 }
 
-// covert pubkey to hex string
-func PubkeyToHex(pubkey *ecdsa.PublicKey) string {
-	pubkeyBytes := crypto.FromECDSAPub(pubkey)
-	pubkeyHex := hexutil.Encode(pubkeyBytes)
-	return pubkeyHex
+// calculate Enode.ID, reference:
+// p2p/discover/node.go:41
+// p2p/discover/node.go:59
+func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
+	var pubBytes [64]byte
+	math.ReadBits(pubkey.X, pubBytes[:len(pubBytes)/2])
+	math.ReadBits(pubkey.Y, pubBytes[len(pubBytes)/2:])
+	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
+}
+
+// calculate the proof ranges that should be used to verify a
+// pre-modification Merkle diff proof for the specified actions.
+func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkletree.LeafRange {
+	newNumSectors := oldNumSectors
+	sectorsChanged := make(map[uint64]struct{})
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			sectorsChanged[newNumSectors] = struct{}{}
+			newNumSectors++
+		}
+	}
+
+	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+	for index := range sectorsChanged {
+		if index < oldNumSectors {
+			oldRanges = append(oldRanges, merkletree.LeafRange{
+				Start: index,
+				End:   index + 1,
+			})
+		}
+	}
+	sort.Slice(oldRanges, func(i, j int) bool {
+		return oldRanges[i].Start < oldRanges[j].Start
+	})
+
+	return oldRanges
+}
+
+// modify the proof ranges produced by calculateProofRanges
+// to verify a post-modification Merkle diff proof for the specified actions.
+func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []storage.UploadAction, numSectors uint64) []merkletree.LeafRange {
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			proofRanges = append(proofRanges, merkletree.LeafRange{
+				Start: numSectors,
+				End:   numSectors + 1,
+			})
+			numSectors++
+		}
+	}
+	return proofRanges
+}
+
+// modify the leaf hashes of a Merkle diff proof to verify a
+// post-modification Merkle diff proof for the specified actions.
+func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
+	// determine which sector index corresponds to each leaf hash
+	var indices []uint64
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			indices = append(indices, numSectors)
+			numSectors++
+		}
+	}
+	sort.Slice(indices, func(i, j int) bool {
+		return indices[i] < indices[j]
+	})
+	indexMap := make(map[uint64]int, len(leafHashes))
+	for i, index := range indices {
+		if i > 0 && index == indices[i-1] {
+			continue // remove duplicates
+		}
+		indexMap[index] = i
+	}
+
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			leafHashes = append(leafHashes, merkle.Root(action.Data))
+		}
+	}
+	return leafHashes
 }

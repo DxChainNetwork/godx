@@ -186,6 +186,11 @@ func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
 
+// for only test
+func (p *Peer) Set(f connFlag, val bool) {
+	p.rw.set(f, val)
+}
+
 // create and initialize new peer object
 // protocols: a list of protocols supported by the peer
 func newPeer(conn *conn, protocols []Protocol) *Peer {
@@ -541,4 +546,8 @@ func (p *Peer) Info() *PeerInfo {
 		info.Protocols[proto.Name] = protoInfo
 	}
 	return info
+}
+
+func (p *Peer) GetConn() net.Conn {
+	return p.rw.GetNetConn()
 }

@@ -595,3 +595,97 @@ outer:
 		t.Errorf("block broadcast to %d peers, expected %d", receivedCount, broadcastExpected)
 	}
 }
+
+// After deleting the test code of handleSession, it is currently unable to test the session
+func testHandleStorageContract(t *testing.T) {
+	acc1Key, _ := crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+	acc2Key, _ := crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+	acc1Addr := crypto.PubkeyToAddress(acc1Key.PublicKey)
+	acc2Addr := crypto.PubkeyToAddress(acc2Key.PublicKey)
+
+	signer := types.HomesteadSigner{}
+	// Create a chain generator with some simple transactions (blatantly stolen from @fjl/chain_markets_test)
+	generator := func(i int, block *core.BlockGen) {
+		switch i {
+		case 0:
+			// In block 1, the test bank sends account #1 some ether.
+			tx, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(10000), params.TxGas, nil, nil), signer, testBankKey)
+			block.AddTx(tx)
+		case 1:
+			// In block 2, the test bank sends some more ether to account #1.
+			// acc1Addr passes it on to account #2.
+			tx1, _ := types.SignTx(types.NewTransaction(block.TxNonce(testBank), acc1Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, testBankKey)
+			tx2, _ := types.SignTx(types.NewTransaction(block.TxNonce(acc1Addr), acc2Addr, big.NewInt(1000), params.TxGas, nil, nil), signer, acc1Key)
+			block.AddTx(tx1)
+			block.AddTx(tx2)
+		case 2:
+			// Block 3 is empty but was mined by account #2.
+			block.SetCoinbase(acc2Addr)
+			block.SetExtra([]byte("yeehaw"))
+		case 3:
+			// Block 4 includes blocks 2 and 3 as uncle headers (with modified extra data).
+			b2 := block.PrevBlock(1).Header()
+			b2.Extra = []byte("foo")
+			block.AddUncle(b2)
+			b3 := block.PrevBlock(2).Header()
+			b3.Extra = []byte("foo")
+			block.AddUncle(b3)
+		}
+	}
+	// Assemble the test environment
+	pm, _ := newTestProtocolManagerMust(t, downloader.FullSync, 4, generator, nil)
+	peer, _ := newStorageContractTestPeer("peer", 64, pm, false)
+	defer peer.close()
+
+	// Simulate storage contract client
+	session := peer.peer.Peer2Session()
+	session.SetRW(peer.app)
+
+	//sk, err := crypto.GenerateKey()
+	//if err != nil {
+	//	t.Fatalf("create scdsa key failed: %v", err)
+	//}
+
+	req := types.StorageContract{FileSize: uint64(101), WindowStart: uint64(1001), WindowEnd: uint64(3001)}
+
+	if err := session.SendStorageContractCreation(req); err != nil {
+		t.Fatalf("send contract create failed: %v", err)
+	}
+
+	req.FileSize += 1
+	req.WindowStart += 1
+	req.WindowEnd += 1
+	if err := session.SendStorageContractCreationClientRevisionSign(req); err != nil {
+		t.Fatalf("send contract create failed: %v", err)
+	}
+
+	req.FileSize += 1
+	req.WindowStart += 1
+	req.WindowEnd += 1
+	if err := session.SendStorageContractCreationHostRevisionSign(req); err != nil {
+		t.Fatalf("send contract create failed: %v", err)
+	}
+
+	var hostSign []byte
+	if msg, err := session.ReadMsg(); err != nil {
+		if err := msg.Decode(&hostSign); err != nil {
+			t.Fatalf("msg decode failed: %v", err)
+		}
+	} else {
+		t.Fatalf("conn read msg failed: %v", err)
+	}
+
+	clientSigns := []byte{1}
+	if err := session.SendStorageContractCreationClientRevisionSign(clientSigns); err != nil {
+		t.Fatalf("send revision sign by client failed: %v", err)
+	}
+
+	var hostRevisionSign []byte
+	if msg, err := session.ReadMsg(); err != nil {
+		if err := msg.Decode(&hostRevisionSign); err != nil {
+			t.Fatalf("msg decode failed: %v", err)
+		}
+	} else {
+		t.Fatalf("conn read msg failed: %v", err)
+	}
+}

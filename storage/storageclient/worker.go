@@ -14,6 +14,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
@@ -23,6 +24,7 @@ type worker struct {
 
 	// The contract and host used by this worker.
 	contract storage.ClientContract
+	hostID   enode.ID
 	client   *StorageClient
 
 	// How many failures in a row?
@@ -56,20 +58,40 @@ type worker struct {
 // update the worker pool to match.
 func (c *StorageClient) activateWorkerPool() {
 
-	// TODO: 获取renter签订的所有合约，fileContractID ==》fileContract
-	contractMap := make(map[common.Hash]storage.ClientContract)
-	//contractSlice := c.contractManager.Contracts()
-	//for i := 0; i < len(contractSlice); i++ {
-	//	contractMap[contractSlice[i].ID] = contractSlice[i]
-	//}
+	// get all contracts in client
+	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
 		c.lock.Lock()
 		_, exists := c.workerPool[id]
 		if !exists {
+
+			clientContract := storage.ClientContract{
+				ContractID:  common.Hash(id),
+				HostID:      contract.Header().EnodeID,
+				StartHeight: contract.Header().StartHeight,
+				EndHeight:   contract.Header().EndHeight,
+
+				// TODO: 计算、填充下这些变量
+				// the amount remaining in the contract that the client can spend.
+				//ClientFunds: common.NewBigInt(1),
+
+				// track the various costs manually.
+				//DownloadSpending: common.NewBigInt(1),
+				//StorageSpending:  common.NewBigInt(1),
+				//UploadSpending:   common.NewBigInt(1),
+
+				// record utility information about the contract.
+				//Utility ContractUtility
+
+				// the amount of money that the client spent or locked while forming a contract.
+				TotalCost: contract.Header().TotalCost,
+			}
+
 			worker := &worker{
-				contract:     contract,
+				contract:     clientContract,
+				hostID:       contract.Header().EnodeID,
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
@@ -91,7 +113,7 @@ func (c *StorageClient) activateWorkerPool() {
 	// Remove a worker for any worker that is not in the set of new contracts.
 	c.lock.Lock()
 	for id, worker := range c.workerPool {
-		_, exists := contractMap[id]
+		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
 			delete(c.workerPool, id)
 			close(worker.killChan)
@@ -100,8 +122,7 @@ func (c *StorageClient) activateWorkerPool() {
 	c.lock.Unlock()
 }
 
-// workLoop repeatedly issues task to a worker, stopping when the worker
-// is killed or when the thread group is closed.
+// workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
 	defer w.killUploading()
 	defer w.killDownloading()
@@ -182,8 +203,7 @@ func (w *worker) DownloadWorkLoop() {
 	}
 }
 
-// killDownloading will drop all of the download task given to the worker,
-// and set a signal to prevent the worker from accepting more download task.
+// drop all of the download task given to the worker.
 func (w *worker) killDownloading() {
 	w.downloadMu.Lock()
 	var removedSegments []*unfinishedDownloadSegment
@@ -198,16 +218,13 @@ func (w *worker) killDownloading() {
 	}
 }
 
-// queueDownloadSegment adds a segment to the worker's queue.
+// add a segment to the worker's queue.
 func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
-	// Accept the segment unless the worker has been terminated. Accepting the
-	// segment needs to happen under the same lock as fetching the termination
-	// status.
 	w.downloadMu.Lock()
 	terminated := w.downloadTerminated
 	if !terminated {
-		// Accept the segment and issue a notification to the master thread that
-		// there is a new download.
+
+		// accept the segment and notify client that there is a new download.
 		w.downloadSegments = append(w.downloadSegments, uds)
 		select {
 		case w.downloadChan <- struct{}{}:
@@ -216,15 +233,13 @@ func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
 	}
 	w.downloadMu.Unlock()
 
-	// If the worker has terminated, remove it from the uds. This call needs to
-	// happen without holding the worker lock.
+	// if the worker has terminated, remove it from the uds
 	if terminated {
 		uds.removeWorker()
 	}
 }
 
-// nextDownloadSegment will pull the next potential segment out of the work
-// queue for downloading.
+// pull the next potential segment out of the work queue for downloading.
 func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	w.downloadMu.Lock()
 	defer w.downloadMu.Unlock()
@@ -249,14 +264,21 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	// whether download success or fail, we should remove the worker at last
 	defer uds.removeWorker()
+	fetchOffset, fetchLength := sectorOffsetAndLength(uds.fetchOffset, uds.fetchLength, uds.erasureCode)
+	root := uds.segmentMap[w.hostID.String()].root
 
-	fetchOffset, fetchLength := sectorOffsetAndLength(uds.staticFetchOffset, uds.staticFetchLength, uds.erasureCode)
-
-	hostPubkeyHex := w.contract.HostEnodeUrl
-	root := uds.staticSegmentMap[w.contract.HostEnodeUrl].root
-
-	// TODO: 获取连接session
-	session := &storage.Session{}
+	// Setup connection
+	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+	if !exist {
+		w.client.log.Error("the host not exist in client", "host_id", w.hostID.String())
+		return
+	}
+	session, err := w.client.ethBackend.SetupConnection(hostInfo.EnodeURL)
+	if err != nil {
+		w.client.log.Error("failed to connect host for file downloading", "host_url", hostInfo.EnodeURL)
+		return
+	}
+	defer w.client.ethBackend.Disconnect(session, hostInfo.EnodeURL)
 
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
@@ -267,12 +289,12 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	// record the amount of all data transferred between download connection
-	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.staticSectorSize)
+	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.sectorSize)
 
 	// calculate a seed for twofishgcm
-	sectorIndex := uds.staticSegmentMap[hostPubkeyHex].index
+	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	segmentIndexBytes := make([]byte, 8)
-	binary.PutUvarint(segmentIndexBytes, uds.staticSegmentIndex)
+	binary.PutUvarint(segmentIndexBytes, uds.segmentIndex)
 	sectorIndexBytes := make([]byte, 8)
 	binary.PutUvarint(sectorIndexBytes, sectorIndex)
 	seed := crypto.Keccak256(segmentIndexBytes, sectorIndexBytes)
@@ -302,18 +324,19 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	uds.markSectorCompleted(sectorIndex)
 	uds.sectorsRegistered--
 
-	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need, we can recover the original data
+	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need,
+	// we can recover the original data
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 
 		// this a accumulation processing, every time we receive a sector
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.staticFetchLength/uint64(uds.erasureCode.MinSectors()))
+		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength/uint64(uds.erasureCode.MinSectors()))
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
 	}
 	if uds.sectorsCompleted == uds.erasureCode.MinSectors() {
 
 		// client maybe receive a not integral sector
-		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.staticFetchLength / uint64(uds.erasureCode.MinSectors()))
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.staticFetchLength-addedReceivedData)
+		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.fetchLength / uint64(uds.erasureCode.MinSectors()))
+		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength-addedReceivedData)
 
 		// recover the logical data
 		go uds.recoverLogicalData()
@@ -321,21 +344,17 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	uds.mu.Unlock()
 }
 
-// processDownloadSegment will take a potential download segment, figure out if
-// there is work to do, and then perform any registration or processing with the
-// segment before returning the segment to the caller.
+// check the given download segment whether there is work to do, and update its info
 func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinishedDownloadSegment {
 	uds.mu.Lock()
-	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.staticComplete()
+	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.isComplete()
 	segmentFailed := uds.sectorsCompleted+uds.workersRemaining < uds.erasureCode.MinSectors()
-
-	hostPubkeyHex := w.contract.HostEnodeUrl
-	sectorData, workerHasSector := uds.staticSegmentMap[hostPubkeyHex]
+	sectorData, workerHasSector := uds.segmentMap[w.hostID.String()]
 
 	sectorCompleted := uds.completedSectors[sectorData.index]
 
-	// if the given segment downloading complete/fail, or no sector associated with host for downloading, or the sector has completed,
-	// the worker should be removed.
+	// if the given segment downloading complete/fail, or no sector associated with host for downloading,
+	// or the sector has completed, the worker should be removed.
 	if segmentComplete || segmentFailed || w.onDownloadCooldown() || !workerHasSector || sectorCompleted {
 		uds.mu.Unlock()
 		uds.removeWorker()
@@ -349,7 +368,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 
 	sectorTaken := uds.sectorUsage[sectorData.index]
 	sectorsInProgress := uds.sectorsRegistered + uds.sectorsCompleted
-	desiredSectorsInProgress := uds.erasureCode.MinSectors() + uds.staticOverdrive
+	desiredSectorsInProgress := uds.erasureCode.MinSectors() + uds.overdrive
 	workersDesired := sectorsInProgress < desiredSectorsInProgress && !sectorTaken
 
 	// if need more sector, and the sector has not been fetched yet,
@@ -360,8 +379,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 		return uds
 	}
 
-	// worker is not needed unless another worker fails, so put this worker on standby for this segment.
-	// the worker is still available to help with the download, so the worker is not removed from the segment.
+	// put this worker on standby for this segment, we can use it to download later.
 	uds.workersStandby = append(uds.workersStandby, w)
 	return nil
 }
@@ -375,48 +393,27 @@ func (w *worker) onDownloadCooldown() bool {
 	return time.Now().Before(w.ownedDownloadRecentFailure.Add(requiredCooldown))
 }
 
-// sectorOffsetAndLength translates the fetch offset and length of the segment
-// into the offset and length of the sector we need to download for a
-// successful recovery of the requested data.
+// calculate the offset and length of the sector we need to download for a successful recovery of the requested data.
 func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 	segmentIndex, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
 	return uint64(segmentIndex * merkle.LeafSize), uint64(numSegments * merkle.LeafSize)
 }
 
-// segmentsForRecovery calculates the first segment and how many segments we
-// need in total to recover the requested data.
+// calculates how many segments we need in total to recover the requested data,
+// and the first segment.
 func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
-
-	// TODO: 确认下擦除🐴是否支持部分编码
-	// If partialDecoding is not available we need to download the whole
-	// sector.
-	//if !rs.SupportsPartialEncoding() {
-	//	return 0, uint64(storage.SectorSize) / storage.SegmentSize
-	//}
-
-	// Else we need to figure out what segments of the piece we need to
-	// download for the recovered data to contain the data we want.
-	recoveredSegmentSize := uint64(rs.MinSectors() * merkle.LeafSize)
-
-	// Calculate the offset of the download.
-	startSegment := segmentFetchOffset / recoveredSegmentSize
-
-	// Calculate the length of the download.
-	endSegment := (segmentFetchOffset + segmentFetchLength) / recoveredSegmentSize
-	if (segmentFetchOffset+segmentFetchLength)%recoveredSegmentSize != 0 {
-		endSegment++
-	}
-	return startSegment, endSegment - startSegment
+	// not support partial encoding
+	return 0, uint64(storage.SectorSize) / merkle.LeafSize
 }
 
-// unregisterWorker will remove the worker from an unfinished download
-// segment, and then un-register the sectors that it grabbed. This function should
-// only be called when a worker download fails.
+// remove the worker from an unfinished download segment,
+// and then un-register the sectors that it grabbed.
+//
+// NOTE: This function should only be called when a worker download fails.
 func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.mu.Lock()
 	uds.sectorsRegistered--
-	hostPubkeyHex := w.contract.HostEnodeUrl
-	sectorIndex := uds.staticSegmentMap[hostPubkeyHex].index
+	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
 }

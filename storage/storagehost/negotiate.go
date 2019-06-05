@@ -8,13 +8,22 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
 )
+
+var sectorHeight = func() uint64 {
+	height := uint64(0)
+	for 1<<height < (storage.SectorSize / merkle.LeafSize) {
+		height++
+	}
+	return height
+}()
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
@@ -109,7 +118,7 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	}
 
 	// The Merkle root is checked last because it is the most expensive check.
-	if revision.NewFileMerkleRoot != storage.CachedMerkleRoot(so.SectorRoots) {
+	if revision.NewFileMerkleRoot != merkle.CachedTreeRoot(so.SectorRoots, sectorHeight) {
 		return errBadFileMerkleRoot
 	}
 

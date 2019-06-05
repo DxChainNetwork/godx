@@ -577,7 +577,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s, srvr)
+	err := s.storageClient.Start(s, srvr, s.APIBackend)
 	if err != nil {
 		return err
 	}
@@ -591,9 +591,16 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	s.bloomIndexer.Close()
+	var fullErr error
+
+	err := s.bloomIndexer.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	s.blockchain.Stop()
-	s.engine.Close()
+
+	err = s.engine.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	s.protocolManager.Stop()
 	if s.lesServer != nil {
 		s.lesServer.Stop()
@@ -603,7 +610,13 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
-	s.storageHost.Close()
+
+	err = s.storageClient.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
+	err = s.storageHost.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	close(s.shutdownChan)
 
 	// stop maintenance
@@ -644,7 +657,9 @@ func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error
 	}
 }
 
-func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
+func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+	defer session.StopConnection()
+
 	if s.netRPCService == nil {
 		return fmt.Errorf("network API is not ready")
 	}
@@ -661,28 +676,33 @@ func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
-func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
-	// within the 30 seconds, if the peer is still not added to the peer set
-	// return error
-	timeout := time.After(30 * time.Second)
-	var p *peer
-
-	for {
-		p = s.protocolManager.peers.Peer(peerID)
-		if p != nil {
-			break
-		}
-
-		// after thirty seconds,
-		select {
-		case <-timeout:
-			return errors.New("peer cannot be found")
-		default:
-		}
+func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+	session, err := s.SetupConnection(hostEnodeUrl)
+	if err != nil {
+		return err
 	}
 
-	// send message to the peer
-	return p2p.Send(p.rw, HostSettingMsg, config)
+	session.SetDeadLine(storage.HostSettingTime)
+	defer s.Disconnect(session, hostEnodeUrl)
+
+	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
+		return err
+	}
+
+	msg, err := session.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	if msg.Code != storage.HostSettingResponseMsg {
+		return errors.New("invalid host settings response")
+	}
+
+	if err := msg.Decode(config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be

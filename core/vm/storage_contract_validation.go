@@ -11,14 +11,13 @@ import (
 	"hash"
 	"math/big"
 
-	"golang.org/x/crypto/sha3"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -37,7 +36,7 @@ var (
 	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
 	errRevisionMissedPayouts = errors.New("storage contract revision has altered missed payout")
 	errWrongUnlockCondition  = errors.New("the unlockhash of storage contract not match unlockcondition")
-	errInvalidRenterSig      = errors.New("invalid renter signatures")
+	errInvalidClientSig      = errors.New("invalid client signatures")
 	errInvalidHostSig        = errors.New("invalid host signatures")
 	errNoStorageContractType = errors.New("no this storage contract type")
 
@@ -60,7 +59,7 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 		return errors.New("this file contract exist")
 	}
 
-	if sc.RenterCollateral.Value.Sign() <= 0 {
+	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
 	if sc.HostCollateral.Value.Sign() <= 0 {
@@ -91,7 +90,7 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 		missedProofOutputSum = missedProofOutputSum.Add(missedProofOutputSum, output.Value)
 	}
 
-	payout := sc.RenterCollateral.Value.Add(sc.RenterCollateral.Value, sc.HostCollateral.Value)
+	payout := sc.ClientCollateral.Value.Add(sc.ClientCollateral.Value, sc.HostCollateral.Value)
 	if validProofOutputSum.Cmp(payout) != 0 {
 		return errStorageContractValidOutputSumViolation
 	}
@@ -100,14 +99,14 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 	}
 
 	// check if balance is enough for collateral
-	renterAddr := sc.RenterCollateral.Address
-	renterCollateralAmount := sc.RenterCollateral.Value
+	clientAddr := sc.ClientCollateral.Address
+	clientCollateralAmount := sc.ClientCollateral.Value
 	hostAddr := sc.HostCollateral.Address
 	hostCollateralAmount := sc.HostCollateral.Value
 
-	renterBalance := evm.StateDB.GetBalance(renterAddr)
-	if renterBalance.Cmp(renterCollateralAmount) == -1 {
-		return errors.New("renter has not enough balance for file contract collateral")
+	clientBalance := evm.StateDB.GetBalance(clientAddr)
+	if clientBalance.Cmp(clientCollateralAmount) == -1 {
+		return errors.New("client has not enough balance for file contract collateral")
 	}
 
 	hostBalance := evm.StateDB.GetBalance(hostAddr)
@@ -216,8 +215,8 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 	}
 
 	var (
-		singleSig, renterSig, hostSig          []byte
-		singlePubkey, renterPubkey, hostPubkey ecdsa.PublicKey
+		singleSig, clientSig, hostSig          []byte
+		singlePubkey, clientPubkey, hostPubkey ecdsa.PublicKey
 		err                                    error
 		uc                                     types.UnlockConditions
 	)
@@ -235,9 +234,9 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 			return errInvalidHostSig
 		}
 	} else if len(signatures) == 2 {
-		renterSig = signatures[0]
+		clientSig = signatures[0]
 		hostSig = signatures[1]
-		renterPubkey, err = RecoverPubkeyFromSignature(dataHash, renterSig)
+		clientPubkey, err = RecoverPubkeyFromSignature(dataHash, clientSig)
 		if err != nil {
 			return err
 		}
@@ -248,7 +247,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 
 		uc = types.UnlockConditions{
 			Timelock:           currentHeight,
-			PublicKeys:         []ecdsa.PublicKey{renterPubkey, hostPubkey},
+			PublicKeys:         []ecdsa.PublicKey{clientPubkey, hostPubkey},
 			SignaturesRequired: 2,
 		}
 
@@ -265,8 +264,8 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 		if uc.UnlockHash() != common.Hash(originUnlockHash) {
 			return errWrongUnlockCondition
 		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&renterPubkey), dataHash[:], renterSig) {
-			return errInvalidRenterSig
+		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&clientPubkey), dataHash[:], clientSig) {
+			return errInvalidClientSig
 		}
 		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&hostPubkey), dataHash[:], hostSig) {
 			return errInvalidHostSig

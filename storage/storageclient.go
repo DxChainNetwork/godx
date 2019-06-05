@@ -7,6 +7,8 @@ package storage
 import (
 	"io"
 
+	"github.com/DxChainNetwork/godx/p2p/enode"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -18,12 +20,12 @@ import (
 // EthBackend is an interface used to get methods implemented by Ethereum
 type EthBackend interface {
 	APIs() []rpc.API
-	GetStorageHostSetting(peerID string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
 	SetupConnection(hostEnodeUrl string) (*Session, error)
-	Disconnect(hostEnodeUrl string) error
+	Disconnect(session *Session, hostEnodeUrl string) error
 
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
@@ -34,51 +36,48 @@ type EthBackend interface {
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
-	GetStorageHostSetting(peerID string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
 }
 
-// A StorageClientContract contains metadata about a storage contract. It is read-only;
-// modifying a StorageClientContract does not modify the actual storage contract.
+// a metadata about a storage contract.
 type ClientContract struct {
-	ID            common.Hash
-	HostEnodeUrl  string
-	Transaction   types.Transaction
+	ContractID  common.Hash
+	HostID      enode.ID
+	Transaction types.Transaction
 
 	StartHeight uint64
 	EndHeight   uint64
 
-	// ClientFunds is the amount remaining in the contract that the client can spend.
+	// the amount remaining in the contract that the client can spend.
 	ClientFunds common.BigInt
 
-	// The StorageContract does not indicate what funds were spent on, so we have
-	// to track the various costs manually.
+	// track the various costs manually.
 	DownloadSpending common.BigInt
 	StorageSpending  common.BigInt
 	UploadSpending   common.BigInt
 
-	// Utility contains utility information about the client.
+	// record utility information about the contract.
 	Utility ContractUtility
 
-	// TotalCost indicates the amount of money that the client spent and/or
-	// locked up while forming a contract.
+	// the amount of money that the client spent or locked while forming a contract.
 	TotalCost common.BigInt
 }
 
-// ContractUtility contains metrics internal to the contractor that reflect the
-// utility of a given contract.
+// record utility of a given contract.
 type ContractUtility struct {
 	GoodForUpload bool
 	GoodForRenew  bool
-	Locked        bool // Locked utilities can only be set to false.
+
+	// only be set to false.
+	Locked bool
 }
 
-// ClientDownloadParameters defines the parameters passed to the client's
-// Download method.
+// the parameters to download from outer request
 type ClientDownloadParameters struct {
 	Async       bool
-	Httpwriter  io.Writer
+	HttpWriter  io.Writer
 	Length      uint64
 	Offset      uint64
 	DxFilePath  string

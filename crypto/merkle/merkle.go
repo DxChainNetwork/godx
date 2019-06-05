@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"

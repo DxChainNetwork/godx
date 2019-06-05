@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storageclient
 
 import (
@@ -28,7 +32,7 @@ type (
 		StartHeight     uint64
 		EndHeight       uint64
 		ClientPublicKey ecdsa.PublicKey
-		Host            HostDBEntry
+		Host            StorageHostEntry
 	}
 
 	// An Allowance dictates how much the Renter is allowed to spend in a given
@@ -56,23 +60,23 @@ type (
 
 	// DirectoryInfo provides information about a dxdir
 	DirectoryInfo struct {
-		NumFiles uint64 	`json:"num_files"`
+		NumFiles uint64 `json:"num_files"`
 
-		TotalSize uint64 	`json:"total_size"`
+		TotalSize uint64 `json:"total_size"`
 
-		Health uint32 		`json:"health"`
+		Health uint32 `json:"health"`
 
-		StuckHealth uint32 	`json:"stuck_health"`
+		StuckHealth uint32 `json:"stuck_health"`
 
-		MinRedundancy uint32		`json:"min_redundancy"`
+		MinRedundancy uint32 `json:"min_redundancy"`
 
-		TimeLastHealthCheck time.Time 	`json:"time_last_health_check"`
+		TimeLastHealthCheck time.Time `json:"time_last_health_check"`
 
-		TimeModify time.Time 			`json:"time_modify"`
+		TimeModify time.Time `json:"time_modify"`
 
-		NumStuckSegments uint64 	`json:"num_stuck_segments"`
+		NumStuckSegments uint64 `json:"num_stuck_segments"`
 
-		DxPath dxdir.DxPath 		`json:"dx_path"`
+		DxPath dxdir.DxPath `json:"dx_path"`
 	}
 
 	// DownloadInfo provides information about a file that has been requested for download
@@ -92,57 +96,51 @@ type (
 		TotalDataTransferred uint64    `json:"totaldatatransferred"` // Total amount of data transferred, including negotiation, etc.
 	}
 
-
 	// UploadParams contains the information used by the Client to upload a file
 	FileUploadParams struct {
 		Source      string
-		DxPath     	dxdir.DxPath
+		DxPath      dxdir.DxPath
 		ErasureCode erasurecode.ErasureCoder
-		Mode       	int
+		Mode        int
 	}
 
 	// FileInfo provides information about a file
 	FileInfo struct {
-		AccessTime       time.Time         `json:"accesstime"`
-		Available        bool              `json:"available"`
-		ChangeTime       time.Time         `json:"changetime"`
-		CipherType       string            `json:"ciphertype"`
-		CreateTime       time.Time         `json:"createtime"`
-		Expiration       uint64 		   `json:"expiration"`
-		Filesize         uint64            `json:"filesize"`
-		Health           float64           `json:"health"`
-		LocalPath        string            `json:"localpath"`
-		MaxHealth        float64           `json:"maxhealth"`
-		MaxHealthPercent float64           `json:"maxhealthpercent"`
-		ModTime          time.Time         `json:"modtime"`
-		NumStuckChunks   uint64            `json:"numstuckchunks"`
-		OnDisk           bool              `json:"ondisk"`
-		Recoverable      bool              `json:"recoverable"`
-		Redundancy       float64           `json:"redundancy"`
-		Renewing         bool              `json:"renewing"`
-		SiaPath          string            `json:"siapath"`
-		Stuck            bool              `json:"stuck"`
-		StuckHealth      float64           `json:"stuckhealth"`
-		UploadedBytes    uint64            `json:"uploadedbytes"`
-		UploadProgress   float64           `json:"uploadprogress"`
+		AccessTime       time.Time `json:"accesstime"`
+		Available        bool      `json:"available"`
+		ChangeTime       time.Time `json:"changetime"`
+		CipherType       string    `json:"ciphertype"`
+		CreateTime       time.Time `json:"createtime"`
+		Expiration       uint64    `json:"expiration"`
+		Filesize         uint64    `json:"filesize"`
+		Health           float64   `json:"health"`
+		LocalPath        string    `json:"localpath"`
+		MaxHealth        float64   `json:"maxhealth"`
+		MaxHealthPercent float64   `json:"maxhealthpercent"`
+		ModTime          time.Time `json:"modtime"`
+		NumStuckChunks   uint64    `json:"numstuckchunks"`
+		OnDisk           bool      `json:"ondisk"`
+		Recoverable      bool      `json:"recoverable"`
+		Redundancy       float64   `json:"redundancy"`
+		Renewing         bool      `json:"renewing"`
+		SiaPath          string    `json:"siapath"`
+		Stuck            bool      `json:"stuck"`
+		StuckHealth      float64   `json:"stuckhealth"`
+		UploadedBytes    uint64    `json:"uploadedbytes"`
+		UploadProgress   float64   `json:"uploadprogress"`
 	}
 
-	// A HostDBEntry represents one host entry in the Renter's host DB. It
-	// aggregates the host's external settings and metrics with its public key.
-	HostDBEntry struct {
+	// define a host entry in the client's host db
+	StorageHostEntry struct {
 		HostExternalSettings
 
-		// FirstSeen is the last block height at which this host was announced.
-		FirstSeen uint64 `json:"firstseen"`
-
-		// Measurements that have been taken on the host. The most recent
-		// measurements are kept in full detail, historic ones are compressed into
-		// the historic values.
+		// the last block height at which this host was announced
+		FirstSeen        uint64      `json:"firstseen"`
 		HistoricDowntime int64       `json:"historicdowntime"`
 		HistoricUptime   int64       `json:"historicuptime"`
 		ScanHistory      HostDBScans `json:"scanhistory"`
 
-		// Measurements that are taken whenever we interact with a host.
+		// record some measurements when interacting with the host
 		HistoricFailedInteractions     float64 `json:"historicfailedinteractions"`
 		HistoricSuccessfulInteractions float64 `json:"historicsuccessfulinteractions"`
 		RecentFailedInteractions       float64 `json:"recentfailedinteractions"`
@@ -150,16 +148,14 @@ type (
 
 		LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
 
-		// Measurements related to the IP subnet mask.
+		// measurements related to the IP subnet mask.
 		IPNets          []string  `json:"ipnets"`
 		LastIPNetChange time.Time `json:"lastipnetchange"`
 
-		// The public key of the host, stored separately to minimize risk of certain
-		// MitM based vulnerabilities.
+		// the public key of the host
 		PublicKey ecdsa.PublicKey `json:"publickey"`
 
-		// Filtered says whether or not a HostDBEntry is being filtered out of the
-		// filtered hosttree due to the filter mode of the hosttree
+		// whether or not a StorageHostEntry is being filtered out of the hosttree
 		Filtered bool `json:"filtered"`
 	}
 

@@ -579,11 +579,11 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// deduct the collateral and deposit it to the public account
-	renterAddr := storageContract.RenterCollateral.Address
+	clientAddr := storageContract.ClientCollateral.Address
 	hostAddr := storageContract.HostCollateral.Address
-	renterCollateralAmount := storageContract.RenterCollateral.Value
+	clientCollateralAmount := storageContract.ClientCollateral.Value
 	hostCollateralAmount := storageContract.HostCollateral.Value
-	evm.StateDB.SubBalance(renterAddr, renterCollateralAmount)
+	evm.StateDB.SubBalance(clientAddr, clientCollateralAmount)
 	evm.StateDB.SubBalance(hostAddr, hostCollateralAmount)
 
 	// go back state DB and delete file contract from local DB if something is wrong above
@@ -643,7 +643,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		FileMerkleRoot:     storageContractRevision.NewFileMerkleRoot,
 		WindowStart:        storageContractRevision.NewWindowStart,
 		WindowEnd:          storageContractRevision.NewWindowEnd,
-		RenterCollateral:   oldStorageContract.RenterCollateral,
+		ClientCollateral:   oldStorageContract.ClientCollateral,
 		HostCollateral:     oldStorageContract.HostCollateral,
 		ValidProofOutputs:  storageContractRevision.NewValidProofOutputs,
 		MissedProofOutputs: storageContractRevision.NewMissedProofOutputs,
@@ -713,7 +713,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainCheck, errGet
 	}
 
-	// effect valid proof outputs, first for renter, second for host
+	// effect valid proof outputs, first for client, second for host
 	for _, vpo := range sc.ValidProofOutputs {
 		evm.StateDB.AddBalance(vpo.Address, vpo.Value)
 	}

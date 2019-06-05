@@ -6,11 +6,9 @@ package storageclient
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"io"
 	"math/big"
@@ -21,21 +19,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -46,30 +42,6 @@ var (
 
 	extraRatio = 0.02
 )
-
-// ************** MOCKING DATA *****************
-// *********************************************
-type (
-	contractManager   struct{}
-	StorageContractID struct{}
-	StorageHostEntry  struct{}
-	streamCache       struct{}
-	Wal               struct{}
-)
-
-// *********************************************
-// *********************************************
-
-// Backend allows Ethereum object to be passed in as interface
-type Backend interface {
-	APIs() []rpc.API
-	AccountManager() *accounts.Manager
-	SuggestPrice(ctx context.Context) (*big.Int, error)
-	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
-	ChainConfig() *params.ChainConfig
-	CurrentBlock() *types.Block
-	SendTx(ctx context.Context, signedTx *types.Transaction) error
-}
 
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
@@ -82,8 +54,6 @@ type StorageClient struct {
 	// Memory Management
 	memoryManager *memorymanager.MemoryManager
 
-	// contract manager and storage host manager
-	contractManager    *contractManager
 	storageHostManager *storagehostmanager.StorageHostManager
 
 	// Download management. The heap has a separate mutex because it is always
@@ -99,7 +69,7 @@ type StorageClient struct {
 	bubbleUpdatesMu sync.Mutex
 
 	// List of workers that can be used for uploading and/or downloading.
-	workerPool map[common.Hash]*worker
+	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
 	lastEstimationStorageHost []StorageHostEntry
@@ -110,16 +80,14 @@ type StorageClient struct {
 	staticFilesDir string
 
 	// Utilities
-	streamCache *streamCache
-	log         log.Logger
-	lock        sync.Mutex
-	tm          threadmanager.ThreadManager
-	wal         Wal
+	log  log.Logger
+	lock sync.Mutex
+	tm   threadmanager.ThreadManager
 
 	// information on network, block chain, and etc.
 	info       ParsedAPI
 	ethBackend storage.EthBackend
-	b          Backend
+	apiBackend ethapi.Backend
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
@@ -148,7 +116,7 @@ func New(persistDir string) (*StorageClient, error) {
 			stuckSegmentFound:   make(chan struct{}, 1),
 			stuckSegmentSuccess: make(chan dxdir.DxPath, 1),
 		},
-		workerPool: make(map[common.Hash]*worker),
+		workerPool: make(map[storage.ContractID]*worker),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -158,9 +126,10 @@ func New(persistDir string) (*StorageClient, error) {
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server) error {
+func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) error {
 	// get the eth backend
 	sc.ethBackend = b
+	sc.apiBackend = apiBackend
 
 	// validation
 	if server == nil {
@@ -249,10 +218,10 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
-	// Calculate the payouts for the renter, host, and whole contract
+	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	renterPayout, hostPayout, _, err := RenterPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
+	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
 	if err != nil {
 		return err
 	}
@@ -274,40 +243,54 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		RenterCollateral: types.DxcoinCollateral{types.DxcoinCharge{Value: renterPayout}},
-		HostCollateral:   types.DxcoinCollateral{types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: renterPayout, Address: clientAddr},
+			{Value: clientPayout, Address: clientAddr},
 			// Deposit is returned to host
 			{Value: hostPayout, Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: renterPayout, Address: clientAddr},
+			{Value: clientPayout, Address: clientAddr},
 			{Value: hostPayout, Address: hostAddr},
 		},
 	}
 
-	// TODO: 记录与当前host协商交互的结果，用于后续健康度检查
-	//defer func() {
-	//	if err != nil {
-	//		hdb.IncrementFailedInteractions(host.PublicKey)
-	//		err = errors.Extend(err, modules.ErrHostFault)
-	//	} else {
-	//		hdb.IncrementSuccessfulInteractions(host.PublicKey)
-	//	}
-	//}()
+	// Increase Successful/Failed interactions accordingly
+	defer func() {
+		hostID := PubkeyToEnodeID(&host.PublicKey)
+		if err != nil {
+			sc.storageHostManager.IncrementFailedInteractions(hostID)
+		} else {
+			sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
+		}
+	}()
+
+	account := accounts.Account{Address: clientAddr}
+	wallet, err := sc.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		return storagehost.ExtendErr("find client account error", err)
+	}
 
 	// Setup connection with storage host
 	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
-	defer sc.ethBackend.Disconnect(host.NetAddress)
+	if err != nil {
+		return storagehost.ExtendErr("setup connection with host failed", err)
+	}
+	defer sc.ethBackend.Disconnect(session, host.NetAddress)
+
+	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
+	if err != nil {
+		return storagehost.ExtendErr("contract sign by client failed", err)
+	}
 
 	// Send the ContractCreate request
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
-		ClientPK:        uc.PublicKeys[0],
+		Sign:            clientContractSign,
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {
@@ -315,21 +298,30 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	}
 
 	var hostSign []byte
-	if msg, err := session.ReadMsg(); err != nil {
-		if err := msg.Decode(&hostSign); err != nil {
-			return err
-		}
-	} else {
+	msg, err := session.ReadMsg()
+	if err != nil {
 		return err
 	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostSign); err != nil {
+		return err
+	}
+
+	storageContract.Signatures[0] = clientContractSign
 	storageContract.Signatures[1] = hostSign
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
-		ParentID:          storageContract.RLPHash(),
-		UnlockConditions:  uc,
-		NewRevisionNumber: 1,
-
+		ParentID:              storageContract.RLPHash(),
+		UnlockConditions:      uc,
+		NewRevisionNumber:     1,
 		NewFileSize:           storageContract.FileSize,
 		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
 		NewWindowStart:        storageContract.WindowStart,
@@ -339,35 +331,30 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
 
-	account := accounts.Account{Address: storageContract.ValidProofOutputs[0].Address}
-	wallet, err := sc.ethBackend.AccountManager().Find(account)
-	if err != nil {
-		return storagehost.ExtendErr("find client account error", err)
-	}
-
-	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("client sign contract error", err)
-	}
-	storageContract.Signatures[0] = clientContractSign
-
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
 		return storagehost.ExtendErr("client sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
-	clientSigns := storage.ContractCreateSignature{ContractSign: clientContractSign, RevisionSign: clientRevisionSign}
-	if err := session.SendStorageContractCreationClientRevisionSign(clientSigns); err != nil {
+	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
 		return storagehost.ExtendErr("send revision sign by client error", err)
 	}
 
 	var hostRevisionSign []byte
-	if msg, err := session.ReadMsg(); err != nil {
-		if err := msg.Decode(&hostRevisionSign); err != nil {
-			return err
-		}
-	} else {
+	msg, err = session.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostRevisionSign); err != nil {
 		return err
 	}
 
@@ -376,39 +363,31 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return err
 	}
 
-	sendAPI := NewStorageContractTxAPI(sc.b)
-	args := SendStorageContractTxArgs{
-		From: clientAddr,
-	}
-	addr := common.Address{}
-	addr.SetBytes([]byte{10})
-	args.To = &addr
-	args.Input = (*hexutil.Bytes)(&scBytes)
-	ctx := context.Background()
-	if _, err := sendAPI.SendFormContractTX(ctx, args); err != nil {
+	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scBytes); err != nil {
 		return storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
-	// TODO: 构造这个合约信息.
-	//header := contractHeader{
-	//	Transaction: revisionTxn,
-	//	SecretKey:   ourSK,
-	//	StartHeight: startHeight,
-	//	TotalCost:   funding,
-	//	ContractFee: host.ContractPrice,
-	//	TxnFee:      txnFee,
-	//	SiafundFee:  types.Tax(startHeight, fc.Payout),
-	//	Utility: modules.ContractUtility{
-	//		GoodForUpload: true,
-	//		GoodForRenew:  true,
-	//	},
-	//}
+	// wrap some information about this contract
+	header := contractset.ContractHeader{
+		ID:                     storage.ContractID(storageContract.ID()),
+		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		StartHeight:            startHeight,
+		EndHeight:              endHeight,
+		TotalCost:              common.NewBigInt(funding.Int64()),
+		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		LatestContractRevision: storageContractRevision,
+		Status: storage.ContractStatus{
+			UploadAbility: true,
+			Canceled:      true,
+			RenewAbility:  false,
+		},
+	}
 
-	// TODO: 保存这个合约信息到本地
-	//meta, err := cs.managedInsertContract(header, nil) // no Merkle roots yet
-	//if err != nil {
-	//	return RenterContract{}, err
-	//}
+	// store this contract info to client local
+	_, err = sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -417,15 +396,25 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.H
 	return merkle.Root(data), err
 }
 
-func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) error {
+func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
 
-	// TODO: 获取最新的storage contract revision
-	// Retrieve the contract
-	// TODO client.contractManager.GetContract()
-	contractRevision := &types.StorageContractRevision{}
+	// Retrieve the last contract revision
+	contractRevision := types.StorageContractRevision{}
+	scs := sc.storageHostManager.GetStorageContractSet()
+
+	// find the contractID formed by this host
+	hostInfo := session.HostInfo()
+	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contract, exist := scs.Acquire(contractID)
+	if !exist {
+		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+	}
+
+	defer scs.Return(contract)
+	contractHeader := contract.Header()
+	contractRevision = contractHeader.LatestContractRevision
 
 	// Calculate price per sector
-	hostInfo := session.HostInfo()
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
 	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
@@ -463,7 +452,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	// Create the revision; we will update the Merkle root later
-	rev := NewRevision(*contractRevision, cost)
+	rev := NewRevision(contractRevision, cost)
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
 	rev.NewFileSize = newFileSize
 
@@ -482,77 +471,139 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
+	// record the change to this contract, that can allow us to continue this incomplete upload at last time
+	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+
+		// Increase Successful/Failed interactions accordingly
+		if err != nil {
+			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+		} else {
+			sc.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+		}
+
+		// reset deadline
+		session.SetDeadLine(time.Hour)
+	}()
+
 	// 1. Send storage upload request
+	session.SetDeadLine(storage.ContractRevisionTime)
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
 		return err
 	}
 
 	// 2. Read merkle proof response from host
 	var merkleResp storage.UploadMerkleProof
-	if msg, err := session.ReadMsg(); err != nil {
+	msg, err := session.ReadMsg()
+	if err != nil {
 		return err
-	} else {
-		if err := msg.Decode(&merkleResp); err != nil {
-			return err
-		}
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&merkleResp); err != nil {
+		return err
 	}
 
 	// Verify the old merkle proof
 	numSectors := contractRevision.NewFileSize / storage.SectorSize
-	proofRanges := storage.CalculateProofRanges(actions, numSectors)
+	proofRanges := CalculateProofRanges(actions, numSectors)
 	proofHashes := merkleResp.OldSubtreeHashes
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
-	if verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot); !verified || err != nil {
-		return errors.New("invalid merkle proof for old root")
+
+	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
+	if err != nil {
+		sc.log.Error("something wrong for verifying diff proof", "error", err)
+	}
+	if !verified {
+		return errors.New("invalid Merkle proof for old root")
 	}
 
-	// Modify leaves and then verify the new Merkle root
-	leafHashes = storage.ModifyLeaves(leafHashes, actions, numSectors)
-	proofRanges = storage.ModifyProofRanges(proofRanges, actions, numSectors)
-	if verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot); !verified || err != nil {
-		return errors.New("invalid merkle proof for new root")
+	// and then modify the leaves and verify the new Merkle root
+	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
+	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
+	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
+	if err != nil {
+		sc.log.Error("something wrong for verifying diff proof", "error", err)
+	}
+	if !verified {
+		return errors.New("invalid Merkle proof for new root")
 	}
 
 	// Update the revision, sign it, and send it
 	rev.NewFileMerkleRoot = newRoot
 
-	var clientRevisionSign []byte
-	// TODO get account and sign revision
-	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+	// get client wallet
+	am := sc.ethBackend.AccountManager()
+	clientAddr := rev.NewValidProofOutputs[0].Address
+	clientAccount := accounts.Account{Address: clientAddr}
+	clientWallet, err := am.Find(clientAccount)
+	if err != nil {
+		return err
+	}
+
+	// client sign the new revision
+	clientRevisionSign, err := clientWallet.SignHash(clientAccount, rev.RLPHash().Bytes())
+	if err != nil {
 		return err
 	}
 	rev.Signatures[0] = clientRevisionSign
 
+	// send client sig to host
+	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		return err
+	}
+
 	// Read the host's signature
 	var hostRevisionSig []byte
-	if msg, err := session.ReadMsg(); err != nil {
+	msg, err = session.ReadMsg()
+	if err != nil {
 		return err
-	} else {
-		if err := msg.Decode(&hostRevisionSig); err != nil {
-			return err
-		}
 	}
-	rev.Signatures[1] = clientRevisionSign
 
-	// TODO update contract
-	//err = sc.commitUpload(walTxn, txn, crypto.Hash{}, storagePrice, bandwidthPrice)
-	//if err != nil {
-	//	return modules.RenterContract{}, err
-	//}
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return negotiationErr
+	}
+
+	if err := msg.Decode(&hostRevisionSig); err != nil {
+		return err
+	}
+
+	rev.Signatures[1] = hostRevisionSig
+
+	// commit upload revision
+	err = contract.CommitUpload(walTxn, rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
 // download
 
-// Read calls the Read RPC, writing the requested data to w. The RPC can be
-// cancelled (with a granularity of one section) via the cancel channel.
+// calls the Read RPC, writing the requested data to w.
+//
+// NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
-	// TODO: Reset deadline when finished.
-	//defer extendDeadline(s.conn, time.Hour)
+	// reset deadline when finished.
+	// if client has download the data, but not sent stopping or completing signal to host, the conn should be disconnected after 1 hour.
+	defer s.SetDeadLine(time.Hour)
 
-	// Sanity-check the request.
+	// sanity check the request.
 	for _, sec := range req.Sections {
 		if uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize {
 			return errors.New("illegal offset and/or length")
@@ -588,11 +639,23 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
 
-	// TODO: 获取最新的storage contract last revision
+	// Retrieve the last contract revision
 	lastRevision := types.StorageContractRevision{}
+	scs := client.storageHostManager.GetStorageContractSet()
+
+	// find the contractID formed by this host
+	hostInfo := s.HostInfo()
+	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contract, exist := scs.Acquire(contractID)
+	if !exist {
+		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+	}
+
+	defer scs.Return(contract)
+	contractHeader := contract.Header()
+	lastRevision = contractHeader.LatestContractRevision
 
 	// calculate price
-	hostInfo := s.HostInfo()
 	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessPrice := hostInfo.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
 
@@ -606,7 +669,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	price = price.MultFloat64(1 + extraRatio)
 
 	// create the download revision and sign it
-	newRevision := storage.NewDownloadRevision(lastRevision, price.BigIntPtr())
+	newRevision := NewRevision(lastRevision, price.BigIntPtr())
 
 	// client sign the revision
 	am := client.ethBackend.AccountManager()
@@ -616,10 +679,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	sig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
+	clientSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
 		return err
 	}
+	newRevision.Signatures[0] = clientSig
 
 	req.NewRevisionNumber = newRevision.NewRevisionNumber
 	req.NewValidProofValues = make([]*big.Int, len(newRevision.NewValidProofOutputs))
@@ -630,33 +694,25 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	for i, nmpo := range newRevision.NewMissedProofOutputs {
 		req.NewMissedProofValues[i] = nmpo.Value
 	}
-	req.Signature = sig[:]
+	req.Signature = clientSig[:]
 
-	// TODO: 记录renter对合约的修改，以防节点断电或其他异常导致的revision被中断，下次节点启动就可以继续完成这个revision，相当于断点续传
-	//walTxn, err := sc.recordDownloadIntent(newRevision, price)
-	//if err != nil {
-	//	return err
-	//}
+	// record the change to this contract
+	walTxn, err := contract.RecordDownloadPreRev(newRevision, price)
+	if err != nil {
+		return err
+	}
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		hostPubkey := lastRevision.UnlockConditions.PublicKeys[1]
-		pubkeyHex := PubkeyToHex(&hostPubkey)
-		hostID := enode.HexID(pubkeyHex)
 		if err != nil {
-			client.storageHostManager.IncrementFailedInteractions(hostID)
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else {
-			client.storageHostManager.IncrementSuccessfulInteractions(hostID)
+			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
 
-	// TODO: Disrupt before sending the signed revision to the host.
-	//if s.deps.Disrupt("InterruptDownloadBeforeSendingRevision") {
-	//	return errors.New("InterruptDownloadBeforeSendingRevision disrupt")
-	//}
-
 	// send download request
-	//TODO: extendDeadline(s.conn, modules.NegotiateDownloadTime)
+	s.SetDeadLine(storage.DownloadTime)
 	err = s.SendStorageContractDownloadRequest(req)
 	if err != nil {
 		return err
@@ -670,8 +726,8 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		case <-doneChan:
 		}
 
-		// TODO: 是否需要发送stop消息通知host
-		//s.writeResponse(modules.RPCLoopReadStop, nil)
+		// if negotiation is canceled or done, client should send stop msg to host
+		s.SendStopMsg()
 	}()
 
 	// ensure we send DownloadStop before returning
@@ -684,6 +740,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		msg, err := s.ReadMsg()
 		if err != nil {
 			return err
+		}
+
+		// if host send some negotiation error, client should handler it
+		if msg.Code == storage.NegotiationErrorMsg {
+			var negotiationErr error
+			msg.Decode(&negotiationErr)
+			return negotiationErr
 		}
 
 		err = msg.Decode(&resp)
@@ -727,6 +790,13 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return err
 		}
 
+		// if host send some negotiation error, client should handler it
+		if msg.Code == storage.NegotiationErrorMsg {
+			var negotiationErr error
+			msg.Decode(&negotiationErr)
+			return negotiationErr
+		}
+
 		err = msg.Decode(&resp)
 		if err != nil {
 			return err
@@ -736,21 +806,16 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	newRevision.Signatures[1] = hostSig
 
-	// TODO: Disrupt before commiting.
-	//if s.deps.Disrupt("InterruptDownloadAfterSendingRevision") {
-	//	return errors.New("InterruptDownloadAfterSendingRevision disrupt")
-	//}
-
-	// TODO: update contract and metrics
-	//if err := sc.commitDownload(walTxn, txn, price); err != nil {
-	//	return err
-	//}
+	// commit this revision
+	err = contract.CommitDownload(walTxn, newRevision, price)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// Download calls the Read RPC with a single section and returns the
-// requested data. A Merkle proof is always requested.
+// calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
 func (client *StorageClient) Download(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
@@ -787,19 +852,19 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 	// instantiate the download object.
 	d := &download{
-		completeChan:          make(chan struct{}),
-		staticStartTime:       time.Now(),
-		destination:           params.destination,
-		destinationString:     params.destinationString,
-		staticDestinationType: params.destinationType,
-		staticLatencyTarget:   params.latencyTarget,
-		staticLength:          params.length,
-		staticOffset:          params.offset,
-		staticOverdrive:       params.overdrive,
-		staticDxFilePath:      params.file.DxPath(),
-		staticPriority:        params.priority,
-		log:                   client.log,
-		memoryManager:         client.memoryManager,
+		completeChan:      make(chan struct{}),
+		startTime:         time.Now(),
+		destination:       params.destination,
+		destinationString: params.destinationString,
+		destinationType:   params.destinationType,
+		latencyTarget:     params.latencyTarget,
+		length:            params.length,
+		offset:            params.offset,
+		overdrive:         params.overdrive,
+		dxFilePath:        params.file.DxPath(),
+		priority:          params.priority,
+		log:               client.log,
+		memoryManager:     client.memoryManager,
 	}
 
 	// set the end time of the download when it's done.
@@ -809,7 +874,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	})
 
 	// nothing more to do for 0-byte files or 0-length downloads.
-	if d.staticLength == 0 {
+	if d.length == 0 {
 		d.markComplete()
 		return d, nil
 	}
@@ -818,21 +883,16 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	minSegment, minSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
 	maxSegment, maxSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
 
-	// if the maxSegmentOffset is exactly 0 we need to subtract 1 segment. e.g. if
-	// the segmentSize is 100 bytes and we want to download 100 bytes from offset
-	// 0, maxSegment would be 1 and maxSegmentOffset would be 0. We want maxSegment
-	// to be 0 though since we don't actually need any data from segment 1.
 	if maxSegment > 0 && maxSegmentOffset == 0 {
 		maxSegment--
 	}
 
-	// make sure the requested segments are within the boundaries.
+	// check the requested segment number
 	if minSegment == params.file.NumSegments() || maxSegment == params.file.NumSegments() {
 		return nil, errors.New("download is requesting a segment that is past the boundary of the file")
 	}
 
-	// for each segment, assemble a mapping from the contract id to the index of
-	// the sector within the segment that the contract is responsible for.
+	// map from the host id to the index of the sector within the segment.
 	segmentMaps := make([]map[string]downloadSectorInfo, maxSegment-minSegment+1)
 	for segmentIndex := minSegment; segmentIndex <= maxSegment; segmentIndex++ {
 		segmentMaps[segmentIndex-minSegment] = make(map[string]downloadSectorInfo)
@@ -863,46 +923,44 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	// queue the downloads for each segment.
 	for i := minSegment; i <= maxSegment; i++ {
 		uds := &unfinishedDownloadSegment{
-			destination:        params.destination,
-			erasureCode:        params.file.ErasureCode(),
-			masterKey:          params.file.CipherKey(),
-			staticSegmentIndex: i,
-			staticCacheID:      fmt.Sprintf("%v:%v", d.staticDxFilePath, i),
-			staticSegmentMap:   segmentMaps[i-minSegment],
-			staticSegmentSize:  params.file.SegmentSize(),
-			staticSectorSize:   params.file.SectorSize(),
+			destination:  params.destination,
+			erasureCode:  params.file.ErasureCode(),
+			masterKey:    params.file.CipherKey(),
+			segmentIndex: i,
+			segmentMap:   segmentMaps[i-minSegment],
+			segmentSize:  params.file.SegmentSize(),
+			sectorSize:   params.file.SectorSize(),
 
 			// increase target by 25ms per segment
-			staticLatencyTarget: params.latencyTarget + (25 * time.Duration(i-minSegment)),
-			staticNeedsMemory:   params.needsMemory,
-			staticPriority:      params.priority,
+			latencyTarget:       params.latencyTarget + (25 * time.Duration(i-minSegment)),
+			needsMemory:         params.needsMemory,
+			priority:            params.priority,
 			completedSectors:    make([]bool, params.file.ErasureCode().NumSectors()),
 			physicalSegmentData: make([][]byte, params.file.ErasureCode().NumSectors()),
 			sectorUsage:         make([]bool, params.file.ErasureCode().NumSectors()),
 			download:            d,
-			renterFile:          params.file,
-			staticStreamCache:   client.streamCache,
+			clientFile:          params.file,
 		}
 
 		// set the offset within the segment that we start downloading from
 		if i == minSegment {
-			uds.staticFetchOffset = minSegmentOffset
+			uds.fetchOffset = minSegmentOffset
 		} else {
-			uds.staticFetchOffset = 0
+			uds.fetchOffset = 0
 		}
 
 		// set the number of bytes to fetch within the segment that we start downloading from
 		if i == maxSegment && maxSegmentOffset != 0 {
-			uds.staticFetchLength = maxSegmentOffset - uds.staticFetchOffset
+			uds.fetchLength = maxSegmentOffset - uds.fetchOffset
 		} else {
-			uds.staticFetchLength = params.file.SegmentSize() - uds.staticFetchOffset
+			uds.fetchLength = params.file.SegmentSize() - uds.fetchOffset
 		}
 
 		// set the writeOffset within the destination for where the data be written.
-		uds.staticWriteOffset = writeOffset
-		writeOffset += int64(uds.staticFetchLength)
+		uds.writeOffset = writeOffset
+		writeOffset += int64(uds.fetchLength)
 
-		uds.staticOverdrive = uint32(params.overdrive)
+		uds.overdrive = uint32(params.overdrive)
 
 		// add this segment to the segment heap, and notify the download loop a new task
 		client.addSegmentToDownloadHeap(uds)
@@ -925,7 +983,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	defer entry.SetTimeAccess(time.Now())
 
 	// validate download parameters.
-	isHTTPResp := p.Httpwriter != nil
+	isHTTPResp := p.HttpWriter != nil
 	if p.Async && isHTTPResp {
 		return nil, errors.New("cannot async download to http response")
 	}
@@ -960,7 +1018,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	var dw downloadDestination
 	var destinationType string
 	if isHTTPResp {
-		dw = newDownloadDestinationWriter(p.Httpwriter)
+		dw = newDownloadWriter(p.HttpWriter)
 		destinationType = "http stream"
 	} else {
 		osFile, err := os.OpenFile(p.Destination, os.O_CREATE|os.O_WRONLY, entry.FileMode())
@@ -972,7 +1030,7 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	}
 
 	if isHTTPResp {
-		w, ok := p.Httpwriter.(http.ResponseWriter)
+		w, ok := p.HttpWriter.(http.ResponseWriter)
 		if ok {
 			w.Header().Set("Content-Length", fmt.Sprint(p.Length))
 		}
@@ -1002,20 +1060,12 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	}
 
 	// register some cleanup for when the download is done.
-	d.OnComplete(func(_ error) error {
+	d.onComplete(func(_ error) error {
 		if closer, ok := dw.(io.Closer); ok {
 			return closer.Close()
 		}
 		return nil
 	})
-
-	// TODO: 是否需要保存下载历史
-	// Add the download object to the download history if it's not a stream.
-	//if destinationType != destinationTypeSeekStream {
-	//	r.downloadHistoryMu.Lock()
-	//	r.downloadHistory = append(r.downloadHistory, d)
-	//	r.downloadHistoryMu.Unlock()
-	//}
 
 	return d, nil
 }
