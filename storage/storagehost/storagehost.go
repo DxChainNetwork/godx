@@ -31,6 +31,7 @@ import (
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
+	storage.HostSettingMsg:					   handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
@@ -367,6 +368,13 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 		return handler(h, s, msg)
 	}
 	return nil
+}
+
+func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetDeadLine(storage.HostSettingTime)
+
+	settings := h.externalConfig()
+	return s.SendHostExtSettingsResponse(settings)
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
