@@ -545,8 +545,13 @@ func (sc *StorageClient) ContracteRenew(oldContract *contractset.Contract, param
 		},
 	}
 
+	oldRoots, errRoots := oldContract.MerkelRoots()
+	if errRoots != nil {
+		return storage.ContractMetaData{}, errRoots
+	}
+
 	// store this contract info to client local
-	contractMetaData, errInsert := sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
+	contractMetaData, errInsert := sc.storageHostManager.GetStorageContractSet().InsertContract(header, oldRoots)
 	if errInsert != nil {
 		return storage.ContractMetaData{}, errInsert
 	}
