@@ -10,19 +10,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 // A worker listens for work on a certain host.
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract storage.ClientContract
+	contract storage.ContractMetaData
 	hostID   enode.ID
 	client   *StorageClient
 
@@ -66,27 +64,23 @@ func (c *StorageClient) activateWorkerPool() {
 		c.lock.Lock()
 		_, exists := c.workerPool[id]
 		if !exists {
+			h := contract.Header()
+			clientContract := storage.ContractMetaData{
+				ID:                     id,
+				EnodeID:                h.EnodeID,
+				StartHeight:            h.StartHeight,
+				EndHeight:              h.LatestContractRevision.NewWindowStart,
+				LatestContractRevision: h.LatestContractRevision,
+				UploadCost:             h.UploadCost,
+				DownloadCost:           h.DownloadCost,
+				StorageCost:            h.StorageCost,
+				TotalCost:              contract.Header().TotalCost,
+				GasFee:                 h.GasFee,
+				ContractFee:            h.ContractFee,
+				Status:                 h.Status,
 
-			clientContract := storage.ClientContract{
-				ContractID:  common.Hash(id),
-				HostID:      contract.Header().EnodeID,
-				StartHeight: contract.Header().StartHeight,
-				EndHeight:   contract.Header().EndHeight,
-
-				// TODO: 计算、填充下这些变量
 				// the amount remaining in the contract that the client can spend.
-				//ClientFunds: common.NewBigInt(1),
-
-				// track the various costs manually.
-				//DownloadSpending: common.NewBigInt(1),
-				//StorageSpending:  common.NewBigInt(1),
-				//UploadSpending:   common.NewBigInt(1),
-
-				// record utility information about the contract.
-				//Utility ContractUtility
-
-				// the amount of money that the client spent or locked while forming a contract.
-				TotalCost: contract.Header().TotalCost,
+				ClientBalance: h.LatestContractRevision.NewValidProofOutputs[0].Value,
 			}
 
 			worker := &worker{
@@ -227,7 +221,9 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	// whether download success or fail, we should remove the worker at last
 	defer uds.removeWorker()
-	fetchOffset, fetchLength := sectorOffsetAndLength(uds.fetchOffset, uds.fetchLength, uds.erasureCode)
+
+	// For not supporting partial encoding, we need to download the whole sector every time.
+	fetchOffset, fetchLength := 0, storage.SectorSize
 	root := uds.segmentMap[w.hostID.String()].root
 
 	// Setup connection
@@ -252,7 +248,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	// record the amount of all data transferred between download connection
-	atomic.AddUint64(&uds.download.atomicTotalDataTransferred, uds.sectorSize)
+	atomic.AddUint64(&uds.download.totalDataTransferred, uds.sectorSize)
 
 	// calculate a seed for twofishgcm
 	sectorIndex := uds.segmentMap[w.hostID.String()].index
@@ -292,14 +288,14 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 
 		// this a accumulation processing, every time we receive a sector
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength/uint64(uds.erasureCode.MinSectors()))
+		atomic.AddUint64(&uds.download.dataReceived, uds.fetchLength/uint64(uds.erasureCode.MinSectors()))
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
 	}
 	if uds.sectorsCompleted == uds.erasureCode.MinSectors() {
 
 		// client maybe receive a not integral sector
 		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.fetchLength / uint64(uds.erasureCode.MinSectors()))
-		atomic.AddUint64(&uds.download.atomicDataReceived, uds.fetchLength-addedReceivedData)
+		atomic.AddUint64(&uds.download.dataReceived, uds.fetchLength-addedReceivedData)
 
 		// recover the logical data
 		go uds.recoverLogicalData()
@@ -354,20 +350,6 @@ func (w *worker) onDownloadCooldown() bool {
 		requiredCooldown *= 2
 	}
 	return time.Now().Before(w.ownedDownloadRecentFailure.Add(requiredCooldown))
-}
-
-// calculate the offset and length of the sector we need to download for a successful recovery of the requested data.
-func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
-	segmentIndex, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
-	return uint64(segmentIndex * storage.SegmentSize), uint64(numSegments * storage.SegmentSize)
-}
-
-// calculates how many segments we need in total to recover the requested data,
-// and the first segment.
-func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
-
-	// not support partial encoding
-	return 0, uint64(storage.SectorSize) / storage.SegmentSize
 }
 
 // remove the worker from an unfinished download segment,

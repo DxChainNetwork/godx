@@ -346,7 +346,6 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
 		StartHeight:            startHeight,
-		EndHeight:              endHeight,
 		TotalCost:              common.NewBigInt(funding.Int64()),
 		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
 		LatestContractRevision: storageContractRevision,

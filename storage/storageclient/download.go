@@ -18,10 +18,10 @@ type (
 	download struct {
 
 		// incremented as data completes, will stop at 100% file progress.
-		atomicDataReceived uint64
+		dataReceived uint64
 
 		// incremented as data arrives, include everything from connection.
-		atomicTotalDataTransferred uint64
+		totalDataTransferred uint64
 
 		// the number of incomplete segments for this download
 		segmentsRemaining uint64
