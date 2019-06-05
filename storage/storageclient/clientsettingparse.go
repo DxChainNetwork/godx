@@ -358,3 +358,39 @@ func formatString(s string) (formatted string) {
 	s = strings.ToLower(s)
 	return s
 }
+
+func clientSettingValidation(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
+	if setting.RentPayment.Fund.IsEqual(common.BigInt0) {
+		setting.RentPayment.Fund = storage.DefaultRentPayment.Fund
+	}
+
+	if setting.RentPayment.StorageHosts == 0 {
+		setting.RentPayment.StorageHosts = storage.DefaultRentPayment.StorageHosts
+	}
+
+	if setting.RentPayment.Period == 0 {
+		setting.RentPayment.Period = storage.DefaultRentPayment.Period
+	}
+
+	if setting.RentPayment.RenewWindow == 0 {
+		setting.RentPayment.RenewWindow = storage.DefaultRentPayment.RenewWindow
+	}
+
+	if setting.RentPayment.ExpectedStorage == 0 {
+		setting.RentPayment.ExpectedStorage = storage.DefaultRentPayment.ExpectedStorage
+	}
+
+	if setting.RentPayment.ExpectedUpload == 0 {
+		setting.RentPayment.ExpectedUpload = storage.DefaultRentPayment.ExpectedUpload
+	}
+
+	if setting.RentPayment.ExpectedDownload == 0 {
+		setting.RentPayment.ExpectedDownload = storage.DefaultRentPayment.ExpectedDownload
+	}
+
+	if setting.RentPayment.ExpectedRedundancy == 0 {
+		setting.RentPayment.ExpectedRedundancy = storage.DefaultRentPayment.ExpectedRedundancy
+	}
+
+	return setting
+}

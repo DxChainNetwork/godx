@@ -179,6 +179,8 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 
 	// TODO (mzhang): Register On Stop Thread Control Function, waiting for WAL
 
+	sc.log.Info("storage client started")
+
 	return nil
 }
 
@@ -195,6 +197,7 @@ func (sc *StorageClient) Close() error {
 func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
 	// making sure the entire program will only be terminated after finish the SetClientSetting
 	// operation
+
 	if err = sc.tm.Add(); err != nil {
 		return
 	}
@@ -228,6 +231,7 @@ func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err er
 
 	// active the worker pool
 	sc.activateWorkerPool()
+
 	return
 }
 

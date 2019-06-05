@@ -66,6 +66,10 @@ func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string)
 		resp = fmt.Sprintf("form contract failed, failed to parse the client settings: %s", err.Error())
 	}
 
+	// validation, for any 0 value, set them to default value
+	clientSetting = clientSettingValidation(clientSetting)
+
+	// call set client setting methods
 	if err := api.sc.SetClientSetting(clientSetting); err != nil {
 		resp = fmt.Sprintf("form contract failed, failed to set the client settings: %s", err.Error())
 		return

@@ -5638,7 +5638,13 @@ module.exports = Net;
                 name: 'setMemoryLimit',
                 call: 'storageclient_setMemoryLimit',
                 params: 1,
-            })
+            });
+
+            var setClientSetting = new Method({
+                name: 'setClientSetting',
+                call: 'storageclient_setClientSetting',
+                params: 1,
+            });
 
             return [
                 payment,
@@ -5646,6 +5652,7 @@ module.exports = Net;
                 memory,
                 memorylimit,
                 setMemoryLimit,
+                setClientSetting,
             ];
         };
 

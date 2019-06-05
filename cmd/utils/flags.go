@@ -119,7 +119,7 @@ var (
 	}
 
 	HostsFlag = cli.StringFlag{
-		Name:  "h",
+		Name:  "host",
 		Usage: "the host flag is used to define how many hosts that storage client wanted to sign contract with, the value must be greater than 1",
 	}
 

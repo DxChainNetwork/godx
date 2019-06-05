@@ -34,7 +34,7 @@ func (cm *ContractManager) contractMaintenance() {
 	}()
 
 	// start maintenance
-	// TODO (mzhang): add contract recovery
+
 	cm.maintainExpiration()
 	cm.removeDuplications()
 	cm.maintainHostToContractIDMapping()
@@ -103,6 +103,7 @@ func (cm *ContractManager) contractMaintenance() {
 	if terminated, err := cm.prepareFormContract(neededContracts, clientRemainingFund); err != nil || terminated {
 		return
 	}
+
 }
 
 func (cm *ContractManager) checkMaintenanceTermination() (terminate bool) {

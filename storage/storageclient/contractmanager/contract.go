@@ -66,7 +66,7 @@ func (cm *ContractManager) resumeContracts() (err error) {
 // 		2. the contract has been renewed
 func (cm *ContractManager) maintainExpiration() {
 	// get the current block height
-	cm.lock.RUnlock()
+	cm.lock.RLock()
 	currentBh := cm.blockHeight
 	cm.lock.RUnlock()
 
@@ -317,6 +317,11 @@ func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (
 }
 
 func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (minEval common.BigInt) {
+	// if there are no hosts passed in, return 0 directly
+	if len(hosts) == 0 {
+		return common.BigInt0
+	}
+
 	minEval = cm.hostManager.Evaluation(hosts[0])
 	for i := 1; i < len(hosts); i++ {
 		eval := cm.hostManager.Evaluation(hosts[i])

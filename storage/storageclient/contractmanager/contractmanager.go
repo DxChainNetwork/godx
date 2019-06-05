@@ -116,6 +116,8 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 		return
 	}
 
+	cm.log.Info("contract manager started")
+
 	return
 }
 
