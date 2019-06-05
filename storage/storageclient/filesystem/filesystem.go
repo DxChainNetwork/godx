@@ -442,20 +442,17 @@ func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHe
 	if len(table) == 0 {
 		table = fs.contractor.HostHealthMapByID(file.HostIDs())
 	}
+	status := fileStatus(file, table)
 	redundancy := file.Redundancy(table)
-	health, stuckHealth, numStuckSegments := file.Health(table)
+
 	info := storage.FileInfo{
-		Accessible:       redundancy >= 100 || onDisk,
-		FileSize:         file.FileSize(),
-		Health:           health,
-		StuckHealth:      stuckHealth,
-		NumStuckSegments: numStuckSegments,
-		Redundancy:       redundancy,
-		StoredOnDisk:     onDisk,
-		Recoverable:      redundancy >= 100,
-		DxPath:           path.Path,
-		Stuck:            numStuckSegments > 0,
-		UploadProgress:   file.UploadProgress(),
+		DxPath:         path.Path,
+		Status:         status,
+		SourcePath:     string(file.LocalPath()),
+		FileSize:       file.FileSize(),
+		Redundancy:     redundancy,
+		StoredOnDisk:   onDisk,
+		UploadProgress: file.UploadProgress(),
 	}
 	return info, nil
 }
@@ -471,14 +468,36 @@ func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealt
 	if len(table) == 0 {
 		table = fs.contractor.HostHealthMapByID(file.HostIDs())
 	}
-	recoverable := file.Redundancy(table) >= 100
 
 	info := storage.FileBriefInfo{
 		Path:           path.Path,
 		UploadProgress: file.UploadProgress(),
-		Recoverable:    recoverable,
+		Status:         fileStatus(file, table),
 	}
 	return info, nil
+}
+
+// fileStatus return the human readable status
+func fileStatus(file *dxfile.FileSetEntryWithID, table storage.HostHealthInfoTable) string {
+	health, _, numStuckSegments := file.Health(table)
+	if numStuckSegments > 0 {
+		return statusUnrecoverableStr
+	}
+	return humanReadableHealth(health)
+}
+
+// humanReadableHealth convert the health to human readable string
+func humanReadableHealth(health uint32) string {
+	if health > healthyThreshold {
+		return statusHealthyStr
+	}
+	if health > recoverableThreshold {
+		return statusRecoverableStr
+	}
+	if health > inDangerThreshold {
+		return statusInDangerStr
+	}
+	return statusUnrecoverableStr
 }
 
 // randomUint32 create a random number uint32
