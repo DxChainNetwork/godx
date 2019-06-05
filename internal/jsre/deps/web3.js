@@ -2528,8 +2528,8 @@ var HostDebug = require('./web3/methods/hostdebug');
 
 var storageclient = require('./web3/methods/storageclient');
 var storagehostmanager = require('./web3/methods/storagehostmanager');
-var filesDebug = require('./web3/methods/filesdebug');
-var files = require('./web3/methods/files');
+var clientfilesdebug = require('./web3/methods/clientfilesdebug');
+var clientfiles = require('./web3/methods/clientfiles');
 
 
 function Web3 (provider) {
@@ -2544,8 +2544,8 @@ function Web3 (provider) {
 
     this.storageclient = new storageclient(this);
     this.storagehostmanager = new storagehostmanager(this);
-    this.filesdebug = new filesDebug(this);
-    this.files = new files(this)
+    this.clientfilesdebug = new clientfilesdebug(this);
+    this.clientfiles = new clientfiles(this)
 
     this.hostdebug = new HostDebug(this);
 
@@ -2646,7 +2646,7 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{ "./web3/methods/files": 212, "./web3/methods/filesdebug": 211, "./web3/methods/storagehostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{ "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/storagehostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 
 /*
     This file is part of web3.js.
@@ -13891,7 +13891,7 @@ module.exports = Web3;
     var methods = function () {
       var createrandomfiles = new Method({
         name: 'createRandomFiles',
-        call: 'filesdebug_createRandomFiles',
+        call: 'clientfilesdebug_createRandomFiles',
         params: 1,
       });
 
@@ -13900,7 +13900,7 @@ module.exports = Web3;
       ];
     };
 
-    function FilesDebug(web3){
+    function ClientFilesDebug(web3){
       this._requestManager = web3._requestManager;
 
       var self = this;
@@ -13911,7 +13911,7 @@ module.exports = Web3;
       });
     }
 
-    module.exports =  FilesDebug
+    module.exports =  ClientFilesDebug
   }, {"../formatters":30, "../method":36, "../../utils/utils":20},],
 
   212: [function(require,module,exports) {
@@ -13925,25 +13925,25 @@ module.exports = Web3;
     var methods = function () {
       var fileInfo = new Method({
         name: 'fileInfo',
-        call: 'files_detailedFileInfo',
+        call: 'clientfiles_detailedFileInfo',
         params: 1,
       })
 
       var rename = new Method({
         name: 'rename',
-        call: 'files_rename',
+        call: 'clientfiles_rename',
         params: 2,
       })
 
       var deletion = new Method({
         name: 'delete',
-        call: 'files_delete',
+        call: 'clientfiles_delete',
         params: 1,
       })
 
       var uploads = new Method({
         name: 'uploads',
-        call: 'files_uploads',
+        call: 'clientfiles_uploads',
         params: 0,
       })
 
@@ -13959,20 +13959,20 @@ module.exports = Web3;
       return [
         new Property({
           name: 'persistDir',
-          getter: 'files_persistDir',
+          getter: 'clientfiles_persistDir',
         }),
         new Property({
           name: 'rootDir',
-          getter: 'files_rootDir',
+          getter: 'clientfiles_rootDir',
         }),
         new Property({
           name: 'fileList',
-          getter: 'files_fileList'
+          getter: 'clientfiles_fileList'
         })
       ];
     }
 
-    function Files(web3){
+    function ClientFiles(web3){
       this._requestManager = web3._requestManager;
 
       var self = this;
@@ -13988,7 +13988,7 @@ module.exports = Web3;
       });
     }
 
-    module.exports = Files
+    module.exports = ClientFiles
   }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20},],
 
 },{},["web3"])
