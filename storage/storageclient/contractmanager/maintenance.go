@@ -34,7 +34,6 @@ func (cm *ContractManager) contractMaintenance() {
 	}()
 
 	// start maintenance
-
 	cm.maintainExpiration()
 	cm.removeDuplications()
 	cm.maintainHostToContractIDMapping()
