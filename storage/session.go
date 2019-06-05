@@ -14,30 +14,37 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 )
 
+var (
+	ErrClientDisconnect = errors.New("storage client disconnect proactively")
+)
+
 const (
+	HostSettingMsg         = 0x20
+	HostSettingResponseMsg = 0x21
+
 	// Storage Contract Negotiate Protocol belonging to eth/64
 	// Storage Contract Creation/Renew Code Msg
-	StorageContractCreationMsg                   = 0x11
-	StorageContractCreationHostSignMsg           = 0x12
-	StorageContractCreationClientRevisionSignMsg = 0x13
-	StorageContractCreationHostRevisionSignMsg   = 0x14
+	StorageContractCreationMsg                   = 0x22
+	StorageContractCreationHostSignMsg           = 0x23
+	StorageContractCreationClientRevisionSignMsg = 0x24
+	StorageContractCreationHostRevisionSignMsg   = 0x25
 
 	// Upload Data Segment Code Msg
-	StorageContractUploadRequestMsg         = 0x15
-	StorageContractUploadMerkleRootProofMsg = 0x16
-	StorageContractUploadClientRevisionMsg  = 0x17
-	StorageContractUploadHostRevisionMsg    = 0x18
+	StorageContractUploadRequestMsg         = 0x26
+	StorageContractUploadMerkleRootProofMsg = 0x27
+	StorageContractUploadClientRevisionMsg  = 0x28
+	StorageContractUploadHostRevisionMsg    = 0x29
 
 	// Download Data Segment Code Msg
-	StorageContractDownloadRequestMsg      = 0x19
-	StorageContractDownloadDataMsg         = 0x20
-	StorageContractDownloadHostRevisionMsg = 0x21
+	StorageContractDownloadRequestMsg      = 0x30
+	StorageContractDownloadDataMsg         = 0x31
+	StorageContractDownloadHostRevisionMsg = 0x32
 
 	// error msg code
-	NegotiationErrorMsg = 0x22
+	NegotiationErrorMsg = 0x33
 
 	// stop msg code
-	NegotiationStopMsg = 0x23
+	NegotiationStopMsg = 0x34
 )
 
 type SessionSet struct {
@@ -120,6 +127,11 @@ func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 		clientDisc: make(chan error),
 	}
 }
+
+func (s *Session) StopConnection() {
+	s.clientDisc <- ErrClientDisconnect
+}
+
 func (s *Session) ClientDiscChan() chan error {
 	return s.clientDisc
 }
@@ -151,6 +163,16 @@ func (s *Session) RW() p2p.MsgReadWriter {
 
 func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 	s.rw = rw
+}
+
+func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
+	s.Log().Debug("Sending host settings request from client", data)
+	return p2p.Send(s.rw, HostSettingMsg, data)
+}
+
+func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
+	s.Log().Debug("Sending host settings response from host", data)
+	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {
