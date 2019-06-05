@@ -60,7 +60,8 @@ func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 
 // SetClientSetting will configure the client setting based on the user input data
 func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (resp string) {
-	clientSetting, err := api.sc.parseClientSetting(settings)
+	prevClientSetting := api.sc.RetrieveClientSetting()
+	clientSetting, err := parseClientSetting(settings, prevClientSetting)
 	if err != nil {
 		resp = fmt.Sprintf("form contract failed, failed to parse the client settings: %s", err.Error())
 	}

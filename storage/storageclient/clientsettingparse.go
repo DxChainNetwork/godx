@@ -34,9 +34,9 @@ var dataSizeMultiplier = map[string]uint64{
 	"tib": 1 << 40,
 }
 
-func (sc *StorageClient) parseClientSetting(settings map[string]string) (clientSetting storage.ClientSetting, err error) {
+func parseClientSetting(settings map[string]string, prevSetting storage.ClientSetting) (clientSetting storage.ClientSetting, err error) {
 	// get the previous settings
-	clientSetting = sc.RetrieveClientSetting()
+	clientSetting = prevSetting
 
 	// parse the ClientSettingAPI
 	for key, value := range settings {

@@ -4,6 +4,14 @@
 
 package storageclient
 
+import (
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
+	"math/rand"
+	"time"
+)
+
 //import (
 //	"fmt"
 //	"github.com/DxChainNetwork/godx/common"
@@ -72,66 +80,66 @@ package storageclient
 //
 //	}
 //}
-//
-///*
-// _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _
-//|  __ \|  __ \|_   _\ \    / /\|__   __|  ____|      |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
-//| |__) | |__) | | |  \ \  / /  \  | |  | |__         | |__  | |  | |  \| | |       | |    | || |  | |  \| |
-//|  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|        |  __| | |  | | . ` | |       | |    | || |  | | . ` |
-//| |    | | \ \ _| |_   \  / ____ \| |  | |____       | |    | |__| | |\  | |____   | |   _| || |__| | |\  |
-//|_|    |_|  \_\_____|   \/_/    \_\_|  |______|      |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
-//
-//*/
-//
-//func settingValidation(settings storage.ClientSetting) (expectedErr bool) {
-//	if settings.MaxUploadSpeed < 0 || settings.MaxDownloadSpeed < 0 {
-//		return true
-//	}
-//
-//	if err := contractmanager.RentPaymentValidation(settings.RentPayment); err != nil {
-//		return true
-//	}
-//
-//	return false
-//}
-//
-//func randomClientSettingsGenerator() (settings storage.ClientSetting) {
-//	settings = storage.ClientSetting{
-//		RentPayment:       randRentPaymentGenerator(),
-//		EnableIPViolation: true,
-//		MaxUploadSpeed:    randInt64(),
-//		MaxDownloadSpeed:  randInt64(),
-//	}
-//
-//	return
-//}
-//
-//func randRentPaymentGenerator() (rentPayment storage.RentPayment) {
-//	rentPayment = storage.RentPayment{
-//		Fund:               common.RandomBigInt(),
-//		StorageHosts:       randUint64(),
-//		Period:             randUint64(),
-//		RenewWindow:        randUint64(),
-//		ExpectedStorage:    randUint64(),
-//		ExpectedUpload:     randUint64(),
-//		ExpectedDownload:   randUint64(),
-//		ExpectedRedundancy: randFloat64(),
-//	}
-//
-//	return
-//}
-//
-//func randUint64() (randUint uint64) {
-//	rand.Seed(time.Now().UnixNano())
-//	return rand.Uint64()
-//}
-//
-//func randFloat64() (randFloat float64) {
-//	rand.Seed(time.Now().UnixNano())
-//	return rand.Float64()
-//}
-//
-//func randInt64() (randBool int64) {
-//	rand.Seed(time.Now().UnixNano())
-//	return int64(rand.Int())
-//}
+
+/*
+_____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _
+|  __ \|  __ \|_   _\ \    / /\|__   __|  ____|      |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
+| |__) | |__) | | |  \ \  / /  \  | |  | |__         | |__  | |  | |  \| | |       | |    | || |  | |  \| |
+|  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|        |  __| | |  | | . ` | |       | |    | || |  | | . ` |
+| |    | | \ \ _| |_   \  / ____ \| |  | |____       | |    | |__| | |\  | |____   | |   _| || |__| | |\  |
+|_|    |_|  \_\_____|   \/_/    \_\_|  |______|      |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
+
+*/
+
+func settingValidation(settings storage.ClientSetting) (expectedErr bool) {
+	if settings.MaxUploadSpeed < 0 || settings.MaxDownloadSpeed < 0 {
+		return true
+	}
+
+	if err := contractmanager.RentPaymentValidation(settings.RentPayment); err != nil {
+		return true
+	}
+
+	return false
+}
+
+func randomClientSettingsGenerator() (settings storage.ClientSetting) {
+	settings = storage.ClientSetting{
+		RentPayment:       randRentPaymentGenerator(),
+		EnableIPViolation: true,
+		MaxUploadSpeed:    randInt64(),
+		MaxDownloadSpeed:  randInt64(),
+	}
+
+	return
+}
+
+func randRentPaymentGenerator() (rentPayment storage.RentPayment) {
+	rentPayment = storage.RentPayment{
+		Fund:               common.RandomBigInt(),
+		StorageHosts:       randUint64(),
+		Period:             randUint64(),
+		RenewWindow:        randUint64(),
+		ExpectedStorage:    randUint64(),
+		ExpectedUpload:     randUint64(),
+		ExpectedDownload:   randUint64(),
+		ExpectedRedundancy: randFloat64(),
+	}
+
+	return
+}
+
+func randUint64() (randUint uint64) {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Uint64()
+}
+
+func randFloat64() (randFloat float64) {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Float64()
+}
+
+func randInt64() (randBool int64) {
+	rand.Seed(time.Now().UnixNano())
+	return int64(rand.Int())
+}
