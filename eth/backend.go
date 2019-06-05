@@ -18,13 +18,14 @@
 package eth
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -47,9 +48,13 @@ import (
 	"github.com/DxChainNetwork/godx/miner"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -62,7 +67,7 @@ type LesServer interface {
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	storageHost    *storagehost.StorageHost
+	storageHost *storagehost.StorageHost
 
 	config      *Config
 	chainConfig *params.ChainConfig
@@ -91,14 +96,17 @@ type Ethereum struct {
 	gasPrice  *big.Int
 	etherbase common.Address
 
-	apisOnce      sync.Once
+	apisOnce       sync.Once
 	registeredAPIs []rpc.API
-	storageClient *storageclient.StorageClient
+	storageClient  *storageclient.StorageClient
 
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
+
+	// maintenance
+	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -182,7 +190,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(config.TxPool, eth.chainConfig, eth.blockchain)
 
-	if eth.protocolManager, err = NewProtocolManager(eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
+	if eth.protocolManager, err = NewProtocolManager(eth, eth.chainConfig, config.SyncMode, config.NetworkId, eth.eventMux, eth.txPool, eth.engine, eth.blockchain, chainDb, config.Whitelist); err != nil {
 		return nil, err
 	}
 
@@ -211,6 +219,14 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		//  make sure what the expected handling case of these failure
 		return nil, err
 	}
+
+	// new maintenance system
+	state, err := eth.blockchain.State()
+	if err != nil {
+		log.Error("failed to get statedb for maintenance", "error", err)
+		return nil, err
+	}
+	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
 
 	return eth, nil
 }
@@ -339,10 +355,20 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 				Public:    false,
-			},{
+			}, {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
+				Public:    true,
+			}, {
+				Namespace: "hostmanagerdebug",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
+				Public:    true,
+			}, {
+				Namespace: "hostmanager",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
 				Public:    true,
 			},
 		}...)
@@ -515,6 +541,8 @@ func (s *Ethereum) IsListening() bool                  { return true } // Always
 func (s *Ethereum) EthVersion() int                    { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
+func (s *Ethereum) GetCurrentBlockHeight() uint64      { return s.blockchain.CurrentHeader().Number.Uint64() }
+func (s *Ethereum) GetBlockChain() *core.BlockChain    { return s.blockchain }
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
@@ -549,7 +577,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s)
+	err := s.storageClient.Start(s, srvr, s.APIBackend)
 	if err != nil {
 		return err
 	}
@@ -563,9 +591,16 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 // Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	s.bloomIndexer.Close()
+	var fullErr error
+
+	err := s.bloomIndexer.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	s.blockchain.Stop()
-	s.engine.Close()
+
+	err = s.engine.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	s.protocolManager.Stop()
 	if s.lesServer != nil {
 		s.lesServer.Stop()
@@ -575,7 +610,100 @@ func (s *Ethereum) Stop() error {
 	s.eventMux.Stop()
 
 	s.chainDb.Close()
-	s.storageHost.Close()
+
+	err = s.storageClient.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
+	err = s.storageHost.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	close(s.shutdownChan)
+
+	// stop maintenance
+	s.maintenance.Stop()
 	return nil
+}
+
+func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+	if s.netRPCService == nil {
+		return nil, fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return nil, fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.AddStorageContractPeer(node); err != nil {
+		return nil, err
+	}
+
+	timer := time.NewTimer(time.Second * 3)
+
+	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
+	var conn *storage.Session
+	for {
+		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
+		if conn != nil {
+			return conn, nil
+		}
+
+		select {
+		case <-timer.C:
+			s.netRPCService.RemoveStorageContractPeer(node)
+			return nil, fmt.Errorf("setup connection timeout")
+		default:
+		}
+	}
+}
+
+func (s *Ethereum) Disconnect(hostEnodeUrl string) error {
+	if s.netRPCService == nil {
+		return fmt.Errorf("network API is not ready")
+	}
+
+	node, err := enode.ParseV4(hostEnodeUrl)
+	if err != nil {
+		return fmt.Errorf("invalid enode: %v", err)
+	}
+
+	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetStorageHostSetting will send message to the peer with the corresponded peer ID
+func (s *Ethereum) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+	// within the 30 seconds, if the peer is still not added to the peer set
+	// return error
+	timeout := time.After(30 * time.Second)
+	var p *peer
+
+	for {
+		p = s.protocolManager.peers.Peer(peerID)
+		if p != nil {
+			break
+		}
+
+		// after thirty seconds,
+		select {
+		case <-timeout:
+			return errors.New("peer cannot be found")
+		default:
+		}
+	}
+
+	// send message to the peer
+	return p2p.Send(p.rw, HostSettingMsg, config)
+}
+
+// SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be
+// delivered through the channel
+func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return s.APIBackend.SubscribeChainChangeEvent(ch)
+}
+
+func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }

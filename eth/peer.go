@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
 	"time"
@@ -394,6 +395,10 @@ func (p *peer) String() string {
 	return fmt.Sprintf("Peer %s [%s]", p.id,
 		fmt.Sprintf("eth/%2d", p.version),
 	)
+}
+
+func (p *peer) Peer2Session() *storage.Session {
+	return storage.NewSession(p.version, p.Peer, p.rw)
 }
 
 // peerSet represents the collection of active peers currently participating in
