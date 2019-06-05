@@ -43,6 +43,9 @@ type (
 func (iu *InsertUpdate) Apply() (err error) {
 	// Open the file
 	err = os.MkdirAll(filepath.Dir(iu.FileName), 0700)
+	if err != nil {
+		return fmt.Errorf("failed to make directory: %v", err)
+	}
 	f, err := os.OpenFile(iu.FileName, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to apply InsertUpdate: %v", err)
