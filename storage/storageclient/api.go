@@ -35,7 +35,7 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 
 // download remote file by sync mode
 //
-// NOTE: RPC not support async download, because it is one time connection, should block until download task done.
+// NOTE: RPC not support async download, because it is a short connection, should block until download task done.
 func (api *PublicStorageClientAPI) DownloadSync(length, offset uint64, localPath, remoteFilePath string) error {
 	p := storage.DownloadParameters{
 		Length: length,

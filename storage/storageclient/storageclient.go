@@ -652,18 +652,21 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	if err != nil {
 		return err
 	}
-	newRevision.Signatures[0] = clientSig
 
+	newRevision.Signatures[0] = clientSig
+	req.Signature = clientSig[:]
+	req.StorageContractID = newRevision.ParentID
 	req.NewRevisionNumber = newRevision.NewRevisionNumber
+
 	req.NewValidProofValues = make([]*big.Int, len(newRevision.NewValidProofOutputs))
 	for i, nvpo := range newRevision.NewValidProofOutputs {
 		req.NewValidProofValues[i] = nvpo.Value
 	}
+
 	req.NewMissedProofValues = make([]*big.Int, len(newRevision.NewMissedProofOutputs))
 	for i, nmpo := range newRevision.NewMissedProofOutputs {
 		req.NewMissedProofValues[i] = nmpo.Value
 	}
-	req.Signature = clientSig[:]
 
 	// record the change to this contract
 	walTxn, err := contract.RecordDownloadPreRev(newRevision, price)
