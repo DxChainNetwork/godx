@@ -13,9 +13,14 @@ import (
 // Health 100 ~ 200: recoverable
 // Health 200: No fix needed
 
-// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
-// to be repaired
-const RepairHealthThreshold = 175
+const (
+	// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
+	// to be repaired
+	RepairHealthThreshold = 175
+
+	// StuckThreshold is the threshold that defines the threshold between the stuck and unstuck segments
+	StuckThreshold = 100
+)
 
 // Health return check for dxFile's segments and return the health, stuckHealth, and numStuckSegments
 // Health 0~100: unrecoverable from contracts
