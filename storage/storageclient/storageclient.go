@@ -27,7 +27,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
@@ -84,9 +83,6 @@ type StorageClient struct {
 	ethBackend storage.EthBackend
 	apiBackend ethapi.Backend
 
-	// get the P2P server for adding peer
-	p2pServer *p2p.Server
-
 	// file management.
 	staticFileSet *dxfile.FileSet
 }
@@ -119,18 +115,10 @@ func New(persistDir string) (*StorageClient, error) {
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) (err error) {
+func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
 	sc.ethBackend = b
 	sc.apiBackend = apiBackend
-
-	// validation
-	if server == nil {
-		return errors.New("failed to get the P2P server")
-	}
-
-	// get the p2p server for the adding peers
-	sc.p2pServer = server
 
 	// getting all needed API functions
 	if err = sc.filterAPIs(b.APIs()); err != nil {
@@ -138,7 +126,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 	}
 
 	// start storageHostManager
-	if err = sc.storageHostManager.Start(sc.p2pServer, sc); err != nil {
+	if err = sc.storageHostManager.Start(sc); err != nil {
 		return
 	}
 

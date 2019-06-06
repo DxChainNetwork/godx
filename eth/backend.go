@@ -577,7 +577,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s, srvr, s.APIBackend)
+	err := s.storageClient.Start(s, s.APIBackend)
 	if err != nil {
 		return err
 	}
@@ -685,7 +685,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.Ho
 	session.SetDeadLine(storage.HostSettingTime)
 	defer s.Disconnect(session, hostEnodeUrl)
 
-	if err := session.SendHostExtSettingsRequest(struct {}{}); err != nil {
+	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		return err
 	}
 

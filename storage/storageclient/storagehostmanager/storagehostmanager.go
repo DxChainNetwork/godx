@@ -14,7 +14,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
@@ -26,9 +25,6 @@ type StorageHostManager struct {
 	// storage client and eth backend
 	b   storage.ClientBackend
 	eth storage.EthBackend
-
-	// peer to peer communication
-	p2pServer *p2p.Server
 
 	rent            storage.RentPayment
 	evalFunc        storagehosttree.EvaluationFunc
@@ -83,10 +79,9 @@ func New(persistDir string) *StorageHostManager {
 
 // Start will start to load prior settings, start go routines to automatically save
 // the settings every 2 min, and go routine to start storage host maintenance
-func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
+func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	// initialization
 	shm.b = b
-	shm.p2pServer = server
 
 	// load prior settings
 	err := shm.loadSettings()
