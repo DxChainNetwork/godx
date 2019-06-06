@@ -28,6 +28,11 @@ func NewContractTxAPI(b ethapi.Backend) *ContractTxAPI {
 	return &ContractTxAPI{b, nonceLock}
 }
 
+func NewStorageContractTxAPI(b ethapi.Backend) *ContractTxAPI {
+	nonceLock := new(ethapi.AddrLocker)
+	return &ContractTxAPI{b, nonceLock}
+}
+
 // send storage contract tx，only need from、to、input（rlp encoded）
 //
 // NOTE: this is general func, you can construct different args to send 4 type txs, like host announce、form contract、contract revision、storage proof.
@@ -112,7 +117,7 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b etha
 }
 
 // send form contract tx, generally triggered in ContractCreate, not for outer request
-func SendFormContractTX(b ethapi.Backend, from common.Address, input []byte) (common.Hash, error) {
+func SendFormContractTX(b ClientBackend, from common.Address, input []byte) (common.Hash, error) {
 	scTxAPI := NewContractTxAPI(b)
 	to := common.Address{}
 	to.SetBytes([]byte{10})

@@ -335,6 +335,202 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.
 
 }
 
+func (cm *ContractManager) ContracteRenew(oldContract *contractset.Contract, params proto.ContractParams) (storage.ContractMetaData, error) {
+
+	contract := oldContract.Header()
+
+	lastRev := contract.GetLatestContractRevision()
+
+	// Extract vars from params, for convenience
+	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
+
+	var basePrice, baseCollateral *big.Int
+	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
+		timeExtension := uint64((endHeight + host.WindowSize) - lastRev.NewWindowEnd)
+		basePrice = new(big.Int).Mul(host.StoragePrice, new(big.Int).SetUint64(lastRev.NewFileSize))
+		basePrice = new(big.Int).Mul(basePrice, new(big.Int).SetUint64(timeExtension))
+		// cost of already uploaded data that needs to be covered by the renewed contract.
+		baseCollateral = new(big.Int).Mul(host.Collateral, new(big.Int).SetUint64(lastRev.NewFileSize))
+		baseCollateral = new(big.Int).Mul(baseCollateral, new(big.Int).SetUint64(timeExtension))
+		// same as basePrice.
+	}
+
+	// Calculate the payouts for the client, host, and whole contract
+	period := endHeight - startHeight
+	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
+	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
+	if err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	// check for negative currency
+	if hostCollateral.Cmp(baseCollateral) < 0 {
+		baseCollateral = hostCollateral
+	}
+
+	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
+	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
+	var hostMiss *big.Int
+	hostMiss = new(big.Int).Sub(hostCollateral, baseCollateral)
+	hostMiss = new(big.Int).Add(hostMiss, host.ContractPrice)
+	// Create storage contract
+	storageContract := types.StorageContract{
+		FileSize:         lastRev.NewFileSize,
+		FileMerkleRoot:   lastRev.NewFileMerkleRoot, // no proof possible without data
+		WindowStart:      endHeight,
+		WindowEnd:        endHeight + host.WindowSize,
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
+		UnlockHash:       lastRev.NewUnlockHash,
+		RevisionNumber:   0,
+		ValidProofOutputs: []types.DxcoinCharge{
+			// Deposit is returned to client
+			{Value: clientPayout, Address: clientAddr},
+			// Deposit is returned to host
+			{Value: hostPayout, Address: hostAddr},
+		},
+		MissedProofOutputs: []types.DxcoinCharge{
+			{Value: clientPayout, Address: clientAddr},
+			{Value: hostMiss, Address: hostAddr},
+		},
+	}
+
+	// Increase Successful/Failed interactions accordingly
+	defer func() {
+		//TODO mainxiang
+		//if err != nil {
+		//	sc.storageHostManager.IncrementFailedInteractions(contract.EnodeID)
+		//} else {
+		//	sc.storageHostManager.IncrementSuccessfulInteractions(contract.EnodeID)
+		//}
+	}()
+
+	account := accounts.Account{Address: clientAddr}
+	wallet, err := cm.b.AccountManager().Find(account)
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
+	}
+
+	// Setup connection with storage host
+	session, err := cm.b.SetupConnection(host.NetAddress)
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
+	}
+	defer cm.b.Disconnect(session, host.NetAddress)
+
+	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("contract sign by client failed", err)
+	}
+
+	// Send the ContractCreate request
+	req := storage.ContractCreateRequest{
+		StorageContract: storageContract,
+		Sign:            clientContractSign,
+	}
+
+	if err := session.SendStorageContractCreation(req); err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	var hostSign []byte
+	msg, err := session.ReadMsg()
+	if err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return storage.ContractMetaData{}, negotiationErr
+	}
+
+	if err := msg.Decode(&hostSign); err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	storageContract.Signatures[0] = clientContractSign
+	storageContract.Signatures[1] = hostSign
+
+	// Assemble init revision and sign it
+	storageContractRevision := types.StorageContractRevision{
+		ParentID:              storageContract.RLPHash(),
+		UnlockConditions:      lastRev.UnlockConditions,
+		NewRevisionNumber:     1,
+		NewFileSize:           storageContract.FileSize,
+		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
+		NewWindowStart:        storageContract.WindowStart,
+		NewWindowEnd:          storageContract.WindowEnd,
+		NewValidProofOutputs:  storageContract.ValidProofOutputs,
+		NewMissedProofOutputs: storageContract.MissedProofOutputs,
+		NewUnlockHash:         storageContract.UnlockHash,
+	}
+
+	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
+	}
+	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
+
+	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
+	}
+
+	var hostRevisionSign []byte
+	msg, err = session.ReadMsg()
+	if err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.NegotiationErrorMsg {
+		var negotiationErr error
+		msg.Decode(&negotiationErr)
+		return storage.ContractMetaData{}, negotiationErr
+	}
+
+	if err := msg.Decode(&hostRevisionSign); err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	scBytes, err := rlp.EncodeToBytes(storageContract)
+	if err != nil {
+		return storage.ContractMetaData{}, err
+	}
+
+	if _, err := storage.SendFormContractTX(ethapi.Backend, clientAddr, scBytes); err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
+	}
+
+	// wrap some information about this contract
+	header := contractset.ContractHeader{
+		ID:                     storage.ContractID(storageContract.ID()),
+		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		StartHeight:            startHeight,
+		EndHeight:              endHeight,
+		TotalCost:              common.NewBigInt(funding.Int64()),
+		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		LatestContractRevision: storageContractRevision,
+		Status: storage.ContractStatus{
+			UploadAbility: true,
+			RenewAbility:  true,
+		},
+	}
+
+	oldRoots, errRoots := oldContract.MerkleRoots()
+	if errRoots != nil {
+		return storage.ContractMetaData{}, errRoots
+	}
+
+	// store this contract info to client local
+	contractMetaData, errInsert := cm.GetStorageContractSet().InsertContract(header, oldRoots)
+	if errInsert != nil {
+		return storage.ContractMetaData{}, errInsert
+	}
+	return contractMetaData, nil
+}
+
 // calculate Enode.ID, reference:
 // p2p/discover/node.go:41
 // p2p/discover/node.go:59
