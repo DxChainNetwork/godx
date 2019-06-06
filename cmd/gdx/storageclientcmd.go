@@ -182,6 +182,14 @@ func downloadSync(ctx *cli.Context) error {
 		utils.Fatalf("please use --offset flag to specify the download offset")
 	}
 
+	if !ctx.GlobalIsSet(utils.DownloadLocalPathFlag.Name) {
+		utils.Fatalf("please use --localpath flag to specify the download localpath")
+	}
+
+	if !ctx.GlobalIsSet(utils.DownloadRemotePathFlag.Name) {
+		utils.Fatalf("please use --remotepath flag to specify the download remotepath")
+	}
+
 	length := ctx.GlobalUint64(utils.DownloadLengthFlag.Name)
 	if length <= 0 {
 		utils.Fatalf("download length must be greater than 0")
@@ -192,8 +200,18 @@ func downloadSync(ctx *cli.Context) error {
 		utils.Fatalf("download offset can not be negative")
 	}
 
+	localpath := ctx.GlobalString(utils.DownloadLocalPathFlag.Name)
+	if localpath == "" {
+		utils.Fatalf("download localpath can not be empty")
+	}
+
+	remotepath := ctx.GlobalString(utils.DownloadRemotePathFlag.Name)
+	if remotepath == "" {
+		utils.Fatalf("download remotepath can not be empty")
+	}
+
 	var result string
-	err = client.Call(&result, "storageclient_downloadSync", length, offset)
+	err = client.Call(&result, "storageclient_downloadSync", length, offset, localpath, remotepath)
 	if err != nil {
 		utils.Fatalf("failed to download by sync mode: %s", err.Error())
 	}

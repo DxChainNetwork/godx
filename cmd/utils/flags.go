@@ -133,25 +133,25 @@ var (
 
 	DownloadLengthFlag = cli.Uint64Flag{
 		Name:  "length",
-		Usage: "length to download file for storage client",
+		Usage: "length of file downloaded for storage client",
 		Value: storageclient.DefaultDownloadLength,
 	}
 
 	DownloadOffsetFlag = cli.Uint64Flag{
 		Name:  "offset",
-		Usage: "offset to download file for storage client",
+		Usage: "offset of file downloaded for storage client",
 		Value: storageclient.DefaultDownloadOffset,
 	}
 
-	DownloadDestinationFlag = cli.StringFlag{
-		Name:  "destination",
-		Usage: "destination to write the downloaded file",
+	DownloadLocalPathFlag = cli.StringFlag{
+		Name:  "localpath",
+		Usage: "localpath of writing the downloaded file",
 		Value: filepath.Join(node.DefaultDataDir(), "downloadfiles"),
 	}
 
-	DownloadDxFilePathFlag = cli.StringFlag{
-		Name:  "dxfilepath",
-		Usage: "dxfilepath store the downloaded file",
+	DownloadRemotePathFlag = cli.StringFlag{
+		Name:  "remotepath",
+		Usage: "remotepath of storing the downloaded file",
 		Value: storageclient.DefaultDownloadDxFilePath,
 	}
 

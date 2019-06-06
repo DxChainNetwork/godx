@@ -36,8 +36,7 @@ import (
 )
 
 var (
-	zeroValue = new(big.Int).SetInt64(0)
-
+	zeroValue  = new(big.Int).SetInt64(0)
 	extraRatio = 0.02
 )
 
@@ -54,11 +53,10 @@ type StorageClient struct {
 
 	storageHostManager *storagehostmanager.StorageHostManager
 
-	// Download management. The heap has a separate mutex because it is always
-	// accessed in isolation.
-	downloadHeapMu sync.Mutex           // Used to protect the downloadHeap.
-	downloadHeap   *downloadSegmentHeap // A heap of priority-sorted segments to download.
-	newDownloads   chan struct{}        // Used to notify download loop that new downloads are available.
+	// Download management
+	downloadHeapMu sync.Mutex
+	downloadHeap   *downloadSegmentHeap
+	newDownloads   chan struct{}
 
 	// List of workers that can be used for uploading and/or downloading.
 	workerPool map[storage.ContractID]*worker
@@ -947,7 +945,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 }
 
 // managedDownload performs a file download and returns the download object
-func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters) (*download, error) {
+func (client *StorageClient) managedDownload(p storage.DownloadParameters) (*download, error) {
 	entry, err := client.staticFileSet.Open(p.RemoteFilePath)
 	if err != nil {
 		return nil, err
@@ -1025,10 +1023,11 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	return d, nil
 }
 
-// NOTE: DownloadSync and DownloadAsync can directly be accessed to outer request via RPC or IPC ...
+// NOTE: DownloadSync can directly be accessed to outer request via RPC or IPC ...
+// but can not async download to http response, so DownloadAsync should not open to out.
 
 // performs a file download and blocks until the download is finished.
-func (client *StorageClient) DownloadSync(p storage.ClientDownloadParameters) error {
+func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
 	}
@@ -1049,7 +1048,7 @@ func (client *StorageClient) DownloadSync(p storage.ClientDownloadParameters) er
 }
 
 // performs a file download without blocking until the download is finished
-func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) error {
+func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
 	}

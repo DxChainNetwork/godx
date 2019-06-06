@@ -38,7 +38,7 @@ type ClientBackend interface {
 }
 
 // the parameters to download from outer request
-type ClientDownloadParameters struct {
+type DownloadParameters struct {
 	Length           uint64
 	Offset           uint64
 	RemoteFilePath   string
