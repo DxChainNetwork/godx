@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"io"
 	"os"
 	"path/filepath"
@@ -191,7 +192,7 @@ func (sc *StorageClient) managedTarDxFiles(tw *tar.Writer) error {
 		if err != nil {
 			return err
 		}
-		if !info.IsDir() && filepath.Ext(path) != DxFileExtension {
+		if !info.IsDir() && filepath.Ext(path) != storage.DxFileExt {
 			return nil
 		}
 		header, err := tar.FileInfoHeader(info, info.Name())

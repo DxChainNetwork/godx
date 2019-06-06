@@ -8,7 +8,6 @@ import (
 	"container/heap"
 	"errors"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
 	"math/rand"
@@ -78,7 +77,7 @@ type uploadHeap struct {
 	newUploads          chan struct{}
 	repairNeeded        chan struct{}
 	stuckSegmentFound   chan struct{}
-	stuckSegmentSuccess chan dxdir.DxPath
+	stuckSegmentSuccess chan storage.DxPath
 
 	mu sync.Mutex
 }
@@ -226,7 +225,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		incomplete := segment.piecesCompleted < segment.piecesNeeded
 		// Check if Segment is downloadable
 		segmentHealth := segment.fileEntry.SegmentHealth(int(segment.index), hostHealthInfoTable)
-		_, err := os.Stat(segment.fileEntry.LocalPath())
+		_, err := os.Stat(string(segment.fileEntry.LocalPath()))
 		downloadable := segmentHealth <= 1 || err == nil
 		// Check if Segment seems stuck
 		stuck := !incomplete && segmentHealth != 0
@@ -264,7 +263,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 	return incompleteSegments
 }
 
-func (sc *StorageClient) managedBuildAndPushRandomSegment(files []*dxfile.FileSetEntryWithID, hosts map[string]struct{}, target repairTarget, offline, goodForRenew map[string]bool) {
+func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntryWithID, hosts map[string]struct{}, target repairTarget, hostHealthInfoTable storage.HostHealthInfoTable) {
 	// Sanity check that there are files
 	if len(files) == 0 {
 		return
@@ -274,7 +273,7 @@ func (sc *StorageClient) managedBuildAndPushRandomSegment(files []*dxfile.FileSe
 	file := files[randFileIndex]
 	sc.lock.Lock()
 	// Build the unfinished stuck Segments from the file
-	unfinishedUploadSegments := sc.createUnfinishedSegments(file, hosts, target, offline, goodForRenew)
+	unfinishedUploadSegments := sc.createUnfinishedSegments(file, hosts, target, hostHealthInfoTable)
 	sc.lock.Unlock()
 	// Sanity check that there are stuck Segments
 	if len(unfinishedUploadSegments) == 0 {
@@ -325,19 +324,23 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 	}
 }
 
-// createSegmentHeap is charge of creating segment heap that worker tasks locate in
-func (sc *StorageClient) createSegmentHeap(dirDxPath dxdir.DxPath, hosts map[string]struct{}, target repairTarget) {
+func (sc *StorageClient) pushFileToSegmentHeap(file *dxfile.FileSetEntryWithID) {
+	file.DxPath()
+}
+
+// pushDirToSegmentHeap is charge of creating segment heap that worker tasks locate in
+func (sc *StorageClient) pushDirToSegmentHeap(dirDxPath storage.DxPath, hosts map[string]struct{}, target repairTarget) {
 	// Get Directory files
 	var files []*dxfile.FileSetEntryWithID
 	var err error
-	fileInfos, err := ioutil.ReadDir(dirDxPath.DxDirSysPath(sc.staticFilesDir))
+	fileInfos, err := ioutil.ReadDir(string(dirDxPath.SysPath(sc.fileSystem.FileRootDir())))
 	if err != nil {
 		return
 	}
 	for _, fi := range fileInfos {
 		// skip sub directories and non dxFiles
 		ext := filepath.Ext(fi.Name())
-		if fi.IsDir() || ext != DxFileExtension {
+		if fi.IsDir() || ext != storage.DxFileExt {
 			continue
 		}
 
@@ -346,13 +349,13 @@ func (sc *StorageClient) createSegmentHeap(dirDxPath dxdir.DxPath, hosts map[str
 		if err != nil {
 			return
 		}
-		file, err := sc.staticFileSet.Open(dxPath.String())
+		file, err := sc.staticFileSet.Open(dxPath)
 		if err != nil {
 			sc.log.Debug("WARN: could not open dx file:", err)
 			continue
 		}
 
-		// For stuck Segment repairs, check to see if file has stuck Segments
+		// For stuck Segment repairs, check to see if file has stuck segments
 		if target == targetStuckSegments && file.NumStuckSegments() == 0 {
 			// Close unneeded files
 			err := file.Close()
@@ -371,7 +374,7 @@ func (sc *StorageClient) createSegmentHeap(dirDxPath dxdir.DxPath, hosts map[str
 			}
 			continue
 		}
-		// For normal repairs, ignore files that don't have any unstuck Segments
+		// For normal repairs, ignore files that don't have any unstuck segments
 		if target == targetUnstuckSegments && file.NumSegments() == file.NumStuckSegments() {
 			err := file.Close()
 			if err != nil {
@@ -389,15 +392,17 @@ func (sc *StorageClient) createSegmentHeap(dirDxPath dxdir.DxPath, hosts map[str
 		return
 	}
 
-	// Build the unfinished upload Segments and add them to the upload heap
-	offline, goodForRenew, _ := sc.managedContractUtilityMaps()
+	// TODO Build the unfinished upload Segments and add them to the upload heap
+	// offline, goodForRenew, _ := sc.managedContractUtilityMaps()
+	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
+
 	switch target {
 	case targetStuckSegments:
 		sc.log.Debug("Adding stuck Segment to heap")
-		sc.managedBuildAndPushRandomSegment(files, hosts, target, offline, goodForRenew)
+		sc.createAndPushRandomSegment(files, hosts, target, nilHostHealthInfoTable)
 	case targetUnstuckSegments:
 		sc.log.Debug("Adding Segments to heap")
-		sc.createAndPushSegments(files, hosts, target, offline, goodForRenew)
+		sc.createAndPushSegments(files, hosts, target, nilHostHealthInfoTable)
 	default:
 		sc.log.Debug("WARN: repair target not recognized", target)
 	}
@@ -516,9 +521,9 @@ func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
 // single iteration of threadedUploadAndRepair.
 func (sc *StorageClient) doUploadAndRepair() error {
 	// Find the lowest health directory to queue for repairs.
-	dirDxPath, dirHealth, err := sc.managedWorstHealthDirectory()
+	dxFile, err := sc.fileSystem.SelectDxFileToFix()
 	if err != nil {
-		sc.log.Debug("WARN: error getting worst health directory:", err)
+		sc.log.Debug("WARN: error getting worst health dxfile:", err)
 		return err
 	}
 
@@ -526,24 +531,24 @@ func (sc *StorageClient) doUploadAndRepair() error {
 	// useful for uploading
 	hosts := sc.refreshHostsAndWorkers()
 
-	// Create a min-heap of segments organized by upload progress
-	sc.createSegmentHeap(dirDxPath, hosts, targetUnstuckSegments)
+	// Push a min-heap of segments organized by upload progress
+	sc.pushDirToSegmentHeap(dxFile.DxPath(), hosts, targetUnstuckSegments)
 	sc.uploadHeap.mu.Lock()
 	heapLen := sc.uploadHeap.heap.Len()
 	sc.uploadHeap.mu.Unlock()
 	if heapLen == 0 {
-		sc.log.Debug("No Segments added to the heap for repair from `%v` even through health was %v", dirDxPath, dirHealth)
-		sc.threadedBubbleMetadata(dirDxPath)
+		sc.log.Debug("No segments added to the heap for repair from `%v` even through health was %v", dxFile.DxPath(), dxFile.GetHealth())
+		sc.fileSystem.InitAndUpdateDirMetadata(dxFile.DxPath())
 		return nil
 	}
-	sc.log.Info("Repairing", heapLen, "Segments from", dirDxPath)
+	sc.log.Info("Repairing", heapLen, "Segments from", dxFile.DxPath())
 
 	// Work through the heap and repair files
 	sc.uploadLoop(hosts)
 
 	// Once we have worked through the heap, call bubble to update the
 	// directory metadata
-	sc.threadedBubbleMetadata(dirDxPath)
+	sc.fileSystem.InitAndUpdateDirMetadata(dxFile.DxPath())
 	return nil
 }
 
@@ -571,7 +576,7 @@ func (sc *StorageClient) uploadAndRepairLoop() {
 		// is a new upload, a signal will be sent through the 'newUploads'
 		// channel, and if the metadata updating code finds a file that needs
 		// repairing, a signal is sent through the 'repairNeeded' channel.
-		rootMetadata, err := sc.managedDirectoryMetadata(dxdir.RootPath)
+		rootMetadata, err := sc.managedDirectoryMetadata(storage.RootDxPath())
 		if err != nil {
 			// If there is an error fetching the root directory metadata, sleep
 			// for a bit and hope that on the next iteration, things will be better

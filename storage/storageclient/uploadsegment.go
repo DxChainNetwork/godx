@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
 	"os"
@@ -158,7 +157,7 @@ func (sc *StorageClient) managedDownloadLogicalSegmentData(segment *unfinishedUp
 	}
 
 	// Create the download
-	buf := NewDownloadDestinationBuffer(segment.length, segment.fileEntry.SectorSize())
+	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
 	d, err := sc.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
@@ -176,7 +175,7 @@ func (sc *StorageClient) managedDownloadLogicalSegmentData(segment *unfinishedUp
 	}
 
 	// Register some cleanup for when the download is done.
-	d.OnComplete(func(_ error) error {
+	d.onComplete(func(_ error) error {
 		// Update the access time when the download is done
 		return segment.fileEntry.DxFile.SetTimeAccess(time.Now())
 	})
@@ -311,7 +310,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	}
 
 	// Try to read the file content from disk. If failed, go through download
-	osFile, err := os.Open(segment.fileEntry.LocalPath())
+	osFile, err := os.Open(string(segment.fileEntry.LocalPath()))
 	if err != nil && download {
 		return sc.managedDownloadLogicalSegmentData(segment)
 	} else if err != nil {
@@ -321,7 +320,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	// TODO: Once we have enabled support for small Segments, we should stop
 	// needing to ignore the EOF errors, because the Segment size should always
 	// match the tail end of the file. Until then, we ignore io.EOF.
-	buf := NewDownloadDestinationBuffer(segment.length, segment.fileEntry.SectorSize())
+	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
 	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && download {
@@ -416,17 +415,7 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 		return fmt.Errorf("unable to update Segment stuck status for file %v: %v", uc.fileEntry.DxPath(), err)
 	}
 
-	dxPath, err := dxdir.NewDxPath(uc.fileEntry.DxPath())
-	if err != nil {
-		return err
-	}
-
-	dirDxPath, err := dxPath.Dir()
-	if err != nil {
-		return err
-	}
-
-	go sc.threadedBubbleMetadata(dirDxPath)
+	go sc.fileSystem.InitAndUpdateDirMetadata(uc.fileEntry.DxPath())
 
 	err = uc.fileEntry.Close()
 	if err != nil {
@@ -478,17 +467,9 @@ func (sc *StorageClient) managedUpdateUploadSegmentStuckStatus(uc *unfinishedUpl
 		sc.log.Debug("WARN: could not set Segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
 	}
 
-	dxPath, err := dxdir.NewDxPath(uc.fileEntry.DxPath())
-	if err != nil {
-		return
-	}
+	dxPath := uc.fileEntry.DxPath()
 
-	dirDxPath, err := dxPath.Dir()
-	if err != nil {
-		return
-	}
-
-	sc.threadedBubbleMetadata(dirDxPath)
+	sc.fileSystem.InitAndUpdateDirMetadata(dxPath)
 
 	// Check to see if the Segment was stuck and now is successfully repaired by
 	// the stuck loop

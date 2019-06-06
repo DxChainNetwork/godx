@@ -56,11 +56,9 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		return fmt.Errorf("not enough contracts to upload file: got %v, needed %v", numContracts, (up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors())/2)
 	}
 
-	dirDxPath, err := up.DxPath.Dir()
-	if err != nil {
-		return err
-	}
-	// Try to create the directory. If ErrPathOverload is returned it already exists.
+	dirDxPath := up.DxPath
+
+	// Try to create the directory. If ErrPathOverload is returned it already exists
 	dxDirEntry, err := sc.staticDirSet.NewDxDir(dirDxPath)
 	if err != dxdir.ErrPathOverload && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
@@ -73,7 +71,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		return fmt.Errorf("generate cipher key error: %v", err)
 	}
 	// Create the DxFile and add to client
-	entry, err := sc.staticFileSet.NewDxFile(up.DxPath.String(), up.Source, up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := sc.staticFileSet.NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
@@ -83,9 +81,8 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		return nil
 	}
 
-	// Bubble the health of the DxFile directory to ensure the health is
-	// updated with the new file
-	go sc.threadedBubbleMetadata(dirDxPath)
+	// Bubble the health of the DxFile directory to ensure the health is updated with the new file
+	go sc.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
 
 	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
 

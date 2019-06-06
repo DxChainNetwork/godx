@@ -9,6 +9,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -21,7 +22,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/merkletree"
@@ -110,8 +111,8 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 	return sc.storageHostManager
 }
 
-// DirInfo returns the Directory Information of the siadir
-func (sc *StorageClient) DirInfo(dxPath dxdir.DxPath) (DirectoryInfo, error) {
+// DirInfo returns the Directory Information of the dxdir
+func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
 	entry, err := sc.staticDirSet.Open(dxPath)
 	if err != nil {
 		return DirectoryInfo{}, err
@@ -128,15 +129,15 @@ func (sc *StorageClient) DirInfo(dxPath dxdir.DxPath) (DirectoryInfo, error) {
 		Health:              metadata.Health,
 		StuckHealth:         metadata.StuckHealth,
 		MinRedundancy:       metadata.MinRedundancy,
-		TimeLastHealthCheck: metadata.TimeLastHealthCheck,
-		TimeModify:          metadata.TimeModify,
+
+		TimeLastHealthCheck: time.Unix(int64(metadata.TimeLastHealthCheck) ,0),
+		TimeModify:          time.Unix(int64(metadata.TimeModify), 0),
 		DxPath:              metadata.DxPath,
 	}, nil
 }
 
-// DirList returns directories and files stored in the siadir as well as the
-// DirectoryInfo of the siadir
-func (sc *StorageClient) DirList(dxPath dxdir.DxPath) ([]DirectoryInfo, []FileInfo, error) {
+// DirList get directories and files in the dxdir
+func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]DirectoryInfo, []FileInfo, error) {
 	if err := sc.tm.Add(); err != nil {
 		return nil, nil, err
 	}
@@ -151,7 +152,7 @@ func (sc *StorageClient) DirList(dxPath dxdir.DxPath) ([]DirectoryInfo, []FileIn
 	}
 	dirs = append(dirs, di)
 	// Read Directory
-	fileInfos, err := ioutil.ReadDir(dxPath.DxDirSysPath(sc.staticFilesDir))
+	fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(storage.SysPath(sc.staticFilesDir))))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,9 +170,8 @@ func (sc *StorageClient) DirList(dxPath dxdir.DxPath) ([]DirectoryInfo, []FileIn
 			dirs = append(dirs, di)
 			continue
 		}
-		// Ignore non siafiles
 		ext := filepath.Ext(fi.Name())
-		if ext != DxFileExtension {
+		if ext != storage.DxFileExt {
 			continue
 		}
 		// Grab dxfile
@@ -190,7 +190,7 @@ func (sc *StorageClient) DirList(dxPath dxdir.DxPath) ([]DirectoryInfo, []FileIn
 	return dirs, files, nil
 }
 
-// TODO complete
+// TODO complete modules/renter/renter.go:478
 func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetEntryWithID) storage.HostHealthInfoTable {
 	infoMap := make(storage.HostHealthInfoTable, 1)
 
@@ -206,6 +206,11 @@ func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetE
 	}
 
 	return infoMap
+}
+
+// GetFileSystem will get the file system
+func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
+	return sc.fileSystem
 }
 
 // calculate Enode.ID, reference:

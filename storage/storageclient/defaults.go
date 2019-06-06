@@ -47,11 +47,6 @@ const (
 	encryptionVersion   = "1.0"
 )
 
-// DxFile Related
-const (
-	DxFileExtension = ".dx"
-)
-
 // Default params about upload/download process
 var (
 	// fileRepairInterval defines how long the renter should wait before

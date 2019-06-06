@@ -4,7 +4,6 @@
 package storageclient
 
 import (
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"time"
 )
 
@@ -33,7 +32,7 @@ func (w *worker) dropUploadSegments() {
 
 	for i := 0; i < len(SegmentsToDrop); i++ {
 		w.dropSegment(SegmentsToDrop[i])
-		w.client.log.Debug("dropping Segment because the worker is dropping all Segments", w.contract.HostEnodeUrl)
+		w.client.log.Debug("dropping Segment because the worker is dropping all Segments", w.contract.HostID.String())
 	}
 }
 
@@ -74,15 +73,16 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, piec
 // AppendUploadSegment - Append a segment to the heap to the unprocessedSegments of work
 // and the signal the uploadChan
 func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
-	utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostPublicKey)
-	goodForUpload := exists && utility.GoodForUpload
+	//utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostPublicKey)
+	//goodForUpload := exists && utility.GoodForUpload
+	goodForUpload := true
 	w.mu.Lock()
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 	if !goodForUpload || uploadTerminated || onCoolDown {
 		w.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostEnodeUrl)
+		w.client.log.Debug("Dropping segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostID.String())
 		return
 	}
 	w.unprocessedSegments = append(w.unprocessedSegments, uc)
@@ -100,13 +100,13 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Open an editing connection to the host
 	// TODO 考虑要不要复用client与host之间的session connection
 	//e, err := w.renter.hostContractor.Editor(w.contract.HostPublicKey, w.renter.tg.StopChan())
-	session, err := w.client.ethBackend.SetupConnection(w.contract.HostEnodeUrl)
+	session, err := w.client.ethBackend.SetupConnection(w.contract.HostID.String())
 	if err != nil {
 		w.client.log.Debug("Worker failed to acquire an editor:", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
-	defer w.client.ethBackend.Disconnect(w.contract.HostEnodeUrl)
+	defer w.client.ethBackend.Disconnect(session, w.contract.HostID.String())
 
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
@@ -119,7 +119,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	w.mu.Unlock()
 
 	// Add piece to renterFile
-	err = uc.fileEntry.AddSector(enode.HexID(w.contract.HostEnodeUrl), root, int(uc.index), int(sectorIndex))
+	err = uc.fileEntry.AddSector(w.contract.HostID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
 		w.client.log.Debug("Worker failed to add new piece to SiaFile:", err)
 		w.uploadFailed(uc, sectorIndex)
@@ -152,15 +152,16 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegment *unfinishedUploadSegment, pieceIndex uint64) {
 	// Determine the usability value of this worker
-	utility, exists := w.client.contractManager.hostContractor.ContractUtility(w.contract.HostEnodeUrl)
-	goodForUpload := exists && utility.GoodForUpload
+	//utility, exists := w.client.contractManager.hostContractor.ContractUtility(w.contract.HostEnodeUrl)
+	//goodForUpload := exists && utility.GoodForUpload
+	goodForUpload := true
 	w.mu.Lock()
 	onCoolDown := w.onUploadCoolDown()
 	w.mu.Unlock()
 
 	// Determine what sort of help this segment needs
 	uc.mu.Lock()
-	_, candidateHost := uc.unusedHosts[w.contract.HostEnodeUrl]
+	_, candidateHost := uc.unusedHosts[w.contract.HostID.String()]
 	segmentComplete := uc.piecesNeeded <= uc.piecesCompleted
 	needsHelp := uc.piecesNeeded > uc.piecesCompleted+uc.piecesRegistered
 	// If the Segment does not need help from this worker, release the segment
@@ -168,7 +169,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegme
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Worker dropping a Segment while processing", segmentComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostEnodeUrl)
+		w.client.log.Debug("Worker dropping a Segment while processing", segmentComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostID.String())
 		return nil, 0
 	}
 
@@ -196,7 +197,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegme
 		w.dropSegment(uc)
 		return nil, 0
 	}
-	delete(uc.unusedHosts, w.contract.HostEnodeUrl)
+	delete(uc.unusedHosts, w.contract.HostID.String())
 	uc.piecesRegistered++
 	uc.workersRemaining--
 	uc.mu.Unlock()

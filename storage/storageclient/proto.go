@@ -6,8 +6,8 @@ package storageclient
 
 import (
 	"crypto/ecdsa"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"math/big"
 	"time"
 
@@ -74,9 +74,9 @@ type (
 
 		TimeModify time.Time `json:"time_modify"`
 
-		NumStuckSegments uint64 `json:"num_stuck_segments"`
+		NumStuckSegments uint32 `json:"num_stuck_segments"`
 
-		DxPath dxdir.DxPath `json:"dx_path"`
+		DxPath storage.DxPath `json:"dx_path"`
 	}
 
 	// DownloadInfo provides information about a file that has been requested for download
@@ -99,7 +99,7 @@ type (
 	// UploadParams contains the information used by the Client to upload a file
 	FileUploadParams struct {
 		Source      string
-		DxPath      dxdir.DxPath
+		DxPath      storage.DxPath
 		ErasureCode erasurecode.ErasureCoder
 		Mode        int
 	}

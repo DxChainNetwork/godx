@@ -31,6 +31,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -46,6 +47,9 @@ var (
 // StorageClient contains fileds that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
+	fileSystem *filesystem.FileSystem
+
+	// TODO (jacky): File Download Related
 
 	// TODO (jacky): File Upload Related
 
@@ -64,9 +68,6 @@ type StorageClient struct {
 
 	// Upload management
 	uploadHeap uploadHeap
-
-	bubbleUpdates   map[string]bubbleStatus
-	bubbleUpdatesMu sync.Mutex
 
 	// List of workers that can be used for uploading and/or downloading.
 	workerPool map[storage.ContractID]*worker
@@ -101,11 +102,12 @@ type StorageClient struct {
 
 // New initializes StorageClient object
 func New(persistDir string) (*StorageClient, error) {
-
-	// TODO (Jacky): data initialization
 	sc := &StorageClient{
+		// TODO(mzhang): replace the implemented contractor here
+		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractor{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
+		log:            log.New(),
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
 		uploadHeap: uploadHeap{
@@ -114,10 +116,15 @@ func New(persistDir string) (*StorageClient, error) {
 			newUploads:          make(chan struct{}, 1),
 			repairNeeded:        make(chan struct{}, 1),
 			stuckSegmentFound:   make(chan struct{}, 1),
-			stuckSegmentSuccess: make(chan dxdir.DxPath, 1),
+			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
 	}
+
+	//// Load file and dir set from wal
+	//if err := sc.managedInitPersist(); err != nil {
+	//	return nil, err
+	//}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
 	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
@@ -175,7 +182,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 
 	// TODO (mzhang): Subscribe consensus change
 
-	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
 
 	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
 
@@ -185,9 +194,21 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 }
 
 func (sc *StorageClient) Close() error {
+	var fullErr error
+	// Closing the host manager
+	sc.log.Info("Closing the renter host manager")
 	err := sc.storageHostManager.Close()
-	errSC := sc.tm.Stop()
-	return common.ErrCompose(err, errSC)
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the file system
+	sc.log.Info("Closing the renter file system")
+	err = sc.fileSystem.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the thread manager
+	err = sc.tm.Stop()
+	fullErr = common.ErrCompose(fullErr, err)
+	return fullErr
 }
 
 func (sc *StorageClient) DeleteFile(path dxdir.DxPath) error {

@@ -6,19 +6,26 @@ package dxdir
 import (
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+	"io"
+	"os"
 )
 
 var (
 	// ErrAlreadyDeleted is the error that happens when save or delete a DxDir
 	// that is already deleted
 	ErrAlreadyDeleted = errors.New("DxDir has already been deleted")
+
+	// ErrUploadDirectory indicates that we can't upload directory
+	ErrUploadDirectory = errors.New("cannot upload directory")
+
+	// ErrPathOverload is an error when a file already exists at that location
+	ErrPathOverload = errors.New("a file already exists at that location")
+
+	// ErrUnknownPath is an error when a file cannot be found with the given path
+	ErrUnknownPath = errors.New("no file known with that path")
 )
 
 // EncodeRLP define the RLP rule for DxDir. Only the metadata is RLP encoded.
@@ -43,7 +50,7 @@ func (d *DxDir) createInsertUpdate() (storage.FileUpdate, error) {
 		return nil, fmt.Errorf("cannot encode DxDir: %v", err)
 	}
 	iu := &storage.InsertUpdate{
-		FileName: filepath.Join(string(d.dirPath), dirFileName),
+		FileName: string(d.dirFilePath),
 		Offset:   0,
 		Data:     data,
 	}
@@ -53,7 +60,7 @@ func (d *DxDir) createInsertUpdate() (storage.FileUpdate, error) {
 // createDeleteUpdate create the delete update
 func (d *DxDir) createDeleteUpdate() (storage.FileUpdate, error) {
 	du := &storage.DeleteUpdate{
-		FileName: filepath.Join(string(d.dirPath), dirFileName),
+		FileName: string(d.dirFilePath),
 	}
 	return du, nil
 }
@@ -83,10 +90,11 @@ func (d *DxDir) delete() error {
 	return storage.ApplyUpdates(d.wal, []storage.FileUpdate{fu})
 }
 
-// load load the DxDir metadata
-func load(path dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
+// load load the DxDir metadata.
+// input path should be the path of the DxDir file
+func load(dirFilePath storage.SysPath, wal *writeaheadlog.Wal) (*DxDir, error) {
 	// Open the file
-	f, err := os.OpenFile(filepath.Join(string(path), dirFileName), os.O_RDONLY, 0600)
+	f, err := os.OpenFile(string(dirFilePath), os.O_RDONLY, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +106,6 @@ func load(path dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
 		return nil, fmt.Errorf("cannot load DxDir: %v", err)
 	}
 	d.wal = wal
-	d.dirPath = path
+	d.dirFilePath = dirFilePath
 	return d, nil
 }
