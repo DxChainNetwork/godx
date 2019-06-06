@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/rlp"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -204,13 +203,13 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		//TODO @mainxiang
-		//hostID := PubkeyToEnodeID(&host.PublicKey)
-		//if err != nil {
-		//	sc.storageHostManager.IncrementFailedInteractions(hostID)
-		//} else {
-		//	sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
-		//}
+
+		hostID := PubkeyToEnodeID(&host.PublicKey)
+		if err != nil {
+			cm.hostManager.IncrementFailedInteractions(hostID)
+		} else {
+			cm.hostManager.IncrementSuccessfulInteractions(hostID)
+		}
 	}()
 
 	account := accounts.Account{Address: clientAddr}
@@ -306,7 +305,7 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(ethapi.Backend, clientAddr, scBytes); err != nil {
+	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
@@ -397,12 +396,11 @@ func (cm *ContractManager) ContracteRenew(oldContract *contractset.Contract, par
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		//TODO mainxiang
-		//if err != nil {
-		//	sc.storageHostManager.IncrementFailedInteractions(contract.EnodeID)
-		//} else {
-		//	sc.storageHostManager.IncrementSuccessfulInteractions(contract.EnodeID)
-		//}
+		if err != nil {
+			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+		} else {
+			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
+		}
 	}()
 
 	account := accounts.Account{Address: clientAddr}
@@ -499,7 +497,7 @@ func (cm *ContractManager) ContracteRenew(oldContract *contractset.Contract, par
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(ethapi.Backend, clientAddr, scBytes); err != nil {
+	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 

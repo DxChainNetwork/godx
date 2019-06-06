@@ -18,20 +18,20 @@ import (
 
 // PublicTransactionPoolAPI exposes methods for the RPC interface
 type ContractTxAPI struct {
-	b         ethapi.Backend
+	b         ClientBackend
 	nonceLock *ethapi.AddrLocker
 }
 
 // NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
-func NewContractTxAPI(b ethapi.Backend) *ContractTxAPI {
+func NewContractTxAPI(b ClientBackend) *ContractTxAPI {
 	nonceLock := new(ethapi.AddrLocker)
 	return &ContractTxAPI{b, nonceLock}
 }
 
-func NewStorageContractTxAPI(b ethapi.Backend) *ContractTxAPI {
-	nonceLock := new(ethapi.AddrLocker)
-	return &ContractTxAPI{b, nonceLock}
-}
+//func NewStorageContractTxAPI(b ClientBackend) *ContractTxAPI {
+//	nonceLock := new(ethapi.AddrLocker)
+//	return &ContractTxAPI{b, nonceLock}
+//}
 
 // send storage contract tx，only need from、to、input（rlp encoded）
 //
@@ -93,7 +93,7 @@ type SendStorageContractTxArgs struct {
 }
 
 // construct tx with args
-func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b ethapi.Backend) (*types.Transaction, error) {
+func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b ClientBackend) (*types.Transaction, error) {
 	args.Gas = new(hexutil.Uint64)
 	*(*uint64)(args.Gas) = 90000
 
@@ -142,7 +142,7 @@ func (sc *ContractTxAPI) SendHostAnnounceTX(from common.Address, input []byte) (
 }
 
 // send contract revision tx, only triggered when host received consensus change, not for outer request
-func SendContractRevisionTX(b ethapi.Backend, from common.Address, input []byte) (common.Hash, error) {
+func SendContractRevisionTX(b ClientBackend, from common.Address, input []byte) (common.Hash, error) {
 	scTxAPI := NewContractTxAPI(b)
 	to := common.Address{}
 	to.SetBytes([]byte{11})
@@ -155,7 +155,7 @@ func SendContractRevisionTX(b ethapi.Backend, from common.Address, input []byte)
 }
 
 // send storage proof tx, only triggered when host received consensus change, not for outer request
-func SendStorageProofTX(b ethapi.Backend, from common.Address, input []byte) (common.Hash, error) {
+func SendStorageProofTX(b ClientBackend, from common.Address, input []byte) (common.Hash, error) {
 	scTxAPI := NewContractTxAPI(b)
 	to := common.Address{}
 	to.SetBytes([]byte{12})

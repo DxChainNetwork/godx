@@ -5,8 +5,11 @@
 package storageclient
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
+	"github.com/DxChainNetwork/godx/params"
+	"math/big"
 	"reflect"
 	"sort"
 
@@ -117,6 +120,26 @@ func (sc *StorageClient) AccountManager() *accounts.Manager {
 
 func (sc *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
 	return sc.ethBackend.Disconnect(session, hostEnodeUrl)
+}
+
+func (sc *StorageClient) ChainConfig() *params.ChainConfig {
+	return sc.ethBackend.ChainConfig()
+}
+
+func (sc *StorageClient) CurrentBlock() *types.Block {
+	return sc.ethBackend.CurrentBlock()
+}
+
+func (sc *StorageClient) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return sc.ethBackend.SendTx(ctx, signedTx)
+}
+
+func (sc *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return sc.ethBackend.SuggestPrice(ctx)
+}
+
+func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return sc.ethBackend.GetPoolNonce(ctx, addr)
 }
 
 // calculate Enode.ID, reference:

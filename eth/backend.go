@@ -714,3 +714,23 @@ func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) ev
 func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }
+
+func (s *Ethereum) ChainConfig() *params.ChainConfig {
+	return s.APIBackend.ChainConfig()
+}
+
+func (s *Ethereum) CurrentBlock() *types.Block {
+	return s.APIBackend.CurrentBlock()
+}
+
+func (s *Ethereum) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return s.APIBackend.SendTx(ctx, signedTx)
+}
+
+func (s *Ethereum) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return s.APIBackend.SuggestPrice(ctx)
+}
+
+func (s *Ethereum) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return s.APIBackend.GetPoolNonce(ctx, addr)
+}

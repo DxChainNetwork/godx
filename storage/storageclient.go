@@ -5,7 +5,10 @@
 package storage
 
 import (
+	"context"
+	"github.com/DxChainNetwork/godx/params"
 	"io"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 
@@ -29,6 +32,11 @@ type EthBackend interface {
 
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -42,6 +50,11 @@ type ClientBackend interface {
 	SetupConnection(hostEnodeUrl string) (*Session, error)
 	AccountManager() *accounts.Manager
 	Disconnect(session *Session, hostEnodeUrl string) error
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
 // a metadata about a storage contract.

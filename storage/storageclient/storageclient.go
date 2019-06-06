@@ -77,7 +77,6 @@ type StorageClient struct {
 	// information on network, block chain, and etc.
 	info       ParsedAPI
 	ethBackend storage.EthBackend
-	apiBackend ethapi.Backend
 
 	// file management.
 	staticFileSet *dxfile.FileSet
@@ -114,7 +113,6 @@ func New(persistDir string) (*StorageClient, error) {
 func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
 	sc.ethBackend = b
-	sc.apiBackend = apiBackend
 
 	// getting all needed API functions
 	if err = sc.filterAPIs(b.APIs()); err != nil {
