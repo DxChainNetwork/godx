@@ -35,7 +35,7 @@ func (sl *sectorLock) unlock() {
 
 // tryLock tries to lock the sectorLock
 func (sl *sectorLock) tryLock() bool {
-	sl.tl.TryToLock()
+	return sl.tl.TryToLock()
 }
 
 // lock tries to lock the lock with the specified id. Block until the lock is released

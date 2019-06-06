@@ -18,6 +18,9 @@ type storageManager struct {
 	// stored in database
 	db *database
 
+	// folders is a in-memory map of the folder
+	folders map[folderID]*storageFolder
+
 	// sectorLocks is the map from sector id to the sectorLock
 	sectorLocks sectorLocks
 

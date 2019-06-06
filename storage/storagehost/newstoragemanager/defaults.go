@@ -5,6 +5,9 @@
 package newstoragemanager
 
 const (
-	prefixFolder         = "folder"
+	// database related keys and prefixes
+	prefixFolder         = "storagefolder"
 	prefixFolderPathToID = "folderPathToID"
+
+	sectorSaltKey = "sectorSalt"
 )

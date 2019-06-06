@@ -5,9 +5,14 @@
 package newstoragemanager
 
 import (
+	"crypto/rand"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
+	"strconv"
 	"strings"
 )
 
@@ -48,10 +53,88 @@ func (db *database) close() {
 	db.lvl.Close()
 }
 
+// getSectorSalt return the sector salt and return.
+// If previously the sector salt is not stored, create a new one and return
+func (db *database) getSectorSalt() (salt sectorSalt, err error) {
+	key := makeKey(sectorSaltKey)
+	var exist bool
+	if exist, err = db.lvl.Has(key, nil); !exist || err != nil {
+		// create a new random salt
+		if _, err = rand.Read(salt[:]); err != nil {
+			return
+		}
+		if err = db.lvl.Put(key, salt[:], nil); err != nil {
+			return
+		}
+		return
+	} else {
+		var saltByte []byte
+		saltByte, err = db.lvl.Get([]byte(sectorSaltKey), nil)
+		if err != nil {
+			return
+		}
+		copy(salt[:], saltByte)
+		return
+	}
+}
+
+// saveStorageFolder save the storage folder to the database.
+// Note the storage folder should be locked before calling this function
+func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
+	// make key-value pair
+	folderIndex := int(sf.id)
+	folderKey := makeKey(prefixFolder, strconv.Itoa(folderIndex))
+	folderData, err := rlp.EncodeToBytes(sf)
+	if err != nil {
+		return err
+	}
+	// save
+	err = db.lvl.Put(folderKey, folderData, nil)
+	return
+}
+
+// loadStorageFolder get the storage folder with the index from db
+func (db *database) loadStorageFolder(index uint32) (sf *storageFolder, err error) {
+	// make the folder key
+	folderKey := makeKey(prefixFolder, strconv.Itoa(int(index)))
+	folderBytes, err := db.lvl.Get(folderKey, nil)
+	if err != nil {
+		return
+	}
+	if err = rlp.DecodeBytes(folderBytes, &sf); err != nil {
+		sf = nil
+		return
+	}
+	return
+}
+
+// loadAllStorageFolders load all storage folders from database
+func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder, fullErr error) {
+	folders = make(map[folderID]*storageFolder)
+	// iterate over all entries start with the prefixFolder
+	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(prefixFolder+"_")), nil)
+	for iter.Next() {
+		// get the folder index from key
+		key := string(iter.Key())
+		folderIndex := strings.TrimPrefix(key, prefixFolder+"_")
+		// get the folder content
+		sfByte := iter.Value()
+		var sf *storageFolder
+		if err := rlp.DecodeBytes(sfByte, &sf); err != nil {
+			// If error happened, log the error in return value and skip to next item
+			fullErr = common.ErrCompose(fullErr, err)
+			continue
+		}
+		sf.id = folderIndex
+		// Add the folder to map
+		folders[folderIndex] = sf
+	}
+	return
+}
+
 // makeKey create the key. Add _ in each of the arguments
-func makeKey(ss ...string) (key []byte, err error) {
+func makeKey(ss ...string) (key []byte) {
 	if len(ss) == 0 {
-		err = errors.New("key cannot be empty")
 		return
 	}
 	s := strings.Join(ss, "_")

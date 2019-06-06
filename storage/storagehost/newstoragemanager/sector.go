@@ -1,5 +1,5 @@
 package newstoragemanager
 
 type (
-	sectorID [12]byte
+	sectorID [64]byte
 )
