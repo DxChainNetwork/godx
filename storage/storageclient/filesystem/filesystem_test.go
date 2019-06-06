@@ -101,6 +101,8 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 			if f.GetHealth() != minHealth {
 				t.Errorf("SelectDxFileToFix got file not with expected health. Got %v, Expect %v", f.GetHealth(), minHealth)
 			}
+		} else if err == errStopped {
+			// No logging for stopped
 		} else {
 			t.Fatalf("SelectDxFileToFix return unexpected error: %v", err)
 		}

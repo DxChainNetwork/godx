@@ -146,6 +146,11 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 	}()
 	for {
 	LOOP:
+		select {
+		case <-fs.tm.StopChan():
+			return nil, errStopped
+		default:
+		}
 		health := curDir.Metadata().Health
 		if err = curDir.Close(); err != nil {
 			return nil, err
@@ -161,6 +166,11 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 		}
 		// Loop over files and compare the health
 		for file := range files {
+			select {
+			case <-fs.tm.StopChan():
+				return nil, errStopped
+			default:
+			}
 			df, err := fs.OpenFile(file)
 			if err != nil {
 				fs.logger.Warn("file system open file", "path", file, "err", err)
@@ -175,6 +185,11 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 		}
 		// Loop over dirs and compare with the health
 		for dir := range dirs {
+			select {
+			case <-fs.tm.StopChan():
+				return nil, errStopped
+			default:
+			}
 			d, err := fs.dirSet.Open(dir)
 			if err != nil {
 				fs.logger.Warn("file system open curDir", "path", dir, "err", err)
