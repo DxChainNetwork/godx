@@ -477,7 +477,6 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
-
 	switch txType {
 	case HostAnnounceTransaction:
 		return evm.HostAnnounceTx(caller, data, gas)
@@ -487,12 +486,9 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 		return evm.CommitRevisionTx(caller, data, gas)
 	case StorageProofTransaction:
 		return evm.StorageProofTx(caller, data, gas)
-	case ContractRenewTransaction:
-		return evm.ContractRenewTx(caller, data, gas)
 	default:
 		return nil, gas, errUnknownStorageContractTx
 	}
-
 }
 
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
@@ -736,20 +732,4 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	log.Info("storage proof tx execution done", "file_contract_id", common.Hash(sp.ParentID).Hex())
 
 	return nil, gasRemainCheck, nil
-}
-
-func (evm *EVM) ContractRenewTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-
-	var (
-		//标记一个锚
-		snapshot = evm.StateDB.Snapshot()
-		err      error
-	)
-	if err != nil {
-		//如果出错，DB回滚
-		evm.StateDB.RevertToSnapshot(snapshot)
-
-	}
-	return nil, gas, err
-
 }
