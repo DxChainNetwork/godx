@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -165,7 +164,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		}
 		wg.Wait()
 		// wait until updates complete
-		err = fs.waitForUpdatesComplete(10 * time.Second)
+		err = fs.waitForUpdatesComplete(30 * time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -280,12 +279,9 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 			if len(fs.unfinishedUpdates) != 1 {
 				t.Errorf("test %d: unfinishedUpdates should have length 1. but got %v", index, len(fs.unfinishedUpdates))
 			}
-			update, exist := fs.unfinishedUpdates[storage.RootDxPath()]
+			_, exist := fs.unfinishedUpdates[storage.RootDxPath()]
 			if !exist {
 				t.Fatalf("test %d: during update, the dxdir is not in the root", index)
-			}
-			if atomic.LoadUint32(&update.redo) != redoNeeded {
-				t.Fatalf("test %d: redo should be redoNeeded", index)
 			}
 		}()
 		// unblock the first update and wait the updates to complete

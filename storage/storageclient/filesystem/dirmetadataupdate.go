@@ -53,13 +53,6 @@ type (
 		//  2. A new thread is trying to update the current DxPath
 		stop chan struct{}
 
-		// redo is the atomic field of whether the update should be redo again.
-		// The redo field check only happens after the a struct is received from stop channel.
-		// If the condition is shutting down the program, redo should be RedoNotNeeded,
-		// If the condition is a new thread accessing, redo should be RedoNeeded.
-		// During normal processing, redo should be 0.
-		redo uint32
-
 		// consecutiveFails is the atomic field for counting the consecutive failed times.
 		// When consecutiveFails reaches a certain number, the dirMetadata update is released.
 		consecutiveFails uint32
@@ -147,7 +140,7 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 // applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a
 // goroutine of calculateMetadataAndApply as necessary.
 //  1. If the update already exists in fs.unfinishedUpdates, signal the current update thread
-//     stopAndRedo
+//     signalStop
 //  2. If there is already an update thread in progress, return
 //  3. Else add to fs.tm, update fs.unfinishedUpdates, and start a goroutine to
 //     calculateMetadataAndApply
@@ -161,16 +154,15 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadlog.Transaction) (err error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
-	// If the update already exists in the unfinishedUpdates, stopAndRedo
+	// If the update already exists in the unfinishedUpdates, signalStop
 	update, exist := fs.unfinishedUpdates[path]
 	if exist {
-		update.stopAndRedo()
+		update.signalStop()
 	} else {
 		update = &dirMetadataUpdate{
 			dxPath:           path,
 			updateInProgress: 0,
-			stop:             make(chan struct{}),
-			redo:             0,
+			stop:             make(chan struct{}, 1),
 		}
 	}
 
@@ -201,10 +193,9 @@ func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadl
 	return
 }
 
-// stopAndRedo is a helper function that update the redo field and try to fill the stop channel.
+// signalStop is a helper function that update the redo field and try to fill the stop channel.
 // It is triggered when a new update is created while currently a dirMetadataUpdate is in progress.
-func (update *dirMetadataUpdate) stopAndRedo() {
-	atomic.StoreUint32(&update.redo, redoNeeded)
+func (update *dirMetadataUpdate) signalStop() {
 	// Try to insert into the channel. If cannot, there is already struct in stop channel.
 	select {
 	case update.stop <- struct{}{}:
@@ -220,10 +211,14 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	defer func() {
 		update.cleanUp(fs, err)
 	}()
+	// clear the stop channel
+	select {
+	case <-update.stop:
+	default:
+	}
 
 	for {
 		// store the value of redo as not needed
-		atomic.StoreUint32(&update.redo, redoNotNeeded)
 		if fs.disrupt("cmaa1") {
 			err = errDisrupted
 			return
@@ -232,6 +227,7 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 		case <-update.stop:
 			continue
 		case <-fs.tm.StopChan():
+			err = errStopped
 			return
 		default:
 		}
@@ -255,9 +251,15 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		}
 		// Termination. Only happens when redo value is redoNotNeeded
-		if atomic.LoadUint32(&update.redo) == redoNotNeeded {
-			break
+		select {
+		case <-update.stop:
+			continue
+		case <-fs.tm.StopChan():
+			err = errStopped
+			return
+		default:
 		}
+		break
 	}
 	return
 }
@@ -270,6 +272,10 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 4. If release is needed, delete the entry in fs.unfinishedUpdates.
 // 5. If release is needed, Release the transaction
 func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
+	// If the error is errStopped, do nothing and simply return
+	if err == errStopped {
+		return
+	}
 	// Set the updateInProgress value to 0, notifying this goroutine is over
 	atomic.StoreUint32(&update.updateInProgress, 0)
 
