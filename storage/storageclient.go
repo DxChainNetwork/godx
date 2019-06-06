@@ -39,6 +39,9 @@ type ClientBackend interface {
 	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
+	SetupConnection(hostEnodeUrl string) (*Session, error)
+	AccountManager() *accounts.Manager
+	Disconnect(session *Session, hostEnodeUrl string) error
 }
 
 // a metadata about a storage contract.

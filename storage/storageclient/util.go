@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/DxChainNetwork/godx/accounts"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
@@ -104,6 +106,17 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 // GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
+}
+
+func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+	return sc.ethBackend.SetupConnection(hostEnodeUrl)
+}
+func (sc *StorageClient) AccountManager() *accounts.Manager {
+	return sc.ethBackend.AccountManager()
+}
+
+func (sc *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+	return sc.ethBackend.Disconnect(session, hostEnodeUrl)
 }
 
 // calculate Enode.ID, reference:
