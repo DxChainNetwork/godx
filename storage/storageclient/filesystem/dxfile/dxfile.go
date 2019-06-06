@@ -228,7 +228,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(table storage.HostHealthInfoTa
 			continue
 		}
 		segHealth := df.segmentHealth(i, table)
-		if segHealth < 200 {
+		if segHealth < 100 {
 			continue
 		}
 		df.segments[i].Stuck = false

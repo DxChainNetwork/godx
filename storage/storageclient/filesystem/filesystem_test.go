@@ -86,7 +86,7 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 				t.Fatal(err)
 			}
 			fHealth, _, _ := file.Health(table)
-			if dxfile.CmpHealthPriority(fHealth, minHealth) >= 0 {
+			if dxfile.CmpRepairPriority(fHealth, minHealth) >= 0 {
 				minHealth = fHealth
 			}
 		}
@@ -94,7 +94,7 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 			t.Fatal(err)
 		}
 		f, err := fs.SelectDxFileToFix()
-		if err == ErrNoRepairNeeded && dxfile.CmpHealthPriority(minHealth, dxdir.DefaultHealth) <= 0 {
+		if err == ErrNoRepairNeeded && dxfile.CmpRepairPriority(minHealth, dxdir.DefaultHealth) <= 0 {
 			// no repair needed
 			continue
 		} else if err == nil {

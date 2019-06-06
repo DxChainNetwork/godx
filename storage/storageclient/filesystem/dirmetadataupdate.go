@@ -497,10 +497,10 @@ func applyMetadataForUpdateToMetadata(md *dxdir.Metadata, update *metadataForUpd
 	md.NumFiles += update.numFiles
 	md.TotalSize += update.totalSize
 	// If the update health or stuckHealth has higher priority than md.Health, update
-	if dxfile.CmpHealthPriority(update.health, md.Health) > 0 {
+	if dxfile.CmpRepairPriority(update.health, md.Health) > 0 {
 		md.Health = update.health
 	}
-	if dxfile.CmpHealthPriority(update.stuckHealth, md.StuckHealth) > 0 {
+	if dxfile.CmpRepairPriority(update.stuckHealth, md.StuckHealth) > 0 {
 		md.StuckHealth = update.stuckHealth
 	}
 	// Update minRedundancy

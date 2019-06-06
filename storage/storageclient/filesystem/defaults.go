@@ -45,11 +45,6 @@ const (
 )
 
 const (
-	// dangerThreshold is the threshold of file status InDanger to recoverable
-	dangerThreshold = uint32(125)
-)
-
-const (
 	// A file healthy status is presented by four human readable string
 	statusHealthyStr       = "healthy"
 	statusRecoverableStr   = "recoverable"

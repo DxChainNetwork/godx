@@ -631,10 +631,10 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
 	fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractManager.HostHealthMapByID(df.HostIDs()))
 	fMinRedundancy := df.Redundancy(fs.contractManager.HostHealthMapByID(df.HostIDs()))
-	if dxfile.CmpHealthPriority(fHealth, health) > 0 {
+	if dxfile.CmpRepairPriority(fHealth, health) > 0 {
 		health = fHealth
 	}
-	if dxfile.CmpHealthPriority(fStuckHealth, stuckHealth) > 0 {
+	if dxfile.CmpRepairPriority(fStuckHealth, stuckHealth) > 0 {
 		stuckHealth = fStuckHealth
 	}
 	numStuckSegments += fNumStuckSegments

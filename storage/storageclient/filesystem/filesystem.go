@@ -144,8 +144,8 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 	defer func() {
 		curDir.Close()
 	}()
+LOOP:
 	for {
-	LOOP:
 		select {
 		case <-fs.tm.StopChan():
 			return nil, errStopped
@@ -156,7 +156,7 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 			return nil, err
 		}
 		// If the health is larger than the threshold, no repair is needed
-		if dxfile.CmpHealthPriority(health, dxfile.RepairHealthThreshold) <= 0 {
+		if dxfile.CmpRepairPriority(health, dxfile.RepairHealthThreshold) <= 0 {
 			return nil, ErrNoRepairNeeded
 		}
 		// Get dirs and files o the directory
@@ -177,7 +177,7 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 				continue
 			}
 			fHealth := df.GetHealth()
-			if dxfile.CmpHealthPriority(fHealth, health) >= 0 {
+			if dxfile.CmpRepairPriority(fHealth, health) >= 0 {
 				// This is the file we want to repair
 				return df, nil
 			}
@@ -196,9 +196,7 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 				continue
 			}
 			dHealth := d.Metadata().Health
-			if dxfile.CmpHealthPriority(dHealth, health) < 0 {
-				continue
-			} else {
+			if dxfile.CmpRepairPriority(dHealth, health) >= 0 {
 				if err = curDir.Close(); err != nil {
 					return nil, common.ErrCompose(err, d.Close())
 				}
