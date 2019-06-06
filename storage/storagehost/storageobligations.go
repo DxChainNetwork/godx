@@ -181,16 +181,16 @@ type (
 
 func (i storageObligationStatus) String() string {
 	if i == 0 {
-		return "obligationUnresolved" // 未解决
+		return "obligationUnresolved"
 	}
 	if i == 1 {
-		return "obligationRejected" // 被拒绝
+		return "obligationRejected"
 	}
 	if i == 2 {
-		return "obligationSucceeded" // 成功
+		return "obligationSucceeded"
 	}
 	if i == 3 {
-		return "obligationFailed" // 失败
+		return "obligationFailed"
 	}
 	return "storageObligationStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 }
@@ -223,7 +223,7 @@ func deleteStorageObligation(db ethdb.Database, sc common.Hash) error {
 }
 
 // expiration returns the height at which the storage obligation expires.
-func (so *StorageObligation) expiration() (number uint64) {
+func (so *StorageObligation) expiration() uint64 {
 	if len(so.StorageContractRevisions) > 0 {
 		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewWindowStart
 	}
@@ -272,14 +272,17 @@ func (so *StorageObligation) merkleRoot() common.Hash {
 // payouts returns the set of valid payouts and missed payouts that represent
 // the latest revision for the storage obligation.
 //返回有效支付和错过支付的集合，代表存储义务的最新Revision。
-func (so *StorageObligation) payouts() (validProofOutputs []types.DxcoinCharge, missedProofOutputs []types.DxcoinCharge) {
+func (so *StorageObligation) payouts() ([]types.DxcoinCharge, []types.DxcoinCharge) {
+	validProofOutputs := make([]types.DxcoinCharge, 2)
+	missedProofOutputs := make([]types.DxcoinCharge, 2)
 	if len(so.StorageContractRevisions) > 0 {
-		validProofOutputs = so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewValidProofOutputs
-		missedProofOutputs = so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewMissedProofOutputs
+		copy(validProofOutputs, so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewValidProofOutputs)
+		copy(missedProofOutputs, so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewMissedProofOutputs)
+		return validProofOutputs, missedProofOutputs
 	}
 	validProofOutputs = so.OriginStorageContract.ValidProofOutputs
 	missedProofOutputs = so.OriginStorageContract.MissedProofOutputs
-	return
+	return validProofOutputs, missedProofOutputs
 }
 
 // proofDeadline returns the height by which the storage proof must be
@@ -292,11 +295,13 @@ func (so *StorageObligation) ProofDeadline() uint64 {
 
 }
 
-// transactionID returns the ID of the transaction containing the Storage
-// contract. 返回包含存储合约的交易的hash
-func (so *StorageObligation) transactionID() common.Hash {
-	//TODO 通过存储合约ID获取到交易hash
-	return common.Hash{}
+func (so StorageObligation) value() *big.Int {
+	var soValue *big.Int
+	soValue = new(big.Int).Add(so.ContractCost, so.PotentialDownloadRevenue)
+	soValue = new(big.Int).Add(soValue, so.PotentialStorageRevenue)
+	soValue = new(big.Int).Add(soValue, so.PotentialUploadRevenue)
+	soValue = new(big.Int).Add(soValue, so.RiskedCollateral)
+	return soValue
 }
 
 //// value returns the value of fulfilling the storage obligation to the host.
