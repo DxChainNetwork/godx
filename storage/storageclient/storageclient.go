@@ -186,10 +186,11 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 }
 
 func (sc *StorageClient) ContractCreate(params ContractParams) error {
-	// Extract vars from params, for convenience
+
+	// extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
-	// Calculate the payouts for the client, host, and whole contract
+	// calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
 	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
@@ -208,7 +209,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
 	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
 
-	// Create storage contract
+	// create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         0,
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
@@ -230,7 +231,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		},
 	}
 
-	// Increase Successful/Failed interactions accordingly
+	// record the successful or failed interactions
 	defer func() {
 		hostID := PubkeyToEnodeID(&host.PublicKey)
 		if err != nil {
@@ -246,7 +247,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return storagehost.ExtendErr("find client account error", err)
 	}
 
-	// Setup connection with storage host
+	// setup connection with storage host
 	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
 	if err != nil {
 		return storagehost.ExtendErr("setup connection with host failed", err)
@@ -258,7 +259,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return storagehost.ExtendErr("contract sign by client failed", err)
 	}
 
-	// Send the ContractCreate request
+	// send the ContractCreate request
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
 		Sign:            clientContractSign,
@@ -288,7 +289,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 	storageContract.Signatures[0] = clientContractSign
 	storageContract.Signatures[1] = hostSign
 
-	// Assemble init revision and sign it
+	// assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
 		ParentID:              storageContract.RLPHash(),
 		UnlockConditions:      uc,
@@ -367,7 +368,7 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
 
-	// Retrieve the last contract revision
+	// retrieve the last contract revision
 	contractRevision := types.StorageContractRevision{}
 	scs := sc.storageHostManager.GetStorageContractSet()
 
@@ -383,13 +384,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	contractHeader := contract.Header()
 	contractRevision = contractHeader.LatestContractRevision
 
-	// Calculate price per sector
+	// calculate price per sector
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
 	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
 	sectorDeposit := hostInfo.Deposit.MultUint64(blockBytes)
 
-	// Calculate the new Merkle root set and total cost/collateral
+	// calculate the new Merkle root set and total cost/collateral
 	var bandwidthPrice, storagePrice, deposit *big.Int
 	newFileSize := contractRevision.NewFileSize
 	for _, action := range actions {
@@ -406,13 +407,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		deposit = sectorDeposit.MultUint64(addedSectors).BigIntPtr()
 	}
 
-	// Estimate cost of Merkle proof
+	// estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
 	bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
 
 	cost := new(big.Int).Add(bandwidthPrice.Add(bandwidthPrice, storagePrice), hostInfo.BaseRPCPrice.BigIntPtr())
 
-	// Check that enough funds are available
+	// check that enough funds are available
 	if contractRevision.NewValidProofOutputs[0].Value.Cmp(cost) < 0 {
 		return errors.New("contract has insufficient funds to support upload")
 	}
@@ -420,12 +421,12 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return errors.New("contract has insufficient collateral to support upload")
 	}
 
-	// Create the revision; we will update the Merkle root later
+	// create the revision; we will update the Merkle root later
 	rev := NewRevision(contractRevision, cost)
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
 	rev.NewFileSize = newFileSize
 
-	// Create the request
+	// create the request
 	req := storage.UploadRequest{
 		StorageContractID: contractRevision.ParentID,
 		Actions:           actions,
@@ -448,7 +449,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	defer func() {
 
-		// Increase Successful/Failed interactions accordingly
+		// record the successful or failed interactions
 		if err != nil {
 			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else {
@@ -459,13 +460,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		session.SetDeadLine(time.Hour)
 	}()
 
-	// 1. Send storage upload request
+	// 1. send storage upload request
 	session.SetDeadLine(storage.ContractRevisionTime)
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
 		return err
 	}
 
-	// 2. Read merkle proof response from host
+	// 2. read merkle proof response from host
 	var merkleResp storage.UploadMerkleProof
 	msg, err := session.ReadMsg()
 	if err != nil {
@@ -483,7 +484,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
-	// Verify merkle proof
+	// verify merkle proof
 	numSectors := contractRevision.NewFileSize / storage.SectorSize
 	proofRanges := CalculateProofRanges(actions, numSectors)
 	proofHashes := merkleResp.OldSubtreeHashes
@@ -508,7 +509,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return errors.New("invalid Merkle proof for new root")
 	}
 
-	// Update the revision, sign it, and send it
+	// update the revision, sign it, and send it
 	rev.NewFileMerkleRoot = newRoot
 
 	// get client wallet
@@ -532,7 +533,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
-	// Read the host's signature
+	// read the host's signature
 	var hostRevisionSig []byte
 	msg, err = session.ReadMsg()
 	if err != nil {
@@ -569,7 +570,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
 
 	// reset deadline when finished.
-	// if client has download the data, but not sent stopping or completing signal to host, the conn should be disconnected after 1 hour.
+	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
+	// the conn should be disconnected after 1 hour.
 	defer s.SetDeadLine(time.Hour)
 
 	// sanity check the request.
@@ -592,8 +594,8 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	var estProofHashes uint64
 	if req.MerkleProof {
 
-		// use the worst-case proof size of 2*tree depth (this occurs when
-		// proving across the two leaves in the center of the tree)
+		// use the worst-case proof size of 2*tree depth,
+		// which occurs when proving across the two leaves in the center of the tree
 		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
 		estProofHashes = uint64(len(req.Sections) * estHashesPerProof)
 	}
@@ -608,7 +610,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
 
-	// Retrieve the last contract revision
+	// retrieve the last contract revision
 	lastRevision := types.StorageContractRevision{}
 	scs := client.storageHostManager.GetStorageContractSet()
 
@@ -633,8 +635,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return errors.New("contract has insufficient funds to support download")
 	}
 
-	// To mitigate small errors (e.g. differing block heights), fudge the
-	// price and collateral by 0.2%.
+	// increase the price fluctuation by 0.2% to mitigate small errors, like different block height
 	price = price.MultFloat64(1 + extraRatio)
 
 	// create the download revision and sign it
@@ -674,7 +675,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	// Increase Successful/Failed interactions accordingly
+	// record the successful or failed interactions
 	defer func() {
 		if err != nil {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
@@ -726,7 +727,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return err
 		}
 
-		// The host may have sent data, a signature, or both. If they sent data, validate it.
+		// if host sent data, should validate it
 		if len(resp.Data) > 0 {
 			if len(resp.Data) != int(sec.Length) {
 				return errors.New("host did not send enough sector data")
@@ -749,7 +750,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			}
 		}
 
-		// If the host sent a signature, exit the loop; they won't be sending any more data
+		// if host sent signature, indicate the download complete, should exit the loop
 		if len(resp.Signature) > 0 {
 			hostSig = resp.Signature
 			break
@@ -757,8 +758,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}
 	if hostSig == nil {
 
-		// the host is required to send a signature; if they haven't sent one
-		// yet, they should send an empty response containing just the signature.
+		// if we haven't received host signature, just read again
 		var resp storage.DownloadResponse
 		msg, err := s.ReadMsg()
 		if err != nil {
