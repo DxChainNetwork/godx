@@ -370,10 +370,12 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 	return
 }
 
+// Header will return the contract header information of the contract
 func (c *Contract) Header() ContractHeader {
 	return c.header
 }
 
-func (c *Contract) MerkelRoots() ([]common.Hash, error) {
+// MerkleRoots will return the merkle roots information of the contract
+func (c *Contract) MerkleRoots() ([]common.Hash, error) {
 	return c.merkleRoots.roots()
 }

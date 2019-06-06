@@ -78,6 +78,12 @@ func (scs *StorageContractSet) Close() (err error) {
 	return
 }
 
+// Empty db will clear all data stored in the contractset database
+func (scs *StorageContractSet) EmptyDB() (err error) {
+	err = scs.db.EmptyDB()
+	return
+}
+
 // InsertContract will insert the formed or renewed contract into the storage contract set
 // allow contract manager further to maintain them
 func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.Hash) (cm storage.ContractMetaData, err error) {

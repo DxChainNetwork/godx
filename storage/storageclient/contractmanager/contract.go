@@ -37,6 +37,7 @@ func (cm *ContractManager) resumeContracts() (err error) {
 	// look through all contracts, resume them by updating their status
 	for _, id := range ids {
 		contract, exists := cm.activeContracts.Acquire(id)
+
 		if !exists {
 			continue
 		}
