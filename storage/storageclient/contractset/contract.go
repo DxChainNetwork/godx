@@ -374,6 +374,6 @@ func (c *Contract) Header() ContractHeader {
 	return c.header
 }
 
-func (c *Contract) MerkelRoots() ([]common.Hash, error) {
+func (c *Contract) MerkleRoots() ([]common.Hash, error) {
 	return c.merkleRoots.roots()
 }

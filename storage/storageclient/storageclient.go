@@ -545,7 +545,7 @@ func (sc *StorageClient) ContracteRenew(oldContract *contractset.Contract, param
 		},
 	}
 
-	oldRoots, errRoots := oldContract.MerkelRoots()
+	oldRoots, errRoots := oldContract.MerkleRoots()
 	if errRoots != nil {
 		return storage.ContractMetaData{}, errRoots
 	}
