@@ -36,18 +36,16 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 // download remote file by sync mode
 //
 // NOTE: RPC not support async download, because it is one time connection, should block until download task done.
-func (api *PublicStorageClientAPI) DownloadSync(length, offset uint64, destination, dxFilePath string) error {
+func (api *PublicStorageClientAPI) DownloadSync(length, offset uint64, localPath, remoteFilePath string) error {
 	p := storage.ClientDownloadParameters{
-		Async:  false,
 		Length: length,
 		Offset: offset,
 
-		// where to write the downloaded files, need to specify from outer request
-		// NOTE: can not get httpWriter from here，so choose the destination dir to write the downloaded files.
-		Destination: destination,
+		// where to write the downloaded files
+		WriteToLocalPath: localPath,
 
-		// where to download th remote file, need to specify from outer request
-		DxFilePath: dxFilePath,
+		// where to download the remote file
+		RemoteFilePath: remoteFilePath,
 	}
 	err := api.sc.DownloadSync(p)
 	if err != nil {

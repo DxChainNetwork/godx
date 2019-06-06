@@ -29,7 +29,7 @@ type downloadSectorInfo struct {
 type unfinishedDownloadSegment struct {
 
 	// where to write the recovered logical data
-	destination downloadDestination
+	destination writeDestination
 	erasureCode erasurecode.ErasureCoder
 	masterKey   crypto.CipherKey
 

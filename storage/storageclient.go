@@ -5,8 +5,6 @@
 package storage
 
 import (
-	"io"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -41,10 +39,8 @@ type ClientBackend interface {
 
 // the parameters to download from outer request
 type ClientDownloadParameters struct {
-	Async       bool
-	HttpWriter  io.Writer
-	Length      uint64
-	Offset      uint64
-	DxFilePath  string
-	Destination string
+	Length           uint64
+	Offset           uint64
+	RemoteFilePath   string
+	WriteToLocalPath string
 }

@@ -12,7 +12,6 @@ import (
 	"io"
 	"math/big"
 	"math/bits"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -949,7 +948,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 // managedDownload performs a file download and returns the download object
 func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters) (*download, error) {
-	entry, err := client.staticFileSet.Open(p.DxFilePath)
+	entry, err := client.staticFileSet.Open(p.RemoteFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -958,18 +957,11 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	defer entry.SetTimeAccess(time.Now())
 
 	// validate download parameters.
-	isHTTPResp := p.HttpWriter != nil
-	if p.Async && isHTTPResp {
-		return nil, errors.New("cannot async download to http response")
+	if p.WriteToLocalPath == "" {
+		return nil, errors.New("not specified local path")
 	}
-	if isHTTPResp && p.Destination != "" {
-		return nil, errors.New("destination cannot be specified when downloading to http response")
-	}
-	if !isHTTPResp && p.Destination == "" {
-		return nil, errors.New("destination not supplied")
-	}
-	if p.Destination != "" && !filepath.IsAbs(p.Destination) {
-		return nil, errors.New("destination must be an absolute path")
+	if p.WriteToLocalPath != "" && !filepath.IsAbs(p.WriteToLocalPath) {
+		return nil, errors.New("local path must be absolute")
 	}
 
 	if p.Offset == entry.FileSize() && entry.FileSize() != 0 {
@@ -989,33 +981,21 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 		return nil, fmt.Errorf("offset and length combination invalid, max byte is at index %d", entry.FileSize()-1)
 	}
 
-	// instantiate the correct downloadWriter implementation
-	var dw downloadDestination
+	// instantiate the file to write the downloaded data
+	var dw writeDestination
 	var destinationType string
-	if isHTTPResp {
-		dw = newDownloadWriter(p.HttpWriter)
-		destinationType = "http stream"
-	} else {
-		osFile, err := os.OpenFile(p.Destination, os.O_CREATE|os.O_WRONLY, entry.FileMode())
-		if err != nil {
-			return nil, err
-		}
-		dw = osFile
-		destinationType = "file"
+	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_WRONLY, entry.FileMode())
+	if err != nil {
+		return nil, err
 	}
-
-	if isHTTPResp {
-		w, ok := p.HttpWriter.(http.ResponseWriter)
-		if ok {
-			w.Header().Set("Content-Length", fmt.Sprint(p.Length))
-		}
-	}
+	dw = osFile
+	destinationType = "file"
 
 	// create the download object.
 	d, err := client.newDownload(downloadParams{
 		destination:       dw,
 		destinationType:   destinationType,
-		destinationString: p.Destination,
+		destinationString: p.WriteToLocalPath,
 		file:              entry.DxFile.Snapshot(),
 		latencyTarget:     25e3 * time.Millisecond,
 		length:            p.Length,

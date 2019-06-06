@@ -13,8 +13,14 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 )
 
-// a file download that has been queued by the client.
 type (
+
+	// where to write the downloaded data
+	writeDestination interface {
+		WriteAt(data []byte, offset int64) (int, error)
+	}
+
+	// a file download that has been queued by the client.
 	download struct {
 
 		// incremented as data completes, will stop at 100% file progress.
@@ -38,7 +44,7 @@ type (
 		startTime time.Time
 
 		// where to write the downloaded data
-		destination downloadDestination
+		destination writeDestination
 
 		// the destination need to report to user
 		destinationString string
@@ -76,7 +82,7 @@ type (
 	downloadParams struct {
 
 		// where to write the downloaded data
-		destination downloadDestination
+		destination writeDestination
 
 		// how to write the downloaded data,
 		// like that "file", "buffer", "http stream" ...
