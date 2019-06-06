@@ -126,7 +126,7 @@ func (df *DxFile) goodSectors(segmentIndex int, table storage.HostHealthInfoTabl
 // If p(h1) > p(h2), return 1
 func CmpRepairPriority(h1, h2 uint32) int {
 	noFix1, noFix2 := h1 >= RepairHealthThreshold, h2 >= RepairHealthThreshold
-	canFix1, canFix2 := h1 >= 100, h2 >= 100
+	canFix1, canFix2 := h1 >= StuckThreshold, h2 >= StuckThreshold
 	if h1 == h2 || (noFix1 && noFix2) || (!canFix1 && !canFix2) {
 		return 0
 	}
