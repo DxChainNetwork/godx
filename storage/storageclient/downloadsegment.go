@@ -202,12 +202,10 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	// ensure cleanup occurs after the data is recovered, whether recovery succeeds or fails.
 	defer uds.cleanUp()
 
-	// calculate the number of bytes we need to recover
-	btr := bytesToRecover(uds.fetchOffset, uds.fetchLength, uds.segmentSize, uds.erasureCode)
-
+	// NOTE: for not supporting partial encoding, we directly recover the whole sector
 	// recover the sectors into the logical segment data.
 	recoverWriter := new(bytes.Buffer)
-	err := uds.erasureCode.Recover(uds.physicalSegmentData, int(btr), recoverWriter)
+	err := uds.erasureCode.Recover(uds.physicalSegmentData, int(uds.segmentSize), recoverWriter)
 	if err != nil {
 		uds.mu.Lock()
 		uds.fail(err)
@@ -224,7 +222,7 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	recoveredData := recoverWriter.Bytes()
 
 	// write the bytes to the requested output.
-	start := recoveredDataOffset(uds.fetchOffset, uds.erasureCode)
+	start := uds.fetchOffset
 	end := start + uds.fetchLength
 	_, err = uds.destination.WriteAt(recoveredData[start:end], uds.writeOffset)
 	if err != nil {
@@ -248,19 +246,4 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 		return err
 	}
 	return nil
-}
-
-// returns the number of bytes we need to recover from the erasure coded segments.
-func bytesToRecover(segmentFetchOffset, segmentFetchLength, segmentSize uint64, rs erasurecode.ErasureCoder) uint64 {
-
-	// not support partial encoding
-	return segmentSize
-
-}
-
-// convert the fetch offset of the segment into the offset of the recovered data.
-func recoveredDataOffset(segmentFetchOffset uint64, rs erasurecode.ErasureCoder) uint64 {
-
-	// not support partial encoding
-	return segmentFetchOffset
 }
