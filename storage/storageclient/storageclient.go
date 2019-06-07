@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
+
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -62,7 +64,7 @@ type StorageClient struct {
 	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []StorageHostEntry
+	lastEstimationStorageHost []proto.StorageHostEntry
 
 	// Directories and File related
 	persist        persistence
