@@ -124,26 +124,30 @@ func (cm *ContractManager) removeDuplications() {
 		}
 
 		// if exists, compare the start height, the larger the start height is, the newer the contract is
-		// newer contract has the larger start height
+		// newer contract has the larger start height. Update the distinctContracts list as well
 		if existedContract.StartHeight < contract.StartHeight {
 			duplicatedContractIDs = append(duplicatedContractIDs, existedContract.ID)
+			// the older contract should be moved to expired contract list
 			cm.updateExpiredContracts(existedContract)
-			cm.updateHostToContractID(existedContract)
+
+			// the newer contract should be added to the mapping
+			cm.updateHostToContractID(contract)
+
+			// update the distinct contract list
+			distinctContracts[contract.EnodeID] = contract
 			continue
 		}
-
 		// if the existedContract is newer, has the larger start height
 		duplicatedContractIDs = append(duplicatedContractIDs, contract.ID)
+		// the older contract should be moved to expired contract list
 		cm.updateExpiredContracts(contract)
-		cm.updateHostToContractID(contract)
-	}
 
-	fmt.Println("trying to update the contract renew")
+		// the newer contract should be added to the mapping
+		cm.updateHostToContractID(existedContract)
+	}
 
 	// update contract renew
 	cm.updateContractRenew(hostToContracts)
-
-	fmt.Println("finished updating the contract renew")
 
 	// save the update data information
 	if err := cm.saveSettings(); err != nil {
@@ -271,6 +275,9 @@ func (cm *ContractManager) updateExpiredContracts(contract storage.ContractMetaD
 	cm.expiredContracts[contract.ID] = contract
 }
 
+// updateHostToContractID will update the hostToContract field, making sure that
+// the contract mapped to the enodeID is the newest contract, meaning the contract
+// with greater start height, if there are multiple of them
 func (cm *ContractManager) updateHostToContractID(contract storage.ContractMetaData) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()

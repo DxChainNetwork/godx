@@ -147,7 +147,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 	// insert data into active contracts
 	amount := 1000
 	if testing.Short() {
-		amount = 10
+		amount = 100
 	}
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
@@ -204,6 +204,51 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 	// remove duplications
 	cm.removeDuplications()
 
+	// validation for oldestContractSet, olderContractSet, newestContractSet
+	// what to validate?
+	// 		1. cm.hostToContract[contract.EnodeID] = contract.ID -> should be newestContract
+	// 		2. oldestContractSet, olderContractSet should be placed under expiredContracts
+	// 		3. oldestContractSet, olderContractSet should be deleted from the contractSet
+	// 		4. the renewed from and renewed to order
+
+	// validate the oldestContractSet
+	for _, contract := range oldestContractSet {
+		if _, exists := cm.expiredContracts[contract.ID]; !exists {
+			t.Fatalf("the oldest contract is not in the expired contracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); exists {
+			t.Fatalf("the oldest contract should not be in the active contracts list")
+		}
+		if id, _ := cm.hostToContract[contract.EnodeID]; id == contract.ID {
+			t.Fatalf("the oldest contract should not be in the host to contract mapping")
+		}
+	}
+
+	// validate the olderContractSet
+	for _, contract := range olderContractSet {
+		if _, exists := cm.expiredContracts[contract.ID]; !exists {
+			t.Fatalf("the older contract is not in the expired contracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); exists {
+			t.Fatalf("the older contract should not be in the active contracts list")
+		}
+		if id, _ := cm.hostToContract[contract.EnodeID]; id == contract.ID {
+			t.Fatalf("the older contract should not be in the host to contract mapping")
+		}
+	}
+
+	// validate the newestContractSet
+	for _, contract := range newestContractSet {
+		if _, exists := cm.expiredContracts[contract.ID]; exists {
+			t.Fatalf("the newest contract should not be in the expired contracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); !exists {
+			t.Fatalf("the newest contract should be in the active contracts list")
+		}
+		if id, _ := cm.hostToContract[contract.EnodeID]; id != contract.ID {
+			t.Fatalf("the newest contract should be in the host to contract mapping")
+		}
+	}
 }
 
 func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
