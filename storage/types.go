@@ -14,6 +14,11 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
+const (
+	// DxFileExt is the extension of DxFile
+	DxFileExt = ".dxfile"
+)
+
 type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
@@ -170,6 +175,24 @@ type (
 	// HostHealthInfoTable is the map the is passed into DxFile health update.
 	// It is a map from host id to HostHealthInfo
 	HostHealthInfoTable map[enode.ID]HostHealthInfo
+
+	// FileInfo is the structure containing file info to be displayed
+	FileInfo struct {
+		DxPath         string  `json:"dxpath"`
+		Status         string  `json:"status"`
+		SourcePath     string  `json:"sourcepath"`
+		FileSize       uint64  `json:"filesize"`
+		Redundancy     uint32  `json:"redundancy"`
+		StoredOnDisk   bool    `json:"storedondisk"`
+		UploadProgress float64 `json:"uploadprogress"`
+	}
+
+	// FileBriefInfo is the brief info about a DxFile
+	FileBriefInfo struct {
+		Path           string  `json:"dxpath"`
+		Status         string  `json:"status"`
+		UploadProgress float64 `json:"uploadProgress"`
+	}
 )
 
 const (
