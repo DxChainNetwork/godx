@@ -6,10 +6,8 @@ package storageclient
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"io"
 	"math/big"
 	"math/bits"
@@ -19,21 +17,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 var (
@@ -66,7 +64,7 @@ type StorageClient struct {
 	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []StorageHostEntry
+	lastEstimationStorageHost []proto.StorageHostEntry
 
 	// Directories and File related
 	persist        persistence
@@ -81,7 +79,6 @@ type StorageClient struct {
 	// information on network, block chain, and etc.
 	info       ParsedAPI
 	ethBackend storage.EthBackend
-	apiBackend ethapi.Backend
 
 	// file management.
 	staticFileSet *dxfile.FileSet
@@ -118,7 +115,6 @@ func New(persistDir string) (*StorageClient, error) {
 func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
 	sc.ethBackend = b
-	sc.apiBackend = apiBackend
 
 	// getting all needed API functions
 	if err = sc.filterAPIs(b.APIs()); err != nil {
@@ -247,183 +243,6 @@ func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit
 		sc.contractManager.SetRateLimits(downloadSpeedLimit, uploadSpeedLimit, DefaultPacketSize)
 	}
 
-	return nil
-}
-
-func (sc *StorageClient) ContractCreate(params ContractParams) error {
-	// Extract vars from params, for convenience
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
-
-	// Calculate the payouts for the client, host, and whole contract
-	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
-	if err != nil {
-		return err
-	}
-
-	uc := types.UnlockConditions{
-		PublicKeys: []ecdsa.PublicKey{
-			clientPublicKey,
-			host.PublicKey,
-		},
-		SignaturesRequired: 2,
-	}
-
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
-
-	// Create storage contract
-	storageContract := types.StorageContract{
-		FileSize:         0,
-		FileMerkleRoot:   common.Hash{}, // no proof possible without data
-		WindowStart:      endHeight,
-		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
-		UnlockHash:       uc.UnlockHash(),
-		RevisionNumber:   0,
-		ValidProofOutputs: []types.DxcoinCharge{
-			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
-			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
-		},
-		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostPayout, Address: hostAddr},
-		},
-	}
-
-	// Increase Successful/Failed interactions accordingly
-	defer func() {
-		hostID := PubkeyToEnodeID(&host.PublicKey)
-		if err != nil {
-			sc.storageHostManager.IncrementFailedInteractions(hostID)
-		} else {
-			sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
-		}
-	}()
-
-	account := accounts.Account{Address: clientAddr}
-	wallet, err := sc.ethBackend.AccountManager().Find(account)
-	if err != nil {
-		return storagehost.ExtendErr("find client account error", err)
-	}
-
-	// Setup connection with storage host
-	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
-	if err != nil {
-		return storagehost.ExtendErr("setup connection with host failed", err)
-	}
-	defer sc.ethBackend.Disconnect(session, host.NetAddress)
-
-	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("contract sign by client failed", err)
-	}
-
-	// Send the ContractCreate request
-	req := storage.ContractCreateRequest{
-		StorageContract: storageContract,
-		Sign:            clientContractSign,
-	}
-
-	if err := session.SendStorageContractCreation(req); err != nil {
-		return err
-	}
-
-	var hostSign []byte
-	msg, err := session.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
-	if err := msg.Decode(&hostSign); err != nil {
-		return err
-	}
-
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
-
-	// Assemble init revision and sign it
-	storageContractRevision := types.StorageContractRevision{
-		ParentID:              storageContract.RLPHash(),
-		UnlockConditions:      uc,
-		NewRevisionNumber:     1,
-		NewFileSize:           storageContract.FileSize,
-		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
-		NewWindowStart:        storageContract.WindowStart,
-		NewWindowEnd:          storageContract.WindowEnd,
-		NewValidProofOutputs:  storageContract.ValidProofOutputs,
-		NewMissedProofOutputs: storageContract.MissedProofOutputs,
-		NewUnlockHash:         storageContract.UnlockHash,
-	}
-
-	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("client sign revision error", err)
-	}
-	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
-
-	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
-		return storagehost.ExtendErr("send revision sign by client error", err)
-	}
-
-	var hostRevisionSign []byte
-	msg, err = session.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
-	if err := msg.Decode(&hostRevisionSign); err != nil {
-		return err
-	}
-
-	scBytes, err := rlp.EncodeToBytes(storageContract)
-	if err != nil {
-		return err
-	}
-
-	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scBytes); err != nil {
-		return storagehost.ExtendErr("Send storage contract transaction error", err)
-	}
-
-	// wrap some information about this contract
-	header := contractset.ContractHeader{
-		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
-		StartHeight:            startHeight,
-		EndHeight:              endHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
-		LatestContractRevision: storageContractRevision,
-		Status: storage.ContractStatus{
-			UploadAbility: true,
-			Canceled:      true,
-			RenewAbility:  false,
-		},
-	}
-
-	// store this contract info to client local
-	_, err = sc.contractManager.GetStorageContractSet().InsertContract(header, nil)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

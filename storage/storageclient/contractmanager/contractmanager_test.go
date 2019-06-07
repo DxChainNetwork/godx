@@ -5,16 +5,20 @@
 package contractmanager
 
 import (
+	"context"
 	"fmt"
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"math/big"
 	"testing"
 )
 
@@ -113,5 +117,37 @@ func (st *storageClientBackendContractManager) SubscribeChainChangeEvent(ch chan
 }
 
 func (st *storageClientBackendContractManager) GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error) {
+	return nil, nil
+}
+
+func (st *storageClientBackendContractManager) ChainConfig() *params.ChainConfig {
+	return nil
+}
+
+func (st *storageClientBackendContractManager) CurrentBlock() *types.Block {
+	return nil
+}
+
+func (st *storageClientBackendContractManager) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return nil
+}
+
+func (st *storageClientBackendContractManager) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return nil, nil
+}
+
+func (st *storageClientBackendContractManager) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return 0, nil
+}
+
+func (st *storageClientBackendContractManager) AccountManager() *accounts.Manager {
+	return nil
+}
+
+func (st *storageClientBackendContractManager) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+	return nil
+}
+
+func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
 	return nil, nil
 }
