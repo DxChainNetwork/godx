@@ -154,7 +154,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 
 	// start to generate data
 	var enodeIDList []enode.ID
-	var oldestContractSet []contractset.ContractHeader
+	var oldestContractSet = make(map[enode.ID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		// generate old contracts
 		enodeID := randomEnodeIDGenerator()
@@ -168,11 +168,11 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		}
 
 		// append to oldestContractSet list
-		oldestContractSet = append(oldestContractSet, oldContract)
+		oldestContractSet[enodeID] = oldContract
 	}
 
 	// generate / insert old contracts 2
-	var olderContractSet []contractset.ContractHeader
+	var olderContractSet = make(map[enode.ID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		// generate old contracts
 		oldContract := randomDuplicateContractGenerator(300, enodeIDList[i])
@@ -184,11 +184,11 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		}
 
 		// append to olderContractSet list
-		olderContractSet = append(olderContractSet, oldContract)
+		olderContractSet[enodeIDList[i]] = oldContract
 	}
 
 	// generate newest contracts set
-	var newestContractSet []contractset.ContractHeader
+	var newestContractSet = make(map[enode.ID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		newestContract := randomDuplicateContractGenerator(600, enodeIDList[i])
 
@@ -199,7 +199,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		}
 
 		// append to newest contract set list
-		newestContractSet = append(newestContractSet, newestContract)
+		newestContractSet[enodeIDList[i]] = newestContract
 	}
 	// remove duplications
 	cm.removeDuplications()
@@ -247,6 +247,27 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		}
 		if id, _ := cm.hostToContract[contract.EnodeID]; id != contract.ID {
 			t.Fatalf("the newest contract should be in the host to contract mapping")
+		}
+	}
+
+	// validate the renewFrom
+	for enodeID, contract := range newestContractSet {
+		older, exists := cm.renewedFrom[contract.ID]
+		if !exists {
+			t.Fatalf("the newest contract id should be in the renewFrom list")
+		}
+
+		if older != olderContractSet[enodeID].ID {
+			t.Fatalf("the newest contract id should map to older contarct")
+		}
+
+		oldest, exists := cm.renewedFrom[olderContractSet[enodeID].ID]
+		if !exists {
+			t.Fatalf("the older contract id should be in the renewFrom list")
+		}
+
+		if oldest != oldestContractSet[enodeID].ID {
+			t.Fatalf("the older contract id should be mapped to the oldest contract")
 		}
 	}
 }

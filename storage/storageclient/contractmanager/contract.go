@@ -249,7 +249,7 @@ func (cm *ContractManager) updateContractRenew(hostToContracts map[enode.ID][]st
 	for _, contracts := range hostToContracts {
 		// sort the contracts, the newer the contract is, it will be nearer to the front of the slice
 		sort.Slice(contracts[:], func(i, j int) bool {
-			return contracts[i].StartHeight < contracts[j].StartHeight
+			return contracts[i].StartHeight > contracts[j].StartHeight
 		})
 
 		// update the renewedFrom (new contract renewed from the old contract)
