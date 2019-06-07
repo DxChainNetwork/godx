@@ -92,8 +92,8 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
-func (sc *StorageClient) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
-	return sc.ethBackend.GetStorageHostSetting(peerID, config)
+func (sc *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+	return sc.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
