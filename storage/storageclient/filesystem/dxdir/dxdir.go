@@ -4,17 +4,18 @@
 package dxdir
 
 import (
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 )
 
 const (
-	dirFileName = ".dxdir"
+	DirFileName = ".dxdir"
 
-	defaultHealth = uint32(200)
+	DefaultHealth = uint32(200)
 )
 
 type (
@@ -28,8 +29,8 @@ type (
 		lock    sync.RWMutex
 		wal     *writeaheadlog.Wal
 
-		// dirPath is the actual path without dirFileName the DxDir locates
-		dirPath dirPath
+		// dirFilePath is the full path of the DxDir file
+		dirFilePath storage.SysPath
 	}
 
 	// Metadata is the necessary metadata to be saved in DxDir
@@ -56,43 +57,43 @@ type (
 		TimeModify uint64
 
 		// NumStuckSegments is the total number of segments that is stuck
-		NumStuckSegments uint64
+		NumStuckSegments uint32
 
 		// DxPath is the DxPath which is the path related to the root directory
-		DxPath DxPath
+		DxPath storage.DxPath
+
+		// RootPath is the root path of the file directory
+		RootPath storage.SysPath
 	}
-
-	// dirPath is the system path of the directory
-	dirPath string
-
-	// DxPath is the path to the root directory
-	DxPath string
 )
 
 //New create a DxDir with representing the dirPath metadata.
 //Note that the only access method should be from dirSet
-func New(dxPath DxPath, sysPath dirPath, wal *writeaheadlog.Wal) (*DxDir, error) {
-	_, err := os.Stat(filepath.Join(string(sysPath), dirFileName))
+func New(dxPath storage.DxPath, rootPath storage.SysPath, wal *writeaheadlog.Wal) (*DxDir, error) {
+	filePath := rootPath.Join(dxPath, DirFileName)
+	_, err := os.Stat(string(filePath))
 	if err == nil {
 		return nil, os.ErrExist
 	}
 	if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err = os.MkdirAll(string(sysPath), 0700); err != nil {
+	if err = os.MkdirAll(string(rootPath.Join(dxPath)), 0700); err != nil {
 		return nil, err
 	}
 	metadata := &Metadata{
-		Health:      defaultHealth,
-		StuckHealth: defaultHealth,
-		TimeModify:  uint64(time.Now().Unix()),
-		DxPath:      dxPath,
+		Health:        DefaultHealth,
+		StuckHealth:   DefaultHealth,
+		MinRedundancy: math.MaxUint32,
+		TimeModify:    uint64(time.Now().Unix()),
+		DxPath:        dxPath,
+		RootPath:      rootPath,
 	}
 	d := &DxDir{
-		metadata: metadata,
-		deleted:  false,
-		wal:      wal,
-		dirPath:  sysPath,
+		metadata:    metadata,
+		deleted:     false,
+		wal:         wal,
+		dirFilePath: filePath,
 	}
 	err = d.save()
 	if err != nil {
@@ -126,11 +127,16 @@ func (d *DxDir) Metadata() Metadata {
 }
 
 // DxPath return the DxPath of the Dxdir
-func (d *DxDir) DxPath() DxPath {
+func (d *DxDir) DxPath() storage.DxPath {
 	d.lock.RLock()
 	defer d.lock.RUnlock()
 
 	return d.metadata.DxPath
+}
+
+// filePath return the actual dxdir file path of a dxdir.
+func (d *DxDir) FilePath() string {
+	return string(d.dirFilePath)
 }
 
 // UpdateMetadata update the metadata with the given metadata.
@@ -149,6 +155,6 @@ func (d *DxDir) UpdateMetadata(metadata Metadata) error {
 	d.metadata.TimeModify = metadata.TimeModify
 	d.metadata.NumStuckSegments = metadata.NumStuckSegments
 
-	// DxPath field should never be updated
+	// DxPath and RootPath field should never be updated
 	return d.save()
 }

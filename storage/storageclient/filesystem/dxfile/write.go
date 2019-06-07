@@ -58,7 +58,7 @@ func (df *DxFile) saveAll() error {
 }
 
 // rename create a series of transactions to rename the file to a new file
-func (df *DxFile) rename(dxPath string, newFilePath string) error {
+func (df *DxFile) rename(dxPath storage.DxPath, newFilePath storage.SysPath) error {
 	if df.deleted {
 		return errors.New("cannot rename the file: file already deleted")
 	}
@@ -203,7 +203,7 @@ func (df *DxFile) createMetadataHostTableUpdate() ([]storage.FileUpdate, error) 
 // segmentShift shift Segment in persist file to the end of the persist file to give space for hostTable.
 // Return the corresponding update and the underlying error.
 func (df *DxFile) segmentShift(targetHostTableSize uint64) ([]storage.FileUpdate, error) {
-	f, err := os.OpenFile(df.filePath, os.O_RDONLY, 0777)
+	f, err := os.OpenFile(string(df.filePath), os.O_RDONLY, 0777)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open the file %v: %v", df.filePath, err)
 	}

@@ -5,11 +5,12 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/log"
 	"os"
 	"time"
 
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
@@ -25,8 +26,8 @@ type (
 		SectorSize uint64 // ShardSize is the size for one shard, which is by default 4MiB
 
 		// path related
-		LocalPath string // Local path is the on-disk location for uploaded files
-		DxPath    string // DxPath is the user specified dxpath
+		LocalPath storage.SysPath // Local path is the on-disk location for uploaded files
+		DxPath    storage.DxPath  // DxPath is the user specified dxpath
 
 		// Encryption
 		CipherKeyCode uint8  // cipher key code defined in cipher package
@@ -81,14 +82,14 @@ type (
 )
 
 // LocalPath return the local path of a file
-func (df *DxFile) LocalPath() string {
+func (df *DxFile) LocalPath() storage.SysPath {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	return df.metadata.LocalPath
 }
 
 // SetLocalPath change the value of local path and save to disk
-func (df *DxFile) SetLocalPath(path string) error {
+func (df *DxFile) SetLocalPath(path storage.SysPath) error {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
@@ -97,10 +98,17 @@ func (df *DxFile) SetLocalPath(path string) error {
 }
 
 // DxPath return dxfile.metadata.DxPath
-func (df *DxFile) DxPath() string {
+func (df *DxFile) DxPath() storage.DxPath {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 	return df.metadata.DxPath
+}
+
+// FilePath return the actual file path of the dxfile
+func (df *DxFile) FilePath() string {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	return string(df.filePath)
 }
 
 // FileSize return the file size of the dxfile
