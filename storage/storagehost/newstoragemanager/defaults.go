@@ -27,3 +27,9 @@ const (
 	// processInterval is the time interval between two attempt to process a transaction
 	processInterval = time.Second
 )
+
+const (
+	// target is the process target
+	targetFix uint8 = iota
+	targetApply
+)

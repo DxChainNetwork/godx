@@ -83,7 +83,7 @@ func (sm *storageManager) Start() (err error) {
 
 // loopProcessTxn loops processing the transaction, until failed for numConsecutiveFailsRelease times,
 // or the processing succeed.
-func (sm *storageManager) loopProcessTxn(txn *writeaheadlog.Transaction) {
+func (sm *storageManager) loopProcessTxn(txn *writeaheadlog.Transaction, target uint8) {
 	upErr := newUpdateError()
 	// decode the update from transaction
 	up, err := decodeFromTransaction(txn)
@@ -108,7 +108,8 @@ func (sm *storageManager) loopProcessTxn(txn *writeaheadlog.Transaction) {
 		// If the storage manager has been stopped. reverse the transaction and
 		// return
 		if err == errStopped {
-			upErr = upErr.addReverseError(up.reverse(sm))
+			err = up.reverse(sm)
+			upErr = upErr.addReverseError(err)
 			return
 		}
 		// If there is no error happened, clear the previous error and return
