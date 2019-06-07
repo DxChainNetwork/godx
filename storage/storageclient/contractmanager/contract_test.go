@@ -56,15 +56,199 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 }
 
 func TestContractManager_MaintainExpiration(t *testing.T) {
+	cm, err := createNewContractManager()
+	if err != nil {
+		t.Fatalf("failed to create contract manager: %s", err.Error())
+	}
 
+	cm.blockHeight = 100
+
+	// insert data into active contracts
+	amount := 1000
+	if testing.Short() {
+		amount = 10
+	}
+	defer cm.activeContracts.Close()
+	defer cm.activeContracts.EmptyDB()
+
+	// create and insert expired contracts
+	var expiredContracts []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		expiredContract := randomContractGenerator(cm.blockHeight / 2)
+		_, err := cm.activeContracts.InsertContract(expiredContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+		expiredContracts = append(expiredContracts, expiredContract)
+	}
+	// create renew contracts
+	var renewedContracts []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		renewedContract := randomContractGenerator(cm.blockHeight * 2)
+		_, err := cm.activeContracts.InsertContract(renewedContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+		cm.renewedTo[renewedContract.ID] = storageContractIDGenerator()
+		renewedContracts = append(renewedContracts, renewedContract)
+	}
+
+	// create active contracts
+	var activeContracts []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		activeContract := randomContractGenerator(cm.blockHeight * 2)
+		_, err := cm.activeContracts.InsertContract(activeContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+		activeContracts = append(activeContracts, activeContract)
+	}
+
+	// maintain expiration
+	cm.maintainExpiration()
+
+	// validate the expire set
+	for _, contract := range expiredContracts {
+		if _, exists := cm.expiredContracts[contract.ID]; !exists {
+			t.Fatalf("the expired contract is not in the expired contracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); exists {
+			t.Fatalf("the expired contract should not be in the active contracts list")
+		}
+	}
+
+	for _, contract := range renewedContracts {
+		if _, exists := cm.expiredContracts[contract.ID]; !exists {
+			t.Fatalf("the renewed contract is not in the expired contracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); exists {
+			t.Fatalf("the renewed contract should not be in the active contracts list")
+		}
+	}
+
+	for _, contract := range activeContracts {
+		if _, exists := cm.expiredContracts[contract.ID]; exists {
+			t.Fatalf("the expired contract is supposed not to be contained in the expiredContracts mapping list")
+		}
+		if _, exists := cm.activeContracts.Acquire(contract.ID); !exists {
+			t.Fatalf("the active contract should be stored in the active contracts list")
+		}
+	}
 }
 
 func TestContractManager_RemoveDuplications(t *testing.T) {
+	cm, err := createNewContractManager()
+	if err != nil {
+		t.Fatalf("failed to create contract manager: %s", err.Error())
+	}
+
+	cm.blockHeight = 100
+
+	// insert data into active contracts
+	amount := 1000
+	if testing.Short() {
+		amount = 10
+	}
+	defer cm.activeContracts.Close()
+	defer cm.activeContracts.EmptyDB()
+
+	// start to generate data
+	var enodeIDList []enode.ID
+	var oldestContractSet []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		// generate old contracts
+		enodeID := randomEnodeIDGenerator()
+		enodeIDList = append(enodeIDList, enodeID)
+		oldContract := randomDuplicateContractGenerator(200, enodeID)
+
+		// insert old contract
+		_, err := cm.activeContracts.InsertContract(oldContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+
+		// append to oldestContractSet list
+		oldestContractSet = append(oldestContractSet, oldContract)
+	}
+
+	// generate / insert old contracts 2
+	var olderContractSet []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		// generate old contracts
+		oldContract := randomDuplicateContractGenerator(300, enodeIDList[i])
+
+		// insert old contract
+		_, err := cm.activeContracts.InsertContract(oldContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+
+		// append to olderContractSet list
+		olderContractSet = append(olderContractSet, oldContract)
+	}
+
+	// generate newest contracts set
+	var newestContractSet []contractset.ContractHeader
+	for i := 0; i < amount; i++ {
+		newestContract := randomDuplicateContractGenerator(600, enodeIDList[i])
+
+		// insert newest contract
+		_, err := cm.activeContracts.InsertContract(newestContract, randomRootsGenerator(10))
+		if err != nil {
+			t.Fatalf("failed to insert contract: %s", err.Error())
+		}
+
+		// append to newest contract set list
+		newestContractSet = append(newestContractSet, newestContract)
+	}
+	// remove duplications
+	cm.removeDuplications()
 
 }
 
 func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 
+}
+
+/*
+ _____  _____  _______      __  _______ ______          ______ _    _ _   _  _____ _______ _____ ____  _   _
+|  __ \|  __ \|_   _\ \    / /\|__   __|  ____|        |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
+| |__) | |__) | | |  \ \  / /  \  | |  | |__           | |__  | |  | |  \| | |       | |    | || |  | |  \| |
+|  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|          |  __| | |  | | . ` | |       | |    | || |  | | . ` |
+| |    | | \ \ _| |_   \  / ____ \| |  | |____         | |    | |__| | |\  | |____   | |   _| || |__| | |\  |
+|_|    |_|  \_\_____|   \/_/    \_\_|  |______|        |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
+
+*/
+
+func randomDuplicateContractGenerator(contractStartHeight uint64, id enode.ID) (ch contractset.ContractHeader) {
+	// generate the private key
+	ch = contractset.ContractHeader{
+		ID:      storageContractIDGenerator(),
+		EnodeID: id,
+		LatestContractRevision: types.StorageContractRevision{
+			ParentID:          randomHashGenerator(),
+			NewRevisionNumber: 15,
+			NewValidProofOutputs: []types.DxcoinCharge{
+				{randomAddressGenerator(), big.NewInt(0)},
+			},
+			UnlockConditions: types.UnlockConditions{
+				PublicKeys: []ecdsa.PublicKey{
+					{nil, nil, nil},
+					{nil, nil, nil},
+				},
+			},
+		},
+		PrivateKey:   "12345678910",
+		StartHeight:  contractStartHeight,
+		DownloadCost: common.RandomBigInt(),
+		UploadCost:   common.RandomBigInt(),
+		TotalCost:    common.RandomBigInt(),
+		StorageCost:  common.RandomBigInt(),
+		GasFee:       common.RandomBigInt(),
+		ContractFee:  common.RandomBigInt(),
+	}
+
+	return
 }
 
 func randomCanceledContractGenerator() (ch contractset.ContractHeader) {
@@ -103,43 +287,13 @@ func randomCanceledContractGenerator() (ch contractset.ContractHeader) {
 	return
 }
 
-func randomActiveContractGenerator() (ch contractset.ContractHeader) {
+func randomContractGenerator(contractEndHeight uint64) (ch contractset.ContractHeader) {
 	// generate the private key
 	ch = contractset.ContractHeader{
 		ID:      storageContractIDGenerator(),
 		EnodeID: randomEnodeIDGenerator(),
 		LatestContractRevision: types.StorageContractRevision{
-			ParentID:          randomHashGenerator(),
-			NewRevisionNumber: 15,
-			NewValidProofOutputs: []types.DxcoinCharge{
-				{randomAddressGenerator(), big.NewInt(0)},
-			},
-			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
-				},
-			},
-		},
-		PrivateKey:   "12345678910",
-		StartHeight:  100,
-		DownloadCost: common.RandomBigInt(),
-		UploadCost:   common.RandomBigInt(),
-		TotalCost:    common.RandomBigInt(),
-		StorageCost:  common.RandomBigInt(),
-		GasFee:       common.RandomBigInt(),
-		ContractFee:  common.RandomBigInt(),
-	}
-
-	return
-}
-
-func randomExpiredContractGenerator() (ch contractset.ContractHeader) {
-	// generate the private key
-	ch = contractset.ContractHeader{
-		ID:      storageContractIDGenerator(),
-		EnodeID: randomEnodeIDGenerator(),
-		LatestContractRevision: types.StorageContractRevision{
+			NewWindowStart:    contractEndHeight,
 			ParentID:          randomHashGenerator(),
 			NewRevisionNumber: 15,
 			NewValidProofOutputs: []types.DxcoinCharge{

@@ -40,7 +40,8 @@ type ContractManager struct {
 	// NOTE: hostToContract mapping contains both expired and active contracts
 	hostToContract map[enode.ID]storage.ContractID
 
-	// contract renew related
+	// contract renew related, where renewed from connect [new] -> old
+	// and renewed to connect [old] -> new
 	renewedFrom  map[storage.ContractID]storage.ContractID
 	renewedTo    map[storage.ContractID]storage.ContractID
 	renewing     map[storage.ContractID]bool

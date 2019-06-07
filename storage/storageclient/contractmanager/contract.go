@@ -66,6 +66,8 @@ func (cm *ContractManager) resumeContracts() (err error) {
 // 		1. current block height is greater than the contract's endHeight
 // 		2. the contract has been renewed
 func (cm *ContractManager) maintainExpiration() {
+	var expiredContractsIDs []storage.ContractID
+
 	// get the current block height
 	cm.lock.RLock()
 	currentBh := cm.blockHeight
@@ -80,20 +82,19 @@ func (cm *ContractManager) maintainExpiration() {
 		expired := currentBh > contract.EndHeight
 
 		// update the expired contract list
-		var expiredContractsIDs []storage.ContractID
 		if expired || renewed {
 			cm.updateExpiredContracts(contract)
 			expiredContractsIDs = append(expiredContractsIDs, contract.ID)
 		}
-
-		// save the updated data information
-		if err := cm.saveSettings(); err != nil {
-			cm.log.Error("failed to save the expired contracts updates while checking the expired contract")
-		}
-
-		// delete the expired contract from the contract set
-		cm.delFromContractSet(expiredContractsIDs)
 	}
+
+	// save the updated data information
+	if err := cm.saveSettings(); err != nil {
+		cm.log.Error("failed to save the expired contracts updates while checking the expired contract")
+	}
+
+	// delete the expired contract from the contract set
+	cm.delFromContractSet(expiredContractsIDs)
 }
 
 // removeDuplications will loop through all active contracts, and find duplicated contracts -> multiple
@@ -123,7 +124,7 @@ func (cm *ContractManager) removeDuplications() {
 		}
 
 		// if exists, compare the start height, the larger the start height is, the newer the contract is
-		// if contract is newer, has the larger start height
+		// newer contract has the larger start height
 		if existedContract.StartHeight < contract.StartHeight {
 			duplicatedContractIDs = append(duplicatedContractIDs, existedContract.ID)
 			cm.updateExpiredContracts(existedContract)
@@ -137,8 +138,12 @@ func (cm *ContractManager) removeDuplications() {
 		cm.updateHostToContractID(contract)
 	}
 
+	fmt.Println("trying to update the contract renew")
+
 	// update contract renew
 	cm.updateContractRenew(hostToContracts)
+
+	fmt.Println("finished updating the contract renew")
 
 	// save the update data information
 	if err := cm.saveSettings(); err != nil {
@@ -234,6 +239,8 @@ func (cm *ContractManager) maintainContractStatus() (err error) {
 	return
 }
 
+// updateContractRenew will update the renew to and renew from list. One host can map to multiple
+// contracts.
 func (cm *ContractManager) updateContractRenew(hostToContracts map[enode.ID][]storage.ContractMetaData) {
 	for _, contracts := range hostToContracts {
 		// sort the contracts, the newer the contract is, it will be nearer to the front of the slice
@@ -249,14 +256,15 @@ func (cm *ContractManager) updateContractRenew(hostToContracts map[enode.ID][]st
 		}
 
 		// update the renewedTo (old contract renewed to new contract)
-		for i := len(contracts) - 1; i > 0; i++ {
+		for i := len(contracts) - 1; i > 1; i-- {
 			cm.lock.Lock()
-			cm.renewedTo[contracts[i].ID] = contracts[i+1].ID
+			cm.renewedTo[contracts[i].ID] = contracts[i-1].ID
 			cm.lock.Unlock()
 		}
 	}
 }
 
+// updateExpireContracts will place the contract into expired contracts list
 func (cm *ContractManager) updateExpiredContracts(contract storage.ContractMetaData) {
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
@@ -269,6 +277,8 @@ func (cm *ContractManager) updateHostToContractID(contract storage.ContractMetaD
 	cm.hostToContract[contract.EnodeID] = contract.ID
 }
 
+// delFromContractSet will delete a list of contract from the activeContracts list
+// based on the list of contract id provided
 func (cm *ContractManager) delFromContractSet(ids []storage.ContractID) {
 	for _, id := range ids {
 		contract, exists := cm.activeContracts.Acquire(id)
