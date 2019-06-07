@@ -90,7 +90,7 @@ func (t *Transaction) threadedInit() {
 	t.status = txnStatusWritten
 
 	// write the header page
-	if err := t.writeHeaderPage(false); err != nil {
+	if err := t.writeHeaderPage(true); err != nil {
 		t.InitErr = fmt.Errorf("writing the first page to disk failed: %v", err)
 		return
 	}
@@ -206,6 +206,12 @@ func (t *Transaction) append(ops []Operation) (err error) {
 		return fmt.Errorf("writing the last page to disk failed: %v", err)
 	}
 
+	// write check sum
+	checksum := t.checksum()
+	if _, err := t.wal.logFile.WriteAt(checksum[:], int64(t.headPage.offset+16)); err != nil {
+		return fmt.Errorf("writing the check sum to disk failed %v", err)
+	}
+
 	// Append the ops to the transaction
 	t.Operations = append(t.Operations, ops...)
 	return nil
@@ -311,6 +317,11 @@ func (t *Transaction) Release() error {
 	}
 	atomic.AddInt64(&t.wal.numUnfinishedTxns, -1)
 	return nil
+}
+
+// Committed return the status of whether the transaction is committed or not
+func (t *Transaction) Committed() bool {
+	return t.status != txnStatusWritten
 }
 
 // checksum calculate the BLAKE2b-256 hash of a Transaction

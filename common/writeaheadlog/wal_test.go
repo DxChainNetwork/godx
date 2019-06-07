@@ -105,9 +105,12 @@ func TestCommitFailed(t *testing.T) {
 	}
 	defer recoveredWal.Close()
 
-	if len(recoveredTxns) != 0 {
+	if len(recoveredTxns) != 1 {
 		t.Errorf("Number of updates after restart didn't match. Expected %v, but was %v",
-			0, len(recoveredTxns))
+			1, len(recoveredTxns))
+	}
+	if recoveredTxns[0].Committed() {
+		t.Errorf("recoveredTxn should not be committed")
 	}
 }
 
