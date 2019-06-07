@@ -14,15 +14,15 @@ type (
 		// atomicUnavailable mark if the folder is damaged or not
 		atomicUnavailable uint64
 
-		// path represent the path of the folder
+		// Path represent the Path of the folder
 		path string
-		// usage mark the usage, every 64 sector come to form a BitVector
+		// Usage mark the Usage, every 64 sector come to form a BitVector
 		// represent in decimal, but use as binary
 		usage []BitVector
 
 		// TODO: Remove or add back freeSectors
 		//// free Sectors mark the sector actually free but marked as used
-		//// in usage
+		//// in Usage
 		//freeSectors map[sectorID]uint32
 
 		// sector is the number of sector in this folder
@@ -34,9 +34,9 @@ type (
 
 	// storageFolderPersist defines the persist data to be stored in database
 	storageFolderPersist struct {
-		path       string
-		usage      []BitVector
-		numSectors uint64
+		Path       string
+		Usage      []BitVector
+		NumSectors uint64
 	}
 
 	folderID uint32
@@ -45,9 +45,9 @@ type (
 // EncodeRLP defines the encode rule of the storage folder
 func (sf *storageFolder) EncodeRLP(w io.Writer) (err error) {
 	sfp := storageFolderPersist{
-		path:       sf.path,
-		usage:      sf.usage,
-		numSectors: sf.numSectors,
+		Path:       sf.path,
+		Usage:      sf.usage,
+		NumSectors: sf.numSectors,
 	}
 	return rlp.Encode(w, sfp)
 }
@@ -59,6 +59,6 @@ func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
 	if err = st.Decode(&sfp); err != nil {
 		return err
 	}
-	sf.path, sf.usage, sf.numSectors = sfp.path, sfp.usage, sfp.numSectors
+	sf.path, sf.usage, sf.numSectors = sfp.Path, sfp.Usage, sfp.NumSectors
 	return nil
 }

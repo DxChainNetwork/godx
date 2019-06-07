@@ -53,9 +53,9 @@ func (db *database) close() {
 	db.lvl.Close()
 }
 
-// getSectorSalt return the sector salt and return.
+// getOrCreateSectorSalt return the sector salt and return.
 // If previously the sector salt is not stored, create a new one and return
-func (db *database) getSectorSalt() (salt sectorSalt, err error) {
+func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 	key := makeKey(sectorSaltKey)
 	var exist bool
 	if exist, err = db.lvl.Has(key, nil); !exist || err != nil {
@@ -94,7 +94,7 @@ func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 }
 
 // loadStorageFolder get the storage folder with the index from db
-func (db *database) loadStorageFolder(index uint32) (sf *storageFolder, err error) {
+func (db *database) loadStorageFolder(index folderID) (sf *storageFolder, err error) {
 	// make the folder key
 	folderKey := makeKey(prefixFolder, strconv.Itoa(int(index)))
 	folderBytes, err := db.lvl.Get(folderKey, nil)
@@ -116,7 +116,7 @@ func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder
 	for iter.Next() {
 		// get the folder index from key
 		key := string(iter.Key())
-		folderIndex := strings.TrimPrefix(key, prefixFolder+"_")
+		folderIndexStr := strings.TrimPrefix(key, prefixFolder+"_")
 		// get the folder content
 		sfByte := iter.Value()
 		var sf *storageFolder
@@ -125,9 +125,14 @@ func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder
 			fullErr = common.ErrCompose(fullErr, err)
 			continue
 		}
-		sf.id = folderIndex
+		id, err := strconv.Atoi(folderIndexStr)
+		if err != nil {
+			fullErr = common.ErrCompose(fullErr, err)
+			continue
+		}
+		sf.id = folderID(id)
 		// Add the folder to map
-		folders[folderIndex] = sf
+		folders[folderID(id)] = sf
 	}
 	return
 }

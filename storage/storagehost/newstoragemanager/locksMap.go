@@ -38,32 +38,38 @@ func (sl *sectorLock) tryLock() bool {
 	return sl.tl.TryToLock()
 }
 
+func newSectorLocks() (sls *sectorLocks) {
+	return &sectorLocks{
+		locks: make(map[sectorID]*sectorLock),
+	}
+}
+
 // lock tries to lock the lock with the specified id. Block until the lock is released
-func (sl *sectorLocks) lock(id sectorID) {
-	sl.lk.Lock()
-	defer sl.lk.Unlock()
+func (sls *sectorLocks) lock(id sectorID) {
+	sls.lk.Lock()
+	defer sls.lk.Unlock()
 	// If the id is in the map, increment the waiting.
 	// If not in map, create a new lock
-	l, exist := sl.locks[id]
+	l, exist := sls.locks[id]
 	if exist {
 		atomic.AddUint32(&l.waiting, 1)
 	} else {
 		l := &sectorLock{
 			waiting: 1,
 		}
-		sl.locks[id] = l
+		sls.locks[id] = l
 	}
 
 	l.lock()
 }
 
 // unlock unlock the sector with the id
-func (sl *sectorLocks) unlock(id sectorID) {
-	sl.lk.Lock()
-	defer sl.lk.Unlock()
+func (sls *sectorLocks) unlock(id sectorID) {
+	sls.lk.Lock()
+	defer sls.lk.Unlock()
 
 	// If the lock have waiting == 0, delete the lock from the map
-	l, exist := sl.locks[id]
+	l, exist := sls.locks[id]
 	if !exist {
 		// unlock a not locked sectorLock, simply return
 		return
@@ -71,7 +77,7 @@ func (sl *sectorLocks) unlock(id sectorID) {
 	if l.waiting <= 1 {
 		// If the waiting number is smaller or equal to one, simply release the lock
 		// from the map
-		delete(sl.locks, id)
+		delete(sls.locks, id)
 	}
 	l.waiting -= 1
 	l.unlock()

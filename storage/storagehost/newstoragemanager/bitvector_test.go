@@ -31,37 +31,37 @@ func TestIsFree(t *testing.T) {
 }
 
 // TestSetUsage check if the function could clear
-// the usage and update the input vector
+// the Usage and update the input vector
 func TestSetUsage(t *testing.T) {
 	// take 10 turns and generate 10 random number
 	for i := 0; i < 10; i++ {
 		// step to avoid overflow
 		var vec = BitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
-			// set every usage
+			// set every Usage
 			vec.setUsage(uint16(i))
 		}
-		// after all usage been set, the result should be the maximum uin64
+		// after all Usage been set, the result should be the maximum uin64
 		if vec != math.MaxUint64 {
-			t.Error("some usage may not be set")
+			t.Error("some Usage may not be set")
 		}
 	}
 }
 
 // TestClearUsage check if the function could clear
-// a usage and update the number
+// a Usage and update the number
 func TestClearUsage(t *testing.T) {
 	// take 10 turns and generate random number
 	for i := 0; i < 10; i++ {
 		var vec = BitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
-			// clear the usage on each bit
+			// clear the Usage on each bit
 			vec.clearUsage(uint16(i))
 		}
 
-		// after all usage been cleared, vec should be 0
+		// after all Usage been cleared, vec should be 0
 		if vec != 0 {
-			t.Error("some usage may not be set")
+			t.Error("some Usage may not be set")
 		}
 	}
 }
