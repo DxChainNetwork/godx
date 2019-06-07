@@ -400,12 +400,15 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 
 func (cm *ContractManager) managedRenew(contract *contractset.Contract, contractFunding *big.Int, newEndHeight uint64, allowance proto.Allowance, entry proto.StorageHostEntry, hostEnodeUrl string, clientPublic ecdsa.PublicKey) (storage.ContractMetaData, error) {
 
-	status, ok := cm.managedContractStatus(contract.Metadata().ID)
+	//Check if the storage contract ID meets the renew condition
+	status, ok := cm.managedContractStatus(contract.Header().ID)
 	if !ok || !status.RenewAbility {
 		return storage.ContractMetaData{}, errors.New("Condition not satisfied")
 	}
 
 	cm.lock.RLock()
+	//Calculate the required parameters
+	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
 	params := proto.ContractParams{
 		Allowance:       allowance,
 		Host:            entry,
@@ -426,7 +429,7 @@ func (cm *ContractManager) managedRenew(contract *contractset.Contract, contract
 }
 
 func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
-
+	//Concurrently secure access to contract status
 	mc, exists := cm.activeContracts.Acquire(id)
 	if !exists {
 		return storage.ContractStatus{}, false
