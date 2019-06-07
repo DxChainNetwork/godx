@@ -137,6 +137,7 @@ func (t *Transaction) append(ops []Operation) (err error) {
 	}
 
 	// Marshal the data
+
 	data := marshalOps(ops)
 	if err != nil {
 		return err
@@ -186,6 +187,11 @@ func (t *Transaction) append(ops []Operation) (err error) {
 			return fmt.Errorf("writing the last page to disk failed: %v", err)
 		}
 		t.Operations = append(t.Operations, ops...)
+
+		checksum := t.checksum()
+		if _, err := t.wal.logFile.WriteAt(checksum[:], int64(t.headPage.offset+16)); err != nil {
+			return fmt.Errorf("writing the check sum to disk failed %v", err)
+		}
 		return nil
 	}
 
@@ -205,15 +211,14 @@ func (t *Transaction) append(ops []Operation) (err error) {
 	if err := t.writePage(lastPage); err != nil {
 		return fmt.Errorf("writing the last page to disk failed: %v", err)
 	}
+	// Append the ops to the transaction
+	t.Operations = append(t.Operations, ops...)
 
 	// write check sum
 	checksum := t.checksum()
 	if _, err := t.wal.logFile.WriteAt(checksum[:], int64(t.headPage.offset+16)); err != nil {
 		return fmt.Errorf("writing the check sum to disk failed %v", err)
 	}
-
-	// Append the ops to the transaction
-	t.Operations = append(t.Operations, ops...)
 	return nil
 }
 
@@ -341,10 +346,7 @@ func (t *Transaction) checksum() []byte {
 		}
 		page.marshal(buf[:0])
 		_, _ = h.Write(buf)
-		//fmt.Println(buf)
 	}
-	//fmt.Println(h.Sum(buf[:0]))
-	//fmt.Println()
 	var sum [checksumSize]byte
 	copy(sum[:], h.Sum(buf[:0]))
 	return sum[:]

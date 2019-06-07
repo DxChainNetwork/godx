@@ -59,6 +59,7 @@ nextTxn:
 			// Transaction with commit status and uncommitted status will be returned
 			continue
 		}
+
 		// decode metadata and first page
 		seq := binary.LittleEndian.Uint64(data[i+8:])
 		var diskChecksum [checksumSize]byte
