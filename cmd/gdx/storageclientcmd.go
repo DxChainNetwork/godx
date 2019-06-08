@@ -71,8 +71,8 @@ var storageClientCommand = cli.Command{
 			Flags: []cli.Flag{
 				utils.DownloadLengthFlag,
 				utils.DownloadOffsetFlag,
-				utils.DownloadDestinationFlag,
-				utils.DownloadDxFilePathFlag,
+				utils.DownloadLocalPathFlag,
+				utils.DownloadRemotePathFlag,
 			},
 			Description: `download file by sync mode`,
 		},

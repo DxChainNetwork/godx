@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"os"
 )
@@ -23,7 +24,7 @@ type Snapshot struct {
 	fileMode    os.FileMode
 	segments    []Segment
 	hostTable   map[enode.ID]bool
-	dxPath      string
+	dxPath      storage.DxPath
 }
 
 // SnapshotReader is the structure that allow reading the raw DxFile content
@@ -40,7 +41,7 @@ func (df *DxFile) SnapshotReader() (*SnapshotReader, error) {
 		df.lock.RUnlock()
 		return nil, fmt.Errorf("file has been deleted")
 	}
-	f, err := os.Open(df.filePath)
+	f, err := os.Open(string(df.filePath))
 	if err != nil {
 		df.lock.RUnlock()
 		return nil, err
@@ -140,7 +141,7 @@ func (s *Snapshot) SectorSize() uint64 {
 }
 
 // DxPath return the DxPath
-func (s *Snapshot) DxPath() string {
+func (s *Snapshot) DxPath() storage.DxPath {
 	return s.dxPath
 }
 

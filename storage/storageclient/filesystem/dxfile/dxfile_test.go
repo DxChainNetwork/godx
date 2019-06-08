@@ -6,73 +6,16 @@ package dxfile
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 )
-
-var testDir = tempDir("dxfile")
-
-// newTestDxFile generate a random DxFile used for testing. The generated DxFile segments are empty
-func newTestDxFile(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
-	ec, _ := erasurecode.New(ecCode, minSectors, numSectors, 64)
-	ck, _ := crypto.GenerateCipherKey(crypto.GCMCipherCode)
-	filename := filepath.Join(testDir, t.Name())
-	wal, txns, _ := writeaheadlog.New(filepath.Join(testDir, t.Name()+".wal"))
-	for _, txn := range txns {
-		txn.Release()
-	}
-	df, err := New(filename, t.Name(), filepath.Join("~/tmp", t.Name()), wal, ec, ck, fileSize, 0777)
-	if err != nil {
-		return nil, err
-	}
-	return df, nil
-}
-
-// newTestDxFileWithSegments generate a random DxFile with some segment data.
-func newTestDxFileWithSegments(t *testing.T, fileSize uint64, minSectors, numSectors uint32, ecCode uint8) (*DxFile, error) {
-	df, err := newTestDxFile(t, fileSize, minSectors, numSectors, ecCode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; uint64(i) != df.metadata.numSegments(); i++ {
-		seg := randomSegment(df.metadata.NumSectors)
-		seg.Index = uint64(i)
-		df.segments[i] = seg
-		for _, sectors := range seg.Sectors {
-			for _, sector := range sectors {
-				df.hostTable[sector.HostID] = true
-			}
-		}
-	}
-	if err = df.saveAll(); err != nil {
-		return nil, err
-	}
-	return df, nil
-}
-
-// tempDir removes and creates the folder named dxfile under the temp directory.
-func tempDir(dirs ...string) string {
-	path := filepath.Join(os.TempDir(), "dxfile", filepath.Join(dirs...))
-	err := os.RemoveAll(path)
-	if err != nil {
-		panic(fmt.Sprintf("cannot remove all files under %v", path))
-	}
-	err = os.MkdirAll(path, 0777)
-	if err != nil {
-		panic(fmt.Sprintf("cannot create directory %v", path))
-	}
-	return path
-}
 
 // TestPruneSegment test df.pruneSegment
 func TestPruneSegment(t *testing.T) {
@@ -151,7 +94,11 @@ func TestAddSector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	filename := filepath.Join(testDir, t.Name())
+	path, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := testDir.Join(path)
 	wal := df.wal
 	recoveredDF, err := readDxFile(filename, wal)
 	if err != nil {
@@ -179,8 +126,12 @@ func TestDelete(t *testing.T) {
 	if err = df.Delete(); err != nil {
 		t.Fatal(err)
 	}
-	filename := filepath.Join(testDir, t.Name())
-	if _, err := os.Stat(filename); err == nil || !os.IsNotExist(err) {
+	path, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := testDir.Join(path)
+	if _, err := os.Stat(string(filename)); err == nil || !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
 	if !df.Deleted() {
@@ -199,11 +150,15 @@ func TestMarkAllUnhealthySegmentsAsStuck(t *testing.T) {
 		}
 		for i, seg := range df.segments {
 			segHealth := df.segmentHealth(i, table)
-			if segHealth < repairHealthThreshold && !seg.Stuck {
+			if segHealth < 100 && !seg.Stuck {
 				t.Errorf("Segment with health %d should have been marked as Stuck", segHealth)
 			}
 		}
-		filename := filepath.Join(testDir, t.Name())
+		path, err := storage.NewDxPath(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := testDir.Join(path)
 		wal := df.wal
 		recoveredDF, err := readDxFile(filename, wal)
 		if err != nil {
@@ -230,7 +185,11 @@ func TestMarkAllHealthySegmentsAsUnstuck(t *testing.T) {
 				t.Errorf("Segment with health %d should have been marked as non-Stuck", segHealth)
 			}
 		}
-		filename := filepath.Join(testDir, t.Name())
+		path, err := storage.NewDxPath(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := testDir.Join(path)
 		wal := df.wal
 		recoveredDF, err := readDxFile(filename, wal)
 		if err != nil {
@@ -311,7 +270,11 @@ func TestSetStuckByIndex(t *testing.T) {
 		if df.GetStuckByIndex(0) != test.setStuck {
 			t.Errorf("test %d: Stuck not expected. Expect %v, Got %v", i, test.setStuck, df.segments[0].Stuck)
 		}
-		filename := filepath.Join(testDir, t.Name())
+		path, err := storage.NewDxPath(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := testDir.Join(path)
 		recoveredDF, err := readDxFile(filename, df.wal)
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
@@ -417,14 +380,22 @@ func TestRename(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newDxFile := t.Name() + "2"
-	newDxFilePath := filepath.Join(testDir, newDxFile)
+	newDxFile, err := storage.NewDxPath(t.Name() + "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	newDxFilePath := testDir.Join(newDxFile)
+
 	err = df.Rename(newDxFile, newDxFilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldDxFilePath := filepath.Join(testDir, t.Name())
-	if _, err := os.Stat(oldDxFilePath); err == nil {
+	oldDxFile, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldDxFilePath := testDir.Join(oldDxFile)
+	if _, err := os.Stat(string(oldDxFilePath)); err == nil {
 		t.Errorf("file %v should have been deleted", oldDxFilePath)
 	}
 
@@ -464,7 +435,14 @@ func TestApplyCachedHealthMetadata(t *testing.T) {
 	if df.metadata.StuckHealth != chm.StuckHealth {
 		t.Errorf("stuckHealth not updated: expect %v, got %v", chm.StuckHealth, df.metadata.StuckHealth)
 	}
-	recoveredDF, err := readDxFile(filepath.Join(testDir, t.Name()), df.wal)
+
+	path, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := testDir.Join(path)
+
+	recoveredDF, err := readDxFile(filename, df.wal)
 	if err != nil {
 		t.Fatal(err)
 	}
