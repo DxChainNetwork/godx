@@ -114,7 +114,7 @@ type Session struct {
 
 	version int
 
-	host       HostInfo
+	host       *HostInfo
 	clientDisc chan error
 }
 
@@ -136,8 +136,12 @@ func (s *Session) ClientDiscChan() chan error {
 	return s.clientDisc
 }
 
+func (s *Session) SetHostInfo(hi *HostInfo) {
+	s.host = hi
+}
+
 func (s *Session) HostInfo() *HostInfo {
-	return &s.host
+	return s.host
 }
 
 func (s *Session) getConn() net.Conn {
@@ -247,4 +251,8 @@ func (s *Session) SendErrorMsg(err error) error {
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
 	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+}
+
+func (s *Session) IsClosed() bool {
+	return s.Peer.IsClosed()
 }

@@ -15,7 +15,7 @@ import (
 var (
 	// errObligationLocked is returned if the file contract being requested is
 	// currently locked. The lock can be in place if there is a storage proof
-	// being submitted, if there is another renter altering the contract, or if
+	// being submitted, if there is another storage client altering the contract, or if
 	// there have been network connections with have not resolved yet.
 	errObligationLocked = errors.New("the requested file contract is currently locked")
 )

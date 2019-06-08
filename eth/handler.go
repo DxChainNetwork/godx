@@ -364,7 +364,12 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		defer pm.removeStorageContactSession(p.id)
 
 		if session.Inbound() {
-			return pm.eth.storageHost.HandleSession(session)
+			for {
+				if err := pm.eth.storageHost.HandleSession(session); err != nil {
+					p.Log().Debug("Storage host handle session message failed", "err", err)
+					return err
+				}
+			}
 		} else {
 			select {
 			case err := <-session.ClientDiscChan():

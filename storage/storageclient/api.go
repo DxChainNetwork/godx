@@ -4,6 +4,8 @@
 
 package storageclient
 
+import "github.com/DxChainNetwork/godx/storage"
+
 // PublicStorageClientAPI defines the object used to call eligible public APIs
 // are used to acquire information
 type PublicStorageClientAPI struct {
@@ -29,6 +31,19 @@ func (api *PublicStorageClientAPI) MemoryAvailable() uint64 {
 // MemoryLimit returns max memory allowed
 func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
+}
+
+// user upload their local files to hosts made contract with
+func (api *PublicStorageClientAPI) Upload(source string, dxPath string) string {
+	param := FileUploadParams{
+		Source: source,
+		DxPath: storage.DxPath{Path: dxPath},
+		Mode:   Override,
+	}
+	if err := api.sc.Upload(param); err != nil {
+		return err.Error()
+	}
+	return "success"
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs

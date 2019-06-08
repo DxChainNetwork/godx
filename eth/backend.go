@@ -587,7 +587,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 		s.lesServer.Start(srvr)
 	}
 
-	// Start Storage Client
+	// Start storage client
 	err := s.storageClient.Start(s, srvr, s.APIBackend)
 	if err != nil {
 		return err
@@ -670,8 +670,6 @@ func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error
 }
 
 func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	defer session.StopConnection()
-
 	if s.netRPCService == nil {
 		return fmt.Errorf("network API is not ready")
 	}
@@ -684,6 +682,11 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeUrl string) err
 	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
 		return err
 	}
+
+	if session != nil {
+		session.StopConnection()
+	}
+
 	return nil
 }
 

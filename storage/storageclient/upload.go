@@ -14,7 +14,7 @@ import (
 	"os"
 )
 
-// Upload instructs the renter to start tracking a file. The renter will
+// Upload instructs the storage client to start tracking a file. The storage client will
 // automatically upload and repair tracked files using a background loop.
 func (sc *StorageClient) Upload(up FileUploadParams) error {
 	if err := sc.tm.Add(); err != nil {
@@ -49,8 +49,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		up.ErasureCode, _ = erasurecode.New(erasurecode.ECTypeStandard, DefaultMinSectors, DefaultNumSectors)
 	}
 
-	// TODO sc.contractManager.Contracts()
-	numContracts := uint32(100) // len(sc.contractManager.Contracts())
+	numContracts := uint32(len(sc.storageHostManager.GetStorageContractSet().Contracts()))
 	requiredContracts := (up.ErasureCode.NumSectors() + up.ErasureCode.MinSectors()) / 2
 	if numContracts < requiredContracts {
 		return fmt.Errorf("not enough contracts to upload file: got %v, needed %v", numContracts, (up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors())/2)
@@ -59,7 +58,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	dirDxPath := up.DxPath
 
 	// Try to create the directory. If ErrPathOverload is returned it already exists
-	dxDirEntry, err := sc.staticDirSet.NewDxDir(dirDxPath)
+	dxDirEntry, err := sc.fileSystem.DirSet.NewDxDir(dirDxPath)
 	if err != dxdir.ErrPathOverload && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
@@ -71,7 +70,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		return fmt.Errorf("generate cipher key error: %v", err)
 	}
 	// Create the DxFile and add to client
-	entry, err := sc.staticFileSet.NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := sc.fileSystem.FileSet.NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}

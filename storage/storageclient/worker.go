@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"sync"
 	"sync/atomic"
@@ -43,8 +44,14 @@ type worker struct {
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	unprocessedSegments       []*unfinishedUploadSegment // Yet unprocessed work items.
-	uploadChan                chan struct{}              // Notifications of new work.
+	// Distribute sectors of segments index
+	// sectorIndexMap indicates that key unfinishedUploadSegment and the array of sector index
+	// sectorTaskNum indicates that the worker have number tasks of sectors waiting for uploading
+	sectorIndexMap map[*unfinishedUploadSegment][]int
+	sectorTaskNum  int32
+
+	unprocessedSegments       []*unfinishedUploadSegment // Yet unprocessed segments
+	uploadChan                chan struct{}              // Notifications of new segment
 	uploadConsecutiveFailures int                        // How many times in a row uploading has failed.
 	uploadRecentFailure       time.Time                  // How recent was the last failure?
 	uploadTerminated          bool                       // Have we stopped uploading?
@@ -56,17 +63,16 @@ type worker struct {
 
 // activateWorkerPool will grab the set of contracts from the contractManager and
 // update the worker pool to match.
-func (c *StorageClient) activateWorkerPool() {
+func (sc *StorageClient) activateWorkerPool() {
 
 	// get all contracts in client
-	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
+	contractMap := sc.storageHostManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
-		c.lock.Lock()
-		_, exists := c.workerPool[id]
+		sc.lock.Lock()
+		_, exists := sc.workerPool[id]
 		if !exists {
-
 			clientContract := storage.ClientContract{
 				ContractID:  common.Hash(id),
 				HostID:      contract.Header().EnodeID,
@@ -95,31 +101,38 @@ func (c *StorageClient) activateWorkerPool() {
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-				client:       c,
+				client:       sc,
 			}
-			c.workerPool[id] = worker
-			if err := c.tm.Add(); err != nil {
-				log.Error("storage client thread manager failed to add in activateWorkerPool", "error", err)
+			sc.workerPool[id] = worker
+
+			// start upload goroutine
+			if err := sc.tm.Add(); err != nil {
+				log.Error("storage client thread manager failed to add in upload progress", "error", err)
 				break
 			}
-			go func() {
-				defer c.tm.Done()
-				worker.workLoop()
-			}()
+			go worker.UploadWorkLoop(&sc.tm)
+
+			// start download goroutine
+			if err := sc.tm.Add(); err != nil {
+				log.Error("storage client thread manager failed to add in download progress", "error", err)
+				break
+			}
+			go worker.DownloadWorkLoop(&sc.tm)
+
 		}
-		c.lock.Unlock()
+		sc.lock.Unlock()
 	}
 
 	// Remove a worker for any worker that is not in the set of new contracts.
-	c.lock.Lock()
-	for id, worker := range c.workerPool {
+	sc.lock.Lock()
+	for id, worker := range sc.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(c.workerPool, id)
+			delete(sc.workerPool, id)
 			close(worker.killChan)
 		}
 	}
-	c.lock.Unlock()
+	sc.lock.Unlock()
 }
 
 // workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
@@ -159,7 +172,8 @@ func (w *worker) workLoop() {
 
 // We split upload and download loop into two separate goroutine, and we will retrieve all available segments once,
 // Last continue to wait for fresh segments
-func (w *worker) UploadWorkLoop() {
+func (w *worker) UploadWorkLoop(tm *threadmanager.ThreadManager) {
+	defer tm.Done()
 	defer w.killUploading()
 	for {
 		// Block util a new upload task, or a stop signal
@@ -171,17 +185,20 @@ func (w *worker) UploadWorkLoop() {
 			return
 		}
 
-		// Loop process upload task
 		for {
-			segment, sectorIndex := w.nextUploadSegment()
+			segment, sectorIndex := w.nextUploadSegment2()
 			if segment != nil {
-				go w.upload(segment, sectorIndex)
+				w.upload(segment, sectorIndex)
+			} else {
+				break
 			}
 		}
+
 	}
 }
 
-func (w *worker) DownloadWorkLoop() {
+func (w *worker) DownloadWorkLoop(tm *threadmanager.ThreadManager) {
+	defer tm.Done()
 	defer w.killDownloading()
 	for {
 		// Block util a new download task, or a stop signal
@@ -193,12 +210,9 @@ func (w *worker) DownloadWorkLoop() {
 			return
 		}
 
-		// Loop process download task
-		for {
-			downloadSegment := w.nextDownloadSegment()
-			if downloadSegment != nil {
-				go w.download(downloadSegment)
-			}
+		downloadSegment := w.nextDownloadSegment()
+		if downloadSegment != nil {
+			w.download(downloadSegment)
 		}
 	}
 }

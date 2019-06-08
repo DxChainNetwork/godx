@@ -35,7 +35,7 @@ type (
 		Host            StorageHostEntry
 	}
 
-	// An Allowance dictates how much the Renter is allowed to spend in a given
+	// An Allowance dictates how much the storage client is allowed to spend in a given
 	// period. Note that funds are spent on both storage and bandwidth
 	Allowance struct {
 		Funds       *big.Int `json:"funds"`
@@ -160,7 +160,7 @@ type (
 	}
 
 	// HostExternalSettings are the parameters advertised by the host. These
-	// are the values that the renter will request from the host in order to
+	// are the values that the storage client will request from the host in order to
 	// build its database.
 	HostExternalSettings struct {
 		// MaxBatchSize indicates the maximum size in bytes that a batch is
@@ -180,11 +180,11 @@ type (
 		WindowSize           uint64      `json:"windowsize"`
 
 		// Collateral is the amount of collateral that the host will put up for
-		// storage in 'bytes per block', as an assurance to the renter that the
+		// storage in 'bytes per block', as an assurance to the storage client that the
 		// host really is committed to keeping the file. But, because the file
 		// contract is created with no data available, this does leave the host
-		// exposed to an attack by a wealthy renter whereby the renter causes
-		// the host to lockup in-advance a bunch of funds that the renter then
+		// exposed to an attack by a wealthy storage client whereby the storage client causes
+		// the host to lockup in-advance a bunch of funds that the storage client then
 		// never uses, meaning the host will not have collateral for other
 		// clients.
 		//
@@ -193,7 +193,7 @@ type (
 		Collateral    *big.Int `json:"collateral"`
 		MaxCollateral *big.Int `json:"maxcollateral"`
 
-		// ContractPrice is the number of coins that the renter needs to pay to
+		// ContractPrice is the number of coins that the storage client needs to pay to
 		// the host just to open a file contract with them. Generally, the price
 		// is only to cover the siacoin fees that the host will suffer when
 		// submitting the file contract revision and storage proof to the
@@ -222,7 +222,7 @@ type (
 
 		// Because the host has a public key, and settings are signed, and
 		// because settings may be MITM'd, settings need a revision number so
-		// that a renter can compare multiple sets of settings and determine
+		// that a storage client can compare multiple sets of settings and determine
 		// which is the most recent.
 		RevisionNumber uint64 `json:"revisionnumber"`
 		Version        string `json:"version"`

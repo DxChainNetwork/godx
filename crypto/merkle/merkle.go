@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"
 )
 
@@ -19,7 +18,8 @@ import (
 // the original data will be divided into pieces based on the
 // merkleRootSize, and then be pushed into the merkle tree
 const (
-	LeafSize = 64
+	SectorSize = uint64(1 << 22)
+	LeafSize   = 64
 )
 
 // Tree serves as a wrapper of the merkle tree, provide a convenient way
@@ -120,7 +120,7 @@ func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
 
 func CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
 	log2SectorSize := uint64(0)
-	for 1<<log2SectorSize < (storage.SectorSize / LeafSize) {
+	for 1<<log2SectorSize < (SectorSize / LeafSize) {
 		log2SectorSize++
 	}
 	cmt := NewCachedTree(log2SectorSize)

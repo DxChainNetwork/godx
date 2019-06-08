@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"io"
 	"math/big"
 	"math/bits"
@@ -32,7 +31,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -93,11 +91,10 @@ type StorageClient struct {
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
 
-	// file management
-	staticFileSet *dxfile.FileSet
+	renewFlags map[storage.ContractID]struct{}
 
-	// dir management
-	staticDirSet *dxdir.DirSet
+	sessionLock sync.Mutex
+	sessionSet  map[storage.ContractID]*storage.Session
 }
 
 // New initializes StorageClient object
@@ -120,11 +117,6 @@ func New(persistDir string) (*StorageClient, error) {
 		},
 		workerPool: make(map[storage.ContractID]*worker),
 	}
-
-	//// Load file and dir set from wal
-	//if err := sc.managedInitPersist(); err != nil {
-	//	return nil, err
-	//}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
 	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
@@ -166,9 +158,10 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
-	// loop to download
+	// loop to download, upload, stuck
 	go sc.downloadLoop()
 	go sc.uploadAndRepairLoop()
+	go sc.stuckFileLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {
@@ -196,12 +189,12 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 func (sc *StorageClient) Close() error {
 	var fullErr error
 	// Closing the host manager
-	sc.log.Info("Closing the renter host manager")
+	sc.log.Info("Closing the storage client host manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the file system
-	sc.log.Info("Closing the renter file system")
+	sc.log.Info("Closing the storage client file system")
 	err = sc.fileSystem.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
@@ -211,12 +204,12 @@ func (sc *StorageClient) Close() error {
 	return fullErr
 }
 
-func (sc *StorageClient) DeleteFile(path dxdir.DxPath) error {
+func (sc *StorageClient) DeleteFile(path storage.DxPath) error {
 	if err := sc.tm.Add(); err != nil {
 		return err
 	}
 	defer sc.tm.Done()
-	return sc.staticFileSet.Delete(path.String())
+	return sc.fileSystem.FileSet.Delete(path)
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {
@@ -418,12 +411,10 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.H
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
-
 	// Retrieve the last contract revision
-	contractRevision := types.StorageContractRevision{}
 	scs := sc.storageHostManager.GetStorageContractSet()
 
-	// find the contractID formed by this host
+	// Find the contractID formed by this host
 	hostInfo := session.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
@@ -433,7 +424,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	defer scs.Return(contract)
 	contractHeader := contract.Header()
-	contractRevision = contractHeader.LatestContractRevision
+	contractRevision := contractHeader.LatestContractRevision
 
 	// Calculate price per sector
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
@@ -499,7 +490,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	defer func() {
-
 		// Increase Successful/Failed interactions accordingly
 		if err != nil {
 			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
@@ -524,12 +514,12 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
+	//// If host send some negotiation error, client should handler it
+	//if msg.Code == storage.NegotiationErrorMsg {
+	//	var negotiationErr error
+	//	msg.Decode(&negotiationErr)
+	//	return negotiationErr
+	//}
 
 	if err := msg.Decode(&merkleResp); err != nil {
 		return err
@@ -614,10 +604,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	return nil
 }
 
-// download
-
-// calls the Read RPC, writing the requested data to w.
-//
+// Download calls the Read RPC, writing the requested data to w
 // NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
 	// reset deadline when finished.
@@ -995,7 +982,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 // managedDownload performs a file download and returns the download object
 func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters) (*download, error) {
-	entry, err := client.staticFileSet.Open(p.DxFilePath)
+	entry, err := client.fileSystem.OpenFile(p.DxFilePath)
 	if err != nil {
 		return nil, err
 	}

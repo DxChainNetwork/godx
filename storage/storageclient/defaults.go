@@ -49,7 +49,7 @@ const (
 
 // Default params about upload/download process
 var (
-	// fileRepairInterval defines how long the renter should wait before
+	// fileRepairInterval defines how long the storage client should wait before
 	// continuing to repair a file that was recently repaired.
 	FileRepairInterval = 5 * time.Minute
 
@@ -60,15 +60,15 @@ var (
 	// MaxConsecutiveSegmentUploads is the maximum number of segment before rebuilding the heap.
 	MaxConsecutiveSegmentUploads = 100
 
-	// offlineCheckFrequency is how long the renter will wait to check the
+	// offlineCheckFrequency is how long the storage client will wait to check the
 	// online status if it is offline.
 	OfflineCheckFrequency = 10 * time.Second
 
-	// rebuildChunkHeapInterval defines how long the renter sleeps between
+	// rebuildChunkHeapInterval defines how long the storage client sleeps between
 	// checking on the filesystem health.
 	RebuildSegmentHeapInterval = 15 * time.Minute
 
-	// repairStuckChunkInterval defines how long the renter sleeps between
+	// repairStuckChunkInterval defines how long the storage client sleeps between
 	// trying to repair a stuck chunk. The uploadHeap prioritizes stuck chunks
 	// so this interval is to allow time for unstuck chunks to be repaired.
 	// Ideally the uploadHeap is spending 95% of its time repairing unstuck
@@ -77,11 +77,12 @@ var (
 
 	// uploadAndRepairErrorSleepDuration indicates how long a repair process
 	// should sleep before retrying if there is an error fetching the metadata
-	// of the root directory of the renter's filesystem.
+	// of the root directory of the storage client's filesystem.
 	UploadAndRepairErrorSleepDuration = 15 * time.Minute
 
 	// RemoteRepairDownloadThreshold indicates the threshold in percent under
-	// which the renter starts repairing a file that is not available on disk
+	// which the storage client starts repairing a file that is not available on disk
+	// TODO  - adjust it to match our target and business model
 	RemoteRepairDownloadThreshold = 0.25
 
 	UploadFailureCoolDown = 1 * time.Minute

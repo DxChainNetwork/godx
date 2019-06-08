@@ -551,3 +551,12 @@ func (p *Peer) Info() *PeerInfo {
 func (p *Peer) GetConn() net.Conn {
 	return p.rw.GetNetConn()
 }
+
+func (p *Peer) IsClosed() bool {
+	select {
+	case <-p.closed:
+		return true
+	default:
+		return false
+	}
+}

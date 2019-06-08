@@ -113,7 +113,7 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 
 // DirInfo returns the Directory Information of the dxdir
 func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
-	entry, err := sc.staticDirSet.Open(dxPath)
+	entry, err := sc.fileSystem.DirSet.Open(dxPath)
 	if err != nil {
 		return DirectoryInfo{}, err
 	}
@@ -123,14 +123,14 @@ func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
 	// could either be health or stuckHealth
 	metadata := entry.Metadata()
 	return DirectoryInfo{
-		NumFiles:            metadata.NumFiles,
-		NumStuckSegments:    metadata.NumStuckSegments,
-		TotalSize:           metadata.TotalSize,
-		Health:              metadata.Health,
-		StuckHealth:         metadata.StuckHealth,
-		MinRedundancy:       metadata.MinRedundancy,
+		NumFiles:         metadata.NumFiles,
+		NumStuckSegments: metadata.NumStuckSegments,
+		TotalSize:        metadata.TotalSize,
+		Health:           metadata.Health,
+		StuckHealth:      metadata.StuckHealth,
+		MinRedundancy:    metadata.MinRedundancy,
 
-		TimeLastHealthCheck: time.Unix(int64(metadata.TimeLastHealthCheck) ,0),
+		TimeLastHealthCheck: time.Unix(int64(metadata.TimeLastHealthCheck), 0),
 		TimeModify:          time.Unix(int64(metadata.TimeModify), 0),
 		DxPath:              metadata.DxPath,
 	}, nil
@@ -190,7 +190,7 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]DirectoryInfo, []File
 	return dirs, files, nil
 }
 
-// TODO complete modules/renter/renter.go:478
+// TODO complete modules/storage client/storage client.go:478
 func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetEntryWithID) storage.HostHealthInfoTable {
 	infoMap := make(storage.HostHealthInfoTable, 1)
 

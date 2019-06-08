@@ -40,7 +40,7 @@ func (uch uploadSegmentHeap) Less(i, j int) bool {
 	// If the Segments have the same stuck status, check which Segment has the lower
 	// completion percentage.
 	if uch[i].stuck == uch[j].stuck {
-		return float64(uch[i].piecesCompleted)/float64(uch[i].piecesNeeded) < float64(uch[j].piecesCompleted)/float64(uch[j].piecesNeeded)
+		return float64(uch[i].sectorsCompletedNum)/float64(uch[i].sectorsNeedNum) < float64(uch[j].sectorsCompletedNum)/float64(uch[j].sectorsNeedNum)
 	}
 	// If Segment i is stuck, return true to prioritize it.
 	if uch[i].stuck {
@@ -60,7 +60,7 @@ func (uch *uploadSegmentHeap) Pop() interface{} {
 }
 
 // uploadHeap contains a priority-sorted heap of all the Segments being uploaded
-// to the renter, along with some metadata.
+// to the storage client, along with some metadata.
 type uploadHeap struct {
 	heap uploadSegmentHeap
 
@@ -163,15 +163,15 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 			length: entry.SegmentSize(),
 			offset: int64(uint64(index) * entry.SegmentSize()),
 
-			memoryNeeded:  entry.SectorSize()*uint64(entry.ErasureCode().NumSectors()+entry.ErasureCode().MinSectors()) + uint64(entry.ErasureCode().NumSectors())*uint64(entry.CipherKey().Overhead()),
-			minimumPieces: int(entry.ErasureCode().MinSectors()),
-			piecesNeeded:  int(entry.ErasureCode().NumSectors()),
-			stuck:         entry.GetStuckByIndex(index),
+			memoryNeeded:   entry.SectorSize()*uint64(entry.ErasureCode().NumSectors()+entry.ErasureCode().MinSectors()) + uint64(entry.ErasureCode().NumSectors())*uint64(entry.CipherKey().Overhead()),
+			minimumSectors: int(entry.ErasureCode().MinSectors()),
+			sectorsNeedNum: int(entry.ErasureCode().NumSectors()),
+			stuck:          entry.GetStuckByIndex(index),
 
 			physicalSegmentData: make([][]byte, entry.ErasureCode().NumSectors()),
 
-			pieceUsage:  make([]bool, entry.ErasureCode().NumSectors()),
-			unusedHosts: make(map[string]struct{}),
+			sectorSlotsStatus: make([]bool, entry.ErasureCode().NumSectors()),
+			unusedHosts:       make(map[string]struct{}),
 		}
 		// Every Segment can have a different set of unused hosts.
 		for host := range hosts {
@@ -181,7 +181,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 
 	// Iterate through the pieces of all Segments of the file and mark which
 	// hosts are already in use for a particular Segment. As you delete hosts
-	// from the 'unusedHosts' map, also increment the 'piecesCompleted' value.
+	// from the 'unusedHosts' map, also increment the 'sectorsCompletedNum' value.
 	for i, index := range segmentIndexes {
 		sectors, err := entry.Sectors(index)
 		if err != nil {
@@ -205,10 +205,10 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 
 				// Mark the Segment set based on the pieces in this contract
 				_, exists := newUnfinishedSegments[i].unusedHosts[sector.HostID.String()]
-				redundantPiece := newUnfinishedSegments[i].pieceUsage[sectorIndex]
+				redundantPiece := newUnfinishedSegments[i].sectorSlotsStatus[sectorIndex]
 				if exists && !redundantPiece {
-					newUnfinishedSegments[i].pieceUsage[sectorIndex] = true
-					newUnfinishedSegments[i].piecesCompleted++
+					newUnfinishedSegments[i].sectorSlotsStatus[sectorIndex] = true
+					newUnfinishedSegments[i].sectorsCompletedNum++
 					delete(newUnfinishedSegments[i].unusedHosts, sector.HostID.String())
 				} else if exists {
 					delete(newUnfinishedSegments[i].unusedHosts, sector.HostID.String())
@@ -222,7 +222,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 	incompleteSegments := newUnfinishedSegments[:0]
 	for _, segment := range newUnfinishedSegments {
 		// Check if Segment is complete
-		incomplete := segment.piecesCompleted < segment.piecesNeeded
+		incomplete := segment.sectorsCompletedNum < segment.sectorsNeedNum
 		// Check if Segment is downloadable
 		segmentHealth := segment.fileEntry.SegmentHealth(int(segment.index), hostHealthInfoTable)
 		_, err := os.Stat(string(segment.fileEntry.LocalPath()))
@@ -324,10 +324,6 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 	}
 }
 
-func (sc *StorageClient) pushFileToSegmentHeap(file *dxfile.FileSetEntryWithID) {
-	file.DxPath()
-}
-
 // pushDirToSegmentHeap is charge of creating segment heap that worker tasks locate in
 func (sc *StorageClient) pushDirToSegmentHeap(dirDxPath storage.DxPath, hosts map[string]struct{}, target repairTarget) {
 	// Get Directory files
@@ -349,7 +345,7 @@ func (sc *StorageClient) pushDirToSegmentHeap(dirDxPath storage.DxPath, hosts ma
 		if err != nil {
 			return
 		}
-		file, err := sc.staticFileSet.Open(dxPath)
+		file, err := sc.fileSystem.OpenFile(dxPath)
 		if err != nil {
 			sc.log.Debug("WARN: could not open dx file:", err)
 			continue
@@ -431,10 +427,10 @@ func (sc *StorageClient) doPrepareNextSegment(uuc *unfinishedUploadSegment) erro
 // refreshHostsAndWorkers will reset the set of hosts and the set of
 // workers for the storage client
 func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
-	currentContracts := sc.contractManager.Contracts()
+	currentContracts := sc.storageHostManager.GetStorageContractSet().Contracts()
 	hosts := make(map[string]struct{})
 	for _, contract := range currentContracts {
-		hosts[contract] = struct{}{}
+		hosts[contract.Header().EnodeID.String()] = struct{}{}
 	}
 
 	// Refresh the worker pool
@@ -443,7 +439,7 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 }
 
 // repairLoop works through the upload heap repairing segments. The repair
-// loop will continue until the renter stops, there are no more Segments, or
+// loop will continue until the storage client stops, there are no more Segments, or
 // enough time has passed indicated by the rebuildHeapSignal
 func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
 	var consecutiveSegmentUploads int
@@ -474,7 +470,7 @@ func (sc *StorageClient) uploadLoop(hosts map[string]struct{}) {
 		sc.lock.Lock()
 		availableWorkers := len(sc.workerPool)
 		sc.lock.Unlock()
-		if availableWorkers < nextSegment.minimumPieces {
+		if availableWorkers < nextSegment.minimumSectors {
 			sc.log.Debug("Setting segment as stuck because there are not enough good workers", nextSegment.id)
 			err := sc.setStuckAndClose(nextSegment, true)
 			if err != nil {
