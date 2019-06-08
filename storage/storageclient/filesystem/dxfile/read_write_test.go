@@ -8,13 +8,13 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
@@ -32,7 +32,11 @@ func TestPersist(t *testing.T) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-		filename := filepath.Join(testDir, t.Name())
+		path, err := storage.NewDxPath(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := testDir.Join(path)
 		wal := df.wal
 		newDF, err := readDxFile(filename, wal)
 		if err != nil {
@@ -108,7 +112,11 @@ func TestDxFile_SaveHostTableUpdate(t *testing.T) {
 		if err != nil {
 			t.Fatalf("test %d: %v", i, err)
 		}
-		filename := filepath.Join(testDir, t.Name())
+		path, err := storage.NewDxPath(t.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		filename := testDir.Join(path)
 		wal := df.wal
 		newDF, err := readDxFile(filename, wal)
 		if err != nil {
@@ -137,7 +145,11 @@ func TestDxFile_SaveSegment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	filename := filepath.Join(testDir, t.Name())
+	path, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := testDir.Join(path)
 	newDF, err := readDxFile(filename, df.wal)
 	if err != nil {
 		t.Fatalf("%v", err)

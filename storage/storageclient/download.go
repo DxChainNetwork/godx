@@ -5,6 +5,7 @@
 package storageclient
 
 import (
+	"github.com/DxChainNetwork/godx/storage"
 	"sync"
 	"time"
 
@@ -54,7 +55,7 @@ type (
 		offset uint64
 
 		// the file path for downloading
-		dxFilePath string
+		dxFilePath storage.DxPath
 
 		// In milliseconds.
 		latencyTarget time.Duration

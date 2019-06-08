@@ -4,8 +4,8 @@
 package dxdir
 
 import (
+	"github.com/DxChainNetwork/godx/storage"
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -17,7 +17,11 @@ func newTestDirSet(t *testing.T) (*DirSet, *DirSetEntryWithID) {
 	// Initialize
 	depth := 3
 	path := randomDxPath(depth)
-	ds, err := NewDirSet(filepath.Join(testDirSetDir, t.Name()), newWal(t))
+	dxPath, err := storage.NewDxPath(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ds, err := NewDirSet(testDirSetDir.Join(dxPath), newWal(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,12 +40,12 @@ func TestNewDirSet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = os.Stat(filepath.Join(ds.rootDir, dirFileName)); err != nil {
+	if _, err = os.Stat(string(ds.rootDir.Join(storage.RootDxPath()))); err != nil {
 		t.Fatal("after start, the root dir is not initialized")
 	}
-	_, err = os.Stat(filepath.Join(testDirSetDir, dirFileName))
+	_, err = os.Stat(string(ds.rootDir.Join(storage.RootDxPath(), DirFileName)))
 	if err != nil {
-		t.Fatalf("file not exist: %v", filepath.Join(testDirSetDir, dirFileName))
+		t.Fatalf("file not exist: %v", ds.rootDir.Join(storage.RootDxPath(), DirFileName))
 	}
 	// Create a new DirSet with the same directory, no error should be reported
 	_, err = NewDirSet(testDirSetDir, ds.wal)
@@ -152,6 +156,7 @@ func TestDirSet_UpdateMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	newMeta.DxPath = path
+	newMeta.RootPath = entry.metadata.RootPath
 	// After update, the metadata should be the same
 	if !reflect.DeepEqual(*newMeta, entry.Metadata()) {
 		t.Errorf("After update metadata, not equal. \n\tGot %+v, \n\tExpect %+v", entry.metadata, newMeta)
