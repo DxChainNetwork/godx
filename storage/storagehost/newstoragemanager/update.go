@@ -53,9 +53,15 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) {
 		upErr = upErr.setPrepareError(err)
 		return
 	}
+	if sm.stopped() {
+		return
+	}
 	// process the update
 	if err := up.process(sm, target); err != nil {
 		upErr = upErr.setPrepareError(err)
+		return
+	}
+	if sm.stopped() {
 		return
 	}
 }

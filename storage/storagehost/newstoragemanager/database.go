@@ -6,6 +6,7 @@ package newstoragemanager
 
 import (
 	"crypto/rand"
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -122,12 +123,12 @@ func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder
 		var sf *storageFolder
 		if err := rlp.DecodeBytes(sfByte, &sf); err != nil {
 			// If error happened, log the error in return value and skip to next item
-			fullErr = common.ErrCompose(fullErr, err)
+			fullErr = common.ErrCompose(fullErr, fmt.Errorf("cannot load folder %s: %v", key, err))
 			continue
 		}
 		id, err := strconv.Atoi(folderIndexStr)
 		if err != nil {
-			fullErr = common.ErrCompose(fullErr, err)
+			fullErr = common.ErrCompose(fullErr, fmt.Errorf("cannot load folder %s: %v", key, err))
 			continue
 		}
 		sf.id = folderID(id)

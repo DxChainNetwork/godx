@@ -18,7 +18,7 @@ func (vec *BitVector) setUsage(idx uint16) {
 	*vec = *vec | mask
 }
 
-// clearUsage clear given index to 1
+// clearUsage clear given index to 0
 func (vec *BitVector) clearUsage(idx uint16) {
 	var mask BitVector = 1 << 16
 	mask = mask - 1<<idx

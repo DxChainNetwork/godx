@@ -4,8 +4,6 @@
 
 package newstoragemanager
 
-import "time"
-
 const (
 	// database related keys and prefixes
 	prefixFolder         = "storagefolder"
@@ -17,15 +15,7 @@ const (
 const (
 	databaseFileName = "storagemanager.db"
 	walFileName      = "storagemanager.wal"
-)
-
-const (
-	// numConsecutiveFailsRelease is the number of times of processing before releasing the
-	// transaction
-	numConsecutiveFailsRelease = 3
-
-	// processInterval is the time interval between two attempt to process a transaction
-	processInterval = time.Second
+	dataFileName     = "dxstorage.data"
 )
 
 const (
@@ -38,4 +28,9 @@ const (
 
 	// targetRecoverUncommitted is the state of recovering an uncommitted trnasaction
 	targetRecoverUncommitted
+)
+
+const (
+	folderAvailable uint32 = iota
+	folderUnavailable
 )

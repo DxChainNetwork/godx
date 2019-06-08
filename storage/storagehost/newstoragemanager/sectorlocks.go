@@ -14,7 +14,7 @@ type (
 	// sectorLocks is the map from the sector ID to the sectorLock
 	sectorLocks struct {
 		locks map[sectorID]*sectorLock
-		lk    sync.Mutex
+		lock  sync.Mutex
 	}
 
 	sectorLock struct {
@@ -45,9 +45,9 @@ func newSectorLocks() (sls *sectorLocks) {
 }
 
 // lock tries to lock the lock with the specified id. Block until the lock is released
-func (sls *sectorLocks) lock(id sectorID) {
-	sls.lk.Lock()
-	defer sls.lk.Unlock()
+func (sls *sectorLocks) lockSector(id sectorID) {
+	sls.lock.Lock()
+	defer sls.lock.Unlock()
 	// If the id is in the map, increment the waiting.
 	// If not in map, create a new lock
 	l, exist := sls.locks[id]
@@ -64,9 +64,9 @@ func (sls *sectorLocks) lock(id sectorID) {
 }
 
 // unlock unlock the sector with the id
-func (sls *sectorLocks) unlock(id sectorID) {
-	sls.lk.Lock()
-	defer sls.lk.Unlock()
+func (sls *sectorLocks) unlockSector(id sectorID) {
+	sls.lock.Lock()
+	defer sls.lock.Unlock()
 
 	// If the lock have waiting == 0, delete the lock from the map
 	l, exist := sls.locks[id]
