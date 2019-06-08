@@ -9,6 +9,17 @@ import (
 	"sync/atomic"
 )
 
+// diskPage is the temporary in-memory page.
+// There are some unfinished transactions logged in the file.
+// define type diskPage as the temporary in-memory page
+type diskPage struct {
+	page
+	nextPageOffset uint64
+}
+
+// recoverWal reads through the wal files, and return transactions with status
+// txnStatusCommitted and txnStatusUncommitted.
+// If a transaction is not valid in checksum, the transaction will not be returned
 func (w *Wal) recoverWal(data []byte) ([]*Transaction, error) {
 	recoveryState, err := readMetadata(data[:])
 	if err != nil {
@@ -21,12 +32,6 @@ func (w *Wal) recoverWal(data []byte) ([]*Transaction, error) {
 			return nil, fmt.Errorf("unable to write Wal state: %v", err)
 		}
 		return nil, nil
-	}
-	// There are some unfinished transactions logged in the file.
-	// define type diskPage as the temporary in-memory page
-	type diskPage struct {
-		page
-		nextPageOffset uint64
 	}
 	pages := make(map[uint64]*diskPage) // offset - page
 	for i := uint64(PageSize); i+PageSize <= uint64(len(data)); i += PageSize {
@@ -55,7 +60,7 @@ func (w *Wal) recoverWal(data []byte) ([]*Transaction, error) {
 nextTxn:
 	for i := PageSize; i+PageSize <= len(data); i += PageSize {
 		status := binary.LittleEndian.Uint64(data[i:])
-		if status != txnStatusCommitted && status != txnStatusWritten {
+		if status != txnStatusCommitted && status != txnStatusUncommitted {
 			// Transaction with commit status and uncommitted status will be returned
 			continue
 		}
