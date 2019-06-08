@@ -13,23 +13,20 @@ import (
 
 // calculate client and host collateral
 func ClientPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
-
-	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
 		host.StoragePrice.SetInt64(1)
 	}
 
-	// Underflow check.
 	if funding.Cmp(host.ContractPrice) <= 0 {
 		err = errors.New("underflow detected, funding < contractPrice")
 		return
 	}
 
-	// Calculate clientPayout.
+	// calculate clientPayout.
 	clientPayout = new(big.Int).Sub(funding, host.ContractPrice)
 	clientPayout = clientPayout.Sub(clientPayout, basePrice)
 
-	// Calculate hostCollateral
+	// calculate hostCollateral
 	maxStorageSizeTime := new(big.Int).Div(clientPayout, host.StoragePrice)
 	maxStorageSizeTime = maxStorageSizeTime.Mul(maxStorageSizeTime, host.Collateral)
 	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
@@ -40,13 +37,11 @@ func ClientPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollater
 		hostCollateral = maxClientCollateral
 	}
 
-	// Don't add more collateral than the host is willing to put into a single
-	// contract.
 	if hostCollateral.Cmp(host.MaxCollateral) > 0 {
 		hostCollateral = host.MaxCollateral
 	}
 
-	// Calculate hostPayout.
+	// calculate hostPayout.
 	hostCollateral.Add(hostCollateral, host.ContractPrice)
 	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
 	return

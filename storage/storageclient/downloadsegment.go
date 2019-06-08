@@ -61,7 +61,7 @@ type unfinishedDownloadSegment struct {
 	// whether or not the segment successfully downloaded
 	failed bool
 
-	// th data used to recover the logical data
+	// the data used to recover the logical data
 	physicalSegmentData [][]byte
 
 	// which sectors in the segment are fetching
@@ -161,7 +161,7 @@ func (uds *unfinishedDownloadSegment) returnMemory() {
 	// the maximum amount of memory is the sectors completed plus the number of workers remaining.
 	maxMemory := uint64(uds.workersRemaining+uds.sectorsCompleted) * uds.sectorSize
 
-	// If enough sectors have completed, max memory is the number of registered
+	// if enough sectors have completed, max memory is the number of registered
 	// sectors plus the number of completed sectors.
 	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
 		maxMemory = uint64(uds.sectorsCompleted+uds.sectorsRegistered) * uds.sectorSize

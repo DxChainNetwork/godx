@@ -22,17 +22,17 @@ func (dch downloadSegmentHeap) Len() int {
 
 func (dch downloadSegmentHeap) Less(i, j int) bool {
 
-	// First sort by priority.
+	// sort by priority.
 	if dch[i].priority != dch[j].priority {
 		return dch[i].priority > dch[j].priority
 	}
 
-	// For equal priority, sort by start time.
+	// if equal above then sort by start time.
 	if dch[i].download.startTime != dch[j].download.startTime {
 		return dch[i].download.startTime.Before(dch[j].download.startTime)
 	}
 
-	// For equal start time, sort by segmentIndex.
+	// if equal above then sort by segmentIndex.
 	return dch[i].segmentIndex < dch[j].segmentIndex
 }
 

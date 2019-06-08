@@ -30,7 +30,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -85,10 +84,6 @@ type StorageClient struct {
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
-
-	// TODO: 需要初始化这个变量，不然调用下载的RPC会报空指针
-	// file management.
-	staticFileSet *dxfile.FileSet
 }
 
 // New initializes StorageClient object
@@ -969,7 +964,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 // managedDownload performs a file download and returns the download object
 func (client *StorageClient) managedDownload(p storage.DownloadParameters) (*download, error) {
 	dxPath := storage.DxPath{p.RemoteFilePath}
-	entry, err := client.staticFileSet.Open(dxPath)
+	entry, err := client.fileSystem.OpenFile(dxPath)
 	if err != nil {
 		return nil, err
 	}
@@ -1070,7 +1065,7 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	}
 }
 
-// performs a file download without blocking until the download is finished
+// performs a file download without blocking
 func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
