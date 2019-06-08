@@ -18,8 +18,9 @@ package vm
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
+
+	"github.com/DxChainNetwork/godx/common"
 
 	"github.com/DxChainNetwork/godx/ethdb"
 
@@ -103,20 +104,21 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckFormContract
-	case func(*EVM, types.StorageContract, uint64) error:
+	case func(StateDB, types.StorageContract, uint64, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+		if len(args) != 6 {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		fc, _ := args[3].(types.StorageContract)
 		bl, _ := args[4].(uint64)
+		addr, _ := args[5].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(evm, fc, bl)
+		err := i(state, fc, bl, addr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
@@ -125,20 +127,21 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckReversionContract
-	case func(*EVM, types.StorageContractRevision, uint64) error:
+	case func(StateDB, types.StorageContractRevision, uint64, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+		if len(args) != 6 {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		scr, _ := args[3].(types.StorageContractRevision)
 		bl, _ := args[4].(uint64)
+		addr, _ := args[5].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(evm, scr, bl)
+		err := i(state, scr, bl, addr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
@@ -147,20 +150,21 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckStorageProof
-	case func(*EVM, types.StorageProof, uint64) error:
+	case func(StateDB, types.StorageProof, uint64, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+		if len(args) != 6 {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		sp, _ := args[3].(types.StorageProof)
 		bl, _ := args[4].(uint64)
+		addr, _ := args[5].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(evm, sp, bl)
+		err := i(state, sp, bl, addr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
