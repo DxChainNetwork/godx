@@ -69,6 +69,7 @@ func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent stor
 
 	// estimate storage host deposit
 	hostDeposit := info.Deposit.Mult(contractExpectedStorageTime)
+
 	possibleDeposit := info.MaxDeposit.Div(contractExpectedStorageTime)
 	if possibleDeposit.Cmp(hostDeposit) < 0 {
 		hostDeposit = possibleDeposit
