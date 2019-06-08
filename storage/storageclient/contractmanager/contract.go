@@ -174,7 +174,7 @@ func (cm *ContractManager) maintainHostToContractIDMapping() {
 
 // removeHostWithDuplicateNetworkAddress will perform the IP violation check.
 // for active storage hosts (hosts the client signed the active contract with),
-// if they have some network address, based on the ip changes time, they will
+// if they have same network address, based on the ip changes time, they will
 // be placed under badHosts list. Then the contracts signed with them will be canceled
 func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 	// loop through all active contracts, get all their host ids
@@ -183,6 +183,10 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 
 	// get all active storageHostIDs and hostToContractID mapping
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
+		// if the contract has been canceled already, ignore them
+		if contract.Status.Canceled && !contract.Status.UploadAbility && !contract.Status.RenewAbility {
+			continue
+		}
 		storageHostIDs = append(storageHostIDs, contract.EnodeID)
 		hostToContractID[contract.EnodeID] = contract.ID
 	}
@@ -207,7 +211,7 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 	}
 }
 
-// maintainContractStatus will iterate through all active contracts. Based onthe storage host's validation
+// maintainContractStatus will iterate through all active contracts. Based on the storage host's validation
 // and contract information to update the contract status
 func (cm *ContractManager) maintainContractStatus() (err error) {
 	cm.lock.RLock()
@@ -300,6 +304,10 @@ func (cm *ContractManager) delFromContractSet(ids []storage.ContractID) {
 	}
 }
 
+// markContractCancel will modify the contract status by marking
+// 		1. UploadAbility: false
+// 		2. RenewAbility: false
+// 		3. Canceled: true
 func (cm *ContractManager) markContractCancel(id storage.ContractID) (err error) {
 	c, exists := cm.activeContracts.Acquire(id)
 	if !exists {
@@ -317,10 +325,15 @@ func (cm *ContractManager) markContractCancel(id storage.ContractID) (err error)
 	return
 }
 
+// markNewlyFormedContractStats will mark the contract status as the following:
+// 		1. UploadAbility: true
+// 		2. RenewAbility: true
+// 		3. Canceled: false
 func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (err error) {
 	c, exists := cm.activeContracts.Acquire(id)
 	if !exists {
 		cm.log.Crit("the newly formed contract's status cannot be found")
+		err = fmt.Errorf("the newly formed contract's status cannot be found from the contract set")
 		return
 	}
 	contractStatus := c.Status()
@@ -331,9 +344,12 @@ func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (
 	if failedReturn := cm.activeContracts.Return(c); failedReturn != nil {
 		cm.log.Warn("the contract that is trying to be returned does not exist")
 	}
+
 	return
 }
 
+// calculateMinEvaluation will get the minimum evaluation from a list of hosts, which is used to
+// evaluate the current hosts that client signed the contract with.
 func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (minEval common.BigInt) {
 	// if there are no hosts passed in, return 0 directly
 	if len(hosts) == 0 {
@@ -352,6 +368,16 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 	return
 }
 
+// checkContractStatus will validate and return the new contract status based on the following criteria
+// 		1. if the status of the contract is not canceled, then mark the upload and renew ability to be true
+// 		2. if the host that the client signed the contract with cannot be found or the host has been filtered, mark
+//		upload and renew ability to be false
+// 		3. if the host's evaluation is smaller than the baseline, then mark the current contract as not good
+// 		for uploading and renewing
+// 		4. if the storage host that signed contract with is offline, mark the current contract as
+// 		not good for uploading and renewing
+// 		5. if the contract has been renewed already, mark the upload ability to false
+// 		6. lastly, if the client does not have enough money left, mark the upload ability as false
 func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData, evalBaseline common.BigInt) (stats storage.ContractStatus) {
 	stats = contract.Status
 
@@ -372,6 +398,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// check the storage host's evaluation, if the evaluation is smaller than baseline, mark
 	// the upload and renew ability to be false
 	eval := cm.hostManager.Evaluation(host)
+
 	// if the baseline is bigger than 0 and the host evaluation is smaller than the baseline
 	if eval.Cmp(evalBaseline) < 0 && evalBaseline.Cmp(common.BigInt0) > 0 {
 		stats.UploadAbility = false
@@ -393,6 +420,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	period := cm.rentPayment.Period
 	cm.lock.RUnlock()
 
+	// if the contract is expected to be renewed already
 	if blockHeight+renewWindow >= contract.EndHeight {
 		stats.UploadAbility = false
 		return

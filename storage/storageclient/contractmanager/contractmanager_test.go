@@ -58,6 +58,18 @@ func createNewContractManager() (cm *ContractManager, err error) {
 	return
 }
 
+var testRentPayment = storage.RentPayment{
+	Fund:         common.NewBigIntUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615),
+	StorageHosts: 50,
+	Period:       3 * storage.BlocksPerMonth,
+	RenewWindow:  storage.BlocksPerMonth,
+
+	ExpectedStorage:    1e12,                                   // 1 TB
+	ExpectedUpload:     uint64(200e9) / storage.BlocksPerMonth, // 200 GB per month
+	ExpectedDownload:   uint64(100e9) / storage.BlocksPerMonth, // 100 GB per month
+	ExpectedRedundancy: 3.0,
+}
+
 func newContractManagerTest(hm *storagehostmanager.StorageHostManager) (cm *ContractManager, err error) {
 	// create and initialize host manager
 	cm = &ContractManager{
@@ -81,6 +93,12 @@ func newContractManagerTest(hm *storagehostmanager.StorageHostManager) (cm *Cont
 	}
 
 	cm.activeContracts = cs
+
+	cm.rentPayment = testRentPayment
+
+	if err = cm.hostManager.SetRentPayment(testRentPayment); err != nil {
+		return
+	}
 
 	return
 }
