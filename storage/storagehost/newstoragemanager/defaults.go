@@ -30,6 +30,12 @@ const (
 
 const (
 	// target is the process target
-	targetFix uint8 = iota
-	targetApply
+	// targetNormal is the normal execution of an update
+	targetNormal uint8 = iota
+
+	// targetRecoverCommitted is the state of recovering a committed transaction
+	targetRecoverCommitted
+
+	// targetRecoverUncommitted is the state of recovering an uncommitted trnasaction
+	targetRecoverUncommitted
 )

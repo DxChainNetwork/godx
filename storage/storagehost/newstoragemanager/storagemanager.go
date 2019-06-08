@@ -10,7 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/log"
 	"path/filepath"
-	"time"
 )
 
 type (
@@ -72,67 +71,30 @@ func (sm *storageManager) Start() (err error) {
 	}
 	// Create goroutines go process unfinished transactions
 	for _, txn := range txns {
+		// define the process target
+		var target uint8
+		if txn.Committed() {
+			target = targetRecoverCommitted
+		} else {
+			target = targetRecoverUncommitted
+		}
+		// decode the update
+		up, err := decodeFromTransaction(txn)
+		if err != nil {
+			if len(txn.Operations) > 0 {
+				sm.log.Warn("Cannot decode transaction", "update", txn.Operations[0].Name)
+			} else {
+				sm.log.Warn("Cannot decode transaction. wal might be corrupted")
+			}
+			continue
+		}
+		// add the thread
 		err = sm.tm.Add()
 		if err != nil {
 			return
 		}
-		go sm.loopProcessTxn(txn)
+		// start a thread to process
+		go sm.prepareProcessReleaseUpdate(up, target)
 	}
 	return nil
-}
-
-// loopProcessTxn loops processing the transaction, until failed for numConsecutiveFailsRelease times,
-// or the processing succeed.
-func (sm *storageManager) loopProcessTxn(txn *writeaheadlog.Transaction, target uint8) {
-	upErr := newUpdateError()
-	// decode the update from transaction
-	up, err := decodeFromTransaction(txn)
-	// If cannot decode from the transaction, return at once
-	if err != nil {
-		sm.logError(up, upErr.setPrepareError(err).setReleaseError(txn.Release()))
-		return
-	}
-	// register the defer function
-	defer func() {
-		sm.cleanUp(up, upErr)
-	}()
-
-	// try to process the update for numConsecutiveFailsRelease times
-	for numFailedTimes := 0; numFailedTimes != numConsecutiveFailsRelease; numFailedTimes++ {
-		select {
-		case <-sm.tm.StopChan():
-			return
-		default:
-		}
-		err = up.apply(sm)
-		// If the storage manager has been stopped. reverse the transaction and
-		// return
-		if err == errStopped {
-			err = up.reverse(sm)
-			upErr = upErr.addReverseError(err)
-			return
-		}
-		// If there is no error happened, clear the previous error and return
-		if err == nil {
-			upErr = newUpdateError()
-			return
-		}
-		// If some other error happened, add the err to the fullErr and then
-		// reverse the transaction
-		if err != nil {
-			upErr = upErr.addProcessError(err).addReverseError(up.reverse(sm))
-			continue
-		}
-		// wait for processInterval and try again
-		select {
-		case <-sm.tm.StopChan():
-			return
-		case <-time.After(processInterval):
-		}
-	}
-}
-
-// cleanUp do the post process Transaction work
-func (sm *storageManager) cleanUp(up update, err *updateError) {
-	sm.logError(up, err.setReleaseError(up.transaction().Release()))
 }
