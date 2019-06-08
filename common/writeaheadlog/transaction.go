@@ -20,7 +20,7 @@ const (
 
 const (
 	txnStatusInvalid = iota
-	txnStatusWritten
+	txnStatusUncommitted
 	txnStatusCommitted
 	txnStatusApplied
 )
@@ -44,7 +44,7 @@ type Transaction struct {
 	commitComplete  bool
 	releaseComplete bool
 
-	status       uint64 // txnStatusInvalid, txnStatusWritten, txnStatusCommitted, txnStatusApplied
+	status       uint64 // txnStatusInvalid, txnStatusUncommitted, txnStatusCommitted, txnStatusApplied
 	InitComplete chan struct{}
 	InitErr      error
 }
@@ -64,10 +64,14 @@ func (w *Wal) NewTransaction(ops []Operation) (*Transaction, error) {
 
 	// Create New Transaction
 	txn := &Transaction{
+		ID:           atomic.AddUint64(&w.nextTxnID, 1) - 1,
 		Operations:   ops,
 		wal:          w,
 		InitComplete: make(chan struct{}),
+		status:       txnStatusInvalid,
 	}
+
+	// Set the sequence number and increase the WAL's transactionCounter
 
 	go txn.threadedInit()
 	// Increment the numUnfinishedTxns
@@ -87,7 +91,7 @@ func (t *Transaction) threadedInit() {
 	} else {
 		t.headPage = t.wal.requestPages(data)
 	}
-	t.status = txnStatusWritten
+	t.status = txnStatusUncommitted
 
 	// write the header page
 	if err := t.writeHeaderPage(true); err != nil {
@@ -251,9 +255,6 @@ func (t *Transaction) commit() error {
 	// Set the transaction status
 	t.status = txnStatusCommitted
 
-	// Set the sequence number and increase the WAL's transactionCounter
-	t.ID = atomic.AddUint64(&t.wal.nextTxnID, 1) - 1
-
 	// Calculate the checksum
 	checksum := t.checksum()
 
@@ -326,7 +327,7 @@ func (t *Transaction) Release() error {
 
 // Committed return the status of whether the transaction is committed or not
 func (t *Transaction) Committed() bool {
-	return t.status != txnStatusWritten
+	return t.status != txnStatusUncommitted
 }
 
 // checksum calculate the BLAKE2b-256 hash of a Transaction
