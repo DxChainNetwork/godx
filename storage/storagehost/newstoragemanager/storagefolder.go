@@ -7,23 +7,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 
 	"github.com/DxChainNetwork/godx/common"
 )
 
 type (
-	// folderManager is the map from folder id to storage folder
-	folderManager struct {
-		sfs  map[folderID]*storageFolder
-		lock sync.Mutex
-	}
-
 	storageFolder struct {
-		// storageFolder has an random id
-		id folderID
-
 		// unavailable is the atomic field mark if the folder is damaged or not
 		// 0 - available
 		// 1 - unavailable
@@ -93,7 +83,7 @@ func (sf *storageFolder) load() (err error) {
 		err = errors.New("data file not exist")
 		return
 	}
-	if fileInfo.Size() < int64(len(sf.usage)-1)*int64(storage.SectorSize)*64 {
+	if fileInfo.Size() < int64(sf.numSectors)*int64(storage.SectorSize) {
 		atomic.StoreUint32(&sf.unavailable, folderUnavailable)
 		err = errors.New("file size too small")
 		return
@@ -105,13 +95,16 @@ func (sf *storageFolder) load() (err error) {
 	return
 }
 
-// close close all files in the storage folders
-func (fm *folderManager) close() (err error) {
-	fm.lock.Lock()
-	defer fm.lock.Unlock()
-
-	for _, sf := range fm.sfs {
-		err = common.ErrCompose(err, sf.dataFile.Close())
+// sizeToNumSectors convert the size to number of sectors
+func sizeToNumSectors(size uint64) (numSectors uint64) {
+	numSectors = size / storage.SectorSize
+	if size%storage.SectorSize != 0 {
+		numSectors++
 	}
+	return
+}
+
+func numSectorsToSize(numSectors uint64) (size uint64) {
+	size = numSectors * storage.SectorSize
 	return
 }

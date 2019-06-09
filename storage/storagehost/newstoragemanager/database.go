@@ -13,7 +13,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"strconv"
 	"strings"
 )
 
@@ -83,8 +82,7 @@ func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 // Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	// make key-value pair
-	folderIndex := int(sf.id)
-	folderKey := makeKey(prefixFolder, strconv.Itoa(folderIndex))
+	folderKey := makeKey(prefixFolder, sf.path)
 	folderData, err := rlp.EncodeToBytes(sf)
 	if err != nil {
 		return err
@@ -95,9 +93,9 @@ func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 }
 
 // loadStorageFolder get the storage folder with the index from db
-func (db *database) loadStorageFolder(index folderID) (sf *storageFolder, err error) {
+func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error) {
 	// make the folder key
-	folderKey := makeKey(prefixFolder, strconv.Itoa(int(index)))
+	folderKey := makeKey(prefixFolder, path)
 	folderBytes, err := db.lvl.Get(folderKey, nil)
 	if err != nil {
 		return
@@ -110,14 +108,14 @@ func (db *database) loadStorageFolder(index folderID) (sf *storageFolder, err er
 }
 
 // loadAllStorageFolders load all storage folders from database
-func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder, fullErr error) {
-	folders = make(map[folderID]*storageFolder)
+func (db *database) loadAllStorageFolders() (folders map[string]*storageFolder, fullErr error) {
+	folders = make(map[string]*storageFolder)
 	// iterate over all entries start with the prefixFolder
 	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(prefixFolder+"_")), nil)
 	for iter.Next() {
 		// get the folder index from key
 		key := string(iter.Key())
-		folderIndexStr := strings.TrimPrefix(key, prefixFolder+"_")
+		path := strings.TrimPrefix(key, prefixFolder+"_")
 		// get the folder content
 		sfByte := iter.Value()
 		var sf *storageFolder
@@ -126,14 +124,8 @@ func (db *database) loadAllStorageFolders() (folders map[folderID]*storageFolder
 			fullErr = common.ErrCompose(fullErr, fmt.Errorf("cannot load folder %s: %v", key, err))
 			continue
 		}
-		id, err := strconv.Atoi(folderIndexStr)
-		if err != nil {
-			fullErr = common.ErrCompose(fullErr, fmt.Errorf("cannot load folder %s: %v", key, err))
-			continue
-		}
-		sf.id = folderID(id)
 		// Add the folder to map
-		folders[folderID(id)] = sf
+		folders[path] = sf
 	}
 	return
 }

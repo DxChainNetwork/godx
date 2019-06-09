@@ -20,7 +20,7 @@ func (vec *BitVector) setUsage(idx uint16) {
 
 // clearUsage clear given index to 0
 func (vec *BitVector) clearUsage(idx uint16) {
-	var mask BitVector = 1 << 16
+	var mask BitVector = 1 << 63
 	mask = mask - 1<<idx
-	*vec = *vec & mask
+	*vec = *vec & BitVector(mask)
 }

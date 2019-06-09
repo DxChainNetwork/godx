@@ -15,7 +15,7 @@ const (
 const (
 	databaseFileName = "storagemanager.db"
 	walFileName      = "storagemanager.wal"
-	dataFileName     = "dxstorage.data"
+	dataFileName     = "dxstorage.dat"
 )
 
 const (
@@ -33,4 +33,15 @@ const (
 const (
 	folderAvailable uint32 = iota
 	folderUnavailable
+)
+
+const (
+	// maxSectorsPerFolder defines the maximum number of sectors in a folder
+	maxSectorsPerFolder uint64 = 1 << 32
+
+	// minSectorsPerFolder defines the minimum number of sectors in a folder
+	minSectorsPerFolder uint64 = 1 << 3
+
+	// maxNumFolders defines the maximum number of storage folders
+	maxNumFolders = 1 << 16
 )

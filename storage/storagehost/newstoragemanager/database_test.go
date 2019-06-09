@@ -41,7 +41,7 @@ func TestDatabase_PutGetStorageFolder(t *testing.T) {
 	if err := db.saveStorageFolder(sf); err != nil {
 		t.Fatal(err)
 	}
-	recoveredSF, err := db.loadStorageFolder(sf.id)
+	recoveredSF, err := db.loadStorageFolder(sf.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,6 @@ func TestDatabase_PutLoadAllStorageFolder(t *testing.T) {
 	folders := make([]*storageFolder, 0, numFolders)
 	for i := 0; i != numFolders; i++ {
 		sf := randomStorageFolder(t, "")
-		sf.id = folderID(i)
 		if err := db.saveStorageFolder(sf); err != nil {
 			t.Fatal(err)
 		}
@@ -72,13 +71,12 @@ func TestDatabase_PutLoadAllStorageFolder(t *testing.T) {
 		t.Fatalf("loaded folders not equal in size. Expect %v, Got %v", len(folders), len(recovered))
 	}
 	// Loop over the folders to check whether all entries exists.
-	for _, folder := range folders {
-		id := folder.id
-		recoveredSF, exist := recovered[id]
+	for i, folder := range folders {
+		recoveredSF, exist := recovered[folder.path]
 		if !exist {
-			t.Errorf("storage folder with id %v not exist in recovered", id)
+			t.Errorf("storage folder with id not exist in recovered")
 		}
-		checkStorageFolderEqual(t, strconv.Itoa(int(id)), recoveredSF, folder)
+		checkStorageFolderEqual(t, strconv.Itoa(i), recoveredSF, folder)
 	}
 }
 
@@ -105,7 +103,6 @@ func checkStorageFolderEqual(t *testing.T, testName string, got, want *storageFo
 func randomStorageFolder(t *testing.T, extra string) (sf *storageFolder) {
 	path := tempDir(t.Name(), extra, randomString(16))
 	sf = &storageFolder{
-		id:         0,
 		path:       path,
 		usage:      []BitVector{1 << 32},
 		numSectors: 1,

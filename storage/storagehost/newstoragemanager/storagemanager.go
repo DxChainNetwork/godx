@@ -10,7 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/log"
-	"os"
 	"path/filepath"
 )
 
@@ -63,8 +62,8 @@ func (sm *storageManager) Start() (err error) {
 		return fmt.Errorf("cannot get or create the sector salt: %v", err)
 	}
 	// load folders metadata from the db
-	if err = sm.loadFolderManager(); err != nil {
-
+	if sm.folders, err = loadFolderManager(sm.db); err != nil {
+		return fmt.Errorf("cannot load folder manager: %v", err)
 	}
 
 	// Open the wal
@@ -99,7 +98,7 @@ func (sm *storageManager) Start() (err error) {
 		// start a thread to process
 		err = sm.tm.Add()
 		if err != nil {
-			return
+			return err
 		}
 		go sm.prepareProcessReleaseUpdate(up, target)
 	}
@@ -118,24 +117,7 @@ func (sm *storageManager) Close() (fullErr error) {
 	// Close storage folder
 	err = sm.folders.close()
 	fullErr = common.ErrCompose(fullErr, err)
-}
 
-// loadFolderManager load storage folders from database and open the data files
-func (sm *storageManager) loadFolderManager() (err error) {
-	// load the folders from database
-	folders, err := sm.db.loadAllStorageFolders()
-	if err != nil {
-		return
-	}
-	for _, sf := range folders {
-		// load the folder data file
-		if err = sf.load(); err != nil {
-			return fmt.Errorf("load folder %v: %v", sf.path, err)
-		}
-	}
-	sm.folders = &folderManager{
-		sfs: folders,
-	}
 	return
 }
 
