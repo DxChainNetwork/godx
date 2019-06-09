@@ -12,7 +12,9 @@ import (
 	"strings"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
 )
@@ -25,6 +27,7 @@ const (
 	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
 	RespendTimeout           = 40
+	HashSize                 = 32
 	PrefixStorageObligation  = "storageobligation-"
 	PrefixHeight             = "height-"
 )
@@ -94,6 +97,7 @@ type (
 		// much computational or I/O expense.
 		SectorRoots       []common.Hash
 		StorageContractID common.Hash
+		TransactionId     common.Hash
 
 		// Variables about the file contract that enforces the storage obligation.
 		// The origin an revision transaction are stored as a set, where the set
@@ -693,12 +697,14 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		return
 	}
 
-	// Check whether the file contract has been seen. If not, resubmit and
-	// queue another action item. Check for death. (signature should have a
-	// kill height)
 	if !so.OriginConfirmed {
-		//TODO Submit the transaction set again, try to get the transaction
-		// confirmed. 重新提交交易集合，尝试获取这个交易的确认
+		if h.blockHeight > so.expiration() {
+			h.log.Info("Full time has elapsed, but the revision transaction could not be submitted to consensus, id", so.id())
+			h.lock.Lock()
+			h.removeStorageObligation(so, obligationRejected)
+			h.lock.Unlock()
+			return
+		}
 
 		// Queue another action item to check the status of the transaction.
 		h.lock.Lock()
@@ -708,6 +714,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			h.log.Info("Error queuing action item:", err)
 		}
 
+		return
 	}
 
 	// Check if the file contract revision is ready for submission. Check for death.
@@ -721,12 +728,6 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 
 		// Check if the revision has failed to submit correctly.
 		if h.blockHeight > so.expiration() {
-			// TODO: Check this error.
-			//
-			// TODO: this is not quite right, because a previous revision may
-			// be confirmed, and the origin transaction may be confirmed, which
-			// would confuse the revenue stuff a bit. Might happen frequently
-			// due to the dynamic fee pool.
 			h.log.Info("Full time has elapsed, but the revision transaction could not be submitted to consensus, id", so.id())
 			h.lock.Lock()
 			h.removeStorageObligation(so, obligationRejected)
@@ -755,7 +756,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		// submit a storage proof. The host payout for a failed empty contract
 		// includes the contract cost and locked collateral.
 		if len(so.SectorRoots) == 0 {
-			h.log.Info("storage proof not submitted for empty contract, id", so.id())
+			h.log.Debug("storage proof not submitted for empty contract, id", so.id())
 			h.lock.Lock()
 			err := h.removeStorageObligation(so, obligationSucceeded)
 			h.lock.Unlock()
@@ -805,6 +806,205 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		h.lock.Unlock()
 	}
 
+}
+
+func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	var actionItems []common.Hash
+
+	err := func() error {
+
+		//Handling rolled back blocks
+		for _, blockReverted := range cce.RevertedBlockHashes {
+			//Rollback contract transaction
+			formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockReverted)
+			if errGetBlock != nil {
+				continue
+			}
+			if len(formContractIDs) > 0 {
+				for _, id := range formContractIDs {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.OriginConfirmed = false
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+
+			if len(revisionIDs) > 0 {
+				for _, id := range revisionIDs {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.RevisionConfirmed = false
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+			if len(storageProofIDs) > 0 {
+				for _, id := range storageProofIDs {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.ProofConfirmed = false
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+
+			if number != 0 {
+				h.blockHeight--
+			}
+
+		}
+
+		//Block executing the main chain
+		for _, blockApply := range cce.AppliedBlockHashes {
+			//apply contract transaction
+			formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockApply)
+			if errGetBlock != nil {
+				continue
+			}
+
+			if len(formContractIDsApply) > 0 {
+				for _, id := range formContractIDsApply {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.OriginConfirmed = true
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+
+			if len(revisionIDsApply) > 0 {
+				for _, id := range revisionIDsApply {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.RevisionConfirmed = true
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+			if len(storageProofIDsApply) > 0 {
+				for _, id := range storageProofIDsApply {
+					so, errGet := getStorageObligation(h.db, id)
+					if errGet != nil {
+						continue
+					}
+					so.ProofConfirmed = true
+					errPut := putStorageObligation(h.db, so)
+					if errPut != nil {
+						continue
+					}
+				}
+			}
+
+			if number != 0 {
+				h.blockHeight++
+			}
+			existingTtems, err := GetHeight(h.db, h.blockHeight)
+			if err != nil {
+				continue
+			}
+
+			// From the existing items, pull out a storage obligation.
+			knownActionItems := make(map[common.Hash]struct{})
+			obligationIDs := make([]common.Hash, len(existingTtems)/HashSize)
+			for i := 0; i < len(existingTtems); i += HashSize {
+				copy(obligationIDs[i/HashSize][:], existingTtems[i:i+HashSize])
+			}
+			for _, soid := range obligationIDs {
+				_, exists := knownActionItems[soid]
+				if !exists {
+					actionItems = append(actionItems, soid)
+					knownActionItems[soid] = struct{}{}
+				}
+			}
+
+		}
+
+		return nil
+	}()
+
+	if err != nil {
+		h.log.Info("ProcessConsensusChangeError:", err)
+	}
+
+	for i := range actionItems {
+		go h.threadedHandleActionItem(actionItems[i])
+	}
+
+	err = h.syncConfig()
+
+	if err != nil {
+		h.log.Info("ERROR: could not save during ProcessConsensusChange:", err)
+	}
+
+}
+
+func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs, revisionIDs, storageProofIDs []common.Hash, number uint64, errGet error) {
+	precompiles := vm.PrecompiledEVMFileContracts
+	block, err := h.ethBackend.GetBlockByHash(blockHashs)
+	if err != nil {
+		errGet = err
+		return
+	}
+	number = block.NumberU64()
+	txs := block.Transactions()
+	for _, tx := range txs {
+		p, ok := precompiles[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.FormContractTransaction:
+			var sc types.StorageContract
+			errUnRlp := rlp.DecodeBytes(tx.Data(), &sc)
+			if errUnRlp != nil {
+				continue
+			}
+			formContractIDs = append(formContractIDs, sc.RLPHash())
+		case vm.CommitRevisionTransaction:
+			var scr types.StorageContractRevision
+			errUnRlp := rlp.DecodeBytes(tx.Data(), &scr)
+			if errUnRlp != nil {
+				continue
+			}
+			revisionIDs = append(formContractIDs, scr.RLPHash())
+		case vm.StorageProofTransaction:
+			var sp types.StorageProof
+			errUnRlp := rlp.DecodeBytes(tx.Data(), &sp)
+			if errUnRlp != nil {
+				continue
+			}
+			storageProofIDs = append(formContractIDs, sp.RLPHash())
+		default:
+			continue
+		}
+	}
+
+	return
 }
 
 // StorageObligations fetches the set of storage obligations in the host and

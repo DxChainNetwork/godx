@@ -31,7 +31,7 @@ import (
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.HostSettingMsg:					   handleHostSettingRequest,
+	storage.HostSettingMsg:                    handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
@@ -491,6 +491,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	so := StorageObligation{
 		SectorRoots:              nil,
+		StorageContractID:        sc.RLPHash(),
 		ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
 		LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
 		PotentialStorageRevenue:  big.NewInt(0),
