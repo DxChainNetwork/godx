@@ -78,23 +78,24 @@ func (cm *ContractManager) AcquireRentPayment() (rentPayment storage.RentPayment
 // RentPaymentValidation will validate the rentPayment. All fields must be
 // non-zero value
 func RentPaymentValidation(rent storage.RentPayment) (err error) {
-	if rent.StorageHosts == 0 {
+	switch {
+	case rent.StorageHosts == 0:
 		return errors.New("amount of storage hosts cannot be set to 0")
-	} else if rent.Period == 0 {
+	case rent.Period == 0:
 		return errors.New("storage period cannot be set to 0")
-	} else if rent.RenewWindow == 0 {
+	case rent.RenewWindow == 0:
 		return errors.New("renew window cannot be set to 0")
-	} else if rent.ExpectedStorage == 0 {
+	case rent.ExpectedStorage == 0:
 		return errors.New("expected storage cannot be set to 0")
-	} else if rent.ExpectedUpload == 0 {
+	case rent.ExpectedUpload == 0:
 		return errors.New("expectedUpload cannot be set to 0")
-	} else if rent.ExpectedDownload == 0 {
+	case rent.ExpectedDownload == 0:
 		return errors.New("expectedDownload cannot be set to 0")
-	} else if rent.ExpectedRedundancy == 0 {
+	case rent.ExpectedRedundancy == 0:
 		return errors.New("expectedRedundancy cannot be set to 0")
-	} else if rent.RenewWindow > rent.Period {
+	case rent.RenewWindow > rent.Period:
 		return errors.New("renew window cannot be larger than the period")
+	default:
+		return
 	}
-
-	return
 }

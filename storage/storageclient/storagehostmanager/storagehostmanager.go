@@ -162,6 +162,13 @@ func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err err
 	return
 }
 
+// RetrieveRentPayment will return the current rent payment settings for storage host manager
+func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+	return shm.rent
+}
+
 // RetrieveHostInfo will acquire the storage host information based on the enode ID provided
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
 	return shm.storageHostTree.RetrieveHostInfo(id)

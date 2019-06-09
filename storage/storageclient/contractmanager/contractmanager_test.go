@@ -29,6 +29,7 @@ func TestContractManager_Start(t *testing.T) {
 	}
 
 	cm, err := newContractManagerTest(shm)
+	defer cm.activeContracts.Close()
 
 	if err := cm.Start(&storageClientBackendContractManager{}); err != nil {
 		t.Fatalf("failed to start the contract manager: %s", err.Error())

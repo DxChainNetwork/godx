@@ -58,7 +58,6 @@ func (cm *ContractManager) saveSettings() (err error) {
 	cm.lock.Lock()
 	data := cm.persistUpdate()
 	cm.lock.Unlock()
-
 	return common.SaveDxJSON(settingsMetadata, filepath.Join(cm.persistDir, PersistFileName), data)
 }
 
