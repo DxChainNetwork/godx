@@ -536,7 +536,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		err      error
+		errChan  chan error
 	)
 
 	// rlp decode and calculate gas used
@@ -552,6 +552,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainDecode, errors.New("empty storage contract")
 	}
 
+	// make the storage contract address
 	scID := sc.ID()
 	scIDBytes := scID.Bytes()
 	contractAddr := common.BytesToAddress(scIDBytes[12:])
@@ -565,14 +566,13 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainCheck, errCheck
 	}
 
-	// TODO: 修改为创建account，storage contract数据直接存储在stateDB的trie中，并且是直接按照contract字段元数据内容存储？？？
-	// TODO: 直接使用storage contract ID生成地址即可，不然其他地方无法根据caller的nonce再次得到这个address
+	// create account for contractAddr
 	state.CreateAccount(contractAddr)
 	if state.Empty(contractAddr) {
 		return nil, gasRemainCheck, errors.New("create empty storage contract account")
 	}
 
-	// TODO: 扣除client和host的钱，加到contractAddr账户上
+	// set balances
 	clientAddr := sc.ClientCollateral.Address
 	hostAddr := sc.HostCollateral.Address
 	clientCollateralAmount := sc.ClientCollateral.Value
@@ -583,68 +583,103 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	totalCollateral := clientCollateralAmount.Add(clientCollateralAmount, hostCollateralAmount)
 	state.AddBalance(contractAddr, totalCollateral)
 
-	// TODO: 设置延迟的fail contract信息，主要标记下是否成功做storage proof，然后在WindowsEnd高度去做相应的转账。
-	//  如果在end高度执行maintenance时发现：
-	//  （1）这个合约account的状态是 1 ，表示未提交storage proof或者提交不成功，将会从contractAddr中转一笔惩罚金给给空账户（目前没有设置fundAddr）。
-	//  （2）状态为 0 ，表示提交storage proof成功（这个在storage proof交易执行时设置为 0 ），将会从contractAddr中转一笔奖励金给host账户。
-	//  总之，成功则给予host奖励，失败则host拿不到奖励，但是client不管成功或者失败都会被扣除这么多
+	// mark this new storage contract as not completed
 	endHeightStr := strconv.FormatUint(sc.WindowEnd, 10)
 	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + endHeightStr))
 	state.SetState(contractAddr, keyExpSC, common.BytesToHash([]byte{1}))
 
-	// TODO: 存储form contract的元数据，这里是直接存储在contractAddr账户的state树里面，虽然一般是一个contractAddr对应一个合约，
-	//  但如果要避免不同的contract的话，最好还是加上prefix，暂定以contractID
+	go func() {
+		select {
+		case <-errChan:
+
+			// go back state DB if something is wrong
+			state.RevertToSnapshot(snapshot)
+		}
+	}()
+
+	// store filed for storage contract in this contractAddr
 	trie := state.StorageTrie(contractAddr)
-	trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
-	trie.TryUpdate(BytesHostCollateral, sc.HostCollateral.Value.Bytes())
+	err := trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
+
+	err = trie.TryUpdate(BytesHostCollateral, sc.HostCollateral.Value.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	buffer := bytes.Buffer{}
 	buffer.WriteString(strconv.FormatUint(sc.FileSize, 10))
-	trie.TryUpdate(BytesFileSize, buffer.Bytes())
+	err = trie.TryUpdate(BytesFileSize, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
-	trie.TryUpdate(BytesUnlockHash, sc.UnlockHash.Bytes())
-	trie.TryUpdate(BytesFileMerkleRoot, sc.FileMerkleRoot.Bytes())
+	err = trie.TryUpdate(BytesUnlockHash, sc.UnlockHash.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
+
+	err = trie.TryUpdate(BytesFileMerkleRoot, sc.FileMerkleRoot.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	buffer.WriteString(strconv.FormatUint(sc.RevisionNumber, 10))
-	trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
+	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	buffer.WriteString(strconv.FormatUint(sc.WindowStart, 10))
-	trie.TryUpdate(BytesWindowStart, buffer.Bytes())
+	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	buffer.WriteString(strconv.FormatUint(sc.WindowEnd, 10))
-	trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
+	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	vpoBytes, err := rlp.EncodeToBytes(sc.ValidProofOutputs)
 	if err != nil {
+		errChan <- err
 		return nil, gasRemainCheck, err
 	}
-	trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
+	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
 	mpoBytes, err := rlp.EncodeToBytes(sc.MissedProofOutputs)
 	if err != nil {
+		errChan <- err
 		return nil, gasRemainCheck, err
 	}
-	trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
-
-	//nodeIterator := trie.NodeIterator(scIDBytes)
-	//it := trie2.NewIterator(nodeIterator)
-	//for it.Next() {
-	//
-	//}
-
-	// go back state DB and delete file contract from local DB if something is wrong above
+	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
 	if err != nil {
-		state.RevertToSnapshot(snapshot)
+		errChan <- err
 		return nil, gasRemainCheck, err
 	}
-
-	log.Info("form contract tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
 
 	// return remain gas if everything is ok
+	log.Info("form contract tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
@@ -653,8 +688,17 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		err      error
+		errChan  chan error
 	)
+
+	go func() {
+		select {
+		case <-errChan:
+
+			// go back state DB if something is wrong
+			state.RevertToSnapshot(snapshot)
+		}
+	}()
 
 	scSet := types.StorageContractSet{}
 	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
@@ -673,7 +717,6 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	contractAddr := common.BytesToAddress(scIDBytes[12:])
 	trie := state.StorageTrie(contractAddr)
 
-	// TODO: 检查revision中，还需判断下storage contract那边的状态，如果为0，表示完成storage proof了，不能再做revision
 	// check file contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, state, scr, uint64(currentHeight), contractAddr)
@@ -683,47 +726,74 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainCheck, errCheck
 	}
 
-	// TODO: 只需要更新一下全局state中存储的contract数据即可
 	buffer := bytes.Buffer{}
 	buffer.WriteString(strconv.FormatUint(scr.NewFileSize, 10))
-	trie.TryUpdate(BytesFileSize, buffer.Bytes())
+	err := trie.TryUpdate(BytesFileSize, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
-	trie.TryUpdate(BytesFileMerkleRoot, scr.NewFileMerkleRoot.Bytes())
+	err = trie.TryUpdate(BytesFileMerkleRoot, scr.NewFileMerkleRoot.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
 	buffer.WriteString(strconv.FormatUint(scr.NewRevisionNumber, 10))
-	trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
+	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
 	buffer.WriteString(strconv.FormatUint(scr.NewWindowStart, 10))
-	trie.TryUpdate(BytesWindowStart, buffer.Bytes())
+	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
 	buffer.WriteString(strconv.FormatUint(scr.NewWindowEnd, 10))
-	trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
+	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
 	buffer.Reset()
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
 	vpoBytes, err := rlp.EncodeToBytes(scr.NewValidProofOutputs)
 	if err != nil {
-		return nil, gasRemainCheck, err
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
 	}
-	trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
+	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
 
 	mpoBytes, err := rlp.EncodeToBytes(scr.NewMissedProofOutputs)
 	if err != nil {
-		return nil, gasRemainCheck, err
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
 	}
-	trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
-	trie.TryUpdate(BytesUnlockHash, scr.NewUnlockHash.Bytes())
-
-	// go back state DB if something is wrong above
+	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
 	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
+	}
+
+	err = trie.TryUpdate(BytesUnlockHash, scr.NewUnlockHash.Bytes())
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
 	}
 
 	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
-
 	return nil, gasRemainCheck, nil
 }
 
@@ -732,8 +802,17 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		err      error
+		errChan  chan error
 	)
+
+	go func() {
+		select {
+		case <-errChan:
+
+			// go back state DB if something is wrong
+			state.RevertToSnapshot(snapshot)
+		}
+	}()
 
 	scSet := types.StorageContractSet{}
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
@@ -759,25 +838,28 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainCheck, errCheck
 	}
 
-	// TODO: 生效valid output，
-	//  NOTE：这里不需要lock去防止同时出现revision和storage proof，因为本来交易就是按照nonce先后顺序执行的
 	vpoBytes, err := trie.TryGet(BytesValidProofOutputs)
 	if err != nil {
+		errChan <- err
 		return nil, gasRemainCheck, err
 	}
 
 	vpos := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, vpos)
+	err = rlp.DecodeBytes(vpoBytes, &vpos)
 	if err != nil {
+		errChan <- err
 		return nil, gasRemainCheck, err
 	}
 
 	// effect valid proof outputs, first for client, second for host
+	totalVale := new(big.Int).SetInt64(1)
 	for _, vpo := range vpos {
 		state.AddBalance(vpo.Address, vpo.Value)
+		totalVale.Add(totalVale, vpo.Value)
 	}
+	state.SubBalance(contractAddr, totalVale)
 
-	// TODO: set status for this storage contract
+	// set completed for this storage contract
 	windowEnd, err := trie.TryGet(BytesWindowEnd)
 	if err != nil {
 		return nil, gasRemainCheck, err
@@ -786,14 +868,6 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + endHeightStr))
 	state.SetState(contractAddr, keyExpSC, common.BytesToHash([]byte{0}))
 
-	// TODO: 删除contract
-	// TODO: 全局的 err 根本没用到，其他的合约交易处理一样，后续需要调整下 。。
-	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-
 	log.Info("storage proof tx execution done", "file_contract_id", sp.ParentID.Hex())
-
 	return nil, gasRemainCheck, nil
 }

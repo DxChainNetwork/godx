@@ -205,7 +205,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		return err
 	}
 	originVpo := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, originVpo)
+	err = rlp.DecodeBytes(vpoBytes, &originVpo)
 	if err != nil {
 		return err
 	}
