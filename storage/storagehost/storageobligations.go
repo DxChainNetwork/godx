@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -743,7 +745,16 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			h.log.Info("Error queuing action item:", err)
 		}
 
-		//TODO Add a miner fee to the transaction and submit it to the blockchain.
+		scrv := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
+
+		scBytes, err := rlp.EncodeToBytes(scrv)
+		if err != nil {
+			return
+		}
+
+		if _, err := storage.SendContractRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+			return
+		}
 
 	}
 
