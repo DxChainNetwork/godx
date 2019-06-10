@@ -291,14 +291,14 @@ func (cm *ContractManager) renew() (contract storage.ContractMetaData, err error
 	return
 }
 
-func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (storage.ContractMetaData, error) {
+func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
 
 	lastRev := contract.GetLatestContractRevision()
 
 	// Extract vars from params, for convenience
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
+	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral *big.Int
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
@@ -324,7 +324,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		baseCollateral = hostCollateral
 	}
 
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
+	clientAddr := lastRev.NewValidProofOutputs[0].Address
 	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
 	var hostMiss *big.Int
 	hostMiss = new(big.Int).Sub(hostCollateral, baseCollateral)
@@ -355,6 +355,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	defer func() {
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+			err = common.ErrExtend(err, ErrHostFault)
 		} else {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
@@ -473,15 +474,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 	}
 
-	oldRoots, errRoots := oldContract.MerkleRoots()
-	if errRoots != nil {
-		return storage.ContractMetaData{}, errRoots
+	oldRoots, err := oldContract.MerkleRoots()
+	if err != nil {
+		return storage.ContractMetaData{}, err
 	}
 
 	// store this contract info to client local
-	contractMetaData, errInsert := cm.GetStorageContractSet().InsertContract(header, oldRoots)
-	if errInsert != nil {
-		return storage.ContractMetaData{}, errInsert
+	contractMetaData, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
+	if err != nil {
+		return storage.ContractMetaData{}, err
 	}
 	return contractMetaData, nil
 }
@@ -537,42 +538,41 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 	return
 }
 
-//func (cm *ContractManager) managedRenew(contract *contractset.Contract, contractFunding *big.Int, newEndHeight uint64, allowance proto.Allowance, entry proto.StorageHostEntry, hostEnodeUrl string, clientPublic ecdsa.PublicKey) (storage.ContractMetaData, error) {
-//
-//	//Check if the storage contract ID meets the renew condition
-//	status, ok := cm.managedContractStatus(contract.Header().ID)
-//	if !ok || !status.RenewAbility {
-//		return storage.ContractMetaData{}, errors.New("Condition not satisfied")
-//	}
-//
-//	cm.lock.RLock()
-//	//Calculate the required parameters
-//	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
-//	params := proto.ContractParams{
-//		Allowance:       allowance,
-//		Host:            entry,
-//		Funding:         contractFunding,
-//		StartHeight:     cm.blockHeight,
-//		EndHeight:       newEndHeight,
-//		HostEnodeUrl:    hostEnodeUrl,
-//		ClientPublicKey: clientPublic,
-//	}
-//	cm.lock.RUnlock()
-//
-//	newContract, errRenew := cm.ContractRenew(contract, params)
-//	if errRenew != nil {
-//		return storage.ContractMetaData{}, errRenew
-//	}
-//
-//	return newContract, nil
-//}
-//
-//func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
-//	//Concurrently secure access to contract status
-//	mc, exists := cm.activeContracts.Acquire(id)
-//	if !exists {
-//		return storage.ContractStatus{}, false
-//	}
-//
-//	return mc.Status(), true
-//}
+func (cm *ContractManager) managedRenew(contract *contractset.Contract, contractFunding *big.Int, newEndHeight uint64, allowance proto.Allowance, entry proto.StorageHostEntry, hostEnodeUrl string, clientPublic ecdsa.PublicKey) (storage.ContractMetaData, error) {
+
+	//Check if the storage contract ID meets the renew condition
+	status, ok := cm.managedContractStatus(contract.Header().ID)
+	if !ok || !status.RenewAbility {
+		return storage.ContractMetaData{}, errors.New("Condition not satisfied")
+	}
+
+	cm.lock.RLock()
+	//Calculate the required parameters
+	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
+	params := proto.ContractParams{
+		Allowance:    allowance,
+		Host:         entry,
+		Funding:      contractFunding,
+		StartHeight:  cm.blockHeight,
+		EndHeight:    newEndHeight,
+		HostEnodeUrl: hostEnodeUrl,
+	}
+	cm.lock.RUnlock()
+
+	newContract, errRenew := cm.ContractRenew(contract, params)
+	if errRenew != nil {
+		return storage.ContractMetaData{}, errRenew
+	}
+
+	return newContract, nil
+}
+
+func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
+	//Concurrently secure access to contract status
+	mc, exists := cm.activeContracts.RetrieveContractMetaData(id)
+	if !exists {
+		return storage.ContractStatus{}, false
+	}
+
+	return mc.Status, true
+}

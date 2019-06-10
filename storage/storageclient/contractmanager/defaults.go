@@ -4,6 +4,8 @@
 
 package contractmanager
 
+import "github.com/pkg/errors"
+
 // persistent related constants
 const (
 	PersistContractManagerHeader  = "Storage Contract Manager Settings"
@@ -28,4 +30,8 @@ const (
 
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
+)
+
+var (
+	ErrHostFault = errors.New("host has returned an error")
 )
