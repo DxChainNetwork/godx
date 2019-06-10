@@ -4,6 +4,8 @@
 
 package contractmanager
 
+import "github.com/pkg/errors"
+
 const (
 	PersistContractManagerHeader  = "Storage Contract Manager Settings"
 	PersistContractManagerVersion = "1.0"
@@ -23,4 +25,8 @@ const (
 	minContractPaymentRenewalThreshold = float64(0.06)
 	minContractPaymentFactor           = float64(0.15)
 	maturityDelay                      = uint64(5)
+)
+
+var (
+	ErrHostFault = errors.New("host has returned an error")
 )

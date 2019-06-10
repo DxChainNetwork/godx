@@ -216,7 +216,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	defer func() {
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
-			err = common.ErrExtend(err, errors.New("host has returned an error"))
+			err = common.ErrExtend(err, ErrHostFault)
 		} else {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}

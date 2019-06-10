@@ -6,7 +6,6 @@ package contractmanager
 
 import (
 	"crypto/ecdsa"
-	"errors"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -154,7 +153,7 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		hostID := PubkeyToEnodeID(&host.PublicKey)
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(hostID)
-			err = common.ErrExtend(err, errors.New("host has returned an error"))
+			err = common.ErrExtend(err, ErrHostFault)
 		} else {
 			cm.hostManager.IncrementSuccessfulInteractions(hostID)
 		}
