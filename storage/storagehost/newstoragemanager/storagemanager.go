@@ -100,6 +100,8 @@ func (sm *storageManager) Start() (err error) {
 		if err != nil {
 			return err
 		}
+		// This function shall be called with a background thread. Since the error has been
+		// logged in prepareProcessReleaseUpdate, it's safe not to handle the error here.
 		go sm.prepareProcessReleaseUpdate(up, target)
 	}
 	return nil

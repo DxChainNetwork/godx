@@ -1,6 +1,7 @@
 package newstoragemanager
 
 import (
+	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -9,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 type (
@@ -18,6 +20,7 @@ type (
 		size uint64
 		txn  *writeaheadlog.Transaction
 		batch *leveldb.Batch
+		folder *storageFolder
 	}
 
 	// addStorageFolderUpdatePersist is the structure of addStorageFolderUpdate
@@ -47,11 +50,19 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 	// record the update intent
 	if err = update.recordIntent(sm); err != nil {
 		err = fmt.Errorf("cannot record the intent for %v: %v", update.str(), err)
+		return
+	}
+	// prepare, process, and release the update
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
+		upErr := err.(*updateError)
+		sm.logError(update, upErr)
+		return
 	}
 	return
 }
 
 // validateAddStorageFolder validate the add storage folder request. Return error if validation failed
+
 func (sm *storageManager) validateAddStorageFolder(path string, size uint64) error {
 	// Check numSectors
 	numSectors := sizeToNumSectors(size)
@@ -64,11 +75,23 @@ func (sm *storageManager) validateAddStorageFolder(path string, size uint64) err
 	// check whether the folder path already exists
 	_, err := os.Stat(path)
 	if !os.IsNotExist(err) {
-		return fmt.Errorf("folder already exist: %v", path)
+		return fmt.Errorf("folder already exists: %v", path)
 	}
 	// check whether the folders has exceed limit
 	if size := sm.folders.size(); size >= maxNumFolders {
 		return fmt.Errorf("too many folders to manager")
+	}
+	// Check the existence of the folder in database
+	exist, err := sm.db.hasStorageFolder(path)
+	if err != nil {
+		return fmt.Errorf("check existence error: %v", err)
+	}
+	if exist {
+		return fmt.Errorf("folder already exist in database")
+	}
+	// check the existence in memory
+	if sm.folders.exist(path) {
+		return fmt.Errorf("folder already exist in memory")
 	}
 	return nil
 }
@@ -135,26 +158,76 @@ func (update *addStorageFolderUpdate) prepare(manager *storageManager, target ui
 	update.batch = manager.db.newBatch()
 	switch target {
 	case targetNormal:
+		err = update.prepareNormal(manager)
 	case targetRecoverCommitted:
 	case targetRecoverUncommitted:
+	default:
+		err = errors.New("unknown target")
+	}
+	return
+}
+
+func (update *addStorageFolderUpdate) process(manager *storageManager, target uint8) (err error) {
+	switch target {
+	case targetNormal:
+		err = update.processNormal(manager)
+	case targetRecoverCommitted:
+	case targetRecoverUncommitted:
+	default:
+		err = errors.New("unknown target")
+	}
+	return
+}
+
+// release handle all errors and release the transaction
+func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+	// After all release operation completes, unlock the folder and the folder manager
+	defer manager.folders.lock.Unlock()
+	defer update.folder.lock.Unlock()
+
+	if upErr.hasErrStopped() {
+		// If the storage manager has been stopped, simply do nothing and return
+		// hand it to the next open
+		return
+	}
+	// If no error happened during update, release the transaction
+	if upErr == nil || upErr.isNil() {
+		err = update.txn.Release()
+	}
+	// If the processErr is os.ErrExist, which means that the file not exist during validation,
+	// but during process, some other program (or user) created a file in the path, keep that
+	// file, which might be useful to other programs. So delete the file only if the processErr
+	// is not os.ErrExist
+	if upErr.processErr != os.ErrExist {
+		if newErr := os.Remove(filepath.Join(update.path, dataFileName)); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
+	// delete folder in the update
+	// The folders is locked before prepare. So it shall be safe to delete the entry
+	delete(manager.folders.sfs, update.path)
+	// Delete the entry in database
+	if newErr := manager.db.deleteStorageFolder(update.path); newErr != nil {
+		err = common.ErrCompose(err, newErr)
+		return
 	}
 	return
 }
 
 // prepareNormal defines the prepare stage behaviour with the targetNormal.
 // In this scenario,
-// 1. a new folder should be written to the batch
-// 2. Create a new locked folder and insert to the folder map
-// 3. The underlying transaction is committed.
+// 1. lock the folders and check for whether the folder exist in folders. if exist, return error
+// 2. a new folder should be written to the batch
+// 3. Create a new locked folder and insert to the folder map
+// 4. The underlying transaction is committed.
 func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (err error) {
-	// Check the existence in the database
-	exist, err := manager.db.hasStorageFolder(update.path)
-	if err != nil {
-		return fmt.Errorf("during check db existence for the folder: %v", err)
+	// Check the existence of the folder in folder manager
+	// Note in this step, the folders has been locked to provide thread safe
+	manager.folders.lock.Lock()
+	if manager.folders.exist(update.path) {
+		return fmt.Errorf("folder already exist in memory")
 	}
-	if exist {
-		return fmt.Errorf("")
-	}
+	// construct the storage folder, lock the folder and register to manager.folders
 	sf := &storageFolder{
 		path: update.path,
 		usage: EmptyUsage(update.size),
@@ -162,12 +235,42 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		lock: common.NewTryLock(),
 	}
 	sf.lock.Lock()
-}
-
-func (update *addStorageFolderUpdate) process(manager *storageManager, target uint8) (err error) {
+	// For normal execution, the folders has already been locked. And the folder is also locked.
+	if err = manager.folders.addFolder(sf); err != nil {
+		err = fmt.Errorf("folder cannot register to storageManager: %v", err)
+		return
+	}
+	// Put the storageFolder in the batch
+	bytes, err := rlp.EncodeToBytes(sf)
+	if err != nil {
+		return
+	}
+	update.batch.Put(makeKey(prefixFolder, update.path), bytes)
 	return
 }
 
-func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+// processNormal process the update as normal, which will
+// 1. create the folder in location specified by path
+// 2. Write the batch to db
+// Note in this function, if file exist will return os.ErrExist, which should be handled in
+// release
+func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (err error) {
+	// check again whether the folder exists
+	if _, err := os.Stat(filepath.Join(update.path)); !os.IsNotExist(err) {
+		return os.ErrExist
+	}
+	// create the data file
+	update.folder.dataFile, err = os.Create(filepath.Join(update.path, dataFileName))
+	if err != nil {
+		return
+	}
+	// truncate the data file
+	if err = update.folder.dataFile.Truncate(update.size); err != nil {
+		return err
+	}
+	// write the batch to database
+	if err = manager.db.writeBatch(update.batch); err != nil {
+		return err
+	}
 	return
 }

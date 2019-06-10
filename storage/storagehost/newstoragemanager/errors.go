@@ -70,10 +70,15 @@ func (upErr *updateError) isNil() (isNil bool) {
 	return
 }
 
+// hasErrStopped determines whether the updateError contains error errStopped
+func (upErr *updateError) hasErrStopped() (has bool) {
+	return upErr.prepareErr == errStopped || upErr.processErr == errStopped || upErr.releaseErr == errStopped
+}
+
 // logError determine the behavior of logging the updateErr for the update
 func (sm *storageManager) logError(up update, err *updateError) {
-	// If there is no error in err, simply return
-	if err == nil || err.isNil() {
+	// If there is no error in err, or the error is errStopped, simply return
+	if err == nil || err.isNil() || err.hasErrStopped() {
 		return
 	}
 	var msg string

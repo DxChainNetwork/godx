@@ -2,8 +2,10 @@ package newstoragemanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"sync"
+	"errors"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 // folderManager is the map from folder id to storage folder
@@ -38,24 +40,54 @@ func (fm *folderManager) close() (err error) {
 	defer fm.lock.Unlock()
 
 	for _, sf := range fm.sfs {
+		sf.lock.Lock()
 		err = common.ErrCompose(err, sf.dataFile.Close())
+		sf.lock.Unlock()
 	}
 	return
 }
 
-// exist check whether the folder id is in the folderManager
+// exist check whether the folder id is in the folderManager.
+// The function is thread safe to use
 func (fm *folderManager) exist(path string) (exist bool) {
-	fm.lock.Lock()
-	defer fm.lock.Unlock()
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
 
 	_, exist = fm.sfs[path]
 	return
 }
 
+// get get a already locked storage folder specified by path from the folder manager.
+// Please make sure the storage folder is unlocked when finished using
+func (fm *folderManager) get(path string) (sf *storageFolder, err error){
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
+
+	sf, exist := fm.sfs[path]
+	if !exist {
+		return nil, errors.New("path not exist")
+	}
+	sf.lock.Lock()
+	return sf, nil
+}
+
+// size return the size in the folder manager
+// The function is thread safe to use
 func (fm *folderManager) size() (size int) {
-	fm.lock.Lock()
-	defer fm.lock.Unlock()
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
 
 	size = len(fm.sfs)
 	return
+}
+
+// add add a storageFolder to the folder manager.
+// Note this function is totally not thread safe either for folder manager or the folder itself.
+// Make sure both the folderManager and storageFolder are locked before the function is called
+func (fm *folderManager) addFolder(sf *storageFolder) (err error) {
+	if _, exist := fm.sfs[sf.path]; exist {
+		err = errors.New("path already exist")
+	}
+	fm.sfs[sf.path] = sf
+	return nil
 }

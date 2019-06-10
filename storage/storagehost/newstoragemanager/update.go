@@ -48,15 +48,15 @@ func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error
 }
 
 // prepareProcessReleaseUpdate is called with a goroutine to prepare, process, release the update.
-func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) {
+func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (upErr *updateError) {
 	defer sm.tm.Done()
 	// register the error handling
-	var upErr *updateError
 	defer func() {
 		if err := up.release(sm, upErr); err != nil {
 			upErr = upErr.setReleaseError(err)
 			sm.logError(up, upErr)
 		}
+		return
 	}()
 	// prepare the update
 	if err := up.prepare(sm, target); err != nil {
@@ -64,14 +64,16 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) {
 		return
 	}
 	if sm.stopped() {
+		upErr = upErr.setPrepareError(errStopped)
 		return
 	}
 	// process the update
 	if err := up.process(sm, target); err != nil {
-		upErr = upErr.setPrepareError(err)
+		upErr = upErr.setProcessError(err)
 		return
 	}
 	if sm.stopped() {
+		upErr = upErr.setProcessError(errStopped)
 		return
 	}
 }

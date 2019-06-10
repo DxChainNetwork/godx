@@ -58,6 +58,12 @@ func (db *database) newBatch() *leveldb.Batch {
 	return new(leveldb.Batch)
 }
 
+// writeBatch write the batch to the database
+func (db *database) writeBatch(batch *leveldb.Batch) (err error) {
+	err = db.lvl.Write(batch, nil)
+	return
+}
+
 // getOrCreateSectorSalt return the sector salt and return.
 // If previously the sector salt is not stored, create a new one and return
 func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
@@ -115,6 +121,27 @@ func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error
 	}
 	if err = rlp.DecodeBytes(folderBytes, &sf); err != nil {
 		sf = nil
+		return
+	}
+	return
+}
+
+// deleteStorageFolder delete the storage folder entry specified with the path
+// WARN: this action will also remove all folder_sector map entries associated
+// with the folder. Be sure that all sectors are placed safe before this
+// function is called.
+func (db *database) deleteStorageFolder(path string) (err error) {
+	folderKey := makeKey(prefixFolder, path)
+	if err = db.lvl.Delete(folderKey, nil); err != nil {
+		return
+	}
+	// Remove all entries in the iterator for folder to sector entries
+	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(makeKey(prefixFolderSector, path))), nil)
+	batch := new(leveldb.Batch)
+	for iter.Next() {
+		batch.Delete(iter.Key())
+	}
+	if err = db.writeBatch(batch); err != nil {
 		return
 	}
 	return
