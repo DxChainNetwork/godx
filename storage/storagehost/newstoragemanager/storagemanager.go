@@ -39,9 +39,9 @@ type (
 )
 
 // TODO: Test new start close routine.
-
 // New create a new storage manager
 func New(persistDir string) (sm *storageManager, err error) {
+	sm = &storageManager{}
 	sm.db, err = openDB(filepath.Join(persistDir, databaseFileName))
 	if err != nil {
 		return nil, fmt.Errorf("cannot create the storagemanager: %v", err)

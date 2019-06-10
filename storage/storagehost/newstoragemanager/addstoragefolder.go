@@ -38,7 +38,6 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 	if err = sm.tm.Add(); err != nil {
 		return
 	}
-	defer sm.tm.Done()
 
 	// validate the add storage folder
 	if err = sm.validateAddStorageFolder(path, size); err != nil {
@@ -55,7 +54,11 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 	// prepare, process, and release the update
 	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
 		upErr := err.(*updateError)
-		sm.logError(update, upErr)
+		if !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
 		return
 	}
 	return
@@ -89,7 +92,9 @@ func (sm *storageManager) validateAddStorageFolder(path string, size uint64) err
 	if exist {
 		return fmt.Errorf("folder already exist in database")
 	}
-	// check the existence in memory
+	// Check the existence of the folder in folder manager
+	// Note in this step, the folders has been locked to provide thread safe
+	sm.folders.lock.Lock()
 	if sm.folders.exist(path) {
 		return fmt.Errorf("folder already exist in memory")
 	}
@@ -150,7 +155,7 @@ func (update *addStorageFolderUpdate) recordIntent(manager *storageManager) (err
 }
 
 // prepare is the interface function defined by update, which prepares an update.
-// For addStorageFolderUpdate, the prepare stage is defined by prepareNormal, prepareCommitted,
+// For addStorageFolderUpdate, the prepare stage is defined by prepareNormal, prepareUncommitted,
 // prepareUncommitted based on the target.
 func (update *addStorageFolderUpdate) prepare(manager *storageManager, target uint8) (err error) {
 	// In the prepare stage, the folder in the folder manager should be locked and removed.
@@ -160,9 +165,9 @@ func (update *addStorageFolderUpdate) prepare(manager *storageManager, target ui
 	case targetNormal:
 		err = update.prepareNormal(manager)
 	case targetRecoverCommitted:
-		err = update.prepareRecover(manager)
+		err = update.prepareCommitted(manager)
 	case targetRecoverUncommitted:
-		err = update.prepareRecover(manager)
+		err = update.prepareUncommitted(manager)
 	default:
 		err = errors.New("unknown target")
 	}
@@ -175,9 +180,9 @@ func (update *addStorageFolderUpdate) process(manager *storageManager, target ui
 	case targetNormal:
 		err = update.processNormal(manager)
 	case targetRecoverCommitted:
-		err = update.processRecover(manager)
+		err = update.processCommitted(manager)
 	case targetRecoverUncommitted:
-		err = update.processRecover(manager)
+		err = update.processUncommitted(manager)
 	default:
 		err = errors.New("unknown target")
 	}
@@ -187,21 +192,22 @@ func (update *addStorageFolderUpdate) process(manager *storageManager, target ui
 // release handle all errors and release the transaction
 func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	// After all release operation completes, unlock the folder and the folder manager
-	defer manager.folders.lock.Unlock()
 	defer func() {
+		manager.folders.lock.Unlock()
 		if update.folder != nil {
+			update.folder.status = folderAvailable
 			update.folder.lock.Unlock()
 		}
 	}()
 
-	if upErr.hasErrStopped() {
-		// If the storage manager has been stopped, simply do nothing and return
-		// hand it to the next open
-		return
-	}
 	// If no error happened during update, release the transaction and return
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
+		return
+	}
+	if upErr.hasErrStopped() {
+		// If the storage manager has been stopped, simply do nothing and return
+		// hand it to the next open
 		return
 	}
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
@@ -232,11 +238,9 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 // 3. Create a new locked folder and insert to the folder map
 // 4. The underlying transaction is committed.
 func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (err error) {
-	// Check the existence of the folder in folder manager
-	// Note in this step, the folders has been locked to provide thread safe
-	manager.folders.lock.Lock()
 	// construct the storage folder, lock the folder and register to manager.folders
 	sf := &storageFolder{
+		status:     folderUnavailable,
 		path:       update.path,
 		usage:      EmptyUsage(update.size),
 		numSectors: sizeToNumSectors(update.size),
@@ -248,12 +252,16 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		err = fmt.Errorf("folder cannot register to storageManager: %v", err)
 		return
 	}
+	update.folder = sf
 	// Put the storageFolder in the batch
 	bytes, err := rlp.EncodeToBytes(sf)
 	if err != nil {
 		return
 	}
 	update.batch.Put(makeKey(prefixFolder, update.path), bytes)
+	if err = <-update.txn.Commit(); err != nil {
+		return fmt.Errorf("cannot commit the transaction")
+	}
 	return
 }
 
@@ -266,6 +274,10 @@ func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (er
 	// check again whether the folder exists
 	if _, err := os.Stat(filepath.Join(update.path)); !os.IsNotExist(err) {
 		return os.ErrExist
+	}
+	// create the directory
+	if err = os.MkdirAll(update.path, 0700); err != nil {
+		return err
 	}
 	// create the data file
 	update.folder.dataFile, err = os.Create(filepath.Join(update.path, dataFileName))
@@ -296,8 +308,8 @@ func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addSt
 	return
 }
 
-// prepareRecover is the function called in prepare stage as preparing committed and uncommitted updates
-func (update *addStorageFolderUpdate) prepareRecover(manager *storageManager) (err error) {
+// prepareCommitted is the function called in prepare stage as preparing committed updates
+func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
 	update.folder, err = manager.folders.get(update.path)
 	if err == nil {
 		// In this case, error only happens when the update.path is not in folders
@@ -309,8 +321,29 @@ func (update *addStorageFolderUpdate) prepareRecover(manager *storageManager) (e
 	return errRevert
 }
 
-// processRecover is the function called in process stage as processing committed an uncommitted updates
-func (update *addStorageFolderUpdate) processRecover(manager *storageManager) (err error) {
+// processCommitted is the function called in process stage as processing committed an uncommitted updates
+func (update *addStorageFolderUpdate) processCommitted(manager *storageManager) (err error) {
+	// Do nothing, just return errRevert.
+	return errRevert
+}
+
+// prepareUncommitted is the function called in prepare stage as preparing uncommitted updates
+func (update *addStorageFolderUpdate) prepareUncommitted(manager *storageManager) (err error) {
+	update.folder, err = manager.folders.get(update.path)
+	if err == nil {
+		// In this case, error only happens when the update.path is not in folders
+		update.folder = nil
+	}
+	// lock the folders until release
+	manager.folders.lock.Lock()
+	if err = <-update.txn.Commit(); err != nil {
+		return common.ErrCompose(err, errRevert)
+	}
+	return errRevert
+}
+
+// processUncommitted is the function called in process stage as processing uncommitted updates
+func (update *addStorageFolderUpdate) processUncommitted(manager *storageManager) (err error) {
 	// Do nothing, just return errRevert.
 	return errRevert
 }

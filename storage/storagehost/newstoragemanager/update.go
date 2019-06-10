@@ -53,6 +53,7 @@ func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error
 func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (upErr *updateError) {
 	defer sm.tm.Done()
 	// register the error handling
+	upErr = &updateError{}
 	defer func() {
 		if err := up.release(sm, upErr); err != nil {
 			upErr = upErr.setReleaseError(err)

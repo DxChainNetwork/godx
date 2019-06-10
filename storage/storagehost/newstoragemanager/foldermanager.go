@@ -48,11 +48,8 @@ func (fm *folderManager) close() (err error) {
 }
 
 // exist check whether the folder id is in the folderManager.
-// The function is thread safe to use
+// The function is not thread safe to use
 func (fm *folderManager) exist(path string) (exist bool) {
-	fm.lock.RLock()
-	defer fm.lock.RUnlock()
-
 	_, exist = fm.sfs[path]
 	return
 }
