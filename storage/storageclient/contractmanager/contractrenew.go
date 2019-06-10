@@ -159,7 +159,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	lastRev := contract.GetLatestContractRevision()
 
 	// Extract vars from params, for convenience
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
+	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral *big.Int
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
@@ -185,7 +185,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		baseCollateral = hostCollateral
 	}
 
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
+	clientAddr := lastRev.NewValidProofOutputs[0].Address
 	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
 	var hostMiss *big.Int
 	hostMiss = new(big.Int).Sub(hostCollateral, baseCollateral)
@@ -411,13 +411,12 @@ func (cm *ContractManager) managedRenew(contract *contractset.Contract, contract
 	//Calculate the required parameters
 	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
 	params := proto.ContractParams{
-		Allowance:       allowance,
-		Host:            entry,
-		Funding:         contractFunding,
-		StartHeight:     cm.blockHeight,
-		EndHeight:       newEndHeight,
-		HostEnodeUrl:    hostEnodeUrl,
-		ClientPublicKey: clientPublic,
+		Allowance:    allowance,
+		Host:         entry,
+		Funding:      contractFunding,
+		StartHeight:  cm.blockHeight,
+		EndHeight:    newEndHeight,
+		HostEnodeUrl: hostEnodeUrl,
 	}
 	cm.lock.RUnlock()
 
