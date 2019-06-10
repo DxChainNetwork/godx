@@ -65,6 +65,9 @@ func (cm *ContractManager) contractMaintenance() {
 	var clientRemainingFund common.BigInt
 	periodCost := cm.CalculatePeriodCost()
 
+	// TODO (mzhang): making sure that if the allowance changed in the middle of the contract
+	// nothing should be changed right away. Making sure that the changes only applies to the
+	// next contract period
 	if cm.rentPayment.Fund.Cmp(periodCost.ContractFund) > 0 {
 		clientRemainingFund = cm.rentPayment.Fund.Sub(periodCost.ContractFund)
 	}
@@ -99,7 +102,7 @@ func (cm *ContractManager) contractMaintenance() {
 	}
 
 	// prepare to for forming contract based on the number of extract contracts needed
-	if terminated, err := cm.prepareFormContract(neededContracts, clientRemainingFund); err != nil || terminated {
+	if terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund); err != nil || terminated {
 		return
 	}
 

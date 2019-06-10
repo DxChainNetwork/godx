@@ -6,7 +6,6 @@ package contractmanager
 
 import (
 	"github.com/DxChainNetwork/godx/core"
-	"github.com/DxChainNetwork/godx/core/types"
 )
 
 func (cm *ContractManager) subscribeChainChangeEvent() {
@@ -29,41 +28,38 @@ func (cm *ContractManager) subscribeChainChangeEvent() {
 // analyzeChainEventChange will analyze block changing event and update the corresponded
 // storage contract manager field (blockHeight)
 func (cm *ContractManager) analyzeChainEventChange(change core.ChainChangeEvent) {
+	// TODO (mzhang): assumption here, the genesis block will never be included in the applied or reverted block list
 	revert := len(change.RevertedBlockHashes)
 	apply := len(change.AppliedBlockHashes)
 
+	cm.lock.Lock()
+	// if chain got reverted, then decrement the blockHeight
 	for i := 0; i < revert; i++ {
-		cm.lock.Lock()
 		cm.blockHeight--
-		cm.lock.Unlock()
 
 		if cm.blockHeight < 0 {
 			cm.log.Error("the block height stores in the storage contract manager should be positive")
-			cm.lock.Lock()
 			cm.blockHeight = 0
-			cm.lock.Unlock()
 		}
 	}
 
+	// if new blocks applied to the block chain, then increment the blockHeight
 	for i := 0; i < apply; i++ {
-		cm.lock.Lock()
 		cm.blockHeight++
-		cm.lock.Unlock()
 	}
 
-	// get block information
-	for _, hash := range change.AppliedBlockHashes {
-		txs, err := cm.b.GetTxByBlockHash(hash)
-		if err != nil {
-			cm.log.Error("failed to get transaction information from the block")
-			continue
-		}
-		cm.analyzeTransactions(txs)
+	if cm.blockHeight >= cm.currentPeriod+cm.rentPayment.Period {
+		cm.currentPeriod += cm.rentPayment.Period
 	}
-}
+	cm.lock.Unlock()
 
-// analyzeTransactions will get the transaction from the block, analyze them
-// to check if there are any contract needs to be recovered
-func (cm *ContractManager) analyzeTransactions(txs types.Transactions) {
-	// TODO (mzhang): IMPLEMENTATION NOT FINISHED YET
+	// save the newest settings (blockHeight) persistently
+	if err := cm.saveSettings(); err != nil {
+		cm.log.Warn("failed to save the current contract manager settings while analyzing the chain change event")
+	}
+
+	// if the block chain finished syncing, start the contract maintenance routine
+	if !cm.b.Syncing() {
+		go cm.contractMaintenance()
+	}
 }

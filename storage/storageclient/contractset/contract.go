@@ -298,7 +298,7 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 	return
 }
 
-// contractHeaderUpdate will update contract header information in both db and mermory
+// contractHeaderUpdate will update contract header information in both db and memory
 func (c *Contract) contractHeaderUpdate(newHeader ContractHeader) (err error) {
 	// update db, store will update the entry with the same key
 	if err = c.db.StoreContractHeader(newHeader); err != nil {

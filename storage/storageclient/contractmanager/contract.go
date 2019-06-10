@@ -441,3 +441,33 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 
 	return
 }
+
+// retrieveContractStatus will get and return the contract's newest status
+func (cm *ContractManager) retrieveContractStatus(id storage.ContractID) (stats storage.ContractStatus, exists bool) {
+	contract, exists := cm.activeContracts.RetrieveContractMetaData(id)
+	if !exists {
+		return
+	}
+	stats = contract.Status
+
+	return
+}
+
+// updateContractStatus will update the contract status for the contract with provided id
+// with the contract status caller provided
+func (cm *ContractManager) updateContractStatus(id storage.ContractID, status storage.ContractStatus) (err error) {
+	// acquire the contract first
+	contract, exists := cm.activeContracts.Acquire(id)
+	if !exists {
+		return fmt.Errorf("failed to acquire the contract: contract does not exist")
+	}
+
+	// return the contract after the function return
+	defer func() {
+		if err := cm.activeContracts.Return(contract); err != nil {
+			cm.log.Warn("failed to return the contract, it has been deleted already")
+		}
+	}()
+
+	return contract.UpdateStatus(status)
+}

@@ -42,10 +42,10 @@ type ContractManager struct {
 
 	// contract renew related, where renewed from connect [new] -> old
 	// and renewed to connect [old] -> new
-	renewedFrom  map[storage.ContractID]storage.ContractID
-	renewedTo    map[storage.ContractID]storage.ContractID
-	renewing     map[storage.ContractID]bool
-	failedRenews map[storage.ContractID]uint64
+	renewedFrom      map[storage.ContractID]storage.ContractID
+	renewedTo        map[storage.ContractID]storage.ContractID
+	renewing         map[storage.ContractID]bool
+	failedRenewCount map[storage.ContractID]uint64
 
 	// used to acquire storage contract
 	blockHeight   uint64
@@ -68,7 +68,7 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 		expiredContracts: make(map[storage.ContractID]storage.ContractMetaData),
 		renewedFrom:      make(map[storage.ContractID]storage.ContractID),
 		renewedTo:        make(map[storage.ContractID]storage.ContractID),
-		failedRenews:     make(map[storage.ContractID]uint64),
+		failedRenewCount: make(map[storage.ContractID]uint64),
 		hostToContract:   make(map[enode.ID]storage.ContractID),
 		renewing:         make(map[storage.ContractID]bool),
 		quit:             make(chan struct{}),

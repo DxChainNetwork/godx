@@ -20,7 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
-func (cm *ContractManager) prepareFormContract(neededContracts int, clientRemainingFund common.BigInt) (terminated bool, err error) {
+func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt) (terminated bool, err error) {
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
 	if err != nil {
@@ -42,7 +42,7 @@ func (cm *ContractManager) prepareFormContract(neededContracts int, clientRemain
 		}
 
 		// start to form contract
-		formCost, contract, errFormContract := cm.formContract(host, contractFund, contractEndHeight)
+		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight)
 		if errFormContract != nil {
 			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, err.Error())
 			continue
@@ -74,8 +74,8 @@ func (cm *ContractManager) prepareFormContract(neededContracts int, clientRemain
 	return
 }
 
-func (cm *ContractManager) formContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64) (formCost common.BigInt, contract storage.ContractMetaData, err error) {
-	// TODO (mzhang): formContract
+func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64) (formCost common.BigInt, contract storage.ContractMetaData, err error) {
+	// TODO (mzhang): createContract
 	return
 }
 

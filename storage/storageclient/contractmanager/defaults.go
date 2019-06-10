@@ -4,12 +4,14 @@
 
 package contractmanager
 
+// persistent related constants
 const (
 	PersistContractManagerHeader  = "Storage Contract Manager Settings"
 	PersistContractManagerVersion = "1.0"
 	PersistFileName               = "storagecontractmanager.json"
 )
 
+// maintenance related constants
 const (
 	randomStorageHostsBackup = 30
 	randomStorageHostsFactor = 4
@@ -23,4 +25,7 @@ const (
 	minContractPaymentRenewalThreshold = float64(0.06)
 	minContractPaymentFactor           = float64(0.15)
 	maturityDelay                      = uint64(5)
+
+	// if a contract failed to renew for 12 times, consider to replace the contract
+	consecutiveRenewFailsBeforeReplacement = 12
 )

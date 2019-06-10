@@ -81,7 +81,7 @@ func newContractManagerTest(hm *storagehostmanager.StorageHostManager) (cm *Cont
 		expiredContracts: make(map[storage.ContractID]storage.ContractMetaData),
 		renewedFrom:      make(map[storage.ContractID]storage.ContractID),
 		renewedTo:        make(map[storage.ContractID]storage.ContractID),
-		failedRenews:     make(map[storage.ContractID]uint64),
+		failedRenewCount: make(map[storage.ContractID]uint64),
 		hostToContract:   make(map[enode.ID]storage.ContractID),
 		renewing:         make(map[storage.ContractID]bool),
 		quit:             make(chan struct{}),
