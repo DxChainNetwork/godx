@@ -6,6 +6,7 @@ package contractmanager
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -102,7 +103,7 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 	return cm.hostManager.RetrieveRandomHosts(neededContracts*randomStorageHostsFactor+randomStorageHostsBackup, blackList, addressBlackList)
 }
 
-func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.ContractMetaData, error) {
+func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md storage.ContractMetaData, err error) {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
@@ -153,6 +154,7 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.
 		hostID := PubkeyToEnodeID(&host.PublicKey)
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(hostID)
+			err = common.ErrExtend(err, errors.New("host has returned an error"))
 		} else {
 			cm.hostManager.IncrementSuccessfulInteractions(hostID)
 		}
@@ -271,9 +273,9 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (storage.
 	}
 
 	// store this contract info to client local
-	meta, errInsert := cm.GetStorageContractSet().InsertContract(header, nil)
-	if errInsert != nil {
-		return storage.ContractMetaData{}, errInsert
+	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
+	if err != nil {
+		return storage.ContractMetaData{}, err
 	}
 
 	return meta, nil

@@ -152,7 +152,7 @@ func (cm *ContractManager) renewContract(record contractRenewRecord, currentPeri
 	return
 }
 
-func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (storage.ContractMetaData, error) {
+func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
 
@@ -216,6 +216,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	defer func() {
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+			err = common.ErrExtend(err, errors.New("host has returned an error"))
 		} else {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
@@ -334,15 +335,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 	}
 
-	oldRoots, errRoots := oldContract.MerkleRoots()
-	if errRoots != nil {
-		return storage.ContractMetaData{}, errRoots
+	oldRoots, err := oldContract.MerkleRoots()
+	if err != nil {
+		return storage.ContractMetaData{}, err
 	}
 
 	// store this contract info to client local
-	contractMetaData, errInsert := cm.GetStorageContractSet().InsertContract(header, oldRoots)
-	if errInsert != nil {
-		return storage.ContractMetaData{}, errInsert
+	contractMetaData, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
+	if err != nil {
+		return storage.ContractMetaData{}, err
 	}
 	return contractMetaData, nil
 }
@@ -430,10 +431,10 @@ func (cm *ContractManager) managedRenew(contract *contractset.Contract, contract
 
 func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
 	//Concurrently secure access to contract status
-	mc, exists := cm.activeContracts.Acquire(id)
+	mc, exists := cm.activeContracts.RetrieveContractMetaData(id)
 	if !exists {
 		return storage.ContractStatus{}, false
 	}
 
-	return mc.Status(), true
+	return mc.Status, true
 }
