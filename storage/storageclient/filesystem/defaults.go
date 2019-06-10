@@ -59,5 +59,5 @@ const (
 
 const (
 	// healthCheckInterval is the interval between two health checks
-	healthCheckInterval = time.Minute
+	healthCheckInterval = 30 * time.Minute
 )
