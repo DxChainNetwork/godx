@@ -316,6 +316,7 @@ func (fs *FileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, er
 			return path, time.Unix(int64(md.TimeLastHealthCheck), 0), nil
 		}
 	}
+	return path, time.Unix(int64(md.TimeLastHealthCheck), 0), nil
 }
 
 // RepairNeededChan return a channel that signals a repair is needed
