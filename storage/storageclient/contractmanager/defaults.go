@@ -4,7 +4,11 @@
 
 package contractmanager
 
-import "github.com/pkg/errors"
+import (
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/pkg/errors"
+	"math/big"
+)
 
 // persistent related constants
 const (
@@ -30,6 +34,15 @@ const (
 
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
+)
+
+// variables below are used to calculate the maxHostStoragePrice and maxHostDeposit, which set
+// a limitation to storage host's configuration
+var (
+	terabytesToBytes           = common.NewBigIntUint64(1e12)
+	blockBytesPerMonthTeraByte = terabytesToBytes.MultUint64(4320)
+	maxHostStoragePrice        = common.PtrBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)).MultUint64(300e3).Div(blockBytesPerMonthTeraByte)
+	maxHostDeposit             = common.PtrBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)).MultUint64(1e3)
 )
 
 var (

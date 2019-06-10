@@ -10,11 +10,23 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// contractRenewRecord data structure stores information
+// of the contract that needs to be renewed
 type contractRenewRecord struct {
 	id   storage.ContractID
 	cost common.BigInt
 }
 
+// contractMaintenance will perform the following actions:
+// 		1. maintainExpiration: remove all expired contract from the active contract list and adding
+//		them to expired contract list
+//		2. removeDuplications: contracts belong to the same storage host will be removed from the
+//		active contract list
+// 		3. maintainHostToContractIDMapping: update the host to contractID mapping
+// 		4. removeHostWithDuplicateNetworkAddress: for storage host located under same network address, only
+// 		one can be saved
+// 		5. filter out contracts need to be renewed, renew contract
+// 		6. check out how many more contracts need to be created, create the contracts
 func (cm *ContractManager) contractMaintenance() {
 	// if the maintenance is running, return directly
 	// otherwise, start the maintaining job
@@ -65,9 +77,7 @@ func (cm *ContractManager) contractMaintenance() {
 	var clientRemainingFund common.BigInt
 	periodCost := cm.CalculatePeriodCost()
 
-	// TODO (mzhang): making sure that if the allowance changed in the middle of the contract
-	// nothing should be changed right away. Making sure that the changes only applies to the
-	// next contract period
+	// in case the rentPayment has been changed in the middle
 	if cm.rentPayment.Fund.Cmp(periodCost.ContractFund) > 0 {
 		clientRemainingFund = cm.rentPayment.Fund.Sub(periodCost.ContractFund)
 	}
@@ -105,7 +115,6 @@ func (cm *ContractManager) contractMaintenance() {
 	if terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund); err != nil || terminated {
 		return
 	}
-
 }
 
 func (cm *ContractManager) checkMaintenanceTermination() (terminate bool) {

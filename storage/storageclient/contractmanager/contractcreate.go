@@ -74,11 +74,66 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 	return
 }
 
-func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64) (formCost common.BigInt, contract storage.ContractMetaData, err error) {
-	// TODO (mzhang): createContract
+// createContract will try to create the contract with the host that caller passed in:
+// 		1. storage host validation
+// 		2. form the contract create parameters
+// 		3. start to create the contract
+// 		4. update the contract manager fields
+func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64) (formCost common.BigInt, newlyCreatedContract storage.ContractMetaData, err error) {
+	// 1. storage host validation
+	// validate the storage price
+	if host.StoragePrice.Cmp(maxHostStoragePrice) > 0 {
+		formCost = common.BigInt0
+		err = fmt.Errorf("failed to create the contract with host: %v, the storage price is too high", host.EnodeID)
+		return
+	}
+
+	cm.lock.RLock()
+	period := cm.rentPayment.Period
+	cm.lock.RUnlock()
+
+	// validate the storage host max deposit
+	if host.MaxDeposit.Cmp(maxHostDeposit) > 0 {
+		host.MaxDeposit = maxHostDeposit
+	}
+
+	// validate the storage host max duration
+	if host.MaxDuration < period {
+		formCost = common.BigInt0
+		err = fmt.Errorf("failed to create the contract with host: %v, the max duration is smaller than period", host.EnodeID)
+		return
+	}
+
+	// TODO (mzhang): waiting form params modification
+	// 2. form the contract create parameters
+	params := proto.ContractParams{}
+
+	// 3. create the contract
+	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
+		formCost = common.BigInt0
+		err = fmt.Errorf("failed to create the contract with host %v: %s", newlyCreatedContract.EnodeID, err.Error())
+		return
+	}
+
+	// 4. update the contract manager fields
+	cm.lock.Lock()
+	// check if the storage client have created another contract with the same storage host
+	if _, exists := cm.hostToContract[newlyCreatedContract.EnodeID]; exists {
+		cm.lock.Unlock()
+		formCost = contractFund
+		err = fmt.Errorf("client already formed a contract with the same storage host %v", newlyCreatedContract.EnodeID)
+		return
+	}
+
+	// if not exists, update the host to contract mapping
+	cm.hostToContract[newlyCreatedContract.EnodeID] = newlyCreatedContract.ID
+	cm.lock.Unlock()
+
+	formCost = contractFund
 	return
 }
 
+// randomHostsForContractForm will randomly retrieve some storage hosts from the storage host pool
 func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (randomHosts []storage.HostInfo, err error) {
 	// for all active contracts, the storage host will be added to be blacklist
 	// for all active contracts which are not canceled, good for uploading, and renewing
@@ -102,6 +157,8 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 	return cm.hostManager.RetrieveRandomHosts(neededContracts*randomStorageHostsFactor+randomStorageHostsBackup, blackList, addressBlackList)
 }
 
+// ContractCreate will try to create the contract with the storage host manager provided
+// by the caller
 func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md storage.ContractMetaData, err error) {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host

@@ -86,6 +86,7 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 	return
 }
 
+// CalculatePeriodCost will calculate the storage client's cost for one period (including all contracts)
 func (cm *ContractManager) CalculatePeriodCost() (periodCost storage.PeriodCost) {
 	activeContracts := cm.activeContracts.RetrieveAllContractsMetaData()
 
@@ -127,6 +128,7 @@ func (cm *ContractManager) CalculatePeriodCost() (periodCost storage.PeriodCost)
 	return
 }
 
+// calculateContractUnspentFund will be used to calculate the storage client's remaining contract fund
 func calculateContractUnspentFund(pc *storage.PeriodCost, contractPayment common.BigInt) {
 	totalContractCost := pc.ContractFees.Add(pc.UploadCost).Add(pc.DownloadCost).Add(pc.StorageCost)
 	if contractPayment.Cmp(totalContractCost) > 0 {
@@ -134,11 +136,14 @@ func calculateContractUnspentFund(pc *storage.PeriodCost, contractPayment common
 	}
 }
 
+// calculatePrevContractCost will be used to calculate the previous contract cost
 func calculatePrevContractCost(pc *storage.PeriodCost, contract storage.ContractMetaData) {
 	pc.PrevContractCost = pc.PrevContractCost.Add(contract.ContractFee).Add(contract.GasFee).
 		Add(contract.UploadCost).Add(contract.DownloadCost).Add(contract.StorageCost)
 }
 
+// updatePrevContractCost will be used to update the previous contracts cost, which will be
+// used to calculate the total storage client period cost
 func updatePrevContractCost(pc *storage.PeriodCost, contract storage.ContractMetaData) {
 	// calculate the contract fees
 	pc.ContractFees = pc.ContractFees.Add(contract.ContractFee)

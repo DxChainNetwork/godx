@@ -28,7 +28,6 @@ func (cm *ContractManager) subscribeChainChangeEvent() {
 // analyzeChainEventChange will analyze block changing event and update the corresponded
 // storage contract manager field (blockHeight)
 func (cm *ContractManager) analyzeChainEventChange(change core.ChainChangeEvent) {
-	// TODO (mzhang): assumption here, the genesis block will never be included in the applied or reverted block list
 	revert := len(change.RevertedBlockHashes)
 	apply := len(change.AppliedBlockHashes)
 

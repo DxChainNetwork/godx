@@ -157,7 +157,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	renewContractID := record.id
 	renewContractCost := record.cost
 
-	// mark the contract as renewing, and remove it at the end
+	// mark the oldContract as renewing, and remove it at the end
 	cm.lock.Lock()
 	cm.renewing[renewContractID] = true
 	cm.lock.Unlock()
@@ -168,65 +168,65 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.lock.Unlock()
 	}()
 
-	// TODO (mzhang): making sure that the contract will not be revised while renewing it, waiting for HZ
+	// TODO (mzhang): making sure that the oldContract will not be revised while renewing it, waiting for HZ
 
-	// acquire the contract
-	contract, exists := cm.activeContracts.Acquire(renewContractID)
+	// acquire the oldContract
+	oldContract, exists := cm.activeContracts.Acquire(renewContractID)
 	if !exists {
 		renewCost = common.BigInt0
-		err = fmt.Errorf("the contract that is trying to be renewed with id %v no longer exists", renewContractID)
+		err = fmt.Errorf("the oldContract that is trying to be renewed with id %v no longer exists", renewContractID)
 		return
 	}
 
-	// 1. get the contract status and check its renewAbility, contract validation
+	// 1. get the oldContract status and check its renewAbility, oldContract validation
 	stats, exists := cm.retrieveContractStatus(renewContractID)
 	if !exists || !stats.RenewAbility {
-		if err := cm.activeContracts.Return(contract); err != nil {
-			cm.log.Warn("during the contract renew process, the contract cannot be returned because it has been deleted already")
+		if err := cm.activeContracts.Return(oldContract); err != nil {
+			cm.log.Warn("during the oldContract renew process, the oldContract cannot be returned because it has been deleted already")
 		}
 		renewCost = common.BigInt0
-		err = fmt.Errorf("contract with id %v is marked as unable to be renewed", renewContractID)
+		err = fmt.Errorf("oldContract with id %v is marked as unable to be renewed", renewContractID)
 		return
 	}
 
-	// 2. contract renew
-	renewedContract, renewErr := cm.renew()
+	// 2. oldContract renew
+	renewedContract, renewErr := cm.renew(oldContract, rentPayment)
 
 	// 3. handle the failed renews
 	if renewErr != nil {
-		if err := cm.activeContracts.Return(contract); err != nil {
-			cm.log.Warn("during the handle contract renew failed process, the contract cannot be returned because it has been deleted already")
+		if err := cm.activeContracts.Return(oldContract); err != nil {
+			cm.log.Warn("during the handle oldContract renew failed process, the oldContract cannot be returned because it has been deleted already")
 		}
 		renewCost = common.BigInt0
-		err = cm.handleRenewFailed(contract, renewErr, rentPayment, blockHeight, stats)
+		err = cm.handleRenewFailed(oldContract, renewErr, rentPayment, blockHeight, stats)
 		return
 	}
 
-	// 4. update the contract manager
+	// 4. update the oldContract manager
 	renewedContractStatus := storage.ContractStatus{
 		UploadAbility: true,
 		RenewAbility:  true,
 		Canceled:      false,
 	}
-	if err := cm.updateContractStatus(renewedContract.ID, renewedContractStatus); err != nil {
+	if err = cm.updateContractStatus(renewedContract.ID, renewedContractStatus); err != nil {
 		// renew succeed, but status update failed
-		cm.log.Warn(fmt.Sprintf("failed to update the renewed contract status: %s", err.Error()))
-		if err := cm.activeContracts.Return(contract); err != nil {
-			cm.log.Warn("during the updating renewed contract failed process, the contract cannot be returned because it has been deleted already")
+		cm.log.Warn(fmt.Sprintf("failed to update the renewed oldContract status: %s", err.Error()))
+		if err = cm.activeContracts.Return(oldContract); err != nil {
+			cm.log.Warn("during the updating renewed oldContract failed process, the oldContract cannot be returned because it has been deleted already")
 			renewCost = renewContractCost
 			err = nil
 			return
 		}
 	}
 
-	// update the old contract status
+	// update the old oldContract status
 	stats.RenewAbility = false
 	stats.UploadAbility = false
 	stats.Canceled = true
-	if err := contract.UpdateStatus(stats); err != nil {
-		cm.log.Warn("failed to update the old contract (before renew) status")
-		if err := cm.activeContracts.Return(contract); err != nil {
-			cm.log.Warn("during the old contract status update process, the contract cannot be returned because it has been deleted already")
+	if err = oldContract.UpdateStatus(stats); err != nil {
+		cm.log.Warn("failed to update the old oldContract (before renew) status")
+		if err = cm.activeContracts.Return(oldContract); err != nil {
+			cm.log.Warn("during the old oldContract status update process, the oldContract cannot be returned because it has been deleted already")
 			renewCost = renewContractCost
 			err = nil
 			return
@@ -235,19 +235,19 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 
 	// update the renewedFrom, renewedTo, expiredContract field
 	cm.lock.Lock()
-	cm.renewedFrom[renewedContract.ID] = contract.Metadata().ID
-	cm.renewedTo[contract.Metadata().ID] = renewedContract.ID
-	cm.expiredContracts[contract.Metadata().ID] = contract.Metadata()
+	cm.renewedFrom[renewedContract.ID] = oldContract.Metadata().ID
+	cm.renewedTo[oldContract.Metadata().ID] = renewedContract.ID
+	cm.expiredContracts[oldContract.Metadata().ID] = oldContract.Metadata()
 	cm.lock.Unlock()
 
 	// save the information persistently
 	if err := cm.saveSettings(); err != nil {
-		cm.log.Warn(fmt.Sprintf("failed to seave the settings persistently during the contract renew start: %s", err.Error()))
+		cm.log.Warn(fmt.Sprintf("failed to seave the settings persistently during the oldContract renew start: %s", err.Error()))
 	}
 
-	// delete the old contract from the active contract list
-	if err := cm.activeContracts.Delete(contract); err != nil {
-		cm.log.Warn("failed to delete the cotnract from the active contract list after renew: %s", err.Error())
+	// delete the old oldContract from the active oldContract list
+	if err := cm.activeContracts.Delete(oldContract); err != nil {
+		cm.log.Warn("failed to delete the cotnract from the active oldContract list after renew: %s", err.Error())
 	}
 
 	renewCost = renewContractCost
@@ -255,9 +255,68 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	return
 }
 
+// renew will start to perform the contract renew operation:
+// 		1. contract renewAbility validation
+// 		2. storage host validation
+// 		3. form the contract renew needed params
+// 		4. perform the contract renew operation
+// 		5. update the storage host to contract id mapping
+func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPayment storage.RentPayment) (renewedContract storage.ContractMetaData, err error) {
+	// 1. contract renewAbility validation
+	contractMeta := renewContract.Metadata()
+	status, exists := cm.retrieveContractStatus(contractMeta.ID)
+	if !exists || !status.RenewAbility {
+		err = fmt.Errorf("the contract is not able to be renewed, the renewAbility is marked as false")
+		return
+	}
+
+	// 2. storage host validation
+	host, exists := cm.hostManager.RetrieveHostInfo(contractMeta.EnodeID)
+
+	if !exists {
+		err = fmt.Errorf("the storage host recorded in the contract that needs to be renewed, cannot be found")
+		return
+	} else if host.Filtered {
+		err = fmt.Errorf("the storage host has been filtered")
+		return
+	} else if host.StoragePrice.Cmp(maxHostStoragePrice) > 0 {
+		err = fmt.Errorf("the storage price exceed the maximum storage price alloweed")
+		return
+	} else if host.MaxDuration < rentPayment.Period {
+		err = fmt.Errorf("the max duration cannot be smaller than the storage contract period")
+		return
+	}
+
+	// validate the storage host max deposit
+	if host.MaxDeposit.Cmp(maxHostDeposit) > 0 {
+		host.MaxDeposit = maxHostDeposit
+	}
+
+	// TODO (mzhang): wait for HZ to modify the params
+	// 3. form the contract renew needed params
+	params := proto.ContractParams{}
+
+	// 4. contract renew
+	if renewedContract, err = cm.ContractRenew(renewContract, params); err != nil {
+		return
+	}
+
+	// 5. update the storage host to contract id mapping
+	cm.lock.Lock()
+	cm.hostToContract[renewedContract.EnodeID] = renewedContract.ID
+	cm.lock.Unlock()
+
+	return
+}
+
 // handleRenewFailed will handle the failed contract renews. If the total amount of contract
 func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, blockHeight uint64, contractStatus storage.ContractStatus) (err error) {
-	// TODO (mzhang): check if the fail is caused by the storage host, waiting for HZ
+	// if renew failed is caused by the storage host, update the the failedRenewsCount
+	if common.ErrContains(renewError, ErrHostFault) {
+		cm.lock.Lock()
+		cm.failedRenewCount[failedContract.Metadata().ID]++
+		cm.lock.Unlock()
+	}
 
 	// get the number of failed renews, to check if the contract needs to be replaced
 	cm.lock.RLock()
@@ -283,11 +342,6 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 
 	// otherwise, do nothing, a renew attempt to the same contract will be performed again
 	err = fmt.Errorf("failed to renew the contract: %s", renewError.Error())
-	return
-}
-
-func (cm *ContractManager) renew() (contract storage.ContractMetaData, err error) {
-	// TODO (mzhang): WIP
 	return
 }
 
@@ -536,43 +590,4 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 	hostCollateral.Add(hostCollateral, host.ContractPrice)
 	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
 	return
-}
-
-func (cm *ContractManager) managedRenew(contract *contractset.Contract, contractFunding *big.Int, newEndHeight uint64, allowance proto.Allowance, entry proto.StorageHostEntry, hostEnodeUrl string, clientPublic ecdsa.PublicKey) (storage.ContractMetaData, error) {
-
-	//Check if the storage contract ID meets the renew condition
-	status, ok := cm.managedContractStatus(contract.Header().ID)
-	if !ok || !status.RenewAbility {
-		return storage.ContractMetaData{}, errors.New("Condition not satisfied")
-	}
-
-	cm.lock.RLock()
-	//Calculate the required parameters
-	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
-	params := proto.ContractParams{
-		Allowance:    allowance,
-		Host:         entry,
-		Funding:      contractFunding,
-		StartHeight:  cm.blockHeight,
-		EndHeight:    newEndHeight,
-		HostEnodeUrl: hostEnodeUrl,
-	}
-	cm.lock.RUnlock()
-
-	newContract, errRenew := cm.ContractRenew(contract, params)
-	if errRenew != nil {
-		return storage.ContractMetaData{}, errRenew
-	}
-
-	return newContract, nil
-}
-
-func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
-	//Concurrently secure access to contract status
-	mc, exists := cm.activeContracts.RetrieveContractMetaData(id)
-	if !exists {
-		return storage.ContractStatus{}, false
-	}
-
-	return mc.Status, true
 }
