@@ -4,7 +4,11 @@
 
 package newstoragemanager
 
-import "github.com/DxChainNetwork/godx/common/writeaheadlog"
+import (
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/rlp"
+	"io"
+)
 
 // update is the data structure used for all storage manager operations
 type update interface {
@@ -26,6 +30,12 @@ type update interface {
 	// release handle the error, and release the transaction. During error handling,
 	// also reverse or redo as needed.
 	release(manager *storageManager, err *updateError) error
+
+	// EncodeRLP defines the rlp encode rule of the update
+	EncodeRLP(w io.Writer) error
+
+	// DecodeRLP defines the rlp decode rule of the update
+	DecodeRLP(st *rlp.Stream) error
 }
 
 // decodeFromTransaction decode and create an update from the transaction

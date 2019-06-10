@@ -53,6 +53,11 @@ func (db *database) close() {
 	db.lvl.Close()
 }
 
+// newBatch create a new batch within the underlying level db
+func (db *database) newBatch() *leveldb.Batch {
+	return new(leveldb.Batch)
+}
+
 // getOrCreateSectorSalt return the sector salt and return.
 // If previously the sector salt is not stored, create a new one and return
 func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
@@ -76,6 +81,14 @@ func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 		copy(salt[:], saltByte)
 		return
 	}
+}
+
+// hasStorageFolder returns the result of whether the database has the key of a
+// folder specified by a path
+func (db *database) hasStorageFolder(path string) (exist bool, err error) {
+	folderKey := makeKey(prefixFolder, path)
+	exist, err = db.lvl.Has(folderKey, nil)
+	return
 }
 
 // saveStorageFolder save the storage folder to the database.

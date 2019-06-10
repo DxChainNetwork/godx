@@ -104,7 +104,7 @@ func randomStorageFolder(t *testing.T, extra string) (sf *storageFolder) {
 	path := tempDir(t.Name(), extra, randomString(16))
 	sf = &storageFolder{
 		path:       path,
-		usage:      []BitVector{1 << 32},
+		usage:      []bitVector{1 << 32},
 		numSectors: 1,
 		lock:       common.NewTryLock(),
 	}

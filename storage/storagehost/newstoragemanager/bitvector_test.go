@@ -13,7 +13,7 @@ func TestIsFree(t *testing.T) {
 	// generate 10 random number and convert to binary
 	for i := 0; i < 10; i++ {
 		// step to avoid overflow
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		bit := getReversedBinary(int64(vec), t)
 		// because there is 64 bit in binary format
 		for i := 0; i < 64; i++ {
@@ -36,7 +36,7 @@ func TestSetUsage(t *testing.T) {
 	// take 10 turns and generate 10 random number
 	for i := 0; i < 10; i++ {
 		// step to avoid overflow
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
 			// set every Usage
 			vec.setUsage(uint16(i))
@@ -53,7 +53,7 @@ func TestSetUsage(t *testing.T) {
 func TestClearUsage(t *testing.T) {
 	// take 10 turns and generate random number
 	for i := 0; i < 10; i++ {
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
 			// clear the Usage on each bit
 			vec.clearUsage(uint16(i))

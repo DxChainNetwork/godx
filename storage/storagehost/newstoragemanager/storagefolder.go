@@ -1,9 +1,9 @@
 package newstoragemanager
 
 import (
+	"errors"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/pkg/errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,9 +22,9 @@ type (
 		// Path represent the Path of the folder
 		path string
 
-		// Usage mark the Usage, every 64 sector come to form a BitVector
+		// Usage mark the Usage, every 64 sector come to form a bitVector
 		// represent in decimal, but use as binary
-		usage []BitVector
+		usage []bitVector
 
 		// TODO: Remove or add back freeSectors
 		//// free Sectors mark the sector actually free but marked as used
@@ -45,7 +45,7 @@ type (
 	// The data is stored as "storagefolder_${folderID}" -> storageFolderPersist
 	storageFolderPersist struct {
 		Path       string
-		Usage      []BitVector
+		Usage      []bitVector
 		NumSectors uint64
 	}
 
@@ -104,6 +104,7 @@ func sizeToNumSectors(size uint64) (numSectors uint64) {
 	return
 }
 
+// numSectorsToSize convert the numSectors to size.
 func numSectorsToSize(numSectors uint64) (size uint64) {
 	size = numSectors * storage.SectorSize
 	return

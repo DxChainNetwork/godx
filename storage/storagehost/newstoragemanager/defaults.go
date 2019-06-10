@@ -8,8 +8,11 @@ const (
 	// database related keys and prefixes
 	prefixFolder         = "storagefolder"
 	prefixFolderPathToID = "folderPathToID"
-
 	sectorSaltKey = "sectorSalt"
+)
+
+const (
+	opNameAddStorageFolder = "add storage folder"
 )
 
 const (
@@ -44,4 +47,11 @@ const (
 
 	// maxNumFolders defines the maximum number of storage folders
 	maxNumFolders = 1 << 16
+)
+
+const (
+	 // bitVectorGranularity is the granularity of one bitVector.
+	 // Since bitVector is of type uint64, and each bit represents a single sector,
+	 // so the granularity is 64 per bitVector
+	bitVectorGranularity = 64
 )

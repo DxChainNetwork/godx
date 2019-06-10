@@ -1,26 +1,38 @@
 package newstoragemanager
 
-// BitVector is used to represent a boolean vector of size 64
+// bitVector is used to represent a boolean vector of size 64
 // the decimal number is considered as binary, and each bit
 // indicating the true or false at an index
-type BitVector uint64
+type bitVector uint64
 
 // isFree check if the value at given index is free
-func (vec BitVector) isFree(idx uint16) bool {
-	var mask BitVector = 1 << idx
+func (vec bitVector) isFree(idx uint16) bool {
+	var mask bitVector = 1 << idx
 	value := vec & mask
 	return value>>idx == 0
 }
 
 // setUsage set given index to 1
-func (vec *BitVector) setUsage(idx uint16) {
-	var mask BitVector = 1 << idx
+func (vec *bitVector) setUsage(idx uint16) {
+	var mask bitVector = 1 << idx
 	*vec = *vec | mask
 }
 
 // clearUsage clear given index to 0
-func (vec *BitVector) clearUsage(idx uint16) {
-	var mask BitVector = 1 << 63
+func (vec *bitVector) clearUsage(idx uint16) {
+	var mask bitVector = 1 << bitVectorGranularity - 1
 	mask = mask - 1<<idx
-	*vec = *vec & BitVector(mask)
+	*vec = *vec & bitVector(mask)
+}
+
+// EmptyUsage create a new empty bitVector slice used as usage in storageFolder with the
+// expected size
+func EmptyUsage(size uint64) (usage []bitVector) {
+	numSectors := sizeToNumSectors(size)
+	usageSize := numSectors / bitVectorGranularity
+	if numSectors % bitVectorGranularity != 0 {
+		usageSize++
+	}
+	usage = make([]bitVector, usageSize)
+	return
 }
