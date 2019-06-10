@@ -117,6 +117,8 @@ func (cm *ContractManager) contractMaintenance() {
 	}
 }
 
+// checkMaintenanceTermination will check if the maintenanceStop signal has been sent
+// if so, return true to terminate the current maintenance process. Otherwise, return false
 func (cm *ContractManager) checkMaintenanceTermination() (terminate bool) {
 	select {
 	case <-cm.maintenanceStop:

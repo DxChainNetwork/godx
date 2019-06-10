@@ -25,8 +25,6 @@ import (
 
 var (
 	zeroValue = new(big.Int).SetInt64(0)
-
-	extraRatio = 0.02
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -345,6 +343,7 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	return
 }
 
+// ContractRenew will perform the renew operation to the contract provided by the caller
 func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
