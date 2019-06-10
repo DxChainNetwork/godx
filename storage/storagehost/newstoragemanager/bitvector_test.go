@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // TestIsFree test if the bits is actually free
@@ -89,4 +90,34 @@ func getReversedBinary(num int64, t *testing.T) []int {
 		b[i], b[j] = b[j], b[i]
 	}
 	return b
+}
+
+// TestBitVector test the operations for bitVector
+func TestBitVector(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	testTimes := 10000
+	if testing.Short() {
+		testTimes = 100
+	}
+	vec := bitVector(0)
+	usage := make([]bool, bitVectorGranularity)
+	for i := 0; i != testTimes; i++ {
+		n := rand.Intn(64)
+		addOrDelete := rand.Int()%2 == 0
+		if addOrDelete {
+			vec.setUsage(uint16(n))
+			usage[n] = true
+		} else {
+			vec.clearUsage(uint16(n))
+			usage[n] = false
+		}
+		if i%10 == 0 {
+			// Check consistency every 10 updates
+			for idx := 0; idx != bitVectorGranularity; idx++ {
+				if vec.isFree(uint16(idx)) == usage[idx] {
+					t.Errorf("isFree not expected at index [%d] at %d update", idx, i)
+				}
+			}
+		}
+	}
 }

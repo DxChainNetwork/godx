@@ -16,10 +16,10 @@ import (
 type (
 	// addStorageFolderUpdate is the structure used for add storage folder.
 	addStorageFolderUpdate struct {
-		path string
-		size uint64
-		txn  *writeaheadlog.Transaction
-		batch *leveldb.Batch
+		path   string
+		size   uint64
+		txn    *writeaheadlog.Transaction
+		batch  *leveldb.Batch
 		folder *storageFolder
 	}
 
@@ -117,12 +117,12 @@ func (update *addStorageFolderUpdate) EncodeRLP(w io.Writer) (err error) {
 }
 
 // DecodeRLP defines the rlp decode rule of the addStorageFolderUpdate
-func (update *addStorageFolderUpdate) DecodeRLP(st *rlp.Stream) (err error){
+func (update *addStorageFolderUpdate) DecodeRLP(st *rlp.Stream) (err error) {
 	var pUpdate addStorageFolderUpdatePersist
 	if err = st.Decode(&pUpdate); err != nil {
 		return
 	}
-	update.path, update.size= pUpdate.Path, pUpdate.Size
+	update.path, update.size = pUpdate.Path, pUpdate.Size
 	return nil
 }
 
@@ -160,19 +160,24 @@ func (update *addStorageFolderUpdate) prepare(manager *storageManager, target ui
 	case targetNormal:
 		err = update.prepareNormal(manager)
 	case targetRecoverCommitted:
+		err = update.prepareRecover(manager)
 	case targetRecoverUncommitted:
+		err = update.prepareRecover(manager)
 	default:
 		err = errors.New("unknown target")
 	}
 	return
 }
 
+// process process the update with specified target
 func (update *addStorageFolderUpdate) process(manager *storageManager, target uint8) (err error) {
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
 	case targetRecoverCommitted:
+		err = update.processRecover(manager)
 	case targetRecoverUncommitted:
+		err = update.processRecover(manager)
 	default:
 		err = errors.New("unknown target")
 	}
@@ -183,16 +188,21 @@ func (update *addStorageFolderUpdate) process(manager *storageManager, target ui
 func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	// After all release operation completes, unlock the folder and the folder manager
 	defer manager.folders.lock.Unlock()
-	defer update.folder.lock.Unlock()
+	defer func() {
+		if update.folder != nil {
+			update.folder.lock.Unlock()
+		}
+	}()
 
 	if upErr.hasErrStopped() {
 		// If the storage manager has been stopped, simply do nothing and return
 		// hand it to the next open
 		return
 	}
-	// If no error happened during update, release the transaction
+	// If no error happened during update, release the transaction and return
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
+		return
 	}
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
 	// but during process, some other program (or user) created a file in the path, keep that
@@ -209,8 +219,9 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	// Delete the entry in database
 	if newErr := manager.db.deleteStorageFolder(update.path); newErr != nil {
 		err = common.ErrCompose(err, newErr)
-		return
 	}
+	// release the transaction
+	err = common.ErrCompose(err, update.txn.Release())
 	return
 }
 
@@ -224,15 +235,12 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 	// Check the existence of the folder in folder manager
 	// Note in this step, the folders has been locked to provide thread safe
 	manager.folders.lock.Lock()
-	if manager.folders.exist(update.path) {
-		return fmt.Errorf("folder already exist in memory")
-	}
 	// construct the storage folder, lock the folder and register to manager.folders
 	sf := &storageFolder{
-		path: update.path,
-		usage: EmptyUsage(update.size),
+		path:       update.path,
+		usage:      EmptyUsage(update.size),
 		numSectors: sizeToNumSectors(update.size),
-		lock: common.NewTryLock(),
+		lock:       common.NewTryLock(),
 	}
 	sf.lock.Lock()
 	// For normal execution, the folders has already been locked. And the folder is also locked.
@@ -265,7 +273,7 @@ func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (er
 		return
 	}
 	// truncate the data file
-	if err = update.folder.dataFile.Truncate(update.size); err != nil {
+	if err = update.folder.dataFile.Truncate(int64(update.size)); err != nil {
 		return err
 	}
 	// write the batch to database
@@ -273,4 +281,36 @@ func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (er
 		return err
 	}
 	return
+}
+
+// decodeAddStorageFolderUpdate decode the transaction to the addStorageFolderUpdate
+func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addStorageFolderUpdate, err error) {
+	// only the data in the first operation is needed
+	if len(txn.Operations) < 1 {
+		return nil, fmt.Errorf("add storage folder transaction not having operation")
+	}
+	b := txn.Operations[0].Data
+	if err = rlp.DecodeBytes(b, &update); err != nil {
+		return
+	}
+	return
+}
+
+// prepareRecover is the function called in prepare stage as preparing committed and uncommitted updates
+func (update *addStorageFolderUpdate) prepareRecover(manager *storageManager) (err error) {
+	update.folder, err = manager.folders.get(update.path)
+	if err == nil {
+		// In this case, error only happens when the update.path is not in folders
+		update.folder = nil
+	}
+	// lock the folders until release
+	manager.folders.lock.Lock()
+
+	return errRevert
+}
+
+// processRecover is the function called in process stage as processing committed an uncommitted updates
+func (update *addStorageFolderUpdate) processRecover(manager *storageManager) (err error) {
+	// Do nothing, just return errRevert.
+	return errRevert
 }

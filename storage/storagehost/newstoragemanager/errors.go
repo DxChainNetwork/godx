@@ -11,9 +11,14 @@ import (
 )
 
 var (
+	// errStopped is the error that during update, an error happened
 	errStopped = errors.New("storage manager has been stopped")
 
+	// errInvalidTransactionType is the error that an invalid transaction type found
 	errInvalidTransactionType = errors.New("invalid wal transaction type")
+
+	// errRevert is the error type to signal the update has to be reverted
+	errRevert = errors.New("update to be reverted")
 )
 
 // updateError is the error happened during processing the update.

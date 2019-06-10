@@ -1,5 +1,7 @@
 package newstoragemanager
 
+import "github.com/DxChainNetwork/godx/common/math"
+
 // bitVector is used to represent a boolean vector of size 64
 // the decimal number is considered as binary, and each bit
 // indicating the true or false at an index
@@ -20,7 +22,7 @@ func (vec *bitVector) setUsage(idx uint16) {
 
 // clearUsage clear given index to 0
 func (vec *bitVector) clearUsage(idx uint16) {
-	var mask bitVector = 1 << bitVectorGranularity - 1
+	var mask bitVector = math.MaxUint64
 	mask = mask - 1<<idx
 	*vec = *vec & bitVector(mask)
 }
@@ -30,7 +32,7 @@ func (vec *bitVector) clearUsage(idx uint16) {
 func EmptyUsage(size uint64) (usage []bitVector) {
 	numSectors := sizeToNumSectors(size)
 	usageSize := numSectors / bitVectorGranularity
-	if numSectors % bitVectorGranularity != 0 {
+	if numSectors%bitVectorGranularity != 0 {
 		usageSize++
 	}
 	usage = make([]bitVector, usageSize)

@@ -41,6 +41,8 @@ type update interface {
 // decodeFromTransaction decode and create an update from the transaction
 func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error) {
 	switch txn.Operations[0].Name {
+	case opNameAddStorageFolder:
+		up, err = decodeAddStorageFolderUpdate(txn)
 	default:
 		err = errInvalidTransactionType
 	}
@@ -76,4 +78,5 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 		upErr = upErr.setProcessError(errStopped)
 		return
 	}
+	return
 }

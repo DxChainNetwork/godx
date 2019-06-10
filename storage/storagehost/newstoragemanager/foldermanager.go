@@ -1,9 +1,9 @@
 package newstoragemanager
 
 import (
+	"errors"
 	"fmt"
 	"sync"
-	"errors"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -59,7 +59,7 @@ func (fm *folderManager) exist(path string) (exist bool) {
 
 // get get a already locked storage folder specified by path from the folder manager.
 // Please make sure the storage folder is unlocked when finished using
-func (fm *folderManager) get(path string) (sf *storageFolder, err error){
+func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	fm.lock.RLock()
 	defer fm.lock.RUnlock()
 
@@ -69,6 +69,12 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error){
 	}
 	sf.lock.Lock()
 	return sf, nil
+}
+
+// delete delete the entry in folder manager
+// Note this function is not thread safe
+func (fm *folderManager) delete(path string) {
+	delete(fm.sfs, path)
 }
 
 // size return the size in the folder manager
