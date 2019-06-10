@@ -307,7 +307,26 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	if err == nil {
 		// no error happend. Continue to update parent
 		if update.dxPath.IsRoot() {
-			// dxPath is already root. return
+			// check for repairNeeded and stuckFound
+			d, err := fs.dirSet.Open(update.dxPath)
+			if err != nil {
+				fs.logger.Warn("cannot open root directory")
+				return
+			}
+			md := d.Metadata()
+			// TODO: Test this
+			if md.Health < dxfile.RepairHealthThreshold {
+				select {
+				case fs.repairNeeded <- struct{}{}:
+				default:
+				}
+			}
+			if md.NumStuckSegments > 0 {
+				select {
+				case fs.stuckFound <- struct{}{}:
+				default:
+				}
+			}
 			return
 		}
 		parent, err := update.dxPath.Parent()
@@ -509,6 +528,9 @@ func applyMetadataForUpdateToMetadata(md *dxdir.Metadata, update *metadataForUpd
 	}
 	md.NumStuckSegments += update.numStuckSegments
 	// update timeLastHealthCheck. TimeLastHealthCheck is the oldest time for health check
+	if uint64(update.timeLastHealthCheck.Unix()) < md.TimeLastHealthCheck {
+		md.TimeLastHealthCheck = uint64(update.timeLastHealthCheck.Unix())
+	}
 	if uint64(update.timeLastHealthCheck.Unix()) < md.TimeLastHealthCheck {
 		md.TimeLastHealthCheck = uint64(update.timeLastHealthCheck.Unix())
 	}

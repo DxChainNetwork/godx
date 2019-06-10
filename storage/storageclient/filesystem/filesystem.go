@@ -69,6 +69,12 @@ type FileSystem struct {
 	// standardDisrupter is the standardDisrupter used for test cases. In production environment,
 	// it should always be an empty standardDisrupter
 	disrupter disrupter
+
+	// repairNeeded is the channel to signal a repair is needed
+	repairNeeded chan struct{}
+
+	// stuckFound is the channel to signal a stuck segment is found
+	stuckFound chan struct{}
 }
 
 // New is the public function used for creating a production FileSystem
@@ -88,6 +94,8 @@ func newFileSystem(persistDir string, contractor contractManager, disrupter disr
 		logger:            log.New("module", "filesystem"),
 		disrupter:         disrupter,
 		unfinishedUpdates: make(map[storage.DxPath]*dirMetadataUpdate),
+		repairNeeded:      make(chan struct{}),
+		stuckFound:        make(chan struct{}),
 	}
 }
 
@@ -254,6 +262,16 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 		// All curDir passed, still not found the directory, return the current directory
 		return curDir, nil
 	}
+}
+
+// RepairNeededChan return a channel that signals a repair is needed
+func (fs *FileSystem) RepairNeededChan() chan struct{} {
+	return fs.repairNeeded
+}
+
+// StuckFound returns a channel that signals a stuck segment is found
+func (fs *FileSystem) StuckFound() chan struct{} {
+	return fs.stuckFound
 }
 
 // dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
