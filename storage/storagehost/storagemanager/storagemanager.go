@@ -22,4 +22,5 @@ type StorageManager interface {
 	AddSector(sectorRoot common.Hash, sectorData []byte) error
 	RemoveSector(sectorRoot common.Hash) error
 	RemoveSectorBatch(sectorRoots []common.Hash) error
+	ReadSector(sectorRoot common.Hash) ([]byte, error)
 }

@@ -5,32 +5,32 @@
 package storagehost
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
 	"reflect"
 	"strconv"
 
-	"gitlab.com/NebulousLabs/Sia/crypto"
-
-	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/accounts"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (
-	// resubmissionTimeout defines the number of blocks that a host will wait
-	// before attempting to resubmit a transaction to the blockchain.
-	// Typically, this transaction will contain either a file contract, a file
-	// contract revision, or a storage proof.
+	SectorSize               = uint64(1 << 22)
 	revisionSubmissionBuffer = uint64(144)
 	resubmissionTimeout      = 3
 	RespendTimeout           = 40
 	HashSize                 = 32
+	SegmentSize              = 64
 	PrefixStorageObligation  = "storageobligation-"
 	PrefixHeight             = "height-"
 )
@@ -778,19 +778,53 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
-		sectorIndex := segmentIdex / (crypto.SegmentSize)
+		sectorIndex := segmentIdex / (SectorSize / SegmentSize)
+		sectorRoot := so.SectorRoots[sectorIndex]
+		sectorBytes, err := h.ReadSector(sectorRoot)
+		if err != nil {
+			h.log.Debug("ReadSector error:", err)
+			return
+		}
+		sectorSegment := segmentIdex % (SectorSize / SegmentSize)
+		base, cachedHashSet := MerkleProof(sectorBytes, sectorSegment)
 
-		//TODO Get the index of the segment, and the index of the sector containing the segment.
+		// Using the sector, build a cached root.
+		log2SectorSize := uint64(0)
+		for 1<<log2SectorSize < (SectorSize / SegmentSize) {
+			log2SectorSize++
+		}
+		ct := merkle.NewCachedTree(log2SectorSize)
+		ct.SetIndex(segmentIdex)
+		for _, root := range so.SectorRoots {
+			ct.Push(root)
+		}
+		hashSet := ct.Prove(base, cachedHashSet)
+		sp := types.StorageProof{
+			ParentID: so.id(),
+			HashSet:  hashSet,
+		}
+		copy(sp.Segment[:], base)
 
-		//TODO Build the storage proof for just the sector.
+		fromAddress := so.OriginStorageContract.ValidProofOutputs[1].Address
+		account := accounts.Account{Address: fromAddress}
+		wallet, err := h.ethBackend.AccountManager().Find(account)
+		spSign, err := wallet.SignHash(account, sp.RLPHash().Bytes())
+		sp.Signature = spSign
 
-		//TODO Create and build the transaction with the storage proof.
+		scBytes, err := rlp.EncodeToBytes(sp)
+		if err != nil {
+			return
+		}
+
+		if _, err := storage.SendContractRevisionTX(h.ethBackend, fromAddress, scBytes); err != nil {
+			return
+		}
 
 		h.lock.Lock()
-		err := h.queueActionItem(so.ProofDeadline(), so.id())
+		errGet := h.queueActionItem(so.ProofDeadline(), so.id())
 		h.lock.Unlock()
-		if err != nil {
-			h.log.Info("Error queuing action item:", err)
+		if errGet != nil {
+			h.log.Info("Error queuing action item:", errGet)
 		}
 	}
 
@@ -810,6 +844,31 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 
 }
 
+func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
+	t := merkle.NewTree()
+	t.SetIndex(proofIndex)
+
+	buf := bytes.NewBuffer(b)
+	for buf.Len() > 0 {
+		t.Push(buf.Next(SegmentSize))
+	}
+
+	// Get the proof and convert it to a base + hash set.
+	_, proof, _, _ := t.Prove()
+	if len(proof) == 0 {
+		// There's no proof, because there's no data. Return blank values.
+		return nil, nil
+	}
+
+	base = proof[0]
+	hashSet = make([]common.Hash, len(proof)-1)
+	for i, p := range proof[1:] {
+		copy(hashSet[i][:], p)
+	}
+
+	return base, hashSet
+}
+
 // storageProofSegment returns the index of the segment that needs to be proven
 // exists in a file contract.
 func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, error) {
@@ -822,12 +881,20 @@ func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, err
 	}
 
 	triggerID := block.Hash()
-	seed := crypto.HashAll(triggerID, fcid)
-	numSegments := int64(crypto.CalculateLeaves(fc.FileSize))
+	seed := crypto.Keccak256Hash(triggerID[:], fcid[:])
+	numSegments := int64(CalculateLeaves(fc.FileSize))
 	seedInt := new(big.Int).SetBytes(seed[:])
 	index := seedInt.Mod(seedInt, big.NewInt(numSegments)).Uint64()
 
 	return index, nil
+}
+
+func CalculateLeaves(dataSize uint64) uint64 {
+	numSegments := dataSize / SegmentSize
+	if dataSize == 0 || dataSize%SegmentSize != 0 {
+		numSegments++
+	}
+	return numSegments
 }
 
 func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
