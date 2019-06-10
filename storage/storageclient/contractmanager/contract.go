@@ -66,6 +66,7 @@ func (cm *ContractManager) resumeContracts() (err error) {
 // 		1. current block height is greater than the contract's endHeight
 // 		2. the contract has been renewed
 func (cm *ContractManager) maintainExpiration() {
+	// this list will be used to delete contract from the active contract list
 	var expiredContractsIDs []storage.ContractID
 
 	// get the current block height
@@ -80,7 +81,6 @@ func (cm *ContractManager) maintainExpiration() {
 		_, renewed := cm.renewedTo[contract.ID]
 		cm.lock.RUnlock()
 		expired := currentBh > contract.EndHeight
-
 		// update the expired contract list
 		if expired || renewed {
 			cm.updateExpiredContracts(contract)

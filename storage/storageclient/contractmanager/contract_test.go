@@ -56,6 +56,7 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 			t.Fatalf("the canceled status should be false, instead got true")
 		}
 	}
+
 }
 
 func TestContractManager_MaintainExpiration(t *testing.T) {
