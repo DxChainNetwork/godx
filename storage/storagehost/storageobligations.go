@@ -9,7 +9,8 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
-	"strings"
+
+	"gitlab.com/NebulousLabs/Sia/crypto"
 
 	"github.com/DxChainNetwork/godx/storage"
 
@@ -366,31 +367,13 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 	// The storage proof should be submitted
 	err5 := h.queueActionItem(so.expiration()+resubmissionTimeout, so.id())
 	err6 := h.queueActionItem(so.expiration()+resubmissionTimeout*2, so.id()) // Paranoia
-	err = composeErrors(err1, err2, err3, err4, err5, err6)
+	err = common.ErrCompose(err1, err2, err3, err4, err5, err6)
 	if err != nil {
 		h.log.Info("Error with transaction set, redacting obligation, id", so.id())
-		return composeErrors(err, h.removeStorageObligation(so, obligationRejected))
+		return common.ErrCompose(err, h.removeStorageObligation(so, obligationRejected))
 	}
 
 	return nil
-}
-
-func composeErrors(errs ...error) error {
-	// Strip out any nil errors.
-	var errStrings []string
-	for _, err := range errs {
-		if err != nil {
-			errStrings = append(errStrings, err.Error())
-		}
-	}
-
-	// Return nil if there are no non-nil errors in the input.
-	if len(errStrings) <= 0 {
-		return nil
-	}
-
-	// Combine all of the non-nil errors into one larger return value.
-	return errors.New(strings.Join(errStrings, "; "))
 }
 
 // modifyStorageObligation will take an updated storage obligation along with a
@@ -789,6 +772,14 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
+		segmentIdex, errSe := h.storageProofSegment(so.OriginStorageContract)
+		if errSe != nil {
+			h.log.Debug("Host got an error when fetching a storage proof segment:", errSe)
+			return
+		}
+
+		sectorIndex := segmentIdex / (crypto.SegmentSize)
+
 		//TODO Get the index of the segment, and the index of the sector containing the segment.
 
 		//TODO Build the storage proof for just the sector.
@@ -817,6 +808,26 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		h.lock.Unlock()
 	}
 
+}
+
+// storageProofSegment returns the index of the segment that needs to be proven
+// exists in a file contract.
+func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, error) {
+	fcid := fc.RLPHash()
+	triggerHerght := fc.WindowStart - 1
+
+	block, errGetHeight := h.ethBackend.GetBlockByNumber(triggerHerght)
+	if errGetHeight != nil {
+		return 0, errGetHeight
+	}
+
+	triggerID := block.Hash()
+	seed := crypto.HashAll(triggerID, fcid)
+	numSegments := int64(crypto.CalculateLeaves(fc.FileSize))
+	seedInt := new(big.Int).SetBytes(seed[:])
+	index := seedInt.Mod(seedInt, big.NewInt(numSegments)).Uint64()
+
+	return index, nil
 }
 
 func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
@@ -876,7 +887,7 @@ func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
 				}
 			}
 
-			if number != 0 {
+			if number != 0 && h.blockHeight > 0 {
 				h.blockHeight--
 			}
 
@@ -974,7 +985,7 @@ func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
 
 }
 
-func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs, revisionIDs, storageProofIDs []common.Hash, number uint64, errGet error) {
+func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
 	precompiles := vm.PrecompiledEVMFileContracts
 	block, err := h.ethBackend.GetBlockByHash(blockHashs)
 	if err != nil {

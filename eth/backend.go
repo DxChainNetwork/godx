@@ -697,7 +697,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.Ho
 	session.SetDeadLine(storage.HostSettingTime)
 	defer s.Disconnect(session, hostEnodeUrl)
 
-	if err := session.SendHostExtSettingsRequest(struct {}{}); err != nil {
+	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		return err
 	}
 
@@ -725,4 +725,8 @@ func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) ev
 
 func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	return s.APIBackend.GetBlock(context.Background(), blockHash)
+}
+
+func (s *Ethereum) GetBlockByNumber(number uint64) (*types.Block, error) {
+	return s.APIBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 }

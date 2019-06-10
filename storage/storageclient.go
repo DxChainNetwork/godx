@@ -26,6 +26,7 @@ type EthBackend interface {
 	GetBlockChain() *core.BlockChain
 	SetupConnection(hostEnodeUrl string) (*Session, error)
 	Disconnect(session *Session, hostEnodeUrl string) error
+	GetBlockByNumber(number uint64) (*types.Block, error)
 
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
