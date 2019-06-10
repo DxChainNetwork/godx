@@ -360,7 +360,6 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 
 // calculate client and host collateral
 func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral common.BigInt, err error) {
-
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
 		host.StoragePrice.SetInt64(1)
@@ -379,7 +378,11 @@ func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice
 	// Calculate hostCollateral
 	maxStorageSizeTime := clientPayout.Div(host.StoragePrice)
 	maxStorageSizeTime = maxStorageSizeTime.Mult(common.NewBigInt(host))
+
+	// TODO: 转换 collateral 命名， hostCollateral -> hostDeposit
 	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
+
+	// TODO: host.Collateral -> host.Deposit
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(period))
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(expectedStorage))
 	maxClientCollateral := host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(5))
@@ -389,51 +392,14 @@ func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice
 
 	// Don't add more collateral than the host is willing to put into a single
 	// contract.
+	// TODO: host.MaxCollateral -> host.MaxDeposit
 	if hostCollateral.Cmp(host.MaxCollateral) > 0 {
 		hostCollateral = host.MaxCollateral
 	}
 
 	// Calculate hostPayout.
+	// TODO: host.ContractPrice -> host.ContractPrice
 	hostCollateral.Add(hostCollateral, host.ContractPrice)
 	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
 	return
-}
-
-func (cm *ContractManager) managedRenew(contract *contractset.Contract, contractFunding *big.Int, newEndHeight uint64, allowance proto.Allowance, entry proto.StorageHostEntry, hostEnodeUrl string, clientPublic ecdsa.PublicKey) (storage.ContractMetaData, error) {
-
-	//Check if the storage contract ID meets the renew condition
-	status, ok := cm.managedContractStatus(contract.Header().ID)
-	if !ok || !status.RenewAbility {
-		return storage.ContractMetaData{}, errors.New("Condition not satisfied")
-	}
-
-	cm.lock.RLock()
-	//Calculate the required parameters
-	//TODO ClientPublicKey、HostEnodeUrl、Host、Allowance ?
-	params := proto.ContractParams{
-		Allowance:    allowance,
-		Host:         entry,
-		Funding:      contractFunding,
-		StartHeight:  cm.blockHeight,
-		EndHeight:    newEndHeight,
-		HostEnodeUrl: hostEnodeUrl,
-	}
-	cm.lock.RUnlock()
-
-	newContract, errRenew := cm.ContractRenew(contract, params)
-	if errRenew != nil {
-		return storage.ContractMetaData{}, errRenew
-	}
-
-	return newContract, nil
-}
-
-func (cm *ContractManager) managedContractStatus(id storage.ContractID) (storage.ContractStatus, bool) {
-	//Concurrently secure access to contract status
-	mc, exists := cm.activeContracts.RetrieveContractMetaData(id)
-	if !exists {
-		return storage.ContractStatus{}, false
-	}
-
-	return mc.Status, true
 }
