@@ -359,7 +359,7 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 }
 
 // calculate client and host collateral
-func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
+func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral common.BigInt, err error) {
 
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
@@ -373,12 +373,12 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 	}
 
 	// Calculate clientPayout.
-	clientPayout = new(big.Int).Sub(funding, host.ContractPrice)
-	clientPayout = clientPayout.Sub(clientPayout, basePrice)
+	clientPayout = funding.Sub(host.ContractPrice)
+	clientPayout = clientPayout.Sub(basePrice)
 
 	// Calculate hostCollateral
-	maxStorageSizeTime := new(big.Int).Div(clientPayout, host.StoragePrice)
-	maxStorageSizeTime = maxStorageSizeTime.Mul(maxStorageSizeTime, host.Collateral)
+	maxStorageSizeTime := clientPayout.Div(host.StoragePrice)
+	maxStorageSizeTime = maxStorageSizeTime.Mult(common.NewBigInt(host))
 	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(period))
 	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(expectedStorage))
