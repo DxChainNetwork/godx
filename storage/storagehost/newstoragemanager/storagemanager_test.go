@@ -41,8 +41,8 @@ func newTestDatabase(t *testing.T, extra string) (db *database) {
 }
 
 // newTestStorageManager creates a new storageManager for testing
-func newTestStorageManager(t *testing.T, extra string) (sm *storageManager) {
-	sm, err := New(tempDir(t.Name(), extra))
+func newTestStorageManager(t *testing.T, extra string, d *disrupter) (sm *storageManager) {
+	sm, err := newStorageManager(tempDir(t.Name(), extra), d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func (sm *storageManager) shutdown(t *testing.T, timeout time.Duration) {
 
 // TestEmptyStorageManager test the open-close process of an empty storageManager
 func TestEmptyStorageManager(t *testing.T) {
-	sm := newTestStorageManager(t, "")
+	sm := newTestStorageManager(t, "", newDisrupter())
 	prevSalt := sm.sectorSalt
 	if sm.sectorSalt == [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
 		t.Fatalf("salt shall not be empty")

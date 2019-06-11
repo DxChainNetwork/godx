@@ -33,14 +33,21 @@ type (
 		persistDir string
 		wal        *writeaheadlog.Wal
 		tm         *threadmanager.ThreadManager
+
+		// disrupter is used only for test
+		disrupter *disrupter
 	}
 
 	sectorSalt [32]byte
 )
 
-// TODO: Test new start close routine.
-// New create a new storage manager
+// New creates a new storage manager with no disrupter
 func New(persistDir string) (sm *storageManager, err error) {
+	return newStorageManager(persistDir, newDisrupter())
+}
+
+// new create a new storage manager with the disrupter
+func newStorageManager(persistDir string, d *disrupter) (sm *storageManager, err error) {
 	sm = &storageManager{}
 	sm.db, err = openDB(filepath.Join(persistDir, databaseFileName))
 	if err != nil {
@@ -51,6 +58,7 @@ func New(persistDir string) (sm *storageManager, err error) {
 	sm.persistDir = persistDir
 	// Only initialize the WAL in start
 	sm.tm = &threadmanager.ThreadManager{}
+	sm.disrupter = d
 	return
 }
 

@@ -5,11 +5,12 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 // TestAddStorageFolderNormal test the process of adding a storagefolder
 func TestAddStorageFolderNormal(t *testing.T) {
-	sm := newTestStorageManager(t, "")
+	sm := newTestStorageManager(t, "", newDisrupter())
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
 	err := sm.addStorageFolder(path, size)
@@ -66,6 +67,43 @@ func TestAddStorageFolderNormal(t *testing.T) {
 	}
 	if dbSf.numSectors != sf.numSectors {
 		t.Errorf("folder stored in db not equal in numsectors. Expect %v, got %v", sf.numSectors, dbSf.numSectors)
+	}
+}
+
+// TestAddStorageFolderRecover test the recover scenario of add storage folder
+func TestAddStorageFolderRecover(t *testing.T) {
+	d := newDisrupter().register("mock process disrupted", func() bool {
+		return true
+	})
+	sm := newTestStorageManager(t, "", d)
+	path := randomFolderPath(t, "")
+	size := uint64(1 << 25)
+	if err := sm.addStorageFolder(path, size); err != nil {
+		t.Fatal(err)
+	}
+	sm.shutdown(t, 100*time.Millisecond)
+	// restart the storage manager
+	newSM, err := New(sm.persistDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = newSM.Start(); err != nil {
+		t.Fatal(err)
+	}
+	// wait for 100ms for the update to complete
+	<-time.After(100 * time.Millisecond)
+	if sm.folders.exist(filepath.Join(path, dataFileName)) {
+		t.Fatalf("folders exist path %v", path)
+	}
+	exist, err := newSM.db.hasStorageFolder(path)
+	if err != nil {
+		t.Fatalf("database check folder exist: %v", err)
+	}
+	if exist {
+		t.Fatalf("database has folder")
+	}
+	if _, err := os.Stat(filepath.Join(path, dataFileName)); err == nil || !os.IsNotExist(err) {
+		t.Fatalf("file exist on disk %v", filepath.Join(path, dataFileName))
 	}
 }
 

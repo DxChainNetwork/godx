@@ -65,38 +65,48 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 }
 
 // validateAddStorageFolder validate the add storage folder request. Return error if validation failed
-
-func (sm *storageManager) validateAddStorageFolder(path string, size uint64) error {
+func (sm *storageManager) validateAddStorageFolder(path string, size uint64) (err error) {
+	sm.folders.lock.Lock()
+	defer func() {
+		if err != nil {
+			sm.folders.lock.Unlock()
+		}
+	}()
 	// Check numSectors
 	numSectors := sizeToNumSectors(size)
 	if numSectors < minSectorsPerFolder {
-		return fmt.Errorf("size too small")
+		err = fmt.Errorf("size too small")
+		return
 	}
 	if numSectors > maxSectorsPerFolder {
-		return fmt.Errorf("size too large")
+		err = fmt.Errorf("size too large")
+		return
 	}
 	// check whether the folder path already exists
-	_, err := os.Stat(path)
+	_, err = os.Stat(path)
 	if !os.IsNotExist(err) {
-		return fmt.Errorf("folder already exists: %v", path)
+		err = fmt.Errorf("folder already exists: %v", path)
+		return
 	}
 	// check whether the folders has exceed limit
 	if size := sm.folders.size(); size >= maxNumFolders {
-		return fmt.Errorf("too many folders to manager")
+		err = fmt.Errorf("too many folders to manager")
+		return
 	}
 	// Check the existence of the folder in database
 	exist, err := sm.db.hasStorageFolder(path)
 	if err != nil {
-		return fmt.Errorf("check existence error: %v", err)
+		err = fmt.Errorf("check existence error: %v", err)
+		return
 	}
 	if exist {
-		return fmt.Errorf("folder already exist in database")
+		err = fmt.Errorf("folder already exist in database")
+		return
 	}
 	// Check the existence of the folder in folder manager
-	// Note in this step, the folders has been locked to provide thread safe
-	sm.folders.lock.Lock()
 	if sm.folders.exist(path) {
-		return fmt.Errorf("folder already exist in memory")
+		err = fmt.Errorf("folder already exist in memory")
+		return
 	}
 	return nil
 }
@@ -208,6 +218,8 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	if upErr.hasErrStopped() {
 		// If the storage manager has been stopped, simply do nothing and return
 		// hand it to the next open
+		upErr.processErr = nil
+		upErr.prepareErr = nil
 		return
 	}
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
@@ -305,19 +317,19 @@ func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addSt
 	if err = rlp.DecodeBytes(b, &update); err != nil {
 		return
 	}
+	update.txn = txn
 	return
 }
 
 // prepareCommitted is the function called in prepare stage as preparing committed updates
 func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
 	update.folder, err = manager.folders.get(update.path)
-	if err == nil {
+	if err != nil {
 		// In this case, error only happens when the update.path is not in folders
 		update.folder = nil
 	}
 	// lock the folders until release
 	manager.folders.lock.Lock()
-
 	return errRevert
 }
 

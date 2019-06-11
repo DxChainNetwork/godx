@@ -55,11 +55,9 @@ func (fm *folderManager) exist(path string) (exist bool) {
 }
 
 // get get a already locked storage folder specified by path from the folder manager.
-// Please make sure the storage folder is unlocked when finished using
+// Please make sure the storage folder is unlocked when finished using.
+// Also make sure the folder manager is locked before calling this function
 func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
-	fm.lock.RLock()
-	defer fm.lock.RUnlock()
-
 	sf, exist := fm.sfs[path]
 	if !exist {
 		return nil, errors.New("path not exist")
@@ -75,11 +73,7 @@ func (fm *folderManager) delete(path string) {
 }
 
 // size return the size in the folder manager
-// The function is thread safe to use
 func (fm *folderManager) size() (size int) {
-	fm.lock.RLock()
-	defer fm.lock.RUnlock()
-
 	size = len(fm.sfs)
 	return
 }

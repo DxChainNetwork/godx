@@ -70,6 +70,7 @@ func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
 	}
 	sf.path, sf.usage, sf.numSectors = sfp.Path, sfp.Usage, sfp.NumSectors
 	sf.status = folderAvailable
+	sf.lock = common.NewTryLock()
 	return nil
 }
 

@@ -75,7 +75,7 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 		upErr = upErr.setProcessError(err)
 		return
 	}
-	if sm.stopped() {
+	if sm.stopped() || sm.disrupter.disrupt("mock process disrupted") {
 		upErr = upErr.setProcessError(errStopped)
 		return
 	}
