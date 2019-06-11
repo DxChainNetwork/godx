@@ -27,6 +27,8 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		return
 	}
 
+	cm.log.Debug("number of storage host retrieved: %v", len(randomHosts))
+
 	cm.lock.RLock()
 	contractFund := cm.rentPayment.Fund.DivUint64(cm.rentPayment.StorageHosts).DivUint64(3)
 	contractEndHeight := cm.currentPeriod + cm.rentPayment.Period + cm.rentPayment.RenewWindow
@@ -36,13 +38,16 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 	for _, host := range randomHosts {
 		// check if the client has enough fund for forming contract
 		if contractFund.Cmp(clientRemainingFund) > 0 {
-			err = fmt.Errorf("the contract fund %v is larger than client remaining fund %v. Impossible to form contract",
+			err = fmt.Errorf("the contract fund %v is larger than client remaining fund %v. Impossible to create contract",
 				contractFund, clientRemainingFund)
 			return
 		}
 
 		// start to form contract
 		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight)
+
+		// if contract formation failed, the error do not need to be returned, just try to form the
+		// contract with another storage host
 		if errFormContract != nil {
 			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, err.Error())
 			continue

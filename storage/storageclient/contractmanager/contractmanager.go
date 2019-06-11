@@ -37,7 +37,7 @@ type ContractManager struct {
 	activeContracts  *contractset.StorageContractSet
 	expiredContracts map[storage.ContractID]storage.ContractMetaData
 
-	// NOTE: hostToContract mapping contains both expired and active contracts
+	// hostID to contractID mapping
 	hostToContract map[enode.ID]storage.ContractID
 
 	// contract renew related, where renewed from connect [new] -> old

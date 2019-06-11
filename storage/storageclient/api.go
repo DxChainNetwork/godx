@@ -7,6 +7,7 @@ package storageclient
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
+	"reflect"
 )
 
 // PublicStorageClientAPI defines the object used to call eligible public APIs
@@ -21,9 +22,9 @@ func NewPublicStorageClientAPI(sc *StorageClient) *PublicStorageClientAPI {
 	return &PublicStorageClientAPI{sc}
 }
 
-// Fund returns the current payment settings
-func (api *PublicStorageClientAPI) Payment() string {
-	return "working in progress: getting payment information"
+// StorageClientSetting will retrieve the current storage client settings
+func (api *PublicStorageClientAPI) StorageClientSetting() (setting storage.ClientSetting) {
+	return api.sc.RetrieveClientSetting()
 }
 
 // MemoryAvailable returns current memory available
@@ -48,34 +49,33 @@ func NewPrivateStorageClientAPI(sc *StorageClient) *PrivateStorageClientAPI {
 	return &PrivateStorageClientAPI{sc}
 }
 
-// SetPayment allows user to configure storage payment settings
-// which will be used to select eligible the StorageHost
-func (api *PrivateStorageClientAPI) SetPayment() string {
-	return "working in progress: setting payment information"
-}
-
 // SetMemoryLimit allows user to expand or shrink the current memory limit
 func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 	return api.sc.memoryManager.SetMemoryLimit(amount)
 }
 
 // SetClientSetting will configure the client setting based on the user input data
-func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (currentSetting storage.ClientSetting, err error) {
+func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (resp string, err error) {
 	prevClientSetting := api.sc.RetrieveClientSetting()
-	currentSetting, err = parseClientSetting(settings, prevClientSetting)
-	if err != nil {
+	var currentSetting storage.ClientSetting
+
+	if currentSetting, err = parseClientSetting(settings, prevClientSetting); err != nil {
 		err = fmt.Errorf("form contract failed, failed to parse the client settings: %s", err.Error())
 		return
 	}
 
-	// validation, for any 0 value, set them to default value
-	currentSetting = clientSettingGetDefault(currentSetting)
+	// if user did not enter anything, set the current setting to the default one
+	if reflect.DeepEqual(currentSetting.RentPayment, storage.RentPayment{}) {
+		currentSetting = clientSettingGetDefault(currentSetting)
+	}
 
 	// call set client setting methods
 	if err = api.sc.SetClientSetting(currentSetting); err != nil {
 		err = fmt.Errorf("failed to set the client settings: %s", err.Error())
 		return
 	}
-	fmt.Println("Successfully set the client setting: ")
+
+	resp = fmt.Sprintf("Successfully set the storage client setting, you can use storageclient.setting() to verify")
+
 	return
 }

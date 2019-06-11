@@ -13,6 +13,10 @@ import (
 	"strings"
 )
 
+var currencyUnit = []string{"ndx", "udx", "mdx", "dx", "Kdx", "Mdx", "Gdx"}
+var timeUnit = []string{"h", "b", "d", "w", "m", "y"}
+var dataSizeUnit = []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
+
 func parseClientSetting(settings map[string]string, prevSetting storage.ClientSetting) (clientSetting storage.ClientSetting, err error) {
 	// get the previous settings
 	clientSetting = prevSetting
@@ -21,78 +25,100 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 	for key, value := range settings {
 		switch {
 		case key == "fund":
-			fund, err := parseFund(value)
+			var fund common.BigInt
+			fund, err = parseFund(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the fund value: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.Fund = fund
 
 		case key == "hosts":
-			hosts, err := parseStorageHosts(value)
+			var hosts uint64
+			hosts, err = parseStorageHosts(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the hosts value: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.StorageHosts = hosts
 
 		case key == "period":
-			period, err := parsePeriodAndRenew(value)
+			var period uint64
+			period, err = parsePeriodAndRenew(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the period value: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.Period = period
 
 		case key == "renew":
-			renew, err := parsePeriodAndRenew(value)
+			var renew uint64
+			renew, err = parsePeriodAndRenew(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the renew value: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.RenewWindow = renew
 
 		case key == "storage":
-			expectedStorage, err := parseExpectedStorage(value)
+			var expectedStorage uint64
+			expectedStorage, err = parseExpectedStorage(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the expected storage: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.ExpectedStorage = expectedStorage
 
 		case key == "upload":
-			expectedUpload, err := parseExpectedUpload(value)
+			var expectedUpload uint64
+			expectedUpload, err = parseExpectedUpload(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the expected upload: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.ExpectedUpload = expectedUpload
 
 		case key == "download":
-			expectedDownload, err := parseExpectedDownload(value)
+			var expectedDownload uint64
+			expectedDownload, err = parseExpectedDownload(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the expected download: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.ExpectedDownload = expectedDownload
 
 		case key == "redundancy":
-			redundancy, err := parseExpectedRedundancy(value)
+			var redundancy float64
+			redundancy, err = parseExpectedRedundancy(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the redundancy: %s", err.Error())
 				break
 			}
 			clientSetting.RentPayment.ExpectedRedundancy = redundancy
 
 		case key == "violation":
-			status, err := parseEnableIPViolation(value)
+			var status bool
+			status, err = parseEnableIPViolation(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the ip violation: %s", err.Error())
 				break
 			}
 			clientSetting.EnableIPViolation = status
 
 		case key == "uploadspeed":
-			uploadSpeed, err := parseMaxUploadSpeed(value)
+			var uploadSpeed int64
+			uploadSpeed, err = parseMaxUploadSpeed(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the uplaod speed: %s", err.Error())
 				break
 			}
 			clientSetting.MaxUploadSpeed = uploadSpeed
 
 		case key == "downloadspeed":
-			downloadSpeed, err := parseMaxDownloadSpeed(value)
+			var downloadSpeed int64
+			downloadSpeed, err = parseMaxDownloadSpeed(value)
 			if err != nil {
+				err = fmt.Errorf("failed to parse the download speed: %s", err.Error())
 				break
 			}
 			clientSetting.MaxDownloadSpeed = downloadSpeed
@@ -100,9 +126,15 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 		default:
 			err = fmt.Errorf("the key entered: %s is not valid. Here is a list of available keys: %+v",
 				key, keys)
-			return
+			break
+		}
+
+		// if got error in the switch case, break the loop directly
+		if err != nil {
+			break
 		}
 	}
+
 	return
 }
 
@@ -195,13 +227,7 @@ func fundUnitConversion(index int, fund *big.Int) (converted common.BigInt) {
 
 // parseStorageHosts will parse the string version of storage hosts into uint64 type
 func parseStorageHosts(hosts string) (parsed uint64, err error) {
-	var parsedInt int64
-	if parsedInt, err = strconv.ParseInt(hosts, 10, 64); err != nil {
-		err = fmt.Errorf("error parsing the storage hsots: %s", err.Error())
-		return
-	}
-	parsed = uint64(parsedInt)
-	return
+	return convertUint64(hosts, 1, "")
 }
 
 // parsePeriodAndRenew will parse the string version of period into uint64 type based on the
@@ -235,23 +261,22 @@ func parsePeriodAndRenew(periodRenew string) (parsed uint64, err error) {
 		// convert the time year to number of blocks
 		return convertUint64(periodRenew, storage.BlocksPerYear, "y")
 	default:
-		err = fmt.Errorf("the unit provided is not valid: %s", unit)
+		err = fmt.Errorf("valid unit must be provided: %v", timeUnit)
 		return
 	}
 }
 
 func convertUint64(data string, factor uint64, unit string) (parsed uint64, err error) {
-	var parsedInt int64
 
 	// remove the unit from the string
 	data = strings.TrimSuffix(data, unit)
 
-	if parsedInt, err = strconv.ParseInt(data, 10, 64); err != nil {
-		err = fmt.Errorf("error parsing to uint64, invalid unit: %s", err.Error())
+	if parsed, err = strconv.ParseUint(data, 10, 64); err != nil {
+		err = fmt.Errorf("error parsing to uint64: %s", err.Error())
 		return
 	}
 
-	parsed = uint64(parsedInt) * factor
+	parsed *= factor
 	return
 }
 
@@ -275,7 +300,8 @@ func dataSizeConverter(dataSize string) (parsed uint64, err error) {
 		return convertUint64(dataSize, 1, "b")
 	}
 
-	err = fmt.Errorf("data provided does not have valid unit: %s", dataSize)
+	err = fmt.Errorf("data provided does not have valid unit: %s. valid units are: %v",
+		dataSize, dataSizeUnit)
 	return
 }
 
@@ -343,37 +369,8 @@ func formatString(s string) (formatted string) {
 }
 
 func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
-	if setting.RentPayment.Fund.IsEqual(common.BigInt0) {
-		setting.RentPayment.Fund = storage.DefaultRentPayment.Fund
-	}
-
-	if setting.RentPayment.StorageHosts == 0 {
-		setting.RentPayment.StorageHosts = storage.DefaultRentPayment.StorageHosts
-	}
-
-	if setting.RentPayment.Period == 0 {
-		setting.RentPayment.Period = storage.DefaultRentPayment.Period
-	}
-
-	if setting.RentPayment.RenewWindow == 0 {
-		setting.RentPayment.RenewWindow = storage.DefaultRentPayment.RenewWindow
-	}
-
-	if setting.RentPayment.ExpectedStorage == 0 {
-		setting.RentPayment.ExpectedStorage = storage.DefaultRentPayment.ExpectedStorage
-	}
-
-	if setting.RentPayment.ExpectedUpload == 0 {
-		setting.RentPayment.ExpectedUpload = storage.DefaultRentPayment.ExpectedUpload
-	}
-
-	if setting.RentPayment.ExpectedDownload == 0 {
-		setting.RentPayment.ExpectedDownload = storage.DefaultRentPayment.ExpectedDownload
-	}
-
-	if setting.RentPayment.ExpectedRedundancy == 0 {
-		setting.RentPayment.ExpectedRedundancy = storage.DefaultRentPayment.ExpectedRedundancy
-	}
+	// set the rent payment to the default rent payment
+	setting.RentPayment = storage.DefaultRentPayment
 
 	return setting
 }

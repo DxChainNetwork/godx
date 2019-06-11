@@ -5,6 +5,7 @@
 package contractmanager
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
@@ -112,7 +113,15 @@ func (cm *ContractManager) contractMaintenance() {
 	}
 
 	// prepare to for forming contract based on the number of extract contracts needed
-	if terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund); err != nil || terminated {
+	terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund)
+	if err != nil {
+		cm.log.Error(fmt.Sprintf("failed to create the contract: %s", err.Error()))
+		return
+	}
+
+	// why terminated is checked explicitly?
+	// in case more codes need to be added in the future after this function
+	if terminated {
 		return
 	}
 }

@@ -29,7 +29,7 @@ func TestStorageClient_ParseClientSetting(t *testing.T) {
 		// parse the setting, and start the validation
 		clientSetting, err := parseClientSetting(settings, prevSetting)
 		if err != nil {
-			t.Fatalf("failed to parse the client setting")
+			t.Fatalf("failed to parse the client setting: %s", err.Error())
 		}
 
 		for _, key := range keys {
@@ -324,9 +324,6 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 	settings = make(map[string]string)
 
 	var value, unit interface{}
-	currencyUnit := []string{"ndx", "udx", "mdx", "dx", "Kdx", "Mdx", "Gdx"}
-	timeUnit := []string{"h", "b", "d", "w", "m", "y"}
-	dataSizeUnit := []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -338,7 +335,7 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 			break
 		case key == "period" || key == "renew":
 			value = rand.Uint64()
-			unit = currencyUnit[rand.Intn(len(timeUnit))]
+			unit = timeUnit[rand.Intn(len(timeUnit))]
 			break
 		case key == "storage" || key == "upload" || key == "download":
 			value = rand.Uint64()
@@ -353,7 +350,7 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 			unit = ""
 			break
 		case key == "uploadspeed" || key == "downloadspeed" || key == "hosts":
-			value = rand.Uint64()
+			value = rand.Int63()
 			unit = ""
 			break
 		default:

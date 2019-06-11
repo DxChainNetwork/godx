@@ -5610,17 +5610,6 @@ module.exports = Net;
 
 
         var methods = function () {
-            var payment = new Method({
-                name: 'payment',
-                call: 'storageclient_payment',
-                params: 0,
-            });
-
-            var setpayment = new Method({
-                name: 'setPayment',
-                call: 'storageclient_setPayment',
-                params: 0,
-            });
 
             var memory = new Method({
                 name: 'memory',
@@ -5646,13 +5635,19 @@ module.exports = Net;
                 params: 1,
             });
 
+            var clientSetting = new Method({
+                name: 'setting',
+                call: 'storageclient_storageClientSetting',
+                params: 0,
+            });
+
+
             return [
-                payment,
-                setpayment,
                 memory,
                 memorylimit,
                 setMemoryLimit,
                 setClientSetting,
+                clientSetting,
             ];
         };
 

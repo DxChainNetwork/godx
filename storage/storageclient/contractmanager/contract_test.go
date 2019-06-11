@@ -30,11 +30,15 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
+	var canceledContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		_, err := cm.activeContracts.InsertContract(randomCanceledContractGenerator(), randomRootsGenerator(10))
+		canceledContract := randomCanceledContractGenerator()
+		_, err := cm.activeContracts.InsertContract(canceledContract, randomRootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
+
+		canceledContracts = append(canceledContracts, canceledContract)
 	}
 
 	// call resumeContracts
@@ -43,16 +47,21 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 	}
 
 	// check the contract status
-	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
-		if contract.Status.UploadAbility {
+	for _, contract := range canceledContracts {
+		fetchedContract, exists := cm.activeContracts.RetrieveContractMetaData(contract.ID)
+		if !exists {
+			t.Fatalf("failed to get the canceled contract")
+		}
+
+		if fetchedContract.Status.UploadAbility {
 			t.Fatalf("the uploadability should be false, instead got true")
 		}
 
-		if contract.Status.RenewAbility {
+		if fetchedContract.Status.RenewAbility {
 			t.Fatalf("the renewability should be false, instead got true")
 		}
 
-		if contract.Status.Canceled {
+		if fetchedContract.Status.Canceled {
 			t.Fatalf("the canceled status should be false, instead got true")
 		}
 	}

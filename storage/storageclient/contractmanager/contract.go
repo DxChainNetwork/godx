@@ -268,18 +268,10 @@ func (cm *ContractManager) maintainContractStatus() (err error) {
 	// it will be marked as not good for upload or download
 	evalBaseline := cm.calculateMinEvaluation(hosts)
 
+	// update the contract status
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
 		newStatus := cm.checkContractStatus(contract, evalBaseline)
-		contract, exists := cm.activeContracts.Acquire(contract.ID)
-		if !exists {
-			return
-		}
-
-		if err = contract.UpdateStatus(newStatus); err != nil {
-			return
-		}
-
-		if err = cm.activeContracts.Return(contract); err != nil {
+		if err = cm.updateContractStatus(contract.ID, newStatus); err != nil {
 			return
 		}
 	}
