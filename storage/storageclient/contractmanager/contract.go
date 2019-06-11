@@ -53,7 +53,10 @@ func (cm *ContractManager) CancelStorageContract() (err error) {
 	}
 
 	// terminate the storage contract maintenance
-	cm.maintenanceStop <- struct{}{}
+	select {
+	case cm.maintenanceStop <- struct{}{}:
+	default:
+	}
 
 	// mark all contracts as canceled (UploadAbility, RenewAbility, Canceled)
 	for _, id := range contractIDs {
