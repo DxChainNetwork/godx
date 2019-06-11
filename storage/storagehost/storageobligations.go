@@ -722,7 +722,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
-		if _, err := storage.SendContractRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+		if _, err := storage.SendContractRevisionTX(h.b, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
 			return
 		}
 
@@ -803,7 +803,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
-		if _, err := storage.SendContractRevisionTX(h.ethBackend, fromAddress, scBytes); err != nil {
+		if _, err := storage.SendContractRevisionTX(h.b, fromAddress, scBytes); err != nil {
 			return
 		}
 

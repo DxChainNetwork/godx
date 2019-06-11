@@ -15,6 +15,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/DxChainNetwork/godx/internal/ethapi"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
@@ -104,6 +106,8 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 
 	ethBackend storage.EthBackend
+
+	b ethapi.Backend
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
