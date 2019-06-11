@@ -538,17 +538,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		errChan  chan error
 	)
-
-	go func() {
-		select {
-		case <-errChan:
-
-			// go back state DB if something is wrong
-			state.RevertToSnapshot(snapshot)
-		}
-	}()
 
 	// rlp decode and calculate gas used
 	scSet := types.StorageContractSet{}
@@ -588,7 +578,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, state, sc, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
-		errChan <- errCheck
+		state.RevertToSnapshot(snapshot)
 		log.Error("failed to check form contract", "err", errCheck)
 		return nil, gasRemainCheck, errCheck
 	}
@@ -608,7 +598,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	statusTrie := state.StorageTrie(statusAddr)
 	err := statusTrie.TryUpdate(scIDBytes, NotProofedStatus)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -616,13 +606,13 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	trie := state.StorageTrie(contractAddr)
 	err = trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
 	err = trie.TryUpdate(BytesHostCollateral, sc.HostCollateral.Value.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -631,19 +621,19 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	err = trie.TryUpdate(BytesFileSize, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
 	err = trie.TryUpdate(BytesUnlockHash, sc.UnlockHash.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
 	err = trie.TryUpdate(BytesFileMerkleRoot, sc.FileMerkleRoot.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -651,7 +641,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -659,7 +649,7 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -667,29 +657,29 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
 	vpoBytes, err := rlp.EncodeToBytes(sc.ValidProofOutputs)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
 	mpoBytes, err := rlp.EncodeToBytes(sc.MissedProofOutputs)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
 
@@ -703,17 +693,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		errChan  chan error
 	)
-
-	go func() {
-		select {
-		case <-errChan:
-
-			// go back state DB if something is wrong
-			state.RevertToSnapshot(snapshot)
-		}
-	}()
 
 	scSet := types.StorageContractSet{}
 	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
@@ -749,13 +729,13 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	err := trie.TryUpdate(BytesFileSize, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
 	err = trie.TryUpdate(BytesFileMerkleRoot, scr.NewFileMerkleRoot.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
@@ -763,7 +743,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
@@ -771,14 +751,14 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
 	buffer.Reset()
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
 	buffer.WriteString(strconv.FormatUint(scr.NewWindowEnd, 10))
 	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 	buffer.Reset()
@@ -789,24 +769,24 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
 	mpoBytes, err := rlp.EncodeToBytes(scr.NewMissedProofOutputs)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
 	err = trie.TryUpdate(BytesUnlockHash, scr.NewUnlockHash.Bytes())
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
@@ -819,17 +799,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
-		errChan  chan error
 	)
-
-	go func() {
-		select {
-		case <-errChan:
-
-			// go back state DB if something is wrong
-			state.RevertToSnapshot(snapshot)
-		}
-	}()
 
 	scSet := types.StorageContractSet{}
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
@@ -926,7 +896,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	statusTrie := state.StorageTrie(statusAddr)
 	err = statusTrie.TryUpdate(sp.ParentID.Bytes(), ProofedStatus)
 	if err != nil {
-		errChan <- err
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, errCheck
 	}
 
