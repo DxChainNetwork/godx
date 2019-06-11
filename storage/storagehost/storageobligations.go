@@ -803,7 +803,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
-		if _, err := storage.SendContractRevisionTX(h.b, fromAddress, scBytes); err != nil {
+		if _, err := storage.SendStorageProofTX(h.b, fromAddress, scBytes); err != nil {
 			return
 		}
 
