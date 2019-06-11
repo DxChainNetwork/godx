@@ -5,7 +5,6 @@
 package newstoragemanager
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"io"
@@ -56,23 +55,17 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 	// register the error handling
 	upErr = &updateError{}
 	defer func() {
-		//fmt.Printf("%v: 8\n", up.str())
 		if err := up.release(sm, upErr); err != nil {
-			//fmt.Println("release error")
 			upErr = upErr.setReleaseError(err)
-			fmt.Println(upErr)
 			sm.logError(up, upErr)
 		}
-		//fmt.Printf("returned form release %v\n", up.str())
 		return
 	}()
-	//fmt.Printf("%v: 5\n", up.str())
 	// prepare the update
 	if err := up.prepare(sm, target); err != nil {
 		upErr = upErr.setPrepareError(err)
 		return
 	}
-	//fmt.Printf("%v: 6\n", up.str())
 	if sm.stopped() {
 		upErr = upErr.setPrepareError(errStopped)
 		return
@@ -82,7 +75,6 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 		upErr = upErr.setProcessError(err)
 		return
 	}
-	//fmt.Printf("%v: 7\n", up.str())
 	if sm.stopped() || sm.disrupter.disrupt("mock process disrupted") {
 		upErr = upErr.setProcessError(errStopped)
 		return
