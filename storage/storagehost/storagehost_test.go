@@ -1,15 +1,16 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/davecgh/go-spew/spew"
 	"math/big"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/davecgh/go-spew/spew"
 )
 
 // constant range for generating the number randomly
@@ -109,7 +110,7 @@ func TestStorageHost_DataPreservation(t *testing.T) {
 		host.config.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
 		// host financial Metrics
 		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
-		host.financialMetrics.StorageRevenue = *big.NewInt(int64(rand.Intn(RANDRANGE)))
+		host.financialMetrics.StorageRevenue = common.NewBigInt(RANDRANGE)
 
 		// extract the persistence information
 		persist1 = host.extractPersistence()

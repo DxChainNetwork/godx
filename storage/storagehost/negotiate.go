@@ -27,7 +27,8 @@ var sectorHeight = func() uint64 {
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
-func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
+//func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
+func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
 	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 3 {
 		return errBadContractOutputCounts
@@ -76,7 +77,8 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
 		return fmt.Errorf("client increased its valid proof output: %v", errHighRenterValidOutput)
 	}
-	fromRenter := new(big.Int).Sub(oldFCR.NewValidProofOutputs[0].Value, revision.NewValidProofOutputs[0].Value)
+	//fromRenter := new(big.Int).Sub(oldFCR.NewValidProofOutputs[0].Value, revision.NewValidProofOutputs[0].Value)
+	fromRenter := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
 	// Verify that enough money was transferred.
 	if fromRenter.Cmp(expectedExchange) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromRenter)
@@ -87,7 +89,9 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
 		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
-	toHost := new(big.Int).Sub(revision.NewValidProofOutputs[1].Value, oldFCR.NewValidProofOutputs[1].Value)
+	//toHost := new(big.Int).Sub(revision.NewValidProofOutputs[1].Value, oldFCR.NewValidProofOutputs[1].Value)
+	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
+
 	// Verify that enough money was transferred.
 	if toHost.Cmp(fromRenter) != 0 {
 		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
@@ -105,7 +109,8 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	// expected. If the new misesd output is greater than the old one, the host
 	// is actually posting negative collateral, which is fine.
 	if revision.NewMissedProofOutputs[1].Value.Cmp(oldFCR.NewMissedProofOutputs[1].Value) <= 0 {
-		collateral := new(big.Int).Sub(oldFCR.NewMissedProofOutputs[1].Value, revision.NewMissedProofOutputs[1].Value)
+		//collateral := new(big.Int).Sub(oldFCR.NewMissedProofOutputs[1].Value, revision.NewMissedProofOutputs[1].Value)
+		collateral := common.NewBigInt(oldFCR.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(revision.NewMissedProofOutputs[1].Value.Int64()))
 		if collateral.Cmp(expectedCollateral) > 0 {
 			s := fmt.Sprintf("host expected to post at most %v collateral, but contract has host posting %v: ", expectedCollateral, collateral)
 			return ExtendErr(s, errLowHostMissedOutput)
@@ -183,13 +188,16 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	}
 	// Check that the collateral does not exceed the maximum amount of
 	// collateral allowed.
-	depositMinusContractPrice := new(big.Int).Sub(sc.ValidProofOutputs[1].Value, externalConfig.ContractPrice.BigIntPtr())
-	if depositMinusContractPrice.Cmp(&config.MaxDeposit) > 0 {
+	//depositMinusContractPrice := new(big.Int).Sub(sc.ValidProofOutputs[1].Value, externalConfig.ContractPrice.BigIntPtr())
+	depositMinusContractPrice := common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(externalConfig.ContractPrice)
+	//if depositMinusContractPrice.Cmp(&config.MaxDeposit) > 0 {
+	if depositMinusContractPrice.Cmp(common.NewBigInt(config.MaxDeposit.Int64())) > 0 {
 		return errMaxCollateralReached
 	}
 	// Check that the host has enough room in the collateral budget to add this
 	// collateral.
-	if new(big.Int).Add(&lockedStorageDeposit, depositMinusContractPrice).Cmp(&config.DepositBudget) > 0 {
+	//if new(big.Int).Add(&lockedStorageDeposit, depositMinusContractPrice).Cmp(&config.DepositBudget) > 0 {
+	if lockedStorageDeposit.Add(depositMinusContractPrice).Cmp(common.NewBigInt(config.DepositBudget.Int64())) > 0 {
 		return errCollateralBudgetExceeded
 	}
 

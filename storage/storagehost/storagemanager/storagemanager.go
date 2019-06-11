@@ -16,6 +16,22 @@ func (cm *storageManager) Close() error {
 	return nil
 }
 
+func (h *storageManager) AddSectorBatch(sectorRoots []common.Hash) error {
+	return nil
+}
+func (h *storageManager) AddSector(sectorRoot common.Hash, sectorData []byte) error {
+	return nil
+}
+func (h *storageManager) RemoveSector(sectorRoot common.Hash) error {
+	return nil
+}
+func (h *storageManager) RemoveSectorBatch(sectorRoots []common.Hash) error {
+	return nil
+}
+func (h *storageManager) ReadSector(sectorRoot common.Hash) ([]byte, error) {
+	return nil, nil
+}
+
 type StorageManager interface {
 	Close() error
 	AddSectorBatch(sectorRoots []common.Hash) error

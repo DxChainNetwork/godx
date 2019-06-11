@@ -105,13 +105,13 @@ type (
 		// Variables about the file contract that enforces the storage obligation.
 		// The origin an revision transaction are stored as a set, where the set
 		// contains potentially unconfirmed transactions.
-		ContractCost             *big.Int
-		LockedCollateral         *big.Int
-		PotentialDownloadRevenue *big.Int
-		PotentialStorageRevenue  *big.Int
-		PotentialUploadRevenue   *big.Int
-		RiskedCollateral         *big.Int
-		TransactionFeesAdded     *big.Int
+		ContractCost             common.BigInt
+		LockedCollateral         common.BigInt
+		PotentialDownloadRevenue common.BigInt
+		PotentialStorageRevenue  common.BigInt
+		PotentialUploadRevenue   common.BigInt
+		RiskedCollateral         common.BigInt
+		TransactionFeesAdded     common.BigInt
 
 		// The negotiation height specifies the block height at which the file
 		// contract was negotiated. If the origin transaction set is not accepted
@@ -246,13 +246,8 @@ func (so *StorageObligation) ProofDeadline() uint64 {
 
 }
 
-func (so StorageObligation) value() *big.Int {
-	var soValue *big.Int
-	soValue = new(big.Int).Add(so.ContractCost, so.PotentialDownloadRevenue)
-	soValue = new(big.Int).Add(soValue, so.PotentialStorageRevenue)
-	soValue = new(big.Int).Add(soValue, so.PotentialUploadRevenue)
-	soValue = new(big.Int).Add(soValue, so.RiskedCollateral)
-	return soValue
+func (so StorageObligation) value() common.BigInt {
+	return so.ContractCost.Add(so.PotentialDownloadRevenue).Add(so.PotentialStorageRevenue).Add(so.PotentialUploadRevenue).Add(so.RiskedCollateral)
 }
 
 // deleteStorageObligations deletes obligations from the database.
@@ -338,13 +333,14 @@ func (h *StorageHost) managedAddStorageObligation(so StorageObligation) error {
 
 		// Update the host financial metrics with regards to this storage obligation.
 		h.financialMetrics.ContractCount++
-		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
-		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
-		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
-		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
-		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
-		h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
+		h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(so.RiskedCollateral)
+		h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(so.TransactionFeesAdded)
+
 		return nil
 	}()
 
@@ -468,22 +464,22 @@ func (h *StorageHost) modifyStorageObligation(so StorageObligation, sectorsRemov
 	}
 
 	// Update the financial information for the storage obligation - apply the
-	h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
-	h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
-	h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
-	h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-	h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
-	h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
-	h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(so.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.LockedCollateral)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(so.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(so.RiskedCollateral)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(so.TransactionFeesAdded)
 
 	// Update the financial information for the storage obligation - remove the
-	h.financialMetrics.PotentialContractCompensation = *new(big.Int).Add(&h.financialMetrics.PotentialContractCompensation, oldso.ContractCost)
-	h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, oldso.LockedCollateral)
-	h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialStorageRevenue, oldso.PotentialStorageRevenue)
-	h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialDownloadBandwidthRevenue, oldso.PotentialDownloadRevenue)
-	h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.PotentialUploadBandwidthRevenue, oldso.PotentialUploadRevenue)
-	h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.RiskedStorageDeposit, oldso.RiskedCollateral)
-	h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Add(&h.financialMetrics.TransactionFeeExpenses, oldso.TransactionFeesAdded)
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(oldso.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(oldso.LockedCollateral)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(oldso.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Sub(oldso.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Sub(oldso.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(oldso.RiskedCollateral)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Sub(oldso.TransactionFeesAdded)
 
 	return nil
 
@@ -536,63 +532,59 @@ func (h *StorageHost) removeStorageObligation(so StorageObligation, sos storageO
 	}
 	if sos == obligationRejected {
 		if h.financialMetrics.TransactionFeeExpenses.Cmp(so.TransactionFeesAdded) >= 0 {
-			h.financialMetrics.TransactionFeeExpenses = *new(big.Int).Sub(&h.financialMetrics.TransactionFeeExpenses, so.TransactionFeesAdded)
-
 			// Remove the obligation statistics as potential risk and income.
-			h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
-			h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
-			h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
-			h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-			h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
-			h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+			h.log.Info("Rejecting storage obligation expiring at block ", so.expiration(), ", current height is ", h.blockHeight, ". Potential revenue is ", h.financialMetrics.PotentialContractCompensation.Add(h.financialMetrics.PotentialStorageRevenue).Add(h.financialMetrics.PotentialDownloadBandwidthRevenue).Add(h.financialMetrics.PotentialUploadBandwidthRevenue))
+
+			h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(so.ContractCost)
+			h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(so.LockedCollateral)
+			h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(so.PotentialStorageRevenue)
+			h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Sub(so.PotentialDownloadRevenue)
+			h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Sub(so.PotentialUploadRevenue)
+			h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(so.RiskedCollateral)
+			h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Sub(so.TransactionFeesAdded)
 		}
 	}
 
 	if sos == obligationSucceeded {
 		// Empty obligations don't submit a storage proof. The revenue for an empty
 		// storage obligation should equal the contract cost of the obligation
-		revenue := new(big.Int).Add(so.ContractCost, so.PotentialStorageRevenue)
-		revenue = new(big.Int).Add(revenue, so.PotentialDownloadRevenue)
-		revenue = new(big.Int).Add(revenue, so.PotentialUploadRevenue)
+		revenue := so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 		if len(so.SectorRoots) == 0 {
-			h.log.Info("No need to submit a storage proof for empty contract. Revenue is %v.\n", revenue)
+			h.log.Info("No need to submit a storage proof for empty contract. Revenue is ", revenue)
 		} else {
-			h.log.Info("Successfully submitted a storage proof. Revenue is %v.\n", revenue)
+			h.log.Info("Successfully submitted a storage proof. Revenue is ", revenue)
 		}
 
 		// Remove the obligation statistics as potential risk and income.
-		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
-		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
-		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
-		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
-		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+		h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Sub(so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Sub(so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(so.RiskedCollateral)
 
 		// Add the obligation statistics as actual income.
-		h.financialMetrics.ContractCompensation = *new(big.Int).Add(&h.financialMetrics.ContractCompensation, so.ContractCost)
-		h.financialMetrics.StorageRevenue = *new(big.Int).Add(&h.financialMetrics.StorageRevenue, so.PotentialStorageRevenue)
-		h.financialMetrics.DownloadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.DownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-		h.financialMetrics.UploadBandwidthRevenue = *new(big.Int).Add(&h.financialMetrics.UploadBandwidthRevenue, so.PotentialUploadRevenue)
+		h.financialMetrics.ContractCompensation = h.financialMetrics.ContractCompensation.Add(so.ContractCost)
+		h.financialMetrics.StorageRevenue = h.financialMetrics.StorageRevenue.Add(so.PotentialStorageRevenue)
+		h.financialMetrics.DownloadBandwidthRevenue = h.financialMetrics.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
+		h.financialMetrics.UploadBandwidthRevenue = h.financialMetrics.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
+
 	}
 
 	if sos == obligationFailed {
 		// Remove the obligation statistics as potential risk and income.
+		h.log.Info("Missed storage proof. Revenue would have been", so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue))
 
-		h.financialMetrics.PotentialContractCompensation = *new(big.Int).Sub(&h.financialMetrics.PotentialContractCompensation, so.ContractCost)
-		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.LockedStorageDeposit, so.LockedCollateral)
-		h.financialMetrics.PotentialStorageRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialStorageRevenue, so.PotentialStorageRevenue)
-		h.financialMetrics.PotentialDownloadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-		h.financialMetrics.PotentialUploadBandwidthRevenue = *new(big.Int).Sub(&h.financialMetrics.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
-		h.financialMetrics.RiskedStorageDeposit = *new(big.Int).Sub(&h.financialMetrics.RiskedStorageDeposit, so.RiskedCollateral)
+		h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(so.ContractCost)
+		h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(so.LockedCollateral)
+		h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(so.PotentialStorageRevenue)
+		h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Sub(so.PotentialDownloadRevenue)
+		h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Sub(so.PotentialUploadRevenue)
+		h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(so.RiskedCollateral)
 
 		// Add the obligation statistics as loss.
-		h.financialMetrics.LockedStorageDeposit = *new(big.Int).Add(&h.financialMetrics.LockedStorageDeposit, so.RiskedCollateral)
-
-		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.ContractCost)
-		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialStorageRevenue)
-		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialDownloadRevenue)
-		h.financialMetrics.LostRevenue = *new(big.Int).Add(&h.financialMetrics.LostRevenue, so.PotentialUploadRevenue)
-
+		h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.RiskedCollateral)
+		h.financialMetrics.LostRevenue = h.financialMetrics.LostRevenue.Add(so.ContractCost).Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 	}
 
 	// Update the storage obligation to be finalized but still in-database. The
@@ -619,42 +611,37 @@ func (h *StorageHost) resetFinancialMetrics() error {
 	sos := h.StorageObligations()
 	for _, so := range sos {
 		// Transaction fees are always added.
-		fm.TransactionFeeExpenses = *new(big.Int).Add(&fm.TransactionFeeExpenses, so.TransactionFeesAdded)
+		fm.TransactionFeeExpenses = fm.TransactionFeeExpenses.Add(so.TransactionFeesAdded)
 		// Update the other financial values based on the obligation status.
 		if so.ObligationStatus == obligationUnresolved {
 			fm.ContractCount++
-			fm.PotentialContractCompensation = *new(big.Int).Add(&fm.PotentialContractCompensation, so.ContractCost)
-			fm.LockedStorageDeposit = *new(big.Int).Add(&fm.LockedStorageDeposit, so.LockedCollateral)
-			fm.PotentialStorageRevenue = *new(big.Int).Add(&fm.PotentialStorageRevenue, so.PotentialStorageRevenue)
-			fm.RiskedStorageDeposit = *new(big.Int).Add(&fm.RiskedStorageDeposit, so.RiskedCollateral)
-			fm.PotentialDownloadBandwidthRevenue = *new(big.Int).Add(&fm.PotentialDownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-			fm.PotentialUploadBandwidthRevenue = *new(big.Int).Add(&fm.PotentialUploadBandwidthRevenue, so.PotentialUploadRevenue)
+			fm.PotentialContractCompensation = fm.PotentialContractCompensation.Add(so.ContractCost)
+			fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.LockedCollateral)
+			fm.PotentialStorageRevenue = fm.PotentialStorageRevenue.Add(so.PotentialStorageRevenue)
+			fm.RiskedStorageDeposit = fm.RiskedStorageDeposit.Add(so.RiskedCollateral)
+			fm.PotentialDownloadBandwidthRevenue = fm.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
+			fm.PotentialUploadBandwidthRevenue = fm.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
 		}
 		if so.ObligationStatus == obligationSucceeded {
-			fm.ContractCompensation = *new(big.Int).Add(&fm.ContractCompensation, so.ContractCost)
-			fm.StorageRevenue = *new(big.Int).Add(&fm.StorageRevenue, so.PotentialStorageRevenue)
-			fm.DownloadBandwidthRevenue = *new(big.Int).Add(&fm.DownloadBandwidthRevenue, so.PotentialDownloadRevenue)
-			fm.UploadBandwidthRevenue = *new(big.Int).Add(&fm.UploadBandwidthRevenue, so.PotentialUploadRevenue)
+			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
+			fm.StorageRevenue = fm.StorageRevenue.Add(so.PotentialStorageRevenue)
+			fm.DownloadBandwidthRevenue = fm.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
+			fm.UploadBandwidthRevenue = fm.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
 		}
 		if so.ObligationStatus == obligationFailed {
-			// If there was no risked collateral for the failed obligation, we don't
-			// update anything since no revenues were lost. Only the contract compensation
-			// and transaction fees are added.
-			fm.ContractCompensation = *new(big.Int).Add(&fm.ContractCompensation, so.ContractCost)
-			status := so.RiskedCollateral.Sign() <= 0
-			if !status { //!so.RiskedCollateral.IsZero()
+
+			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
+			if !so.RiskedCollateral.IsNeg() {
 				// Storage obligation failed with risked collateral.
-				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialStorageRevenue)
-				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialDownloadRevenue)
-				fm.LostRevenue = *new(big.Int).Add(&fm.LostRevenue, so.PotentialUploadRevenue)
-				fm.LockedStorageDeposit = *new(big.Int).Add(&fm.LockedStorageDeposit, so.RiskedCollateral)
+				fm.LostRevenue = fm.LostRevenue.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
+				fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.RiskedCollateral)
 			}
+
 		}
 
 	}
 
 	h.financialMetrics = fm
-
 	return nil
 }
 
