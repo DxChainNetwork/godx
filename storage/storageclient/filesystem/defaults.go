@@ -56,3 +56,8 @@ const (
 	recoverableThreshold = uint32(125)
 	inDangerThreshold    = uint32(100)
 )
+
+const (
+	// healthCheckInterval is the interval between two health checks
+	healthCheckInterval = 30 * time.Minute
+)

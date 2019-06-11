@@ -69,6 +69,12 @@ type FileSystem struct {
 	// standardDisrupter is the standardDisrupter used for test cases. In production environment,
 	// it should always be an empty standardDisrupter
 	disrupter disrupter
+
+	// repairNeeded is the channel to signal a repair is needed
+	repairNeeded chan struct{}
+
+	// stuckFound is the channel to signal a stuck segment is found
+	stuckFound chan struct{}
 }
 
 // New is the public function used for creating a production FileSystem
@@ -88,6 +94,8 @@ func newFileSystem(persistDir string, contractor contractManager, disrupter disr
 		logger:            log.New("module", "filesystem"),
 		disrupter:         disrupter,
 		unfinishedUpdates: make(map[storage.DxPath]*dirMetadataUpdate),
+		repairNeeded:      make(chan struct{}),
+		stuckFound:        make(chan struct{}),
 	}
 }
 
@@ -254,6 +262,72 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 		// All curDir passed, still not found the directory, return the current directory
 		return curDir, nil
 	}
+}
+
+// OldestLastTimeHealthCheck find the dxpath of the directory with the oldest lastTimeHealthCheck
+// TODO: test this function
+func (fs *FileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
+	path := storage.RootDxPath()
+	dir, err := fs.dirSet.Open(path)
+	if err != nil {
+		return storage.DxPath{}, time.Time{}, err
+	}
+	md := dir.Metadata()
+	if err = dir.Close(); err != nil {
+		return storage.DxPath{}, time.Time{}, err
+	}
+
+	for time.Since(time.Unix(int64(md.TimeLastHealthCheck), 0)) > healthCheckInterval {
+		// check whether the file system has closed
+		select {
+		case <-fs.tm.StopChan():
+			return storage.DxPath{}, time.Time{}, errStopped
+		default:
+		}
+		subDirs, _, err := fs.dirsAndFiles(path)
+		if err != nil {
+			return storage.DxPath{}, time.Time{}, err
+		}
+		// If no more directories to go deep into, return
+		if len(subDirs) == 0 {
+			return path, time.Unix(int64(md.TimeLastHealthCheck), 0), nil
+		}
+		// Loop through the subDirs
+		updated := false
+		for subDir := range subDirs {
+			dir, err := fs.dirSet.Open(subDir)
+			if err != nil {
+				return storage.DxPath{}, time.Time{}, err
+			}
+			subMd := dir.Metadata()
+			if err = dir.Close(); err != nil {
+				return storage.DxPath{}, time.Time{}, err
+			}
+			// If subdirectory has older timestamp than the parent directory, continue to next
+			// subdir
+			if subMd.TimeLastHealthCheck > md.TimeLastHealthCheck {
+				continue
+			}
+			updated = true
+			md = subMd
+			path = subDir
+		}
+		// After loop over dirs, not updated, return current directory
+		if !updated {
+			return path, time.Unix(int64(md.TimeLastHealthCheck), 0), nil
+		}
+	}
+	return path, time.Unix(int64(md.TimeLastHealthCheck), 0), nil
+}
+
+// RepairNeededChan return a channel that signals a repair is needed
+func (fs *FileSystem) RepairNeededChan() chan struct{} {
+	return fs.repairNeeded
+}
+
+// StuckFoundChan returns a channel that signals a stuck segment is found
+func (fs *FileSystem) StuckFoundChan() chan struct{} {
+	return fs.stuckFound
 }
 
 // dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
