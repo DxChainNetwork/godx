@@ -1,7 +1,10 @@
 package vm
 
 var (
-	StrPrefixExpSC = "expired_storage_contract_"
+	StrPrefixExpSC = "ExpiredStorageContract_"
+
+	ProofedStatus    = []byte{'1'}
+	NotProofedStatus = []byte{'0'}
 
 	BytesClientCollateral   = []byte("ClientCollateral")
 	BytesHostCollateral     = []byte("HostCollateral")

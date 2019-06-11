@@ -39,6 +39,8 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
+
+	maxWindowLength = uint64(300)
 )
 
 type (
@@ -539,6 +541,15 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 		errChan  chan error
 	)
 
+	go func() {
+		select {
+		case <-errChan:
+
+			// go back state DB if something is wrong
+			state.RevertToSnapshot(snapshot)
+		}
+	}()
+
 	// rlp decode and calculate gas used
 	scSet := types.StorageContractSet{}
 	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
@@ -552,24 +563,34 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainDecode, errors.New("empty storage contract")
 	}
 
-	// make the storage contract address
+	// create the expired storage contract status address (e.g. "expired_storage_contract_1500")
+	windowEndStr := strconv.FormatUint(sc.WindowEnd, 10)
+	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
+
+	// create storage contract address, directly use the contract ID
 	scID := sc.ID()
 	scIDBytes := scID.Bytes()
 	contractAddr := common.BytesToAddress(scIDBytes[12:])
 
-	// check form contract and calculate gas used
-	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, state, sc, uint64(currentHeight), contractAddr)
-	errCheck, _ := resultCheck[0].(error)
-	if errCheck != nil {
-		log.Error("failed to check form contract", "err", errCheck)
-		return nil, gasRemainCheck, errCheck
+	// if the account not exist, create it
+	if !state.Exist(statusAddr) {
+		state.CreateAccount(statusAddr)
 	}
 
-	// create account for contractAddr
+	// check if this storage contract exist
+	if state.Exist(contractAddr) {
+		return nil, gasRemainDecode, errors.New("this storage contract already exist")
+	}
 	state.CreateAccount(contractAddr)
-	if state.Empty(contractAddr) {
-		return nil, gasRemainCheck, errors.New("create empty storage contract account")
+
+	// check form contract and calculate gas used
+	currentHeight := evm.BlockNumber.Uint64()
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, state, sc, uint64(currentHeight))
+	errCheck, _ := resultCheck[0].(error)
+	if errCheck != nil {
+		errChan <- errCheck
+		log.Error("failed to check form contract", "err", errCheck)
+		return nil, gasRemainCheck, errCheck
 	}
 
 	// set balances
@@ -583,23 +604,17 @@ func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]b
 	totalCollateral := clientCollateralAmount.Add(clientCollateralAmount, hostCollateralAmount)
 	state.AddBalance(contractAddr, totalCollateral)
 
-	// mark this new storage contract as not completed
-	endHeightStr := strconv.FormatUint(sc.WindowEnd, 10)
-	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + endHeightStr))
-	state.SetState(contractAddr, keyExpSC, common.BytesToHash([]byte{1}))
+	// mark this new storage contract as not proofed
+	statusTrie := state.StorageTrie(statusAddr)
+	err := statusTrie.TryUpdate(scIDBytes, NotProofedStatus)
+	if err != nil {
+		errChan <- err
+		return nil, gasRemainCheck, err
+	}
 
-	go func() {
-		select {
-		case <-errChan:
-
-			// go back state DB if something is wrong
-			state.RevertToSnapshot(snapshot)
-		}
-	}()
-
-	// store filed for storage contract in this contractAddr
+	// store storage contract in this contractAddr's state
 	trie := state.StorageTrie(contractAddr)
-	err := trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
+	err = trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
 	if err != nil {
 		errChan <- err
 		return nil, gasRemainCheck, err
@@ -712,10 +727,11 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainDecode, errors.New("empty storage contract revision")
 	}
 
-	scID := scr.ParentID
-	scIDBytes := scID.Bytes()
-	contractAddr := common.BytesToAddress(scIDBytes[12:])
-	trie := state.StorageTrie(contractAddr)
+	// check if the account exist
+	contractAddr := common.BytesToAddress(scr.ParentID.Bytes())
+	if !state.Exist(contractAddr) {
+		return nil, gasRemainDecode, errors.New("no this storage contract account")
+	}
 
 	// check file contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
@@ -726,6 +742,8 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainCheck, errCheck
 	}
 
+	// update revision info
+	trie := state.StorageTrie(contractAddr)
 	buffer := bytes.Buffer{}
 	buffer.WriteString(strconv.FormatUint(scr.NewFileSize, 10))
 	err := trie.TryUpdate(BytesFileSize, buffer.Bytes())
@@ -759,16 +777,15 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	buffer.WriteString(strconv.FormatUint(scr.NewWindowEnd, 10))
 	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
-	buffer.Reset()
 	if err != nil {
 		errChan <- err
 		return nil, gasRemainCheck, errCheck
 	}
+	buffer.Reset()
 
 	vpoBytes, err := rlp.EncodeToBytes(scr.NewValidProofOutputs)
 	if err != nil {
-		errChan <- err
-		return nil, gasRemainCheck, errCheck
+		return nil, gasRemainCheck, err
 	}
 	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
 	if err != nil {
@@ -793,7 +810,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainCheck, errCheck
 	}
 
-	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
+	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
@@ -826,47 +843,92 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainDec, errors.New("empty storage proof")
 	}
 
-	scID := sp.ParentID
-	scIDBytes := scID.Bytes()
-	contractAddr := common.BytesToAddress(scIDBytes[12:])
-	trie := state.StorageTrie(contractAddr)
-
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, evm, sp, uint64(currentHeight), contractAddr)
+
+	contractAddr := common.BytesToAddress(sp.ParentID[12:])
+	if !state.Exist(contractAddr) {
+		return nil, gasRemainDec, errors.New("no this storage contract account")
+	}
+
+	// retrieve origin data in storage contract
+	trie := state.StorageTrie(contractAddr)
+	windowEndBytes, err := trie.TryGet(BytesWindowEnd)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	windwoEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	windowStartBytes, err := trie.TryGet(BytesWindowStart)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	windwoStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	fileMerkleRootBytes, err := trie.TryGet(BytesFileMerkleRoot)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	fileSizeBytes, err := trie.TryGet(BytesFileSize)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	validOutputsBytes, err := trie.TryGet(BytesValidProofOutputs)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	vpos := []types.DxcoinCharge{}
+	err = rlp.DecodeBytes(validOutputsBytes, &vpos)
+	if err != nil {
+		return nil, gasRemainDec, err
+	}
+
+	statusAddr := common.BytesToAddress(append([]byte(StrPrefixExpSC), windowEndBytes...))
+
+	sc := types.StorageContract{
+		ValidProofOutputs: vpos,
+		FileMerkleRoot:    common.BytesToHash(fileMerkleRootBytes),
+		WindowStart:       windwoStart,
+		WindowEnd:         windwoEnd,
+		FileSize:          fileSize,
+	}
+
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, sc)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		return nil, gasRemainCheck, errCheck
 	}
 
-	vpoBytes, err := trie.TryGet(BytesValidProofOutputs)
-	if err != nil {
-		errChan <- err
-		return nil, gasRemainCheck, err
-	}
-
-	vpos := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, &vpos)
-	if err != nil {
-		errChan <- err
-		return nil, gasRemainCheck, err
-	}
-
 	// effect valid proof outputs, first for client, second for host
-	totalVale := new(big.Int).SetInt64(1)
-	for _, vpo := range vpos {
+	totalVale := new(big.Int).SetInt64(0)
+	for _, vpo := range sc.ValidProofOutputs {
 		state.AddBalance(vpo.Address, vpo.Value)
 		totalVale.Add(totalVale, vpo.Value)
 	}
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract
-	windowEnd, err := trie.TryGet(BytesWindowEnd)
+	statusTrie := state.StorageTrie(statusAddr)
+	err = statusTrie.TryUpdate(sp.ParentID.Bytes(), ProofedStatus)
 	if err != nil {
-		return nil, gasRemainCheck, err
+		errChan <- err
+		return nil, gasRemainCheck, errCheck
 	}
-	endHeightStr := string(windowEnd)
-	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + endHeightStr))
-	state.SetState(contractAddr, keyExpSC, common.BytesToHash([]byte{0}))
 
 	log.Info("storage proof tx execution done", "file_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil

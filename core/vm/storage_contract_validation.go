@@ -51,13 +51,7 @@ const (
 )
 
 // check whether a new StorageContract is valid
-func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight uint64, contractAddr common.Address) error {
-
-	// check if this file contract exist
-	if state.Exist(contractAddr) {
-		return errors.New("this file contract exist")
-	}
-
+func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
@@ -65,7 +59,7 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 		return errZeroCollateral
 	}
 
-	// Check that start and expiration are reasonable values.
+	// check that start and expiration are reasonable values.
 	if sc.WindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
@@ -73,7 +67,7 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 		return errStorageContractWindowEndViolation
 	}
 
-	// Check that the proof outputs sum to the payout
+	// check that the proof outputs sum to the payout
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range sc.ValidProofOutputs {
@@ -125,24 +119,23 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 // check whether a new StorageContractRevision is valid
 func CheckReversionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
 
-	// check if this file contract exist
-	if !state.Exist(contractAddr) {
-		return errors.New("this file contract don't exist")
-	}
-
 	// check whether it has proofed
-	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
-	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + windowEndStr))
-	flag := state.GetState(contractAddr, keyExpSC)
-	if flag == common.BytesToHash([]byte{0}) {
-		return errors.New("can not revision after storage proofed")
+	windowEnStr := strconv.FormatUint(scr.NewWindowEnd, 10)
+	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEnStr))
+	statusTrie := state.StorageTrie(statusAddr)
+	flag, err := statusTrie.TryGet(scr.ParentID.Bytes())
+	if err != nil {
+		return errors.New("failed to retrieve contract status")
+	}
+	if bytes.Equal(flag, ProofedStatus) {
+		return errors.New("can not revision after storage proof")
 	}
 
 	if scr.UnlockConditions.Timelock > currentHeight {
 		return errTimelockNotSatisfied
 	}
 
-	// Check that start and expiration are reasonable values.
+	// check that start and expiration are reasonable values.
 	if scr.NewWindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
@@ -150,8 +143,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		return errStorageContractWindowEndViolation
 	}
 
-	// Check that the valid outputs and missed outputs sum to the same
-	// value.
+	// check that the valid outputs and missed outputs sum whether are the same
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range scr.NewValidProofOutputs {
@@ -174,7 +166,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		return err
 	}
 
-	// retrieve origin data in storage contract
+	// retrieve origin storage contract
 	trie := state.StorageTrie(contractAddr)
 	wStartBytes, err := trie.TryGet(BytesWindowStart)
 	if err != nil {
@@ -205,7 +197,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		return err
 	}
 	originVpo := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, &originVpo)
+	err = rlp.DecodeBytes(vpoBytes, originVpo)
 	if err != nil {
 		return err
 	}
@@ -224,7 +216,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	}
 
 	// Check that the unlock conditions match the unlock hash.
-	if scr.UnlockConditions.UnlockHash() != common.Hash(unHash) {
+	if scr.UnlockConditions.UnlockHash() != unHash {
 		return errWrongUnlockCondition
 	}
 
@@ -310,59 +302,23 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 }
 
 // check whether a new StorageProof is valid
-func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, contractAddr common.Address) error {
-
-	// check if this file contract exist
-	if !state.Exist(contractAddr) {
-		return errors.New("this file contract exist")
-	}
-
-	// retrieve origin data in storage contract
-	trie := state.StorageTrie(contractAddr)
-	wEndBytes, err := trie.TryGet(BytesWindowEnd)
-	if err != nil {
-		return err
-	}
-	wEnd, err := strconv.ParseUint(string(wEndBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	wStartBytes, err := trie.TryGet(BytesWindowStart)
-	if err != nil {
-		return err
-	}
-	wStart, err := strconv.ParseUint(string(wStartBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	fileSizeBytes, err := trie.TryGet(BytesFileSize)
-	if err != nil {
-		return err
-	}
-	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	merkleRootBytes, err := trie.TryGet(BytesFileMerkleRoot)
-	if err != nil {
-		return err
-	}
+func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, sc types.StorageContract) error {
 
 	// check whether it proofed repeatedly
-	keyExpSC := common.BytesToHash([]byte(StrPrefixExpSC + string(wEndBytes)))
-	flag := state.GetState(contractAddr, keyExpSC)
-	if flag == common.BytesToHash([]byte{0}) {
-		return errors.New("can submit storage proof repeatedly")
+	statusTrie := state.StorageTrie(statusAddr)
+	flag, err := statusTrie.TryGet(sp.ParentID.Bytes())
+	if err != nil {
+		return errors.New("failed to retrieve contract status")
+	}
+	if bytes.Equal(flag, ProofedStatus) {
+		return errors.New("can not submit storage proof repeatedly")
 	}
 
-	if wStart > currentHeight {
+	if sc.WindowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
 	}
 
-	if wEnd < currentHeight {
+	if sc.WindowEnd < currentHeight {
 		return errors.New("too late to submit storage proof")
 	}
 
@@ -373,21 +329,21 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		return err
 	}
 
-	// Check that the storage proof itself is valid.
+	// check that the storage proof itself is valid.
 
-	segmentIndex, err := storageProofSegment(state, wStart, fileSize, sp.ParentID, currentHeight)
+	segmentIndex, err := storageProofSegment(state, sc.WindowStart, sc.FileSize, sp.ParentID, currentHeight)
 	if err != nil {
 		return err
 	}
 
-	leaves := CalculateLeaves(fileSize)
+	leaves := CalculateLeaves(sc.FileSize)
 
 	segmentLen := uint64(SegmentSize)
 
-	// If this segment chosen is the final segment, it should only be as
-	// long as necessary to complete the filesize.
+	// if this segment chosen is the final segment, it should only be as
+	// long as necessary to complete the file size.
 	if segmentIndex == leaves-1 {
-		segmentLen = fileSize % SegmentSize
+		segmentLen = sc.FileSize % SegmentSize
 	}
 
 	if segmentLen == 0 {
@@ -399,9 +355,9 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		common.BytesToHash(merkleRootBytes),
+		sc.FileMerkleRoot,
 	)
-	if !verified && fileSize > 0 {
+	if !verified && sc.FileSize > 0 {
 		return errInvalidStorageProof
 	}
 

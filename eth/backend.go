@@ -105,9 +105,6 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	// maintenance
-	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -220,14 +217,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		//  make sure what the expected handling case of these failure
 		return nil, err
 	}
-
-	// new maintenance system
-	state, err := eth.blockchain.State()
-	if err != nil {
-		log.Error("failed to get statedb for maintenance", "error", err)
-		return nil, err
-	}
-	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
 
 	return eth, nil
 }
@@ -631,8 +620,6 @@ func (s *Ethereum) Stop() error {
 
 	close(s.shutdownChan)
 
-	// stop maintenance
-	s.maintenance.Stop()
 	return nil
 }
 
@@ -697,7 +684,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.Ho
 	session.SetDeadLine(storage.HostSettingTime)
 	defer s.Disconnect(session, hostEnodeUrl)
 
-	if err := session.SendHostExtSettingsRequest(struct {}{}); err != nil {
+	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		return err
 	}
 

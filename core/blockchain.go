@@ -1061,10 +1061,6 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	// Set new head.
 	if status == CanonStatTy {
 		bc.insert(block)
-
-		// send canonical chain head event for file contract maintennance
-		canEv := CanonicalChainHeadEvent{block}
-		bc.canonicalChainHeadFeed.Send(canEv)
 	}
 	bc.futureBlocks.Remove(block.Hash())
 	return status, nil
@@ -1754,11 +1750,6 @@ func (bc *BlockChain) SubscribeChainSideEvent(ch chan<- ChainSideEvent) event.Su
 // SubscribeLogsEvent registers a subscription of []*types.Log.
 func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	return bc.scope.Track(bc.logsFeed.Subscribe(ch))
-}
-
-// SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
-func (bc *BlockChain) SubscribeCanonicalChainEvent(ch chan<- CanonicalChainHeadEvent) event.Subscription {
-	return bc.scope.Track(bc.canonicalChainHeadFeed.Subscribe(ch))
 }
 
 func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) event.Subscription {

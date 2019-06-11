@@ -104,21 +104,20 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckFormContract
-	case func(StateDB, types.StorageContract, uint64, common.Address) error:
+	case func(StateDB, types.StorageContract, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
-		if len(args) != 6 {
+		if len(args) != 5 {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
 		state, _ := args[2].(StateDB)
 		fc, _ := args[3].(types.StorageContract)
 		bl, _ := args[4].(uint64)
-		addr, _ := args[5].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(state, fc, bl, addr)
+		err := i(state, fc, bl)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
@@ -150,12 +149,12 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckStorageProof
-	case func(StateDB, types.StorageProof, uint64, common.Address) error:
+	case func(StateDB, types.StorageProof, uint64, common.Address, types.StorageContract) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
 		}
-		if len(args) != 6 {
+		if len(args) != 7 {
 			result = append(result, GasCalculationParamsNumberWorng)
 			return gas, result
 		}
@@ -163,8 +162,9 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		sp, _ := args[3].(types.StorageProof)
 		bl, _ := args[4].(uint64)
 		addr, _ := args[5].(common.Address)
+		sc, _ := args[6].(types.StorageContract)
 		gas -= params.CheckFileGas
-		err := i(state, sp, bl, addr)
+		err := i(state, sp, bl, addr, sc)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
