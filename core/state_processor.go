@@ -98,7 +98,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			// if this account has not proofed contract, effect the missed output
 			if bytes.Equal(value, []byte{'0'}) {
 				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes)
+				contractAddr := common.BytesToAddress(scIDBytes[12:])
 				contractTrie := statedb.StorageTrie(contractAddr)
 				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
 				if err != nil {

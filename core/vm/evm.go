@@ -728,7 +728,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 
 	// check if the account exist
-	contractAddr := common.BytesToAddress(scr.ParentID.Bytes())
+	contractAddr := common.BytesToAddress(scr.ParentID.Bytes()[12:])
 	if !state.Exist(contractAddr) {
 		return nil, gasRemainDecode, errors.New("no this storage contract account")
 	}

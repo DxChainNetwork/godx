@@ -972,7 +972,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 			// if this account has not proofed contract, effect the missed output
 			if bytes.Equal(value, []byte{'0'}) {
 				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes)
+				contractAddr := common.BytesToAddress(scIDBytes[12:])
 				contractTrie := w.current.state.StorageTrie(contractAddr)
 				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
 				if err != nil {
