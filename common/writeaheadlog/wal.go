@@ -54,7 +54,7 @@ func New(path string) (*Wal, []*Transaction, error) {
 	return newWal(path, &utilsProd{})
 }
 
-// newWal return a new Wal and unfinished transactions
+// newWal return a new Wal and unreleased transactions (committed and uncommitted)
 func newWal(path string, utils utilsSet) (w *Wal, txns []*Transaction, err error) {
 	newWal := &Wal{
 		utils:   utils,
