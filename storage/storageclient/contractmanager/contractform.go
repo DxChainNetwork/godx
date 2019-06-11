@@ -16,7 +16,6 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -102,14 +101,14 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 	return cm.hostManager.RetrieveRandomHosts(neededContracts*randomStorageHostsFactor+randomStorageHostsBackup, blackList, addressBlackList)
 }
 
-func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md storage.ContractMetaData, err error) {
+func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
 	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
+	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
+	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -137,13 +136,13 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
 			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
+			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostPayout, Address: hostAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
+			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
 		},
 	}
 
@@ -165,11 +164,11 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
 	}
 
-	session, err := cm.b.SetupConnection(host.NetAddress)
+	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.NetAddress)
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -262,8 +261,8 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
 		StartHeight:            startHeight,
 		EndHeight:              endHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		TotalCost:              funding,
+		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,
 		Status: storage.ContractStatus{
 			UploadAbility: true,

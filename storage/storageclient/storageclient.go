@@ -17,10 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
-
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -29,6 +25,7 @@ import (
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -64,7 +61,7 @@ type StorageClient struct {
 	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []proto.StorageHostEntry
+	lastEstimationStorageHost []storage.HostInfo
 
 	// Directories and File related
 	persist        persistence
