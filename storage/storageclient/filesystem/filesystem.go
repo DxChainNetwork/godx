@@ -264,8 +264,8 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 	}
 }
 
-// TODO: test this function
 // OldestLastTimeHealthCheck find the dxpath of the directory with the oldest lastTimeHealthCheck
+// TODO: test this function
 func (fs *FileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
 	path := storage.RootDxPath()
 	dir, err := fs.dirSet.Open(path)
@@ -325,7 +325,7 @@ func (fs *FileSystem) RepairNeededChan() chan struct{} {
 	return fs.repairNeeded
 }
 
-// StuckFound returns a channel that signals a stuck segment is found
+// StuckFoundChan returns a channel that signals a stuck segment is found
 func (fs *FileSystem) StuckFoundChan() chan struct{} {
 	return fs.stuckFound
 }
