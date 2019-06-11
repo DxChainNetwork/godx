@@ -158,6 +158,11 @@ func (fs *FileSet) Delete(dxPath storage.DxPath) error {
 	defer fs.lock.Unlock()
 
 	entry, err := fs.open(dxPath)
+
+	if err == ErrUnknownFile {
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}

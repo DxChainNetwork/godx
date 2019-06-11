@@ -5,57 +5,118 @@
 package storageclient
 
 import (
-	"fmt"
+	"encoding/binary"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/pborman/uuid"
+	"io"
 	"io/ioutil"
+	"math/rand"
+	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestUploadDirectory(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
+	rt := newStorageClientTester(t)
+	server := newTestServer()
 
-	rt := newStorageClientTester()
+	rt.Client.Start(rt.Backend, server, rt.Backend)
 	defer rt.Client.Close()
 
-	dxPath := filepath.Dir("dxchain")
-	testUploadFile, err := ioutil.TempFile(dxPath, "*")
+	localFilePath := filepath.Join(homeDir(), "uploadtestfiles")
+
+	_, err := os.Stat(localFilePath)
+	if os.IsNotExist(err) {
+		os.Mkdir(localFilePath, os.ModePerm)
+	}
+
+	testUploadFile, err := ioutil.TempFile(localFilePath, "*")
+
+	if _, err := testUploadFile.Write(generateRandomBytes()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testUploadFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 2, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ec, err := erasurecode.New(erasurecode.ECTypeStandard, DefaultMinSectors, DefaultNumSectors)
-	if err != nil {
-		t.Fatal(err)
-	}
 	params := FileUploadParams{
-		Source:      filepath.Join(dxPath, testUploadFile.Name()),
+		Source:      testUploadFile.Name(),
 		DxPath:      storage.DxPath{Path: uuid.New()},
 		ErasureCode: ec,
 	}
+
 	err = rt.Client.Upload(params)
 	if err == nil {
 		t.Fatal("expected Upload to fail with empty directory as source")
 	}
 }
 
-func TestSome(t *testing.T) {
-	m := make(map[string][]int)
-	a := []int{1, 2}
-	m["t"] = a
+func TestReadFromLocalfile(t *testing.T) {
+	filePath, fileSize, fileHash := generateFile(t)
 
-	for k, v := range m {
-		v = v[1:]
-		m[k] = v
-
-	}
-	for k, v := range m {
-		fmt.Println(k)
-		fmt.Println(v)
+	osFile, err := os.Open(filePath)
+	if err != nil {
+		t.Fatal(err)
 	}
 
+	buf := NewDownloadBuffer(uint64(fileSize), 1<<22)
+	sr := io.NewSectionReader(osFile, 0, int64(fileSize))
+	_, err = buf.ReadFrom(sr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if fileHash != crypto.Keccak256Hash(buf.buf...) {
+		t.Fatal("write and read content is not the same")
+	}
+
+	if err := osFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Remove(filePath); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func generateFile(t *testing.T) (string, int, common.Hash) {
+	localFilePath := filepath.Join(homeDir(), "uploadtestfiles")
+
+	_, err := os.Stat(localFilePath)
+	if os.IsNotExist(err) {
+		os.Mkdir(localFilePath, os.ModePerm)
+	}
+
+	testUploadFile, err := ioutil.TempFile(localFilePath, "*")
+
+	bytes := generateRandomBytes()
+	if _, err := testUploadFile.Write(bytes); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := testUploadFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	return testUploadFile.Name(), len(bytes), crypto.Keccak256Hash(bytes)
+}
+
+func generateRandomBytes() []byte {
+	var bytes []byte
+	for i := 0; i < (1 << 20); i++ {
+		tmp := make([]byte, 8)
+		n := uint64(rand.Int63())
+		binary.BigEndian.PutUint64(tmp, n)
+		bytes = append(bytes, tmp...)
+	}
+	return bytes
 }

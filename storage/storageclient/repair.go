@@ -74,7 +74,7 @@ var (
 	ErrMarkStuck    = errors.New("unable to mark healthy segments as unstuck")
 )
 
-// addStuckSegmentsToHeap adds all the stuck Segments in a file to the repair heap
+// addStuckSegmentsToHeap adds all the stuck segments in a file to the repair heap
 func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 	// Open File
 	sf, err := sc.fileSystem.OpenFile(dxPath)
@@ -158,9 +158,9 @@ func (sc *StorageClient) stuckFileLoop() {
 				// The storage client has shut down.
 				return
 			case <-sc.uploadHeap.stuckSegmentFound:
-				// Health Loop found stuck Segment
+				// Health Loop found stuck segment
 			case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
-				// Stuck Segment was successfully repaired. Add the rest of the file
+				// Stuck segment was successfully repaired. Add the rest of the file
 				// to the heap
 				err := sc.addStuckSegmentsToHeap(dxPath)
 				if err != nil {
@@ -190,12 +190,12 @@ func (sc *StorageClient) stuckFileLoop() {
 			return
 		case <-rebuildStuckHeapSignal:
 			// Time to find another random Segment
-		case DxPath := <-sc.uploadHeap.stuckSegmentSuccess:
+		case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
 			// Stuck Segment was successfully repaired. Add the rest of the file
 			// to the heap
-			err := sc.addStuckSegmentsToHeap(DxPath)
+			err := sc.addStuckSegmentsToHeap(dxPath)
 			if err != nil {
-				sc.log.Debug("WARN: unable to add stuck Segments from file", DxPath, "to heap:", err)
+				sc.log.Debug("WARN: unable to add stuck segments from file", dxPath, "to heap:", err)
 			}
 		}
 	}
@@ -203,7 +203,7 @@ func (sc *StorageClient) stuckFileLoop() {
 
 //// threadedUpdatestorage clientHealth reads all the Dxfiles in the storage client, calculates
 //// the health of each file and updates the folder metadata
-//func (sc *StorageClient) threadedUpdatestorage clientHealth() {
+//func (sc *StorageClient) threadedUpdatestorageclientHealth() {
 //	err := sc.tm.Add()
 //	if err != nil {
 //		return

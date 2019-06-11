@@ -205,8 +205,8 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 
 				// Mark the Segment set based on the pieces in this contract
 				_, exists := newUnfinishedSegments[i].unusedHosts[sector.HostID.String()]
-				redundantPiece := newUnfinishedSegments[i].sectorSlotsStatus[sectorIndex]
-				if exists && !redundantPiece {
+				redundantSector := newUnfinishedSegments[i].sectorSlotsStatus[sectorIndex]
+				if exists && !redundantSector {
 					newUnfinishedSegments[i].sectorSlotsStatus[sectorIndex] = true
 					newUnfinishedSegments[i].sectorsCompletedNum++
 					delete(newUnfinishedSegments[i].unusedHosts, sector.HostID.String())
@@ -221,35 +221,38 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 	// completed or are not downloadable.
 	incompleteSegments := newUnfinishedSegments[:0]
 	for _, segment := range newUnfinishedSegments {
-		// Check if Segment is complete
+		// Check if segment is complete
 		incomplete := segment.sectorsCompletedNum < segment.sectorsNeedNum
-		// Check if Segment is downloadable
+
+		// Check if segment is downloadable
 		segmentHealth := segment.fileEntry.SegmentHealth(int(segment.index), hostHealthInfoTable)
 		_, err := os.Stat(string(segment.fileEntry.LocalPath()))
-		downloadable := segmentHealth <= 1 || err == nil
-		// Check if Segment seems stuck
-		stuck := !incomplete && segmentHealth != 0
+		downloadable := segmentHealth >= dxfile.UnstuckHealthThreshold || err == nil
+
+		// Check if segment seems stuck
+		stuck := !incomplete && segmentHealth != dxfile.CompleteHealthThreshold
 
 		// Add Segment to list of incompleteSegments if it is incomplete and
-		// downloadable or if we are targeting stuck Segments
+		// downloadable or if we are targeting stuck segments
 		if incomplete && (downloadable || target == targetStuckSegments) {
 			incompleteSegments = append(incompleteSegments, segment)
 			continue
 		}
 
-		// If a Segment is not downloadable mark it as stuck
+		// If a segment is not downloadable mark it as stuck
+		// 当文件上传未达到recoverable级别时，此时又把该源文件删除，则会被永远标记为stuck = true
 		if !downloadable {
-			sc.log.Info("Marking Segment", segment.id, "as stuck due to not being downloadable")
+			sc.log.Info("Marking segment", segment.id, "as stuck due to not being downloadable")
 			err = segment.fileEntry.SetStuckByIndex(int(segment.index), true)
 			if err != nil {
-				sc.log.Debug("WARN: unable to mark Segment as stuck:", err)
+				sc.log.Debug("WARN: unable to mark segment as stuck:", err)
 			}
 			continue
 		} else if stuck {
-			sc.log.Info("Marking Segment", segment.id, "as stuck due to being complete but having a health of", segmentHealth)
+			sc.log.Info("Marking segment", segment.id, "as stuck due to being complete but having a health of", segmentHealth)
 			err = segment.fileEntry.SetStuckByIndex(int(segment.index), true)
 			if err != nil {
-				sc.log.Debug("WARN: unable to mark Segment as stuck:", err)
+				sc.log.Debug("WARN: unable to mark segment as stuck:", err)
 			}
 			continue
 		}
@@ -263,25 +266,29 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 	return incompleteSegments
 }
 
+// Select a dxfile randomly and then grab one segment randomly in this file
 func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntryWithID, hosts map[string]struct{}, target repairTarget, hostHealthInfoTable storage.HostHealthInfoTable) {
 	// Sanity check that there are files
 	if len(files) == 0 {
 		return
 	}
+
 	// Grab a random file
 	randFileIndex := rand.Intn(len(files))
 	file := files[randFileIndex]
 	sc.lock.Lock()
-	// Build the unfinished stuck Segments from the file
+
+	// Build the unfinished stuck segments from the file
 	unfinishedUploadSegments := sc.createUnfinishedSegments(file, hosts, target, hostHealthInfoTable)
 	sc.lock.Unlock()
-	// Sanity check that there are stuck Segments
+
+	// Sanity check that there are stuck segments
 	if len(unfinishedUploadSegments) == 0 {
 		sc.log.Debug("WARN: no stuck unfinishedUploadSegments returned from buildUnfinishedSegments, so no stuck Segments will be added to the heap")
 		return
 	}
-	// Add a random stuck Segment to the upload heap and set its stuckRepair field
-	// to true
+
+	// Add a random stuck segment to the upload heap and set its stuckRepair field to true
 	randSegmentIndex := rand.Intn(len(unfinishedUploadSegments))
 	randSegment := unfinishedUploadSegments[randSegmentIndex]
 	randSegment.stuckRepair = true
@@ -294,8 +301,8 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 	}
 	// Close the unused unfinishedUploadSegments
 	unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
-	for _, Segment := range unfinishedUploadSegments {
-		err := Segment.fileEntry.Close()
+	for _, segment := range unfinishedUploadSegments {
+		err := segment.fileEntry.Close()
 		if err != nil {
 			sc.log.Debug("WARN: unable to close file:", err)
 		}
@@ -584,7 +591,9 @@ func (sc *StorageClient) uploadAndRepairLoop() {
 			}
 			continue
 		}
-		if float64(rootMetadata.Health) < RemoteRepairDownloadThreshold {
+
+		// We are not upload or repair immediately because of enough health score
+		if rootMetadata.Health >= dxfile.RepairHealthThreshold {
 			// Block until a signal is received that there is more work to do.
 			// A signal will be sent if new data to upload is received, or if
 			// the health loop discovers that some files are not in good health.

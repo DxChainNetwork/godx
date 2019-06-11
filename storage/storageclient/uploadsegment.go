@@ -86,7 +86,7 @@ type unfinishedUploadSegment struct {
 	sectorsUploadingNum int                 // number of sectors that are being uploaded, but aren't finished yet (may fail).
 	released            bool                // whether this segment has been released from the active Segments set.
 	unusedHosts         map[string]struct{} // hosts that aren't yet storing any sectors or performing any work.
-	workersRemaining    int                 // number of inactive workers still able to upload a sector.
+	workersRemain       int                 // number of inactive workers still able to upload a sector.
 	workerBackups       []*worker           // workers that can be used if other workers fail.
 }
 
@@ -117,7 +117,7 @@ func (uc *unfinishedUploadSegment) SegmentComplete() bool {
 		return true
 	}
 	// We are no longer doing any uploads and we don't have any workers left.
-	if uc.workersRemaining == 0 && uc.sectorsUploadingNum == 0 {
+	if uc.workersRemain == 0 && uc.sectorsUploadingNum == 0 {
 		return true
 	}
 	return false
@@ -135,7 +135,7 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 
 	// Distribute the segment to each worker in the work pool, marking the number of workers that have received the segment
 	sc.lock.Lock()
-	uc.workersRemaining += len(sc.workerPool)
+	uc.workersRemain += len(sc.workerPool)
 	workers := make([]*worker, 0, len(sc.workerPool))
 	for _, worker := range sc.workerPool {
 		workers = append(workers, worker)
@@ -252,17 +252,17 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 	//
 	// Need to ensure the erasure coding memory is released as well as the
 	// physical Segment memory. Physical Segment memory is released by setting
-	// 'workersRemaining' to zero if the repair fails before being distributed
+	// 'workersRemain' to zero if the repair fails before being distributed
 	// to workers. Erasure coding memory is released manually if the repair
 	// fails before the erasure coding occurs.
-	defer sc.cleanUpUploadSegment(segment)
+	defer sc.cleanupUploadSegment(segment)
 
 	// Retrieve the logical data for the Segment.
 	err = sc.retrieveLogicalSegmentData(segment)
 	if err != nil {
 		// retrieve logical data failed, interrupt upload and release memory
 		segment.logicalSegmentData = nil
-		segment.workersRemaining = 0
+		segment.workersRemain = 0
 		sc.memoryManager.Return(erasureCodingMemory + pieceCompletedMemory)
 		segment.memoryReleased += erasureCodingMemory + pieceCompletedMemory
 		sc.log.Debug("retrieve logical data of a segment failed:", err)
@@ -279,7 +279,7 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 	sc.memoryManager.Return(erasureCodingMemory)
 	segment.memoryReleased += erasureCodingMemory
 	if err != nil {
-		segment.workersRemaining = 0
+		segment.workersRemain = 0
 		sc.memoryManager.Return(pieceCompletedMemory)
 		segment.memoryReleased += pieceCompletedMemory
 		for i := 0; i < len(segment.physicalSegmentData); i++ {
@@ -322,32 +322,30 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 
 // retrieveLogicalSegmentData will get the raw data from disk if possible otherwise queueing a download
 func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
-	numParityPieces := float64(segment.sectorsNeedNum - segment.minimumSectors)
-	minMissingPiecesToDownload := int(numParityPieces * RemoteRepairDownloadThreshold)
-	download := segment.sectorsCompletedNum+minMissingPiecesToDownload < segment.sectorsNeedNum
+	numRedundantSectors := float64(segment.sectorsNeedNum - segment.minimumSectors)
+	minMissingSectorsToDownload := int(numRedundantSectors * RemoteRepairDownloadThreshold)
+	needDownload := segment.sectorsCompletedNum+minMissingSectorsToDownload < segment.sectorsNeedNum
 
 	// Download the segment if it's not on disk.
-	if segment.fileEntry.LocalPath() == "" && download {
+	if segment.fileEntry.LocalPath() == "" && needDownload {
 		return sc.downloadLogicalSegmentData(segment)
 	} else if segment.fileEntry.LocalPath() == "" {
 		return errors.New("file not available locally")
 	}
 
-	// Try to read the file content from disk. If failed, go through download
+	// Try to read the file content from disk. If failed, go through needDownload
 	osFile, err := os.Open(string(segment.fileEntry.LocalPath()))
-	if err != nil && download {
+	if err != nil && needDownload {
 		return sc.downloadLogicalSegmentData(segment)
 	} else if err != nil {
 		return errors.New("failed to open file locally")
 	}
 	defer osFile.Close()
-	// TODO: Once we have enabled support for small Segments, we should stop
-	// needing to ignore the EOF errors, because the Segment size should always
-	// match the tail end of the file. Until then, we ignore io.EOF.
+
 	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
 	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
-	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && download {
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && needDownload {
 		sc.log.Debug("failed to read file, downloading instead:", err)
 		return sc.downloadLogicalSegmentData(segment)
 	} else if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
@@ -362,9 +360,9 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanUpUploadSegment will check the state of the segment and perform any
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
-func (sc *StorageClient) cleanUpUploadSegment(uc *unfinishedUploadSegment) {
+func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
-	piecesAvailable := 0
+	sectorsAvailable := 0
 	var memoryReleased uint64
 	// Release any unnecessary pieces, counting any pieces that are
 	// currently available.
@@ -374,26 +372,26 @@ func (sc *StorageClient) cleanUpUploadSegment(uc *unfinishedUploadSegment) {
 			continue
 		}
 
-		// If we have all the available pieces we need, release this piece.
-		// Otherwise, mark that there's another piece available. This algorithm
-		// will prefer releasing later pieces, which improves computational
-		// complexity for erasure coding.
-		if piecesAvailable >= uc.workersRemaining {
+		// If we have all the available sectors we need, release this sector.
+		// Otherwise, mark that there's another sector available. This algorithm
+		// will prefer releasing later sectors, which improves computational
+		// complexity for erasure coding
+		if sectorsAvailable >= uc.workersRemain {
 			memoryReleased += storage.SectorSize
 			if len(uc.physicalSegmentData) < len(uc.sectorSlotsStatus) {
 				// TODO handle this. Might happen if erasure coding the Segment failed.
 			}
 			uc.physicalSegmentData[i] = nil
-			// Mark this piece as taken so that we don't double release memory.
+			// Mark this sector as taken so that we don't double release memory
 			uc.sectorSlotsStatus[i] = true
 		} else {
-			piecesAvailable++
+			sectorsAvailable++
 		}
 	}
 
 	// Check if the Segment needs to be removed from the list of active
-	// Segments. It needs to be removed if the Segment is complete, but hasn't
-	// yet been released.
+	// segments. It needs to be removed if the segment is complete, but hasn't
+	// yet been released
 	segmentComplete := uc.SegmentComplete()
 	released := uc.released
 	if segmentComplete && !released {
@@ -404,11 +402,11 @@ func (sc *StorageClient) cleanUpUploadSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Unlock()
 
 	// If there are pieces available, add the standby workers to collect them.
-	// Standby workers are only added to the Segment when piecesAvailable is equal
+	// Standby workers are only added to the Segment when sectorsAvailable is equal
 	// to zero, meaning this code will only trigger if the number of pieces
 	// available increases from zero. That can only happen if a worker
 	// experiences an error during upload.
-	if piecesAvailable > 0 {
+	if sectorsAvailable > 0 {
 		uc.managedNotifyStandbyWorkers()
 	}
 	// If required, return the memory to the storage client.
@@ -428,7 +426,7 @@ func (sc *StorageClient) cleanUpUploadSegment(uc *unfinishedUploadSegment) {
 	}
 	// Sanity check - all memory should be released if the Segment is complete.
 	if segmentComplete && totalMemoryReleased != uc.memoryNeeded {
-		sc.log.Debug("No workers remaining, but not all memory released:", uc.workersRemaining, uc.sectorsUploadingNum, uc.memoryReleased, uc.memoryNeeded)
+		sc.log.Debug("No workers remaining, but not all memory released:", uc.workersRemain, uc.sectorsUploadingNum, uc.memoryReleased, uc.memoryNeeded)
 	}
 }
 

@@ -15,9 +15,9 @@ import (
 // holding a lock
 func (w *worker) dropSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
-	uc.workersRemaining--
+	uc.workersRemain--
 	uc.mu.Unlock()
-	w.client.cleanUpUploadSegment(uc)
+	w.client.cleanupUploadSegment(uc)
 }
 
 // dropUploadSegments will release all of the upload segments that the worker has received.
@@ -219,7 +219,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	uc.memoryReleased += uint64(releaseSize)
 	uc.mu.Unlock()
 	w.client.memoryManager.Return(uint64(releaseSize))
-	w.client.cleanUpUploadSegment(uc)
+	w.client.cleanupUploadSegment(uc)
 }
 
 // onUploadCoolDown returns true if the worker is on coolDown from failed
@@ -254,7 +254,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegme
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Worker dropping a Segment while processing", isComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Worker dropping a segment while processing", isComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostID.String())
 		return nil, 0
 	}
 
@@ -262,7 +262,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegme
 	if !needsHelp {
 		uc.workerBackups = append(uc.workerBackups, w)
 		uc.mu.Unlock()
-		w.client.cleanUpUploadSegment(uc)
+		w.client.cleanupUploadSegment(uc)
 		return nil, 0
 	}
 
@@ -284,7 +284,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (nextSegme
 	}
 	delete(uc.unusedHosts, w.contract.HostID.String())
 	uc.sectorsUploadingNum++
-	uc.workersRemaining--
+	uc.workersRemain--
 	uc.mu.Unlock()
 	return uc, uint64(index)
 }
@@ -318,7 +318,7 @@ func (w *worker) preProcessUploadSegment2(uc *unfinishedUploadSegment) error {
 	if !isNeedUpload {
 		uc.workerBackups = append(uc.workerBackups, w)
 		uc.mu.Unlock()
-		w.client.cleanUpUploadSegment(uc)
+		w.client.cleanupUploadSegment(uc)
 		return errors.New("add worker to the sent of standby segments")
 	}
 
@@ -327,7 +327,7 @@ func (w *worker) preProcessUploadSegment2(uc *unfinishedUploadSegment) error {
 	// Select a sector and mark that a sector has been selected.
 	delete(uc.unusedHosts, w.contract.HostID.String())
 	uc.sectorsUploadingNum++
-	uc.workersRemaining--
+	uc.workersRemain--
 	uc.mu.Unlock()
 	return nil
 }
@@ -351,7 +351,7 @@ func (w *worker) uploadFailed(uc *unfinishedUploadSegment, pieceIndex uint64) {
 
 	// Notify the standby workers of the Segment
 	uc.managedNotifyStandbyWorkers()
-	w.client.cleanUpUploadSegment(uc)
+	w.client.cleanupUploadSegment(uc)
 
 	// Because the worker is now on cooldown, drop all remaining Segments.
 	w.dropUploadSegments()

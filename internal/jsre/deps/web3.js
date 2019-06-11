@@ -5641,7 +5641,13 @@ module.exports = Net;
                 name: 'setMemoryLimit',
                 call: 'storageclient_setMemoryLimit',
                 params: 1,
-            })
+            });
+
+            var upload = new Method({
+                name: 'upload',
+                call: 'storageclient_upload',
+                params: 2,
+            });
 
             return [
                 payment,
@@ -5649,6 +5655,7 @@ module.exports = Net;
                 memory,
                 memorylimit,
                 setMemoryLimit,
+                upload,
             ];
         };
 

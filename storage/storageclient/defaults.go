@@ -83,7 +83,7 @@ var (
 	// RemoteRepairDownloadThreshold indicates the threshold in percent under
 	// which the storage client starts repairing a file that is not available on disk
 	// TODO  - adjust it to match our target and business model
-	RemoteRepairDownloadThreshold = 0.25
+	RemoteRepairDownloadThreshold = 0.125
 
 	UploadFailureCoolDown = 1 * time.Minute
 )
