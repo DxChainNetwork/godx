@@ -38,19 +38,22 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 	if err = sm.tm.Add(); err != nil {
 		return
 	}
-
+	//fmt.Printf("%v: 1\n", path)
 	// validate the add storage folder
 	if err = sm.validateAddStorageFolder(path, size); err != nil {
 		return
 	}
+	//fmt.Printf("%v: 2\n", path)
 	// create the update and record the intent
 	update := NewAddStorageFolderUpdate(path, size)
 
+	//fmt.Printf("%v: 3\n", path)
 	// record the update intent
 	if err = update.recordIntent(sm); err != nil {
 		err = fmt.Errorf("cannot record the intent for %v: %v", update.str(), err)
 		return
 	}
+	//fmt.Printf("%v: 4\n", path)
 	// prepare, process, and release the update
 	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
 		upErr := err.(*updateError)
@@ -61,6 +64,7 @@ func (sm *storageManager) addStorageFolder(path string, size uint64) (err error)
 		}
 		return
 	}
+	//fmt.Println("returned")
 	return
 }
 
@@ -202,14 +206,18 @@ func (update *addStorageFolderUpdate) process(manager *storageManager, target ui
 // release handle all errors and release the transaction
 func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	// After all release operation completes, unlock the folder and the folder manager
+	//fmt.Printf("releasing %v\n", update.path)
 	defer func() {
 		manager.folders.lock.Unlock()
+		//fmt.Println(0.111111111)
 		if update.folder != nil {
 			update.folder.status = folderAvailable
 			update.folder.lock.Unlock()
 		}
+		//fmt.Printf("release folder lock %v\n", update.path)
 	}()
 
+	//fmt.Println(1111111111)
 	// If no error happened during update, release the transaction and return
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -222,6 +230,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		upErr.prepareErr = nil
 		return
 	}
+	//fmt.Println(22222222222)
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
 	// but during process, some other program (or user) created a file in the path, keep that
 	// file, which might be useful to other programs. So delete the file only if the processErr
@@ -231,6 +240,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 			err = common.ErrCompose(err, newErr)
 		}
 	}
+	//fmt.Println(33333333333333)
 	// delete folder in the update
 	// The folders is locked before prepare. So it shall be safe to delete the entry
 	delete(manager.folders.sfs, update.path)
@@ -238,6 +248,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	if newErr := manager.db.deleteStorageFolder(update.path); newErr != nil {
 		err = common.ErrCompose(err, newErr)
 	}
+	//fmt.Println(44444444444444)
 	// release the transaction
 	err = common.ErrCompose(err, update.txn.Release())
 	return

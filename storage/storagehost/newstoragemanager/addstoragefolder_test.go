@@ -1,8 +1,11 @@
 package newstoragemanager
 
 import (
+	"github.com/DxChainNetwork/godx/storage"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -104,6 +107,77 @@ func TestAddStorageFolderRecover(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(path, dataFileName)); err == nil || !os.IsNotExist(err) {
 		t.Fatalf("file exist on disk %v", filepath.Join(path, dataFileName))
+	}
+}
+
+// TestAddStorageFolderExhaustive exhaustively test the add storage folder
+func TestAddStorageFolderExhaustive(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	d := newDisrupter()
+	sm := newTestStorageManager(t, "", d)
+	numFolders := 100
+	if testing.Short() {
+		numFolders = 10
+	}
+	expectFolders := make(map[string]*storageFolder)
+	var wg sync.WaitGroup
+	for i := 0; i != numFolders; i++ {
+		// create path. At possibility 10%, will try to add an existing folder path
+		path := filepath.Join(os.TempDir(), "storagemanager", filepath.Join(t.Name()), strconv.Itoa(i))
+		// randomly create size
+		// numSectors should be in the range between minSectorsPerFolder and maxSectorsPerFolder
+		numSectors := rand.Uint64()%(minSectorsPerFolder) + minSectorsPerFolder
+		size := numSectors * storage.SectorSize
+		sf := &storageFolder{
+			path:       path,
+			usage:      EmptyUsage(size),
+			numSectors: numSectors,
+		}
+		// only update the expected folder if not using the exist path
+		expectFolders[path] = sf
+		// create the insert using goroutine
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			err := sm.addStorageFolder(path, size)
+			if err != nil {
+				t.Fatalf("update return some err: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	for path, sf := range expectFolders {
+		// the folder should exist in database
+		dbsf, err := sm.db.loadStorageFolder(path)
+		if err != nil {
+			t.Errorf("db cannot find folder %v", err)
+			continue
+		}
+		if dbsf.path != path {
+			t.Errorf("path not expected. Expect %v, Got %v", path, dbsf.path)
+		}
+		if dbsf.numSectors != sf.numSectors {
+			t.Errorf("[%v]: numSector not expected", path)
+		}
+		// the folder should exist in memory
+		exist := sm.folders.exist(path)
+		if !exist {
+			t.Errorf("folder %v not exist in memory", path)
+		}
+		mmsf, err := sm.folders.get(path)
+		if err != nil {
+			t.Errorf("folder %v get erorr: %v", path, err)
+		}
+		if mmsf.path != path {
+			t.Errorf("path not expected. Expect %v, Got %v", path, dbsf.path)
+		}
+		if mmsf.numSectors != sf.numSectors {
+			t.Errorf("[%v]: numSector not expected", path)
+		}
+		// the folder should exist on disk
+		if _, err := os.Stat(filepath.Join(path, dataFileName)); err != nil {
+			t.Errorf("on disk check error: %v", err)
+		}
 	}
 }
 
