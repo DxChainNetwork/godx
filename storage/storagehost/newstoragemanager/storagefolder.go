@@ -30,8 +30,11 @@ type (
 		//// in Usage
 		//freeSectors map[sectorID]uint32
 
-		// sector is the number of sector in this folder
+		// sector is the total number of sector in this folder
 		numSectors uint64
+
+		// StoredSectors is the number of sectors stored in the folder
+		storedSectors uint64
 
 		// folderLock locked the storage folder to prevent racing
 		lock *common.TryLock
@@ -43,9 +46,10 @@ type (
 	// storageFolderPersist defines the persist data to be stored in database
 	// The data is stored as "storagefolder_${folderID}" -> storageFolderPersist
 	storageFolderPersist struct {
-		Path       string
-		Usage      []bitVector
-		NumSectors uint64
+		Path          string
+		Usage         []bitVector
+		NumSectors    uint64
+		StoredSectors uint64
 	}
 
 	folderID uint32
@@ -54,9 +58,10 @@ type (
 // EncodeRLP defines the encode rule of the storage folder
 func (sf *storageFolder) EncodeRLP(w io.Writer) (err error) {
 	sfp := storageFolderPersist{
-		Path:       sf.path,
-		Usage:      sf.usage,
-		NumSectors: sf.numSectors,
+		Path:          sf.path,
+		Usage:         sf.usage,
+		NumSectors:    sf.numSectors,
+		StoredSectors: sf.storedSectors,
 	}
 	return rlp.Encode(w, sfp)
 }
@@ -68,7 +73,7 @@ func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
 	if err = st.Decode(&sfp); err != nil {
 		return err
 	}
-	sf.path, sf.usage, sf.numSectors = sfp.Path, sfp.Usage, sfp.NumSectors
+	sf.path, sf.usage, sf.numSectors, sf.storedSectors = sfp.Path, sfp.Usage, sfp.NumSectors, sfp.StoredSectors
 	sf.status = folderAvailable
 	sf.lock = common.NewTryLock()
 	return nil

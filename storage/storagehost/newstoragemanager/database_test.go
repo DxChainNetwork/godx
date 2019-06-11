@@ -3,6 +3,7 @@ package newstoragemanager
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 	"testing"
@@ -98,15 +99,19 @@ func checkStorageFolderEqual(t *testing.T, testName string, got, want *storageFo
 			t.Errorf("Test %v %v: Usage[%d] not equal. expect %v, got %v", t.Name(), testName, i, want.usage[i], got.usage[i])
 		}
 	}
+	if got.storedSectors != want.storedSectors {
+		t.Errorf("Test %v %v: expect storedSectors %v, got %v", t.Name(), testName, want.storedSectors, got.storedSectors)
+	}
 }
 
 func randomStorageFolder(t *testing.T, extra string) (sf *storageFolder) {
 	path := tempDir(t.Name(), extra, randomString(16))
 	sf = &storageFolder{
-		path:       path,
-		usage:      []bitVector{1 << 32},
-		numSectors: 1,
-		lock:       common.NewTryLock(),
+		path:          path,
+		usage:         []bitVector{1 << 32},
+		numSectors:    1,
+		lock:          common.NewTryLock(),
+		storedSectors: randomUint64(),
 	}
 	return sf
 }
@@ -115,5 +120,12 @@ func randomString(size int) (s string) {
 	b := make([]byte, size)
 	rand.Read(b)
 	s = common.Bytes2Hex(b)
+	return
+}
+
+func randomUint64() (num uint64) {
+	b := make([]byte, 8)
+	rand.Read(b)
+	num = binary.LittleEndian.Uint64(b)
 	return
 }
