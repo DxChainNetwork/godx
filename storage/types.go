@@ -87,8 +87,9 @@ type (
 		IPNetwork           string    `json:"ipnetwork"`
 		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		EnodeID  enode.ID `json:"enodeid"`
-		EnodeURL string   `json:"enodeurl"`
+		EnodeID    enode.ID        `json:"enodeid"`
+		EnodeURL   string          `json:"enodeurl"`
+		NodePubKey ecdsa.PublicKey `json:"nodepubkey"`
 
 		Filtered bool `json:"filtered"`
 	}
