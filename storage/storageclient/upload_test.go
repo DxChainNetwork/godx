@@ -19,7 +19,8 @@ import (
 	"testing"
 )
 
-func TestUploadDirectory(t *testing.T) {
+// Upload test case has many dependencies modules. Now we test each critical function
+func testUploadDirectory(t *testing.T) {
 	rt := newStorageClientTester(t)
 	server := newTestServer()
 
@@ -60,7 +61,28 @@ func TestUploadDirectory(t *testing.T) {
 	}
 }
 
-func TestReadFromLocalfile(t *testing.T) {
+/***************** Upload Business Logic Test Case For Each Critical Function ***********************/
+func TestPushDirToSegmentHeap(t *testing.T) {
+
+}
+
+func TestCreateUnfinishedSegments(t *testing.T) {
+
+}
+
+func TestNextUploadSegment(t *testing.T) {
+
+}
+
+func TestPreProcessUploadSegment(t *testing.T) {
+
+}
+
+func TestCleanupUploadSegment(t *testing.T) {
+
+}
+
+func TestReadFromLocalFile(t *testing.T) {
 	filePath, fileSize, fileHash := generateFile(t)
 
 	osFile, err := os.Open(filePath)

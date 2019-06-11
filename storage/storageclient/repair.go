@@ -4,59 +4,6 @@
 
 package storageclient
 
-// The following describes the work flow of how Dx repairs files
-//
-// There are 3 main functions that work together to make up Dx's file repair
-// mechanism, threadedUpdatestorage clientHealth, threadedUploadLoop, and
-// threadedStuckFileLoop. These 3 functions will be referred to as the health
-// loop, the repair loop, and the stuck loop respectively.
-//
-// The health loop is responsible for ensuring that the health of the storage client's
-// file directory is updated periodically. The health information for a
-// directory is stored in the .Dxdir metadata file and is the worst values for
-// any of the files and sub directories. This is true for all directories which
-// means the health of top level directory of the storage client is the health of the
-// worst file in the storage client. For health and stuck health the worst value is the
-// highest value, for timestamp values the oldest timestamp is the worst value,
-// and for aggregate values (ie NumStuckSegments) it will be the sum of all the
-// files and sub directories.  The health loop keeps the storage client file directory
-// updated by following the path of oldest LastHealthCheckTime and then calling
-// threadedBubbleHealth, to be referred to as bubble, on that directory. When a
-// directory is bubbled, the health information is recalculated and saved to
-// disk and then bubble is called on the parent directory until the top level
-// directory is reached. If during a bubble a file is found that meets the
-// threshold health for repair, then a signal is sent to the repair loop. If a
-// stuck Segment is found then a signal is sent to the stuck loop. Once the entire
-// storage client's directory has been updated within the healthCheckInterval the health
-// loop sleeps until the time interval has passed.
-//
-// The repair loop is responsible for repairing the storage client's files, this
-// includes uploads. The repair loop follows the path of worst health and then
-// adds the files from the directory with the worst health to the repair heap
-// and begins repairing. If no directories are unhealthy enough to require
-// repair the repair loop sleeps until a new upload triggers it to start or it
-// is triggered by a bubble finding a file that requires repair. While there are
-// files to repair, the repair loop will continue to work through the storage client's
-// directory finding the worst health directories and adding them to the repair
-// heap. The rebuildSegmentHeapInterval is used to make sure the repair heap
-// doesn't get stuck on repairing a set of Segments for too long. Once the
-// rebuildSegmentheapInterval passes, the repair loop will continue in it's search
-// for files that need repair. As Segments are repaired, they will call bubble on
-// their directory to ensure that the storage client directory gets updated.
-//
-// The stuck loop is responsible for targeting Segments that didn't get repaired
-// properly. The stuck loop randomly finds a directory containing stuck Segments
-// and adds those to the repair heap. The repair heap will randomly add one
-// stuck Segment to the heap at a time. Stuck Segments are priority in the heap, so
-// limiting it to 1 stuck Segment at a time prevents the heap from being saturated
-// with stuck Segments that potentially cannot be repaired which would cause no
-// other files to be repaired. If the repair of a stuck Segment is successful, a
-// signal is sent to the stuck loop and another stuck Segment is added to the
-// heap. If the repair wasn't successful, the stuck loop will wait for the
-// repairStuckSegmentInterval to pass and then try another random stuck Segment. If
-// the stuck loop doesn't find any stuck Segments, it will sleep until a bubble
-// triggers it by finding a stuck Segment.
-
 import (
 	"errors"
 	"fmt"
@@ -82,7 +29,7 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 		return fmt.Errorf("unable to open Dxfile %v, error: %v", dxPath, err)
 	}
 	defer sf.Close()
-	// Add stuck Segments from file to repair heap
+	// Add stuck segments from file to repair heap
 	files := []*dxfile.FileSetEntryWithID{sf}
 	hosts := sc.refreshHostsAndWorkers()
 	hostHealthInfoTable := sc.getClientHostHealthInfoTable(files)
@@ -129,14 +76,14 @@ func (sc *StorageClient) managedDirectoryMetadata(dxPath storage.DxPath) (dxdir.
 
 // threadedStuckFileLoop go through the storage client directory and finds the stuck
 // Segments and tries to repair them
-func (sc *StorageClient) stuckFileLoop() {
+func (sc *StorageClient) stuckLoop() {
 	err := sc.tm.Add()
 	if err != nil {
 		return
 	}
 	defer sc.tm.Done()
 
-	// Loop until the storage client has shutdown or until there are no stuck Segments
+	// Loop until the storage client has shutdown or until there are no stuck segments
 	for {
 		// Wait until the storage client is online to proceed.
 		if !sc.blockUntilOnline() {
@@ -148,7 +95,7 @@ func (sc *StorageClient) stuckFileLoop() {
 		// Randomly get directory with stuck files
 		dir, err := sc.fileSystem.RandomStuckDirectory()
 		if err != nil && err != ErrNoStuckFiles {
-			sc.log.Debug("WARN: error getting random stuck directory:", err)
+			sc.log.Debug("getting random stuck directory, error: ", err)
 			continue
 		}
 		if err == ErrNoStuckFiles {
@@ -164,7 +111,7 @@ func (sc *StorageClient) stuckFileLoop() {
 				// to the heap
 				err := sc.addStuckSegmentsToHeap(dxPath)
 				if err != nil {
-					sc.log.Debug("WARN: unable to add stuck segments from file", dxPath, "to heap:", err)
+					sc.log.Debug("unable to add stuck segments from file", dxPath, "to heap:", err)
 				}
 			}
 			continue
@@ -174,12 +121,12 @@ func (sc *StorageClient) stuckFileLoop() {
 		// useful for uploading.
 		hosts := sc.refreshHostsAndWorkers()
 
-		// push stuck Segment to upload heap
+		// push stuck segment to upload heap
 		sc.pushDirToSegmentHeap(dir.DxPath(), hosts, targetStuckSegments)
 
-		sc.uploadLoop(hosts)
+		sc.uploadAndRepair(hosts)
 
-		// Call bubble once all Segments have been popped off heap
+		// Call bubble once all segments have been popped off heap
 		sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath())
 
 		// Sleep until it is time to try and repair another stuck Segment
@@ -189,13 +136,13 @@ func (sc *StorageClient) stuckFileLoop() {
 			// Return if the return has been shutdown
 			return
 		case <-rebuildStuckHeapSignal:
-			// Time to find another random Segment
+			// Time to find another random segment
 		case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
-			// Stuck Segment was successfully repaired. Add the rest of the file
+			// Stuck segment was successfully repaired. Add the rest of the file
 			// to the heap
 			err := sc.addStuckSegmentsToHeap(dxPath)
 			if err != nil {
-				sc.log.Debug("WARN: unable to add stuck segments from file", dxPath, "to heap:", err)
+				sc.log.Debug("unable to add stuck segments from file", dxPath, "to heap:", err)
 			}
 		}
 	}
@@ -221,7 +168,7 @@ func (sc *StorageClient) stuckFileLoop() {
 //		// Follow path of oldest time, return directory and timestamp
 //		dxPath, lastHealthCheckTime, err := sc.managedOldestHealthCheckTime()
 //		if err != nil {
-//			sc.log.Debug("WARN: Could not find oldest health check time:", err)
+//			sc.log.Debug("Could not find oldest health check time:", err)
 //			continue
 //		}
 //

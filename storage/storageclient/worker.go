@@ -20,7 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
-// A worker listens for work on a certain host.
+// A worker is responsible for uploading and downloading file segments
 type worker struct {
 
 	// The contract and host used by this worker.
@@ -34,10 +34,9 @@ type worker struct {
 	// the time that last failure
 	ownedDownloadRecentFailure time.Time
 
-	// Notifications of new work. Takes priority over uploads.
+	// Notifications of new download work. Takes priority over uploads.
 	downloadChan chan struct{}
 
-	// Yet unprocessed work items.
 	downloadSegments []*unfinishedDownloadSegment
 	downloadMu       sync.Mutex
 
@@ -50,11 +49,10 @@ type worker struct {
 	sectorIndexMap map[*unfinishedUploadSegment][]int
 	sectorTaskNum  int32
 
-	unprocessedSegments       []*unfinishedUploadSegment // Yet unprocessed segments
-	uploadChan                chan struct{}              // Notifications of new segment
-	uploadConsecutiveFailures int                        // How many times in a row uploading has failed.
-	uploadRecentFailure       time.Time                  // How recent was the last failure?
-	uploadTerminated          bool                       // Have we stopped uploading?
+	uploadChan                chan struct{} // Notifications of new segment
+	uploadConsecutiveFailures int           // How many times in a row uploading has failed.
+	uploadRecentFailure       time.Time     // How recent was the last failure?
+	uploadTerminated          bool          // Have we stopped uploading?
 
 	// Worker will shut down if a signal is sent down this channel.
 	killChan chan struct{}
@@ -96,12 +94,13 @@ func (sc *StorageClient) activateWorkerPool() {
 			}
 
 			worker := &worker{
-				contract:     clientContract,
-				hostID:       contract.Header().EnodeID,
-				downloadChan: make(chan struct{}, 1),
-				uploadChan:   make(chan struct{}, 1),
-				killChan:     make(chan struct{}),
-				client:       sc,
+				contract:       clientContract,
+				hostID:         contract.Header().EnodeID,
+				downloadChan:   make(chan struct{}, 1),
+				uploadChan:     make(chan struct{}, 1),
+				killChan:       make(chan struct{}),
+				client:         sc,
+				sectorIndexMap: make(map[*unfinishedUploadSegment][]int),
 			}
 			sc.workerPool[id] = worker
 
@@ -135,41 +134,6 @@ func (sc *StorageClient) activateWorkerPool() {
 	sc.lock.Unlock()
 }
 
-// workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
-func (w *worker) workLoop() {
-	defer w.killUploading()
-	defer w.killDownloading()
-
-	// TODO - Evaluate this concurrent architecture
-	for {
-		// Perform one step of processing download task
-		downloadSegment := w.nextDownloadSegment()
-		if downloadSegment != nil {
-			w.download(downloadSegment)
-			continue
-		}
-
-		// Perform one step of processing upload task
-		segment, sectorIndex := w.nextUploadSegment()
-		if segment != nil {
-			w.upload(segment, sectorIndex)
-			continue
-		}
-
-		// keep listening for a new upload/download task, or a stop signal
-		select {
-		case <-w.downloadChan:
-			continue
-		case <-w.uploadChan:
-			continue
-		case <-w.killChan:
-			return
-		case <-w.client.tm.StopChan():
-			return
-		}
-	}
-}
-
 // We split upload and download loop into two separate goroutine, and we will retrieve all available segments once,
 // Last continue to wait for fresh segments
 func (w *worker) UploadWorkLoop(tm *threadmanager.ThreadManager) {
@@ -186,7 +150,7 @@ func (w *worker) UploadWorkLoop(tm *threadmanager.ThreadManager) {
 		}
 
 		for {
-			segment, sectorIndex := w.nextUploadSegment2()
+			segment, sectorIndex := w.nextUploadSegment()
 			if segment != nil {
 				w.upload(segment, sectorIndex)
 			} else {

@@ -108,8 +108,7 @@ func New(persistDir string) (*StorageClient, error) {
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
 		uploadHeap: uploadHeap{
-			heapSegments:        make(map[uploadSegmentID]struct{}),
-			repairingSegments:   make(map[uploadSegmentID]struct{}),
+			pendingSegments:     make(map[uploadSegmentID]struct{}),
 			newUploads:          make(chan struct{}, 1),
 			repairNeeded:        make(chan struct{}, 1),
 			stuckSegmentFound:   make(chan struct{}, 1),
@@ -160,8 +159,8 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 
 	// loop to download, upload, stuck
 	go sc.downloadLoop()
-	go sc.uploadAndRepairLoop()
-	go sc.stuckFileLoop()
+	go sc.uploadLoop()
+	go sc.stuckLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {

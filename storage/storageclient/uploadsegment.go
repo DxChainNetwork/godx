@@ -16,14 +16,17 @@ import (
 	"time"
 )
 
-// uploadSegmentID is a unique identifier for each Segment in the storage client.
+// uploadSegmentID is a unique identifier for each segment in the storage client
 type uploadSegmentID struct {
-	fid   dxfile.FileID // Unique to each file.
-	index uint64        // Unique to each Segment within a file.
+	// Unique to each dx file
+	fid dxfile.FileID
+
+	// Index of each segment within a file
+	index uint64
 }
 
-// unfinishedUploadSegment contains a segment from the filesystem that has not
-// finished uploading, including knowledge of the progress.
+// unfinishedUploadSegment represents a segment from the dx filesystem that has not
+// finished uploading, including flags of the upload progress
 type unfinishedUploadSegment struct {
 	// Information about the file. localPath may be the empty string if the file
 	// is known not to exist locally.
@@ -31,105 +34,81 @@ type unfinishedUploadSegment struct {
 	fileEntry *dxfile.FileSetEntryWithID
 	threadUID int
 
-	// Information about the Segment, namely where it exists within the file.
-	//
-	// TODO / NOTE: As we change the file mapper, we're probably going to have
-	// to update these fields. Compatibility shouldn't be an issue because this
-	// struct is not persisted anywhere, it's always built from other
-	// structures.
-	index          uint64
-	length         uint64
+	// Information about the segment within the file
+	// 	+ index: 	array index within dxfile that represents local file in memory
+	// 	+ offset: 	actual location in byte unit offset of the segment within the file
+	// 	+ length: 	segment length in byte unit within local dx file
+	// And these fields can help us to read from dx file
+	index  uint64
+	offset int64
+	length uint64
+
 	memoryNeeded   uint64 // memory needed in bytes
 	memoryReleased uint64 // memory that has been returned of memoryNeeded
-	minimumSectors int    // number of sectors required to recover the file.
-	offset         int64  // Offset of the segment within the file.
-	sectorsNeedNum int    // number of pieces to achieve a 100% complete upload
-	stuck          bool   // indicates if the segment was marked as stuck during last repair
-	stuckRepair    bool   // indicates if the segment was identified for repair by the stuck loop
 
-	// The logical data is the data that is presented to the user when the user
-	// requests the Segment. The physical data is all of the pieces that get
-	// stored across the network.
+	sectorsMinNeedNum int // number of sectors minimum to recover file
+	sectorsAllNeedNum int // number of sectors of minimum + redundant
+
+	stuck       bool // flag whether the segment was stuck during upload
+	stuckRepair bool // flag if the segment was set 'true' for repair by the stuck loop
+
+	// The logical data is the data read from file of user
+	// The physical data is all the sectors encrypted and stored on disk across the network
 	logicalSegmentData  [][]byte
 	physicalSegmentData [][]byte
 
-	// Worker synchronization fields. The mutex only protects these fields.
-	//
-	// When a worker passes over a piece for upload to go on standby:
-	//	+ the worker should add itself to the list of standby Segments
-	//  + the worker should call for memory to be released
-	//
-	// When a worker passes over a piece because it's not useful:
-	//	+ the worker should decrement the number of workers remaining
-	//	+ the worker should call for memory to be released
-	//
-	// When a worker accepts a piece for upload:
-	//	+ the worker should increment the number of pieces registered
-	// 	+ the worker should mark the piece usage for the piece it is uploading
-	//	+ the worker should decrement the number of workers remaining
-	//
-	// When a worker completes an upload (success or failure):
-	//	+ the worker should decrement the number of pieces registered
-	//  + the worker should call for memory to be released
-	//
-	// When a worker completes an upload (failure):
-	//	+ the worker should unmark the piece usage for the piece it registered
-	//	+ the worker should notify the standby workers of a new available piece
-	//
-	// When a worker completes an upload successfully:
-	//	+ the worker should increment the number of pieces completed
-	//	+ the worker should decrement the number of pieces registered
-	//	+ the worker should release the memory for the completed piece
 	mu                  sync.Mutex
-	sectorSlotsStatus   []bool              // 'true' if a sector is either uploaded, or a worker is attempting to upload that piece.
-	sectorsCompletedNum int                 // number of sectors that have been fully uploaded.
-	sectorsUploadingNum int                 // number of sectors that are being uploaded, but aren't finished yet (may fail).
-	released            bool                // whether this segment has been released from the active Segments set.
-	unusedHosts         map[string]struct{} // hosts that aren't yet storing any sectors or performing any work.
-	workersRemain       int                 // number of inactive workers still able to upload a sector.
-	workerBackups       []*worker           // workers that can be used if other workers fail.
+	sectorSlotsStatus   []bool              // 'true' in that index if a sector is either uploaded, or a worker is attempting to upload that sector
+	sectorsCompletedNum int                 // number of sectors that have been successful completely uploaded
+	sectorsUploadingNum int                 // number of sectors that are being uploaded, but aren't finished yet (may fail)
+	released            bool                // whether this segment has been released from the active segments set
+	unusedHosts         map[string]struct{} // hosts that aren't yet storing any sectors or performing any work
+	workersRemain       int                 // number of inactive workers still able to upload a sector
+	workerBackups       []*worker           // workers that can be used if other workers fail
 }
 
-// managedNotifyStandbyWorkers is called when a worker fails to upload a sector, meaning
+// notifyBackupWorkers is called when a worker fails to upload a sector, meaning
 // that the backup workers may now be needed to help the sector finish uploading
-func (uc *unfinishedUploadSegment) managedNotifyStandbyWorkers() {
+func (uc *unfinishedUploadSegment) notifyBackupWorkers() {
 	// Copy the standby workers into a new slice and reset it since we can't
 	// hold the lock while calling the managed function.
 	uc.mu.Lock()
-	standbyWorkers := make([]*worker, len(uc.workerBackups))
-	copy(standbyWorkers, uc.workerBackups)
+	backupWorkers := make([]*worker, len(uc.workerBackups))
+	copy(backupWorkers, uc.workerBackups)
 	uc.workerBackups = uc.workerBackups[:0]
 	uc.mu.Unlock()
 
-	randomAssignSectorTaskToWorker(standbyWorkers, uc)
+	randomAssignSectorTaskToWorker(backupWorkers, uc)
 
-	for i := 0; i < len(standbyWorkers); i++ {
-		standbyWorkers[i].signalUploadChan(uc)
+	for i := 0; i < len(backupWorkers); i++ {
+		backupWorkers[i].signalUploadChan(uc)
 	}
 }
 
-// SegmentComplete checks some fields of the segment to determine if the Segment is
-// completed. This can either mean that it ran out of workers or that it was
-// uploaded successfully.
-func (uc *unfinishedUploadSegment) SegmentComplete() bool {
-	// The whole Segment was uploaded successfully.
-	if uc.sectorsCompletedNum == uc.sectorsNeedNum && uc.sectorsUploadingNum == 0 {
+// IsSegmentUploadComplete checks some fields of the segment to determine if the segment is completed
+// 1）no remain workers and no uploading task
+// 2) completely upload and no uploading task
+func (uc *unfinishedUploadSegment) IsSegmentUploadComplete() bool {
+	if uc.sectorsCompletedNum == uc.sectorsAllNeedNum && uc.sectorsUploadingNum == 0 {
 		return true
 	}
-	// We are no longer doing any uploads and we don't have any workers left.
+
+	// We are no longer doing any uploads and we don't have any workers left
 	if uc.workersRemain == 0 && uc.sectorsUploadingNum == 0 {
 		return true
 	}
 	return false
 }
 
-// distributeSegment dispatch segment to the workers in the pool
+// dispatchSegment dispatches segments to the workers randomly in the pool in the current solution
+// Now it may be that one sector will not be assigned to worker, and this doesn't have a big impact on the upload process
+// But we will optimize this features and schedule strategy is more balanced and fair
 func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
-	// Add Segment to repairingSegments map
+	// Add segment to pendingSegments map
 	sc.uploadHeap.mu.Lock()
-	_, exists := sc.uploadHeap.repairingSegments[uc.id]
+	_, exists := sc.uploadHeap.pendingSegments[uc.id]
 	if !exists {
-		sc.uploadHeap.repairingSegments[uc.id] = struct{}{}
+		sc.uploadHeap.pendingSegments[uc.id] = struct{}{}
 	}
 	sc.uploadHeap.mu.Unlock()
 
@@ -140,9 +119,8 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 	for _, worker := range sc.workerPool {
 		workers = append(workers, worker)
 	}
-	sc.lock.Unlock()
-
 	randomAssignSectorTaskToWorker(workers, uc)
+	sc.lock.Unlock()
 
 	for _, worker := range workers {
 		worker.signalUploadChan(uc)
@@ -153,27 +131,24 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 func randomAssignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
 	length := len(workers)
 	for i, s := range uc.sectorSlotsStatus {
-		workIndex := (i + rand.Int()) % length
-		if !s && workers[workIndex].isReady(uc) {
-			workers[workIndex].mu.Lock()
-			if indexes, ok := workers[workIndex].sectorIndexMap[uc]; ok {
+		workerIndex := (i + rand.Int()) % length
+		if !s && workers[workerIndex].isReady(uc) {
+			if indexes, ok := workers[workerIndex].sectorIndexMap[uc]; ok {
 				indexes = append(indexes, i)
-				workers[workIndex].sectorIndexMap[uc] = indexes
+				workers[workerIndex].sectorIndexMap[uc] = indexes
 			} else {
 				var idx []int
 				idx = append(idx, i)
-				workers[workIndex].sectorIndexMap[uc] = idx
+				workers[workerIndex].sectorIndexMap[uc] = idx
 			}
-			workers[workIndex].mu.Unlock()
 			// mark sector usage as true
 			uc.sectorSlotsStatus[i] = true
 		}
 	}
 }
 
-// managedDownloadLogicalSegmentData will fetch the logical Segment data by sending a
-// download to the storage client's downloader, and then using the data that gets
-// returned.
+// downloadLogicalSegmentData will fetch the logical segment data by sending a
+// download to the storage client's downloader, and then assign the data to the field
 func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSegment) error {
 	downloadLength := segment.length
 	if segment.index == uint64(segment.fileEntry.NumSegments()-1) && segment.fileEntry.FileSize()%segment.length != 0 {
@@ -204,8 +179,7 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 		return segment.fileEntry.DxFile.SetTimeAccess(time.Now())
 	})
 
-	// Set the in-memory buffer to nil just to be safe in case of a memory
-	// leak.
+	// Set the in-memory buffer to nil just to be safe in case of a memory leak.
 	defer func() {
 		d.destination = nil
 	}()
@@ -224,47 +198,33 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 	return nil
 }
 
-// uploadSegment will fetch the logical data for a segment, create
-// the physical pieces for the segment, and then distribute them.
-func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
+// retrieveDataAndDispatchSegment will fetch the logical data for a segment, encode
+// the physical data for the segment, and then distribute them.
+func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploadSegment) {
 	err := sc.tm.Add()
 	if err != nil {
 		return
 	}
 	defer sc.tm.Done()
 
-	// Calculate the amount of memory needed for erasure coding. This will need
-	// to be released if there's an error before erasure coding is complete.
 	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(segment.fileEntry.ErasureCode().MinSectors())
-
-	// Calculate the amount of memory to release due to already completed
-	// pieces. This memory gets released during encryption, but needs to be
-	// released if there's a failure before encryption happens.
-	var pieceCompletedMemory uint64
+	var sectorCompletedMemory uint64
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
-			pieceCompletedMemory += storage.SectorSize
+			sectorCompletedMemory += storage.SectorSize
 		}
 	}
 
-	// Ensure that memory is released and that the Segment is cleaned up properly
-	// after the Segment is distributed.
-	//
-	// Need to ensure the erasure coding memory is released as well as the
-	// physical Segment memory. Physical Segment memory is released by setting
-	// 'workersRemain' to zero if the repair fails before being distributed
-	// to workers. Erasure coding memory is released manually if the repair
-	// fails before the erasure coding occurs.
 	defer sc.cleanupUploadSegment(segment)
 
-	// Retrieve the logical data for the Segment.
+	// Retrieve the logical data for the segment
 	err = sc.retrieveLogicalSegmentData(segment)
 	if err != nil {
 		// retrieve logical data failed, interrupt upload and release memory
 		segment.logicalSegmentData = nil
 		segment.workersRemain = 0
-		sc.memoryManager.Return(erasureCodingMemory + pieceCompletedMemory)
-		segment.memoryReleased += erasureCodingMemory + pieceCompletedMemory
+		sc.memoryManager.Return(erasureCodingMemory + sectorCompletedMemory)
+		segment.memoryReleased += erasureCodingMemory + sectorCompletedMemory
 		sc.log.Debug("retrieve logical data of a segment failed:", err)
 		return
 	}
@@ -275,36 +235,38 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 		segmentBytes = append(segmentBytes, b...)
 	}
 	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
-	segment.logicalSegmentData = nil
-	sc.memoryManager.Return(erasureCodingMemory)
-	segment.memoryReleased += erasureCodingMemory
 	if err != nil {
 		segment.workersRemain = 0
-		sc.memoryManager.Return(pieceCompletedMemory)
-		segment.memoryReleased += pieceCompletedMemory
+		sc.memoryManager.Return(sectorCompletedMemory)
+		segment.memoryReleased += sectorCompletedMemory
 		for i := 0; i < len(segment.physicalSegmentData); i++ {
 			segment.physicalSegmentData[i] = nil
 		}
-		sc.log.Debug("Fetching physical data of a Segment failed:", err)
+		sc.log.Debug("Erasure encode physical data of a segment failed:", err)
 		return
 	}
 
-	// Sanity check - we should have at least as many physical data pieces as we
-	// do elements in our piece usage.
+	segment.logicalSegmentData = nil
+	sc.memoryManager.Return(erasureCodingMemory)
+	segment.memoryReleased += erasureCodingMemory
+
+	// Sanity check that at least as many physical data sectors as sector slots
 	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
-		sc.log.Error("not enough physical pieces to match the upload settings of the file")
+		sc.log.Error("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
-	// Loop through the pieces and encrypt any that are needed, while dropping
-	// any pieces that are not needed.
+
+	// Loop through the sectorSlots and encrypt any that are needed
+	// If the sector has been used, set physicalSegmentData nil and gc routine will collect this memory
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
 			segment.physicalSegmentData[i] = nil
 		} else {
 			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
-			// TODO 加密失败之后，是传明文还是忽略该segment
+			// TODO Discuss 加密失败之后，是传明文还是忽略该segment
 			if err != nil {
-				sc.log.Debug("encrypt segment failed", err)
+				//segment.physicalSegmentData[i] = nil
+				sc.log.Debug("encrypt segment after erasure encode failed: ", err)
 			} else {
 				segment.physicalSegmentData[i] = cipherData
 			}
@@ -312,9 +274,9 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 		}
 	}
 
-	if pieceCompletedMemory > 0 {
-		sc.memoryManager.Return(pieceCompletedMemory)
-		segment.memoryReleased += pieceCompletedMemory
+	if sectorCompletedMemory > 0 {
+		sc.memoryManager.Return(sectorCompletedMemory)
+		segment.memoryReleased += sectorCompletedMemory
 	}
 
 	sc.dispatchSegment(segment)
@@ -322,9 +284,9 @@ func (sc *StorageClient) uploadSegment(segment *unfinishedUploadSegment) {
 
 // retrieveLogicalSegmentData will get the raw data from disk if possible otherwise queueing a download
 func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
-	numRedundantSectors := float64(segment.sectorsNeedNum - segment.minimumSectors)
+	numRedundantSectors := float64(segment.sectorsAllNeedNum - segment.sectorsMinNeedNum)
 	minMissingSectorsToDownload := int(numRedundantSectors * RemoteRepairDownloadThreshold)
-	needDownload := segment.sectorsCompletedNum+minMissingSectorsToDownload < segment.sectorsNeedNum
+	needDownload := segment.sectorsCompletedNum+minMissingSectorsToDownload < segment.sectorsAllNeedNum
 
 	// Download the segment if it's not on disk.
 	if segment.fileEntry.LocalPath() == "" && needDownload {
@@ -357,7 +319,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	return nil
 }
 
-// cleanUpUploadSegment will check the state of the segment and perform any
+// cleanupUploadSegment will check the state of the segment and perform any
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
 func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
@@ -392,7 +354,7 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	// Check if the Segment needs to be removed from the list of active
 	// segments. It needs to be removed if the segment is complete, but hasn't
 	// yet been released
-	segmentComplete := uc.SegmentComplete()
+	segmentComplete := uc.IsSegmentUploadComplete()
 	released := uc.released
 	if segmentComplete && !released {
 		uc.released = true
@@ -407,7 +369,7 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	// available increases from zero. That can only happen if a worker
 	// experiences an error during upload.
 	if sectorsAvailable > 0 {
-		uc.managedNotifyStandbyWorkers()
+		uc.notifyBackupWorkers()
 	}
 	// If required, return the memory to the storage client.
 	if memoryReleased > 0 {
@@ -421,7 +383,7 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 			sc.log.Debug("file not closed after segment upload complete: %v %v", uc.fileEntry.DxPath(), err)
 		}
 		sc.uploadHeap.mu.Lock()
-		delete(sc.uploadHeap.repairingSegments, uc.id)
+		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()
 	}
 	// Sanity check - all memory should be released if the Segment is complete.
@@ -446,7 +408,7 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 	return nil
 }
 
-// managedUpdateUploadSegmentStuckStatus checks to see if the repair was
+// updateUploadSegmentStuckStatus checks to see if the repair was
 // successful and then updates the segment's stuck status
 func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegment) {
 	// Grab necessary information from upload Segment under lock
@@ -454,7 +416,7 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 	index := uc.id.index
 	stuck := uc.stuck
 	sectorsCompleteNum := uc.sectorsCompletedNum
-	sectorsNeedNum := uc.sectorsNeedNum
+	sectorsNeedNum := uc.sectorsAllNeedNum
 	stuckRepair := uc.stuckRepair
 	uc.mu.Unlock()
 
@@ -475,51 +437,35 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 
 	// If the repair was unsuccessful and there was a client closed then return
 	if !successfulRepair && clientOffline {
-		sc.log.Debug("WARN: repair unsuccessful for Segment", uc.id, "due to client shut down")
+		sc.log.Debug("repair unsuccessful for Segment", uc.id, "due to client shut down")
 		return
 	}
 	// Log if the repair was unsuccessful
 	if !successfulRepair {
-		sc.log.Debug("WARN: repair unsuccessful, marking segment", uc.id, "as stuck", float64(sectorsCompleteNum)/float64(sectorsNeedNum))
+		sc.log.Debug("repair unsuccessful, marking segment", uc.id, "as stuck", float64(sectorsCompleteNum)/float64(sectorsNeedNum))
 	} else {
 		sc.log.Debug("SUCCESS: repair successsful, marking segment as non-stuck:", uc.id)
 	}
-	// Update Segment stuck status
+
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {
-		sc.log.Debug("WARN: could not set segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
+		sc.log.Debug("could not set segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
 	}
 
 	dxPath := uc.fileEntry.DxPath()
 
-	sc.fileSystem.InitAndUpdateDirMetadata(dxPath)
+	if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+		sc.log.Error("update dir meta data failed: ", err)
+	}
 
-	// Check to see if the Segment was stuck and now is successfully repaired by
-	// the stuck loop
+	// Check to see if the segment was stuck and now is successfully repaired by the stuck loop
 	if stuck && successfulRepair && stuckRepair {
 		// Signal the stuck loop that the Segment was successfully repaired
 		sc.log.Debug("Stuck segment", uc.id, "successfully repaired")
 		select {
 		case <-sc.tm.StopChan():
-			sc.log.Debug("WARN: storage client shut down before the stuck loop was signalled that the stuck repair was successful")
+			sc.log.Debug("storage client shut down before the stuck loop was signalled that the stuck repair was successful")
 			return
 		case sc.uploadHeap.stuckSegmentSuccess <- dxPath:
 		}
 	}
 }
-
-//type workerHeap []*worker
-//
-//func (wh workerHeap) Len() int { return len(wh) }
-//func (wh workerHeap) Less(i, j int) bool {
-//	return atomic.LoadInt32(&wh[i].sectorTaskNum) > atomic.LoadInt32(&wh[j].sectorTaskNum)
-//}
-//
-//func (wh workerHeap) Swap(i, j int)       { wh[i], wh[j] = wh[j], wh[i] }
-//func (wh *workerHeap) Push(x interface{}) { *wh = append(*wh, x.(*worker)) }
-//func (wh *workerHeap) Pop() interface{} {
-//	old := *wh
-//	n := len(old)
-//	x := old[n-1]
-//	*wh = old[0 : n-1]
-//	return x
-//}
