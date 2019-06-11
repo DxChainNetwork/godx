@@ -12,7 +12,6 @@ import (
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -38,73 +37,44 @@ const (
 var EmptyStorageContract = types.StorageContract{}
 
 const (
-	obligationUnresolved storageObligationStatus = iota // Indicatees that an unitialized value was used. Unresolved
-	obligationRejected                                  // Indicates that the obligation never got started, no revenue gained or lost.
-	obligationSucceeded                                 // Indicates that the obligation was completed, revenues were gained.
-	obligationFailed                                    // Indicates that the obligation failed, revenues and collateral were lost.
+	obligationUnresolved storageObligationStatus = iota
+	obligationRejected
+	obligationSucceeded
+	obligationFailed
 )
 
 var (
-	// errDuplicateStorageObligation is returned when the storage obligation
-	// database already has a storage obligation with the provided file
-	// contract. This error should only happen in the event of a developer
-	// mistake.
 	errDuplicateStorageObligation = errors.New("storage obligation has a file contract which conflicts with an existing storage obligation")
-	// errInsaneFileContractOutputCounts is returned when a file contract has
-	// the wrong number of outputs for either the valid or missed payouts.
+
 	errInsaneFileContractOutputCounts = errors.New("file contract has incorrect number of outputs for the valid or missed payouts")
-	// errInsaneFileContractRevisionOutputCounts is returned when a file
-	// contract has the wrong number of outputs for either the valid or missed
-	// payouts.
+
 	errInsaneFileContractRevisionOutputCounts = errors.New("file contract revision has incorrect number of outputs for the valid or missed payouts")
-	// errInsaneOriginSetFileContract is returned is the final transaction of
-	// the origin transaction set of a storage obligation does not have a file
-	// contract in the final transaction - there should be a file contract
-	// associated with every storage obligation.
+
 	errInsaneOriginSetFileContract = errors.New("origin transaction set of storage obligation should have one file contract in the final transaction")
-	// original storage contract of storage obligation is empty - there should be a file contract associated
-	// with every storage obligation
+
 	ErrEmptyOriginStorageContract = errors.New("origin storage contract of storage obligation is empty")
-	// errInsaneRevisionSetRevisionCount is returned if the final transaction
-	// in the revision transaction set of a storage obligation has more or less
-	// than one file contract revision.
+
 	ErrEmptyRevisionSet = errors.New("storage contract revisions of storage obligation should have one file contract revision in the final transaction")
-	// errInsaneStorageObligationRevision is returned if there is an attempted
-	// storage obligation revision which does not have sensical inputs.
+
 	errInsaneStorageObligationRevision = errors.New("revision to storage obligation does not make sense")
-	// errInsaneStorageObligationRevisionData is returned if there is an
-	// attempted storage obligation revision which does not have sensical
-	// inputs.
+
 	errInsaneStorageObligationRevisionData = errors.New("revision to storage obligation has insane data")
-	// errNoBuffer is returned if there is an attempted storage obligation that
-	// needs to have the storage proof submitted in less than
-	// revisionSubmissionBuffer blocks.
+
 	errNoBuffer = errors.New("file contract rejected because storage proof window is too close")
-	// errNoStorageObligation is returned if the requested storage obligation
-	// is not found in the database.
+
 	errNoStorageObligation = errors.New("storage obligation not found in database")
-	// errObligationUnlocked is returned when a storage obligation is being
-	// removed from lock, but is already unlocked.
+
 	errObligationUnlocked = errors.New("storage obligation is unlocked, and should not be getting unlocked")
-	//Transaction not confirmed
+
 	errTransactionNotConfired = errors.New("Transaction not confirmed")
 )
 
 type (
 	StorageObligation struct {
-		// Storage obligations are broken up into ordered atomic sectors that are
-		// exactly 4MiB each. By saving the roots of each sector, storage proofs
-		// and modifications to the data can be made inexpensively by making use of
-		// the merkletree.CachedTree. Sectors can be appended, modified, or deleted
-		// and the host can recompute the Merkle root of the whole file without
-		// much computational or I/O expense.
 		SectorRoots       []common.Hash
 		StorageContractID common.Hash
 		TransactionId     common.Hash
 
-		// Variables about the file contract that enforces the storage obligation.
-		// The origin an revision transaction are stored as a set, where the set
-		// contains potentially unconfirmed transactions.
 		ContractCost             common.BigInt
 		LockedCollateral         common.BigInt
 		PotentialDownloadRevenue common.BigInt
@@ -113,18 +83,10 @@ type (
 		RiskedCollateral         common.BigInt
 		TransactionFeesAdded     common.BigInt
 
-		// The negotiation height specifies the block height at which the file
-		// contract was negotiated. If the origin transaction set is not accepted
-		// onto the blockchain quickly enough, the contract is pruned from the
-		// host. The origin and revision transaction set contain the contracts +
-		// revisions as well as all parent transactions. The parents are necessary
-		// because after a restart the transaction pool may be emptied out.
 		NegotiationHeight        uint64
 		OriginStorageContract    types.StorageContract
 		StorageContractRevisions []types.StorageContractRevision
 
-		// Variables indicating whether the critical transactions in a storage
-		// obligation have been confirmed on the blockchain.
 		ObligationStatus    storageObligationStatus
 		OriginConfirmed     bool
 		ProofConfirmed      bool
@@ -152,7 +114,6 @@ func (i storageObligationStatus) String() string {
 	return "storageObligationStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 }
 
-// getStorageObligation fetches a storage obligation from the database
 func getStorageObligation(db ethdb.Database, sc common.Hash) (StorageObligation, error) {
 	so, errGet := GetStorageObligation(db, sc)
 	if errGet != nil {
@@ -161,8 +122,6 @@ func getStorageObligation(db ethdb.Database, sc common.Hash) (StorageObligation,
 	return so, nil
 }
 
-// putStorageObligation places a storage obligation into the database,
-// overwriting the existing storage obligation if there is one.
 func putStorageObligation(db ethdb.Database, so StorageObligation) error {
 	err := StoreStorageObligation(db, so.id(), so)
 	if err != nil {
@@ -650,9 +609,9 @@ func (h *StorageHost) resetFinancialMetrics() error {
 func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 
 	// Lock the storage obligation in question.
-	h.managedLockStorageObligation(soid)
+	h.checkAndLockStorageObligation(soid)
 	defer func() {
-		h.managedUnlockStorageObligation(soid)
+		h.checkAndUnlockStorageObligation(soid)
 	}()
 
 	// Fetch the storage obligation associated with the storage obligation id.
@@ -677,6 +636,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			h.lock.Unlock()
 			return
 		}
+		//TODO send transaction
 
 		// Queue another action item to check the status of the transaction.
 		h.lock.Lock()
@@ -729,7 +689,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 	}
 
 	// Check whether a storage proof is ready to be provided, and whether it
-	// has been accepted. Check for death.	检查存储证明准备提交和是否被接收，检查状态是否销毁
+	// has been accepted. Check for death.
 	if !so.ProofConfirmed && h.blockHeight >= so.expiration()+resubmissionTimeout {
 		h.log.Info("Host is attempting a storage proof for", so.id())
 
@@ -759,20 +719,20 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			return
 		}
 
-		segmentIdex, errSe := h.storageProofSegment(so.OriginStorageContract)
-		if errSe != nil {
-			h.log.Debug("Host got an error when fetching a storage proof segment:", errSe)
+		segmentIndex, err := h.storageProofSegment(so.OriginStorageContract)
+		if err != nil {
+			h.log.Debug("Host got an error when fetching a storage proof segment:", err)
 			return
 		}
 
-		sectorIndex := segmentIdex / (SectorSize / SegmentSize)
+		sectorIndex := segmentIndex / (SectorSize / SegmentSize)
 		sectorRoot := so.SectorRoots[sectorIndex]
 		sectorBytes, err := h.ReadSector(sectorRoot)
 		if err != nil {
 			h.log.Debug("ReadSector error:", err)
 			return
 		}
-		sectorSegment := segmentIdex % (SectorSize / SegmentSize)
+		sectorSegment := segmentIndex % (SectorSize / SegmentSize)
 		base, cachedHashSet := MerkleProof(sectorBytes, sectorSegment)
 
 		// Using the sector, build a cached root.
@@ -781,7 +741,7 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 			log2SectorSize++
 		}
 		ct := merkle.NewCachedTree(log2SectorSize)
-		ct.SetIndex(segmentIdex)
+		ct.SetIndex(segmentIndex)
 		for _, root := range so.SectorRoots {
 			ct.Push(root)
 		}
@@ -795,7 +755,13 @@ func (h *StorageHost) threadedHandleActionItem(soid common.Hash) {
 		fromAddress := so.OriginStorageContract.ValidProofOutputs[1].Address
 		account := accounts.Account{Address: fromAddress}
 		wallet, err := h.ethBackend.AccountManager().Find(account)
+		if err != nil {
+
+		}
 		spSign, err := wallet.SignHash(account, sp.RLPHash().Bytes())
+		if err != nil {
+
+		}
 		sp.Signature = spSign
 
 		scBytes, err := rlp.EncodeToBytes(sp)

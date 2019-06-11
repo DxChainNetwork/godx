@@ -219,11 +219,11 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 
 func FinalizeStorageObligation(h *StorageHost, so StorageObligation) error {
 	// Get a lock on the storage obligation
-	lockErr := h.managedTryLockStorageObligation(so.id(), storage.ObligationLockTimeout)
+	lockErr := h.checkAndTryLockStorageObligation(so.id(), storage.ObligationLockTimeout)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer h.managedUnlockStorageObligation(so.id())
+	defer h.checkAndUnlockStorageObligation(so.id())
 
 	if err := h.managedAddStorageObligation(so); err != nil {
 		return err
