@@ -99,16 +99,15 @@ type BlockChain struct {
 	triegc *prque.Prque   // Priority queue mapping block numbers to tries to gc
 	gcproc time.Duration  // Accumulates canonical block processing for trie dumping
 
-	hc                     *HeaderChain
-	rmLogsFeed             event.Feed
-	chainFeed              event.Feed
-	chainSideFeed          event.Feed
-	chainHeadFeed          event.Feed
-	chainChangeFeed        event.Feed
-	canonicalChainHeadFeed event.Feed // canonical chain head feed for file contract maintenance
-	logsFeed               event.Feed
-	scope                  event.SubscriptionScope
-	genesisBlock           *types.Block
+	hc              *HeaderChain
+	rmLogsFeed      event.Feed
+	chainFeed       event.Feed
+	chainSideFeed   event.Feed
+	chainHeadFeed   event.Feed
+	chainChangeFeed event.Feed
+	logsFeed        event.Feed
+	scope           event.SubscriptionScope
+	genesisBlock    *types.Block
 
 	mu      sync.RWMutex // global mutex for locking chain operations
 	chainmu sync.RWMutex // blockchain insertion lock

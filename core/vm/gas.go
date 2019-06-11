@@ -21,9 +21,6 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
-
-	"github.com/DxChainNetwork/godx/ethdb"
-
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/params"
 )
@@ -165,50 +162,6 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		sc, _ := args[6].(types.StorageContract)
 		gas -= params.CheckFileGas
 		err := i(state, sp, bl, addr, sc)
-		if err != nil {
-			result = append(result, err)
-			return gas, result
-		}
-		result = append(result, nil)
-		return gas, result
-
-		//StoreStorageContract
-	case func(ethdb.Database, common.Hash, types.StorageContract) error:
-		if gas < params.SstoreSetGas {
-			result = append(result, GasCalculationinsufficient)
-			return gas, result
-		}
-		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
-			return gas, result
-		}
-		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(common.Hash)
-		sc, _ := args[4].(types.StorageContract)
-		gas -= params.SstoreSetGas
-		err := i(db, scid, sc)
-		if err != nil {
-			result = append(result, err)
-			return gas, result
-		}
-		result = append(result, nil)
-		return gas, result
-
-		//StoreExpireStorageContract
-	case func(ethdb.Database, common.Hash, uint64) error:
-		if gas < params.SstoreSetGas {
-			result = append(result, GasCalculationinsufficient)
-			return gas, result
-		}
-		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
-			return gas, result
-		}
-		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(common.Hash)
-		height, _ := args[4].(uint64)
-		gas -= params.SstoreSetGas
-		err := i(db, scid, height)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
