@@ -307,7 +307,29 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 	if err == nil {
 		// no error happend. Continue to update parent
 		if update.dxPath.IsRoot() {
-			// dxPath is already root. return
+			// If root check for repairNeeded and stuckFound, and there is no need to further update parent
+			d, err := fs.dirSet.Open(update.dxPath)
+			if err != nil {
+				fs.logger.Warn("cannot open root directory")
+				return
+			}
+			md := d.Metadata()
+			// TODO: Test this
+			if md.Health < dxfile.RepairHealthThreshold {
+				select {
+				case fs.repairNeeded <- struct{}{}:
+				default:
+				}
+			}
+			if md.NumStuckSegments > 0 {
+				select {
+				case fs.stuckFound <- struct{}{}:
+				default:
+				}
+			}
+			if err := d.Close(); err != nil {
+				fs.logger.Warn("cannot close root directory", "err", err)
+			}
 			return
 		}
 		parent, err := update.dxPath.Parent()

@@ -152,7 +152,7 @@ func (d *DxDir) UpdateMetadata(metadata Metadata) error {
 	d.metadata.StuckHealth = metadata.StuckHealth
 	d.metadata.MinRedundancy = metadata.MinRedundancy
 	d.metadata.TimeLastHealthCheck = metadata.TimeLastHealthCheck
-	d.metadata.TimeModify = metadata.TimeModify
+	d.metadata.TimeModify = uint64(time.Now().Unix())
 	d.metadata.NumStuckSegments = metadata.NumStuckSegments
 
 	// DxPath and RootPath field should never be updated
