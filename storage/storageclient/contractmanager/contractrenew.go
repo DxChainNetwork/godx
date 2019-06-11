@@ -8,8 +8,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -20,12 +18,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
-)
-
-var (
-	zeroValue = new(big.Int).SetInt64(0)
-
-	extraRatio = 0.02
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -181,7 +173,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
+	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         lastRev.NewFileSize,
@@ -315,7 +307,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
 		EndHeight:              endHeight,
 		TotalCost:              funding,
