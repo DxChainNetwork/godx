@@ -302,7 +302,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 }
 
 // check whether a new StorageProof is valid
-func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, sc types.StorageContract) error {
+func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
 	statusTrie := state.StorageTrie(statusAddr)
@@ -314,11 +314,48 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
-	if sc.WindowStart > currentHeight {
+	// retrieve the storage contract info
+	contractTrie := state.StorageTrie(contractAddr)
+	windowStartBytes, err := contractTrie.TryGet(BytesWindowStart)
+	if err != nil {
+		return err
+	}
+
+	windowStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	windowEndBytes, err := contractTrie.TryGet(BytesWindowEnd)
+	if err != nil {
+		return err
+	}
+
+	windowEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	fileMerkleRootBytes, err := contractTrie.TryGet(BytesFileMerkleRoot)
+	if err != nil {
+		return err
+	}
+
+	fileSizeBytes, err := contractTrie.TryGet(BytesFileSize)
+	if err != nil {
+		return err
+	}
+
+	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	if windowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
 	}
 
-	if sc.WindowEnd < currentHeight {
+	if windowEnd < currentHeight {
 		return errors.New("too late to submit storage proof")
 	}
 
@@ -331,19 +368,19 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 
 	// check that the storage proof itself is valid.
 
-	segmentIndex, err := storageProofSegment(state, sc.WindowStart, sc.FileSize, sp.ParentID, currentHeight)
+	segmentIndex, err := storageProofSegment(state, windowStart, fileSize, sp.ParentID, currentHeight)
 	if err != nil {
 		return err
 	}
 
-	leaves := CalculateLeaves(sc.FileSize)
+	leaves := CalculateLeaves(fileSize)
 
 	segmentLen := uint64(SegmentSize)
 
 	// if this segment chosen is the final segment, it should only be as
 	// long as necessary to complete the file size.
 	if segmentIndex == leaves-1 {
-		segmentLen = sc.FileSize % SegmentSize
+		segmentLen = fileSize % SegmentSize
 	}
 
 	if segmentLen == 0 {
@@ -355,9 +392,9 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		sc.FileMerkleRoot,
+		common.BytesToHash(fileMerkleRootBytes),
 	)
-	if !verified && sc.FileSize > 0 {
+	if !verified && fileSize > 0 {
 		return errInvalidStorageProof
 	}
 

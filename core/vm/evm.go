@@ -827,36 +827,6 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasRemainDec, err
 	}
 
-	windwoEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	windowStartBytes, err := trie.TryGet(BytesWindowStart)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	windwoStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	fileMerkleRootBytes, err := trie.TryGet(BytesFileMerkleRoot)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	fileSizeBytes, err := trie.TryGet(BytesFileSize)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
 	validOutputsBytes, err := trie.TryGet(BytesValidProofOutputs)
 	if err != nil {
 		return nil, gasRemainDec, err
@@ -870,15 +840,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 	statusAddr := common.BytesToAddress(append([]byte(StrPrefixExpSC), windowEndBytes...))
 
-	sc := types.StorageContract{
-		ValidProofOutputs: vpos,
-		FileMerkleRoot:    common.BytesToHash(fileMerkleRootBytes),
-		WindowStart:       windwoStart,
-		WindowEnd:         windwoEnd,
-		FileSize:          fileSize,
-	}
-
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, sc)
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		return nil, gasRemainCheck, errCheck
@@ -886,7 +848,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 	// effect valid proof outputs, first for client, second for host
 	totalVale := new(big.Int).SetInt64(0)
-	for _, vpo := range sc.ValidProofOutputs {
+	for _, vpo := range vpos {
 		state.AddBalance(vpo.Address, vpo.Value)
 		totalVale.Add(totalVale, vpo.Value)
 	}

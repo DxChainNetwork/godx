@@ -146,7 +146,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckStorageProof
-	case func(StateDB, types.StorageProof, uint64, common.Address, types.StorageContract) error:
+	case func(StateDB, types.StorageProof, uint64, common.Address, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)
 			return gas, result
@@ -158,10 +158,10 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		state, _ := args[2].(StateDB)
 		sp, _ := args[3].(types.StorageProof)
 		bl, _ := args[4].(uint64)
-		addr, _ := args[5].(common.Address)
-		sc, _ := args[6].(types.StorageContract)
+		statusAddr, _ := args[5].(common.Address)
+		contractAddr, _ := args[6].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(state, sp, bl, addr, sc)
+		err := i(state, sp, bl, statusAddr, contractAddr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
