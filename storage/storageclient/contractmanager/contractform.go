@@ -116,13 +116,13 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	uc := types.UnlockConditions{
 		PublicKeys: []ecdsa.PublicKey{
 			clientPublicKey,
-			host.PublicKey,
+			host.NodePubKey,
 		},
 		SignaturesRequired: 2,
 	}
 
 	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
+	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 
 	// Create storage contract
 	storageContract := types.StorageContract{
@@ -130,8 +130,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
@@ -149,7 +149,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
 
-		hostID := PubkeyToEnodeID(&host.PublicKey)
+		hostID := PubkeyToEnodeID(&host.NodePubKey)
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(hostID)
 			err = common.ErrExtend(err, ErrHostFault)
@@ -258,7 +258,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
 		EndHeight:              endHeight,
 		TotalCost:              funding,
