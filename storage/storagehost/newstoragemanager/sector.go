@@ -1,7 +1,10 @@
 package newstoragemanager
 
 import (
+	"io"
+
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -13,8 +16,8 @@ type (
 
 		// location field. The combination of folder and index field
 		// could locate the location of the sector
-		folder string
-		index  uint64
+		folderID folderID
+		index    uint64
 
 		// count is the number of times the sector is used
 		count uint64
@@ -25,9 +28,9 @@ type (
 
 	// sectorPersist is the structure to be stored in database.
 	sectorPersist struct {
-		Folder string
-		Index  uint64
-		Count  uint64
+		FolderID folderID
+		Index    uint64
+		Count    uint64
 	}
 )
 
@@ -38,4 +41,26 @@ func (sm *storageManager) calculateSectorID(mk common.Hash) (id sectorID) {
 	hasher.Write(mk[:])
 	hasher.Sum(id[:0])
 	return id
+}
+
+// EncodeRLP defines the encode rule of the sector structure
+// Note the id field is not encoded
+func (s *sector) EncodeRLP(w io.Writer) (err error) {
+	sp := sectorPersist{
+		FolderID: s.folderID,
+		Index:    s.index,
+		Count:    s.count,
+	}
+	return rlp.Encode(w, sp)
+}
+
+// DecodeRLP defines the decode rule of the sector structure.
+// Note the id field is not decoded
+func (s *sector) DecodeRLP(st *rlp.Stream) (err error) {
+	var sp sectorPersist
+	if err = st.Decode(&sp); err != nil {
+		return
+	}
+	s.folderID, s.index, s.count = sp.FolderID, sp.Index, sp.Count
+	return
 }

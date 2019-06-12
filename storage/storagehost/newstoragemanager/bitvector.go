@@ -8,20 +8,20 @@ import "github.com/DxChainNetwork/godx/common/math"
 type bitVector uint64
 
 // isFree check if the value at given index is free
-func (vec bitVector) isFree(idx uint16) bool {
+func (vec bitVector) isFree(idx uint64) bool {
 	var mask bitVector = 1 << idx
 	value := vec & mask
 	return value>>idx == 0
 }
 
 // setUsage set given index to 1
-func (vec *bitVector) setUsage(idx uint16) {
+func (vec *bitVector) setUsage(idx uint64) {
 	var mask bitVector = 1 << idx
 	*vec = *vec | mask
 }
 
 // clearUsage clear given index to 0
-func (vec *bitVector) clearUsage(idx uint16) {
+func (vec *bitVector) clearUsage(idx uint64) {
 	var mask bitVector = math.MaxUint64
 	mask = mask - 1<<idx
 	*vec = *vec & bitVector(mask)

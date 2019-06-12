@@ -18,7 +18,7 @@ func TestIsFree(t *testing.T) {
 		bit := getReversedBinary(int64(vec), t)
 		// because there is 64 bit in binary format
 		for i := 0; i < 64; i++ {
-			free := vec.isFree(uint16(i))
+			free := vec.isFree(uint64(i))
 			// the bit is actually filled
 			if bit[i] == 1 && free {
 				t.Error("the bit should be used")
@@ -40,7 +40,7 @@ func TestSetUsage(t *testing.T) {
 		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
 			// set every Usage
-			vec.setUsage(uint16(i))
+			vec.setUsage(uint64(i))
 		}
 		// after all Usage been set, the result should be the maximum uin64
 		if vec != math.MaxUint64 {
@@ -57,7 +57,7 @@ func TestClearUsage(t *testing.T) {
 		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
 			// clear the Usage on each bit
-			vec.clearUsage(uint16(i))
+			vec.clearUsage(uint64(i))
 		}
 
 		// after all Usage been cleared, vec should be 0
@@ -105,16 +105,16 @@ func TestBitVector(t *testing.T) {
 		n := rand.Intn(64)
 		addOrDelete := rand.Int()%2 == 0
 		if addOrDelete {
-			vec.setUsage(uint16(n))
+			vec.setUsage(uint64(n))
 			usage[n] = true
 		} else {
-			vec.clearUsage(uint16(n))
+			vec.clearUsage(uint64(n))
 			usage[n] = false
 		}
 		if i%10 == 0 {
 			// Check consistency every 10 updates
 			for idx := 0; idx != bitVectorGranularity; idx++ {
-				if vec.isFree(uint16(idx)) == usage[idx] {
+				if vec.isFree(uint64(idx)) == usage[idx] {
 					t.Errorf("isFree not expected at index [%d] at %d update", idx, i)
 				}
 			}

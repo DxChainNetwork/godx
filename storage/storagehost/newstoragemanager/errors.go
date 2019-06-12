@@ -19,6 +19,9 @@ var (
 
 	// errRevert is the error type to signal the update has to be reverted
 	errRevert = errors.New("update to be reverted")
+
+	// errFolderAlreadyFull is the error trying to add a sector to an already full folder
+	errFolderAlreadyFull = errors.New("folder already full")
 )
 
 // updateError is the error happened during processing the update.

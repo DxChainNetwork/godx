@@ -3,7 +3,6 @@ package newstoragemanager
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/binary"
 	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 	"testing"
@@ -141,12 +140,5 @@ func randomString(size int) (s string) {
 	b := make([]byte, size)
 	rand.Read(b)
 	s = common.Bytes2Hex(b)
-	return
-}
-
-func randomUint64() (num uint64) {
-	b := make([]byte, 8)
-	rand.Read(b)
-	num = binary.LittleEndian.Uint64(b)
 	return
 }
