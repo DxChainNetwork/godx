@@ -97,15 +97,21 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 
 // CalculatePeriodCost will calculate the storage client's cost for one period (including all contracts)
 func (cm *ContractManager) CalculatePeriodCost(rentPayment storage.RentPayment) (periodCost storage.PeriodCost) {
+	// get all activeContracts
 	activeContracts := cm.activeContracts.RetrieveAllContractsMetaData()
 
 	cm.lock.RLock()
 	defer cm.lock.RUnlock()
 
+	// loop through all signed contract, get the total cost spent
+	// by the storage client
 	for _, contract := range activeContracts {
 		updatePrevContractCost(&periodCost, contract)
 	}
 
+	// loop through expired contracts list, update the money spent by the storage client
+	// for expiredContracts, only contract within the current period will be used to do the
+	// PeriodCost calculation
 	for _, contract := range cm.expiredContracts {
 		host, exists := cm.hostManager.RetrieveHostInfo(contract.EnodeID)
 		// it is possible that the expiredContract (got renewed but still not expired, old contract)
@@ -131,7 +137,7 @@ func (cm *ContractManager) CalculatePeriodCost(rentPayment storage.RentPayment) 
 		}
 	}
 
-	// calculate the unspent fund
+	// calculate the unspent fund based on the cost spent by the storage client already
 	calculateContractUnspentFund(&periodCost, rentPayment.Fund)
 
 	return
