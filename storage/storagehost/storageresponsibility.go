@@ -847,13 +847,15 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			}
 		}
 
-		for _, id := range revisionIDsApply {
-			so, errGet := getStorageResponsibility(h.db, id)
+		for key, value := range revisionIDsApply {
+			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
 				h.log.Crit(errGetStorageResponsibility, errGet)
 				continue
 			}
-			so.StorageRevisionConfirmed = true
+			if value == so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewRevisionNumber {
+				so.StorageRevisionConfirmed = true
+			}
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
 				h.log.Crit(errPutStorageResponsibility, errPut)
@@ -924,8 +926,8 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 			}
 		}
 
-		for _, id := range revisionIDs {
-			so, errGet := getStorageResponsibility(h.db, id)
+		for key := range revisionIDs {
+			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
 				h.log.Crit(errGetStorageResponsibility, errGet)
 				continue
@@ -961,8 +963,9 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 }
 
 //Analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
-func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
-	precompiles := vm.PrecompiledEVMFileContracts
+func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (formContractIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
+	revisionIDs = make(map[common.Hash]uint64)
+	precompiled := vm.PrecompiledEVMFileContracts
 	block, err := h.ethBackend.GetBlockByHash(blockHash)
 	if err != nil {
 		errGet = err
@@ -971,7 +974,7 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 	number = block.NumberU64()
 	txs := block.Transactions()
 	for _, tx := range txs {
-		p, ok := precompiles[*tx.To()]
+		p, ok := precompiled[*tx.To()]
 		if !ok {
 			continue
 		}
@@ -991,7 +994,7 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 				h.log.Crit("Error when serializing revision:", err)
 				continue
 			}
-			revisionIDs = append(formContractIDs, scr.ParentID)
+			revisionIDs[scr.ParentID] = scr.NewRevisionNumber
 		case vm.StorageProofTransaction:
 			var sp types.StorageProof
 			err := rlp.DecodeBytes(tx.Data(), &sp)
@@ -999,12 +1002,11 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 				h.log.Crit("Error when serializing proof:", err)
 				continue
 			}
-			storageProofIDs = append(formContractIDs, sp.ParentID)
+			storageProofIDs = append(storageProofIDs, sp.ParentID)
 		default:
 			continue
 		}
 	}
-
 	return
 }
 
