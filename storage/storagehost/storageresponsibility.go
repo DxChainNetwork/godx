@@ -29,6 +29,8 @@ const (
 	responseTimeout             = 40
 	PrefixStorageResponsibility = "StorageResponsibility-" //DB Prefix for StorageResponsibility
 	PrefixHeight                = "height-"                //DB Prefix for task
+	errGetStorageResponsibility = "failed to get data from DB as I wished "
+	errPutStorageResponsibility = "failed to get data from DB as I wished "
 )
 
 //Storage contract should not be empty
@@ -799,140 +801,155 @@ func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	var actionItems []common.Hash
+	//Handling rolled back blocks
+	h.RevertedBlockHashesStorageResponsibility(cce.RevertedBlockHashes)
 
-	err := func() error {
-
-		//Handling rolled back blocks
-		for _, blockReverted := range cce.RevertedBlockHashes {
-			//Rollback contract transaction
-			formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockReverted)
-			if errGetBlock != nil {
-				continue
-			}
-			for _, id := range formContractIDs {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.FormContractConfirmed = false
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			for _, id := range revisionIDs {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.StorageRevisionConfirmed = false
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			for _, id := range storageProofIDs {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.StorageProofConfirmed = false
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			if number != 0 && h.blockHeight > 0 {
-				h.blockHeight--
-			}
-
-		}
-
-		//Block executing the main chain
-		for _, blockApply := range cce.AppliedBlockHashes {
-			//apply contract transaction
-			formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockApply)
-			if errGetBlock != nil {
-				continue
-			}
-
-			for _, id := range formContractIDsApply {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.FormContractConfirmed = true
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			for _, id := range revisionIDsApply {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.StorageRevisionConfirmed = true
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			for _, id := range storageProofIDsApply {
-				so, errGet := getStorageResponsibility(h.db, id)
-				if errGet != nil {
-					continue
-				}
-				so.StorageProofConfirmed = true
-				errPut := putStorageResponsibility(h.db, so)
-				if errPut != nil {
-					continue
-				}
-			}
-
-			if number != 0 {
-				h.blockHeight++
-			}
-			existingTtems, err := GetHeight(h.db, h.blockHeight)
-			if err != nil {
-				continue
-			}
-
-			// From the existing items, pull out a storage responsibility.
-			knownActionItems := make(map[common.Hash]struct{})
-			responsibilityIDs := make([]common.Hash, len(existingTtems)/common.HashLength)
-			for i := 0; i < len(existingTtems); i += common.HashLength {
-				copy(responsibilityIDs[i/common.HashLength][:], existingTtems[i:i+common.HashLength])
-			}
-			for _, soid := range responsibilityIDs {
-				_, exists := knownActionItems[soid]
-				if !exists {
-					actionItems = append(actionItems, soid)
-					knownActionItems[soid] = struct{}{}
-				}
-			}
-
-		}
-		return nil
-	}()
-
-	if err != nil {
-		h.log.Info("ProcessConsensusChangeError:", err)
+	//Block executing the main chain
+	taskItems := h.ApplyBlockHashesStorageResponsibility(cce.AppliedBlockHashes)
+	for i := range taskItems {
+		go h.threadedHandleTaskItem(taskItems[i])
 	}
 
-	for i := range actionItems {
-		go h.threadedHandleTaskItem(actionItems[i])
-	}
-
-	err = h.syncConfig()
+	err := h.syncConfig()
 	if err != nil {
 		h.log.Info("ERROR: could not save during ProcessConsensusChange:", err)
+	}
+
+}
+
+//Block executing the main chain
+func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash) []common.Hash {
+	var taskItems []common.Hash
+	for _, blockApply := range blocks {
+		//apply contract transaction
+		formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockApply)
+		if errGetBlock != nil {
+			continue
+		}
+
+		for _, id := range formContractIDsApply {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.FormContractConfirmed = true
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		for _, id := range revisionIDsApply {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.StorageRevisionConfirmed = true
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		for _, id := range storageProofIDsApply {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.StorageProofConfirmed = true
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		if number != 0 {
+			h.blockHeight++
+		}
+		existingTtems, err := GetHeight(h.db, h.blockHeight)
+		if err != nil {
+			continue
+		}
+
+		// From the existing items, pull out a storage responsibility.
+		knownActionItems := make(map[common.Hash]struct{})
+		responsibilityIDs := make([]common.Hash, len(existingTtems)/common.HashLength)
+		for i := 0; i < len(existingTtems); i += common.HashLength {
+			copy(responsibilityIDs[i/common.HashLength][:], existingTtems[i:i+common.HashLength])
+		}
+		for _, soid := range responsibilityIDs {
+			_, exists := knownActionItems[soid]
+			if !exists {
+				taskItems = append(taskItems, soid)
+				knownActionItems[soid] = struct{}{}
+			}
+		}
+
+	}
+	return taskItems
+}
+
+//Handling rolled back blocks
+func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.Hash) {
+	for _, blockReverted := range blocks {
+		//Rollback contract transaction
+		formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockReverted)
+		if errGetBlock != nil {
+			h.log.Crit("Failed to get the data from the block as expected ", errGetBlock)
+			continue
+		}
+		for _, id := range formContractIDs {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.FormContractConfirmed = false
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		for _, id := range revisionIDs {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.StorageRevisionConfirmed = false
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		for _, id := range storageProofIDs {
+			so, errGet := getStorageResponsibility(h.db, id)
+			if errGet != nil {
+				h.log.Crit(errGetStorageResponsibility, errGet)
+				continue
+			}
+			so.StorageProofConfirmed = false
+			errPut := putStorageResponsibility(h.db, so)
+			if errPut != nil {
+				h.log.Crit(errPutStorageResponsibility, errPut)
+				continue
+			}
+		}
+
+		if number != 0 && h.blockHeight > 0 {
+			h.blockHeight--
+		}
+
 	}
 
 }
