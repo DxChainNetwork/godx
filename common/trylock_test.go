@@ -11,7 +11,7 @@ func TestTryLock_LockUnlock(t *testing.T) {
 	var lock sync.RWMutex
 
 	triggered := false
-	tLock := NewTryLock()
+	var tLock TryLock
 
 	tLock.Lock()
 	a := 10
@@ -57,7 +57,7 @@ CONDITION:
 }
 
 func TestTryLock_TryToLock(t *testing.T) {
-	tLock := NewTryLock()
+	var tLock TryLock
 	locked := tLock.TryToLock()
 	if !locked {
 		t.Fatalf("the TryLock should be locked")
