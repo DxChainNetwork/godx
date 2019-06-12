@@ -21,6 +21,9 @@ import (
 )
 
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt) (terminated bool, err error) {
+
+	cm.log.Debug("Prepare to create the contract")
+
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
 	if err != nil {

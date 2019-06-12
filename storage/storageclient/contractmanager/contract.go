@@ -106,6 +106,9 @@ func (cm *ContractManager) resumeContracts() (err error) {
 // 		1. current block height is greater than the contract's endHeight
 // 		2. the contract has been renewed
 func (cm *ContractManager) maintainExpiration() {
+
+	cm.log.Debug("Maintain expiration started")
+
 	// this list will be used to delete contract from the active contract list
 	var expiredContractsIDs []storage.ContractID
 
@@ -145,6 +148,8 @@ func (cm *ContractManager) maintainExpiration() {
 // 		3. update the renewFrom and renewTo map, based on the relationship among them
 // 		4. update the contractSet, remove the expired contracts from the contractSet
 func (cm *ContractManager) removeDuplications() {
+	cm.log.Debug("Remove duplications started")
+
 	var distinctContracts = make(map[enode.ID]storage.ContractMetaData)
 	var duplicatedContractIDs []storage.ContractID
 	var hostToContracts = make(map[enode.ID][]storage.ContractMetaData)
@@ -200,6 +205,8 @@ func (cm *ContractManager) removeDuplications() {
 
 // maintainHostToContractIDMapping will remove storage host with non-active contracts
 func (cm *ContractManager) maintainHostToContractIDMapping() {
+	cm.log.Debug("Maintain hostToContract mapping started")
+
 	cm.lock.Lock()
 	defer cm.lock.Unlock()
 
@@ -217,6 +224,8 @@ func (cm *ContractManager) maintainHostToContractIDMapping() {
 // if they have same network address, based on the ip changes time, they will
 // be placed under badHosts list. Then the contracts signed with them will be canceled
 func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
+	cm.log.Debug("Remove host with duplicate network address started")
+
 	// loop through all active contracts, get all their host ids
 	var storageHostIDs []enode.ID
 	var hostToContractID = make(map[enode.ID]storage.ContractID)
@@ -254,6 +263,8 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 // maintainContractStatus will iterate through all active contracts. Based on the storage host's validation
 // and contract information to update the contract status
 func (cm *ContractManager) maintainContractStatus() (err error) {
+	cm.log.Debug("Maintain contract status started")
+
 	cm.lock.RLock()
 	hostsAmount := int(cm.rentPayment.StorageHosts)
 	cm.lock.RUnlock()

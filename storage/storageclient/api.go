@@ -7,7 +7,6 @@ package storageclient
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
-	"reflect"
 )
 
 // PublicStorageClientAPI defines the object used to call eligible public APIs
@@ -64,10 +63,8 @@ func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string)
 		return
 	}
 
-	// if user did not enter anything, set the current setting to the default one
-	if reflect.DeepEqual(currentSetting.RentPayment, storage.RentPayment{}) {
-		currentSetting = clientSettingGetDefault(currentSetting)
-	}
+	// if user entered any 0s for the rent payment, set them to the default rentPayment settings
+	currentSetting = clientSettingGetDefault(currentSetting)
 
 	// call set client setting methods
 	if err = api.sc.SetClientSetting(currentSetting); err != nil {

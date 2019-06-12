@@ -46,6 +46,8 @@ func (cm *ContractManager) contractMaintenance() {
 		cm.maintenanceWg.Done()
 	}()
 
+	cm.log.Info("Contract maintenance started")
+
 	// start maintenance
 	cm.maintainExpiration()
 	cm.removeDuplications()
@@ -129,6 +131,8 @@ func (cm *ContractManager) contractMaintenance() {
 // checkMaintenanceTermination will check if the maintenanceStop signal has been sent
 // if so, return true to terminate the current maintenance process. Otherwise, return false
 func (cm *ContractManager) checkMaintenanceTermination() (terminate bool) {
+	cm.log.Debug("Maintenance termination signal received")
+
 	select {
 	case <-cm.maintenanceStop:
 		terminate = true

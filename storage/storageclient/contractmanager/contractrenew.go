@@ -33,6 +33,9 @@ var (
 // 		2. contracts that have insufficient amount of funding, meaning the contract is about to be
 // 		   marked as not good for data uploading
 func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
+
+	cm.log.Info("Contract renew check started")
+
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
 	rentPayment := cm.rentPayment
@@ -112,6 +115,9 @@ func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenew
 // prepareContractRenew will loop through all record in the renewRecords and start to renew
 // each contract. Before contract renewing get started, the fund will be validated first.
 func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewRecord, clientRemainingFund common.BigInt) (remainingFund common.BigInt, terminate bool) {
+
+	cm.log.Debug("Prepare to renew the contract")
+
 	// get the data needed
 	cm.lock.RLock()
 	rentPayment := cm.rentPayment
