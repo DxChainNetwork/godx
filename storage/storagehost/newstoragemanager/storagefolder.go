@@ -14,6 +14,10 @@ import (
 
 type (
 	storageFolder struct {
+		// id is a uint32 associated with a folder. It is randomly generated
+		// unique key of a folder.
+		id folderID
+
 		// status is the atomic field mark if the folder is damaged or not
 		// folderAvailable / folderUnavailable
 		status uint32
@@ -46,6 +50,7 @@ type (
 	// storageFolderPersist defines the persist data to be stored in database
 	// The data is stored as "storagefolder_${folderID}" -> storageFolderPersist
 	storageFolderPersist struct {
+		ID            uint32
 		Path          string
 		Usage         []bitVector
 		NumSectors    uint64
@@ -58,6 +63,7 @@ type (
 // EncodeRLP defines the encode rule of the storage folder
 func (sf *storageFolder) EncodeRLP(w io.Writer) (err error) {
 	sfp := storageFolderPersist{
+		ID:            uint32(sf.id),
 		Path:          sf.path,
 		Usage:         sf.usage,
 		NumSectors:    sf.numSectors,
@@ -73,7 +79,7 @@ func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
 	if err = st.Decode(&sfp); err != nil {
 		return err
 	}
-	sf.path, sf.usage, sf.numSectors, sf.storedSectors = sfp.Path, sfp.Usage, sfp.NumSectors, sfp.StoredSectors
+	sf.id, sf.path, sf.usage, sf.numSectors, sf.storedSectors = folderID(sfp.ID), sfp.Path, sfp.Usage, sfp.NumSectors, sfp.StoredSectors
 	sf.status = folderAvailable
 	sf.lock = common.NewTryLock()
 	return nil

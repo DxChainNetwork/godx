@@ -38,11 +38,24 @@ func TestDatabase_getSectorSalt(t *testing.T) {
 // TestDatabase_PutGetStorageFolder test the save-load process for the storage folder
 func TestDatabase_PutGetStorageFolder(t *testing.T) {
 	db := newTestDatabase(t, "")
-	sf := randomStorageFolder(t, "")
+	sf := randomStorageFolder(t, "", db)
 	if err := db.saveStorageFolder(sf); err != nil {
 		t.Fatal(err)
 	}
 	recoveredSF, err := db.loadStorageFolder(sf.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkStorageFolderEqual(t, "", recoveredSF, sf)
+}
+
+func TestDatabase_PutGetStorageFolderByID(t *testing.T) {
+	db := newTestDatabase(t, "")
+	sf := randomStorageFolder(t, "", db)
+	if err := db.saveStorageFolder(sf); err != nil {
+		t.Fatal(err)
+	}
+	recoveredSF, err := db.loadStorageFolderByID(sf.id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +69,7 @@ func TestDatabase_PutLoadAllStorageFolder(t *testing.T) {
 	numFolders := 10
 	folders := make([]*storageFolder, 0, numFolders)
 	for i := 0; i != numFolders; i++ {
-		sf := randomStorageFolder(t, "")
+		sf := randomStorageFolder(t, "", db)
 		if err := db.saveStorageFolder(sf); err != nil {
 			t.Fatal(err)
 		}
@@ -84,6 +97,9 @@ func TestDatabase_PutLoadAllStorageFolder(t *testing.T) {
 // checkStorageFolderEqual checks equality of two storageFolder. Only persist fields are checked.
 // If error happened, directory error the testing.T
 func checkStorageFolderEqual(t *testing.T, testName string, got, want *storageFolder) {
+	if got.id != want.id {
+		t.Errorf("Test %v %v: expect id %v, got %v", t.Name(), testName, want.id, got.id)
+	}
 	if got.path != want.path {
 		t.Errorf("Test %v %v: expect Path %v, got %v", t.Name(), testName, want.path, got.path)
 	}
@@ -104,9 +120,14 @@ func checkStorageFolderEqual(t *testing.T, testName string, got, want *storageFo
 	}
 }
 
-func randomStorageFolder(t *testing.T, extra string) (sf *storageFolder) {
+func randomStorageFolder(t *testing.T, extra string, db *database) (sf *storageFolder) {
 	path := tempDir(t.Name(), extra, randomString(16))
+	id, err := db.randomFolderID()
+	if err != nil {
+		t.Fatal(err)
+	}
 	sf = &storageFolder{
+		id:            id,
 		path:          path,
 		usage:         []bitVector{1 << 32},
 		numSectors:    1,

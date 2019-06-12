@@ -6,6 +6,7 @@ package newstoragemanager
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -13,6 +14,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"strconv"
 	"strings"
 )
 
@@ -100,14 +102,22 @@ func (db *database) hasStorageFolder(path string) (exist bool, err error) {
 // saveStorageFolder save the storage folder to the database.
 // Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
-	// make key-value pair
+	// make a new batch
+	batch := db.newBatch()
+	// write folder data update to batch
 	folderKey := makeKey(prefixFolder, sf.path)
 	folderData, err := rlp.EncodeToBytes(sf)
 	if err != nil {
 		return err
 	}
-	// save
-	err = db.lvl.Put(folderKey, folderData, nil)
+	batch.Put(folderKey, folderData)
+	// write id to path mapping to batch
+	folderIDToPathKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sf.id), 10))
+	batch.Put(folderIDToPathKey, []byte(sf.path))
+
+	if err = db.writeBatch(batch); err != nil {
+		return
+	}
 	return
 }
 
@@ -130,14 +140,20 @@ func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error
 // WARN: this action will also remove all folder_sector map entries associated
 // with the folder. Be sure that all sectors are placed safe before this
 // function is called.
-func (db *database) deleteStorageFolder(path string) (err error) {
-	folderKey := makeKey(prefixFolder, path)
-	if err = db.lvl.Delete(folderKey, nil); err != nil {
-		return
-	}
-	// Remove all entries in the iterator for folder to sector entries
-	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(makeKey(prefixFolderSector, path))), nil)
+func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
 	batch := new(leveldb.Batch)
+
+	folderKey := makeKey(prefixFolder, sf.path)
+	batch.Delete(folderKey)
+
+	// when folder's id is 0, consider it as invalid. Skip delete the folderIDToPath
+	if sf.id != 0 {
+		folderIDToPathKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sf.id), 10))
+		batch.Delete(folderIDToPathKey)
+	}
+
+	// Remove all entries in the iterator for folder to sector entries
+	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(makeKey(prefixFolderSector, sf.path))), nil)
 	for iter.Next() {
 		batch.Delete(iter.Key())
 	}
@@ -170,6 +186,18 @@ func (db *database) loadAllStorageFolders() (folders map[string]*storageFolder, 
 	return
 }
 
+// loadStorageFolderByID load the storage folder by id
+func (db *database) loadStorageFolderByID(id folderID) (sf *storageFolder, err error) {
+	folderIDKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10))
+	b, err := db.lvl.Get(folderIDKey, nil)
+	if err != nil {
+		return
+	}
+	path := string(b)
+	sf, err = db.loadStorageFolder(path)
+	return
+}
+
 // makeKey create the key. Add _ in each of the arguments
 func makeKey(ss ...string) (key []byte) {
 	if len(ss) == 0 {
@@ -177,5 +205,33 @@ func makeKey(ss ...string) (key []byte) {
 	}
 	s := strings.Join(ss, "_")
 	key = []byte(s)
+	return
+}
+
+// randomFolderID create a random folder id that does not exist in database.
+// After the function execution, the folderID is already stored in database to avoid other
+// randomFolderID calls to use the same id
+func (db *database) randomFolderID() (id folderID, err error) {
+	b := make([]byte, 4)
+	for i := 0; i != maxCreateFolderIDReties; i++ {
+		rand.Read(b)
+		id = folderID(binary.LittleEndian.Uint32(b))
+		if id == 0 {
+			continue
+		}
+		key := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10))
+		if exist, err := db.lvl.Has(key, nil); exist || err != nil {
+			continue
+		}
+		// The key is ok to use
+		err = db.lvl.Put(key, []byte{}, nil)
+		if err != nil {
+			// this key might be invalid. Continue to the next loop to find
+			// another available key.
+			continue
+		}
+		return
+	}
+	err = errors.New("create random folder id maximum retries reached.")
 	return
 }

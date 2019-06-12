@@ -62,15 +62,7 @@ func TestAddStorageFolderNormal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check storage folder error: %v", err)
 	}
-	if dbSf.path != path {
-		t.Errorf("folder stored in db not equal in path. Expect %v, got %v", path, dbSf.path)
-	}
-	if len(dbSf.usage) != len(sf.usage) {
-		t.Errorf("folder stored in db not equal in usage size. Expect %v, got %v", len(sf.usage), len(dbSf.usage))
-	}
-	if dbSf.numSectors != sf.numSectors {
-		t.Errorf("folder stored in db not equal in numsectors. Expect %v, got %v", sf.numSectors, dbSf.numSectors)
-	}
+	checkStorageFolderEqual(t, "", dbSf, sf)
 }
 
 // TestAddStorageFolderRecover test the recover scenario of add storage folder
@@ -153,6 +145,7 @@ func TestAddStorageFolderExhaustive(t *testing.T) {
 			t.Errorf("db cannot find folder %v", err)
 			continue
 		}
+		sf.id = dbsf.id
 		if dbsf.path != path {
 			t.Errorf("path not expected. Expect %v, Got %v", path, dbsf.path)
 		}
@@ -171,9 +164,18 @@ func TestAddStorageFolderExhaustive(t *testing.T) {
 		if mmsf.path != path {
 			t.Errorf("path not expected. Expect %v, Got %v", path, dbsf.path)
 		}
+		if dbsf.id != mmsf.id {
+			t.Errorf("id not expected. Expect %v, got %v", dbsf.id, mmsf.id)
+		}
 		if mmsf.numSectors != sf.numSectors {
 			t.Errorf("[%v]: numSector not expected", path)
 		}
+		dbsf2, err := sm.db.loadStorageFolderByID(dbsf.id)
+		if err != nil {
+			t.Errorf("db cannot find folder with index %v", dbsf.id)
+			continue
+		}
+		checkStorageFolderEqual(t, "", dbsf2, dbsf)
 		// the folder should exist on disk
 		if _, err := os.Stat(filepath.Join(path, dataFileName)); err != nil {
 			t.Errorf("on disk check error: %v", err)

@@ -7,8 +7,9 @@ package newstoragemanager
 const (
 	// database related keys and prefixes
 	prefixFolder         = "storageFolder"
-	prefixFolderSector = "folderToSector"
-	sectorSaltKey = "sectorSalt"
+	prefixFolderSector   = "folderToSector"
+	prefixFolderIDToPath = "folderIDToPath"
+	sectorSaltKey        = "sectorSalt"
 )
 
 const (
@@ -50,8 +51,13 @@ const (
 )
 
 const (
-	 // bitVectorGranularity is the granularity of one bitVector.
-	 // Since bitVector is of type uint64, and each bit represents a single sector,
-	 // so the granularity is 64 per bitVector
+	// bitVectorGranularity is the granularity of one bitVector.
+	// Since bitVector is of type uint64, and each bit represents a single sector,
+	// so the granularity is 64 per bitVector
 	bitVectorGranularity = 64
+)
+
+const (
+	// maxCreateFolderIDReties defines maximum times of trying to create a folder id
+	maxCreateFolderIDReties = 20
 )

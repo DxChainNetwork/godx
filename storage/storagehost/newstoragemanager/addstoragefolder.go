@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 )
 
 type (
@@ -234,7 +235,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	// The folders is locked before prepare. So it shall be safe to delete the entry
 	delete(manager.folders.sfs, update.path)
 	// Delete the entry in database
-	if newErr := manager.db.deleteStorageFolder(update.path); newErr != nil {
+	if newErr := manager.db.deleteStorageFolder(update.folder); newErr != nil {
 		err = common.ErrCompose(err, newErr)
 	}
 	// release the transaction
@@ -250,7 +251,12 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 // 4. The underlying transaction is committed.
 func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (err error) {
 	// construct the storage folder, lock the folder and register to manager.folders
+	id, err := manager.db.randomFolderID()
+	if err != nil {
+		return fmt.Errorf("cannot create id: %v", err)
+	}
 	sf := &storageFolder{
+		id:         id,
 		status:     folderUnavailable,
 		path:       update.path,
 		usage:      EmptyUsage(update.size),
@@ -270,6 +276,7 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		return
 	}
 	update.batch.Put(makeKey(prefixFolder, update.path), bytes)
+	update.batch.Put(makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10)), []byte(update.path))
 	if err = <-update.txn.Commit(); err != nil {
 		return fmt.Errorf("cannot commit the transaction")
 	}
@@ -322,13 +329,17 @@ func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addSt
 
 // prepareCommitted is the function called in prepare stage as preparing committed updates
 func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
-	update.folder, err = manager.folders.get(update.path)
-	if err != nil {
-		// In this case, error only happens when the update.path is not in folders
-		update.folder = nil
-	}
 	// lock the folders until release
 	manager.folders.lock.Lock()
+
+	update.folder, err = manager.folders.get(update.path)
+	if err != nil || update.folder == nil {
+		// In this case, error only happens when the update.path is not in folders
+		update.folder = &storageFolder{
+			path: update.path,
+			id:   folderID(0),
+		}
+	}
 	return errRevert
 }
 
@@ -341,9 +352,12 @@ func (update *addStorageFolderUpdate) processCommitted(manager *storageManager) 
 // prepareUncommitted is the function called in prepare stage as preparing uncommitted updates
 func (update *addStorageFolderUpdate) prepareUncommitted(manager *storageManager) (err error) {
 	update.folder, err = manager.folders.get(update.path)
-	if err == nil {
+	if err != nil || update.folder == nil {
 		// In this case, error only happens when the update.path is not in folders
-		update.folder = nil
+		update.folder = &storageFolder{
+			path: update.path,
+			id:   folderID(0),
+		}
 	}
 	// lock the folders until release
 	manager.folders.lock.Lock()
