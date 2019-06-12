@@ -164,7 +164,7 @@ func (df *DxFile) Sectors(segmentIndex int) ([][]*Sector, error) {
 		sectors[sectorIndex] = make([]*Sector, len(df.segments[segmentIndex].Sectors[sectorIndex]))
 		for i, sector := range df.segments[segmentIndex].Sectors[sectorIndex] {
 			sectors[sectorIndex][i] = &Sector{
-				HostID: 	sector.HostID,
+				HostID:     sector.HostID,
 				MerkleRoot: sector.MerkleRoot,
 			}
 		}
