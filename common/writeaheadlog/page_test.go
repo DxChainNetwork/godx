@@ -21,16 +21,3 @@ func BenchmarkPage_Marshal(b *testing.B) {
 		p.marshal(buf[:0])
 	}
 }
-
-// TODO: remove the test
-//func TestPage(t *testing.T) {
-//	data := bytes.Repeat([]byte{1}, 500-pageMetaSize)
-//	p := page{
-//		offset:   4096,
-//		payload:  data,
-//		nextPage: &page{offset: 11111},
-//	}
-//	buf := make([]byte, PageSize)
-//	fmt.Println(p.marshal(buf[:0]))
-//	fmt.Println(len(p.marshal(buf[:0])))
-//}

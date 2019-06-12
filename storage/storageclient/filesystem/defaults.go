@@ -4,7 +4,10 @@
 
 package filesystem
 
-import "time"
+import (
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
+	"time"
+)
 
 const (
 	redoNotNeeded uint32 = iota
@@ -39,4 +42,22 @@ const (
 	defaultGoWideRate = float32(0.5)
 	defaultMaxDepth   = 3
 	defaultMissRate   = float32(0.1)
+)
+
+const (
+	// A file healthy status is presented by four human readable string
+	statusHealthyStr       = "healthy"
+	statusRecoverableStr   = "recoverable"
+	statusInDangerStr      = "in danger"
+	statusUnrecoverableStr = "unrecoverable"
+
+	// Thresholds defines the threshold between status
+	healthyThreshold     = dxfile.RepairHealthThreshold
+	recoverableThreshold = uint32(125)
+	inDangerThreshold    = uint32(100)
+)
+
+const (
+	// healthCheckInterval is the interval between two health checks
+	healthCheckInterval = 30 * time.Minute
 )

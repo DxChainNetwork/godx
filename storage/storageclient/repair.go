@@ -37,8 +37,8 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 	return nil
 }
 
-// managedDirectoryMetadata reads the directory metadata and returns the bubble metadata
-func (sc *StorageClient) managedDirectoryMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
+// dirMetadata retrieve the directory metadata and returns the dir metadata after bubble
+func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
 	sysPath := dxPath.SysPath(storage.SysPath(sc.staticFilesDir))
 	fi, err := os.Stat(string(sysPath))
 	if err != nil {
@@ -48,7 +48,7 @@ func (sc *StorageClient) managedDirectoryMetadata(dxPath storage.DxPath) (dxdir.
 		return dxdir.Metadata{}, fmt.Errorf("%v is not a directory", dxPath)
 	}
 
-	dxDir, err := sc.fileSystem.DirSet.Open(dxPath)
+	dxDir, err := sc.fileSystem.DirSet().Open(dxPath)
 	if os.IsNotExist(err) {
 		// Remember initial Error
 		initError := err
@@ -64,7 +64,7 @@ func (sc *StorageClient) managedDirectoryMetadata(dxPath storage.DxPath) (dxdir.
 		}
 		// If we are at the root directory or the directory is not empty, create
 		// a metadata file
-		dxDir, err = sc.fileSystem.DirSet.NewDxDir(dxPath)
+		dxDir, err = sc.fileSystem.DirSet().NewDxDir(dxPath)
 	}
 	if err != nil {
 		return dxdir.Metadata{}, err
@@ -74,7 +74,7 @@ func (sc *StorageClient) managedDirectoryMetadata(dxPath storage.DxPath) (dxdir.
 	return dxDir.Metadata(), nil
 }
 
-// threadedStuckFileLoop go through the storage client directory and finds the stuck
+// stuckLoop go through the storage client directory and finds the stuck
 // Segments and tries to repair them
 func (sc *StorageClient) stuckLoop() {
 	err := sc.tm.Add()
@@ -99,16 +99,15 @@ func (sc *StorageClient) stuckLoop() {
 			continue
 		}
 		if err == ErrNoStuckFiles {
-			// Block until new work is required.
+			// Block until new work is required
 			select {
 			case <-sc.tm.StopChan():
-				// The storage client has shut down.
+				// The storage client has shut down
 				return
-			case <-sc.uploadHeap.stuckSegmentFound:
+			case <-sc.fileSystem.StuckFoundChan():
 				// Health Loop found stuck segment
 			case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
-				// Stuck segment was successfully repaired. Add the rest of the file
-				// to the heap
+				// Stuck segment was successfully repaired. Add the rest of the file to the heap
 				err := sc.addStuckSegmentsToHeap(dxPath)
 				if err != nil {
 					sc.log.Debug("unable to add stuck segments from file", dxPath, "to heap:", err)
@@ -150,46 +149,44 @@ func (sc *StorageClient) stuckLoop() {
 	}
 }
 
-//// threadedUpdatestorage clientHealth reads all the Dxfiles in the storage client, calculates
-//// the health of each file and updates the folder metadata
-//func (sc *StorageClient) threadedUpdatestorageclientHealth() {
-//	err := sc.tm.Add()
-//	if err != nil {
-//		return
-//	}
-//	defer sc.tm.Done()
-//	// Loop until the storage client has shutdown or until the storage client's top level files
-//	// directory has a LasHealthCheckTime within the healthCheckInterval
-//	for {
-//		select {
-//		// Check to make sure storage client hasn't been shutdown
-//		case <-sc.tm.StopChan():
-//			return
-//		default:
-//		}
-//		// Follow path of oldest time, return directory and timestamp
-//		dxPath, lastHealthCheckTime, err := sc.managedOldestHealthCheckTime()
-//		if err != nil {
-//			sc.log.Debug("Could not find oldest health check time:", err)
-//			continue
-//		}
-//
-//		// If lastHealthCheckTime is within the healthCheckInterval block
-//		// until it is time to check again
-//		var nextCheckTime time.Duration
-//		timeSinceLastCheck := time.Since(lastHealthCheckTime)
-//		if timeSinceLastCheck > HealthCheckInterval { // Check for underflow
-//			nextCheckTime = 0
-//		} else {
-//			nextCheckTime = HealthCheckInterval - timeSinceLastCheck
-//		}
-//		healthCheckSignal := time.After(nextCheckTime)
-//		select {
-//		case <-sc.tm.StopChan():
-//			return
-//		case <-healthCheckSignal:
-//			// Bubble directory
-//			sc.fileSystem.InitAndUpdateDirMetadata(dxPath)
-//		}
-//	}
-//}
+// healthCheckLoop reads all the dxfiles in the storage client, calculates
+// the health of each file and updates the directory metadata
+func (sc *StorageClient) healthCheckLoop() {
+	err := sc.tm.Add()
+	if err != nil {
+		return
+	}
+	defer sc.tm.Done()
+	// Loop until the storage client has shutdown or until the storage client's top level files
+	// directory has a LasHealthCheckTime within the healthCheckInterval
+	for {
+		select {
+		case <-sc.tm.StopChan():
+			return
+		default:
+		}
+		// get path of oldest time, return directory and timestamp
+		dxPath, lastHealthCheckTime, err := sc.fileSystem.OldestLastTimeHealthCheck()
+		if err != nil {
+			sc.log.Debug("Could not find oldest health check time:", err)
+			continue
+		}
+
+		var nextCheckTime time.Duration
+		timeSinceLastCheck := time.Since(lastHealthCheckTime)
+		if timeSinceLastCheck > HealthCheckInterval {
+			nextCheckTime = 0
+		} else {
+			nextCheckTime = HealthCheckInterval - timeSinceLastCheck
+		}
+		healthCheckSignal := time.After(nextCheckTime)
+		select {
+		case <-sc.tm.StopChan():
+			return
+		case <-healthCheckSignal:
+			if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+				sc.log.Error("")
+			}
+		}
+	}
+}

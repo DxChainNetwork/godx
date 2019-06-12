@@ -51,7 +51,7 @@ func NewPublicFileSystemAPI(fs *FileSystem) *PublicFileSystemAPI {
 
 // RootDir returns the root directory of the file system
 func (api *PublicFileSystemAPI) RootDir() string {
-	return string(api.fs.rootDir)
+	return string(api.fs.fileRootDir)
 }
 
 // PersistDir return the directory where the files locates
@@ -108,7 +108,7 @@ func (api *PublicFileSystemAPI) Rename(prevPath, newPath string) string {
 	if err != nil {
 		return fmt.Sprintf("Path not valid: %v", newPath)
 	}
-	if err = api.fs.FileSet.Rename(prevDxPath, newDxPath); err != nil {
+	if err = api.fs.fileSet.Rename(prevDxPath, newDxPath); err != nil {
 		return fmt.Sprintf("Cannot rename from %v to %v: %v", prevPath, newPath, err)
 	}
 
@@ -134,7 +134,7 @@ func (api *PublicFileSystemAPI) Delete(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Path not valid: %v", path)
 	}
-	if err = api.fs.FileSet.Delete(dxPath); err != nil {
+	if err = api.fs.fileSet.Delete(dxPath); err != nil {
 		return fmt.Sprintf("Cannot delete file %v: %v", path, err)
 	}
 	if newParent, err := dxPath.Parent(); err == nil {

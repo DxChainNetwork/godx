@@ -20,7 +20,7 @@ const (
 
 const (
 	txnStatusInvalid = iota
-	txnStatusWritten
+	txnStatusUncommitted
 	txnStatusCommitted
 	txnStatusApplied
 )
@@ -44,7 +44,7 @@ type Transaction struct {
 	commitComplete  bool
 	releaseComplete bool
 
-	status       uint64 // txnStatusInvalid, txnStatusWritten, txnStatusCommitted, txnStatusApplied
+	status       uint64 // txnStatusInvalid, txnStatusUncommitted, txnStatusCommitted, txnStatusApplied
 	InitComplete chan struct{}
 	InitErr      error
 }
@@ -64,10 +64,14 @@ func (w *Wal) NewTransaction(ops []Operation) (*Transaction, error) {
 
 	// Create New Transaction
 	txn := &Transaction{
+		ID:           atomic.AddUint64(&w.nextTxnID, 1) - 1,
 		Operations:   ops,
 		wal:          w,
 		InitComplete: make(chan struct{}),
+		status:       txnStatusInvalid,
 	}
+
+	// Set the sequence number and increase the WAL's transactionCounter
 
 	go txn.threadedInit()
 	// Increment the numUnfinishedTxns
@@ -87,10 +91,10 @@ func (t *Transaction) threadedInit() {
 	} else {
 		t.headPage = t.wal.requestPages(data)
 	}
-	t.status = txnStatusWritten
+	t.status = txnStatusUncommitted
 
 	// write the header page
-	if err := t.writeHeaderPage(false); err != nil {
+	if err := t.writeHeaderPage(true); err != nil {
 		t.InitErr = fmt.Errorf("writing the first page to disk failed: %v", err)
 		return
 	}
@@ -137,6 +141,7 @@ func (t *Transaction) append(ops []Operation) (err error) {
 	}
 
 	// Marshal the data
+
 	data := marshalOps(ops)
 	if err != nil {
 		return err
@@ -186,6 +191,11 @@ func (t *Transaction) append(ops []Operation) (err error) {
 			return fmt.Errorf("writing the last page to disk failed: %v", err)
 		}
 		t.Operations = append(t.Operations, ops...)
+
+		checksum := t.checksum()
+		if _, err := t.wal.logFile.WriteAt(checksum[:], int64(t.headPage.offset+16)); err != nil {
+			return fmt.Errorf("writing the check sum to disk failed %v", err)
+		}
 		return nil
 	}
 
@@ -205,9 +215,14 @@ func (t *Transaction) append(ops []Operation) (err error) {
 	if err := t.writePage(lastPage); err != nil {
 		return fmt.Errorf("writing the last page to disk failed: %v", err)
 	}
-
 	// Append the ops to the transaction
 	t.Operations = append(t.Operations, ops...)
+
+	// write check sum
+	checksum := t.checksum()
+	if _, err := t.wal.logFile.WriteAt(checksum[:], int64(t.headPage.offset+16)); err != nil {
+		return fmt.Errorf("writing the check sum to disk failed %v", err)
+	}
 	return nil
 }
 
@@ -239,9 +254,6 @@ func (t *Transaction) commit() error {
 
 	// Set the transaction status
 	t.status = txnStatusCommitted
-
-	// Set the sequence number and increase the WAL's transactionCounter
-	t.ID = atomic.AddUint64(&t.wal.nextTxnID, 1) - 1
 
 	// Calculate the checksum
 	checksum := t.checksum()
@@ -313,6 +325,11 @@ func (t *Transaction) Release() error {
 	return nil
 }
 
+// Committed return the status of whether the transaction is committed or not
+func (t *Transaction) Committed() bool {
+	return t.status != txnStatusUncommitted
+}
+
 // checksum calculate the BLAKE2b-256 hash of a Transaction
 func (t *Transaction) checksum() []byte {
 	h := sha3.NewLegacyKeccak256()
@@ -330,10 +347,7 @@ func (t *Transaction) checksum() []byte {
 		}
 		page.marshal(buf[:0])
 		_, _ = h.Write(buf)
-		//fmt.Println(buf)
 	}
-	//fmt.Println(h.Sum(buf[:0]))
-	//fmt.Println()
 	var sum [checksumSize]byte
 	copy(sum[:], h.Sum(buf[:0]))
 	return sum[:]

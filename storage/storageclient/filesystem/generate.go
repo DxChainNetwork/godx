@@ -65,7 +65,7 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 		go func() {
 			defer wg.Done()
 			fileSize := uint64(1 << 22 * 10 * 10)
-			dxfile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
+			dxfile, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, missRate)
 			if err != nil {
 				errChan <- err
 				return
@@ -112,7 +112,7 @@ func tempDir(dirs ...string) storage.SysPath {
 }
 
 // newEmptyTestFileSystem creates an empty file system used for testing
-func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractor, disrupter disrupter) *FileSystem {
+func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractManager, disrupter disrupter) *FileSystem {
 	var rootDir storage.SysPath
 	if len(extraNaming) == 0 {
 		rootDir = tempDir(t.Name())

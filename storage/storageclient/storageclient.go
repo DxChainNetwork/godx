@@ -103,7 +103,7 @@ type StorageClient struct {
 func New(persistDir string) (*StorageClient, error) {
 	sc := &StorageClient{
 		// TODO(mzhang): replace the implemented contractor here
-		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractor{}),
+		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractManager{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 		log:            log.New(),
@@ -112,8 +112,6 @@ func New(persistDir string) (*StorageClient, error) {
 		uploadHeap: uploadHeap{
 			pendingSegments:     make(map[uploadSegmentID]struct{}),
 			newUploads:          make(chan struct{}, 1),
-			repairNeeded:        make(chan struct{}, 1),
-			stuckSegmentFound:   make(chan struct{}, 1),
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
@@ -211,7 +209,7 @@ func (sc *StorageClient) DeleteFile(path storage.DxPath) error {
 		return err
 	}
 	defer sc.tm.Done()
-	return sc.fileSystem.FileSet.Delete(path)
+	return sc.fileSystem.FileSet().Delete(path)
 }
 
 func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {

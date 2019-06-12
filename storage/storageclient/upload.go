@@ -60,7 +60,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	dirDxPath := up.DxPath
 
 	// Try to create the directory. If ErrPathOverload is returned it already exists
-	dxDirEntry, err := sc.fileSystem.DirSet.NewDxDir(dirDxPath)
+	dxDirEntry, err := sc.fileSystem.DirSet().NewDxDir(dirDxPath)
 	if err != dxdir.ErrPathOverload && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
@@ -75,7 +75,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	}
 
 	// Create the DxFile and add to client
-	entry, err := sc.fileSystem.FileSet.NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}

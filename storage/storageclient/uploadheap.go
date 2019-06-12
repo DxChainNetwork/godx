@@ -66,8 +66,6 @@ type uploadHeap struct {
 
 	// Control channels
 	newUploads          chan struct{}
-	repairNeeded        chan struct{}
-	stuckSegmentFound   chan struct{}
 	stuckSegmentSuccess chan storage.DxPath
 
 	mu sync.Mutex
@@ -214,7 +212,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		// Check if segment is downloadable
 		segmentHealth := segment.fileEntry.SegmentHealth(int(segment.index), hostHealthInfoTable)
 		_, err := os.Stat(string(segment.fileEntry.LocalPath()))
-		downloadable := segmentHealth >= dxfile.UnstuckHealthThreshold || err == nil
+		downloadable := segmentHealth >= dxfile.StuckThreshold || err == nil
 
 		// Check if segment seems stuck
 		stuck := !incomplete && segmentHealth != dxfile.CompleteHealthThreshold
@@ -564,7 +562,7 @@ func (sc *StorageClient) uploadLoop() {
 
 		// Check whether a repair is needed of root dir. If the root dir health is more than
 		// RepairHealthThreshold, it is not necessary to upload any sectors
-		rootMetadata, err := sc.managedDirectoryMetadata(storage.RootDxPath())
+		rootMetadata, err := sc.dirMetadata(storage.RootDxPath())
 		if err != nil {
 			// If there is an error fetching the root directory metadata, sleep
 			// for a bit and hope that on the next iteration, things will be better
@@ -584,7 +582,7 @@ func (sc *StorageClient) uploadLoop() {
 			// repairNeeded - stuck loop
 			select {
 			case <-sc.uploadHeap.newUploads:
-			case <-sc.uploadHeap.repairNeeded:
+			case <-sc.fileSystem.RepairNeededChan():
 			case <-sc.tm.StopChan():
 				return
 			}

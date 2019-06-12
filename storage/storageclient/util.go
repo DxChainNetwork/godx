@@ -113,7 +113,7 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 
 // DirInfo returns the Directory Information of the dxdir
 func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
-	entry, err := sc.fileSystem.DirSet.Open(dxPath)
+	entry, err := sc.fileSystem.DirSet().Open(dxPath)
 	if err != nil {
 		return DirectoryInfo{}, err
 	}
