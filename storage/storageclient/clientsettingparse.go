@@ -13,10 +13,17 @@ import (
 	"strings"
 )
 
+// currencyUnit defines available units used for rentPayment fund
 var currencyUnit = []string{"ndx", "udx", "mdx", "dx", "Kdx", "Mdx", "Gdx"}
+
+// timeUnit defines available units used for period and renew
 var timeUnit = []string{"h", "b", "d", "w", "m", "y"}
+
+// dataSizeUnit defines available units used for specifying expected storage size, expected upload size, and expected download size
 var dataSizeUnit = []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
 
+// parseClientSetting will take client settings in a map format, where both key and value are strings. Then, those value will be parsed
+// and transfer them to storage.ClientSetting data structure
 func parseClientSetting(settings map[string]string, prevSetting storage.ClientSetting) (clientSetting storage.ClientSetting, err error) {
 	// get the previous settings
 	clientSetting = prevSetting
@@ -266,6 +273,7 @@ func parsePeriodAndRenew(periodRenew string) (parsed uint64, err error) {
 	}
 }
 
+// convertUint64 will convert data to the uint64 format
 func convertUint64(data string, factor uint64, unit string) (parsed uint64, err error) {
 
 	// remove the unit from the string
@@ -280,10 +288,12 @@ func convertUint64(data string, factor uint64, unit string) (parsed uint64, err 
 	return
 }
 
+// parseExpectedStorage will parse the string into uint64
 func parseExpectedStorage(storage string) (parsed uint64, err error) {
 	return dataSizeConverter(storage)
 }
 
+// dataSizeConverter will convert the string with the unit into uint64 in the unit of byte
 func dataSizeConverter(dataSize string) (parsed uint64, err error) {
 	// string format
 	dataSize = strings.Replace(dataSize, " ", "", -1)
@@ -305,6 +315,7 @@ func dataSizeConverter(dataSize string) (parsed uint64, err error) {
 	return
 }
 
+// parseExpectedUpload will parse the string into the form of rentPayment.ExpectedUpload
 func parseExpectedUpload(upload string) (parsed uint64, err error) {
 	if parsed, err = dataSizeConverter(upload); err != nil {
 		return
@@ -315,6 +326,7 @@ func parseExpectedUpload(upload string) (parsed uint64, err error) {
 	return
 }
 
+// parseExpectedDownload will parse the string into the form of rentPayment.ExpectedDownload
 func parseExpectedDownload(download string) (parsed uint64, err error) {
 	if parsed, err = dataSizeConverter(download); err != nil {
 		return
@@ -325,6 +337,7 @@ func parseExpectedDownload(download string) (parsed uint64, err error) {
 	return
 }
 
+// parseExpectedRedundancy will parse the string into the form of rentPayment.ExpectedRedundancy
 func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
 	if parsed, err = strconv.ParseFloat(redundancy, 64); err != nil {
 		err = fmt.Errorf("error parsing the redundancy into float64: %s", err.Error())
@@ -334,6 +347,8 @@ func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
 	return
 }
 
+// parseEnableIPViolation will parse the string into boolean, which is used to indicate if the
+// IP Violation checking is enabled
 func parseEnableIPViolation(enable string) (parsed bool, err error) {
 	// format the string
 	enable = formatString(enable)
@@ -350,26 +365,33 @@ func parseEnableIPViolation(enable string) (parsed bool, err error) {
 	}
 }
 
+// parseMaxUploadSpeed will parse the string into maxUploadSpeed which will be used
+// to limit the speed while uploading data
 func parseMaxUploadSpeed(uploadSpeed string) (parsed int64, err error) {
 	// in terms of bytes/seconds
 	uploadSpeed = formatString(uploadSpeed)
 	return strconv.ParseInt(uploadSpeed, 10, 64)
 }
 
+// parseMaxDownloadSpeed will parse the string into maxDownloadSpeed which will be used
+// to limit the speed while downloading data
 func parseMaxDownloadSpeed(downloadSpeed string) (parsed int64, err error) {
 	// in terms of bytes/seconds
 	formatString(downloadSpeed)
 	return strconv.ParseInt(downloadSpeed, 10, 64)
 }
 
+// formatString will remove all spaces from the string and set the entire string into lower case
 func formatString(s string) (formatted string) {
 	s = strings.Replace(s, " ", "", -1)
 	s = strings.ToLower(s)
 	return s
 }
 
+// clientSettingGetDefault will take the clientSetting and check if any filed in the RentPayment is zero
+// if so, set the value to default value
 func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
-	if setting.RentPayment.Fund.IsEqual(common.BigInt0) { // set the rent payment to the default rent payment
+	if setting.RentPayment.Fund.IsEqual(common.BigInt0) {
 		setting.RentPayment.Fund = storage.DefaultRentPayment.Fund
 	}
 
