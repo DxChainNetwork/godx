@@ -140,14 +140,28 @@ func (cm *ContractManager) Stop() {
 	log.Info("ContractManager is stopped")
 }
 
+// SetRateLimits will set the rate limits for the active contracts, which limited the
+// data upload, download speed, and the packet size per upload/download
 func (cm *ContractManager) SetRateLimits(readBPS int64, writeBPS int64, packetSize uint64) {
 	cm.activeContracts.SetRateLimit(readBPS, writeBPS, packetSize)
 }
 
+// RetrieveRateLimit will acquire the current rate limit
 func (cm *ContractManager) RetrieveRateLimit() (readBPS, writeBPS int64, packetSize uint64) {
 	return cm.activeContracts.RetrieveRateLimit()
 }
 
+// GetStorageContractSet will be used to get the contract set stored with active contracts
 func (cm *ContractManager) GetStorageContractSet() (contractSet *contractset.StorageContractSet) {
 	return cm.activeContracts
+}
+
+// RetrieveActiveContracts will be used to retrieve all the signed contracts
+func (cm *ContractManager) RetrieveActiveContracts() (cms []storage.ContractMetaData) {
+	return cm.activeContracts.RetrieveAllContractsMetaData()
+}
+
+// RetrieveActiveContract will return the contract meta data based on the contract id provided
+func (cm *ContractManager) RetrieveActiveContract(contractID storage.ContractID) (contract storage.ContractMetaData, exists bool) {
+	return cm.activeContracts.RetrieveContractMetaData(contractID)
 }

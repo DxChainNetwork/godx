@@ -13,7 +13,7 @@ import (
 	"sort"
 )
 
-// cancel all contracts will cancel all currently active contracts. Once the contracts are
+// CancelStorageContract will cancel all currently active contracts. Once the contracts are
 // canceled, they cannot be used for file uploading, and they will not automatically be renewed
 func (cm *ContractManager) CancelStorageContract() (err error) {
 	// adding all contract into renewing list, making sure that

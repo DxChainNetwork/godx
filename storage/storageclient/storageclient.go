@@ -173,6 +173,33 @@ func (sc *StorageClient) Close() error {
 	return common.ErrCompose(err, errSC)
 }
 
+// ContractDetail will return the detailed contract information
+func (sc *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {
+	return sc.contractManager.RetrieveActiveContract(contractID)
+}
+
+// ActiveContracts will retrieve all active contracts, reformat them, and return them back
+func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPI) {
+	allActiveContracts := sc.contractManager.RetrieveActiveContracts()
+
+	for _, contract := range allActiveContracts {
+		activeContract := ActiveContractsAPI{
+			ID:           contract.ID,
+			HostID:       contract.EnodeID,
+			AbleToUpload: contract.Status.UploadAbility,
+			AbleToRenew:  contract.Status.RenewAbility,
+			Canceled:     contract.Status.Canceled,
+		}
+		activeContracts = append(activeContracts, activeContract)
+	}
+
+	return
+}
+
+func (sc *StorageClient) CancelContracts() (err error) {
+	return sc.contractManager.CancelStorageContract()
+}
+
 // SetClientSetting will config the client setting based on the value provided
 // it will set the bandwidth limit, rentPayment, and ipViolation check
 // By setting the rentPayment, the contract maintenance

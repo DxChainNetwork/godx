@@ -2,7 +2,6 @@ package contractmanager
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -779,69 +778,5 @@ func randomCanceledContractGenerator() (ch contractset.ContractHeader) {
 		},
 	}
 
-	return
-}
-
-func randomContractGenerator(contractEndHeight uint64) (ch contractset.ContractHeader) {
-	// generate the private key
-	ch = contractset.ContractHeader{
-		ID:      storageContractIDGenerator(),
-		EnodeID: randomEnodeIDGenerator(),
-		LatestContractRevision: types.StorageContractRevision{
-			NewWindowStart:    contractEndHeight,
-			ParentID:          randomHashGenerator(),
-			NewRevisionNumber: 15,
-			NewValidProofOutputs: []types.DxcoinCharge{
-				{randomAddressGenerator(), big.NewInt(0)},
-			},
-			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
-				},
-			},
-		},
-		PrivateKey:   "12345678910",
-		StartHeight:  100,
-		DownloadCost: common.RandomBigInt(),
-		UploadCost:   common.RandomBigInt(),
-		TotalCost:    common.RandomBigInt(),
-		StorageCost:  common.RandomBigInt(),
-		GasFee:       common.RandomBigInt(),
-		ContractFee:  common.RandomBigInt(),
-		Status: storage.ContractStatus{
-			UploadAbility: true,
-			RenewAbility:  true,
-			Canceled:      false,
-		},
-	}
-
-	return
-}
-
-func randomRootsGenerator(rootCount int) (roots []common.Hash) {
-	for i := 0; i < rootCount; i++ {
-		roots = append(roots, randomHashGenerator())
-	}
-	return
-}
-
-func randomEnodeIDGenerator() (id enode.ID) {
-	rand.Read(id[:])
-	return
-}
-
-func randomAddressGenerator() (a common.Address) {
-	rand.Read(a[:])
-	return
-}
-
-func storageContractIDGenerator() (id storage.ContractID) {
-	rand.Read(id[:])
-	return
-}
-
-func randomHashGenerator() (h common.Hash) {
-	rand.Read(h[:])
 	return
 }

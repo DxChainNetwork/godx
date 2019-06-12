@@ -356,6 +356,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 				Public:    false,
 			}, {
+				Namespace: "clientdebug",
+				Version:   "1.0",
+				Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
+				Public:    true,
+			}, {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),

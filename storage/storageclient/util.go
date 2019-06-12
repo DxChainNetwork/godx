@@ -30,6 +30,16 @@ import (
 	"github.com/DxChainNetwork/merkletree"
 )
 
+// ActiveContractAPI is used to re-format the contract information that is going to
+// be displayed on the console
+type ActiveContractsAPI struct {
+	ID           storage.ContractID
+	HostID       enode.ID
+	AbleToUpload bool
+	AbleToRenew  bool
+	Canceled     bool
+}
+
 // ParsedAPI will parse the APIs saved in the Ethereum
 // and get the ones needed
 type ParsedAPI struct {
