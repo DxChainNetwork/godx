@@ -493,8 +493,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
 	so := StorageResponsibility{
-		SectorRoots:       nil,
-		StorageContractID: sc.RLPHash(),
+		SectorRoots: nil,
 		//ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
 		ContractCost: h.externalConfig().ContractPrice,
 		//LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),

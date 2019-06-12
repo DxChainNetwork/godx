@@ -55,8 +55,7 @@ type (
 	//Storage contract management and maintenance on the storage host side
 	StorageResponsibility struct {
 		//Store the root set of related metadata
-		SectorRoots       []common.Hash
-		StorageContractID common.Hash
+		SectorRoots []common.Hash
 
 		//Primary source of income and expenditure
 		ContractCost             common.BigInt
@@ -145,7 +144,7 @@ func (so *StorageResponsibility) fileSize() uint64 {
 }
 
 func (so *StorageResponsibility) id() (scid common.Hash) {
-	return so.StorageContractID
+	return so.OriginStorageContract.RLPHash()
 }
 
 //Check this storage responsibility
@@ -255,7 +254,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 					return err
 				}
 			}
-			errPut := StoreStorageResponsibility(h.db, so.StorageContractID, so)
+			errPut := StoreStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				return errPut
 			}
@@ -408,7 +407,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 	var scids []common.Hash
 	for _, so := range sos {
 		if h.blockHeight > so.NegotiationBlockNumber+responseTimeout {
-			scids = append(scids, so.StorageContractID)
+			scids = append(scids, so.id())
 		}
 		if so.FormContractConfirmed == false {
 			return errTransactionNotConfirmed
