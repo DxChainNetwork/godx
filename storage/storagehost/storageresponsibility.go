@@ -803,7 +803,7 @@ func calculateLeaves(dataSize uint64) uint64 {
 }
 
 //Handle when a new block is generated or a block is rolled back
-func (h *StorageHost) ProcessConsensusChange(cce core.ChainChangeEvent) {
+func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -953,7 +953,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 			}
 		}
 
-		if number != 0 && h.blockHeight > 0 {
+		if number != 0 && h.blockHeight > 1 {
 			h.blockHeight--
 		}
 
