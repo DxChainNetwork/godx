@@ -183,7 +183,7 @@ type (
 		StartHeight            uint64
 		EndHeight              uint64
 
-		ClientBalance common.BigInt
+		ContractBalance common.BigInt
 
 		UploadCost   common.BigInt
 		DownloadCost common.BigInt

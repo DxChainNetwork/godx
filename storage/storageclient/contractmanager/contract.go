@@ -83,6 +83,9 @@ func (cm *ContractManager) resumeContracts() (err error) {
 		}
 
 		// getting the contract status and setting the canceling status to be false
+		// The reason that only status.Canceled got modified is that they other two
+		// status will be checked in the maintainContractStatus methods during
+		// contract maintenance
 		status := contract.Status()
 		status.Canceled = false
 		err = contract.UpdateStatus(status)
@@ -133,7 +136,7 @@ func (cm *ContractManager) maintainExpiration() {
 
 	// save the updated data information
 	if err := cm.saveSettings(); err != nil {
-		cm.log.Error("failed to save the expired contracts updates while checking the expired contract")
+		cm.log.Error("failed to save the expired contracts updates while checking the expired contract", "err", err.Error())
 	}
 
 	// delete the expired contract from the contract set
@@ -150,14 +153,19 @@ func (cm *ContractManager) maintainExpiration() {
 func (cm *ContractManager) removeDuplications() {
 	cm.log.Debug("Remove duplications started")
 
+	// contracts that are going to be kept in the active contract list
 	var distinctContracts = make(map[enode.ID]storage.ContractMetaData)
+
+	// contracts that are going to mark as expired contracts and removed from the active contract list
 	var duplicatedContractIDs []storage.ContractID
+
+	// host to contracts mapping, mainly used to update renewTo and renewFrom fields
 	var hostToContracts = make(map[enode.ID][]storage.ContractMetaData)
 
 	// loop through all active contracts, find ones that has the same storage host
 	// move the duplicated ones to expiredContracts
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
-		// append all the contract to the hostToContracts mapping, used for contract renew
+		// append all the contract to the hostToContracts mapping, used for updating renewTo and renewFrom fields
 		hostToContracts[contract.EnodeID] = append(hostToContracts[contract.EnodeID], contract)
 
 		// check the distinctContracts and apply updates
@@ -172,6 +180,7 @@ func (cm *ContractManager) removeDuplications() {
 		// newer contract has the larger start height. Update the distinctContracts list as well
 		if existedContract.StartHeight < contract.StartHeight {
 			duplicatedContractIDs = append(duplicatedContractIDs, existedContract.ID)
+
 			// the older contract should be moved to expired contract list
 			cm.updateExpiredContracts(existedContract)
 
@@ -196,7 +205,7 @@ func (cm *ContractManager) removeDuplications() {
 
 	// save the update data information
 	if err := cm.saveSettings(); err != nil {
-		cm.log.Error("failed to save the expired contracts updates while removing the duplications")
+		cm.log.Error("failed to save the expired contracts updates persistently", "err", err.Error())
 	}
 
 	// delete the duplicated contracts from the contract set
@@ -213,7 +222,7 @@ func (cm *ContractManager) maintainHostToContractIDMapping() {
 	// clear all entries from hostToContract
 	cm.hostToContract = make(map[enode.ID]storage.ContractID)
 
-	// re-inserted them again, this time, only storage host with active contract
+	// re-insert them again, this time, only storage host with active contract
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
 		cm.hostToContract[contract.EnodeID] = contract.ID
 	}
@@ -227,6 +236,8 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 	cm.log.Debug("Remove host with duplicate network address started")
 
 	// loop through all active contracts, get all their host ids
+	// removeDuplications ensures that storage client can only sign one contract with each storage host
+	// multiple contracts mapping to one storage host should not be possible
 	var storageHostIDs []enode.ID
 	var hostToContractID = make(map[enode.ID]storage.ContractID)
 
@@ -236,6 +247,8 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 		if contract.Status.Canceled && !contract.Status.UploadAbility && !contract.Status.RenewAbility {
 			continue
 		}
+
+		// add the host id and contract id to mapping
 		storageHostIDs = append(storageHostIDs, contract.EnodeID)
 		hostToContractID[contract.EnodeID] = contract.ID
 	}
@@ -249,13 +262,13 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 
 		// check if the contract exists
 		if !exists {
-			cm.log.Crit("for contract maintenance, while removing the host with duplicate network address, the duplicatedHostID does not match with any active contract")
+			cm.log.Error("for contract maintenance, while removing the host with duplicate network address, the duplicatedHostID does not match with any active contract")
 			continue
 		}
 
 		// cancel the contract if exists
 		if err := cm.markContractCancel(contractID); err != nil {
-			cm.log.Crit(fmt.Sprintf("failed to cancel the contract %v in contract maintaining process: %s", contractID, err.Error()))
+			cm.log.Error("failed to mark the contract's status as canceled", "err", err.Error())
 		}
 	}
 }
@@ -331,14 +344,18 @@ func (cm *ContractManager) updateHostToContractID(contract storage.ContractMetaD
 // based on the list of contract id provided
 func (cm *ContractManager) delFromContractSet(ids []storage.ContractID) {
 	for _, id := range ids {
+		// acquire the contract that is trying to delete
 		contract, exists := cm.activeContracts.Acquire(id)
+
+		// if the contract does not exist, meaning somehow it has been deleted, log a warning
 		if !exists {
 			cm.log.Warn("the expired contract that is trying to be deleted does not exist")
 			continue
 		}
 
+		// delete the contract
 		if err := cm.activeContracts.Delete(contract); err != nil {
-			cm.log.Warn(err.Error())
+			cm.log.Error("failed to delete the contract from the active contract list", "err", err.Error())
 		}
 	}
 }
@@ -348,19 +365,27 @@ func (cm *ContractManager) delFromContractSet(ids []storage.ContractID) {
 // 		2. RenewAbility: false
 // 		3. Canceled: true
 func (cm *ContractManager) markContractCancel(id storage.ContractID) (err error) {
+	// get the contract
 	c, exists := cm.activeContracts.Acquire(id)
 	if !exists {
-		cm.log.Crit("the contract tyring to cancel does not exist")
+		cm.log.Error("the contract tyring to cancel does not exist")
 		return
 	}
+
+	// at the end, return the contract
+	defer func() {
+		if failedReturn := cm.activeContracts.Return(c); failedReturn != nil {
+			cm.log.Warn("the contract that is trying to be returned does not exist")
+		}
+	}()
+
+	// update the contract status
 	contractStatus := c.Status()
 	contractStatus.UploadAbility = false
 	contractStatus.RenewAbility = false
 	contractStatus.Canceled = true
 	err = c.UpdateStatus(contractStatus)
-	if failedReturn := cm.activeContracts.Return(c); failedReturn != nil {
-		cm.log.Warn("the contract that is trying to be returned does not exist")
-	}
+
 	return
 }
 
@@ -371,7 +396,7 @@ func (cm *ContractManager) markContractCancel(id storage.ContractID) (err error)
 func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (err error) {
 	c, exists := cm.activeContracts.Acquire(id)
 	if !exists {
-		cm.log.Crit("the newly formed contract's status cannot be found")
+		cm.log.Error("the newly formed contract's status cannot be found")
 		err = fmt.Errorf("the newly formed contract's status cannot be found from the contract set")
 		return
 	}
@@ -395,6 +420,7 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 		return common.BigInt0
 	}
 
+	// get the minimum evaluation
 	minEval = cm.hostManager.Evaluation(hosts[0])
 	for i := 1; i < len(hosts); i++ {
 		eval := cm.hostManager.Evaluation(hosts[i])
@@ -403,6 +429,7 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 		}
 	}
 
+	// divided by 100
 	minEval = minEval.DivUint64(evalFactor)
 	return
 }
@@ -466,14 +493,25 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	}
 
 	// check if the contract has enough funding for upload payment
+	// each contract is in charge of a data sector, sectorStorageCost specifies the storage price
+	// needed for storing a data sector in a certain period time
 	sectorStorageCost := host.StoragePrice.MultUint64(contractset.SectorSize * period)
+
+	// upload cost for uploading a sector
 	sectorUploadBandwidthCost := host.UploadBandwidthPrice.MultUint64(contractset.SectorSize)
+
+	// download cost for downloading a sector
 	sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
+
+	// total cost for store / upload / download a sector
 	totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-	remainingBalancePercentage := contract.ClientBalance.Div(contract.TotalCost).Float64()
+	remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
 
-	if contract.ClientBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minClientBalanceUploadThreshold {
+	// if the remaining contract balance is not enough to pay for the 3X total sector cost
+	// or the remainingBalancePercentage is smaller than 5%, we consider this contract is not good
+	// for data uploading
+	if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minClientBalanceUploadThreshold {
 		stats.UploadAbility = false
 		return
 	}

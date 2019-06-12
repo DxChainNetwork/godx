@@ -5,7 +5,6 @@
 package contractmanager
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
@@ -61,14 +60,14 @@ func (cm *ContractManager) contractMaintenance() {
 	rentPayment := cm.rentPayment
 	cm.lock.RUnlock()
 
-	if err := cm.maintainContractStatus(int(rentPayment.StorageHosts)); err != nil {
-		log.Warn("failed to maintain contract status, contractMaintenance terminating")
-		return
-	}
-
 	// when RentPayment is empty, meaning that the storage client does
 	// not want to sign contract with anyone
 	if reflect.DeepEqual(rentPayment, storage.RentPayment{}) {
+		return
+	}
+
+	if err := cm.maintainContractStatus(int(rentPayment.StorageHosts)); err != nil {
+		log.Error("failed to maintain contract status, contractMaintenance terminating", "err", err.Error())
 		return
 	}
 
@@ -91,7 +90,7 @@ func (cm *ContractManager) contractMaintenance() {
 		clientRemainingFund = common.BigInt0
 	}
 
-	// start to renew the contracts in the closeToExpireRenews list, which have higher priority
+	// start to renew the contracts in the closeToExpireRenews list, which has higher priority
 	clientRemainingFund, terminate := cm.prepareContractRenew(closeToExpireRenews, clientRemainingFund, rentPayment)
 	if terminate {
 		return
@@ -121,7 +120,7 @@ func (cm *ContractManager) contractMaintenance() {
 	// prepare to for forming contract based on the number of extract contracts needed
 	terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund, rentPayment)
 	if err != nil {
-		cm.log.Error(fmt.Sprintf("failed to create the contract: %s", err.Error()))
+		cm.log.Error("failed to create the contract", "err", err.Error())
 		return
 	}
 

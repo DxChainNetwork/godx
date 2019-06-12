@@ -9,7 +9,14 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// renewCostEstimation will estimate the estimated cost for the contract period after the renew
+// renewCostEstimation will estimate the estimated cost for the contract period after the renew, the cost estimation included the following costs:
+// 		1. storageCost for storing current amount of data (contract.LatestContractRevision.NewFileSize) for the current amount of time (period)
+// 		2. calculate the upload and download cost within the current period. Multiple renews may happen within the same current period when contract go renew
+// 			due to lack of contract funding. At that time, the current period will not be updated
+// 		3. calculate the storage cost for the current period
+// 		4. get the contract cost from the host
+//      SUMMARY: totalStorageCost + upload cost within current period + download cost within the current period + storage cost within the current period
+//		+ contract cost specified by the storage host -> raise 33%
 func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract storage.ContractMetaData, blockHeight uint64, rent storage.RentPayment) (estimation common.BigInt) {
 	// get the cost for current storage
 	amountDataStored := contract.LatestContractRevision.NewFileSize
@@ -22,7 +29,6 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 	prevContractTotalDownloadCost := contract.DownloadCost
 
 	cm.lock.RLock()
-
 	// prevent loop from running forever
 	for i := 0; i < 10e5; i++ {
 		// get the previous contractID
@@ -38,6 +44,9 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 		}
 
 		// verify the start height to check if the start height is within the current period
+		// current period will be changed in two places:
+		// 		1. SetRentPayment
+		//		2. ChainChanges
 		if prevContract.StartHeight < cm.currentPeriod {
 			break
 		}
@@ -49,13 +58,15 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 	}
 	cm.lock.RUnlock()
 
-	// amount of data uploaded within the current period
+	// amount of data uploaded = total amount of data stored in the contract / uploadBandwidthPrice
 	prevDataUploaded := common.NewBigIntUint64(amountDataStored)
 	if host.UploadBandwidthPrice.Cmp(common.BigInt0) > 0 {
 		prevDataUploaded = prevContractTotalUploadCost.Div(host.UploadBandwidthPrice)
 	}
 
 	// if the data uploaded is greater than the total data stored in the contract
+	// this can only happen if the UploadBandwidthPrice is 0, therefore, the above
+	// validation is skipped
 	if prevDataUploaded.Cmp(common.NewBigIntUint64(amountDataStored)) > 0 {
 		prevDataUploaded = common.NewBigIntUint64(amountDataStored)
 	}
@@ -63,15 +74,13 @@ func (cm *ContractManager) renewCostEstimation(host storage.HostInfo, contract s
 	// upload cost + the storage cost for the newly uploaded data
 	newUploadCost := prevContractTotalUploadCost.Add(prevDataUploaded.MultUint64(rent.Period).Mult(host.StoragePrice))
 
-	// assume the download cost does not change for the new contract period
-	newDownloadCost := prevContractTotalDownloadCost
-
 	// contract price will be stayed the same
 	contractPrice := host.ContractPrice
 
 	// TODO (mzhang): Gas fee estimation is ignored currently
 
-	estimation = storageCost.Add(newUploadCost).Add(newDownloadCost).Add(contractPrice)
+	// assume the download cost does not change for the new contract period
+	estimation = storageCost.Add(newUploadCost).Add(prevContractTotalDownloadCost).Add(contractPrice)
 
 	// rise the estimation up by 33%
 	estimation = estimation.Add(estimation.DivUint64(3))
@@ -107,7 +116,7 @@ func (cm *ContractManager) CalculatePeriodCost(rentPayment storage.RentPayment) 
 			// if the host exists, and the contract is still waiting for the storage proof
 			// then it means the balance left in the contract is still withHeld and not
 			// give back to the client yet
-			periodCost.WithheldFund = periodCost.WithheldFund.Add(contract.ClientBalance)
+			periodCost.WithheldFund = periodCost.WithheldFund.Add(contract.ContractBalance)
 
 			// update the withheldFundReleaseBlock to maximum block number
 			if contract.EndHeight+host.WindowSize+maturityDelay >= periodCost.WithheldFundReleaseBlock {

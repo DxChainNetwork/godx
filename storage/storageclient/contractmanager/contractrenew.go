@@ -34,13 +34,13 @@ var (
 // 		   marked as not good for data uploading
 func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment) (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 
-	cm.log.Info("Contract renew check started")
+	cm.log.Debug("Contract renew check started")
 
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
 	cm.lock.RUnlock()
 
-	// loop through all active contracts, get the priorityRenews and emptyRenews
+	// loop through all active contracts, get the closeToExpireRenews and insufficientFundingRenews
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
 		// validate the storage host for the contract, check if the host exists or get filtered
 		host, exists := cm.hostManager.RetrieveHostInfo(contract.EnodeID)
@@ -71,9 +71,9 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-		remainingBalancePercentage := contract.ClientBalance.Div(contract.TotalCost).Float64()
+		remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
 
-		if contract.ClientBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
+		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
 			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
 				id:   contract.ID,
 				cost: contract.TotalCost.MultUint64(2),
@@ -129,13 +129,14 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 	for _, record := range renewRecords {
 		// verify that the cost needed for contract renew does not exceed the clientRemainingFund
 		if clientRemainingFund.Cmp(record.cost) < 0 {
+			cm.log.Debug("client does not have enough fund to renew the contract", "contractID", record.id, "cost", record.cost)
 			continue
 		}
 
 		// renew the contract, get the spending for the renew
 		renewCost, err := cm.contractRenewStart(record, currentPeriod, rentPayment, blockHeight, contractEndHeight)
 		if err != nil {
-			cm.log.Error(fmt.Sprintf("contract renew failed. id: %v, err : %v", record.id, err.Error()))
+			cm.log.Error("contract renew failed", "contractID", record.id, "err", err.Error())
 		}
 
 		// update the remaining fund
@@ -173,7 +174,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 
 	// TODO (mzhang): making sure that the oldContract will not be revised while renewing it, waiting for HZ
 
-	// acquire the oldContract
+	// acquire the oldContract (contract that is about to be renewed)
 	oldContract, exists := cm.activeContracts.Acquire(renewContractID)
 	if !exists {
 		renewCost = common.BigInt0
@@ -205,6 +206,9 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		return
 	}
 
+	// at this point, the contract has been renewed successfully
+	renewCost = renewContractCost
+
 	// 4. update the oldContract manager
 	renewedContractStatus := storage.ContractStatus{
 		UploadAbility: true,
@@ -216,7 +220,6 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.log.Warn(fmt.Sprintf("failed to update the renewed oldContract status: %s", err.Error()))
 		if err = cm.activeContracts.Return(oldContract); err != nil {
 			cm.log.Warn("during the updating renewed oldContract failed process, the oldContract cannot be returned because it has been deleted already")
-			renewCost = renewContractCost
 			err = nil
 			return
 		}
@@ -230,7 +233,6 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.log.Warn("failed to update the old oldContract (before renew) status")
 		if err = cm.activeContracts.Return(oldContract); err != nil {
 			cm.log.Warn("during the old oldContract status update process, the oldContract cannot be returned because it has been deleted already")
-			renewCost = renewContractCost
 			err = nil
 			return
 		}
@@ -244,16 +246,15 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	cm.lock.Unlock()
 
 	// save the information persistently
-	if err := cm.saveSettings(); err != nil {
-		cm.log.Warn(fmt.Sprintf("failed to seave the settings persistently during the oldContract renew start: %s", err.Error()))
+	if err = cm.saveSettings(); err != nil {
+		cm.log.Error("failed to save the settings persistently", "err", err.Error())
 	}
 
 	// delete the old oldContract from the active oldContract list
-	if err := cm.activeContracts.Delete(oldContract); err != nil {
-		cm.log.Warn("failed to delete the cotnract from the active oldContract list after renew: %s", err.Error())
+	if err = cm.activeContracts.Delete(oldContract); err != nil {
+		cm.log.Error("failed to delete the contract from the active oldContract list after renew", "err", err.Error())
 	}
 
-	renewCost = renewContractCost
 	err = nil
 	return
 }
@@ -312,7 +313,11 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 	return
 }
 
-// handleRenewFailed will handle the failed contract renews. If the total amount of contract
+// handleRenewFailed will handle the failed contract renews.
+// 		1. check if the error is caused by storage host, if so, increase the failed renew count
+// 		2. if the amount of renew fails exceed a limit or it is already passed the second half of renew window,
+// 		meaning the contract needs to be replaced, mark the contract as canceled
+// 		3. return the error message
 func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, blockHeight uint64, contractStatus storage.ContractStatus) (err error) {
 	// if renew failed is caused by the storage host, update the the failedRenewsCount
 	if common.ErrContains(renewError, ErrHostFault) {
