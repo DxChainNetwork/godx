@@ -88,3 +88,35 @@ func (fm *folderManager) addFolder(sf *storageFolder) (err error) {
 	fm.sfs[sf.path] = sf
 	return nil
 }
+
+// selectFolderToAdd select a folder to add sector. return a locked storageFolder, the
+// index to insert, and error that happened during execution
+// The function is thread safe to call
+func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, err error) {
+	fm.lock.RLock()
+	defer fm.lock.RUnlock()
+	// Loop over the folder manager to check availability
+	for _, sf = range fm.sfs {
+		if locked := sf.lock.TryToLock(); !locked {
+			// Some other goroutine is accessing the folder.
+			// Continue to the next folder
+			continue
+		}
+		if sf.status == folderUnavailable {
+			sf.lock.Unlock()
+			continue
+		}
+		index, err = sf.freeSectorIndex()
+		if err == errFolderAlreadyFull {
+			sf.lock.Unlock()
+			continue
+		} else if err != nil {
+			sf.lock.Unlock()
+			return nil, 0, err
+		}
+		// return the locked storage folder, the index, and nil error
+		return
+	}
+	// After loop over all folders, still no available slot found
+	return nil, 0, errAllFoldersFullOrUsed
+}

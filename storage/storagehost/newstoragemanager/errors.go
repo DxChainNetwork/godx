@@ -22,6 +22,9 @@ var (
 
 	// errFolderAlreadyFull is the error trying to add a sector to an already full folder
 	errFolderAlreadyFull = errors.New("folder already full")
+
+	// errAllFoldersFullOrUsed is the error happened when all folders are full or in use
+	errAllFoldersFullOrUsed = errors.New("all folders are full or in use")
 )
 
 // updateError is the error happened during processing the update.

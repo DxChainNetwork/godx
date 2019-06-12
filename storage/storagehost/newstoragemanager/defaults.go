@@ -10,10 +10,12 @@ const (
 	prefixFolderSector   = "folderToSector"
 	prefixFolderIDToPath = "folderIDToPath"
 	sectorSaltKey        = "sectorSalt"
+	prefixSector         = "sector"
 )
 
 const (
 	opNameAddStorageFolder = "add storage folder"
+	opNameAddSector        = "add sector"
 )
 
 const (

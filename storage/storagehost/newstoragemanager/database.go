@@ -246,3 +246,24 @@ func (db *database) randomFolderID() (id folderID, err error) {
 	err = errors.New("create random folder id maximum retries reached.")
 	return
 }
+
+// hasSector checks whether the sector is in the database
+func (db *database) hasSector(id sectorID) (exist bool, err error) {
+	key := makeKey(prefixSector, common.Bytes2Hex(id[:]))
+	exist, err = db.lvl.Has(key, nil)
+	return
+}
+
+// getSector get the sector from database with specified id.
+// If the key does not exist in database, return ErrNotFound
+func (db *database) getSector(id sectorID) (s *sector, err error) {
+	key := makeKey(prefixSector, common.Bytes2Hex(id[:]))
+	b, err := db.lvl.Get(key, nil)
+	if err != nil {
+		return
+	}
+	if err = rlp.DecodeBytes(b, &s); err != nil {
+		return
+	}
+	return
+}
