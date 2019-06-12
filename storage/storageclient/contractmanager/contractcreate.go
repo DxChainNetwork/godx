@@ -30,7 +30,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		return
 	}
 
-	cm.log.Debug("number of storage host retrieved: %v", len(randomHosts))
+	cm.log.Debug("randomly acquired hosts from the storage host manager", "amount of storage hosts", len(randomHosts))
 
 	cm.lock.RLock()
 	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)

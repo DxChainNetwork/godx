@@ -96,6 +96,6 @@ type ClientDownloadParameters struct {
 	HttpWriter  io.Writer
 	Length      uint64
 	Offset      uint64
-	DxFilePath  string
+	DxFilePath  DxPath
 	Destination string
 }

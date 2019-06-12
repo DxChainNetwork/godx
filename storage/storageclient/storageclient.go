@@ -17,10 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
-
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -29,8 +25,11 @@ import (
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
@@ -43,6 +42,9 @@ var (
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
+	fileSystem *filesystem.FileSystem
+
+	// TODO (jacky): File Download Related
 
 	// TODO (jacky): File Upload Related
 
@@ -89,9 +91,12 @@ func New(persistDir string) (*StorageClient, error) {
 	var err error
 
 	// TODO: data initialization(file management system, file upload, file download)
+
 	sc := &StorageClient{
+		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractManager{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
+		log:            log.New(),
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
 		workerPool:     make(map[storage.ContractID]*worker),
@@ -155,7 +160,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 
 	// TODO (mzhang): Subscribe consensus change
 
-	// TODO (Jacky): DxFile / DxDirectory Update & Initialize Stream Cache
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
 
 	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
 
@@ -167,10 +174,26 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 }
 
 func (sc *StorageClient) Close() error {
+	sc.log.Info("Closing The Contract Manager")
 	sc.contractManager.Stop()
+
+	var fullErr error
+
+	// Closing the host manager
+	sc.log.Info("Closing The Renter Host Manager")
 	err := sc.storageHostManager.Close()
-	errSC := sc.tm.Stop()
-	return common.ErrCompose(err, errSC)
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the file system
+	sc.log.Info("Closing the renter file system")
+	err = sc.fileSystem.Close()
+	fullErr = common.ErrCompose(fullErr, err)
+
+	// Closing the thread manager
+	sc.log.Info("Closing The Storage Client Manager")
+	err = sc.tm.Stop()
+	fullErr = common.ErrCompose(fullErr, err)
+	return fullErr
 }
 
 // ContractDetail will return the detailed contract information

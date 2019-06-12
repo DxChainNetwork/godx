@@ -26,6 +26,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/merkletree"
 )
@@ -150,6 +151,12 @@ func (sc *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
 
 func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return sc.ethBackend.GetPoolNonce(ctx, addr)
+}
+
+// GetFileSystem will get the file system
+func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
+	return sc.fileSystem
+
 }
 
 // calculate Enode.ID, reference:

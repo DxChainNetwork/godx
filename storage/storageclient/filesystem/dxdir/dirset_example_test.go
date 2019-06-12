@@ -6,6 +6,7 @@ package dxdir
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
 	"reflect"
 )
@@ -25,6 +26,7 @@ func ExampleDirSet() {
 	newMeta := randomMetadata()
 	// note the DxPath field is not updated
 	newMeta.DxPath = path
+	newMeta.RootPath = storage.SysPath(exampleDirSetDir)
 	err = entry.UpdateMetadata(*newMeta)
 	if err != nil {
 		fmt.Println(err)
@@ -47,7 +49,7 @@ func ExampleDirSet() {
 
 // newExampleWal create a new wal for the example
 func newExampleWal() *writeaheadlog.Wal {
-	wal, txns, err := writeaheadlog.New(filepath.Join(exampleDirSetDir, "example.wal"))
+	wal, txns, err := writeaheadlog.New(filepath.Join(string(exampleDirSetDir), "example.wal"))
 	if err != nil {
 		fmt.Println(err)
 	}

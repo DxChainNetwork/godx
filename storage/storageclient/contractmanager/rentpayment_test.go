@@ -64,9 +64,9 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 	go func() {
 		select {
 		case <-cm.maintenanceStop:
-			cm.lock.RLock()
+			cm.lock.Lock()
 			cm.maintenanceRunning = false
-			cm.lock.RUnlock()
+			cm.lock.Unlock()
 			cm.maintenanceWg.Done()
 		}
 	}()
@@ -93,8 +93,12 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 
 	time.Sleep(time.Second)
 
+	cm.lock.RLock()
+	expiredContractList := cm.expiredContracts
+	cm.lock.RUnlock()
+
 	for _, contract := range expiredContracts {
-		if _, exists := cm.expiredContracts[contract.ID]; !exists {
+		if _, exists := expiredContractList[contract.ID]; !exists {
 			t.Fatalf("maitenance failed, the contract should be in the expired contract list")
 		}
 	}

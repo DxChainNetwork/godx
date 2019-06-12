@@ -54,6 +54,7 @@ import (
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
@@ -375,6 +376,16 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
 				Public:    true,
+			}, {
+				Namespace: "clientfilesdebug",
+				Version:   "1.0",
+				Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
+				Public:    true,
+			}, {
+				Namespace: "clientfiles",
+				Version:   "1.0",
+				Service:   filesystem.NewPublicFileSystemAPI(s.storageClient.GetFileSystem()),
+				Public:    true,
 			},
 		}...)
 	}
@@ -610,6 +621,7 @@ func (s *Ethereum) Stop() error {
 	if s.lesServer != nil {
 		s.lesServer.Stop()
 	}
+
 	s.txPool.Stop()
 	s.miner.Stop()
 	s.eventMux.Stop()
