@@ -103,7 +103,8 @@ func (db *database) hasStorageFolder(path string) (exist bool, err error) {
 // Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	// make a new batch
-	batch, err := db.saveStorageFolderBatch(sf)
+	batch := new(leveldb.Batch)
+	batch, err = db.saveStorageFolderToBatch(batch, sf)
 	if err != nil {
 		return err
 	}
@@ -113,11 +114,9 @@ func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	return
 }
 
-// saveStorageFolderBatch create the level db batch for save storage folder
+// saveStorageFolderToBatch append the save storage folder operations to the batch
 // The storage folder should be locked before calling this function
-func (db *database) saveStorageFolderBatch(sf *storageFolder) (batch *leveldb.Batch, err error) {
-	// make a new batch
-	batch = db.newBatch()
+func (db *database) saveStorageFolderToBatch(batch *leveldb.Batch, sf *storageFolder) (newBatch *leveldb.Batch, err error) {
 	// write folder data update to batch
 	folderKey := makeKey(prefixFolder, sf.path)
 	folderData, err := rlp.EncodeToBytes(sf)
@@ -164,7 +163,7 @@ func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
 	}
 
 	// Remove all entries in the iterator for folder to sector entries
-	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(makeKey(prefixFolderSector, sf.path))), nil)
+	iter := db.lvl.NewIterator(util.BytesPrefix(makeKey(prefixFolderSector, strconv.FormatUint(uint64(sf.id), 10))), nil)
 	for iter.Next() {
 		batch.Delete(iter.Key())
 	}
@@ -224,7 +223,7 @@ func makeKey(ss ...string) (key []byte) {
 // randomFolderID calls to use the same id
 func (db *database) randomFolderID() (id folderID, err error) {
 	b := make([]byte, 4)
-	for i := 0; i != maxCreateFolderIDReties; i++ {
+	for i := 0; i != maxCreateFolderIDRetries; i++ {
 		rand.Read(b)
 		id = folderID(binary.LittleEndian.Uint32(b))
 		if id == 0 {
@@ -266,4 +265,24 @@ func (db *database) getSector(id sectorID) (s *sector, err error) {
 		return
 	}
 	return
+}
+
+// saveSectorToBatch append the save sector operations to the batch
+func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, folderToSector bool) (newBatch *leveldb.Batch, err error) {
+	exist, err := db.lvl.Has(makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sector.folderID), 10)), nil)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get folder path from id: %v", err)
+	}
+	if !exist {
+		return nil, fmt.Errorf("fold id not exist in db")
+	}
+	sectorBytes, err := rlp.EncodeToBytes(sector)
+	if err != nil {
+		return nil, err
+	}
+	batch.Put(makeKey(prefixSector, string(sector.id[:])), sectorBytes)
+	if folderToSector {
+		folderToSectorKey := makeKey(prefixFolderSector, strconv.FormatUint(uint64(sector.folderID)), string(sector.id[:]))
+		batch.Put(folderToSectorKey, []byte{})
+	}
 }

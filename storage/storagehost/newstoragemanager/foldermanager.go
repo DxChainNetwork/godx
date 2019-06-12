@@ -120,3 +120,14 @@ func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, e
 	// After loop over all folders, still no available slot found
 	return nil, 0, errAllFoldersFullOrUsed
 }
+
+// selectFolderToAddWithRetry execute selectFolderToAdd retryTimes, If no error, return
+func (fm *folderManager) selectFolderToAddWithRetry(retryTimes int) (sf *storageFolder, index uint64, err error) {
+	for i := 0; i != retryTimes; i++ {
+		sf, index, err = fm.selectFolderToAdd()
+		if err == nil {
+			return
+		}
+	}
+	return nil, 0, err
+}

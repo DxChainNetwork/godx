@@ -270,7 +270,7 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 	}
 	update.folder = sf
 	// Put the storageFolder in the batch
-	update.batch, err = manager.db.saveStorageFolderBatch(sf)
+	update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, sf)
 	if err != nil {
 		return fmt.Errorf("cannot create save storage folder batch: %v", err)
 	}

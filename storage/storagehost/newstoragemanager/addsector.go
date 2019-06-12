@@ -1,12 +1,13 @@
 package newstoragemanager
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -20,6 +21,9 @@ type (
 		// The folder to add sector
 		folder *storageFolder
 
+		// folderID is the id of the folder
+		folderID folderID
+
 		// The index to insert
 		index uint64
 
@@ -31,6 +35,9 @@ type (
 
 		// batch is the in memory database operation set
 		batch *leveldb.Batch
+
+		// physical is the flag for whether this update is to add a physical sector or not
+		physical bool
 	}
 
 	// addSectorInitPersist is the initial persist part for add sector update
@@ -39,8 +46,15 @@ type (
 		Data []byte
 	}
 
-	// addSectorAppendPersist is the append part for add sector update
-	addSectorAppendPersist struct {
+	// addPhysicalSectorAppendPersist is the append part for add physical sector update
+	addPhysicalSectorAppendPersist struct {
+		FolderPath string
+		Index      uint64
+		Count      uint64
+	}
+
+	// addVirtualSectorAppendPersist is the append part for adding virtual sector update
+	addVirtualSectorAppendPersist struct {
 		FolderID folderID
 		Index    uint64
 		Count    uint64
@@ -134,8 +148,14 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 
 // release release the update
 func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	update.txn.Release()
-	update.folder.lock.Unlock()
+	if update.txn != nil {
+		// update.txn might be nil if the transaction have init error during prepare
+		update.txn.Release()
+	}
+
+	if update.folder != nil {
+		update.folder.lock.Unlock()
+	}
 	manager.sectorLocks.unlockSector(update.id)
 	return
 }
@@ -150,8 +170,88 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error) {
 	// Try to find the sector in the database. If found, simply increment the count field
 	manager.sectorLocks.lockSector(update.id)
-	manager.folders.selectFolderToAdd()
+	s, err := manager.db.getSector(update.id)
+	var op writeaheadlog.Operation
+	if err != nil && err != leveldb.ErrNotFound {
+		// something unexpect error happened, return the error
+		return
+	} else if err == nil {
+		// entry is found in database. This shall be a virtual sector update. Update the database
+		// entry and there is no need to access the folder.
+		update.physical = false
+		update.folderID, update.index, update.count = s.folderID, s.index, s.count+1
+		op, err = update.createVirtualSectorAppendOperation()
+		if err != nil {
+			return err
+		}
+
+	} else {
+		// This is the case to add a new physical sector.
+		// The appended operation should have the name opNamePhysicalSector
+		update.physical = true
+		sf, index, err := manager.folders.selectFolderToAddWithRetry(maxFolderSelectionRetries)
+		if err != nil {
+			// If there is error, it can only be errAllFoldersFullOrUsed.
+			// In this case, return the err
+			return
+		}
+		if err = sf.setUsedSectorSlot(index); err != nil {
+			return
+		}
+		update.folder = sf
+		update.folderID, update.index, update.count = sf.id, index, 1
+		// create the operation
+		// TODO: implement here
+		//op, err
+	}
+	// Wait for the initialization of the transaction to complete and append the transaction
+	if <-update.txn.InitComplete; update.txn.InitErr != nil {
+		update.txn = nil
+		err = update.txn.InitErr
+		return
+	}
+	err = <-update.txn.Append([]writeaheadlog.Operation{op})
+	if err != nil {
+		return
+	}
+	if err = <-update.txn.Commit(); err != nil {
+		return
+	}
 	return
+}
+
+// createVirtualSectorAppendOperation create an operation to append for add virtual sector
+func (update *addSectorUpdate) createVirtualSectorAppendOperation() (op writeaheadlog.Operation, err error) {
+	persist := addVirtualSectorAppendPersist{
+		FolderID: update.folderID,
+		Index:    update.index,
+		Count:    update.count,
+	}
+	b, err := rlp.EncodeToBytes(persist)
+	if err != nil {
+		return writeaheadlog.Operation{}, err
+	}
+	return writeaheadlog.Operation{
+		Name: opNameAddVirtualSector,
+		Data: b,
+	}, nil
+}
+
+// createPhysicalSectorAppendOperation create an operation to append for adding physical sector
+func (update *addSectorUpdate) createPhysicalSectorAppendOperation() (op writeaheadlog.Operation, err error) {
+	persist := addPhysicalSectorAppendPersist{
+		FolderPath: update.folder.path,
+		Index:      update.index,
+		Count:      update.count,
+	}
+	b, err := rlp.EncodeToBytes(persist)
+	if err != nil {
+		return writeaheadlog.Operation{}, err
+	}
+	return writeaheadlog.Operation{
+		Name: opNameAddPhysicalSector,
+		Data: b,
+	}, nil
 }
 
 func (update *addSectorUpdate) processNormal(manager *storageManager) (err error) {

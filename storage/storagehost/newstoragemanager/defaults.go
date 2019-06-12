@@ -14,8 +14,10 @@ const (
 )
 
 const (
-	opNameAddStorageFolder = "add storage folder"
-	opNameAddSector        = "add sector"
+	opNameAddStorageFolder  = "add storage folder"
+	opNameAddSector         = "add sector"
+	opNameAddVirtualSector  = "add virtual sector"
+	opNameAddPhysicalSector = "add physical sector"
 )
 
 const (
@@ -60,6 +62,10 @@ const (
 )
 
 const (
-	// maxCreateFolderIDReties defines maximum times of trying to create a folder id
-	maxCreateFolderIDReties = 20
+	// maxCreateFolderIDRetries defines maximum times of trying to create a folder id
+	maxCreateFolderIDRetries = 20
+
+	// maxFolderSelectionRetries is the max retry numbers used for selecting a folder to put a
+	// sector
+	maxFolderSelectionRetries = 3
 )
