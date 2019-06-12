@@ -572,7 +572,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 	}
 
 	// maintain contract status
-	if err := cm.maintainContractStatus(); err != nil {
+	if err := cm.maintainContractStatus(int(cm.rentPayment.StorageHosts)); err != nil {
 		t.Fatalf("failed to maintain the contract status")
 	}
 

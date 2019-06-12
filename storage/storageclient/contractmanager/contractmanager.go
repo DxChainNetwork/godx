@@ -75,7 +75,9 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 	}
 
 	// initialize log
-	cm.log = log.New()
+	cm.log = log.New("module", "contract manager")
+	logHandler := log.CallerStackHandler("%v", log.StreamHandler(os.Stdout, log.TerminalFormat(true)))
+	cm.log.SetHandler(logHandler)
 
 	// initialize contract set
 	cs, err := contractset.New(persistDir)
@@ -117,7 +119,7 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 		return
 	}
 
-	cm.log.Info("contract manager started")
+	cm.log.Info("Contract Manager Started")
 
 	return
 }
@@ -127,7 +129,7 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 func (cm *ContractManager) Stop() {
 	// close the activeContracts related operations first
 	if err := cm.activeContracts.Close(); err != nil {
-		cm.log.Error(fmt.Sprintf("failed to close the contract manager active contracts: %s", err.Error()))
+		cm.log.Error("failed to close the contract set", "err", err.Error())
 	}
 
 	// send the quit signal to terminate all the running routines
@@ -137,7 +139,7 @@ func (cm *ContractManager) Stop() {
 	cm.wg.Wait()
 
 	// log info
-	log.Info("ContractManager is stopped")
+	log.Info("ContractManager Terminated")
 }
 
 // SetRateLimits will set the rate limits for the active contracts, which limited the

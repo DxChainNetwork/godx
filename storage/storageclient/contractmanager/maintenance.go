@@ -9,6 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
+	"reflect"
 )
 
 // contractRenewRecord data structure stores information
@@ -46,30 +47,33 @@ func (cm *ContractManager) contractMaintenance() {
 		cm.maintenanceWg.Done()
 	}()
 
-	cm.log.Info("Contract maintenance started")
+	cm.log.Info("Contract Maintenance Started")
 
 	// start maintenance
 	cm.maintainExpiration()
 	cm.removeDuplications()
 	cm.maintainHostToContractIDMapping()
 	cm.removeHostWithDuplicateNetworkAddress()
-	if err := cm.maintainContractStatus(); err != nil {
+
+	// get the rentPayment, this rentPayment will be used for all future
+	// contract renew and contract create
+	cm.lock.RLock()
+	rentPayment := cm.rentPayment
+	cm.lock.RUnlock()
+
+	if err := cm.maintainContractStatus(int(rentPayment.StorageHosts)); err != nil {
 		log.Warn("failed to maintain contract status, contractMaintenance terminating")
 		return
 	}
 
-	// check the number of storage host needed. If the storage client does not want to
-	// sign contract with anyone, return directly
-	cm.lock.RLock()
-	neededHosts := cm.rentPayment.StorageHosts
-	cm.lock.RUnlock()
-
-	if neededHosts <= 0 {
+	// when RentPayment is empty, meaning that the storage client does
+	// not want to sign contract with anyone
+	if reflect.DeepEqual(rentPayment, storage.RentPayment{}) {
 		return
 	}
 
 	// get the contract renew list
-	closeToExpireRenews, insufficientFundingRenews := cm.checkForContractRenew()
+	closeToExpireRenews, insufficientFundingRenews := cm.checkForContractRenew(rentPayment)
 
 	// reset the failed renew set, making sure it only keep track of
 	// current renew list
@@ -78,21 +82,23 @@ func (cm *ContractManager) contractMaintenance() {
 	// calculate amount of money the storage client need to spend within
 	// one period cycle. It includes cost for all contracts
 	var clientRemainingFund common.BigInt
-	periodCost := cm.CalculatePeriodCost()
+	periodCost := cm.CalculatePeriodCost(rentPayment)
 
-	// in case the rentPayment has been changed in the middle
-	if cm.rentPayment.Fund.Cmp(periodCost.ContractFund) > 0 {
-		clientRemainingFund = cm.rentPayment.Fund.Sub(periodCost.ContractFund)
+	// calculate the clientRemainingFund, in case the remaining fund is negative
+	// set it to 0
+	clientRemainingFund = rentPayment.Fund.Sub(periodCost.ContractFund)
+	if clientRemainingFund.IsNeg() {
+		clientRemainingFund = common.BigInt0
 	}
 
 	// start to renew the contracts in the closeToExpireRenews list, which have higher priority
-	clientRemainingFund, terminate := cm.prepareContractRenew(closeToExpireRenews, clientRemainingFund)
+	clientRemainingFund, terminate := cm.prepareContractRenew(closeToExpireRenews, clientRemainingFund, rentPayment)
 	if terminate {
 		return
 	}
 
 	// start to renew contract in the insufficientFundingRenews list, lower priority
-	clientRemainingFund, terminate = cm.prepareContractRenew(insufficientFundingRenews, clientRemainingFund)
+	clientRemainingFund, terminate = cm.prepareContractRenew(insufficientFundingRenews, clientRemainingFund, rentPayment)
 	if terminate {
 		return
 	}
@@ -106,16 +112,14 @@ func (cm *ContractManager) contractMaintenance() {
 		}
 	}
 
-	cm.lock.RLock()
-	neededContracts := int(cm.rentPayment.StorageHosts - uploadableContracts)
-	cm.lock.RUnlock()
-
+	// get the number of contracts that needed to be formed
+	neededContracts := int(rentPayment.StorageHosts - uploadableContracts)
 	if neededContracts <= 0 {
 		return
 	}
 
 	// prepare to for forming contract based on the number of extract contracts needed
-	terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund)
+	terminated, err := cm.prepareCreateContract(neededContracts, clientRemainingFund, rentPayment)
 	if err != nil {
 		cm.log.Error(fmt.Sprintf("failed to create the contract: %s", err.Error()))
 		return

@@ -20,7 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
-func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt) (terminated bool, err error) {
+func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
 
 	cm.log.Debug("Prepare to create the contract")
 
@@ -33,8 +33,8 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 	cm.log.Debug("number of storage host retrieved: %v", len(randomHosts))
 
 	cm.lock.RLock()
-	contractFund := cm.rentPayment.Fund.DivUint64(cm.rentPayment.StorageHosts).DivUint64(3)
-	contractEndHeight := cm.currentPeriod + cm.rentPayment.Period + cm.rentPayment.RenewWindow
+	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)
+	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
 	// loop through each host and try to form contract with them
@@ -47,7 +47,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		}
 
 		// start to form contract
-		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight)
+		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight, rentPayment)
 
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
@@ -87,7 +87,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 // 		2. form the contract create parameters
 // 		3. start to create the contract
 // 		4. update the contract manager fields
-func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64) (formCost common.BigInt, newlyCreatedContract storage.ContractMetaData, err error) {
+func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64, rentPayment storage.RentPayment) (formCost common.BigInt, newlyCreatedContract storage.ContractMetaData, err error) {
 	// 1. storage host validation
 	// validate the storage price
 	if host.StoragePrice.Cmp(maxHostStoragePrice) > 0 {
@@ -96,17 +96,13 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		return
 	}
 
-	cm.lock.RLock()
-	period := cm.rentPayment.Period
-	cm.lock.RUnlock()
-
 	// validate the storage host max deposit
 	if host.MaxDeposit.Cmp(maxHostDeposit) > 0 {
 		host.MaxDeposit = maxHostDeposit
 	}
 
 	// validate the storage host max duration
-	if host.MaxDuration < period {
+	if host.MaxDuration < rentPayment.Period {
 		formCost = common.BigInt0
 		err = fmt.Errorf("failed to create the contract with host: %v, the max duration is smaller than period", host.EnodeID)
 		return

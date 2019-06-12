@@ -249,25 +249,21 @@ func (cm *ContractManager) removeHostWithDuplicateNetworkAddress() {
 
 		// check if the contract exists
 		if !exists {
-			cm.log.Crit("the duplicatedHostID does not match with any active contract")
+			cm.log.Crit("for contract maintenance, while removing the host with duplicate network address, the duplicatedHostID does not match with any active contract")
 			continue
 		}
 
 		// cancel the contract if exists
 		if err := cm.markContractCancel(contractID); err != nil {
-			cm.log.Crit(fmt.Sprintf("failed to cancel the contract %v: %s", contractID, err.Error()))
+			cm.log.Crit(fmt.Sprintf("failed to cancel the contract %v in contract maintaining process: %s", contractID, err.Error()))
 		}
 	}
 }
 
 // maintainContractStatus will iterate through all active contracts. Based on the storage host's validation
 // and contract information to update the contract status
-func (cm *ContractManager) maintainContractStatus() (err error) {
+func (cm *ContractManager) maintainContractStatus(hostsAmount int) (err error) {
 	cm.log.Debug("Maintain contract status started")
-
-	cm.lock.RLock()
-	hostsAmount := int(cm.rentPayment.StorageHosts)
-	cm.lock.RUnlock()
 
 	// randomly select some storage hosts, and calculate the minimum score
 	hosts, err := cm.hostManager.RetrieveRandomHosts(hostsAmount+randomStorageHostsBackup, nil, nil)

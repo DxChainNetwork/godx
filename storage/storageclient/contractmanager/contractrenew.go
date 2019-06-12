@@ -32,13 +32,12 @@ var (
 // 		1. contracts that are about to expired. they need to be renewed
 // 		2. contracts that have insufficient amount of funding, meaning the contract is about to be
 // 		   marked as not good for data uploading
-func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
+func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment) (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 
 	cm.log.Info("Contract renew check started")
 
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
-	rentPayment := cm.rentPayment
 	cm.lock.RUnlock()
 
 	// loop through all active contracts, get the priorityRenews and emptyRenews
@@ -89,6 +88,8 @@ func (cm *ContractManager) checkForContractRenew() (closeToExpireRenews []contra
 // in the current renew lists
 func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 	cm.lock.Lock()
+	defer cm.lock.Unlock()
+
 	filteredFailedRenews := make(map[storage.ContractID]uint64)
 
 	// loop through the closeToExpireRenews, get the failedRenewCount
@@ -109,21 +110,19 @@ func (cm *ContractManager) resetFailedRenews(closeToExpireRenews []contractRenew
 
 	// reset the failedRenewCount
 	cm.failedRenewCount = filteredFailedRenews
-	cm.lock.Unlock()
 }
 
 // prepareContractRenew will loop through all record in the renewRecords and start to renew
 // each contract. Before contract renewing get started, the fund will be validated first.
-func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewRecord, clientRemainingFund common.BigInt) (remainingFund common.BigInt, terminate bool) {
+func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewRecord, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (remainingFund common.BigInt, terminate bool) {
 
 	cm.log.Debug("Prepare to renew the contract")
 
 	// get the data needed
 	cm.lock.RLock()
-	rentPayment := cm.rentPayment
 	blockHeight := cm.blockHeight
 	currentPeriod := cm.currentPeriod
-	contractEndHeight := cm.currentPeriod + cm.rentPayment.Period + cm.rentPayment.RenewWindow
+	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
 	// loop through all contracts that need to be renewed, and prepare to renew the contract
