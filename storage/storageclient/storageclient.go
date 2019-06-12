@@ -251,7 +251,7 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		},
 	}
 
-	// Increase Successful/Failed interactions accordingly
+	// Increase Successful/failed interactions accordingly
 	defer func() {
 		hostID := PubkeyToEnodeID(&host.PublicKey)
 		if err != nil {
@@ -470,7 +470,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	defer func() {
 
-		// Increase Successful/Failed interactions accordingly
+		// Increase Successful/failed interactions accordingly
 		if err != nil {
 			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else {
@@ -693,7 +693,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	// Increase Successful/Failed interactions accordingly
+	// Increase Successful/failed interactions accordingly
 	defer func() {
 		if err != nil {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
