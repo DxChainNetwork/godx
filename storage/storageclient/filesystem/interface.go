@@ -14,17 +14,17 @@ import (
 )
 
 // TODO(mzhang): implement this.
-// contractor is the contractor interface used in file system
-type contractor interface {
+// contractManager is the contractManager interface used in file system
+type contractManager interface {
 	// HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by input
 	HostHealthMapByID([]enode.ID) storage.HostHealthInfoTable
 }
 
-// AlwaysSuccessContractor is the contractor that always return good condition for all host keys
-type AlwaysSuccessContractor struct{}
+// AlwaysSuccessContractManager is the contractManager that always return good condition for all host keys
+type AlwaysSuccessContractManager struct{}
 
 // HostHealthMapByID always return good condition
-func (c *AlwaysSuccessContractor) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
+func (c *AlwaysSuccessContractManager) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
 	table := make(storage.HostHealthInfoTable)
 	for _, id := range ids {
 		table[id] = storage.HostHealthInfo{
@@ -35,11 +35,11 @@ func (c *AlwaysSuccessContractor) HostHealthMapByID(ids []enode.ID) storage.Host
 	return table
 }
 
-// AlwaysSuccessContractor is the contractor that always return wrong condition for all host keys
-type alwaysFailContractor struct{}
+// AlwaysSuccessContractManager is the contractManager that always return wrong condition for all host keys
+type alwaysFailContractManager struct{}
 
 // HostHealthMapByID always return bad condition
-func (c *alwaysFailContractor) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
+func (c *alwaysFailContractManager) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
 	table := make(storage.HostHealthInfoTable)
 	for _, id := range ids {
 		table[id] = storage.HostHealthInfo{
@@ -50,9 +50,9 @@ func (c *alwaysFailContractor) HostHealthMapByID(ids []enode.ID) storage.HostHea
 	return table
 }
 
-// randomContractor is the contractor that return condition is random possibility
+// randomContractManager is the contractManager that return condition is random possibility
 // rate is the possibility between 0 and 1 for specified conditions
-type randomContractor struct {
+type randomContractManager struct {
 	missRate         float32 // missRate is the rate that the input id is not in the table
 	onlineRate       float32 // onlineRate is the rate the the id is online
 	goodForRenewRate float32 // goodForRenewRate is the rate of goodForRenew
@@ -63,7 +63,7 @@ type randomContractor struct {
 	lock   sync.Mutex                  // lock is the mutex to protect the table field
 }
 
-func (c *randomContractor) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
+func (c *randomContractManager) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
 	c.once.Do(func() {
 		c.table = make(storage.HostHealthInfoTable)
 		c.missed = make(map[enode.ID]struct{})

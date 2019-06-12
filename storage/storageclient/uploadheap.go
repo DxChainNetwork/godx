@@ -214,7 +214,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		// Check if segment is downloadable
 		segmentHealth := segment.fileEntry.SegmentHealth(int(segment.index), hostHealthInfoTable)
 		_, err := os.Stat(string(segment.fileEntry.LocalPath()))
-		downloadable := segmentHealth >= dxfile.UnstuckHealthThreshold || err == nil
+		downloadable := segmentHealth >= dxfile.StuckThreshold || err == nil
 
 		// Check if segment seems stuck
 		stuck := !incomplete && segmentHealth != dxfile.CompleteHealthThreshold

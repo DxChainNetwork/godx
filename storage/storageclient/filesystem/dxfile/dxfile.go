@@ -164,7 +164,7 @@ func (df *DxFile) Sectors(segmentIndex int) ([][]*Sector, error) {
 		sectors[sectorIndex] = make([]*Sector, len(df.segments[segmentIndex].Sectors[sectorIndex]))
 		for i, sector := range df.segments[segmentIndex].Sectors[sectorIndex] {
 			sectors[sectorIndex][i] = &Sector{
-				HostID: 	sector.HostID,
+				HostID:     sector.HostID,
 				MerkleRoot: sector.MerkleRoot,
 			}
 		}
@@ -250,7 +250,7 @@ func (df *DxFile) MarkAllHealthySegmentsAsUnstuck(table storage.HostHealthInfoTa
 			continue
 		}
 		segHealth := df.segmentHealth(i, table)
-		if segHealth < 200 {
+		if segHealth < StuckThreshold {
 			continue
 		}
 		df.segments[i].Stuck = false
@@ -284,7 +284,7 @@ func (df *DxFile) MarkAllUnhealthySegmentsAsStuck(table storage.HostHealthInfoTa
 			continue
 		}
 		segHealth := df.segmentHealth(i, table)
-		if segHealth >= 100 {
+		if segHealth >= StuckThreshold {
 			continue
 		}
 		df.segments[i].Stuck = true

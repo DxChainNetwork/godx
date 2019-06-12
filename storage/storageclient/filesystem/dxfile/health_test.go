@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// TestCmpHealth test CmpHealthPriority
+// TestCmpHealth test CmpRepairPriority
 func TestCmpHealth(t *testing.T) {
 	tests := []struct {
 		h1  uint32
@@ -30,7 +30,7 @@ func TestCmpHealth(t *testing.T) {
 		{99, 0, 0},
 	}
 	for _, test := range tests {
-		res := CmpHealthPriority(test.h1, test.h2)
+		res := CmpRepairPriority(test.h1, test.h2)
 		if res != test.res {
 			t.Errorf("compare health unexpected value: %d, %d -> %d", test.h1, test.h2, res)
 		}

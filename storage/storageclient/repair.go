@@ -150,46 +150,46 @@ func (sc *StorageClient) stuckLoop() {
 	}
 }
 
-//// threadedUpdatestorage clientHealth reads all the Dxfiles in the storage client, calculates
-//// the health of each file and updates the folder metadata
-//func (sc *StorageClient) threadedUpdatestorageclientHealth() {
-//	err := sc.tm.Add()
-//	if err != nil {
-//		return
-//	}
-//	defer sc.tm.Done()
-//	// Loop until the storage client has shutdown or until the storage client's top level files
-//	// directory has a LasHealthCheckTime within the healthCheckInterval
-//	for {
-//		select {
-//		// Check to make sure storage client hasn't been shutdown
-//		case <-sc.tm.StopChan():
-//			return
-//		default:
-//		}
-//		// Follow path of oldest time, return directory and timestamp
-//		dxPath, lastHealthCheckTime, err := sc.managedOldestHealthCheckTime()
-//		if err != nil {
-//			sc.log.Debug("Could not find oldest health check time:", err)
-//			continue
-//		}
-//
-//		// If lastHealthCheckTime is within the healthCheckInterval block
-//		// until it is time to check again
-//		var nextCheckTime time.Duration
-//		timeSinceLastCheck := time.Since(lastHealthCheckTime)
-//		if timeSinceLastCheck > HealthCheckInterval { // Check for underflow
-//			nextCheckTime = 0
-//		} else {
-//			nextCheckTime = HealthCheckInterval - timeSinceLastCheck
-//		}
-//		healthCheckSignal := time.After(nextCheckTime)
-//		select {
-//		case <-sc.tm.StopChan():
-//			return
-//		case <-healthCheckSignal:
-//			// Bubble directory
-//			sc.fileSystem.InitAndUpdateDirMetadata(dxPath)
-//		}
-//	}
-//}
+// healthCheckLoop reads all the dxfiles in the storage client, calculates
+// the health of each file and updates the folder metadata
+func (sc *StorageClient) healthCheckLoop() {
+	err := sc.tm.Add()
+	if err != nil {
+		return
+	}
+	defer sc.tm.Done()
+
+	// Loop until the storage client has shutdown or until the storage client's top level files
+	// directory has a LasHealthCheckTime within the healthCheckInterval
+	for {
+		select {
+		case <-sc.tm.StopChan():
+			return
+		default:
+		}
+
+		// get path of oldest time, return directory and timestamp
+		dxPath, lastHealthCheckTime, err := sc.fileSystem.managedOldestHealthCheckTime()
+		if err != nil {
+			sc.log.Debug("Could not find oldest health check time:", err)
+			continue
+		}
+
+		var nextCheckTime time.Duration
+		timeSinceLastCheck := time.Since(lastHealthCheckTime)
+		if timeSinceLastCheck > HealthCheckInterval {
+			nextCheckTime = 0
+		} else {
+			nextCheckTime = HealthCheckInterval - timeSinceLastCheck
+		}
+		healthCheckSignal := time.After(nextCheckTime)
+		select {
+		case <-sc.tm.StopChan():
+			return
+		case <-healthCheckSignal:
+			if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+				sc.log.Error("healthCheckLoop update metadata failed: ", err)
+			}
+		}
+	}
+}

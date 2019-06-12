@@ -29,22 +29,22 @@ import (
 // ErrNoRepairNeeded is the error that no repair is needed
 var ErrNoRepairNeeded = errors.New("no repair needed")
 
-// FileSystem is the structure for a file system that include a FileSet and a DirSet
+// FileSystem is the structure for a file system that include a fileSet and a dirSet
 type FileSystem struct {
-	// rootDir is the root directory where the files locates
-	rootDir storage.SysPath
+	// fileRootDir is the root directory where the files locates
+	fileRootDir storage.SysPath
 
 	// persistDir is the directory of containing the persist files
 	persistDir storage.SysPath
 
-	// FileSet is the FileSet from module dxfile
-	FileSet *dxfile.FileSet
+	// fileSet is the fileSet from module dxfile
+	fileSet *dxfile.FileSet
 
-	// DirSet is the DirSet from module dxdir
-	DirSet *dxdir.DirSet
+	// dirSet is the dirSet from module dxdir
+	dirSet *dxdir.DirSet
 
-	// contractor is the contractor used to give health info for the file system
-	contractor contractor
+	// contractManager is the contractManager used to give health info for the file system
+	contractManager contractManager
 
 	// fileWal is the wal responsible for storage.InsertUpdate / storage.DeleteUpdate
 	// that is used in dxfile and dxdir
@@ -72,18 +72,18 @@ type FileSystem struct {
 }
 
 // New is the public function used for creating a production FileSystem
-func New(persistDir string, contractor contractor) *FileSystem {
+func New(persistDir string, contractor contractManager) *FileSystem {
 	d := newStandardDisrupter()
 	return newFileSystem(persistDir, contractor, d)
 }
 
 // newFileSystem creates a new file system with the standardDisrupter
-func newFileSystem(persistDir string, contractor contractor, disrupter disrupter) *FileSystem {
+func newFileSystem(persistDir string, contractor contractManager, disrupter disrupter) *FileSystem {
 	// create the FileSystem
 	return &FileSystem{
-		rootDir:           storage.SysPath(filepath.Join(persistDir, filesDirectory)),
+		fileRootDir:       storage.SysPath(filepath.Join(persistDir, filesDirectory)),
 		persistDir:        storage.SysPath(persistDir),
-		contractor:        contractor,
+		contractManager:   contractor,
 		tm:                &threadmanager.ThreadManager{},
 		logger:            log.New("module", "filesystem"),
 		disrupter:         disrupter,
@@ -98,12 +98,12 @@ func (fs *FileSystem) Start() error {
 	if err := fs.loadFileWal(); err != nil {
 		return fmt.Errorf("cannot start the file system: %v", err)
 	}
-	// load fs.DirSet
+	// load fs.dirSet
 	var err error
-	if fs.DirSet, err = dxdir.NewDirSet(fs.rootDir, fs.fileWal); err != nil {
-		return fmt.Errorf("cannot start the file system DirSet: %v", err)
+	if fs.dirSet, err = dxdir.NewDirSet(fs.fileRootDir, fs.fileWal); err != nil {
+		return fmt.Errorf("cannot start the file system dirSet: %v", err)
 	}
-	fs.FileSet = dxfile.NewFileSet(fs.rootDir, fs.fileWal)
+	fs.fileSet = dxfile.NewFileSet(fs.fileRootDir, fs.fileWal)
 	// open the updateWal
 	if err := fs.loadUpdateWal(); err != nil {
 		return fmt.Errorf("cannot start the file system: %v", err)
@@ -115,7 +115,7 @@ func (fs *FileSystem) Start() error {
 
 // OpenFile opens the DxFile specified by the path
 func (fs *FileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
-	return fs.FileSet.Open(path)
+	return fs.fileSet.Open(path)
 }
 
 // Close will terminate all threads opened by file system
@@ -137,21 +137,26 @@ func (fs *FileSystem) Close() error {
 
 // SelectDxFileToFix selects a file with the health of highest priority to repair
 func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
-	curDir, err := fs.DirSet.Open(storage.RootDxPath())
+	curDir, err := fs.dirSet.Open(storage.RootDxPath())
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		curDir.Close()
 	}()
+LOOP:
 	for {
-	LOOP:
+		select {
+		case <-fs.tm.StopChan():
+			return nil, errStopped
+		default:
+		}
 		health := curDir.Metadata().Health
 		if err = curDir.Close(); err != nil {
 			return nil, err
 		}
 		// If the health is larger than the threshold, no repair is needed
-		if dxfile.CmpHealthPriority(health, dxfile.RepairHealthThreshold) <= 0 {
+		if dxfile.CmpRepairPriority(health, dxfile.RepairHealthThreshold) <= 0 {
 			return nil, ErrNoRepairNeeded
 		}
 		// Get dirs and files o the directory
@@ -161,13 +166,18 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 		}
 		// Loop over files and compare the health
 		for file := range files {
+			select {
+			case <-fs.tm.StopChan():
+				return nil, errStopped
+			default:
+			}
 			df, err := fs.OpenFile(file)
 			if err != nil {
 				fs.logger.Warn("file system open file", "path", file, "err", err)
 				continue
 			}
 			fHealth := df.GetHealth()
-			if dxfile.CmpHealthPriority(fHealth, health) >= 0 {
+			if dxfile.CmpRepairPriority(fHealth, health) >= 0 {
 				// This is the file we want to repair
 				return df, nil
 			}
@@ -175,15 +185,18 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 		}
 		// Loop over dirs and compare with the health
 		for dir := range dirs {
-			d, err := fs.DirSet.Open(dir)
+			select {
+			case <-fs.tm.StopChan():
+				return nil, errStopped
+			default:
+			}
+			d, err := fs.dirSet.Open(dir)
 			if err != nil {
 				fs.logger.Warn("file system open curDir", "path", dir, "err", err)
 				continue
 			}
 			dHealth := d.Metadata().Health
-			if dxfile.CmpHealthPriority(dHealth, health) < 0 {
-				continue
-			} else {
+			if dxfile.CmpRepairPriority(dHealth, health) >= 0 {
 				if err = curDir.Close(); err != nil {
 					return nil, common.ErrCompose(err, d.Close())
 				}
@@ -200,7 +213,7 @@ func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 // is proportion to the value of numStuckSegments
 func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 	path := storage.RootDxPath()
-	curDir, err := fs.DirSet.Open(path)
+	curDir, err := fs.dirSet.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +236,7 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 			return nil, err
 		}
 		for dirPath := range dirs {
-			d, err := fs.DirSet.Open(dirPath)
+			d, err := fs.dirSet.Open(dirPath)
 			if err != nil {
 				continue
 			}
@@ -246,7 +259,7 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 // dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
 // The returned type map is to add the randomness in file selection
 func (fs *FileSystem) dirsAndFiles(path storage.DxPath) (map[storage.DxPath]struct{}, map[storage.DxPath]struct{}, error) {
-	fileInfos, err := ioutil.ReadDir(string(fs.rootDir.Join(path)))
+	fileInfos, err := ioutil.ReadDir(string(fs.fileRootDir.Join(path)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -393,10 +406,10 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 	}
 	defer fs.tm.Done()
 
-	// TODO: Call contractor.HostUtilsMap here to avoid calculating the map again and
+	// TODO: Call contractManager.HostUtilsMap here to avoid calculating the map again and
 	// 	again for each file
 	var fileList []storage.FileBriefInfo
-	err := filepath.Walk(string(fs.rootDir), func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(string(fs.fileRootDir), func(path string, info os.FileInfo, err error) error {
 		if os.IsNotExist(err) {
 			return nil
 		}
@@ -406,7 +419,7 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 		if info.IsDir() || filepath.Ext(path) != storage.DxFileExt {
 			return nil
 		}
-		str := strings.TrimSuffix(strings.TrimPrefix(path, string(fs.rootDir)), storage.DxFileExt)
+		str := strings.TrimSuffix(strings.TrimPrefix(path, string(fs.fileRootDir)), storage.DxFileExt)
 		dxPath, err := storage.NewDxPath(str)
 		if err != nil {
 			return err
@@ -425,9 +438,9 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 }
 
 // fileDetailedInfo returns detailed information for a file specified by the path
-// If the input table is empty, the code the query the contractor for health info
+// If the input table is empty, the code the query the contractManager for health info
 func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error) {
-	file, err := fs.FileSet.Open(path)
+	file, err := fs.fileSet.Open(path)
 	if err != nil {
 		return storage.FileInfo{}, err
 	}
@@ -440,45 +453,64 @@ func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHe
 		onDisk = err == nil
 	}
 	if len(table) == 0 {
-		table = fs.contractor.HostHealthMapByID(file.HostIDs())
+		table = fs.contractManager.HostHealthMapByID(file.HostIDs())
 	}
+	status := fileStatus(file, table)
 	redundancy := file.Redundancy(table)
-	health, stuckHealth, numStuckSegments := file.Health(table)
+
 	info := storage.FileInfo{
-		Accessible:       redundancy >= 100 || onDisk,
-		FileSize:         file.FileSize(),
-		Health:           health,
-		StuckHealth:      stuckHealth,
-		NumStuckSegments: numStuckSegments,
-		Redundancy:       redundancy,
-		StoredOnDisk:     onDisk,
-		Recoverable:      redundancy >= 100,
-		DxPath:           path.Path,
-		Stuck:            numStuckSegments > 0,
-		UploadProgress:   file.UploadProgress(),
+		DxPath:         path.Path,
+		Status:         status,
+		SourcePath:     string(file.LocalPath()),
+		FileSize:       file.FileSize(),
+		Redundancy:     redundancy,
+		StoredOnDisk:   onDisk,
+		UploadProgress: file.UploadProgress(),
 	}
 	return info, nil
 }
 
 // fileBriefInfo returns the brief info about a file specified by the path
-// If the input table is empty, the code the query the contractor for health info
+// If the input table is empty, the code the query the contractManager for health info
 func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileBriefInfo, error) {
-	file, err := fs.FileSet.Open(path)
+	file, err := fs.fileSet.Open(path)
 	if err != nil {
 		return storage.FileBriefInfo{}, err
 	}
 	defer file.Close()
 	if len(table) == 0 {
-		table = fs.contractor.HostHealthMapByID(file.HostIDs())
+		table = fs.contractManager.HostHealthMapByID(file.HostIDs())
 	}
-	recoverable := file.Redundancy(table) >= 100
 
 	info := storage.FileBriefInfo{
 		Path:           path.Path,
 		UploadProgress: file.UploadProgress(),
-		Recoverable:    recoverable,
+		Status:         fileStatus(file, table),
 	}
 	return info, nil
+}
+
+// fileStatus return the human readable status
+func fileStatus(file *dxfile.FileSetEntryWithID, table storage.HostHealthInfoTable) string {
+	health, _, numStuckSegments := file.Health(table)
+	if numStuckSegments > 0 {
+		return statusUnrecoverableStr
+	}
+	return humanReadableHealth(health)
+}
+
+// humanReadableHealth convert the health to human readable string
+func humanReadableHealth(health uint32) string {
+	if health > healthyThreshold {
+		return statusHealthyStr
+	}
+	if health > recoverableThreshold {
+		return statusRecoverableStr
+	}
+	if health > inDangerThreshold {
+		return statusInDangerStr
+	}
+	return statusUnrecoverableStr
 }
 
 // randomUint32 create a random number uint32
@@ -488,6 +520,6 @@ func randomUint32() uint32 {
 	return binary.LittleEndian.Uint32(b)
 }
 
-func (fs *FileSystem) FileRootDir() storage.SysPath{
+func (fs *FileSystem) FileRootDir() storage.SysPath {
 	return fs.rootDir
 }

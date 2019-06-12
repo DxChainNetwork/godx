@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -24,7 +23,7 @@ import (
 )
 
 // TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
-// under different contractor under the same directory.
+// under different contractManager under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipped for short tests")
@@ -33,14 +32,14 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	fileSize := uint64(1 << 22 * 10 * 10)
 	tests := []struct {
 		numFiles        int // numFiles is the number of the files under the same directory
-		contractor      contractor
+		contractor      contractManager
 		markStuck       bool // flag indicates whether markAllUnhealthyAsStuck called
 		rootMetadata    *dxdir.Metadata
 		cmpMetadataFunc func(got dxdir.Metadata, expect dxdir.Metadata) error
 	}{
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -50,7 +49,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   10,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
@@ -60,7 +59,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -70,7 +69,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   1,
-			contractor: &AlwaysSuccessContractor{},
+			contractor: &AlwaysSuccessContractManager{},
 			markStuck:  false,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  1,
@@ -80,7 +79,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles:   10,
-			contractor: &alwaysFailContractor{},
+			contractor: &alwaysFailContractManager{},
 			markStuck:  true,
 			rootMetadata: &dxdir.Metadata{
 				NumFiles:  10,
@@ -90,7 +89,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles: 1,
-			contractor: &randomContractor{
+			contractor: &randomContractManager{
 				missRate:         0.1,
 				onlineRate:       0.9,
 				goodForRenewRate: 0.9,
@@ -104,7 +103,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		},
 		{
 			numFiles: 100,
-			contractor: &randomContractor{
+			contractor: &randomContractManager{
 				missRate:         0.1,
 				onlineRate:       0.9,
 				goodForRenewRate: 0.9,
@@ -119,7 +118,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 	}
 	for index, test := range tests {
 		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, newStandardDisrupter())
-		test.rootMetadata.RootPath = fs.rootDir
+		test.rootMetadata.RootPath = fs.fileRootDir
 		commonPath := randomDxPath(t, 2)
 		ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 		if err != nil {
@@ -137,12 +136,12 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+				df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
 				if test.markStuck {
-					if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+					if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractManager.HostHealthMapByID(df.HostIDs())); err != nil {
 						t.Fatalf("test %d: cannot markAllUnhealthySegmentsAsStuck: %v", index, err)
 					}
 				}
@@ -165,7 +164,7 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		}
 		wg.Wait()
 		// wait until updates complete
-		err = fs.waitForUpdatesComplete(10 * time.Second)
+		err = fs.waitForUpdatesComplete(30 * time.Second)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -174,10 +173,10 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		rootPath := storage.RootDxPath()
 		test.rootMetadata.DxPath = rootPath
 
-		if !fs.DirSet.Exists(rootPath) {
+		if !fs.dirSet.Exists(rootPath) {
 			t.Fatalf("test %d path %s not exist", index, rootPath.Path)
 		}
-		dir, err := fs.DirSet.Open(rootPath)
+		dir, err := fs.dirSet.Open(rootPath)
 		if err != nil {
 			t.Fatalf("test %d cannot open dir path %v: %v", index, rootPath.Path, err)
 		}
@@ -223,7 +222,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		dr = newCounterDisrupter(dr)
 
 		// create FileSystem and create a new DxFile
-		ct := &alwaysFailContractor{}
+		ct := &alwaysFailContractManager{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
 
 		path := storage.RootDxPath()
@@ -233,11 +232,11 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		}
 		fileSize := uint64(1 << 22 * 10 * 10)
 		path, err = path.Join(randomDxPath(t, 1).Path)
-		df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+		df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+		if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractManager.HostHealthMapByID(df.HostIDs())); err != nil {
 			t.Fatal(err)
 		}
 		// calculate the metadata to expect at root
@@ -257,7 +256,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 			MinRedundancy:    minRedundancy,
 			NumStuckSegments: numStuckSegments,
 			DxPath:           storage.RootDxPath(),
-			RootPath:         fs.rootDir,
+			RootPath:         fs.fileRootDir,
 		}
 
 		// Create the first update. The update should be blocked right now
@@ -280,12 +279,9 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 			if len(fs.unfinishedUpdates) != 1 {
 				t.Errorf("test %d: unfinishedUpdates should have length 1. but got %v", index, len(fs.unfinishedUpdates))
 			}
-			update, exist := fs.unfinishedUpdates[storage.RootDxPath()]
+			_, exist := fs.unfinishedUpdates[storage.RootDxPath()]
 			if !exist {
 				t.Fatalf("test %d: during update, the dxdir is not in the root", index)
-			}
-			if atomic.LoadUint32(&update.redo) != redoNeeded {
-				t.Fatalf("test %d: redo should be redoNeeded", index)
 			}
 		}()
 		// unblock the first update and wait the updates to complete
@@ -321,7 +317,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	dr = newCounterDisrupter(dr)
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -330,11 +326,11 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractor.HostHealthMapByID(df.HostIDs())); err != nil {
+	if err = df.MarkAllUnhealthySegmentsAsStuck(fs.contractManager.HostHealthMapByID(df.HostIDs())); err != nil {
 		t.Fatal(err)
 	}
 	// calculate the metadata to expect at root
@@ -352,7 +348,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 		MinRedundancy:    minRedundancy,
 		NumStuckSegments: numStuckSegments,
 		DxPath:           storage.RootDxPath(),
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	// start the dir update
 	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
@@ -397,7 +393,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	cdr := newCounterDisrupter(dr)
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, cdr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -406,7 +402,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +419,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 		MinRedundancy:    math.MaxUint32,
 		NumStuckSegments: 0,
 		DxPath:           storage.RootDxPath(),
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	// start the dir update
 	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
@@ -464,7 +460,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 
 	// create FileSystem and create a new DxFile
-	ct := &alwaysFailContractor{}
+	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -473,7 +469,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	}
 	fileSize := uint64(1 << 22 * 10 * 10)
 	path, err = path.Join(randomDxPath(t, 1).Path)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +487,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 		MinRedundancy:    math.MaxUint32,
 		NumStuckSegments: 0,
 		DxPath:           storage.RootDxPath(),
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	// start the dir update
 	err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
@@ -502,8 +498,8 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	// Check that the disrupter has been accessed twice
 	fs.postTestCheck(t, true, false, defaultMd)
 
-	// Restart the filesystem with always success contractor. The metadata should be updated as expected
-	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractor{}, newStandardDisrupter())
+	// Restart the filesystem with always success contractManager. The metadata should be updated as expected
+	newFs := newFileSystem(string(persistDir), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	if err = newFs.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -515,7 +511,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 		MinRedundancy:    300,
 		NumStuckSegments: 0,
 		DxPath:           storage.RootDxPath(),
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	if err = newFs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
@@ -533,7 +529,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	dr := newStandardDisrupter()
 
 	// create FileSystem and create a new DxFile
-	ct := &AlwaysSuccessContractor{}
+	ct := &AlwaysSuccessContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -544,7 +540,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	// create three files
 	// 1. corrupted dxfile
 	path := randomDxPath(t, 1)
-	corruptedDxFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	corruptedDxFile, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,7 +549,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	}
 	// 2. corrupted dxdir
 	path = randomDxPath(t, 2)
-	corruptedDirFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	corruptedDirFile, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,7 +558,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	}
 	// 3. Good file
 	path = randomDxPath(t, 1)
-	goodFile, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+	goodFile, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -625,7 +621,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 		MinRedundancy:    300,
 		NumStuckSegments: 0,
 		DxPath:           storage.RootDxPath(),
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	// start the dir update
 	fs.postTestCheck(t, true, true, expectMd)
@@ -633,12 +629,12 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 
 // healthParamsUpdate calculate and update the health parameters
 func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
-	fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractor.HostHealthMapByID(df.HostIDs()))
-	fMinRedundancy := df.Redundancy(fs.contractor.HostHealthMapByID(df.HostIDs()))
-	if dxfile.CmpHealthPriority(fHealth, health) > 0 {
+	fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractManager.HostHealthMapByID(df.HostIDs()))
+	fMinRedundancy := df.Redundancy(fs.contractManager.HostHealthMapByID(df.HostIDs()))
+	if dxfile.CmpRepairPriority(fHealth, health) > 0 {
 		health = fHealth
 	}
-	if dxfile.CmpHealthPriority(fStuckHealth, stuckHealth) > 0 {
+	if dxfile.CmpRepairPriority(fStuckHealth, stuckHealth) > 0 {
 		stuckHealth = fStuckHealth
 	}
 	numStuckSegments += fNumStuckSegments
@@ -649,7 +645,7 @@ func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, 
 }
 
 // postTestCheck check the post test status. Checks whether could be closed in 1 seconds,
-// whether fileWal should be empty, updateWal is empty, and the rootDir's metadata is as expected
+// whether fileWal should be empty, updateWal is empty, and the fileRootDir's metadata is as expected
 func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updateWalShouldEmpty bool, md *dxdir.Metadata) {
 	c := make(chan struct{})
 	go func() {
@@ -689,7 +685,7 @@ func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 	wal.CloseIncomplete()
 	// check root dxdir file have the expected metadata
 	if md != nil {
-		d, err := fs.DirSet.Open(storage.RootDxPath())
+		d, err := fs.dirSet.Open(storage.RootDxPath())
 		if err != nil {
 			t.Fatalf("cannot open the root dxdir: %v", err)
 		}

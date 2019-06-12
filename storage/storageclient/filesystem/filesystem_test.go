@@ -55,9 +55,9 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 		tests = tests[:1]
 	}
 	for i, test := range tests {
-		// Create a random file system with random files, and random contractor
+		// Create a random file system with random files, and random contractManager
 		dr := newStandardDisrupter()
-		ct := &randomContractor{
+		ct := &randomContractManager{
 			missRate:         0.1,
 			onlineRate:       0.8,
 			goodForRenewRate: 0.8,
@@ -71,11 +71,11 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 		var minHealth = dxdir.DefaultHealth
 		for i := 0; i != test.numFiles; i++ {
 			path := randomDxPath(t, 5)
-			file, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
+			file, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, fileSize, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
-			table := fs.contractor.HostHealthMapByID(file.HostIDs())
+			table := fs.contractManager.HostHealthMapByID(file.HostIDs())
 			if err = file.MarkAllUnhealthySegmentsAsStuck(table); err != nil {
 				t.Fatal(err)
 			}
@@ -86,7 +86,7 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 				t.Fatal(err)
 			}
 			fHealth, _, _ := file.Health(table)
-			if dxfile.CmpHealthPriority(fHealth, minHealth) >= 0 {
+			if dxfile.CmpRepairPriority(fHealth, minHealth) >= 0 {
 				minHealth = fHealth
 			}
 		}
@@ -94,13 +94,15 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 			t.Fatal(err)
 		}
 		f, err := fs.SelectDxFileToFix()
-		if err == ErrNoRepairNeeded && dxfile.CmpHealthPriority(minHealth, dxdir.DefaultHealth) <= 0 {
+		if err == ErrNoRepairNeeded && dxfile.CmpRepairPriority(minHealth, dxdir.DefaultHealth) <= 0 {
 			// no repair needed
 			continue
 		} else if err == nil {
 			if f.GetHealth() != minHealth {
 				t.Errorf("SelectDxFileToFix got file not with expected health. Got %v, Expect %v", f.GetHealth(), minHealth)
 			}
+		} else if err == errStopped {
+			// No logging for stopped
 		} else {
 			t.Fatalf("SelectDxFileToFix return unexpected error: %v", err)
 		}
@@ -119,7 +121,7 @@ func TestFileSystem_RandomStuckDirectory(t *testing.T) {
 	}
 	for i, test := range tests {
 		dr := newStandardDisrupter()
-		ct := &AlwaysSuccessContractor{}
+		ct := &AlwaysSuccessContractManager{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
 		if err := fs.createRandomFiles(test.numFiles, 0.8, 0.3, 5, test.missRate); err != nil {
 			t.Fatal(err)

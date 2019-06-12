@@ -13,11 +13,15 @@ import (
 // Health 100 ~ 200: recoverable
 // Health 200: No fix needed
 
-// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
-// to be repaired
 const (
-	RepairHealthThreshold   = 175
-	UnstuckHealthThreshold  = 100
+	// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
+	// to be repaired
+	RepairHealthThreshold = 175
+
+	// StuckThreshold is the threshold that defines the threshold between the stuck and unstuck segments
+	StuckThreshold = 100
+
+	// CompleteHealthThreshold is that this file completely upload all sectors
 	CompleteHealthThreshold = 200
 )
 
@@ -112,7 +116,7 @@ func (df *DxFile) goodSectors(segmentIndex int, table storage.HostHealthInfoTabl
 	return uint32(numSectorsGoodForRenew), uint32(numSectorsGoodForUpload)
 }
 
-// CmpHealthPriority compare two health. The compare result returns the priority the health related Segment should be fixed
+// CmpRepairPriority compare two health. The compare result returns the priority the health related Segment should be fixed
 // The priority is determined by the follows:
 // When the file is not recoverable from contract (health 0~99), it has the highest property to recover from disk
 // When the file is recoverable (health 100~199), it is then prioritized.
@@ -123,9 +127,9 @@ func (df *DxFile) goodSectors(segmentIndex int, table storage.HostHealthInfoTabl
 // If p(h1) == p(h2), return 0
 // If p(h1) < p(h2), return -1
 // If p(h1) > p(h2), return 1
-func CmpHealthPriority(h1, h2 uint32) int {
+func CmpRepairPriority(h1, h2 uint32) int {
 	noFix1, noFix2 := h1 >= RepairHealthThreshold, h2 >= RepairHealthThreshold
-	canFix1, canFix2 := h1 >= 100, h2 >= 100
+	canFix1, canFix2 := h1 >= StuckThreshold, h2 >= StuckThreshold
 	if h1 == h2 || (noFix1 && noFix2) || (!canFix1 && !canFix2) {
 		return 0
 	}

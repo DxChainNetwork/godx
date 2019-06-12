@@ -35,7 +35,7 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 		tests = tests[:len(tests)-1]
 	}
 	for i, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractor{}, newStandardDisrupter())
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 		goDeepRate, goWideRate, maxDepth, missRate := float32(0.7), float32(0.5), 3, float32(test.missRate)
 		err := fs.createRandomFiles(int(test.numFiles), goDeepRate, goWideRate, maxDepth, missRate)
 		if err != nil {
@@ -49,13 +49,13 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 			MinRedundancy:    test.expectRedundancy,
 			NumStuckSegments: test.expectNumStuckSegments,
 			DxPath:           storage.RootDxPath(),
-			RootPath:         fs.rootDir,
+			RootPath:         fs.fileRootDir,
 		}
 		if err := fs.waitForUpdatesComplete(20 * time.Second); err != nil {
 			t.Fatal(err)
 		}
 		// Check the metadata of the root directory
-		dxdir, err := fs.DirSet.Open(storage.RootDxPath())
+		dxdir, err := fs.dirSet.Open(storage.RootDxPath())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +73,7 @@ func TestPublicFileSystemAPI_FileList(t *testing.T) {
 		tests = tests[:1]
 	}
 	for i, test := range tests {
-		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractor{}, newStandardDisrupter())
+		fs := newEmptyTestFileSystem(t, strconv.Itoa(i), &AlwaysSuccessContractManager{}, newStandardDisrupter())
 		api := NewPublicFileSystemAPI(fs)
 		// create random files
 		goDeepRate, goWideRate, maxDepth, missRate := float32(0.7), float32(0.5), 3, float32(0.1)
@@ -91,18 +91,18 @@ func TestPublicFileSystemAPI_FileList(t *testing.T) {
 // TestPublicFileSystemAPI_Rename test the rename functionality.
 // The rename function should also update the metadata in all related directories
 func TestPublicFileSystemAPI_Rename(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	api := NewPublicFileSystemAPI(fs)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
 		t.Fatal(err)
 	}
 	prevPath, newPath := randomDxPath(t, 3), randomDxPath(t, 3)
-	df, err := fs.FileSet.NewRandomDxFile(prevPath, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
+	df, err := fs.fileSet.NewRandomDxFile(prevPath, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	table := fs.contractor.HostHealthMapByID(df.HostIDs())
+	table := fs.contractManager.HostHealthMapByID(df.HostIDs())
 	health, stuckHealth, numStuckSegments := df.Health(table)
 	redundancy := df.Redundancy(table)
 	if err = df.Close(); err != nil {
@@ -124,7 +124,7 @@ func TestPublicFileSystemAPI_Rename(t *testing.T) {
 		StuckHealth:      stuckHealth,
 		MinRedundancy:    redundancy,
 		NumStuckSegments: numStuckSegments,
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	emptyMd := dxdir.Metadata{
 		NumFiles:         0,
@@ -133,7 +133,7 @@ func TestPublicFileSystemAPI_Rename(t *testing.T) {
 		StuckHealth:      dxdir.DefaultHealth,
 		MinRedundancy:    math.MaxUint32,
 		NumStuckSegments: 0,
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	// expected root metadata
 	expectRootMd := expectMd
@@ -168,14 +168,14 @@ func TestPublicFileSystemAPI_Rename(t *testing.T) {
 // TestPublicFileSystemAPI_Rename test the rename functionality.
 // The rename function should also update the metadata in all related directories
 func TestPublicFileSystemAPI_Delete(t *testing.T) {
-	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractor{}, newStandardDisrupter())
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractManager{}, newStandardDisrupter())
 	api := NewPublicFileSystemAPI(fs)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
 		t.Fatal(err)
 	}
 	path := randomDxPath(t, 3)
-	df, err := fs.FileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
+	df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestPublicFileSystemAPI_Delete(t *testing.T) {
 		StuckHealth:      dxdir.DefaultHealth,
 		MinRedundancy:    math.MaxUint32,
 		NumStuckSegments: 0,
-		RootPath:         fs.rootDir,
+		RootPath:         fs.fileRootDir,
 	}
 	parDir, err := path.Parent()
 	if err != nil {
@@ -220,7 +220,7 @@ func TestPublicFileSystemAPI_Delete(t *testing.T) {
 
 // checkDxDirMetadata checks whether the dxdir with path has the expected metadata
 func (fs *FileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
-	dir, err := fs.DirSet.Open(path)
+	dir, err := fs.dirSet.Open(path)
 	if err != nil {
 		return err
 	}
