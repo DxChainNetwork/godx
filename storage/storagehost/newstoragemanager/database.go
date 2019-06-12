@@ -103,22 +103,33 @@ func (db *database) hasStorageFolder(path string) (exist bool, err error) {
 // Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	// make a new batch
-	batch := db.newBatch()
+	batch, err := db.saveStorageFolderBatch(sf)
+	if err != nil {
+		return err
+	}
+	if err = db.writeBatch(batch); err != nil {
+		return
+	}
+	return
+}
+
+// saveStorageFolderBatch create the level db batch for save storage folder
+// The storage folder should be locked before calling this function
+func (db *database) saveStorageFolderBatch(sf *storageFolder) (batch *leveldb.Batch, err error) {
+	// make a new batch
+	batch = db.newBatch()
 	// write folder data update to batch
 	folderKey := makeKey(prefixFolder, sf.path)
 	folderData, err := rlp.EncodeToBytes(sf)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	batch.Put(folderKey, folderData)
 	// write id to path mapping to batch
 	folderIDToPathKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sf.id), 10))
 	batch.Put(folderIDToPathKey, []byte(sf.path))
 
-	if err = db.writeBatch(batch); err != nil {
-		return
-	}
-	return
+	return batch, nil
 }
 
 // loadStorageFolder get the storage folder with the index from db

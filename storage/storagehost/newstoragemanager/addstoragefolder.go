@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 )
 
 type (
@@ -271,14 +270,12 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 	}
 	update.folder = sf
 	// Put the storageFolder in the batch
-	bytes, err := rlp.EncodeToBytes(sf)
+	update.batch, err = manager.db.saveStorageFolderBatch(sf)
 	if err != nil {
-		return
+		return fmt.Errorf("cannot create save storage folder batch: %v", err)
 	}
-	update.batch.Put(makeKey(prefixFolder, update.path), bytes)
-	update.batch.Put(makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10)), []byte(update.path))
 	if err = <-update.txn.Commit(); err != nil {
-		return fmt.Errorf("cannot commit the transaction")
+		return fmt.Errorf("cannot commit the transaction: %v", err)
 	}
 	return
 }
