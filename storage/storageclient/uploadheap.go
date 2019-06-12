@@ -437,7 +437,7 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 // repairLoop works through the upload heap repairing segments. The repair
 // loop will continue until the storage client stops, there are no more Segments, or
 // enough time has passed indicated by the rebuildHeapSignal
-func (sc *StorageClient) uploadAndRepair(hosts map[string]struct{}) {
+func (sc *StorageClient) uploadOrRepair(hosts map[string]struct{}) {
 	var consecutiveSegmentUploads int
 	rebuildHeapSignal := time.After(RebuildSegmentHeapInterval)
 	for {
@@ -535,7 +535,7 @@ func (sc *StorageClient) doUpload() error {
 	sc.log.Info("Repairing", heapLen, "Segments from", dxFile.DxPath())
 
 	// Work through the heap and repair files
-	sc.uploadAndRepair(hosts)
+	sc.uploadOrRepair(hosts)
 
 	// When we have worked through the heap, invoke update metadata to update
 	return sc.fileSystem.InitAndUpdateDirMetadata(dxFile.DxPath())
@@ -599,11 +599,5 @@ func (sc *StorageClient) uploadLoop() {
 				return
 			}
 		}
-
-		// TODO: This sleep is a hack to keep the CPU from spinning at 100% for
-		// a brief time when all of the Segments in the directory have been added
-		// to the repair loop, but the directory isn't full yet so it keeps
-		// trying to add more Segments ???
-		time.Sleep(20 * time.Millisecond)
 	}
 }

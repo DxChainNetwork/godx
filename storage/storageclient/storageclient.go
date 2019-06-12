@@ -158,10 +158,11 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
-	// loop to download, upload, stuck
+	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
 	go sc.uploadLoop()
 	go sc.stuckLoop()
+	go sc.healthCheckLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {

@@ -123,7 +123,7 @@ func (sc *StorageClient) stuckLoop() {
 		// push stuck segment to upload heap
 		sc.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
 
-		sc.uploadAndRepair(hosts)
+		sc.uploadOrRepair(hosts)
 
 		// Call bubble once all segments have been popped off heap
 		if err := sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {

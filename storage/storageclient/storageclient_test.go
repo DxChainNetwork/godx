@@ -48,7 +48,7 @@ func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithI
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := client.fileSystem.FileSet.NewDxFile(randomDxPath(), "", false, ec, ck, 1<<24, 0777)
+	entry, err := client.fileSystem.FileSet().NewDxFile(randomDxPath(), "", false, ec, ck, 1<<24, 0777)
 	if err != nil {
 		t.Fatal(err)
 	}
