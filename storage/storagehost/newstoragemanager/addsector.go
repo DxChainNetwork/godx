@@ -58,10 +58,28 @@ type (
 // addSector add the sector to host manager
 // whether the data has merkle root root is not validated here, and assumed valid
 func (sm *storageManager) addSector(root common.Hash, data []byte) (err error) {
+	if err = sm.tm.Add(); err != nil {
+		return
+	}
+	// validate the add sector request
 	if err = validateAddSector(root, data); err != nil {
 		return fmt.Errorf("validation failed: %v", err)
 	}
-	//update := sm.createAddSectorUpdate(root, data)
+	// create the update
+	update := sm.createAddSectorUpdate(root, data)
+	// record the add sector intent
+	if err = update.recordIntent(sm); err != nil {
+		return
+	}
+	// prepare, process and release the update
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
+		if upErr := err.(*updateError); !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
+		return
+	}
 	return
 }
 
@@ -142,20 +160,60 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 
 // release release the update
 func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	if update.txn != nil {
-		// update.txn might be nil if the transaction have init error during prepare
-		update.txn.Release()
+	defer func() {
+		if update.folder != nil {
+			update.folder.lock.Unlock()
+		}
+		manager.sectorLocks.unlockSector(update.id)
+	}()
+	// If no error happened, simply release the transaction
+	if upErr == nil || upErr.isNil() {
+		err = update.txn.Release()
+		return
 	}
-
+	// If storage manager has been stopped, no release, do nothing and return
+	if upErr.hasErrStopped() {
+		upErr.processErr = nil
+		upErr.prepareErr = nil
+		return
+	}
+	// There is some error happened, revert the memory update.
+	// For recovery situations, the update might not be stored in database. So
+	// error might happen as a normal situation. Simply skip the error
 	if update.folder != nil {
-		update.folder.lock.Unlock()
+		_ := update.folder.setFreeSectorSlot(update.sector.index)
 	}
-	manager.sectorLocks.unlockSector(update.id)
-	return
-}
-
-// decodeAddSectorUpdate decode the transaction to an addSectorUpdate
-func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpdate, err error) {
+	// If prepare process has error, release the transaction and return
+	if upErr.prepareErr != nil {
+		err = common.ErrCompose(err, update.txn.Release())
+		return
+	}
+	batch := new(leveldb.Batch)
+	// If process has error, need to reverse the batch update
+	if update.physical {
+		// Need to delete the sector and folder id to sector mapping
+		batch.Delete(makeSectorKey(update.sector.id))
+		// Need to delete the mapping from folder id to sector id
+		batch.Delete(makeFolderSectorKey(update.folder.id, update.sector.id))
+	} else {
+		// Need to put the previous sector data to database
+		var newErr error
+		batch, newErr = manager.db.saveSectorToBatch(batch, update.sector, false)
+		if newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
+	// Update the folder
+	if update.folder != nil {
+		var newErr error
+		batch, newErr = manager.db.saveStorageFolderToBatch(batch, update.folder)
+		if newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
+	if newErr := manager.db.writeBatch(batch); newErr != nil {
+		err = common.ErrCompose(err, newErr)
+	}
 	return
 }
 
@@ -175,7 +233,7 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 		update.physical = false
 		update.sector = s
 		update.sector.count += 1
-		update.batch, err = manager.db.saveSectorToBatch(update.batch, update.sector, true)
+		update.batch, err = manager.db.saveSectorToBatch(update.batch, update.sector, false)
 		if err != nil {
 			return
 		}
@@ -201,6 +259,11 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 			folderID: sf.id,
 			index:    index,
 			count:    1,
+		}
+		// Apply the sector update to batch
+		update.batch, err = manager.db.saveSectorToBatch(update.batch, update.sector, true)
+		if err != nil {
+			return
 		}
 		// create the operation
 		op, err = update.createPhysicalSectorAppendOperation()
@@ -258,6 +321,24 @@ func (update *addSectorUpdate) createPhysicalSectorAppendOperation() (op writeah
 	}, nil
 }
 
+// processNormal is to process normally for add sector update
+// 1. If is a physical update, insert the data to the folder file
+// 2. Apply the database update
 func (update *addSectorUpdate) processNormal(manager *storageManager) (err error) {
+	if update.physical {
+		_, err = update.folder.dataFile.WriteAt(update.data, int64(update.sector.index*storage.SectorSize))
+		if err != nil {
+			return
+		}
+	}
+	if err = manager.db.writeBatch(update.batch); err != nil {
+		return
+	}
+	return
+}
+
+// decodeAddSectorUpdate decode the transaction to an addSectorUpdate
+func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpdate, err error) {
+
 	return
 }

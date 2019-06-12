@@ -289,7 +289,7 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 		return nil, fmt.Errorf("cannot get folder path from id: %v", err)
 	}
 	if !exist {
-		return nil, fmt.Errorf("fold id not exist in db")
+		return nil, fmt.Errorf("folder id not exist in db")
 	}
 	sectorBytes, err := rlp.EncodeToBytes(sector)
 	if err != nil {
