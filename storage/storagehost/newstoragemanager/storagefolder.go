@@ -45,7 +45,7 @@ type (
 		storedSectors uint64
 
 		// folderLock locked the storage folder to prevent racing
-		lock *common.TryLock
+		lock common.TryLock
 
 		// dataFile is the file where all the data sectors locates
 		dataFile *os.File
@@ -85,7 +85,6 @@ func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
 	}
 	sf.id, sf.path, sf.usage, sf.numSectors, sf.storedSectors = folderID(sfp.ID), sfp.Path, sfp.Usage, sfp.NumSectors, sfp.StoredSectors
 	sf.status = folderAvailable
-	sf.lock = common.NewTryLock()
 	return
 }
 

@@ -130,7 +130,6 @@ func randomStorageFolder(t *testing.T, extra string, db *database) (sf *storageF
 		path:          path,
 		usage:         []bitVector{1 << 32},
 		numSectors:    1,
-		lock:          common.NewTryLock(),
 		storedSectors: randomUint64(),
 	}
 	return sf

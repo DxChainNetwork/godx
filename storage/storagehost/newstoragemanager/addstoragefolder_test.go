@@ -1,6 +1,7 @@
 package newstoragemanager
 
 import (
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"os"
@@ -51,7 +52,7 @@ func TestAddStorageFolderNormal(t *testing.T) {
 		t.Errorf("usage size unexpected. got %v, expect %v", expectUsageSize, len(sf.usage))
 	}
 	// the storage folder's lock shall be released
-	if locked(sf.lock) {
+	if TryLocked(sf.lock) {
 		t.Errorf("The storage folder still locked after update")
 	}
 	if locked(&sm.folders.lock) {
@@ -197,4 +198,14 @@ func locked(lock sync.Locker) bool {
 	default:
 	}
 	return false
+}
+
+func TryLocked(lock common.TryLock) (locked bool) {
+	defer func() {
+		if !locked {
+			lock.Unlock()
+		}
+	}()
+	locked = lock.TryToLock()
+	return
 }

@@ -260,7 +260,6 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		path:       update.path,
 		usage:      EmptyUsage(update.size),
 		numSectors: sizeToNumSectors(update.size),
-		lock:       common.NewTryLock(),
 	}
 	sf.lock.Lock()
 	// For normal execution, the folders has already been locked. And the folder is also locked.
