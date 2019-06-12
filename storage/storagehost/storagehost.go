@@ -124,8 +124,9 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 func New(persistDir string) (*StorageHost, error) {
 	// do a host creation, but incomplete config
 	host := StorageHost{
-		log:        log.New(),
-		persistDir: persistDir,
+		log:                         log.New(),
+		persistDir:                  persistDir,
+		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
 		// TODO: init the storageHostObligation
 	}
 
@@ -184,8 +185,10 @@ func New(persistDir string) (*StorageHost, error) {
 		// just log the cannot syn problem, the does not sever enough to panic the system
 		host.log.Warn(tmErr.Error())
 	}
-
-	// TODO: storageObligation handle
+	//Delete residual storage responsibility
+	if err = host.PruneStaleStorageResponsibilities(); err != nil {
+		host.log.Info("Could not prune stale storage responsibilities:", err)
+	}
 
 	// TODO: Init the networking
 
