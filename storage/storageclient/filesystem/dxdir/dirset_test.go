@@ -157,7 +157,9 @@ func TestDirSet_UpdateMetadata(t *testing.T) {
 	}
 	newMeta.DxPath = path
 	newMeta.RootPath = entry.metadata.RootPath
-	// After update, the metadata should be the same
+	// After update, the metadata should be the same expect for the time modify field
+	newMeta.TimeModify = 0
+	entry.metadata.TimeModify = 0
 	if !reflect.DeepEqual(*newMeta, entry.Metadata()) {
 		t.Errorf("After update metadata, not equal. \n\tGot %+v, \n\tExpect %+v", entry.metadata, newMeta)
 	}
@@ -169,6 +171,7 @@ func TestDirSet_UpdateMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	recovered.metadata.TimeModify = 0
 	if !reflect.DeepEqual(recovered.Metadata(), *newMeta) {
 		t.Errorf("Recovered DxDir's metadata not equal.\n\tGot %+v\n\tExpect %+v", recovered.metadata, newMeta)
 	}

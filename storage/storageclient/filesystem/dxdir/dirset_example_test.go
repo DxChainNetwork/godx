@@ -41,6 +41,8 @@ func ExampleDirSet() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	newEntry.metadata.TimeModify = 0
+	newMeta.TimeModify = 0
 	if !reflect.DeepEqual(*newEntry.metadata, *newMeta) {
 		fmt.Printf("After open, metadata not equal: \n\tExpect %+v\n\tGot %+v", newMeta, newEntry.metadata)
 	}
