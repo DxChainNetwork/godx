@@ -679,7 +679,10 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 			log2SectorSize++
 		}
 		ct := merkle.NewCachedTree(log2SectorSize)
-		ct.SetIndex(segmentIndex)
+		err = ct.SetIndex(segmentIndex)
+		if err != nil {
+			h.log.Crit("cannot call SetIndex on Tree ", err)
+		}
 		for _, root := range so.SectorRoots {
 			ct.Push(root)
 		}
@@ -736,7 +739,10 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	if so.StorageProofConfirmed && h.blockHeight >= so.proofDeadline() {
 		h.log.Info("This storage responsibility is responsible for the completion of the storage contract, id", so.id())
 		h.lock.Lock()
-		h.removeStorageResponsibility(so, succeeded)
+		err := h.removeStorageResponsibility(so, succeeded)
+		if err != nil {
+			h.log.Info("failed to delete storage responsibility", err)
+		}
 		h.lock.Unlock()
 	}
 
@@ -745,6 +751,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 // Get the stooge proof
 func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
 	t := merkle.NewTree()
+	//This error doesn't mean anything to us.
 	t.SetIndex(proofIndex)
 
 	buf := bytes.NewBuffer(b)
@@ -822,7 +829,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 	var taskItems []common.Hash
 	for _, blockApply := range blocks {
 		//apply contract transaction
-		formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockApply)
+		formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockApply)
 		if errGetBlock != nil {
 			continue
 		}
@@ -899,7 +906,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.Hash) {
 	for _, blockReverted := range blocks {
 		//Rollback contract transaction
-		formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStrageContractIDsWithBlockHash(blockReverted)
+		formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockReverted)
 		if errGetBlock != nil {
 			h.log.Crit("Failed to get the data from the block as expected ", errGetBlock)
 			continue
@@ -955,7 +962,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 }
 
 //Analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
-func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
+func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
 	precompiles := vm.PrecompiledEVMFileContracts
 	block, err := h.ethBackend.GetBlockByHash(blockHashs)
 	if err != nil {
@@ -972,25 +979,28 @@ func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Has
 		switch p {
 		case vm.FormContractTransaction:
 			var sc types.StorageContract
-			errUnRlp := rlp.DecodeBytes(tx.Data(), &sc)
-			if errUnRlp != nil {
+			err := rlp.DecodeBytes(tx.Data(), &sc)
+			if err != nil {
+				h.log.Crit("Error when serializing storage contract:", err)
 				continue
 			}
 			formContractIDs = append(formContractIDs, sc.RLPHash())
 		case vm.CommitRevisionTransaction:
 			var scr types.StorageContractRevision
-			errUnRlp := rlp.DecodeBytes(tx.Data(), &scr)
-			if errUnRlp != nil {
+			err := rlp.DecodeBytes(tx.Data(), &scr)
+			if err != nil {
+				h.log.Crit("Error when serializing revision:", err)
 				continue
 			}
-			revisionIDs = append(formContractIDs, scr.RLPHash())
+			revisionIDs = append(formContractIDs, scr.ParentID)
 		case vm.StorageProofTransaction:
 			var sp types.StorageProof
-			errUnRlp := rlp.DecodeBytes(tx.Data(), &sp)
-			if errUnRlp != nil {
+			err := rlp.DecodeBytes(tx.Data(), &sp)
+			if err != nil {
+				h.log.Crit("Error when serializing proof:", err)
 				continue
 			}
-			storageProofIDs = append(formContractIDs, sp.RLPHash())
+			storageProofIDs = append(formContractIDs, sp.ParentID)
 		default:
 			continue
 		}
@@ -1002,7 +1012,6 @@ func (h *StorageHost) GetAllStrageContractIDsWithBlockHash(blockHashs common.Has
 // StorageResponsibilities fetches the set of storage Responsibility in the host and
 // returns metadata on them.
 func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
-
 	if len(h.lockedStorageResponsibility) < 1 {
 		return nil
 	}
@@ -1010,6 +1019,7 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	for i := range h.lockedStorageResponsibility {
 		so, err := GetStorageResponsibility(h.db, i)
 		if err != nil {
+			h.log.Crit(errGetStorageResponsibility, err)
 			continue
 		}
 
