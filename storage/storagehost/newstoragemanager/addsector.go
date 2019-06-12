@@ -11,6 +11,7 @@ import (
 )
 
 type (
+	// TODO: Add more test cases for more error scenarios
 	// addSectorUpdate is the update to add a sector
 	addSectorUpdate struct {
 		// user input fields

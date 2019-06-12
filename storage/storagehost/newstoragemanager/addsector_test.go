@@ -5,14 +5,29 @@
 package newstoragemanager
 
 import (
-	"fmt"
+	"crypto/rand"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
 	"testing"
 )
 
-func TestMerkleRoot(t *testing.T) {
-	data1 := []byte{1}
-	data2 := []byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-	fmt.Printf("%x\n", merkle.Root(data1))
-	fmt.Printf("%x\n", merkle.Root(data2))
+func TestAddSector(t *testing.T) {
+	sm := newTestStorageManager(t, "", newDisrupter())
+	path := randomFolderPath(t, "")
+	size := uint64(1 << 25)
+	if err := sm.addStorageFolder(path, size); err != nil {
+		t.Fatal(err)
+	}
+	// Create the sector
+	data := randomBytes(storage.SectorSize)
+	root := merkle.Root(data)
+	if err := sm.addSector(root, data); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func randomBytes(size uint64) []byte {
+	b := make([]byte, size)
+	rand.Read(b)
+	return b
 }
