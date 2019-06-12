@@ -833,6 +833,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			continue
 		}
 
+		//Traverse all contract transactions and modify storage responsibility status
 		for _, id := range formContractIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
@@ -847,12 +848,18 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			}
 		}
 
+		//Traverse all revision transactions and modify storage responsibility status
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
 				h.log.Crit(errGetStorageResponsibility, errGet)
 				continue
 			}
+			if len(so.StorageContractRevisions) < 1 {
+				h.log.Crit("Storage contract cannot get revisions,id ", so.id())
+				continue
+			}
+			//To prevent vicious attacks, determine the consistency of the revision number.
 			if value == so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewRevisionNumber {
 				so.StorageRevisionConfirmed = true
 			}
@@ -863,6 +870,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			}
 		}
 
+		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
@@ -912,6 +920,8 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 			h.log.Crit("Failed to get the data from the block as expected ", errGetBlock)
 			continue
 		}
+
+		//Traverse all formContract transactions and modify storage responsibility status
 		for _, id := range formContractIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
@@ -926,6 +936,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 			}
 		}
 
+		//Traverse all revision transactions and modify storage responsibility status
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
@@ -940,6 +951,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 			}
 		}
 
+		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
