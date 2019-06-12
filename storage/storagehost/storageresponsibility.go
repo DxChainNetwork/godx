@@ -778,9 +778,9 @@ func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Has
 //If it exists, return the index of the segment in the storage contract that needs to be proved
 func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, error) {
 	fcid := fc.RLPHash()
-	triggerHerght := fc.WindowStart - 1
+	triggerHeight := fc.WindowStart - 1
 
-	block, errGetHeight := h.ethBackend.GetBlockByNumber(triggerHerght)
+	block, errGetHeight := h.ethBackend.GetBlockByNumber(triggerHeight)
 	if errGetHeight != nil {
 		return 0, errGetHeight
 	}
@@ -879,16 +879,16 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		if number != 0 {
 			h.blockHeight++
 		}
-		existingTtems, err := GetHeight(h.db, h.blockHeight)
+		existingItems, err := GetHeight(h.db, h.blockHeight)
 		if err != nil {
 			continue
 		}
 
 		// From the existing items, pull out a storage responsibility.
 		knownActionItems := make(map[common.Hash]struct{})
-		responsibilityIDs := make([]common.Hash, len(existingTtems)/common.HashLength)
-		for i := 0; i < len(existingTtems); i += common.HashLength {
-			copy(responsibilityIDs[i/common.HashLength][:], existingTtems[i:i+common.HashLength])
+		responsibilityIDs := make([]common.Hash, len(existingItems)/common.HashLength)
+		for i := 0; i < len(existingItems); i += common.HashLength {
+			copy(responsibilityIDs[i/common.HashLength][:], existingItems[i:i+common.HashLength])
 		}
 		for _, soid := range responsibilityIDs {
 			_, exists := knownActionItems[soid]
@@ -962,9 +962,9 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 }
 
 //Analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
-func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHashs common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
+func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (formContractIDs []common.Hash, revisionIDs []common.Hash, storageProofIDs []common.Hash, number uint64, errGet error) {
 	precompiles := vm.PrecompiledEVMFileContracts
-	block, err := h.ethBackend.GetBlockByHash(blockHashs)
+	block, err := h.ethBackend.GetBlockByHash(blockHash)
 	if err != nil {
 		errGet = err
 		return
