@@ -274,6 +274,9 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 	if err != nil {
 		return fmt.Errorf("cannot create save storage folder batch: %v", err)
 	}
+	if <-update.txn.InitComplete; update.txn.InitErr != nil {
+		return fmt.Errorf("cannot initialize the trnasaction: %v", update.txn.InitErr)
+	}
 	if err = <-update.txn.Commit(); err != nil {
 		return fmt.Errorf("cannot commit the transaction: %v", err)
 	}

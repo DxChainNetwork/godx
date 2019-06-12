@@ -94,7 +94,7 @@ func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 // hasStorageFolder returns the result of whether the database has the key of a
 // folder specified by a path
 func (db *database) hasStorageFolder(path string) (exist bool, err error) {
-	folderKey := makeKey(prefixFolder, path)
+	folderKey := makeFolderKey(path)
 	exist, err = db.lvl.Has(folderKey, nil)
 	return
 }
@@ -118,14 +118,14 @@ func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 // The storage folder should be locked before calling this function
 func (db *database) saveStorageFolderToBatch(batch *leveldb.Batch, sf *storageFolder) (newBatch *leveldb.Batch, err error) {
 	// write folder data update to batch
-	folderKey := makeKey(prefixFolder, sf.path)
+	folderKey := makeFolderKey(sf.path)
 	folderData, err := rlp.EncodeToBytes(sf)
 	if err != nil {
 		return nil, err
 	}
 	batch.Put(folderKey, folderData)
 	// write id to path mapping to batch
-	folderIDToPathKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sf.id), 10))
+	folderIDToPathKey := makeFolderIDToPathKey(sf.id)
 	batch.Put(folderIDToPathKey, []byte(sf.path))
 
 	return batch, nil
@@ -134,7 +134,7 @@ func (db *database) saveStorageFolderToBatch(batch *leveldb.Batch, sf *storageFo
 // loadStorageFolder get the storage folder with the index from db
 func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error) {
 	// make the folder key
-	folderKey := makeKey(prefixFolder, path)
+	folderKey := makeFolderKey(path)
 	folderBytes, err := db.lvl.Get(folderKey, nil)
 	if err != nil {
 		return
@@ -153,17 +153,17 @@ func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error
 func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
 	batch := new(leveldb.Batch)
 
-	folderKey := makeKey(prefixFolder, sf.path)
+	folderKey := makeFolderKey(sf.path)
 	batch.Delete(folderKey)
 
 	// when folder's id is 0, consider it as invalid. Skip delete the folderIDToPath
 	if sf.id != 0 {
-		folderIDToPathKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sf.id), 10))
+		folderIDToPathKey := makeFolderIDToPathKey(sf.id)
 		batch.Delete(folderIDToPathKey)
 	}
 
 	// Remove all entries in the iterator for folder to sector entries
-	iter := db.lvl.NewIterator(util.BytesPrefix(makeKey(prefixFolderSector, strconv.FormatUint(uint64(sf.id), 10))), nil)
+	iter := db.lvl.NewIterator(util.BytesPrefix(folderSectorPrefix(sf.id)), nil)
 	for iter.Next() {
 		batch.Delete(iter.Key())
 	}
@@ -177,7 +177,7 @@ func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
 func (db *database) loadAllStorageFolders() (folders map[string]*storageFolder, fullErr error) {
 	folders = make(map[string]*storageFolder)
 	// iterate over all entries start with the prefixFolder
-	iter := db.lvl.NewIterator(util.BytesPrefix([]byte(prefixFolder+"_")), nil)
+	iter := db.lvl.NewIterator(util.BytesPrefix(folderPrefix()), nil)
 	for iter.Next() {
 		// get the folder index from key
 		key := string(iter.Key())
@@ -198,7 +198,7 @@ func (db *database) loadAllStorageFolders() (folders map[string]*storageFolder, 
 
 // loadStorageFolderByID load the storage folder by id
 func (db *database) loadStorageFolderByID(id folderID) (sf *storageFolder, err error) {
-	folderIDKey := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10))
+	folderIDKey := makeFolderIDToPathKey(id)
 	b, err := db.lvl.Get(folderIDKey, nil)
 	if err != nil {
 		return
@@ -229,7 +229,7 @@ func (db *database) randomFolderID() (id folderID, err error) {
 		if id == 0 {
 			continue
 		}
-		key := makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10))
+		key := makeFolderIDToPathKey(id)
 		if exist, err := db.lvl.Has(key, nil); exist || err != nil {
 			continue
 		}
@@ -248,7 +248,7 @@ func (db *database) randomFolderID() (id folderID, err error) {
 
 // hasSector checks whether the sector is in the database
 func (db *database) hasSector(id sectorID) (exist bool, err error) {
-	key := makeKey(prefixSector, common.Bytes2Hex(id[:]))
+	key := makeSectorKey(id)
 	exist, err = db.lvl.Has(key, nil)
 	return
 }
@@ -256,7 +256,7 @@ func (db *database) hasSector(id sectorID) (exist bool, err error) {
 // getSector get the sector from database with specified id.
 // If the key does not exist in database, return ErrNotFound
 func (db *database) getSector(id sectorID) (s *sector, err error) {
-	key := makeKey(prefixSector, common.Bytes2Hex(id[:]))
+	key := makeSectorKey(id)
 	b, err := db.lvl.Get(key, nil)
 	if err != nil {
 		return
@@ -267,7 +267,22 @@ func (db *database) getSector(id sectorID) (s *sector, err error) {
 	return
 }
 
+// saveSector save the sector to the database
+func (db *database) saveSector(sector *sector) (err error) {
+	batch := new(leveldb.Batch)
+	batch, err = db.saveSectorToBatch(batch, sector, true)
+	if err != nil {
+		return
+	}
+	if err = db.writeBatch(batch); err != nil {
+		return err
+	}
+	return
+}
+
 // saveSectorToBatch append the save sector operations to the batch
+// The last argument folderToSector is the boolean value whether to write the folderid to sector
+// id mapping
 func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, folderToSector bool) (newBatch *leveldb.Batch, err error) {
 	exist, err := db.lvl.Has(makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(sector.folderID), 10)), nil)
 	if err != nil {
@@ -280,9 +295,49 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 	if err != nil {
 		return nil, err
 	}
-	batch.Put(makeKey(prefixSector, string(sector.id[:])), sectorBytes)
+	batch.Put(makeSectorKey(sector.id), sectorBytes)
 	if folderToSector {
-		folderToSectorKey := makeKey(prefixFolderSector, strconv.FormatUint(uint64(sector.folderID)), string(sector.id[:]))
+		folderToSectorKey := makeFolderSectorKey(sector.folderID, sector.id)
 		batch.Put(folderToSectorKey, []byte{})
 	}
+}
+
+// makeFolderKey makes the folder key which is storageFolder_${folderPath}
+func makeFolderKey(path string) (key []byte) {
+	key = makeKey(prefixFolder, path)
+	return
+}
+
+// makeFolderIDToPathKey makes the key of folderID to path
+func makeFolderIDToPathKey(id folderID) (key []byte) {
+	key = makeKey(prefixFolderIDToPath, strconv.FormatUint(uint64(id), 10))
+	return
+}
+
+// makeFolderSectorKey makes the key of folderID to Sector
+func makeFolderSectorKey(folderID folderID, sectorID sectorID) (key []byte) {
+	key = makeKey(prefixFolderSector, strconv.FormatUint(uint64(folderID), 10), common.Bytes2Hex(sectorID[:]))
+	return
+}
+
+// makeSectorKey make the key off sector
+func makeSectorKey(sectorID sectorID) (key []byte) {
+	key = makeKey(prefixSector, common.Bytes2Hex(sectorID[:]))
+	return
+}
+
+// folderSectorPrefix make the prefix of folder id
+func folderSectorPrefix(id folderID) (prefix []byte) {
+	s := prefixFolderSector
+	s += "_"
+	s += strconv.FormatUint(uint64(id), 10)
+	s += "_"
+	prefix = []byte(s)
+	return prefix
+}
+
+// folderPrefix return the prefix of a folder
+func folderPrefix() (prefix []byte) {
+	prefix = []byte(prefixFolder + "_")
+	return
 }
