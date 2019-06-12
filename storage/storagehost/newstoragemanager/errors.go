@@ -88,6 +88,13 @@ func (upErr *updateError) hasErrStopped() (has bool) {
 
 // logError determine the behavior of logging the updateErr for the update
 func (sm *storageManager) logError(up update, err *updateError) {
+	// If there is errReverted, set it to nil
+	if err.prepareErr == errRevert {
+		err.prepareErr = nil
+	}
+	if err.processErr == errRevert {
+		err.processErr = nil
+	}
 	// If there is no error in err, or the error is errStopped, simply return
 	if err == nil || err.isNil() || err.hasErrStopped() {
 		return

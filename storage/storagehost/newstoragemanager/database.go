@@ -91,6 +91,44 @@ func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 	}
 }
 
+// randomFolderID create a random folder id that does not exist in database.
+// After the function execution, the folderID is already stored in database to avoid other
+// randomFolderID calls to use the same id
+func (db *database) randomFolderID() (id folderID, err error) {
+	b := make([]byte, 4)
+	for i := 0; i != maxCreateFolderIDRetries; i++ {
+		rand.Read(b)
+		id = folderID(binary.LittleEndian.Uint32(b))
+		if id == 0 {
+			continue
+		}
+		key := makeFolderIDToPathKey(id)
+		if exist, err := db.lvl.Has(key, nil); exist || err != nil {
+			continue
+		}
+		// The key is ok to use
+		err = db.lvl.Put(key, []byte{}, nil)
+		if err != nil {
+			// this key might be invalid. Continue to the next loop to find
+			// another available key.
+			continue
+		}
+		return
+	}
+	err = errors.New("create random folder id maximum retries reached.")
+	return
+}
+
+// getFolderPath get the folder path from id
+func (db *database) getFolderPath(id folderID) (path string, err error) {
+	key := makeFolderIDToPathKey(id)
+	b, err := db.lvl.Get(key, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // hasStorageFolder returns the result of whether the database has the key of a
 // folder specified by a path
 func (db *database) hasStorageFolder(path string) (exist bool, err error) {
@@ -218,34 +256,6 @@ func makeKey(ss ...string) (key []byte) {
 	return
 }
 
-// randomFolderID create a random folder id that does not exist in database.
-// After the function execution, the folderID is already stored in database to avoid other
-// randomFolderID calls to use the same id
-func (db *database) randomFolderID() (id folderID, err error) {
-	b := make([]byte, 4)
-	for i := 0; i != maxCreateFolderIDRetries; i++ {
-		rand.Read(b)
-		id = folderID(binary.LittleEndian.Uint32(b))
-		if id == 0 {
-			continue
-		}
-		key := makeFolderIDToPathKey(id)
-		if exist, err := db.lvl.Has(key, nil); exist || err != nil {
-			continue
-		}
-		// The key is ok to use
-		err = db.lvl.Put(key, []byte{}, nil)
-		if err != nil {
-			// this key might be invalid. Continue to the next loop to find
-			// another available key.
-			continue
-		}
-		return
-	}
-	err = errors.New("create random folder id maximum retries reached.")
-	return
-}
-
 // hasSector checks whether the sector is in the database
 func (db *database) hasSector(id sectorID) (exist bool, err error) {
 	key := makeSectorKey(id)
@@ -300,6 +310,7 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 		folderToSectorKey := makeFolderSectorKey(sector.folderID, sector.id)
 		batch.Put(folderToSectorKey, []byte{})
 	}
+	return newBatch, nil
 }
 
 // makeFolderKey makes the folder key which is storageFolder_${folderPath}

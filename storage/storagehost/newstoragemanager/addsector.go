@@ -3,7 +3,6 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -141,6 +140,10 @@ func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
+	case targetRecoverUncommitted:
+		err = update.prepareUncommitted(manager)
+	case targetRecoverCommitted:
+		err = update.prepareCommitted(manager)
 	default:
 		err = errors.New("invalid target")
 	}
@@ -152,6 +155,10 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
+	case targetRecoverCommitted:
+		err = update.processCommitted(manager)
+	case targetRecoverUncommitted:
+		err = update.processUncommitted(manager)
 	default:
 		err = errors.New("invalid target")
 	}
@@ -168,7 +175,9 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
-		err = update.txn.Release()
+		if update.txn != nil {
+			err = update.txn.Release()
+		}
 		return
 	}
 	// If storage manager has been stopped, no release, do nothing and return
@@ -181,11 +190,13 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	// For recovery situations, the update might not be stored in database. So
 	// error might happen as a normal situation. Simply skip the error
 	if update.folder != nil {
-		_ := update.folder.setFreeSectorSlot(update.sector.index)
+		_ = update.folder.setFreeSectorSlot(update.sector.index)
 	}
 	// If prepare process has error, release the transaction and return
 	if upErr.prepareErr != nil {
-		err = common.ErrCompose(err, update.txn.Release())
+		if update.txn != nil {
+			err = common.ErrCompose(err, update.txn.Release())
+		}
 		return
 	}
 	batch := new(leveldb.Batch)
@@ -198,6 +209,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	} else {
 		// Need to put the previous sector data to database
 		var newErr error
+		update.sector.count--
 		batch, newErr = manager.db.saveSectorToBatch(batch, update.sector, false)
 		if newErr != nil {
 			err = common.ErrCompose(err, newErr)
@@ -222,12 +234,12 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error) {
 	// Try to find the sector in the database. If found, simply increment the count field
 	manager.sectorLocks.lockSector(update.id)
-	s, err := manager.db.getSector(update.id)
+	s, existErr := manager.db.getSector(update.id)
 	var op writeaheadlog.Operation
-	if err != nil && err != leveldb.ErrNotFound {
+	if existErr != nil && existErr != leveldb.ErrNotFound {
 		// something unexpect error happened, return the error
 		return
-	} else if err == nil {
+	} else if existErr == nil {
 		// entry is found in database. This shall be a virtual sector update. Update the database
 		// entry and there is no need to access the folder.
 		update.physical = false
@@ -245,7 +257,9 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 		// This is the case to add a new physical sector.
 		// The appended operation should have the name opNamePhysicalSector
 		update.physical = true
-		sf, index, err := manager.folders.selectFolderToAddWithRetry(maxFolderSelectionRetries)
+		var sf *storageFolder
+		var index uint64
+		sf, index, err = manager.folders.selectFolderToAddWithRetry(maxFolderSelectionRetries)
 		if err != nil {
 			// If there is error, it can only be errAllFoldersFullOrUsed.
 			// In this case, return the err
@@ -339,6 +353,87 @@ func (update *addSectorUpdate) processNormal(manager *storageManager) (err error
 
 // decodeAddSectorUpdate decode the transaction to an addSectorUpdate
 func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpdate, err error) {
-
+	if len(txn.Operations) == 0 {
+		return nil, errors.New("empty transaction")
+	}
+	// The first operation must have addSectorInitPersist
+	initBytes := txn.Operations[0].Data
+	var initPersist addSectorInitPersist
+	if err = rlp.DecodeBytes(initBytes, &initPersist); err != nil {
+		return
+	}
+	update = &addSectorUpdate{
+		id:   initPersist.ID,
+		data: initPersist.Data,
+		txn:  txn,
+	}
+	// Not appended
+	if len(txn.Operations) == 1 {
+		return
+	}
+	// Depend on the name of the second operation, assign value to update.sector
+	appendOp := txn.Operations[1]
+	switch appendOp.Name {
+	case opNameAddPhysicalSector:
+		update.physical = true
+		var persist addPhysicalSectorAppendPersist
+		if err = rlp.DecodeBytes(appendOp.Data, &persist); err != nil {
+			return
+		}
+		update.sector = &sector{
+			id:       update.id,
+			folderID: persist.FolderID,
+			index:    persist.Index,
+			count:    persist.Count,
+		}
+	case opNameAddVirtualSector:
+		update.physical = false
+		var persist addVirtualSectorAppendPersist
+		if err = rlp.DecodeBytes(appendOp.Data, &persist); err != nil {
+			return
+		}
+		update.sector = &sector{
+			id:       update.id,
+			folderID: persist.FolderID,
+			index:    persist.Index,
+			count:    persist.Count,
+		}
+	default:
+		err = fmt.Errorf("unknown operation name: %v", txn.Operations[1].Name)
+	}
 	return
+}
+
+// prepareUncommitted prepare for uncommitted recovery
+// If the addSectorUpdate is uncommitted, nothing is written to database,
+// the folder has its original data. So no action is needed
+func (update *addSectorUpdate) prepareUncommitted(manager *storageManager) (err error) {
+	manager.sectorLocks.lockSector(update.sector.id)
+	return errRevert
+}
+
+// processUncommitted process for uncommitted recovery data
+func (update *addSectorUpdate) processUncommitted(manager *storageManager) (err error) {
+	return errRevert
+}
+
+// prepareCommitted prepare for committed transaction
+func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
+	manager.sectorLocks.lockSector(update.sector.id)
+	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
+	if err != nil {
+		return
+	}
+	manager.folders.lock.RLock()
+	update.folder, err = manager.folders.get(folderPath)
+	manager.folders.lock.RUnlock()
+	if err != nil {
+		return err
+	}
+	return
+}
+
+// processCommitted process for committed transaction
+func (update *addSectorUpdate) processCommitted(manager *storageManager) (err error) {
+	return errRevert
 }
