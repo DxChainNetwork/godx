@@ -10,9 +10,6 @@ import (
 )
 
 // dropSegment will remove a worker from the responsibility of tracking a segment
-// This function is managed instead of static because it is against convention
-// to be calling functions on other objects (in this case, the storage client) while
-// holding a lock
 func (w *worker) dropSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
 	uc.workersRemain--
@@ -227,9 +224,9 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) error {
 }
 
 // uploadFailed is called if a worker failed to upload part of an unfinished segment
-func (w *worker) uploadFailed(uc *unfinishedUploadSegment, pieceIndex uint64) {
+func (w *worker) uploadFailed(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Mark the failure in the worker if the gateway says we are online. It's
-	// not the worker's fault if we are offline.
+	// not the worker's fault if we are offline
 	if w.client.Online() {
 		w.mu.Lock()
 		w.uploadRecentFailure = time.Now()
@@ -237,16 +234,16 @@ func (w *worker) uploadFailed(uc *unfinishedUploadSegment, pieceIndex uint64) {
 		w.mu.Unlock()
 	}
 
-	// Unregister the piece from the segment and hunt for a replacement.
+	// Unregister the sector from the segment and hunt for a replacement
 	uc.mu.Lock()
+	uc.workersRemain--
 	uc.sectorsUploadingNum--
-	uc.sectorSlotsStatus[pieceIndex] = false
+	uc.sectorSlotsStatus[sectorIndex] = false
 	uc.mu.Unlock()
 
-	// Notify the standby workers of the Segment
-	uc.notifyBackupWorkers()
+	// Clean up this segment, we may notify backup workers of segment to help upload
 	w.client.cleanupUploadSegment(uc)
 
-	// Because the worker is now on cooldown, drop all remaining Segments.
+	// Because the worker is now on cool down, drop all other remaining segments
 	w.dropUploadSegments()
 }

@@ -350,22 +350,10 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	// Segment needs to be removed if it is complete, but hasn't been released
 	segmentComplete := uc.IsSegmentUploadComplete()
 	released := uc.released
-	if segmentComplete && !released {
-		uc.released = true
-	}
-	uc.memoryReleased += uint64(memoryReleased)
-	totalMemoryReleased := uc.memoryReleased
-	uc.mu.Unlock()
 
-	if sectorsAvailable > 0 {
-		uc.notifyBackupWorkers()
-	}
-	// If required, return the memory to the storage client.
-	if memoryReleased > 0 {
-		sc.memoryManager.Return(memoryReleased)
-	}
 	// If required, remove the segment from the set of repairing segments.
 	if segmentComplete && !released {
+		uc.released = true
 		sc.updateUploadSegmentStuckStatus(uc)
 		err := uc.fileEntry.Close()
 		if err != nil {
@@ -375,10 +363,25 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()
 	}
+
+	uc.memoryReleased += uint64(memoryReleased)
+	totalMemoryReleased := uc.memoryReleased
+	uc.mu.Unlock()
+
+	if sectorsAvailable > 0 {
+		uc.notifyBackupWorkers()
+	}
+
+	// If required, return the memory to the storage client.
+	if memoryReleased > 0 {
+		sc.memoryManager.Return(memoryReleased)
+	}
+
 	// Sanity check - all memory should be released if the segment is complete.
 	if segmentComplete && totalMemoryReleased != uc.memoryNeeded {
 		sc.log.Debug("No workers remaining, but not all memory released:", uc.workersRemain, uc.sectorsUploadingNum, uc.memoryReleased, uc.memoryNeeded)
 	}
+
 }
 
 // setStuckAndClose sets the unfinishedUploadSegment's stuck status
