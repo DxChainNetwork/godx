@@ -35,7 +35,9 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	if err != nil {
 		return fmt.Errorf("unable to open the source file, error: %v", err)
 	}
-	file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
 
 	// Delete existing file if Override mode
 	if up.Mode == Override {
@@ -62,19 +64,24 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 	if err != dxdir.ErrPathOverload && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
-		dxDirEntry.Close()
+		if err := dxDirEntry.Close(); err != nil {
+			return err
+		}
 	}
 
 	cipherKey, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
 		return fmt.Errorf("generate cipher key error: %v", err)
 	}
+
 	// Create the DxFile and add to client
 	entry, err := sc.fileSystem.FileSet.NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
-	defer entry.Close()
+	if err := entry.Close(); err != nil {
+		return err
+	}
 
 	if sourceInfo.Size() == 0 {
 		return nil

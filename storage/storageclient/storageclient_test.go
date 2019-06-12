@@ -6,19 +6,24 @@ package storageclient
 
 import (
 	"context"
+	"crypto/rand"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/eth/downloader"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"math/big"
 	"os"
 	"os/user"
@@ -26,9 +31,31 @@ import (
 	"testing"
 )
 
+var hashes = []string{"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd51",
+	"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd53", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd54", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd55"}
+
 type StorageClientTester struct {
 	Client  *StorageClient
 	Backend *BackendTest
+}
+
+func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithID {
+	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 2, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := client.fileSystem.FileSet.NewDxFile(randomDxPath(), "", false, ec, ck, 1<<24, 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := entry.SetLocalPath(storage.SysPath(entry.FilePath())); err != nil {
+		t.Fatal(err)
+	}
+	return entry
 }
 
 func newStorageClientTester(t *testing.T) *StorageClientTester {
@@ -38,7 +65,43 @@ func newStorageClientTester(t *testing.T) *StorageClientTester {
 	}
 
 	b := &BackendTest{}
+
+	if err := client.fileSystem.Start(); err != nil {
+		t.Fatal(err)
+	}
+
 	return &StorageClientTester{Client: client, Backend: b}
+}
+
+// For only test: add mock workers to workpool
+func mockAddWorkers(n int, client *StorageClient) {
+	for i := 0; i < n; i++ {
+		contractID := common.HexToHash(hashes[i])
+		worker := &worker{
+			contract:       storage.ClientContract{ContractID: contractID},
+			hostID:         enode.RandomID(enode.ID{}, i),
+			downloadChan:   make(chan struct{}, 1),
+			uploadChan:     make(chan struct{}, 1),
+			killChan:       make(chan struct{}),
+			client:         client,
+			sectorIndexMap: make(map[*unfinishedUploadSegment][]int),
+		}
+		client.workerPool[storage.ContractID(contractID)] = worker
+	}
+}
+
+// randomDxPath creates a random DxPath which is a string of byte slice of length 16
+func randomDxPath() storage.DxPath {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	path, err := storage.NewDxPath(common.Bytes2Hex(b))
+	if err != nil {
+		panic(err)
+	}
+	return path
 }
 
 func homeDir() string {

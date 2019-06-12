@@ -122,12 +122,14 @@ func (sc *StorageClient) stuckLoop() {
 		hosts := sc.refreshHostsAndWorkers()
 
 		// push stuck segment to upload heap
-		sc.pushDirToSegmentHeap(dir.DxPath(), hosts, targetStuckSegments)
+		sc.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
 
 		sc.uploadAndRepair(hosts)
 
 		// Call bubble once all segments have been popped off heap
-		sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath())
+		if err := sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {
+			sc.log.Error("update dir meta data failed: ", err)
+		}
 
 		// Sleep until it is time to try and repair another stuck Segment
 		rebuildStuckHeapSignal := time.After(RepairStuckSegmentInterval)

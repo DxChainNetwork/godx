@@ -86,7 +86,7 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 	return nextSegment, sectorIndex
 }
 
-// isReady indicates that a woker is ready for uploading a segment
+// isReady indicates that a worker is ready for uploading a segment
 // It must be goodForUpload, not on cool down and not terminated
 func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	w.mu.Lock()
@@ -156,7 +156,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	w.uploadConsecutiveFailures = 0
 	w.mu.Unlock()
 
-	// Add piece to storage clientFile
+	// Add sector to storage clientFile
 	err = uc.fileEntry.AddSector(w.contract.HostID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
 		w.client.log.Debug("Worker failed to add new piece to SiaFile:", err)
@@ -219,9 +219,6 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) error {
 		return errors.New("add worker to the sent of standby segments")
 	}
 
-	// If the segment needs help from this worker, find a sector to upload and
-	// return the stats for that sector
-	// Select a sector and mark that a sector has been selected.
 	delete(uc.unusedHosts, w.contract.HostID.String())
 	uc.sectorsUploadingNum++
 	uc.workersRemain--

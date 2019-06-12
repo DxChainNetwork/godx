@@ -16,6 +16,8 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -62,28 +64,83 @@ func testUploadDirectory(t *testing.T) {
 }
 
 /***************** Upload Business Logic Test Case For Each Critical Function ***********************/
-func TestPushDirToSegmentHeap(t *testing.T) {
+func TestPushFileToSegmentHeap(t *testing.T) {
+	sct := newStorageClientTester(t)
 
+	entry := newFileEntry(t, sct.Client)
+	dxPath := entry.DxPath()
+	if err := entry.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	hosts := map[string]struct{}{
+		"111111": {},
+		"222222": {},
+		"333333": {},
+		"444444": {},
+		"555555": {},
+	}
+
+	sct.Client.pushDirOrFileToSegmentHeap(dxPath, false, hosts, targetUnstuckSegments)
+
+	if sct.Client.uploadHeap.len() > 0 {
+		t.Fatal("not enough workers, can't push segment upload heap")
+	}
 }
 
-func TestCreateUnfinishedSegments(t *testing.T) {
+func TestCreatAndAssignToWorkers(t *testing.T) {
+	sct := newStorageClientTester(t)
+	entry := newFileEntry(t, sct.Client)
+	defer func() {
+		if err := entry.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
-}
+	hosts := map[string]struct{}{
+		"111111": {},
+		"222222": {},
+		"333333": {},
+		"444444": {},
+		"555555": {},
+	}
 
-func TestNextUploadSegment(t *testing.T) {
+	mockAddWorkers(3, sct.Client)
 
-}
+	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
 
-func TestPreProcessUploadSegment(t *testing.T) {
+	unfinishedSegments := sct.Client.createUnfinishedSegments(entry, hosts, targetUnstuckSegments, nilHostHealthInfoTable)
+	if len(unfinishedSegments) <= 0 {
+		t.Fatal("push heap failed")
+	}
 
+	var wg sync.WaitGroup
+	var sectors int
+	for _, v := range sct.Client.workerPool {
+		wg.Add(1)
+		go func(w *worker) {
+			<-w.uploadChan
+			wg.Done()
+		}(v)
+	}
+
+	sct.Client.dispatchSegment(unfinishedSegments[0])
+	wg.Wait()
+
+	for _, v := range sct.Client.workerPool {
+		sectors += int(v.sectorTaskNum)
+	}
+
+	if sectors != len(unfinishedSegments[0].sectorSlotsStatus) {
+		t.Fatal("missing sector dispatch")
+	}
 }
 
 func TestCleanupUploadSegment(t *testing.T) {
-
 }
 
 func TestReadFromLocalFile(t *testing.T) {
-	filePath, fileSize, fileHash := generateFile(t)
+	filePath, fileSize, fileHash := generateFile(t, homeDir()+"uploadtestfiles")
 
 	osFile, err := os.Open(filePath)
 	if err != nil {
@@ -110,15 +167,13 @@ func TestReadFromLocalFile(t *testing.T) {
 	}
 }
 
-func generateFile(t *testing.T) (string, int, common.Hash) {
-	localFilePath := filepath.Join(homeDir(), "uploadtestfiles")
-
+func generateFile(t *testing.T, localFilePath string) (string, int, common.Hash) {
 	_, err := os.Stat(localFilePath)
 	if os.IsNotExist(err) {
 		os.Mkdir(localFilePath, os.ModePerm)
 	}
 
-	testUploadFile, err := ioutil.TempFile(localFilePath, "*")
+	testUploadFile, err := ioutil.TempFile(localFilePath, "*"+storage.DxFileExt)
 
 	bytes := generateRandomBytes()
 	if _, err := testUploadFile.Write(bytes); err != nil {
@@ -141,4 +196,22 @@ func generateRandomBytes() []byte {
 		bytes = append(bytes, tmp...)
 	}
 	return bytes
+}
+
+func getFileNameFromPath(path string) string {
+	s := filepath.ToSlash(path)
+	_, file := filepath.Split(s)
+	return file
+}
+
+func getDxPathFromPath(root string, path string) storage.DxPath {
+	if strings.HasPrefix(path, root) {
+		s := strings.TrimPrefix(path, root)
+		if strings.HasPrefix(s, "/") {
+			p := strings.TrimSuffix(strings.TrimPrefix(s, "/"), storage.DxFileExt)
+			return storage.DxPath{Path: p}
+		}
+		return storage.DxPath{Path: strings.TrimSuffix(s, storage.DxFileExt)}
+	}
+	return storage.RootDxPath()
 }

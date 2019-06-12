@@ -129,9 +129,12 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 
 // randomAssignSectorTaskToWorker will assign randomly non uploaded sector to worker
 func randomAssignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
+	// use time now as random seed to ensure different number every time
+	rand.Seed(time.Now().Unix())
+
 	length := len(workers)
 	for i, s := range uc.sectorSlotsStatus {
-		workerIndex := (i + rand.Int()) % length
+		workerIndex := rand.Int() % length
 		if !s && workers[workerIndex].isReady(uc) {
 			if indexes, ok := workers[workerIndex].sectorIndexMap[uc]; ok {
 				indexes = append(indexes, i)
@@ -143,6 +146,7 @@ func randomAssignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegme
 			}
 			// mark sector usage as true
 			uc.sectorSlotsStatus[i] = true
+			workers[workerIndex].sectorTaskNum++
 		}
 	}
 }
@@ -326,34 +330,24 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64
-	// Release any unnecessary pieces, counting any pieces that are
-	// currently available.
+	// Release any unnecessary sectors if they are not uploading or uploaded
 	for i := 0; i < len(uc.sectorSlotsStatus); i++ {
-		// Skip the piece if it's not available.
 		if uc.sectorSlotsStatus[i] {
 			continue
 		}
 
-		// If we have all the available sectors we need, release this sector.
-		// Otherwise, mark that there's another sector available. This algorithm
-		// will prefer releasing later sectors, which improves computational
-		// complexity for erasure coding
 		if sectorsAvailable >= uc.workersRemain {
 			memoryReleased += storage.SectorSize
-			if len(uc.physicalSegmentData) < len(uc.sectorSlotsStatus) {
-				// TODO handle this. Might happen if erasure coding the Segment failed.
-			}
 			uc.physicalSegmentData[i] = nil
-			// Mark this sector as taken so that we don't double release memory
+
+			// Mark this sector as true when released memory
 			uc.sectorSlotsStatus[i] = true
 		} else {
 			sectorsAvailable++
 		}
 	}
 
-	// Check if the Segment needs to be removed from the list of active
-	// segments. It needs to be removed if the segment is complete, but hasn't
-	// yet been released
+	// Segment needs to be removed if it is complete, but hasn't been released
 	segmentComplete := uc.IsSegmentUploadComplete()
 	released := uc.released
 	if segmentComplete && !released {
@@ -363,11 +357,6 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	totalMemoryReleased := uc.memoryReleased
 	uc.mu.Unlock()
 
-	// If there are pieces available, add the standby workers to collect them.
-	// Standby workers are only added to the Segment when sectorsAvailable is equal
-	// to zero, meaning this code will only trigger if the number of pieces
-	// available increases from zero. That can only happen if a worker
-	// experiences an error during upload.
 	if sectorsAvailable > 0 {
 		uc.notifyBackupWorkers()
 	}
@@ -386,7 +375,7 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()
 	}
-	// Sanity check - all memory should be released if the Segment is complete.
+	// Sanity check - all memory should be released if the segment is complete.
 	if segmentComplete && totalMemoryReleased != uc.memoryNeeded {
 		sc.log.Debug("No workers remaining, but not all memory released:", uc.workersRemain, uc.sectorsUploadingNum, uc.memoryReleased, uc.memoryNeeded)
 	}
@@ -437,14 +426,14 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 
 	// If the repair was unsuccessful and there was a client closed then return
 	if !successfulRepair && clientOffline {
-		sc.log.Debug("repair unsuccessful for Segment", uc.id, "due to client shut down")
+		sc.log.Debug("repair unsuccessful for segment", uc.id, "due to client shut down")
 		return
 	}
-	// Log if the repair was unsuccessful
+
 	if !successfulRepair {
 		sc.log.Debug("repair unsuccessful, marking segment", uc.id, "as stuck", float64(sectorsCompleteNum)/float64(sectorsNeedNum))
 	} else {
-		sc.log.Debug("SUCCESS: repair successsful, marking segment as non-stuck:", uc.id)
+		sc.log.Debug("repair successful, marking segment as non-stuck:", uc.id)
 	}
 
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {

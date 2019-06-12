@@ -62,7 +62,6 @@ type worker struct {
 // activateWorkerPool will grab the set of contracts from the contractManager and
 // update the worker pool to match.
 func (sc *StorageClient) activateWorkerPool() {
-
 	// get all contracts in client
 	contractMap := sc.storageHostManager.GetStorageContractSet().Contracts()
 

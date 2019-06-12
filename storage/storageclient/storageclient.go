@@ -95,6 +95,8 @@ type StorageClient struct {
 
 	sessionLock sync.Mutex
 	sessionSet  map[storage.ContractID]*storage.Session
+
+	disrupter *disrupter
 }
 
 // New initializes StorageClient object
@@ -119,6 +121,7 @@ func New(persistDir string) (*StorageClient, error) {
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
 	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
+	sc.disrupter = newDisrupter()
 
 	return sc, nil
 }
