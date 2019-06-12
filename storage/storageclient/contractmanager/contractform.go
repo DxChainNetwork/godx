@@ -101,8 +101,8 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 	return cm.hostManager.RetrieveRandomHosts(neededContracts*randomStorageHostsFactor+randomStorageHostsBackup, blackList, addressBlackList)
 }
 
+//A contract transaction initiated by the storage client
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
-	// Extract vars from params, for convenience
 	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
@@ -121,7 +121,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		SignaturesRequired: 2,
 	}
 
+	//Calculate the account address of the client
 	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
+	//Calculate the account address of the host
 	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 
 	// Create storage contract
@@ -158,6 +160,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		}
 	}()
 
+	//Find the wallet based on the account address
 	account := accounts.Account{Address: clientAddr}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
@@ -170,6 +173,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	defer cm.b.Disconnect(session, host.EnodeURL)
 
+	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("contract sign by client failed", err)

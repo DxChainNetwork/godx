@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -143,13 +144,11 @@ func (cm *ContractManager) renewContract(record contractRenewRecord, currentPeri
 	return
 }
 
+//A renew transaction initiated by the storage client
 func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params storage.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
-
 	lastRev := contract.GetLatestContractRevision()
-
-	// Extract vars from params, for convenience
 	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral common.BigInt
@@ -172,7 +171,9 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		baseCollateral = hostCollateral
 	}
 
+	//Calculate the account address of the client
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
+	//Calculate the account address of the host
 	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 	// Create storage contract
 	storageContract := types.StorageContract{
