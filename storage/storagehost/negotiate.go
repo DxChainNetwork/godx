@@ -27,8 +27,8 @@ var sectorHeight = func() uint64 {
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
-//func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
-func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
+//func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
+func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
 	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 3 {
 		return errBadContractOutputCounts
@@ -36,7 +36,7 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if so.expiration()-revisionSubmissionBuffer <= blockHeight {
+	if so.expiration()-postponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 
@@ -148,9 +148,9 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 		return errBadFileMerkleRoot
 	}
 
-	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
-	if sc.WindowStart <= blockHeight+revisionSubmissionBuffer {
-		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the revisionSubmissionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, revisionSubmissionBuffer, sc.WindowStart, blockHeight+revisionSubmissionBuffer)
+	// WindowStart must be at least postponedExecutionBuffer blocks into the future
+	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
 		return errEarlyWindow
 	}
 
@@ -217,15 +217,15 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	return nil
 }
 
-func FinalizeStorageObligation(h *StorageHost, so StorageObligation) error {
-	// Get a lock on the storage obligation
-	lockErr := h.checkAndTryLockStorageObligation(so.id(), storage.ObligationLockTimeout)
+func FinalizeStorageResponsibility(h *StorageHost, so StorageResponsibility) error {
+	// Get a lock on the storage responsibility
+	lockErr := h.checkAndTryLockStorageResponsibility(so.id(), storage.ResponsibilityLockTimeout)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer h.checkAndUnlockStorageObligation(so.id())
+	defer h.checkAndUnlockStorageResponsibility(so.id())
 
-	if err := h.managedAddStorageObligation(so); err != nil {
+	if err := h.InsertStorageResponsibility(so); err != nil {
 		return err
 	}
 	return nil
@@ -242,7 +242,7 @@ func VerifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if existingRevision.NewWindowStart-revisionSubmissionBuffer <= blockHeight {
+	if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 

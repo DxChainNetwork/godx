@@ -93,7 +93,7 @@ type StorageHost struct {
 	// storage host manager for manipulating the file storage system
 	sm.StorageManager
 
-	lockedStorageObligations map[common.Hash]*TryMutex
+	lockedStorageResponsibility map[common.Hash]*TryMutex
 
 	// things for log and persistence
 	// TODO: database to store the info of storage obligation, here just a mock
@@ -492,23 +492,23 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
-	so := StorageObligation{
+	so := StorageResponsibility{
 		SectorRoots:       nil,
 		StorageContractID: sc.RLPHash(),
 		//ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
 		ContractCost: h.externalConfig().ContractPrice,
 		//LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
-		LockedCollateral: common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
+		LockedStorageDeposit: common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
 		//PotentialStorageRevenue:  big.NewInt(0),
 		PotentialStorageRevenue: common.BigInt0,
-		//RiskedCollateral:         big.NewInt(0),
-		RiskedCollateral:         common.BigInt0,
-		NegotiationHeight:        h.blockHeight,
+		//RiskedStorageDeposit:         big.NewInt(0),
+		RiskedStorageDeposit:     common.BigInt0,
+		NegotiationBlockNumber:   h.blockHeight,
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
 
-	if err := FinalizeStorageObligation(h, so); err != nil {
+	if err := FinalizeStorageResponsibility(h, so); err != nil {
 		s.SendErrorMsg(err)
 		return ExtendErr("finalize storage obligation error", err)
 	}
@@ -527,7 +527,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage obligation
-	so, err := GetStorageObligation(h.db, uploadRequest.StorageContractID)
+	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
 		s.SendErrorMsg(err)
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
@@ -683,14 +683,14 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Update the storage obligation
 	so.SectorRoots = newRoots
 	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
-	//so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newDeposit)
+	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
 	//so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
 
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(storageRevenue)
-	so.RiskedCollateral = so.RiskedCollateral.Add(newDeposit)
+	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-	err = h.modifyStorageObligation(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
 	if err != nil {
 		s.SendErrorMsg(err)
 		return err
@@ -743,7 +743,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}()
 
 	// get storage obligation
-	so, err := GetStorageObligation(h.db, req.StorageContractID)
+	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
 	}
@@ -847,7 +847,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	h.lock.Lock()
-	err = h.modifyStorageObligation(so, nil, nil, nil)
+	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
 		s.SendErrorMsg(err)
