@@ -117,6 +117,9 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
+
+	// subscribe block chain change event
+	go h.subscribeChainChangEvent()
 }
 
 // New Initialize the Host, including init the structure

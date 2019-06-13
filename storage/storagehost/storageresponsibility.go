@@ -550,6 +550,10 @@ func (h *StorageHost) resetFinancialMetrics() error {
 
 //Handling storage responsibilities in the task queue
 func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
+	if err := h.tm.Add(); err != nil {
+		return
+	}
+	defer h.tm.Done()
 
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
@@ -821,6 +825,27 @@ func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
 		h.log.Info("ERROR: could not save during ProcessConsensusChange:", err)
 	}
 
+}
+
+// subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
+// once received, a function will be triggered to analyze those blocks
+func (h *StorageHost) subscribeChainChangEvent() {
+	if err := h.tm.Add(); err != nil {
+		return
+	}
+	defer h.tm.Done()
+
+	chainChanges := make(chan core.ChainChangeEvent, 100)
+	h.ethBackend.SubscribeChainChangeEvent(chainChanges)
+
+	for {
+		select {
+		case change := <-chainChanges:
+			h.HostBlockHeightChange(change)
+		case <-h.tm.StopChan():
+			return
+		}
+	}
 }
 
 //Block executing the main chain
