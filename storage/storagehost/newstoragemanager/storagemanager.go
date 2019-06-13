@@ -128,6 +128,9 @@ func (sm *storageManager) Close() (fullErr error) {
 	err = sm.folders.close()
 	fullErr = common.ErrCompose(fullErr, err)
 
+	_, err = sm.wal.CloseIncomplete()
+	fullErr = common.ErrCompose(fullErr, err)
+
 	return
 }
 

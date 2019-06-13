@@ -316,11 +316,6 @@ func (t *Transaction) Release() error {
 	return nil
 }
 
-// Committed return the status of whether the transaction is committed or not
-func (t *Transaction) Committed() bool {
-	return t.status != txnStatusUncommitted
-}
-
 // checksum calculate the BLAKE2b-256 hash of a Transaction
 func (t *Transaction) checksum() []byte {
 	h := sha3.NewLegacyKeccak256()

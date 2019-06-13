@@ -140,9 +140,10 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 func TestAddSectorStopRecoverPhysical(t *testing.T) {
 	tests := []struct {
 		keyWord string
+		numTxn  int
 	}{
-		{"physical prepare normal stop"},
-		{"physical process normal stop"},
+		{"physical prepare normal stop", 0},
+		{"physical process normal stop", 1},
 	}
 	for _, test := range tests {
 		d := newDisrupter().register(test.keyWord, func() bool { return true })
@@ -160,7 +161,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		id := sm.calculateSectorID(root)
 		sm.shutdown(t, 100*time.Millisecond)
 		// The update should not be released
-		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 1); err != nil {
+		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		newSM, err := New(sm.persistDir)
@@ -189,9 +190,10 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 	tests := []struct {
 		keyWord string
+		numTxn  int
 	}{
-		{"virtual process normal stop"},
-		{"virtual prepare normal stop"},
+		{"virtual process normal stop", 1},
+		{"virtual prepare normal stop", 0},
 	}
 	for _, test := range tests {
 		d := newDisrupter().register(test.keyWord, func() bool { return true })
@@ -212,7 +214,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		}
 		sm.shutdown(t, 100*time.Millisecond)
 		// The update should not be released
-		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 1); err != nil {
+		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		newSM, err := New(sm.persistDir)
@@ -242,7 +244,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	sm := newTestStorageManager(t, "", newDisrupter())
 	size := uint64(1 << 25)
 	// add three storage folders, each have 8 sectors
-	for i := 0; i != 3; i++{
+	for i := 0; i != 3; i++ {
 		path := randomFolderPath(t, "")
 		if err := sm.addStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", "", err)
@@ -253,16 +255,16 @@ func TestAddSectorConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	type expectSector struct {
 		count uint64
-		data []byte
+		data  []byte
 	}
 	expect := make(map[common.Hash]expectSector)
 	var expectLock sync.Mutex
 	errChan := make(chan error, 1)
-	stopChan := time.After(10 * time.Second)
+	stopChan := time.After(20 * time.Second)
 	for atomic.LoadUint32(&numSectors) < 24 {
 		// fatal err if timeout
 		select {
-		case <- stopChan:
+		case <-stopChan:
 			t.Fatalf("After 10 seconds, still not complete")
 		case err := <-errChan:
 			t.Fatalf("error happend %v", err)
@@ -273,8 +275,9 @@ func TestAddSectorConcurrent(t *testing.T) {
 		go func() {
 			atomic.AddUint32(&numTotal, 1)
 			defer wg.Done()
+
 			// The possibility of adding a virtual is 25% when numSectors is not 0
-			virtual := atomic.LoadUint32(&numSectors) > 0 && (randomUint32() % 4 == 0)
+			virtual := atomic.LoadUint32(&numSectors) > 0 && (randomUint32()%4 == 0)
 			if virtual {
 				atomic.AddUint32(&numVirtual, 1)
 				var rt common.Hash
@@ -286,7 +289,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 					count := sector.count + 1
 					expect[sectorRoot] = expectSector{
 						count: count,
-						data: data,
+						data:  data,
 					}
 					break
 				}
@@ -316,8 +319,10 @@ func TestAddSectorConcurrent(t *testing.T) {
 						return
 					}
 					// unexpected error
-					errChan <- err
-					return
+					if !upErr.isNil() {
+						errChan <- err
+						return
+					}
 				}
 				// There is no error. Save the data to expect
 				expectLock.Lock()
@@ -329,10 +334,10 @@ func TestAddSectorConcurrent(t *testing.T) {
 				atomic.AddUint32(&numSectors, 1)
 			}
 		}()
-		<- time.After(20 * time.Millisecond)
+		<-time.After(100 * time.Millisecond)
 	}
 	waitChan := make(chan struct{})
-	go func(){
+	go func() {
 		wg.Wait()
 		close(waitChan)
 	}()
@@ -340,7 +345,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	case err := <-errChan:
 		t.Fatal(err)
 	case <-waitChan:
-	case <-time.After(10 * time.Second):
+	case <-time.After(60 * time.Second):
 		t.Fatalf("time out")
 	}
 
@@ -355,8 +360,8 @@ func TestAddSectorConcurrent(t *testing.T) {
 	if err := checkFoldersHasExpectedSectors(sm, 24); err != nil {
 		t.Fatal(err)
 	}
-	sm.shutdown(t, 1 * time.Second)
-	if err := checkWalTxnNum(sm.persistDir, 0); err != nil {
+	sm.shutdown(t, 1*time.Second)
+	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -370,13 +375,11 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if sector.count != count {
 		return fmt.Errorf("sector count not expected. Got %v, Expect %v", sector.count, count)
 	}
-	//fmt.Println(1)
 	folderID := sector.folderID
 	folderPath, err := sm.db.getFolderPath(folderID)
 	if err != nil {
 		return err
 	}
-	//fmt.Println(2)
 	// DB folder should have expected data
 	dbFolder, err := sm.db.loadStorageFolder(folderPath)
 	if err != nil {
@@ -388,7 +391,6 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if err = dbFolder.setUsedSectorSlot(sector.index); err == nil {
 		return fmt.Errorf("folder's %d entry shall be occupied", sector.index)
 	}
-	//fmt.Println(3)
 	// DB folder should have the map from folder id to sector id
 	key := makeFolderSectorKey(folderID, id)
 	exist, err := sm.db.lvl.Has(key, nil)
@@ -398,21 +400,18 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if !exist {
 		return fmt.Errorf("folder id to sector id not exist")
 	}
-	//fmt.Println(4)
 	// memoryFolder
 	mmFolder, err := sm.folders.get(folderPath)
 	if err != nil {
 		return err
 	}
 	defer mmFolder.lock.Unlock()
-	//fmt.Println(4.1)
 	if err = mmFolder.setUsedSectorSlot(sector.index); err == nil {
 		return fmt.Errorf("folders %d entry shall be occupied", sector.index)
 	}
-	if mmFolder.storedSectors != 1 {
-		return fmt.Errorf("folders has not 1 occupied sector %v", dbFolder.storedSectors)
+	if mmFolder.storedSectors < 1 {
+		return fmt.Errorf("folders has no occupied sector")
 	}
-	//fmt.Println(5)
 	// check whether the sector data is saved correctly
 	b := make([]byte, storage.SectorSize)
 	n, err := mmFolder.dataFile.ReadAt(b, int64(sector.index*storage.SectorSize))
@@ -425,7 +424,6 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if !bytes.Equal(data, b) {
 		return fmt.Errorf("data not correctly saved on disk")
 	}
-	//fmt.Println(6)
 	c := make(chan struct{})
 	go func() {
 		sm.sectorLocks.lockSector(sector.id)
@@ -517,4 +515,3 @@ func checkExpectStoredSectors(folders map[string]*storageFolder, totalStoredSect
 	}
 	return nil
 }
-

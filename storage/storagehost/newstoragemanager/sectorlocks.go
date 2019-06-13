@@ -47,7 +47,6 @@ func newSectorLocks() (sls *sectorLocks) {
 // lock tries to lock the lock with the specified id. Block until the lock is released
 func (sls *sectorLocks) lockSector(id sectorID) {
 	sls.lock.Lock()
-	defer sls.lock.Unlock()
 	// If the id is in the map, increment the waiting.
 	// If not in map, create a new lock
 	l, exist := sls.locks[id]
@@ -59,6 +58,7 @@ func (sls *sectorLocks) lockSector(id sectorID) {
 		}
 		sls.locks[id] = l
 	}
+	sls.lock.Unlock()
 	l.lock()
 }
 

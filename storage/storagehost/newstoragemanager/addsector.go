@@ -137,7 +137,6 @@ func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error)
 
 // prepare prepares for the update
 func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (err error) {
-	fmt.Println("preparing")
 	update.batch = new(leveldb.Batch)
 	switch target {
 	case targetNormal:
@@ -154,7 +153,6 @@ func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (e
 
 // process process the update
 func (update *addSectorUpdate) process(manager *storageManager, target uint8) (err error) {
-	fmt.Println("processing")
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
@@ -170,7 +168,6 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 
 // release release the update
 func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	fmt.Println("releasing")
 	defer func() {
 		if update.folder != nil {
 			update.folder.lock.Unlock()
@@ -179,7 +176,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
-		if update.txn != nil && update.txn.Committed() {
+		if update.txn != nil {
 			err = update.txn.Release()
 		}
 		return
@@ -198,16 +195,15 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}
 	// If prepare process has error, release the transaction and return
 	if upErr.prepareErr != nil {
-		if update.txn != nil && update.txn.Committed() {
-			err = common.ErrCompose(err, update.txn.Release())
-		}
 		return
 	}
 	batch := new(leveldb.Batch)
 	// If process has error, need to reverse the batch update
 	if update.physical {
 		// Need to delete the sector and folder id to sector mapping
-		batch.Delete(makeSectorKey(update.sector.id))
+		if update.sector != nil {
+			batch.Delete(makeSectorKey(update.sector.id))
+		}
 		// Need to delete the mapping from folder id to sector id
 		if update.folder != nil {
 			batch.Delete(makeFolderSectorKey(update.folder.id, update.sector.id))
@@ -233,7 +229,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 		err = common.ErrCompose(err, newErr)
 	}
 	// release the transaction
-	if update.txn != nil && update.txn.Committed() {
+	if update.txn != nil {
 		if newErr := update.txn.Release(); newErr != nil {
 			err = common.ErrCompose(err, newErr)
 		}
@@ -312,9 +308,6 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 	if err != nil {
 		return
 	}
-	if err = <-update.txn.Commit(); err != nil {
-		return
-	}
 	if !update.physical && manager.disrupter.disrupt("virtual prepare normal") {
 		return errDisrupted
 	}
@@ -368,6 +361,9 @@ func (update *addSectorUpdate) createPhysicalSectorAppendOperation() (op writeah
 // 1. If is a physical update, insert the data to the folder file
 // 2. Apply the database update
 func (update *addSectorUpdate) processNormal(manager *storageManager) (err error) {
+	if err = <-update.txn.Commit(); err != nil {
+		return
+	}
 	if update.physical {
 		_, err = update.folder.dataFile.WriteAt(update.data, int64(update.sector.index*storage.SectorSize))
 		if err != nil {
@@ -449,7 +445,7 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 // If the addSectorUpdate is uncommitted, nothing is written to database,
 // the folder has its original data. So no action is needed
 func (update *addSectorUpdate) prepareUncommitted(manager *storageManager) (err error) {
-	manager.sectorLocks.lockSector(update.sector.id)
+	manager.sectorLocks.lockSector(update.id)
 	return errRevert
 }
 
@@ -460,7 +456,7 @@ func (update *addSectorUpdate) processUncommitted(manager *storageManager) (err 
 
 // prepareCommitted prepare for committed transaction
 func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
-	manager.sectorLocks.lockSector(update.sector.id)
+	manager.sectorLocks.lockSector(update.id)
 	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
 	if err != nil {
 		return

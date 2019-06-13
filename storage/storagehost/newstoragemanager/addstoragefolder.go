@@ -84,7 +84,6 @@ func (sm *storageManager) validateAddStorageFolder(path string, size uint64) (er
 	// check whether the folder path already exists
 	_, err = os.Stat(path)
 	if !os.IsNotExist(err) {
-		fmt.Println(err)
 		err = fmt.Errorf("folder already exists: %v", path)
 		return
 	}
@@ -234,7 +233,6 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	// is not os.ErrExist
 	if upErr.processErr != os.ErrExist {
 		if newErr := os.Remove(filepath.Join(update.path, dataFileName)); newErr != nil {
-			fmt.Println(newErr)
 			err = common.ErrCompose(err, newErr)
 		}
 	}
@@ -246,7 +244,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		err = common.ErrCompose(err, newErr)
 	}
 	// release the transaction
-	if update.txn.Committed() {
+	if upErr.processErr != nil && update.txn != nil {
 		err = common.ErrCompose(err, update.txn.Release())
 	}
 	return
