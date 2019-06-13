@@ -84,6 +84,7 @@ func (sm *storageManager) validateAddStorageFolder(path string, size uint64) (er
 	// check whether the folder path already exists
 	_, err = os.Stat(path)
 	if !os.IsNotExist(err) {
+		fmt.Println(err)
 		err = fmt.Errorf("folder already exists: %v", path)
 		return
 	}

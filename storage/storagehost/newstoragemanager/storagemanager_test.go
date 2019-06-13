@@ -1,6 +1,7 @@
 package newstoragemanager
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"math/rand"
@@ -15,7 +16,7 @@ func tempDir(dirs ...string) string {
 	path := filepath.Join(os.TempDir(), "storagemanager", filepath.Join(dirs...))
 	err := os.RemoveAll(path)
 	if err != nil {
-		panic(fmt.Sprintf("cannot remove all files under %v", path))
+		panic(fmt.Sprintf("cannot remove all files under %v: %v", path, err))
 	}
 	err = os.MkdirAll(path, 0777)
 	if err != nil {
@@ -114,4 +115,17 @@ func randomFolderPath(t *testing.T, extra string) (path string) {
 	folderName := common.Bytes2Hex(b)
 	path = filepath.Join(path, folderName)
 	return path
+}
+
+// randomBytes create a random byte slice of specified size
+func randomBytes(size uint64) []byte {
+	b := make([]byte, size)
+	rand.Read(b)
+	return b
+}
+
+func randomUint32() uint32 {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return binary.LittleEndian.Uint32(b)
 }

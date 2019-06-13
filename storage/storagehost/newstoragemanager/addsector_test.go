@@ -6,7 +6,6 @@ package newstoragemanager
 
 import (
 	"bytes"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
@@ -16,6 +15,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -238,7 +239,126 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 
 // TestAddSectorConcurrent test the scenario of multiple goroutines add sector at the same time
 func TestAddSectorConcurrent(t *testing.T) {
+	sm := newTestStorageManager(t, "", newDisrupter())
+	size := uint64(1 << 25)
+	// add three storage folders, each have 8 sectors
+	for i := 0; i != 3; i++{
+		path := randomFolderPath(t, "")
+		if err := sm.addStorageFolder(path, size); err != nil {
+			t.Fatalf("test %v: %v", "", err)
+		}
+	}
+	// create 24 valid sectors, with a mix of virtual and invalid sectors
+	var numSectors, numVirtual, numTotal uint32
+	var wg sync.WaitGroup
+	type expectSector struct {
+		count uint64
+		data []byte
+	}
+	expect := make(map[common.Hash]expectSector)
+	var expectLock sync.Mutex
+	errChan := make(chan error, 1)
+	stopChan := time.After(10 * time.Second)
+	for atomic.LoadUint32(&numSectors) < 24 {
+		// fatal err if timeout
+		select {
+		case <- stopChan:
+			t.Fatalf("After 10 seconds, still not complete")
+		case err := <-errChan:
+			t.Fatalf("error happend %v", err)
+		default:
+		}
+		// increment numSectors when a sector is successfully added
+		wg.Add(1)
+		go func() {
+			atomic.AddUint32(&numTotal, 1)
+			defer wg.Done()
+			// The possibility of adding a virtual is 25% when numSectors is not 0
+			virtual := atomic.LoadUint32(&numSectors) > 0 && (randomUint32() % 4 == 0)
+			if virtual {
+				atomic.AddUint32(&numVirtual, 1)
+				var rt common.Hash
+				var data []byte
+				expectLock.Lock()
+				for sectorRoot, sector := range expect {
+					rt = sectorRoot
+					data = sector.data
+					count := sector.count + 1
+					expect[sectorRoot] = expectSector{
+						count: count,
+						data: data,
+					}
+					break
+				}
+				expectLock.Unlock()
+				if err := sm.addSector(rt, data); err != nil {
+					errChan <- fmt.Errorf("add virtual sector cause an error: %v", err)
+				}
+			} else {
+				// create a random sector
+				data := randomBytes(storage.SectorSize)
+				root := merkle.Root(data)
+				expectLock.Lock()
+				if _, exist := expect[root]; exist {
+					// The root exist. Thus unlock and return
+					expectLock.Unlock()
+					return
+				}
+				expectLock.Unlock()
+				if err := sm.addSector(root, data); err != nil {
+					upErr, isUpErr := err.(*updateError)
+					if !isUpErr {
+						errChan <- err
+						return
+					}
+					if upErr.isNil() || upErr.prepareErr == errAllFoldersFullOrUsed {
+						// Currently busy
+						return
+					}
+					// unexpected error
+					errChan <- err
+					return
+				}
+				// There is no error. Save the data to expect
+				expectLock.Lock()
+				expect[root] = expectSector{
+					count: 1,
+					data:  data,
+				}
+				expectLock.Unlock()
+				atomic.AddUint32(&numSectors, 1)
+			}
+		}()
+		<- time.After(20 * time.Millisecond)
+	}
+	waitChan := make(chan struct{})
+	go func(){
+		wg.Wait()
+		close(waitChan)
+	}()
+	select {
+	case err := <-errChan:
+		t.Fatal(err)
+	case <-waitChan:
+	case <-time.After(10 * time.Second):
+		t.Fatalf("time out")
+	}
 
+	// Check the result
+	t.Logf("after %v tries, added %v virtual sectors, got %v sectors", numTotal, numVirtual, numSectors)
+	for rt, expect := range expect {
+		id := sm.calculateSectorID(rt)
+		if err := checkSectorExist(id, sm, expect.data, expect.count); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := checkFoldersHasExpectedSectors(sm, 24); err != nil {
+		t.Fatal(err)
+	}
+	sm.shutdown(t, 1 * time.Second)
+	if err := checkWalTxnNum(sm.persistDir, 0); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // checkSectorExist checks whether the sector exists
@@ -398,8 +518,3 @@ func checkExpectStoredSectors(folders map[string]*storageFolder, totalStoredSect
 	return nil
 }
 
-func randomBytes(size uint64) []byte {
-	b := make([]byte, size)
-	rand.Read(b)
-	return b
-}
