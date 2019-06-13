@@ -55,15 +55,17 @@ func TestAddStorageFolderNormal(t *testing.T) {
 	if TryLocked(sf.lock) {
 		t.Errorf("The storage folder still locked after update")
 	}
-	if locked(&sm.folders.lock) {
-		t.Errorf("The folders still locked after update")
-	}
 	// Check the database data
 	dbSf, err := sm.db.loadStorageFolder(path)
 	if err != nil {
 		t.Fatalf("check storage folder error: %v", err)
 	}
 	checkStorageFolderEqual(t, "", dbSf, sf)
+	dbSf2, err := sm.db.loadStorageFolderByID(dbSf.id)
+	if err != nil {
+		t.Fatalf("check storage folder error: %v", err)
+	}
+	checkStorageFolderEqual(t, "", dbSf2, dbSf)
 }
 
 // TestAddStorageFolderRecover test the recover scenario of add storage folder
@@ -182,22 +184,6 @@ func TestAddStorageFolderExhaustive(t *testing.T) {
 			t.Errorf("on disk check error: %v", err)
 		}
 	}
-}
-
-// locked checks whether the lock is unlocked or not.
-func locked(lock sync.Locker) bool {
-	c := make(chan struct{})
-	go func() {
-		lock.Lock()
-		lock.Unlock()
-		close(c)
-	}()
-	select {
-	case <-c:
-		return true
-	default:
-	}
-	return false
 }
 
 func TryLocked(lock common.TryLock) (locked bool) {

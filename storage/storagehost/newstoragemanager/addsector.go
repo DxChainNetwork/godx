@@ -137,6 +137,7 @@ func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error)
 
 // prepare prepares for the update
 func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (err error) {
+	fmt.Println("preparing")
 	update.batch = new(leveldb.Batch)
 	switch target {
 	case targetNormal:
@@ -153,6 +154,7 @@ func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (e
 
 // process process the update
 func (update *addSectorUpdate) process(manager *storageManager, target uint8) (err error) {
+	fmt.Println("processing")
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
@@ -168,6 +170,7 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 
 // release release the update
 func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+	fmt.Println("releasing")
 	defer func() {
 		if update.folder != nil {
 			update.folder.lock.Unlock()
@@ -190,7 +193,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	// There is some error happened, revert the memory update.
 	// For recovery situations, the update might not be stored in database. So
 	// error might happen as a normal situation. Simply skip the error
-	if update.folder != nil {
+	if update.folder != nil && update.physical {
 		_ = update.folder.setFreeSectorSlot(update.sector.index)
 	}
 	// If prepare process has error, release the transaction and return
@@ -206,7 +209,9 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 		// Need to delete the sector and folder id to sector mapping
 		batch.Delete(makeSectorKey(update.sector.id))
 		// Need to delete the mapping from folder id to sector id
-		batch.Delete(makeFolderSectorKey(update.folder.id, update.sector.id))
+		if update.folder != nil {
+			batch.Delete(makeFolderSectorKey(update.folder.id, update.sector.id))
+		}
 	} else {
 		// Need to put the previous sector data to database
 		var newErr error
@@ -226,6 +231,12 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}
 	if newErr := manager.db.writeBatch(batch); newErr != nil {
 		err = common.ErrCompose(err, newErr)
+	}
+	// release the transaction
+	if update.txn != nil {
+		if newErr := update.txn.Release(); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
 	}
 	return
 }
@@ -271,12 +282,17 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 		}
 		update.folder = sf
 		update.sector = &sector{
+			id:       update.id,
 			folderID: sf.id,
 			index:    index,
 			count:    1,
 		}
 		// Apply the sector update to batch
 		update.batch, err = manager.db.saveSectorToBatch(update.batch, update.sector, true)
+		if err != nil {
+			return
+		}
+		update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, sf)
 		if err != nil {
 			return
 		}
@@ -298,6 +314,18 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 	}
 	if err = <-update.txn.Commit(); err != nil {
 		return
+	}
+	if !update.physical && manager.disrupter.disrupt("virtual prepare normal") {
+		return errDisrupted
+	}
+	if update.physical && manager.disrupter.disrupt("physical prepare normal") {
+		return errDisrupted
+	}
+	if !update.physical && manager.disrupter.disrupt("virtual prepare normal stop") {
+		return errStopped
+	}
+	if update.physical && manager.disrupter.disrupt("physical prepare normal stop") {
+		return errStopped
 	}
 	return
 }
@@ -348,6 +376,18 @@ func (update *addSectorUpdate) processNormal(manager *storageManager) (err error
 	}
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return
+	}
+	if !update.physical && manager.disrupter.disrupt("virtual process normal") {
+		return errDisrupted
+	}
+	if update.physical && manager.disrupter.disrupt("physical process normal") {
+		return errDisrupted
+	}
+	if !update.physical && manager.disrupter.disrupt("virtual process normal stop") {
+		return errStopped
+	}
+	if update.physical && manager.disrupter.disrupt("physical process normal stop") {
+		return errStopped
 	}
 	return
 }

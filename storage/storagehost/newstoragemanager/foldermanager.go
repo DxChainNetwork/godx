@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -128,6 +129,7 @@ func (fm *folderManager) selectFolderToAddWithRetry(retryTimes int) (sf *storage
 		if err == nil {
 			return
 		}
+		<-time.After(100 * time.Millisecond)
 	}
 	return nil, 0, err
 }

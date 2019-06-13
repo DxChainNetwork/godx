@@ -25,6 +25,9 @@ var (
 
 	// errAllFoldersFullOrUsed is the error happened when all folders are full or in use
 	errAllFoldersFullOrUsed = errors.New("all folders are full or in use")
+
+	// errDisrupted is the error that is disrupted during test
+	errDisrupted = errors.New("disrupted")
 )
 
 // updateError is the error happened during processing the update.

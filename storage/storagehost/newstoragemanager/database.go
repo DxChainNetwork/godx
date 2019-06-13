@@ -274,6 +274,7 @@ func (db *database) getSector(id sectorID) (s *sector, err error) {
 	if err = rlp.DecodeBytes(b, &s); err != nil {
 		return
 	}
+	s.id = id
 	return
 }
 
@@ -310,7 +311,7 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 		folderToSectorKey := makeFolderSectorKey(sector.folderID, sector.id)
 		batch.Put(folderToSectorKey, []byte{})
 	}
-	return newBatch, nil
+	return batch, nil
 }
 
 // makeFolderKey makes the folder key which is storageFolder_${folderPath}

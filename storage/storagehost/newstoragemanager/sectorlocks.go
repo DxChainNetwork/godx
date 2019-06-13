@@ -54,12 +54,11 @@ func (sls *sectorLocks) lockSector(id sectorID) {
 	if exist {
 		atomic.AddUint32(&l.waiting, 1)
 	} else {
-		l := &sectorLock{
+		l = &sectorLock{
 			waiting: 1,
 		}
 		sls.locks[id] = l
 	}
-
 	l.lock()
 }
 
