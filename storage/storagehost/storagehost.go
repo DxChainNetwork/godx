@@ -31,7 +31,7 @@ import (
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.HostSettingMsg:					   handleHostSettingRequest,
+	storage.HostSettingMsg:                    handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
@@ -721,7 +721,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
 	}
 
-	// Check the contract is empty
+	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		err := errors.New("no contract locked")
 		s.SendErrorMsg(err)
@@ -740,15 +740,15 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		var err error
 		switch {
 		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
-			err = errors.New("download request has invalid sector bounds")
+			err = errors.New("download out boundary of sector")
 		case sec.Length == 0:
-			err = errors.New("length cannot be zero")
+			err = errors.New("length cannot be 0")
 		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
 			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
-			err = errors.New("wrong number of valid proof values")
+			err = errors.New("the number of valid proof values not match the old")
 		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
-			err = errors.New("wrong number of missed proof values")
+			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
 			s.SendErrorMsg(err)

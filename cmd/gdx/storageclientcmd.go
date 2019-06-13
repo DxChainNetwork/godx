@@ -167,7 +167,7 @@ func setMemoryLimit(ctx *cli.Context) error {
 
 // download remote file by sync mode
 //
-// NOTE: RPC not support async download, because it is a short connection, should block until download task done.
+// NOTE: RPC not support async download, because it is stateless, should block until download task done.
 func downloadSync(ctx *cli.Context) error {
 	client, err := gdxAttach(ctx)
 	if err != nil {

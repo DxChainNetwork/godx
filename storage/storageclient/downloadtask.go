@@ -5,11 +5,11 @@
 package storageclient
 
 import (
-	"github.com/DxChainNetwork/godx/storage"
 	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 )

@@ -14,7 +14,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
@@ -31,13 +30,14 @@ type unfinishedDownloadSegment struct {
 	// where to write the recovered logical data
 	destination writeDestination
 	erasureCode erasurecode.ErasureCoder
-	masterKey   crypto.CipherKey
 
-	// required for deriving the encryption keys for each sector
+	// used to generate twofishgcm key seed
 	segmentIndex uint64
 
 	// maps from host id to the downloadSectorInfo
-	segmentMap  map[string]downloadSectorInfo
+	segmentMap map[string]downloadSectorInfo
+
+	// the length of the original data decoded
 	segmentSize uint64
 
 	// the length of segment to fetch
@@ -45,7 +45,9 @@ type unfinishedDownloadSegment struct {
 
 	// where is the logical segment being downloaded at
 	fetchOffset uint64
-	sectorSize  uint64
+
+	// the number of bytes every sector of remote file
+	sectorSize uint64
 
 	// where to write the completed data for the writer
 	writeOffset int64

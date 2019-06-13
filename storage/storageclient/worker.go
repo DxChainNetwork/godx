@@ -7,7 +7,6 @@ package storageclient
 import (
 	"encoding/binary"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/DxChainNetwork/godx/crypto"
@@ -52,14 +51,14 @@ type worker struct {
 	mu       sync.Mutex
 }
 
-// activateWorkerPool will grab the set of contracts from the contractManager and
+// activateWorkerPool will grab the set of contracts from the contract manager and
 // update the worker pool to match.
 func (c *StorageClient) activateWorkerPool() {
 
 	// get all contracts in client
 	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
 
-	// Add a worker for any contract that does not already have a worker.
+	// new a worker for a contract that haven't a worker
 	for id, contract := range contractMap {
 		c.lock.Lock()
 		_, exists := c.workerPool[id]
@@ -212,8 +211,7 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 // actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) {
 
-	// If 'nil' is returned, it is either because the worker has been removed
-	// from the segment entirely, or because the worker has been put on standby.
+	// check the uds whether can be the worker performed
 	uds = w.processDownloadSegment(uds)
 	if uds == nil {
 		return
@@ -222,11 +220,11 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	// whether download success or fail, we should remove the worker at last
 	defer uds.removeWorker()
 
-	// For not supporting partial encoding, we need to download the whole sector every time.
+	// for not supporting partial encoding, we need to download the whole sector every time.
 	fetchOffset, fetchLength := 0, storage.SectorSize
 	root := uds.segmentMap[w.hostID.String()].root
 
-	// Setup connection
+	// setup connection
 	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
 	if !exist {
 		w.client.log.Error("the host not exist in client", "host_id", w.hostID.String())
@@ -247,9 +245,6 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	// record the amount of all data transferred between download connection
-	atomic.AddUint64(&uds.download.totalDataTransferred, uds.sectorSize)
-
 	// calculate a seed for twofishgcm
 	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	segmentIndexBytes := make([]byte, 8)
@@ -265,11 +260,6 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	if uint64(fetchOffset/storage.SegmentSize) == 0 {
-		w.client.log.Error("twofish doesn't support a blockIndex != 0")
-		return
-	}
-
 	// decrypt the sector
 	decryptedSector, err := key.DecryptInPlace(sectorData)
 	if err != nil {
@@ -278,27 +268,23 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	// mark the sector as completed. perform segment recovery if we newly have enough sectors to do so.
+	// mark the sector as completed
 	uds.mu.Lock()
 	uds.markSectorCompleted(sectorIndex)
 	uds.sectorsRegistered--
 
 	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need,
 	// we can recover the original data
-	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
-
-		// this a accumulation processing, every time we receive a sector
-		atomic.AddUint64(&uds.download.dataReceived, uds.fetchLength/uint64(uds.erasureCode.MinSectors()))
-		uds.physicalSegmentData[sectorIndex] = decryptedSector
-	}
-	if uds.sectorsCompleted == uds.erasureCode.MinSectors() {
-
-		// client maybe receive a not integral sector
-		addedReceivedData := uint64(uds.erasureCode.MinSectors()) * (uds.fetchLength / uint64(uds.erasureCode.MinSectors()))
-		atomic.AddUint64(&uds.download.dataReceived, uds.fetchLength-addedReceivedData)
+	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
 
 		// recover the logical data
 		go uds.recoverLogicalData()
+		w.client.log.Debug("received enough sectors to recover", "sectors_completed", uds.sectorsCompleted)
+	} else {
+
+		// this a accumulation processing, every time we receive a sector
+		uds.physicalSegmentData[sectorIndex] = decryptedSector
+		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(sectorData), "sectors_completed", uds.sectorsCompleted)
 	}
 	uds.mu.Unlock()
 }
@@ -321,18 +307,13 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	}
 	defer uds.mu.Unlock()
 
-	// if the workers in progress are not enough for the segment downloading,
-	// we need more extra worker matched the criteria
-	meetsExtraCriteria := true
-
+	// if need more sector, and the sector has not been fetched yet,
+	// should register the worker and return the segment for downloading.
 	sectorTaken := uds.sectorUsage[sectorData.index]
 	sectorsInProgress := uds.sectorsRegistered + uds.sectorsCompleted
 	desiredSectorsInProgress := uds.erasureCode.MinSectors() + uds.overdrive
 	workersDesired := sectorsInProgress < desiredSectorsInProgress && !sectorTaken
-
-	// if need more sector, and the sector has not been fetched yet,
-	// should register the worker and return the segment for downloading.
-	if workersDesired && meetsExtraCriteria {
+	if workersDesired {
 		uds.sectorsRegistered++
 		uds.sectorUsage[sectorData.index] = true
 		return uds

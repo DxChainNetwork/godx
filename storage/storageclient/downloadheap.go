@@ -61,7 +61,7 @@ func (c *StorageClient) downloadLoop() {
 	}
 	defer c.tm.Done()
 
-	// infinite loop to process downloads. Will return if get stopping signal.
+	// infinite loop to process downloads, return if get stopping signal.
 LOOP:
 	for {
 		// wait until the client is online.

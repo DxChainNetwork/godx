@@ -591,7 +591,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// sanity check the request.
 	for _, sec := range req.Sections {
 		if uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize {
-			return errors.New("illegal offset and/or length")
+			return errors.New("download out boundary of sector")
 		}
 		if req.MerkleProof {
 			if sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0 {
@@ -646,7 +646,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	price := hostInfo.BaseRPCPrice.Add(bandwidthPrice).Add(sectorAccessPrice)
 	if lastRevision.NewValidProofOutputs[0].Value.Cmp(price.BigIntPtr()) < 0 {
-		return errors.New("contract has insufficient funds to support download")
+		return errors.New("client funds not enough to support download")
 	}
 
 	// increase the price fluctuation by 0.2% to mitigate small errors, like different block height
@@ -827,16 +827,16 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 	// params validation.
 	if params.file == nil {
-		return nil, errors.New("no file provided when requesting download")
+		return nil, errors.New("not exist the remote file")
 	}
 	if params.length < 0 {
-		return nil, errors.New("download length must be zero or a positive whole number")
+		return nil, errors.New("download length cannot be negative")
 	}
 	if params.offset < 0 {
-		return nil, errors.New("download offset cannot be a negative number")
+		return nil, errors.New("download offset cannot be negative")
 	}
 	if params.offset+params.length > params.file.FileSize() {
-		return nil, errors.New("download is requesting data past the boundary of the file")
+		return nil, errors.New("download data out the boundary of the remote file")
 	}
 
 	// instantiate the download object.
@@ -856,19 +856,19 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 		memoryManager:     client.memoryManager,
 	}
 
-	// set the end time of the download when it's done.
+	// record the end time when it's done.
 	d.onComplete(func(_ error) error {
 		d.endTime = time.Now()
 		return nil
 	})
 
-	// nothing more to do for 0-byte files or 0-length downloads.
+	// nothing to do
 	if d.length == 0 {
 		d.markComplete()
 		return d, nil
 	}
 
-	// determine which segments to download.
+	// calculate which segments to download
 	minSegment, minSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
 	maxSegment, maxSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
 
@@ -878,10 +878,10 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 	// check the requested segment number
 	if minSegment == params.file.NumSegments() || maxSegment == params.file.NumSegments() {
-		return nil, errors.New("download is requesting a segment that is past the boundary of the file")
+		return nil, errors.New("download segment out the boundary of the remote file")
 	}
 
-	// map from the host id to the index of the sector within the segment.
+	// map from the host id to the index of the sector within the segment
 	segmentMaps := make([]map[string]downloadSectorInfo, maxSegment-minSegment+1)
 	for segmentIndex := minSegment; segmentIndex <= maxSegment; segmentIndex++ {
 		segmentMaps[segmentIndex-minSegment] = make(map[string]downloadSectorInfo)
@@ -892,10 +892,10 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 		for sectorIndex, sectorSet := range sectors {
 			for _, sector := range sectorSet {
 
-				// sanity check - a worker should not have two sectors for the same segment.
+				// check that a worker should not have two sectors for the same segment
 				_, exists := segmentMaps[segmentIndex-minSegment][sector.HostID.String()]
 				if exists {
-					client.log.Error("ERROR: Worker has multiple sectors uploaded for the same segment.")
+					client.log.Error("a worker has multiple sectors for the same segment")
 				}
 				segmentMaps[segmentIndex-minSegment][sector.HostID.String()] = downloadSectorInfo{
 					index: uint64(sectorIndex),
@@ -905,16 +905,17 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 		}
 	}
 
-	// where to write a segment within the download destination
+	// record where to write every segment
 	writeOffset := int64(0)
+
+	// record how many segments remained after every downloading
 	d.segmentsRemaining += maxSegment - minSegment + 1
 
-	// queue the downloads for each segment.
+	// queue the downloads for each segment
 	for i := minSegment; i <= maxSegment; i++ {
 		uds := &unfinishedDownloadSegment{
 			destination:  params.destination,
 			erasureCode:  params.file.ErasureCode(),
-			masterKey:    params.file.CipherKey(),
 			segmentIndex: i,
 			segmentMap:   segmentMaps[i-minSegment],
 			segmentSize:  params.file.SegmentSize(),
@@ -931,21 +932,21 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 			clientFile:          params.file,
 		}
 
-		// set the offset within the segment that we start downloading from
+		// set the offset of the segment to begin downloading
 		if i == minSegment {
 			uds.fetchOffset = minSegmentOffset
 		} else {
 			uds.fetchOffset = 0
 		}
 
-		// set the number of bytes to fetch within the segment that we start downloading from
+		// set the number of bytes to download the segment
 		if i == maxSegment && maxSegmentOffset != 0 {
 			uds.fetchLength = maxSegmentOffset - uds.fetchOffset
 		} else {
 			uds.fetchLength = params.file.SegmentSize() - uds.fetchOffset
 		}
 
-		// set the writeOffset within the destination for where the data be written.
+		// set the writeOffset where the data be written
 		uds.writeOffset = writeOffset
 		writeOffset += int64(uds.fetchLength)
 
@@ -961,8 +962,8 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	return d, nil
 }
 
-// managedDownload performs a file download and returns the download object
-func (client *StorageClient) managedDownload(p storage.DownloadParameters) (*download, error) {
+// createDownload performs a file download and returns the download object
+func (client *StorageClient) createDownload(p storage.DownloadParameters) (*download, error) {
 	dxPath := storage.DxPath{p.RemoteFilePath}
 	entry, err := client.fileSystem.OpenFile(dxPath)
 	if err != nil {
@@ -981,20 +982,20 @@ func (client *StorageClient) managedDownload(p storage.DownloadParameters) (*dow
 	}
 
 	if p.Offset == entry.FileSize() && entry.FileSize() != 0 {
-		return nil, errors.New("offset equals filesize")
+		return nil, errors.New("offset cannot out the index of remote file")
 	}
 
 	// if length == 0, download the rest file.
 	if p.Length == 0 {
 		if p.Offset > entry.FileSize() {
-			return nil, errors.New("offset cannot be greater than file size")
+			return nil, errors.New("offset greater than the size of remote file")
 		}
 		p.Length = entry.FileSize() - p.Offset
 	}
 
 	// check whether offset and length is valid
 	if p.Offset < 0 || p.Offset+p.Length > entry.FileSize() {
-		return nil, fmt.Errorf("offset and length combination invalid, max byte is at index %d", entry.FileSize()-1)
+		return nil, fmt.Errorf("offset or length is invalid, remote file size is %d", entry.FileSize())
 	}
 
 	// instantiate the file to write the downloaded data
@@ -1023,14 +1024,14 @@ func (client *StorageClient) managedDownload(p storage.DownloadParameters) (*dow
 	if closer, ok := dw.(io.Closer); err != nil && ok {
 		closeErr := closer.Close()
 		if closeErr != nil {
-			return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close error: %v", err, closeErr))
+			return nil, errors.New(fmt.Sprintf("something wrong with creating download object: %v, destination close error: %v", err, closeErr))
 		}
-		return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close successfully", err))
+		return nil, errors.New(fmt.Sprintf("get something wrong with creating download object: %v, destination close successfully", err))
 	} else if err != nil {
 		return nil, err
 	}
 
-	// register some cleanup for when the download is done.
+	// register the func, and run it when download is done.
 	d.onComplete(func(_ error) error {
 		if closer, ok := dw.(io.Closer); ok {
 			return closer.Close()
@@ -1051,7 +1052,7 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	}
 	defer client.tm.Done()
 
-	d, err := client.managedDownload(p)
+	d, err := client.createDownload(p)
 	if err != nil {
 		return err
 	}
@@ -1061,7 +1062,7 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	case <-d.completeChan:
 		return d.Err()
 	case <-client.tm.StopChan():
-		return errors.New("download interrupted by shutdown")
+		return errors.New("download is shutdown")
 	}
 }
 
@@ -1072,6 +1073,6 @@ func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 	}
 	defer client.tm.Done()
 
-	_, err := client.managedDownload(p)
+	_, err := client.createDownload(p)
 	return err
 }
