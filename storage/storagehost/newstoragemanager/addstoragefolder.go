@@ -221,12 +221,19 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		upErr.prepareErr = nil
 		return
 	}
+	// Close the folder datafile
+	if update.folder != nil {
+		if newErr := update.folder.dataFile.Close(); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
 	// but during process, some other program (or user) created a file in the path, keep that
 	// file, which might be useful to other programs. So delete the file only if the processErr
 	// is not os.ErrExist
 	if upErr.processErr != os.ErrExist {
 		if newErr := os.Remove(filepath.Join(update.path, dataFileName)); newErr != nil {
+			fmt.Println(newErr)
 			err = common.ErrCompose(err, newErr)
 		}
 	}
