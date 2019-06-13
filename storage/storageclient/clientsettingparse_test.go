@@ -347,9 +347,13 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 			value = rand.Intn(2) == 0
 			unit = ""
 			break
-		case key == "uploadspeed" || key == "downloadspeed" || key == "hosts":
+		case key == "hosts":
 			value = rand.Int63()
 			unit = ""
+			break
+		case key == "uploadspeed" || key == "downloadspeed":
+			value = rand.Int63()
+			unit = speedUnit[rand.Intn(len(speedUnit))]
 			break
 		default:
 			err = fmt.Errorf("the key received is not valid: %s", key)

@@ -50,11 +50,6 @@ const (
 	DxFileExtension = ".dx"
 )
 
-// rentPayment filed validation min requirement
-const (
-	minHosts = 2
-)
-
 var currencyIndexMap = map[string]uint64{
 	"wei":        1,
 	"kwei":       1e3,
@@ -74,6 +69,14 @@ var dataSizeMultiplier = map[string]uint64{
 	"mib": 1 << 20,
 	"gib": 1 << 30,
 	"tib": 1 << 40,
+}
+
+var speedMultiplier = map[string]int64{
+	"bps":  1,
+	"kbps": 1e3,
+	"mbps": 1e6,
+	"gbps": 1e9,
+	"tbps": 1e12,
 }
 
 var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",

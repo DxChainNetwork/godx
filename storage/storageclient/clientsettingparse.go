@@ -22,13 +22,16 @@ var timeUnit = []string{"h", "b", "d", "w", "m", "y"}
 // dataSizeUnit defines available units used for specifying expected storage size, expected upload size, and expected download size
 var dataSizeUnit = []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
 
+// speedUint defines available units used for specifying upload and download speed
+var speedUnit = []string{"bps", "kbps", "mbps", "gbps", "tbps"}
+
 // parseClientSetting will take client settings in a map format, where both key and value are strings. Then, those value will be parsed
 // and transfer them to storage.ClientSetting data structure
 func parseClientSetting(settings map[string]string, prevSetting storage.ClientSetting) (clientSetting storage.ClientSetting, err error) {
 	// get the previous settings
 	clientSetting = prevSetting
 
-	// parse the ClientSettingAPI
+	// parse the ClientSettingAPIDisplay
 	for key, value := range settings {
 		switch {
 		case key == "fund":
@@ -114,7 +117,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "uploadspeed":
 			var uploadSpeed int64
-			uploadSpeed, err = parseMaxUploadSpeed(value)
+			uploadSpeed, err = parseSpeed(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the uplaod speed: %s", err.Error())
 				break
@@ -123,7 +126,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "downloadspeed":
 			var downloadSpeed int64
-			downloadSpeed, err = parseMaxDownloadSpeed(value)
+			downloadSpeed, err = parseSpeed(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the download speed: %s", err.Error())
 				break
@@ -353,20 +356,48 @@ func parseEnableIPViolation(enable string) (parsed bool, err error) {
 	}
 }
 
-// parseMaxUploadSpeed will parse the string into maxUploadSpeed which will be used
-// to limit the speed while uploading data
-func parseMaxUploadSpeed(uploadSpeed string) (parsed int64, err error) {
-	// in terms of bytes/seconds
-	uploadSpeed = formatString(uploadSpeed)
-	return strconv.ParseInt(uploadSpeed, 10, 64)
+// parseSpeed will parse the string into maxUploadSpeed or maxDownloadSpeed which will be used
+// to limit the speed while uploading/downloading data
+func parseSpeed(uploadDownloadSpeed string) (parsed int64, err error) {
+	// remove whitespace and convert all to lower case
+	uploadDownloadSpeed = formatString(uploadDownloadSpeed)
+
+	// loop through the speedMultiplier
+	for unit, _ := range speedMultiplier {
+		// unit bps is ignored due to each unit contains bps as suffix
+		if unit == "bps" {
+			continue
+		}
+		if strings.HasSuffix(uploadDownloadSpeed, unit) {
+			return speedConvert(uploadDownloadSpeed, unit)
+		}
+	}
+
+	// check the bps unit
+	if strings.HasSuffix(uploadDownloadSpeed, "bps") {
+		return speedConvert(uploadDownloadSpeed, "bps")
+	}
+
+	// there is no qualified unit
+	err = fmt.Errorf("failed to parse the upload/download speed, unit must be included. Here is a list of available units: %s", speedUnit)
+	return
 }
 
-// parseMaxDownloadSpeed will parse the string into maxDownloadSpeed which will be used
-// to limit the speed while downloading data
-func parseMaxDownloadSpeed(downloadSpeed string) (parsed int64, err error) {
-	// in terms of bytes/seconds
-	formatString(downloadSpeed)
-	return strconv.ParseInt(downloadSpeed, 10, 64)
+// speedConvert will convert the upload and download speed to bps, in form of int64
+func speedConvert(speed string, unit string) (parsed int64, err error) {
+	// remove the suffix
+	speed = strings.TrimSuffix(speed, unit)
+
+	// parse the string into int64 format
+	if parsed, err = strconv.ParseInt(speed, 10, 64); err != nil {
+		err = fmt.Errorf("failed to parse the speed provided, unit must be included. Here is a list of available units: %s", speedUnit)
+		return
+	}
+
+	// convert the the result into bps format
+	parsed *= speedMultiplier[unit]
+
+	return
 }
 
 // formatString will remove all spaces from the string and set the entire string into lower case

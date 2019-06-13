@@ -22,8 +22,8 @@ func NewPublicStorageClientAPI(sc *StorageClient) *PublicStorageClientAPI {
 }
 
 // StorageClientSetting will retrieve the current storage client settings
-func (api *PublicStorageClientAPI) StorageClientSetting() (setting storage.ClientSetting) {
-	return api.sc.RetrieveClientSetting()
+func (api *PublicStorageClientAPI) StorageClientSetting() (setting storage.ClientSettingAPIDisplay) {
+	return formatClientSetting(api.sc.RetrieveClientSetting())
 }
 
 // MemoryAvailable returns current memory available

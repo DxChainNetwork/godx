@@ -135,29 +135,29 @@ type ClientSetting struct {
 	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
 }
 
-// both RentPaymentAPI and ClientSettingAPI are used for API configurations
+// both RentPaymentAPIDisplay and ClientSettingAPIDisplay are used for API configurations
 type (
-	RentPaymentAPI struct {
-		Fund         string `json:"fund"`
-		StorageHosts string `json:"storagehosts"`
-		Period       string `json:"period"`
-		RenewWindow  string `json:"renewwindow"`
+	RentPaymentAPIDisplay struct {
+		Fund         string `json:"Fund"`
+		StorageHosts string `json:"Number of Storage Hosts"`
+		Period       string `json:"Storage Time"`
+		RenewWindow  string `json:"Renew Time"`
 
 		// ExpectedStorage is amount of data expected to be stored
-		ExpectedStorage string `json:"expectedstorage"`
+		ExpectedStorage string `json:"Expected Storage"`
 		// ExpectedUpload is expected amount of data upload before redundancy / block
-		ExpectedUpload string `json:"expectedupload"`
+		ExpectedUpload string `json:"Expected Upload"`
 		// ExpectedDownload is expected amount of data downloaded / block
-		ExpectedDownload string `json:"expecteddownload"`
+		ExpectedDownload string `json:"Expected Download"`
 		// ExpectedRedundancy is the average redundancy of files uploaded
-		ExpectedRedundancy string `json:"expectedredundancy"`
+		ExpectedRedundancy string `json:"Expected Redundancy"`
 	}
 
-	ClientSettingAPI struct {
-		RentPayment       RentPaymentAPI `json:"rentpayment"`
-		EnableIPViolation string         `json:"enableipviolation"`
-		MaxUploadSpeed    string         `json:"maxuploadspeed"`
-		MaxDownloadSpeed  string         `json:"maxdownloadspeed"`
+	ClientSettingAPIDisplay struct {
+		RentPayment       RentPaymentAPIDisplay `json:"RentPayment Setting"`
+		EnableIPViolation string                `json:"IP Violation Check Status"`
+		MaxUploadSpeed    string                `json:"Max Upload Speed"`
+		MaxDownloadSpeed  string                `json:"Max Download Speed"`
 	}
 )
 
