@@ -179,7 +179,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
-		if update.txn != nil {
+		if update.txn != nil && update.txn.Committed() {
 			err = update.txn.Release()
 		}
 		return
@@ -198,7 +198,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}
 	// If prepare process has error, release the transaction and return
 	if upErr.prepareErr != nil {
-		if update.txn != nil {
+		if update.txn != nil && update.txn.Committed() {
 			err = common.ErrCompose(err, update.txn.Release())
 		}
 		return
@@ -233,7 +233,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 		err = common.ErrCompose(err, newErr)
 	}
 	// release the transaction
-	if update.txn != nil {
+	if update.txn != nil && update.txn.Committed() {
 		if newErr := update.txn.Release(); newErr != nil {
 			err = common.ErrCompose(err, newErr)
 		}

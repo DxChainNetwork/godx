@@ -246,7 +246,9 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		err = common.ErrCompose(err, newErr)
 	}
 	// release the transaction
-	err = common.ErrCompose(err, update.txn.Release())
+	if update.txn.Committed() {
+		err = common.ErrCompose(err, update.txn.Release())
+	}
 	return
 }
 
