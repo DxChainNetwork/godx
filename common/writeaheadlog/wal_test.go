@@ -1,7 +1,6 @@
 package writeaheadlog
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand"
 	"os"
@@ -106,12 +105,9 @@ func TestCommitFailed(t *testing.T) {
 	}
 	defer recoveredWal.Close()
 
-	if len(recoveredTxns) != 1 {
+	if len(recoveredTxns) != 0 {
 		t.Errorf("Number of updates after restart didn't match. Expected %v, but was %v",
 			1, len(recoveredTxns))
-	}
-	if recoveredTxns[0].Committed() {
-		t.Errorf("recoveredTxn should not be committed")
 	}
 }
 
@@ -645,76 +641,6 @@ func TestTransactionAppend(t *testing.T) {
 	}
 }
 
-func TestUncommittedRecover(t *testing.T) {
-	wt, err := newWalTester(t.Name(), &utilsProd{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Create four transactions:
-	// 1. new -> append -> commit -> release
-	// 2. new -> append -> commit
-	// 3. new -> append
-	// 4. new
-	// close the wal and reopen should return 3 transactions
-	txn1, err := randomNewTransaction(wt, "test1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = processTransaction(txn1, 4, "test1"); err != nil {
-		t.Fatal(err)
-	}
-	txn2, err := randomNewTransaction(wt, "test2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = processTransaction(txn2, 3, "test2"); err != nil {
-		t.Fatal(err)
-	}
-	txn3, err := randomNewTransaction(wt, "test3")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = processTransaction(txn3, 2, "test3"); err != nil {
-		t.Fatal(err)
-	}
-	txn4, err := randomNewTransaction(wt, "test4")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = processTransaction(txn4, 1, "test4"); err != nil {
-		t.Fatal(err)
-	}
-	txnMap := make(map[string]*Transaction)
-	txnMap["test1"] = txn1
-	txnMap["test2"] = txn2
-	txnMap["test3"] = txn3
-	txnMap["test4"] = txn4
-	num, err := wt.wal.CloseIncomplete()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if num != 3 {
-		t.Fatalf("closing wal with %d transactions. Expect %d", num, 3)
-	}
-
-	_, txns, err := New(wt.wal.logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(txns) != 3 {
-		t.Fatalf("Reopen wal with %d transaction. Expect %d", len(txns), 3)
-	}
-	if err = checkTxnDataEqual(txns[0], txnMap[txns[0].Operations[0].Name]); err != nil {
-		t.Fatalf("txn2 not expected: %v", err)
-	}
-	if err = checkTxnDataEqual(txns[1], txnMap[txns[1].Operations[0].Name]); err != nil {
-		t.Fatalf("txn3 not expected: %v", err)
-	}
-	if err = checkTxnDataEqual(txns[2], txnMap[txns[2].Operations[0].Name]); err != nil {
-		t.Fatalf("txn4 not expected: %v", err)
-	}
-}
-
 // BenchmarkTransactionSpeedAppend runs benchmarkTransactionSpeed with append =
 // false
 func BenchmarkTransactionSpeed(b *testing.B) {
@@ -900,62 +826,6 @@ func (p *person) saveToDisk(filename string) error {
 	}
 	if _, err = f.Write([]byte(fmt.Sprintf("%+v", p))); err != nil {
 		return fmt.Errorf("cannot write the content")
-	}
-	return nil
-}
-
-func randomNewTransaction(wt *walTester, name string) (*Transaction, error) {
-	var ops []Operation
-	ops = append(ops, randomOp(name))
-	return wt.wal.NewTransaction(ops)
-}
-
-func randomOp(name string) Operation {
-	return Operation{
-		Name: name,
-		Data: randomBytes(1234),
-	}
-}
-
-// processTransaction process the transaction till the certain step reached
-func processTransaction(txn *Transaction, step int, name string) error {
-	if <-txn.InitComplete; txn.InitErr != nil {
-		return txn.InitErr
-	}
-	if step <= 1 {
-		return nil
-	}
-	if err := <-txn.Append([]Operation{randomOp(name)}); err != nil {
-		return err
-	}
-	if step <= 2 {
-		return nil
-	}
-	if err := <-txn.Commit(); err != nil {
-		return err
-	}
-	if step <= 3 {
-		return nil
-	}
-
-	if err := txn.Release(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func checkTxnDataEqual(got, want *Transaction) error {
-	if len(got.Operations) != len(want.Operations) {
-		return fmt.Errorf("operations size not equal: %d != %d", len(got.Operations), len(want.Operations))
-	}
-	for i := range got.Operations {
-		gotOp, wantOp := got.Operations[i], want.Operations[i]
-		if gotOp.Name != wantOp.Name {
-			return fmt.Errorf("operation[%d] name not expected. %v != %v", i, gotOp.Name, wantOp.Name)
-		}
-		if !bytes.Equal(gotOp.Data, wantOp.Data) {
-			return fmt.Errorf("operation[%d] data not expected.", i)
-		}
 	}
 	return nil
 }
