@@ -25,13 +25,13 @@ func TestAddSector(t *testing.T) {
 	sm := newTestStorageManager(t, "", newDisrupter())
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
-	if err := sm.addStorageFolder(path, size); err != nil {
+	if err := sm.AddStorageFolder(path, size); err != nil {
 		t.Fatal(err)
 	}
 	// Create the sector
 	data := randomBytes(storage.SectorSize)
 	root := merkle.Root(data)
-	if err := sm.addSector(root, data); err != nil {
+	if err := sm.AddSector(root, data); err != nil {
 		t.Fatal(err)
 	}
 	// Post add sector check
@@ -44,7 +44,7 @@ func TestAddSector(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Create a virtual sector
-	if err := sm.addSector(root, data); err != nil {
+	if err := sm.AddSector(root, data); err != nil {
 		t.Fatal(err)
 	}
 	err = checkSectorExist(root, sm, data, 2)
@@ -73,13 +73,13 @@ func TestDisruptedPhysicalAddSector(t *testing.T) {
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
-		if err := sm.addStorageFolder(path, size); err != nil {
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		// Create the sector
 		data := randomBytes(storage.SectorSize)
 		root := merkle.Root(data)
-		if err := sm.addSector(root, data); err == nil {
+		if err := sm.AddSector(root, data); err == nil {
 			t.Fatalf("test %v: disrupting does not give error", test.keyWord)
 		}
 		id := sm.calculateSectorID(root)
@@ -109,16 +109,16 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
-		if err := sm.addStorageFolder(path, size); err != nil {
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		// Create the sector
 		data := randomBytes(storage.SectorSize)
 		root := merkle.Root(data)
-		if err := sm.addSector(root, data); err != nil {
+		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: first add sector give error: %v", test.keyWord, err)
 		}
-		if err := sm.addSector(root, data); err == nil {
+		if err := sm.AddSector(root, data); err == nil {
 			t.Fatalf("test %v: second add sector does not give error: %v", test.keyWord, err)
 		}
 		if err := checkSectorExist(root, sm, data, 1); err != nil {
@@ -148,12 +148,12 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
-		if err := sm.addStorageFolder(path, size); err != nil {
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		data := randomBytes(storage.SectorSize)
 		root := merkle.Root(data)
-		if err := sm.addSector(root, data); err != nil {
+		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: errStop should not give error: %v", test.keyWord, err)
 		}
 		id := sm.calculateSectorID(root)
@@ -198,15 +198,15 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
-		if err := sm.addStorageFolder(path, size); err != nil {
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		data := randomBytes(storage.SectorSize)
 		root := merkle.Root(data)
-		if err := sm.addSector(root, data); err != nil {
+		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: add physical sector should not give error: %v", test.keyWord, err)
 		}
-		if err := sm.addSector(root, data); err != nil {
+		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: errStop should not give error: %v", test.keyWord, err)
 		}
 		sm.shutdown(t, 100*time.Millisecond)
@@ -243,7 +243,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	// add three storage folders, each have 8 sectors
 	for i := 0; i != 3; i++ {
 		path := randomFolderPath(t, "")
-		if err := sm.addStorageFolder(path, size); err != nil {
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatalf("test %v: %v", "", err)
 		}
 	}
@@ -291,7 +291,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 					break
 				}
 				expectLock.Unlock()
-				if err := sm.addSector(rt, data); err != nil {
+				if err := sm.AddSector(rt, data); err != nil {
 					errChan <- fmt.Errorf("add virtual sector cause an error: %v", err)
 				}
 			} else {
@@ -305,7 +305,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 					return
 				}
 				expectLock.Unlock()
-				if err := sm.addSector(root, data); err != nil {
+				if err := sm.AddSector(root, data); err != nil {
 					upErr, isUpErr := err.(*updateError)
 					if !isUpErr {
 						errChan <- err
@@ -331,7 +331,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 				atomic.AddUint32(&numSectors, 1)
 			}
 		}()
-		<-time.After(100 * time.Millisecond)
+		<-time.After(50 * time.Millisecond)
 	}
 	waitChan := make(chan struct{})
 	go func() {
@@ -438,7 +438,7 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 		return
 	}
 	// Lastly, use the ReadSector method to check the data equality
-	b, err = sm.readSector(root)
+	b, err = sm.ReadSector(root)
 	if err != nil {
 		return
 	}

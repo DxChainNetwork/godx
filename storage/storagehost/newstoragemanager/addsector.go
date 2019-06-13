@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package newstoragemanager
 
 import (
@@ -11,7 +15,6 @@ import (
 )
 
 type (
-	// TODO: Add more test cases for more error scenarios
 	// addSectorUpdate is the update to add a sector
 	addSectorUpdate struct {
 		// user input fields
@@ -21,14 +24,14 @@ type (
 		// The folder to add sector
 		folder *storageFolder
 
+		// sector to add
+		sector *sector
+
 		// transaction is the transaction the update associated with
 		txn *writeaheadlog.Transaction
 
 		// batch is the in memory database operation set
 		batch *leveldb.Batch
-
-		// cached field for sector
-		sector *sector
 
 		// physical is the flag for whether this update is to add a physical sector or not
 		physical bool
@@ -55,9 +58,9 @@ type (
 	}
 )
 
-// addSector add the sector to host manager
+// AddSector add the sector to host manager
 // whether the data has merkle root root is not validated here, and assumed valid
-func (sm *storageManager) addSector(root common.Hash, data []byte) (err error) {
+func (sm *storageManager) AddSector(root common.Hash, data []byte) (err error) {
 	if err = sm.tm.Add(); err != nil {
 		return
 	}

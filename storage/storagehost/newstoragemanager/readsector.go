@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package newstoragemanager
 
 import (
@@ -8,8 +12,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-//readSector read the sector data
-func (sm *storageManager) readSector(root common.Hash) (data []byte, err error) {
+//ReadSector read the sector data
+func (sm *storageManager) ReadSector(root common.Hash) (data []byte, err error) {
 	// calculate the sector id
 	id := sm.calculateSectorID(root)
 	// lock the sector

@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package newstoragemanager
 
 import (
@@ -17,7 +21,7 @@ func TestAddStorageFolderNormal(t *testing.T) {
 	sm := newTestStorageManager(t, "", newDisrupter())
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
-	err := sm.addStorageFolder(path, size)
+	err := sm.AddStorageFolder(path, size)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +80,7 @@ func TestAddStorageFolderRecover(t *testing.T) {
 	sm := newTestStorageManager(t, "", d)
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
-	if err := sm.addStorageFolder(path, size); err != nil {
+	if err := sm.AddStorageFolder(path, size); err != nil {
 		t.Fatal(err)
 	}
 	sm.shutdown(t, 100*time.Millisecond)
@@ -134,7 +138,7 @@ func TestAddStorageFolderExhaustive(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			err := sm.addStorageFolder(path, size)
+			err := sm.AddStorageFolder(path, size)
 			if err != nil {
 				t.Fatalf("update return some err: %v", err)
 			}
