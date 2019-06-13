@@ -60,8 +60,8 @@ func (w *Wal) recoverWal(data []byte) ([]*Transaction, error) {
 nextTxn:
 	for i := PageSize; i+PageSize <= len(data); i += PageSize {
 		status := binary.LittleEndian.Uint64(data[i:])
-		if status != txnStatusCommitted && status != txnStatusUncommitted {
-			// Transaction with commit status and uncommitted status will be returned
+		if status != txnStatusCommitted {
+			// Only Transactions after commit is processed
 			continue
 		}
 
@@ -90,7 +90,7 @@ nextTxn:
 		txn := &Transaction{
 			status:         status,
 			setupComplete:  true,
-			commitComplete: status == txnStatusCommitted,
+			commitComplete: true,
 			ID:             seq,
 			headPage:       firstPage,
 			wal:            w,
