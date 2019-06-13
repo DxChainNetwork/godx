@@ -33,9 +33,6 @@ const (
 
 	// targetRecoverCommitted is the state of recovering a committed transaction
 	targetRecoverCommitted
-
-	// targetRecoverUncommitted is the state of recovering an uncommitted trnasaction
-	targetRecoverUncommitted
 )
 
 const (

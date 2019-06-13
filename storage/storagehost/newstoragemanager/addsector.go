@@ -141,8 +141,6 @@ func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
-	case targetRecoverUncommitted:
-		err = update.prepareUncommitted(manager)
 	case targetRecoverCommitted:
 		err = update.prepareCommitted(manager)
 	default:
@@ -158,8 +156,6 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 		err = update.processNormal(manager)
 	case targetRecoverCommitted:
 		err = update.processCommitted(manager)
-	case targetRecoverUncommitted:
-		err = update.processUncommitted(manager)
 	default:
 		err = errors.New("invalid target")
 	}
@@ -439,19 +435,6 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 		err = fmt.Errorf("unknown operation name: %v", txn.Operations[1].Name)
 	}
 	return
-}
-
-// prepareUncommitted prepare for uncommitted recovery
-// If the addSectorUpdate is uncommitted, nothing is written to database,
-// the folder has its original data. So no action is needed
-func (update *addSectorUpdate) prepareUncommitted(manager *storageManager) (err error) {
-	manager.sectorLocks.lockSector(update.id)
-	return errRevert
-}
-
-// processUncommitted process for uncommitted recovery data
-func (update *addSectorUpdate) processUncommitted(manager *storageManager) (err error) {
-	return errRevert
 }
 
 // prepareCommitted prepare for committed transaction

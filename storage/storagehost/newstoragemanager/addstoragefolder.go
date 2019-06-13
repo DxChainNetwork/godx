@@ -175,8 +175,6 @@ func (update *addStorageFolderUpdate) prepare(manager *storageManager, target ui
 		err = update.prepareNormal(manager)
 	case targetRecoverCommitted:
 		err = update.prepareCommitted(manager)
-	case targetRecoverUncommitted:
-		err = update.prepareUncommitted(manager)
 	default:
 		err = errors.New("unknown target")
 	}
@@ -190,8 +188,6 @@ func (update *addStorageFolderUpdate) process(manager *storageManager, target ui
 		err = update.processNormal(manager)
 	case targetRecoverCommitted:
 		err = update.processCommitted(manager)
-	case targetRecoverUncommitted:
-		err = update.processUncommitted(manager)
 	default:
 		err = errors.New("unknown target")
 	}
@@ -352,30 +348,6 @@ func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) 
 
 // processCommitted is the function called in process stage as processing committed an uncommitted updates
 func (update *addStorageFolderUpdate) processCommitted(manager *storageManager) (err error) {
-	// Do nothing, just return errRevert.
-	return errRevert
-}
-
-// prepareUncommitted is the function called in prepare stage as preparing uncommitted updates
-func (update *addStorageFolderUpdate) prepareUncommitted(manager *storageManager) (err error) {
-	update.folder, err = manager.folders.get(update.path)
-	if err != nil || update.folder == nil {
-		// In this case, error only happens when the update.path is not in folders
-		update.folder = &storageFolder{
-			path: update.path,
-			id:   folderID(0),
-		}
-	}
-	// lock the folders until release
-	manager.folders.lock.Lock()
-	if err = <-update.txn.Commit(); err != nil {
-		return common.ErrCompose(err, errRevert)
-	}
-	return errRevert
-}
-
-// processUncommitted is the function called in process stage as processing uncommitted updates
-func (update *addStorageFolderUpdate) processUncommitted(manager *storageManager) (err error) {
 	// Do nothing, just return errRevert.
 	return errRevert
 }
