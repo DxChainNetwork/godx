@@ -53,29 +53,34 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	//TODO 从磁盘中获取总的存储和剩余存储
 
 	acceptingContracts := h.config.AcceptingContracts
-	paymentAddress := h.config.PaymentAddress
-	account := accounts.Account{Address: paymentAddress}
-	wallet, err := h.ethBackend.AccountManager().Find(account)
-	if err != nil {
-		h.log.Error("Failed to find the wallet", err)
-		acceptingContracts = false
-	}
-	//If the wallet is locked, you will not be able to enter the signing phase.
-	status, err := wallet.Status()
-	if status == "Locked" || err != nil {
-		h.log.Error("Wallet is not unlocked", err)
-		acceptingContracts = false
-	}
-
-	stateDB, err := h.ethBackend.GetBlockChain().State()
-	if err != nil {
-		h.log.Error("Failed to find the stateDB", err)
-	}
-	balance := stateDB.GetBalance(paymentAddress)
 	MaxDeposit := h.config.MaxDeposit
-	//If the maximum deposit amount exceeds the account balance, set it as the account balance
-	if balance.Cmp(&MaxDeposit) < 0 {
-		MaxDeposit = *balance
+	paymentAddress := h.config.PaymentAddress
+	if paymentAddress != (common.Address{}) {
+		account := accounts.Account{Address: paymentAddress}
+		wallet, err := h.ethBackend.AccountManager().Find(account)
+		if err != nil {
+			h.log.Error("Failed to find the wallet", err)
+			acceptingContracts = false
+		}
+		//If the wallet is locked, you will not be able to enter the signing phase.
+		status, err := wallet.Status()
+		if status == "Locked" || err != nil {
+			h.log.Error("Wallet is not unlocked", err)
+			acceptingContracts = false
+		}
+
+		stateDB, err := h.ethBackend.GetBlockChain().State()
+		if err != nil {
+			h.log.Error("Failed to find the stateDB", err)
+		}
+		balance := stateDB.GetBalance(paymentAddress)
+
+		//If the maximum deposit amount exceeds the account balance, set it as the account balance
+		if balance.Cmp(&MaxDeposit) < 0 {
+			MaxDeposit = *balance
+		}
+	} else {
+		h.log.Error("paymentAddress must be explicitly specified")
 	}
 
 	return storage.HostExtConfig{
