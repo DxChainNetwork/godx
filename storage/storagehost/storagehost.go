@@ -31,7 +31,7 @@ import (
 )
 
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.HostSettingMsg:					   handleHostSettingRequest,
+	storage.HostSettingMsg:                    handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
@@ -43,9 +43,62 @@ func (h *StorageHost) checkUnlockHash() error {
 	return nil
 }
 
-// TODO: return the externalConfig for host
+//return the externalConfig for host
 func (h *StorageHost) externalConfig() storage.HostExtConfig {
-	return storage.HostExtConfig{}
+	//Each time you update the configuration, number plus one
+	h.revisionNumber++
+
+	var totalStorageSpace uint64
+	var remainingStorageSpace uint64
+	//TODO 从磁盘中获取总的存储和剩余存储
+
+	acceptingContracts := h.config.AcceptingContracts
+	paymentAddress := h.config.PaymentAddress
+	account := accounts.Account{Address: paymentAddress}
+	wallet, err := h.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		h.log.Error("Failed to find the wallet", err)
+		acceptingContracts = false
+	}
+	//If the wallet is locked, you will not be able to enter the signing phase.
+	status, err := wallet.Status()
+	if status == "Locked" || err != nil {
+		h.log.Error("Wallet is not unlocked", err)
+		acceptingContracts = false
+	}
+
+	stateDB, err := h.ethBackend.GetBlockChain().State()
+	if err != nil {
+		h.log.Error("Failed to find the stateDB", err)
+	}
+	balance := stateDB.GetBalance(paymentAddress)
+	MaxDeposit := h.config.MaxDeposit
+	//If the maximum deposit amount exceeds the account balance, set it as the account balance
+	if balance.Cmp(&MaxDeposit) < 0 {
+		MaxDeposit = *balance
+	}
+
+	return storage.HostExtConfig{
+		AcceptingContracts:     acceptingContracts,
+		MaxDownloadBatchSize:   h.config.MaxDownloadBatchSize,
+		MaxDuration:            h.config.MaxDuration,
+		MaxReviseBatchSize:     h.config.MaxReviseBatchSize,
+		SectorSize:             storage.SectorSize,
+		WindowSize:             h.config.WindowSize,
+		PaymentAddress:         paymentAddress,
+		TotalStorage:           totalStorageSpace,
+		RemainingStorage:       remainingStorageSpace,
+		Deposit:                common.NewBigInt(h.config.Deposit.Int64()),
+		MaxDeposit:             common.NewBigInt(MaxDeposit.Int64()),
+		BaseRPCPrice:           common.NewBigInt(h.config.MinBaseRPCPrice.Int64()),
+		ContractPrice:          common.NewBigInt(h.config.MinContractPrice.Int64()),
+		DownloadBandwidthPrice: common.NewBigInt(h.config.MinDownloadBandwidthPrice.Int64()),
+		SectorAccessPrice:      common.NewBigInt(h.config.MinSectorAccessPrice.Int64()),
+		StoragePrice:           common.NewBigInt(h.config.MinStoragePrice.Int64()),
+		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
+		RevisionNumber:         h.revisionNumber,
+		Version:                storage.ConfigVersion,
+	}
 }
 
 // TODO: mock the database for storing storage obligation, currently use the
