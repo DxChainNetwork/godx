@@ -64,7 +64,7 @@ func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
 			h.storagehost.lock.Lock()
 			h.storagehost.config.PaymentAddress = paymentAddress
 			h.storagehost.lock.Unlock()
-			h.storagehost.log.Info("host automatically configured", "address", paymentAddress)
+			h.storagehost.log.Info("host automatically sets your wallet's first account as paymentAddress")
 			return paymentAddress, nil
 		}
 	}
