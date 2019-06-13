@@ -36,8 +36,7 @@ func TestAddSector(t *testing.T) {
 	}
 	// Post add sector check
 	// The sector shall be stored in db
-	sectorID := sm.calculateSectorID(root)
-	err := checkSectorExist(sectorID, sm, data, 1)
+	err := checkSectorExist(root, sm, data, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +47,7 @@ func TestAddSector(t *testing.T) {
 	if err := sm.addSector(root, data); err != nil {
 		t.Fatal(err)
 	}
-	err = checkSectorExist(sectorID, sm, data, 2)
+	err = checkSectorExist(root, sm, data, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,8 +121,7 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 		if err := sm.addSector(root, data); err == nil {
 			t.Fatalf("test %v: second add sector does not give error: %v", test.keyWord, err)
 		}
-		id := sm.calculateSectorID(root)
-		if err := checkSectorExist(id, sm, data, 1); err != nil {
+		if err := checkSectorExist(root, sm, data, 1); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		if err := checkFoldersHasExpectedSectors(sm, 1); err != nil {
@@ -205,7 +203,6 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		}
 		data := randomBytes(storage.SectorSize)
 		root := merkle.Root(data)
-		id := sm.calculateSectorID(root)
 		if err := sm.addSector(root, data); err != nil {
 			t.Fatalf("test %v: add physical sector should not give error: %v", test.keyWord, err)
 		}
@@ -226,7 +223,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		}
 		// wait for the update to complete
 		<-time.After(100 * time.Millisecond)
-		if err := checkSectorExist(id, newSM, data, 1); err != nil {
+		if err := checkSectorExist(root, newSM, data, 1); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		if err := checkFoldersHasExpectedSectors(newSM, 1); err != nil {
@@ -352,8 +349,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	// Check the result
 	t.Logf("after %v tries, added %v virtual sectors, got %v sectors", numTotal, numVirtual, numSectors)
 	for rt, expect := range expect {
-		id := sm.calculateSectorID(rt)
-		if err := checkSectorExist(id, sm, expect.data, expect.count); err != nil {
+		if err := checkSectorExist(rt, sm, expect.data, expect.count); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -367,7 +363,8 @@ func TestAddSectorConcurrent(t *testing.T) {
 }
 
 // checkSectorExist checks whether the sector exists
-func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64) (err error) {
+func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count uint64) (err error) {
+	id := sm.calculateSectorID(root)
 	sector, err := sm.db.getSector(id)
 	if err != nil {
 		return err
@@ -405,7 +402,6 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if err != nil {
 		return err
 	}
-	defer mmFolder.lock.Unlock()
 	if err = mmFolder.setUsedSectorSlot(sector.index); err == nil {
 		return fmt.Errorf("folders %d entry shall be occupied", sector.index)
 	}
@@ -418,6 +414,7 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 	if err != nil {
 		return err
 	}
+	mmFolder.lock.Unlock()
 	if uint64(n) != storage.SectorSize {
 		return fmt.Errorf("read size not equal to sectorSize. Got %v, Expect %v", n, storage.SectorSize)
 	}
@@ -438,7 +435,15 @@ func checkSectorExist(id sectorID, sm *storageManager, data []byte, count uint64
 		err = errors.New("sector still locked")
 	}
 	if err != nil {
-		return err
+		return
+	}
+	// Lastly, use the ReadSector method to check the data equality
+	b, err = sm.readSector(root)
+	if err != nil {
+		return
+	}
+	if !bytes.Equal(data, b) {
+		return fmt.Errorf("data bytes not equal")
 	}
 	return nil
 }

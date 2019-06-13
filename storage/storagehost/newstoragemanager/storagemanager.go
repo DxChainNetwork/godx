@@ -87,12 +87,7 @@ func (sm *storageManager) Start() (err error) {
 			return nil
 		}
 		// define the process target
-		var target uint8
-		if txn.Committed() {
-			target = targetRecoverCommitted
-		} else {
-			target = targetRecoverUncommitted
-		}
+		target := targetRecoverCommitted
 		// decode the update
 		up, err := decodeFromTransaction(txn)
 		if err != nil {

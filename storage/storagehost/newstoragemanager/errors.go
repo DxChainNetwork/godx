@@ -11,6 +11,9 @@ import (
 )
 
 var (
+	// ErrNotFound is the error that happens when a sector data is not found
+	ErrNotFound = errors.New("not found")
+
 	// errStopped is the error that during update, an error happened
 	errStopped = errors.New("storage manager has been stopped")
 

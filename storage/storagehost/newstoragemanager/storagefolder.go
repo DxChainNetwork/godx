@@ -5,15 +5,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"io"
 	"os"
 	"path/filepath"
-	"sync/atomic"
-
-	"github.com/DxChainNetwork/godx/common"
 )
 
 type (
@@ -93,17 +91,17 @@ func (sf *storageFolder) load() (err error) {
 	datafilePath := filepath.Join(sf.path, dataFileName)
 	fileInfo, err := os.Stat(datafilePath)
 	if os.IsNotExist(err) {
-		atomic.StoreUint32(&sf.status, folderUnavailable)
+		sf.status = folderUnavailable
 		err = errors.New("data file not exist")
 		return
 	}
 	if fileInfo.Size() < int64(sf.numSectors)*int64(storage.SectorSize) {
-		atomic.StoreUint32(&sf.status, folderUnavailable)
+		sf.status = folderUnavailable
 		err = errors.New("file size too small")
 		return
 	}
 	if sf.dataFile, err = os.Open(datafilePath); err != nil {
-		atomic.StoreUint32(&sf.status, folderUnavailable)
+		sf.status = folderUnavailable
 		return
 	}
 	return
