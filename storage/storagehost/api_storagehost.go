@@ -2,6 +2,12 @@ package storagehost
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/DxChainNetwork/godx/accounts"
+
+	"github.com/DxChainNetwork/godx/common"
+
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -26,6 +32,43 @@ func NewHostDebugAPI(storagehost *StorageHost) *HostDeBugAPI {
 // HelloWorld just test if the debug API is working, could be called in console
 func (h *HostDeBugAPI) HelloWorld(ctx context.Context) string {
 	return "confirmed! host api is working"
+}
+
+func (h *HostDeBugAPI) SetPaymentAddress(paymentAddress common.Address) bool {
+	account := accounts.Account{Address: paymentAddress}
+	_, err := h.storagehost.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		h.storagehost.log.Error("You must set up an account owned by your local wallet!")
+		return false
+	}
+
+	h.storagehost.lock.Lock()
+	h.storagehost.config.PaymentAddress = paymentAddress
+	h.storagehost.lock.Unlock()
+
+	return true
+}
+
+func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
+	h.storagehost.lock.RLock()
+	paymentAddress := h.storagehost.config.PaymentAddress
+	h.storagehost.lock.RUnlock()
+
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+
+	if wallets := h.storagehost.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			paymentAddress := accounts[0].Address
+			h.storagehost.lock.Lock()
+			h.storagehost.config.PaymentAddress = paymentAddress
+			h.storagehost.lock.Unlock()
+			h.storagehost.log.Info("host automatically configured", "address", paymentAddress)
+			return paymentAddress, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
 // Version gives a mock version of the debugapi

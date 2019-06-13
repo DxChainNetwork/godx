@@ -13792,6 +13792,18 @@ module.exports = Web3;
         params: 0,
       });
 
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddress',
+        call: 'hostdebug_setPaymentAddress',
+        params: 1,
+      });
+
+      var getPaymentAddress = new Method({
+        name: 'getPaymentAddress',
+        call: 'hostdebug_getPaymentAddress',
+        params: 0,
+      });
+
       var persistdir = new Method({
         name: 'persistdir',
         call: 'hostdebug_persistdir',
@@ -13850,6 +13862,8 @@ module.exports = Web3;
 
       return [
         helloWorld,
+        getPaymentAddress,
+        setPaymentAddress,
         persistdir,
         printStorageHost,
         printInternalSetting,
