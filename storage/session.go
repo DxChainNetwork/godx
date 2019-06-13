@@ -17,9 +17,9 @@ import (
 var (
 	ErrClientDisconnect = errors.New("storage client disconnect proactively")
 )
-const (
 
-	HostSettingMsg = 0x20
+const (
+	HostSettingMsg         = 0x20
 	HostSettingResponseMsg = 0x21
 
 	// Storage Contract Negotiate Protocol belonging to eth/64
@@ -235,12 +235,6 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 		return nil, err
 	}
 	return &msg, err
-}
-
-// if error occurs in host's negotiation, should send this msg
-func (s *Session) SendErrorMsg(err error) error {
-	s.Log().Debug("Sending negotiation error msg", "error_info", err)
-	return p2p.Send(s.rw, NegotiationErrorMsg, err)
 }
 
 // send this msg to notify the other node that we want stop the negotiation
