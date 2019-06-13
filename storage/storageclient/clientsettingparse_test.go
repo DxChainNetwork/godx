@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
-	"math/big"
 	"math/rand"
 	"testing"
 	"time"
@@ -74,11 +73,11 @@ func TestParseFund(t *testing.T) {
 		fund   string
 		result common.BigInt
 	}{
-		{"100 h", common.NewBigInt(100)},
-		{"100 DX", fundUnitConversion(currencyIndexMap["dx"], big.NewInt(100))},
-		{"100 GDX", fundUnitConversion(currencyIndexMap["Gdx"], big.NewInt(100))},
-		{"100  nDx", fundUnitConversion(currencyIndexMap["ndx"], big.NewInt(100))},
-		{"99876Kdx", fundUnitConversion(currencyIndexMap["Kdx"], big.NewInt(99876))},
+		{"100 wei", common.NewBigInt(100)},
+		{"100ether", common.NewBigInt(100).MultUint64(currencyIndexMap["ether"])},
+		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(currencyIndexMap["milliether"])},
+		{"100  MICROether", common.NewBigInt(100).MultUint64(currencyIndexMap["microether"])},
+		{"99876KWEI", common.NewBigInt(99876).MultUint64(currencyIndexMap["kwei"])},
 	}
 
 	for _, table := range tables {
@@ -99,12 +98,11 @@ func TestParseFund(t *testing.T) {
 
 func TestParseFundFail(t *testing.T) {
 	var failedExpected = []string{
-		"100dxc",   // does not match with any unit
-		"100ldx",   // error, even the suffix is dx
-		"120lgdx",  // error, even the suffix is dx
-		"a1200gdx", // error, even the suffix is dx
-		"120gdx",   // lower case g, does not match with any unit
-		"120kdx",   // lower case k, does not match with any unit
+		"100dxc",     // does not match with any unit
+		"100fwei",    // error, even the suffix is dx
+		"120cdwei",   // error, even the suffix is dx
+		"a1200ether", // error, even the suffix is dx
+		"120gether",  // error, does not match with any unit
 	}
 
 	for _, failedCase := range failedExpected {

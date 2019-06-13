@@ -55,14 +55,14 @@ const (
 	minHosts = 2
 )
 
-var currencyIndexMap = map[string]int{
-	"ndx": 0,
-	"udx": 1,
-	"mdx": 2,
-	"dx":  3,
-	"Kdx": 4,
-	"Mdx": 5,
-	"Gdx": 6,
+var currencyIndexMap = map[string]uint64{
+	"wei":        1,
+	"kwei":       1e3,
+	"mwei":       1e6,
+	"gwei":       1e9,
+	"microether": 1e12,
+	"milliether": 1e15,
+	"ether":      1e18,
 }
 
 var dataSizeMultiplier = map[string]uint64{

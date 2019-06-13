@@ -14,7 +14,7 @@ import (
 )
 
 // currencyUnit defines available units used for rentPayment fund
-var currencyUnit = []string{"ndx", "udx", "mdx", "dx", "Kdx", "Mdx", "Gdx"}
+var currencyUnit = []string{"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
 
 // timeUnit defines available units used for period and renew
 var timeUnit = []string{"h", "b", "d", "w", "m", "y"}
@@ -145,51 +145,49 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 	return
 }
 
-// parseFund will parse the user string input, and convert it into common.BigInt
-// type in terms of hump, which is the smallest currency unit
+//parseFund will parse the user string input, and convert it into common.BigInt
+//type in terms of wei, which is the smallest currency unit
 func parseFund(fund string) (parsed common.BigInt, err error) {
 
-	// verify the length first
-	if len(fund) < 3 {
-		err = fmt.Errorf("currency unit is expected")
-		return
-	}
+	// remove all the white spaces and convert everything into lower case
+	fund = formatString(fund)
 
-	// remove all white spaces, and convert the character d and x to lower case
-	fund = strings.Replace(fund, " ", "", -1)
-	fund = strings.Replace(fund, "D", "d", -1)
-	fund = strings.Replace(fund, "X", "x", -1)
-
-	// check the special uint h
-	if strings.HasSuffix(fund, "h") {
-		return stringToBigInt("h", fund, -1)
-	}
-
-	// check the suffix and convert the units to hump, which is the smallest unit
-	// for the dx currency
-	for unit, index := range currencyIndexMap {
-		if unit == "dx" {
+	// check the suffix and convert the units into wei, which is the smallest unit
+	// for the eth currency type
+	for unit, _ := range currencyIndexMap {
+		// skip wei or ether because other currency unit also
+		// includes these kind of suffix, such as milliether and
+		// kwei
+		if unit == "wei" || unit == "ether" {
 			continue
 		}
 
+		// check if the string contains the suffix and convert
+		// the result into bigInt
 		if strings.HasSuffix(fund, unit) {
-			return stringToBigInt(unit, fund, index)
+			return stringToBigInt(unit, fund)
 		}
 	}
 
-	// at the end, check if the string contains dx suffix
-	if strings.HasSuffix(fund, "dx") {
-		return stringToBigInt("dx", fund, currencyIndexMap["dx"])
+	// check if the suffix contains wei
+	if strings.HasSuffix(fund, "wei") {
+		return stringToBigInt("wei", fund)
 	}
 
-	// if the provided currency unit cannot be found from the currency unit list
-	// return error
-	err = fmt.Errorf("the provided currency unit is invalid")
+	// check if the suffix contains ether
+	if strings.HasSuffix(fund, "ether") {
+		return stringToBigInt("ether", fund)
+	}
+
+	// otherwise, return error
+	err = fmt.Errorf("the provided currency unit is invalid. Here is a list of valid currency unit: %+v", currencyUnit)
 	return
 }
 
 // stringToBigInt will convert the string to common.BigInt type
-func stringToBigInt(unit, fund string, index int) (parsed common.BigInt, err error) {
+func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
+	// from the currency indexMap, get the conversion rate
+	conversionRate := currencyIndexMap[unit]
 	var bigInt = new(big.Int)
 
 	// remove the unit
@@ -197,7 +195,7 @@ func stringToBigInt(unit, fund string, index int) (parsed common.BigInt, err err
 
 	// check if the string contains only digit
 	if !containsDigitOnly(fund) {
-		err = fmt.Errorf("the fund is expected to not contain any letter %s", fund)
+		err = fmt.Errorf("the fund provided is not valid, the fund must be numbers only with the valid unit, ex 100wei. Here is a list of valid currency unit: %+v", currencyUnit)
 		return
 	}
 
@@ -207,13 +205,12 @@ func stringToBigInt(unit, fund string, index int) (parsed common.BigInt, err err
 		return
 	}
 
-	// convert the unit to hump, and convert the type to common.BigInt
-	if unit != "h" {
-		parsed = fundUnitConversion(index, bigInt)
-		return
-	}
-
+	// convert the result to common.BigInt
 	parsed = common.PtrBigInt(bigInt)
+
+	// unit conversion
+	parsed = parsed.MultUint64(conversionRate)
+
 	return
 }
 
@@ -221,15 +218,6 @@ func stringToBigInt(unit, fund string, index int) (parsed common.BigInt, err err
 func containsDigitOnly(s string) (digitOnly bool) {
 	notDigit := func(c rune) bool { return c < '0' || c > '9' }
 	return strings.IndexFunc(s, notDigit) == -1
-}
-
-// fundUnitConversion will convert the fund into unit hump, which is the smallest
-// currency unit
-func fundUnitConversion(index int, fund *big.Int) (converted common.BigInt) {
-	exp := 24 + 3*(index-3)
-	mag := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(exp)), nil)
-	converted = common.PtrBigInt(new(big.Int).Mul(fund, mag))
-	return
 }
 
 // parseStorageHosts will parse the string version of storage hosts into uint64 type
