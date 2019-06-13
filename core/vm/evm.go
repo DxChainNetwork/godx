@@ -485,7 +485,7 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	case HostAnnounceTransaction:
 		return evm.HostAnnounceTx(caller, data, gas)
 	case FormContractTransaction:
-		return evm.FormContractTx(caller, data, gas)
+		return evm.CreateContractTx(caller, data, gas)
 	case CommitRevisionTransaction:
 		return evm.CommitRevisionTx(caller, data, gas)
 	case StorageProofTransaction:
@@ -533,7 +533,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 	return nil, gasCheck, nil
 }
 
-func (evm *EVM) FormContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
+func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter form contract tx executing ... ")
 	var (
 		state    = evm.StateDB
