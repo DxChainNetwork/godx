@@ -550,7 +550,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	return contractMetaData, nil
 }
 
-// calculate Enode.ID, reference:
+// calculate Enode.ContractID, reference:
 // p2p/discover/node.go:41
 // p2p/discover/node.go:59
 func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {

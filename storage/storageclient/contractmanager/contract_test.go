@@ -218,7 +218,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 
 	// validation for oldestContractSet, olderContractSet, newestContractSet
 	// what to validate?
-	// 		1. cm.hostToContract[contract.EnodeID] = contract.ID -> should be newestContract
+	// 		1. cm.hostToContract[contract.EnodeID] = contract.ContractID -> should be newestContract
 	// 		2. oldestContractSet, olderContractSet should be placed under expiredContracts
 	// 		3. oldestContractSet, olderContractSet should be deleted from the contractSet
 	// 		4. the renewed from and renewed to order

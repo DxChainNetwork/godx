@@ -202,13 +202,13 @@ func (sc *StorageClient) ContractDetail(contractID storage.ContractID) (detail s
 }
 
 // ActiveContracts will retrieve all active contracts, reformat them, and return them back
-func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPI) {
+func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
 	allActiveContracts := sc.contractManager.RetrieveActiveContracts()
 
 	for _, contract := range allActiveContracts {
-		activeContract := ActiveContractsAPI{
-			ID:           contract.ID,
-			HostID:       contract.EnodeID,
+		activeContract := ActiveContractsAPIDisplay{
+			ContractID:   contract.ID.String(),
+			HostID:       contract.EnodeID.String(),
 			AbleToUpload: contract.Status.UploadAbility,
 			AbleToRenew:  contract.Status.RenewAbility,
 			Canceled:     contract.Status.Canceled,

@@ -153,7 +153,7 @@ func calculateContractUnspentFund(pc *storage.PeriodCost, contractPayment common
 
 // calculatePrevContractCost will be used to calculate the previous contract cost
 func calculatePrevContractCost(pc *storage.PeriodCost, contract storage.ContractMetaData) {
-	pc.PrevContractCost = pc.PrevContractCost.Add(contract.ContractFee).Add(contract.GasFee).
+	pc.PrevContractCost = pc.PrevContractCost.Add(contract.ContractFee).Add(contract.GasCost).
 		Add(contract.UploadCost).Add(contract.DownloadCost).Add(contract.StorageCost)
 }
 
@@ -162,7 +162,7 @@ func calculatePrevContractCost(pc *storage.PeriodCost, contract storage.Contract
 func updatePrevContractCost(pc *storage.PeriodCost, contract storage.ContractMetaData) {
 	// calculate the contract fees
 	pc.ContractFees = pc.ContractFees.Add(contract.ContractFee)
-	pc.ContractFees = pc.ContractFees.Add(contract.GasFee)
+	pc.ContractFees = pc.ContractFees.Add(contract.GasCost)
 
 	// calculate the upload, download, and storage cost
 	pc.UploadCost = pc.UploadCost.Add(contract.UploadCost)

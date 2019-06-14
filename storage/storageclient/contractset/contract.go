@@ -291,7 +291,7 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 		DownloadCost: c.header.DownloadCost,
 		StorageCost:  c.header.StorageCost,
 		TotalCost:    c.header.TotalCost,
-		GasFee:       c.header.GasFee,
+		GasCost:      c.header.GasFee,
 		ContractFee:  c.header.ContractFee,
 		Status:       c.header.Status,
 	}

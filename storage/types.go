@@ -192,7 +192,7 @@ type (
 		// contract available fund
 		TotalCost common.BigInt
 
-		GasFee      common.BigInt
+		GasCost     common.BigInt
 		ContractFee common.BigInt
 
 		Status ContractStatus

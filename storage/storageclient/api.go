@@ -9,6 +9,16 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// ActiveContractAPI is used to re-format the contract information that is going to
+// be displayed on the console
+type ActiveContractsAPIDisplay struct {
+	ContractID   string
+	HostID       string
+	AbleToUpload bool
+	AbleToRenew  bool
+	Canceled     bool
+}
+
 // PublicStorageClientAPI defines the object used to call eligible public APIs
 // are used to acquire information
 type PublicStorageClientAPI struct {
@@ -91,20 +101,30 @@ func (api *PrivateStorageClientAPI) CancelAllContracts() (resp string) {
 }
 
 // ActiveContracts will retrieve all active contracts and display their general information
-func (api *PrivateStorageClientAPI) ActiveContracts() (activeContracts []ActiveContractsAPI) {
+func (api *PrivateStorageClientAPI) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
 	activeContracts = api.sc.ActiveContracts()
 	return
 }
 
 // ContractDetail will retrieve detailed contract information
-func (api *PrivateStorageClientAPI) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, err error) {
-	contract, exists := api.sc.ContractDetail(contractID)
+func (api *PrivateStorageClientAPI) ContractDetail(contractID string) (detail ContractMetaDataAPIDisplay, err error) {
+	// convert the string into contractID format
+	var convertContractID storage.ContractID
+	if convertContractID, err = storage.StringToContractID(contractID); err != nil {
+		err = fmt.Errorf("the contract id provided is not valid, it must be in type of string")
+		return
+	}
+
+	// get the contract detail
+	contract, exists := api.sc.ContractDetail(convertContractID)
 	if !exists {
 		err = fmt.Errorf("the contract with %v does not exist", contractID)
 		return
 	}
 
-	detail = contract
+	// format the contract meta data
+	detail = formatContractMetaData(contract)
+
 	return
 }
 
