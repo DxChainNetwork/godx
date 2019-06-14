@@ -196,6 +196,6 @@ func TryLocked(lock common.TryLock) (locked bool) {
 			lock.Unlock()
 		}
 	}()
-	locked = lock.TryToLock()
+	locked = lock.TryLock()
 	return
 }

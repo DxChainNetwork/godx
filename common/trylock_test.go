@@ -58,12 +58,12 @@ CONDITION:
 
 func TestTryLock_TryToLock(t *testing.T) {
 	var tLock TryLock
-	locked := tLock.TryToLock()
+	locked := tLock.TryLock()
 	if !locked {
 		t.Fatalf("the TryLock should be locked")
 	}
 
-	locked = tLock.TryToLock()
+	locked = tLock.TryLock()
 	if locked {
 		t.Fatalf("the TryLock should be failed to lock")
 	}

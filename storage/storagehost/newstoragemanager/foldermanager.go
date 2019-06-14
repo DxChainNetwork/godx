@@ -102,7 +102,7 @@ func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, e
 	defer fm.lock.RUnlock()
 	// Loop over the folder manager to check availability
 	for _, sf = range fm.sfs {
-		if locked := sf.lock.TryToLock(); !locked {
+		if locked := sf.lock.TryLock(); !locked {
 			// Some other goroutine is accessing the folder.
 			// Continue to the next folder
 			continue
