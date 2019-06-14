@@ -350,12 +350,16 @@ func (sc *StorageClient) ContractCreate(params ContractParams) error {
 		return err
 	}
 
-	scBytes, err := rlp.EncodeToBytes(storageContract)
+	// the real input data of transaction
+	scSet := types.StorageContractSet{}
+	scSet.StorageContract = storageContract
+
+	scSetBytes, err := rlp.EncodeToBytes(scSet)
 	if err != nil {
 		return err
 	}
 
-	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scBytes); err != nil {
+	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scSetBytes); err != nil {
 		return storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 

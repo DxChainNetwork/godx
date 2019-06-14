@@ -39,8 +39,6 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
-
-	maxWindowLength = uint64(300)
 )
 
 type (
