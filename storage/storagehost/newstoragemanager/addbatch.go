@@ -7,12 +7,13 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
-	"strings"
-	"sync"
 )
 
 type (
@@ -47,6 +48,19 @@ func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
 	if len(roots) == 0 {
 		return
 	}
+	// create the update and record the intent
+	update := sm.createAddSectorBatchUpdate(roots)
+	if err = update.recordIntent(sm); err != nil {
+		return err
+	}
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
+		if upErr := err.(*updateError); !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
+		return
+	}
 	return
 }
 
@@ -77,6 +91,9 @@ func (update *addSectorBatchUpdate) str() (s string) {
 
 // recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
+	if err = manager.tm.Add(); err != nil {
+		return errStopped
+	}
 	persist := addSectorBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -98,6 +115,7 @@ func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err e
 
 // prepare is the function to be called during prepare stage
 func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint8) (err error) {
+	fmt.Println("prepare")
 	update.batch = manager.db.newBatch()
 	switch target {
 	case targetNormal:
@@ -112,6 +130,7 @@ func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint
 
 // prepare is the function to be called during process stage
 func (update *addSectorBatchUpdate) process(manager *storageManager, target uint8) (err error) {
+	fmt.Println("process")
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
@@ -126,13 +145,20 @@ func (update *addSectorBatchUpdate) process(manager *storageManager, target uint
 // release is to release the update and do error handling
 // Checks for the existence of all sectors and append to the transaction
 func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+	fmt.Println("lalalal", upErr)
 	// release all sector locks
 	defer func() {
 		// release all locks
 		for _, s := range update.sectors {
+			//fmt.Printf("try unlocking %x\n", s.id)
 			manager.sectorLocks.unlockSector(s.id)
+			fmt.Printf("unlocked %x\n", s.id)
 		}
 	}()
+	//fmt.Println("length", len(update.ids))
+	//for _, id := range update.ids {
+	//fmt.Printf("releasing %x\n", id)
+	//}
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -176,9 +202,12 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 // prepareNormal prepare for the normal execution
 func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err error) {
 	var once sync.Once
+	fmt.Println(1)
 	for _, id := range update.ids {
 		// lock the sector
+		fmt.Printf("try locking %x\n", id)
 		manager.sectorLocks.lockSector(id)
+		fmt.Printf("locked %x\n", id)
 		s, err := manager.db.getSector(id)
 		if err != nil {
 			manager.sectorLocks.unlockSector(id)
@@ -196,7 +225,7 @@ func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err 
 		// Write to wal transaction
 		op, err := createAddBatchAppendOperation(id, s.folderID, s.index, s.count)
 		if err != nil {
-			return
+			return err
 		}
 		// Wait for init to complete just once
 		once.Do(func() {
@@ -210,9 +239,10 @@ func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err 
 		}
 		// append the prepared op to transaction
 		if err = <-update.txn.Append([]writeaheadlog.Operation{op}); err != nil {
-			return
+			return err
 		}
 	}
+	fmt.Println(2)
 	return
 }
 
@@ -237,9 +267,14 @@ func createAddBatchAppendOperation(id sectorID, folderID folderID, index, count 
 
 // processNormal process for the normal execution
 func (update *addSectorBatchUpdate) processNormal(manager *storageManager) (err error) {
+	fmt.Println(3)
+	if err = <-update.txn.Commit(); err != nil {
+		return
+	}
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return
 	}
+	fmt.Println(4)
 	return
 }
 

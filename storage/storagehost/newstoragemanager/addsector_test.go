@@ -419,7 +419,7 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 		return fmt.Errorf("read size not equal to sectorSize. Got %v, Expect %v", n, storage.SectorSize)
 	}
 	if !bytes.Equal(data, b) {
-		return fmt.Errorf("data not correctly saved on disk")
+		return fmt.Errorf("data not correctly saved on disk.\n\tGot %x\n\texpect %x\n", b[0:10], data[0:10])
 	}
 	c := make(chan struct{})
 	go func() {
