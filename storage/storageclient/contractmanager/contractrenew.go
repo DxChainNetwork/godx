@@ -513,12 +513,16 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	scBytes, err := rlp.EncodeToBytes(storageContract)
+	// the real input data of transaction
+	scSet := types.StorageContractSet{}
+	scSet.StorageContract = storageContract
+
+	scSetBytes, err := rlp.EncodeToBytes(scSet)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
+	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scSetBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 
