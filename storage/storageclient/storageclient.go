@@ -155,6 +155,10 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 		return err
 	}
 
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
+
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
@@ -175,10 +179,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 	})
 
 	// TODO (mzhang): Subscribe consensus change
-
-	if err = sc.fileSystem.Start(); err != nil {
-		return err
-	}
 
 	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
 
@@ -227,6 +227,16 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 	}
 
 	return nil
+}
+
+// Check whether the contract session is uploading or downloading
+func  (sc *StorageClient) IsSessionUploadOrDownload(contractID storage.ContractID) bool {
+	sc.sessionLock.Lock()
+	defer sc.sessionLock.Unlock()
+	if s, ok := sc.sessionSet[contractID]; ok {
+		return s.IsBusy()
+	}
+	return false
 }
 
 func (sc *StorageClient) ContractCreate(params ContractParams) error {
@@ -420,7 +430,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
@@ -503,7 +513,9 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}()
 
 	// 1. Send storage upload request
-	session.SetDeadLine(storage.ContractRevisionTime)
+	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
+		return err
+	}
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
 		return err
 	}
@@ -514,13 +526,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return err
 	}
-
-	//// If host send some negotiation error, client should handler it
-	//if msg.Code == storage.NegotiationErrorMsg {
-	//	var negotiationErr error
-	//	msg.Decode(&negotiationErr)
-	//	return negotiationErr
-	//}
 
 	if err := msg.Decode(&merkleResp); err != nil {
 		return err
@@ -582,14 +587,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return err
 	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
 	if err := msg.Decode(&hostRevisionSig); err != nil {
 		return err
 	}
@@ -657,7 +654,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
@@ -1061,9 +1058,9 @@ func (client *StorageClient) managedDownload(p storage.ClientDownloadParameters)
 	if closer, ok := dw.(io.Closer); err != nil && ok {
 		closeErr := closer.Close()
 		if closeErr != nil {
-			return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close error: %v", err, closeErr))
+			return nil, fmt.Errorf("get something wrong when create download object: %v, destination close error: %v", err, closeErr)
 		}
-		return nil, errors.New(fmt.Sprintf("get something wrong when create download object: %v, destination close successfully", err))
+		return nil, fmt.Errorf("get something wrong when create download object: %v, destination close successfully", err)
 	} else if err != nil {
 		return nil, err
 	}

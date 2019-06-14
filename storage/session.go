@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p"
@@ -19,6 +20,9 @@ var (
 )
 
 const (
+	IDLE = 0
+	BUSY = 1
+
 	HostSettingMsg         = 0x20
 	HostSettingResponseMsg = 0x21
 
@@ -116,6 +120,9 @@ type Session struct {
 
 	host       *HostInfo
 	clientDisc chan error
+
+	// indicate this session is busy, it is true when uploading or downloading
+	busy int32
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
@@ -144,6 +151,18 @@ func (s *Session) HostInfo() *HostInfo {
 	return s.host
 }
 
+func (s * Session) SetBusy() bool {
+	return atomic.CompareAndSwapInt32(&s.busy, IDLE, BUSY)
+}
+
+func (s * Session) ResetBusy() bool {
+	return atomic.CompareAndSwapInt32(&s.busy, BUSY, IDLE)
+}
+
+func (s * Session) IsBusy() bool {
+	return atomic.LoadInt32(&s.busy) == BUSY
+}
+
 func (s *Session) getConn() net.Conn {
 	return s.Peer.GetConn()
 }
@@ -158,7 +177,6 @@ func (s *Session) SetDeadLine(d time.Duration) error {
 	return nil
 }
 
-// form contract protocol
 
 // RW() and SetRW() for only test
 func (s *Session) RW() p2p.MsgReadWriter {

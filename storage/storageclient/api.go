@@ -33,7 +33,7 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
 }
 
-// user upload their local files to hosts made contract with
+// Upload their local files to hosts made contract with
 func (api *PublicStorageClientAPI) Upload(source string, dxPath string) string {
 	param := FileUploadParams{
 		Source: source,

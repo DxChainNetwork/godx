@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"sync"
 	"sync/atomic"
@@ -43,11 +42,8 @@ type worker struct {
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	// Distribute sectors of segments index
-	// sectorIndexMap indicates that key unfinishedUploadSegment and the array of sector index
-	// sectorTaskNum indicates that the worker have number tasks of sectors waiting for uploading
-	sectorIndexMap map[*unfinishedUploadSegment][]int
-	sectorTaskNum  int32
+	// pending upload segment in heap
+	pendingSegments []*unfinishedUploadSegment
 
 	uploadChan                chan struct{} // Notifications of new segment
 	uploadConsecutiveFailures int           // How many times in a row uploading has failed.
@@ -99,23 +95,18 @@ func (sc *StorageClient) activateWorkerPool() {
 				uploadChan:     make(chan struct{}, 1),
 				killChan:       make(chan struct{}),
 				client:         sc,
-				sectorIndexMap: make(map[*unfinishedUploadSegment][]int),
 			}
 			sc.workerPool[id] = worker
 
-			// start upload goroutine
+			// start worker goroutine
 			if err := sc.tm.Add(); err != nil {
-				log.Error("storage client thread manager failed to add in upload progress", "error", err)
+				log.Error("storage client failed to add in worker progress", "error", err)
 				break
 			}
-			go worker.UploadWorkLoop(&sc.tm)
-
-			// start download goroutine
-			if err := sc.tm.Add(); err != nil {
-				log.Error("storage client thread manager failed to add in download progress", "error", err)
-				break
-			}
-			go worker.DownloadWorkLoop(&sc.tm)
+			go func() {
+				defer sc.tm.Done()
+				worker.workLoop()
+			}()
 
 		}
 		sc.lock.Unlock()
@@ -133,49 +124,35 @@ func (sc *StorageClient) activateWorkerPool() {
 	sc.lock.Unlock()
 }
 
-// We split upload and download loop into two separate goroutine, and we will retrieve all available segments once,
-// Last continue to wait for fresh segments
-func (w *worker) UploadWorkLoop(tm *threadmanager.ThreadManager) {
-	defer tm.Done()
+// workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
+// this model ensure that we can only do upload or download at the same time, not both
+func (w *worker) workLoop() {
 	defer w.killUploading()
-	for {
-		// Block util a new upload task, or a stop signal
-		select {
-		case <-w.uploadChan:
-		case <-w.killChan:
-			return
-		case <-w.client.tm.StopChan():
-			return
-		}
-
-		for {
-			segment, sectorIndex := w.nextUploadSegment()
-			if segment != nil {
-				w.upload(segment, sectorIndex)
-			} else {
-				break
-			}
-		}
-
-	}
-}
-
-func (w *worker) DownloadWorkLoop(tm *threadmanager.ThreadManager) {
-	defer tm.Done()
 	defer w.killDownloading()
-	for {
-		// Block util a new download task, or a stop signal
-		select {
-		case <-w.downloadChan:
-		case <-w.killChan:
-			return
-		case <-w.client.tm.StopChan():
-			return
-		}
 
+	for {
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
 			w.download(downloadSegment)
+			continue
+		}
+
+		segment, sectorIndex := w.nextUploadSegment()
+		if segment != nil {
+			w.upload(segment, sectorIndex)
+			continue
+		}
+
+		// keep listening for a new upload/download task, or a stop signal
+		select {
+		case <-w.downloadChan:
+			continue
+		case <-w.uploadChan:
+			continue
+		case <-w.killChan:
+			return
+		case <-w.client.tm.StopChan():
+			return
 		}
 	}
 }

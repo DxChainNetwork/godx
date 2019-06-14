@@ -10,7 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
-	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -78,7 +77,7 @@ func (uc *unfinishedUploadSegment) notifyBackupWorkers() {
 	uc.workerBackups = uc.workerBackups[:0]
 	uc.mu.Unlock()
 
-	randomAssignSectorTaskToWorker(backupWorkers, uc)
+	assignSectorTaskToWorker(backupWorkers, uc)
 
 	for i := 0; i < len(backupWorkers); i++ {
 		backupWorkers[i].signalUploadChan(uc)
@@ -100,7 +99,7 @@ func (uc *unfinishedUploadSegment) IsSegmentUploadComplete() bool {
 	return false
 }
 
-// dispatchSegment dispatches segments to the workers randomly in the pool in the current solution
+// dispatchSegment dispatches segments to the workers in the pool in the current solution
 // Now it may be that one sector will not be assigned to worker, and this doesn't have a big impact on the upload process
 // But we will optimize this features and schedule strategy is more balanced and fair
 func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
@@ -119,34 +118,20 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 	for _, worker := range sc.workerPool {
 		workers = append(workers, worker)
 	}
-	randomAssignSectorTaskToWorker(workers, uc)
 	sc.lock.Unlock()
 
-	for _, worker := range workers {
-		worker.signalUploadChan(uc)
-	}
+	assignSectorTaskToWorker(workers, uc)
 }
 
-// randomAssignSectorTaskToWorker will assign randomly non uploaded sector to worker
-func randomAssignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
-	// use time now as random seed to ensure different number every time
-	rand.Seed(time.Now().Unix())
-
-	length := len(workers)
-	for i, s := range uc.sectorSlotsStatus {
-		workerIndex := rand.Int() % length
-		if !s && workers[workerIndex].isReady(uc) {
-			if indexes, ok := workers[workerIndex].sectorIndexMap[uc]; ok {
-				indexes = append(indexes, i)
-				workers[workerIndex].sectorIndexMap[uc] = indexes
-			} else {
-				var idx []int
-				idx = append(idx, i)
-				workers[workerIndex].sectorIndexMap[uc] = idx
+// assignSectorTaskToWorker will assign non uploaded sector to worker
+func assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
+	for _, w := range workers {
+		if w.isReady(uc) {
+			w.pendingSegments = append(w.pendingSegments, uc)
+			select {
+			case w.uploadChan <- struct{}{}:
+			default:
 			}
-			// mark sector usage as true
-			uc.sectorSlotsStatus[i] = true
-			workers[workerIndex].sectorTaskNum++
 		}
 	}
 }

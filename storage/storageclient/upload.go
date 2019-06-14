@@ -87,7 +87,7 @@ func (sc *StorageClient) Upload(up FileUploadParams) error {
 		return nil
 	}
 
-	// Bubble the health of the DxFile directory to ensure the health is updated with the new file
+	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file
 	go sc.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
 
 	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)

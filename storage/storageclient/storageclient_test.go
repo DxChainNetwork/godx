@@ -84,7 +84,6 @@ func mockAddWorkers(n int, client *StorageClient) {
 			uploadChan:     make(chan struct{}, 1),
 			killChan:       make(chan struct{}),
 			client:         client,
-			sectorIndexMap: make(map[*unfinishedUploadSegment][]int),
 		}
 		client.workerPool[storage.ContractID(contractID)] = worker
 	}

@@ -115,7 +115,6 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	var sectors int
 	for _, v := range sct.Client.workerPool {
 		wg.Add(1)
 		go func(w *worker) {
@@ -126,21 +125,10 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 
 	sct.Client.dispatchSegment(unfinishedSegments[0])
 	wg.Wait()
-
-	for _, v := range sct.Client.workerPool {
-		sectors += int(v.sectorTaskNum)
-	}
-
-	if sectors != len(unfinishedSegments[0].sectorSlotsStatus) {
-		t.Fatal("missing sector dispatch")
-	}
-}
-
-func TestCleanupUploadSegment(t *testing.T) {
 }
 
 func TestReadFromLocalFile(t *testing.T) {
-	filePath, fileSize, fileHash := generateFile(t, homeDir()+"uploadtestfiles")
+	filePath, fileSize, fileHash := generateFile(t, homeDir()+"/uploadtestfiles")
 
 	osFile, err := os.Open(filePath)
 	if err != nil {

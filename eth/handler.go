@@ -83,8 +83,6 @@ type ProtocolManager struct {
 	fetcher                 *fetcher.Fetcher
 	peers                   *peerSet
 	storageContractSessions *storage.SessionSet
-	storageContractContext  *ethdb.MemDatabase
-	storageContractContext2 Context
 	SubProtocols            []p2p.Protocol
 
 	eventMux      *event.TypeMux
@@ -118,7 +116,6 @@ func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode download
 		chainconfig:             config,
 		peers:                   newPeerSet(),
 		storageContractSessions: storage.NewSessionSet(),
-		storageContractContext:  ethdb.NewMemDatabase(),
 		whitelist:               whitelist,
 		newPeerCh:               make(chan *peer),
 		noMorePeers:             make(chan struct{}),
@@ -219,9 +216,9 @@ func (pm *ProtocolManager) removeStorageContactSession(id string) {
 	if peer == nil {
 		return
 	}
-	log.Debug("Removing Ethereum peer", "peer", id)
+	log.Debug("Removing StorageContract peer", "peer", id)
 
-	// Unregister the peer from Ethereum peer set
+	// Unregister the peer from StorageContract peer set
 	if err := pm.storageContractSessions.Unregister(id); err != nil {
 		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
@@ -869,8 +866,4 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 
 func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
 	return pm.storageContractSessions
-}
-
-func (pm *ProtocolManager) SaveStorageContract(peerID string, key string, data interface{}) {
-	pm.storageContractContext2.Store(peerID, key, data)
 }

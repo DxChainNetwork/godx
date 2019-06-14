@@ -636,23 +636,29 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+// SetupConnection will setup connection with host if they are never connected with each other
+func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
 	if s.netRPCService == nil {
 		return nil, fmt.Errorf("network API is not ready")
 	}
 
-	node, err := enode.ParseV4(hostEnodeUrl)
+	hostNode, err := enode.ParseV4(hostEnodeURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid enode: %v", err)
 	}
 
-	if _, err := s.netRPCService.AddStorageContractPeer(node); err != nil {
+	// First we check storage contract session set have already connection with this node
+	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
+	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil {
+		return conn,  nil
+	}
+
+	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
 	}
 
 	timer := time.NewTimer(time.Second * 3)
 
-	nodeId := fmt.Sprintf("%x", node.ID().Bytes()[:8])
 	var conn *storage.Session
 	for {
 		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
@@ -662,24 +668,24 @@ func (s *Ethereum) SetupConnection(hostEnodeUrl string) (*storage.Session, error
 
 		select {
 		case <-timer.C:
-			s.netRPCService.RemoveStorageContractPeer(node)
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
 		}
 	}
 }
 
-func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+// When worker is done, we disconnect with host
+func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) error {
 	if s.netRPCService == nil {
 		return fmt.Errorf("network API is not ready")
 	}
 
-	node, err := enode.ParseV4(hostEnodeUrl)
+	hostNode, err := enode.ParseV4(hostEnodeURL)
 	if err != nil {
 		return fmt.Errorf("invalid enode: %v", err)
 	}
 
-	if _, err := s.netRPCService.RemoveStorageContractPeer(node); err != nil {
+	if _, err := s.netRPCService.RemoveStorageContractPeer(hostNode); err != nil {
 		return err
 	}
 
@@ -691,14 +697,16 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeUrl string) err
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
-func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
-	session, err := s.SetupConnection(hostEnodeUrl)
+func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
+	session, err := s.SetupConnection(hostEnodeURL)
 	if err != nil {
 		return err
 	}
 
-	session.SetDeadLine(storage.HostSettingTime)
-	defer s.Disconnect(session, hostEnodeUrl)
+	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
+		return err
+	}
+	defer s.Disconnect(session, hostEnodeURL)
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		return err
