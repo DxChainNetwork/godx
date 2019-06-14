@@ -284,21 +284,21 @@ func (c *Contract) Metadata() (meta storage.ContractMetaData) {
 		LatestContractRevision: c.header.LatestContractRevision,
 		StartHeight:            c.header.StartHeight,
 
-		EndHeight:     c.header.LatestContractRevision.NewWindowStart,
-		ClientBalance: c.header.LatestContractRevision.NewValidProofOutputs[0].Value,
+		EndHeight:       c.header.LatestContractRevision.NewWindowStart,
+		ContractBalance: common.PtrBigInt(c.header.LatestContractRevision.NewValidProofOutputs[0].Value),
 
 		UploadCost:   c.header.UploadCost,
 		DownloadCost: c.header.DownloadCost,
 		StorageCost:  c.header.StorageCost,
 		TotalCost:    c.header.TotalCost,
-		GasFee:       c.header.GasFee,
+		GasCost:      c.header.GasFee,
 		ContractFee:  c.header.ContractFee,
 		Status:       c.header.Status,
 	}
 	return
 }
 
-// contractHeaderUpdate will update contract header information in both db and mermory
+// contractHeaderUpdate will update contract header information in both db and memory
 func (c *Contract) contractHeaderUpdate(newHeader ContractHeader) (err error) {
 	// update db, store will update the entry with the same key
 	if err = c.db.StoreContractHeader(newHeader); err != nil {
@@ -370,10 +370,12 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 	return
 }
 
+// Header will return the contract header information of the contract
 func (c *Contract) Header() ContractHeader {
 	return c.header
 }
 
-func (c *Contract) MerkelRoots() ([]common.Hash, error) {
+// MerkleRoots will return the merkle roots information of the contract
+func (c *Contract) MerkleRoots() ([]common.Hash, error) {
 	return c.merkleRoots.roots()
 }

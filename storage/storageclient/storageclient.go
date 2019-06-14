@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io"
@@ -22,19 +21,16 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
 var (
@@ -43,7 +39,7 @@ var (
 	extraRatio = 0.02
 )
 
-// StorageClient contains fileds that are used to perform StorageHost
+// StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
 	fileSystem *filesystem.FileSystem
@@ -58,6 +54,7 @@ type StorageClient struct {
 	memoryManager *memorymanager.MemoryManager
 
 	storageHostManager *storagehostmanager.StorageHostManager
+	contractManager    *contractmanager.ContractManager
 
 	// Download management. The heap has a separate mutex because it is always
 	// accessed in isolation.
@@ -69,7 +66,7 @@ type StorageClient struct {
 	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []StorageHostEntry
+	lastEstimationStorageHost []proto.StorageHostEntry
 
 	// Directories and File related
 	persist        persistence
@@ -84,10 +81,6 @@ type StorageClient struct {
 	// information on network, block chain, and etc.
 	info       ParsedAPI
 	ethBackend storage.EthBackend
-	apiBackend ethapi.Backend
-
-	// get the P2P server for adding peer
-	p2pServer *p2p.Server
 
 	// file management.
 	staticFileSet *dxfile.FileSet
@@ -95,8 +88,11 @@ type StorageClient struct {
 
 // New initializes StorageClient object
 func New(persistDir string) (*StorageClient, error) {
+	var err error
+
+	// TODO: data initialization(file management system, file upload, file download)
+
 	sc := &StorageClient{
-		// TODO(mzhang): replace the implemented contractor here
 		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractManager{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
@@ -107,35 +103,38 @@ func New(persistDir string) (*StorageClient, error) {
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
+
+	// initialize storageHostManager
 	sc.storageHostManager = storagehostmanager.New(sc.persistDir)
+
+	// initialize storage contract manager
+	if sc.contractManager, err = contractmanager.New(sc.persistDir, sc.storageHostManager); err != nil {
+		err = fmt.Errorf("error initializing contract manager: %s", err.Error())
+		return nil, err
+	}
 
 	return sc, nil
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBackend ethapi.Backend) error {
+func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
 	sc.ethBackend = b
-	sc.apiBackend = apiBackend
-
-	// validation
-	if server == nil {
-		return errors.New("failed to get the P2P server")
-	}
-
-	// get the p2p server for the adding peers
-	sc.p2pServer = server
 
 	// getting all needed API functions
-	err := sc.filterAPIs(b.APIs())
-	if err != nil {
-		return err
+	if err = sc.filterAPIs(b.APIs()); err != nil {
+		return
 	}
 
-	// TODO: (mzhang) Initialize ContractManager & HostManager -> assign to StorageClient
-	err = sc.storageHostManager.Start(sc.p2pServer, sc)
-	if err != nil {
-		return err
+	// start storageHostManager
+	if err = sc.storageHostManager.Start(sc); err != nil {
+		return
+	}
+
+	// start contractManager
+	if err = sc.contractManager.Start(sc); err != nil {
+		err = fmt.Errorf("error starting contract manager: %s", err.Error())
+		return
 	}
 
 	// Load settings from persist file
@@ -169,13 +168,19 @@ func (sc *StorageClient) Start(b storage.EthBackend, server *p2p.Server, apiBack
 
 	// TODO (mzhang): Register On Stop Thread Control Function, waiting for WAL
 
+	sc.log.Info("storage client started")
+
 	return nil
 }
 
 func (sc *StorageClient) Close() error {
+	sc.log.Info("Closing The Contract Manager")
+	sc.contractManager.Stop()
+
 	var fullErr error
+
 	// Closing the host manager
-	sc.log.Info("Closing the renter host manager")
+	sc.log.Info("Closing The Renter Host Manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
@@ -185,12 +190,97 @@ func (sc *StorageClient) Close() error {
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the thread manager
+	sc.log.Info("Closing The Storage Client Manager")
 	err = sc.tm.Stop()
 	fullErr = common.ErrCompose(fullErr, err)
 	return fullErr
 }
 
-func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpeedLimit int64) error {
+// ContractDetail will return the detailed contract information
+func (sc *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {
+	return sc.contractManager.RetrieveActiveContract(contractID)
+}
+
+// ActiveContracts will retrieve all active contracts, reformat them, and return them back
+func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
+	allActiveContracts := sc.contractManager.RetrieveActiveContracts()
+
+	for _, contract := range allActiveContracts {
+		activeContract := ActiveContractsAPIDisplay{
+			ContractID:   contract.ID.String(),
+			HostID:       contract.EnodeID.String(),
+			AbleToUpload: contract.Status.UploadAbility,
+			AbleToRenew:  contract.Status.RenewAbility,
+			Canceled:     contract.Status.Canceled,
+		}
+		activeContracts = append(activeContracts, activeContract)
+	}
+
+	return
+}
+
+func (sc *StorageClient) CancelContracts() (err error) {
+	return sc.contractManager.CancelStorageContract()
+}
+
+// SetClientSetting will config the client setting based on the value provided
+// it will set the bandwidth limit, rentPayment, and ipViolation check
+// By setting the rentPayment, the contract maintenance
+func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
+	// making sure the entire program will only be terminated after finish the SetClientSetting
+	// operation
+
+	if err = sc.tm.Add(); err != nil {
+		return
+	}
+	defer sc.tm.Done()
+
+	// input validation
+	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
+		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
+			setting.MaxUploadSpeed, setting.MaxDownloadSpeed)
+	}
+
+	// set the rent payment
+	if err = sc.contractManager.SetRentPayment(setting.RentPayment); err != nil {
+		return
+	}
+
+	// set upload/download (write/read) bandwidth limits
+	if err = sc.setBandwidthLimits(setting.MaxDownloadSpeed, setting.MaxUploadSpeed); err != nil {
+		return
+	}
+
+	// set the ip violation check
+	sc.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
+
+	// update and save the persist
+	sc.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
+	sc.persist.MaxUploadSpeed = setting.MaxUploadSpeed
+	if err = sc.saveSettings(); err != nil {
+		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+	}
+
+	// active the worker pool
+	sc.activateWorkerPool()
+
+	return
+}
+
+// RetrieveClientSetting will return the current storage client setting
+func (sc *StorageClient) RetrieveClientSetting() (setting storage.ClientSetting) {
+	maxDownloadSpeed, maxUploadSpeed, _ := sc.contractManager.RetrieveRateLimit()
+	setting = storage.ClientSetting{
+		RentPayment:       sc.contractManager.AcquireRentPayment(),
+		EnableIPViolation: sc.storageHostManager.RetrieveIPViolationCheckSetting(),
+		MaxUploadSpeed:    maxUploadSpeed,
+		MaxDownloadSpeed:  maxDownloadSpeed,
+	}
+	return
+}
+
+// setBandwidthLimits specifies the data upload and downloading speed limit
+func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit int64) (err error) {
 	// validation
 	if uploadSpeedLimit < 0 || downloadSpeedLimit < 0 {
 		return errors.New("upload/download speed limit cannot be negative")
@@ -198,192 +288,11 @@ func (sc *StorageClient) setBandwidthLimits(uploadSpeedLimit int64, downloadSpee
 
 	// Update the contract settings accordingly
 	if uploadSpeedLimit == 0 && downloadSpeedLimit == 0 {
-		// TODO (mzhang): update contract settings using contract manager
+		sc.contractManager.SetRateLimits(0, 0, 0)
 	} else {
-		// TODO (mzhang): update contract settings to the loaded data
+		sc.contractManager.SetRateLimits(downloadSpeedLimit, uploadSpeedLimit, DefaultPacketSize)
 	}
 
-	return nil
-}
-
-func (sc *StorageClient) ContractCreate(params ContractParams) error {
-	// Extract vars from params, for convenience
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
-
-	// Calculate the payouts for the client, host, and whole contract
-	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
-	if err != nil {
-		return err
-	}
-
-	uc := types.UnlockConditions{
-		PublicKeys: []ecdsa.PublicKey{
-			clientPublicKey,
-			host.PublicKey,
-		},
-		SignaturesRequired: 2,
-	}
-
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
-
-	// Create storage contract
-	storageContract := types.StorageContract{
-		FileSize:         0,
-		FileMerkleRoot:   common.Hash{}, // no proof possible without data
-		WindowStart:      endHeight,
-		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
-		UnlockHash:       uc.UnlockHash(),
-		RevisionNumber:   0,
-		ValidProofOutputs: []types.DxcoinCharge{
-			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
-			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
-		},
-		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostPayout, Address: hostAddr},
-		},
-	}
-
-	// Increase Successful/Failed interactions accordingly
-	defer func() {
-		hostID := PubkeyToEnodeID(&host.PublicKey)
-		if err != nil {
-			sc.storageHostManager.IncrementFailedInteractions(hostID)
-		} else {
-			sc.storageHostManager.IncrementSuccessfulInteractions(hostID)
-		}
-	}()
-
-	account := accounts.Account{Address: clientAddr}
-	wallet, err := sc.ethBackend.AccountManager().Find(account)
-	if err != nil {
-		return storagehost.ExtendErr("find client account error", err)
-	}
-
-	// Setup connection with storage host
-	session, err := sc.ethBackend.SetupConnection(host.NetAddress)
-	if err != nil {
-		return storagehost.ExtendErr("setup connection with host failed", err)
-	}
-	defer sc.ethBackend.Disconnect(session, host.NetAddress)
-
-	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("contract sign by client failed", err)
-	}
-
-	// Send the ContractCreate request
-	req := storage.ContractCreateRequest{
-		StorageContract: storageContract,
-		Sign:            clientContractSign,
-	}
-
-	if err := session.SendStorageContractCreation(req); err != nil {
-		return err
-	}
-
-	var hostSign []byte
-	msg, err := session.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
-	if err := msg.Decode(&hostSign); err != nil {
-		return err
-	}
-
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
-
-	// Assemble init revision and sign it
-	storageContractRevision := types.StorageContractRevision{
-		ParentID:              storageContract.RLPHash(),
-		UnlockConditions:      uc,
-		NewRevisionNumber:     1,
-		NewFileSize:           storageContract.FileSize,
-		NewFileMerkleRoot:     storageContract.FileMerkleRoot,
-		NewWindowStart:        storageContract.WindowStart,
-		NewWindowEnd:          storageContract.WindowEnd,
-		NewValidProofOutputs:  storageContract.ValidProofOutputs,
-		NewMissedProofOutputs: storageContract.MissedProofOutputs,
-		NewUnlockHash:         storageContract.UnlockHash,
-	}
-
-	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
-	if err != nil {
-		return storagehost.ExtendErr("client sign revision error", err)
-	}
-	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
-
-	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
-		return storagehost.ExtendErr("send revision sign by client error", err)
-	}
-
-	var hostRevisionSign []byte
-	msg, err = session.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
-	if err := msg.Decode(&hostRevisionSign); err != nil {
-		return err
-	}
-
-	// the real input data of transaction
-	scSet := types.StorageContractSet{}
-	scSet.StorageContract = storageContract
-
-	scSetBytes, err := rlp.EncodeToBytes(scSet)
-	if err != nil {
-		return err
-	}
-
-	if _, err := storage.SendFormContractTX(sc.apiBackend, clientAddr, scSetBytes); err != nil {
-		return storagehost.ExtendErr("Send storage contract transaction error", err)
-	}
-
-	// wrap some information about this contract
-	header := contractset.ContractHeader{
-		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
-		StartHeight:            startHeight,
-		EndHeight:              endHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
-		LatestContractRevision: storageContractRevision,
-		Status: storage.ContractStatus{
-			UploadAbility: true,
-			Canceled:      true,
-			RenewAbility:  false,
-		},
-	}
-
-	// store this contract info to client local
-	_, err = sc.storageHostManager.GetStorageContractSet().InsertContract(header, nil)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -395,7 +304,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// Retrieve the last contract revision
 	contractRevision := types.StorageContractRevision{}
-	scs := sc.storageHostManager.GetStorageContractSet()
+	scs := sc.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
 	hostInfo := session.HostInfo()
@@ -636,7 +545,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// Retrieve the last contract revision
 	lastRevision := types.StorageContractRevision{}
-	scs := client.storageHostManager.GetStorageContractSet()
+	scs := client.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
 	hostInfo := s.HostInfo()

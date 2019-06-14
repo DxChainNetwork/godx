@@ -33,18 +33,21 @@ type StorageContractSet struct {
 func New(persistDir string) (scs *StorageContractSet, err error) {
 	// initialize the directory
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
+		err = fmt.Errorf("error initializing directory: %s", err.Error())
 		return
 	}
 
 	// initialize DB
 	db, err := OpenDB(filepath.Join(persistDir, persistDBName))
 	if err != nil {
+		err = fmt.Errorf("error initializing database: %s", err.Error())
 		return
 	}
 
 	// initialize wal
 	wal, walTxns, err := writeaheadlog.New(filepath.Join(persistDir, persistWalName))
 	if err != nil {
+		err = fmt.Errorf("error initializing wal: %s", err.Error())
 		return
 	}
 
@@ -61,6 +64,7 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 
 	// load the contracts from the database
 	if err = scs.loadContract(walTxns); err != nil {
+		err = fmt.Errorf("error loading contracts from the database: %s", err.Error())
 		return
 	}
 
@@ -71,6 +75,12 @@ func New(persistDir string) (scs *StorageContractSet, err error) {
 func (scs *StorageContractSet) Close() (err error) {
 	scs.db.Close()
 	_, err = scs.wal.CloseIncomplete()
+	return
+}
+
+// Empty db will clear all data stored in the contractset database
+func (scs *StorageContractSet) EmptyDB() (err error) {
+	err = scs.db.EmptyDB()
 	return
 }
 
