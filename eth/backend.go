@@ -357,6 +357,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 				Public:    false,
 			}, {
+				Namespace: "clientdebug",
+				Version:   "1.0",
+				Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
+				Public:    true,
+			}, {
 				Namespace: "hostdebug",
 				Version:   "1.0",
 				Service:   storagehost.NewHostDebugAPI(s.storageHost),
@@ -588,7 +593,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s, srvr, s.APIBackend)
+	err := s.storageClient.Start(s, s.APIBackend)
 	if err != nil {
 		return err
 	}
@@ -697,7 +702,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeUrl string, config *storage.Ho
 	session.SetDeadLine(storage.HostSettingTime)
 	defer s.Disconnect(session, hostEnodeUrl)
 
-	if err := session.SendHostExtSettingsRequest(struct {}{}); err != nil {
+	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		return err
 	}
 
@@ -725,4 +730,24 @@ func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) ev
 
 func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	return s.APIBackend.GetBlock(context.Background(), blockHash)
+}
+
+func (s *Ethereum) ChainConfig() *params.ChainConfig {
+	return s.APIBackend.ChainConfig()
+}
+
+func (s *Ethereum) CurrentBlock() *types.Block {
+	return s.APIBackend.CurrentBlock()
+}
+
+func (s *Ethereum) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return s.APIBackend.SendTx(ctx, signedTx)
+}
+
+func (s *Ethereum) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return s.APIBackend.SuggestPrice(ctx)
+}
+
+func (s *Ethereum) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return s.APIBackend.GetPoolNonce(ctx, addr)
 }

@@ -8,11 +8,13 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
+
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
 // calculate client and host collateral
-func ClientPayoutsPreTax(host StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
+func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
 
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
