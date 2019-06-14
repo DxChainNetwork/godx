@@ -13,6 +13,9 @@ type update interface {
 	// str returns a brief string of what the update is doing
 	str() string
 
+	// lockResource locks the resources effected by the update in the recovery process
+	lockResource(manager *storageManager) error
+
 	// recordIntent record the intent in the wal, and register the transaction to
 	// the update itself
 	recordIntent(manager *storageManager) error

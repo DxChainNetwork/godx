@@ -14,8 +14,8 @@ import (
 )
 
 type (
-	// deleteBatchUpdate defines an update to delete batches
-	deleteBatchUpdate struct {
+	// deleteSectorBatchUpdate defines an update to delete batches
+	deleteSectorBatchUpdate struct {
 		// ids is the function call params
 		ids []sectorID
 
@@ -66,12 +66,12 @@ func (sm *storageManager) DeleteSectorBatch(roots []common.Hash) (err error) {
 	return
 }
 
-func (sm *storageManager) createDeleteSectorBatchUpdate(roots []common.Hash) (update *deleteBatchUpdate) {
+func (sm *storageManager) createDeleteSectorBatchUpdate(roots []common.Hash) (update *deleteSectorBatchUpdate) {
 	return
 }
 
 // str defines the string representation of the update
-func (update *deleteBatchUpdate) str() (s string) {
+func (update *deleteSectorBatchUpdate) str() (s string) {
 	s = "Delete sector batch\n[\n\t"
 	idStrs := make([]string, 0, len(update.ids))
 	for _, id := range update.ids {
@@ -82,11 +82,11 @@ func (update *deleteBatchUpdate) str() (s string) {
 	return
 }
 
-func (update *deleteBatchUpdate) recordIntent(manager *storageManager) (err error) {
+func (update *deleteSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
 	return
 }
 
-func (update *deleteBatchUpdate) prepare(manager *storageManager, target uint8) (err error) {
+func (update *deleteSectorBatchUpdate) prepare(manager *storageManager, target uint8) (err error) {
 	update.batch = manager.db.newBatch()
 	switch target {
 	case targetNormal:
@@ -99,7 +99,7 @@ func (update *deleteBatchUpdate) prepare(manager *storageManager, target uint8) 
 	return
 }
 
-func (update *deleteBatchUpdate) process(manager *storageManager, target uint8) (err error) {
+func (update *deleteSectorBatchUpdate) process(manager *storageManager, target uint8) (err error) {
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
@@ -111,26 +111,30 @@ func (update *deleteBatchUpdate) process(manager *storageManager, target uint8) 
 	return
 }
 
-func (update *deleteBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+func (update *deleteSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	return
 }
 
-func (update *deleteBatchUpdate) prepareNormal(manager *storageManager) (err error) {
+func (update *deleteSectorBatchUpdate) prepareNormal(manager *storageManager) (err error) {
 	return
 }
 
-func (update *deleteBatchUpdate) processNormal(manager *storageManager) (err error) {
+func (update *deleteSectorBatchUpdate) processNormal(manager *storageManager) (err error) {
 	return
 }
 
-func decodeDeleteSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *deleteBatchUpdate, err error) {
+func decodeDeleteSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *deleteSectorBatchUpdate, err error) {
 	return
 }
 
-func (update *deleteBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
+func (update *deleteSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
 	return
 }
 
-func (update *deleteBatchUpdate) processCommitted(manager *storageManager) (err error) {
+func (update *deleteSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
+	return
+}
+
+func (update *deleteSectorBatchUpdate) processCommitted(manager *storageManager) (err error) {
 	return
 }

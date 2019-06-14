@@ -317,6 +317,12 @@ func decodeAddSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *addSect
 	return update, nil
 }
 
+// lockResource locks the resource during recover
+func (update *addSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
+	manager.sectorLocks.lockSectors(update.ids)
+	return
+}
+
 // prepareCommitted prepare for the recovery
 func (update *addSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
 	return nil

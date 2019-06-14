@@ -441,11 +441,12 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 	return
 }
 
-// prepareCommitted prepare for committed transaction
-func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
+// lockResource locks the resource during recover
+func (update *addSectorUpdate) lockResource(manager *storageManager) (err error) {
 	manager.sectorLocks.lockSector(update.id)
 	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
 	if err != nil {
+		manager.sectorLocks.unlockSector(update.id)
 		return
 	}
 	manager.folders.lock.RLock()
@@ -454,6 +455,11 @@ func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err er
 	if err != nil {
 		return err
 	}
+	return
+}
+
+// prepareCommitted prepare for committed transaction
+func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
 	return
 }
 

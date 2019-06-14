@@ -91,8 +91,6 @@ func (sm *storageManager) Start() (err error) {
 		// Wait for the last update to lock the corresponding resource
 		<-time.After(20 * time.Millisecond)
 		txn := txns[i]
-		// define the process target
-		target := targetRecoverCommitted
 		// decode the update
 		up, err := decodeFromTransaction(txn)
 		if err != nil {
@@ -108,12 +106,17 @@ func (sm *storageManager) Start() (err error) {
 		if err != nil {
 			return err
 		}
+		// lock the resource for the update
+		if err = up.lockResource(sm); err != nil {
+			sm.log.Warn("Cannot lock the resource for update", "update", up)
+			continue
+		}
 		// This function shall be called with a background thread. Since the error has been
 		// logged in prepareProcessReleaseUpdate, it's safe not to handle the error here.
-		go func(up update, target uint8) {
-			_ = sm.prepareProcessReleaseUpdate(up, target)
+		go func(up update) {
+			_ = sm.prepareProcessReleaseUpdate(up, targetRecoverCommitted)
 			sm.tm.Done()
-		}(up, target)
+		}(up)
 	}
 	return nil
 }

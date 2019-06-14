@@ -335,20 +335,22 @@ func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addSt
 	return
 }
 
-// prepareCommitted is the function called in prepare stage as preparing committed updates
-func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
+// lockResource locks the resource during recover
+func (update *addStorageFolderUpdate) lockResource(manager *storageManager) (err error) {
 	// lock the folders until release
 	manager.folders.lock.Lock()
 
 	update.folder, err = manager.folders.get(update.path)
-	if err != nil || update.folder == nil {
-		// In this case, error only happens when the update.path is not in folders
-		update.folder = &storageFolder{
-			path: update.path,
-			id:   folderID(0),
-		}
+	if err != nil {
+		manager.folders.lock.Unlock()
+		return err
 	}
-	return errRevert
+	return nil
+}
+
+// prepareCommitted is the function called in prepare stage as preparing committed updates
+func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
+	return
 }
 
 // processCommitted is the function called in process stage as processing committed an uncommitted updates
