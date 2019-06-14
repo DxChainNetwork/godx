@@ -167,3 +167,12 @@ func (cm *ContractManager) RetrieveActiveContracts() (cms []storage.ContractMeta
 func (cm *ContractManager) RetrieveActiveContract(contractID storage.ContractID) (contract storage.ContractMetaData, exists bool) {
 	return cm.activeContracts.RetrieveContractMetaData(contractID)
 }
+
+// IsRenewing will return if the contract with the contract ID passed in is renewing
+func (cm *ContractManager) IsRenewing(contractID storage.ContractID) (renewing bool) {
+	cm.lock.RLock()
+	defer cm.lock.RUnlock()
+
+	_, renewing = cm.renewing[contractID]
+	return
+}
