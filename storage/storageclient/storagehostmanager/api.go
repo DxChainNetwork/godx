@@ -7,6 +7,7 @@ package storagehostmanager
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -148,4 +149,27 @@ func (api *PublicHostManagerDebugAPI) InsertActiveHostInfo(amount int) string {
 		}
 	}
 	return fmt.Sprintf("Successfully inserted %v Active Storage Host Information", amount)
+}
+
+// InsertHostInfoIPTime is used for the test case in contractManager module
+func (api *PublicHostManagerDebugAPI) InsertHostInfoIPTime(amount int, id enode.ID, ip string, ipChanged time.Time) (err error) {
+	for i := 0; i < amount; i++ {
+		hi := hostInfoGeneratorIPID(ip, id, ipChanged)
+		if err = api.shm.insert(hi); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// InsertHostInfoHighEval is used for the test case in contractManager module, which is used
+// to insert contract with higher evaluation
+func (api *PublicHostManagerDebugAPI) InsertHostInfoHighEval(id enode.ID) (err error) {
+	hi := hostInfoGeneratorHighEvaluation(id)
+	return api.shm.insert(hi)
+}
+
+func (api *PublicHostManagerDebugAPI) InsertHostInfoLowEval(id enode.ID) (err error) {
+	hi := hostInfoGeneratorLowEvaluation(id)
+	return api.shm.insert(hi)
 }

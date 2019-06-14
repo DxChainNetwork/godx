@@ -149,12 +149,31 @@ func (x BigInt) DivUint64(y uint64) (quotient BigInt) {
 	return
 }
 
+func (x BigInt) DivNoRemaining(y uint64) (noRemaining bool) {
+	// get the x % y
+	var module BigInt
+	bigInt := NewBigIntUint64(y)
+	module.b.Mod(&x.b, &bigInt.b)
+
+	// if the result of x % y is 0, meaning the number can be divided completely
+	if module.IsEqual(BigInt0) {
+		return true
+	}
+	return false
+}
+
 // Cmp will compare two BigInt Data
 // x == y  0
 // x > y   1
 // x < y  -1
 func (x BigInt) Cmp(y BigInt) (result int) {
 	result = x.b.Cmp(&y.b)
+	return
+}
+
+// CmpUint64 will compare BigInt data with Uint64 data
+func (x BigInt) CmpUint64(y uint64) (result int) {
+	result = x.Cmp(NewBigIntUint64(y))
 	return
 }
 
@@ -168,6 +187,15 @@ func (x BigInt) Float64() (result float64) {
 // BigIntPtr will return the pointer version of the big.Int
 func (x BigInt) BigIntPtr() *big.Int {
 	return &x.b
+}
+
+// PtrBigInt convert the pointer version of big.Int to BigInt type
+func PtrBigInt(x *big.Int) (y BigInt) {
+	y = BigInt{
+		b: *x,
+	}
+
+	return
 }
 
 // MarshalJSON provided JSON encoding rules for BigInt data type
