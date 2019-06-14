@@ -348,14 +348,14 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	} else {
-		p.Log().Debug("Ethereum peer connected", "name", p.Name())
+		p.Log().Debug("DX session connected", "name", p.Name())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
 		}
 		session := p.Peer2Session()
 		if err := pm.storageContractSessions.Register(session); err != nil {
-			p.Log().Error("Ethereum peer registration failed", "err", err)
+			p.Log().Error("DX session registration failed", "err", err)
 			return err
 		}
 		defer pm.removeStorageContactSession(p.id)
@@ -371,6 +371,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			select {
 			case err := <-session.ClientDiscChan():
 				return err
+			case <-session.Peer.ClosedChan():
+				return errors.New("DX session is closed")
 			}
 		}
 	}

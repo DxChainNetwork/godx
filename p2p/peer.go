@@ -560,3 +560,7 @@ func (p *Peer) IsClosed() bool {
 		return false
 	}
 }
+
+func (p *Peer) ClosedChan() chan struct{} {
+	return p.closed
+}
