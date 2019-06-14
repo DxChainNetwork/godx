@@ -51,6 +51,8 @@ type (
 	}
 
 	// addVirtualSectorAppendPersist is the append part for adding virtual sector update
+	// Note this structure happens to be the same as addPhysicalSectorAppendPersist.
+	// Do not refactor this because of the consideration of extensibility
 	addVirtualSectorAppendPersist struct {
 		FolderID folderID
 		Index    uint64
@@ -140,10 +142,22 @@ func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error)
 
 // prepare prepares for the update
 func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (err error) {
-	update.batch = new(leveldb.Batch)
+	update.batch = manager.db.newBatch()
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
+		if !update.physical && manager.disrupter.disrupt("virtual prepare normal") {
+			return errDisrupted
+		}
+		if update.physical && manager.disrupter.disrupt("physical prepare normal") {
+			return errDisrupted
+		}
+		if !update.physical && manager.disrupter.disrupt("virtual prepare normal stop") {
+			return errStopped
+		}
+		if update.physical && manager.disrupter.disrupt("physical prepare normal stop") {
+			return errStopped
+		}
 	case targetRecoverCommitted:
 		err = update.prepareCommitted(manager)
 	default:
@@ -157,6 +171,18 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
+		if !update.physical && manager.disrupter.disrupt("virtual process normal") {
+			return errDisrupted
+		}
+		if update.physical && manager.disrupter.disrupt("physical process normal") {
+			return errDisrupted
+		}
+		if !update.physical && manager.disrupter.disrupt("virtual process normal stop") {
+			return errStopped
+		}
+		if update.physical && manager.disrupter.disrupt("physical process normal stop") {
+			return errStopped
+		}
 	case targetRecoverCommitted:
 		err = update.processCommitted(manager)
 	default:
@@ -175,9 +201,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
-		if update.txn != nil {
-			err = update.txn.Release()
-		}
+		err = update.txn.Release()
 		return
 	}
 	// If storage manager has been stopped, no release, do nothing and return
@@ -196,7 +220,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 	if upErr.prepareErr != nil {
 		return
 	}
-	batch := new(leveldb.Batch)
+	batch := manager.db.newBatch()
 	// If process has error, need to reverse the batch update
 	if update.physical {
 		// Need to delete the sector and folder id to sector mapping
@@ -307,18 +331,6 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 	if err != nil {
 		return
 	}
-	if !update.physical && manager.disrupter.disrupt("virtual prepare normal") {
-		return errDisrupted
-	}
-	if update.physical && manager.disrupter.disrupt("physical prepare normal") {
-		return errDisrupted
-	}
-	if !update.physical && manager.disrupter.disrupt("virtual prepare normal stop") {
-		return errStopped
-	}
-	if update.physical && manager.disrupter.disrupt("physical prepare normal stop") {
-		return errStopped
-	}
 	return
 }
 
@@ -371,18 +383,6 @@ func (update *addSectorUpdate) processNormal(manager *storageManager) (err error
 	}
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return
-	}
-	if !update.physical && manager.disrupter.disrupt("virtual process normal") {
-		return errDisrupted
-	}
-	if update.physical && manager.disrupter.disrupt("physical process normal") {
-		return errDisrupted
-	}
-	if !update.physical && manager.disrupter.disrupt("virtual process normal stop") {
-		return errStopped
-	}
-	if update.physical && manager.disrupter.disrupt("physical process normal stop") {
-		return errStopped
 	}
 	return
 }

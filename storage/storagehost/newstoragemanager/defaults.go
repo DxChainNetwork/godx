@@ -14,10 +14,14 @@ const (
 )
 
 const (
-	opNameAddStorageFolder  = "add storage folder"
+	opNameAddStorageFolder = "add storage folder"
+
 	opNameAddSector         = "add sector"
 	opNameAddVirtualSector  = "add virtual sector"
 	opNameAddPhysicalSector = "add physical sector"
+
+	opNameAddSectorBatch       = "add sector batch"
+	opNameAddSectorBatchAppend = "add sector batch append"
 )
 
 const (

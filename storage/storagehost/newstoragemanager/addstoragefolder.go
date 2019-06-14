@@ -284,9 +284,6 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 	if <-update.txn.InitComplete; update.txn.InitErr != nil {
 		return fmt.Errorf("cannot initialize the trnasaction: %v", update.txn.InitErr)
 	}
-	if err = <-update.txn.Commit(); err != nil {
-		return fmt.Errorf("cannot commit the transaction: %v", err)
-	}
 	return
 }
 
@@ -296,6 +293,9 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 // Note in this function, if file exist will return os.ErrExist, which should be handled in
 // release
 func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (err error) {
+	if err = <-update.txn.Commit(); err != nil {
+		return fmt.Errorf("cannot commit the transaction: %v", err)
+	}
 	// check again whether the folder exists
 	if _, err := os.Stat(filepath.Join(update.path)); !os.IsNotExist(err) {
 		return os.ErrExist

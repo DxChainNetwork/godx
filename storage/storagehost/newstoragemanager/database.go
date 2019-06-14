@@ -141,7 +141,7 @@ func (db *database) hasStorageFolder(path string) (exist bool, err error) {
 // Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	// make a new batch
-	batch := new(leveldb.Batch)
+	batch := db.newBatch()
 	batch, err = db.saveStorageFolderToBatch(batch, sf)
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error
 // with the folder. Be sure that all sectors are placed safe before this
 // function is called.
 func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
-	batch := new(leveldb.Batch)
+	batch := db.newBatch()
 
 	folderKey := makeFolderKey(sf.path)
 	batch.Delete(folderKey)
@@ -280,7 +280,7 @@ func (db *database) getSector(id sectorID) (s *sector, err error) {
 
 // saveSector save the sector to the database
 func (db *database) saveSector(sector *sector) (err error) {
-	batch := new(leveldb.Batch)
+	batch := db.newBatch()
 	batch, err = db.saveSectorToBatch(batch, sector, true)
 	if err != nil {
 		return

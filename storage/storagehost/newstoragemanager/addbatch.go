@@ -5,10 +5,14 @@
 package newstoragemanager
 
 import (
+	"errors"
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"strings"
+	"sync"
 )
 
 type (
@@ -39,33 +43,212 @@ type (
 )
 
 func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
+	// If no root input, no need to update. Simply return a nil error
+	if len(roots) == 0 {
+		return
+	}
 	return
 }
 
-func (sm *storageManager) createAddSectorBatchUpdate(ids []sectorID) (update *addSectorBatchUpdate) {
+// createAddSectorBatchUpdate creates an addSectorBatchUpdate
+func (sm *storageManager) createAddSectorBatchUpdate(roots []common.Hash) (update *addSectorBatchUpdate) {
+	// copy the ids
+	update = &addSectorBatchUpdate{
+		ids: make([]sectorID, 0, len(roots)),
+	}
+	for _, root := range roots {
+		id := sm.calculateSectorID(root)
+		update.ids = append(update.ids, id)
+	}
 	return
 }
 
 // str defines the string representation of the update
 func (update *addSectorBatchUpdate) str() (s string) {
 	s = "Add sector batch\n[\n\t"
-	s += strings.Join(common.Bytes2Hex(update.ids), ",\n\t")
+	idStrs := make([]string, 0, len(update.ids))
+	for _, id := range update.ids {
+		idStrs = append(idStrs, common.Bytes2Hex(id[:]))
+	}
+	s += strings.Join(idStrs, ",\n\t")
 	s += "\n]"
 	return
 }
 
+// recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
+	persist := addSectorBatchInitPersist{
+		IDs: update.ids,
+	}
+	b, err := rlp.EncodeToBytes(persist)
+	if err != nil {
+		return
+	}
+	op := writeaheadlog.Operation{
+		Name: opNameAddSectorBatch,
+		Data: b,
+	}
+	update.txn, err = manager.wal.NewTransaction([]writeaheadlog.Operation{op})
+	if err != nil {
+		update.txn = nil
+		return fmt.Errorf("cannot create trnasaction: %v", err)
+	}
 	return
 }
 
-func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (err error) {
+// prepare is the function to be called during prepare stage
+func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint8) (err error) {
+	update.batch = manager.db.newBatch()
+	switch target {
+	case targetNormal:
+		err = update.prepareNormal(manager)
+	case targetRecoverCommitted:
+		err = update.prepareCommitted(manager)
+	default:
+		err = errors.New("invalid target")
+	}
 	return
 }
 
-func (update *addSectorUpdate) process(manager *storageManager, target uint8) (err error) {
+// prepare is the function to be called during process stage
+func (update *addSectorBatchUpdate) process(manager *storageManager, target uint8) (err error) {
+	switch target {
+	case targetNormal:
+		err = update.processNormal(manager)
+	case targetRecoverCommitted:
+		err = update.processCommitted(manager)
+	default:
+		err = errors.New("invalid target")
+	}
 	return
 }
 
-func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+// release is to release the update and do error handling
+// Checks for the existence of all sectors and append to the transaction
+func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+	// release all sector locks
+	defer func() {
+		// release all locks
+		for _, s := range update.sectors {
+			manager.sectorLocks.unlockSector(s.id)
+		}
+	}()
+	// If no error happened, release the transaction
+	if upErr == nil || upErr.isNil() {
+		err = update.txn.Release()
+		return
+	}
+	// If have errStopped, do nothing and return
+	if upErr.hasErrStopped() {
+		upErr.processErr = nil
+		upErr.prepareErr = nil
+		return
+	}
+	// If some error happened at prepare stage, no need to do anything, just release the transaction
+	if upErr.prepareErr != nil {
+		err = update.txn.Release()
+		return
+	}
+	// If some error happened at process stage, we need to revert the db sectors.
+	// And then release the transaction
+	batch := manager.db.newBatch()
+	for _, s := range update.sectors {
+		// s.count == 1 and s.count == 0 shall never happen.
+		// The following check is redundancy in code to avoid integer overflow
+		if s.count > 1 {
+			s.count--
+		}
+		var newErr error
+		batch, newErr = manager.db.saveSectorToBatch(batch, s, false)
+		if newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
+	if newErr := manager.db.writeBatch(batch); newErr != nil {
+		err = common.ErrCompose(err, newErr)
+	}
+	if newErr := update.txn.Release(); newErr != nil {
+		err = common.ErrCompose(err, newErr)
+	}
+	return
+}
 
+// prepareNormal prepare for the normal execution
+func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err error) {
+	var once sync.Once
+	for _, id := range update.ids {
+		// lock the sector
+		manager.sectorLocks.lockSector(id)
+		s, err := manager.db.getSector(id)
+		if err != nil {
+			manager.sectorLocks.unlockSector(id)
+			return fmt.Errorf("get sector [%x]: %v", id, err)
+		}
+		// increment the count field
+		s.count++
+		// Write to memory
+		update.sectors = append(update.sectors, s)
+		// Write to batch
+		update.batch, err = manager.db.saveSectorToBatch(update.batch, s, false)
+		if err != nil {
+			return fmt.Errorf("cannot save sector [%v]: %v", id, err)
+		}
+		// Write to wal transaction
+		op, err := createAddBatchAppendOperation(id, s.folderID, s.index, s.count)
+		if err != nil {
+			return
+		}
+		// Wait for init to complete just once
+		once.Do(func() {
+			if <-update.txn.InitComplete; update.txn.InitErr != nil {
+				update.txn = nil
+				err = update.txn.InitErr
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("wal init error: %v", err)
+		}
+		// append the prepared op to transaction
+		if err = <-update.txn.Append([]writeaheadlog.Operation{op}); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// createAddBatchAppendPersist is the helper function to create an append operation
+func createAddBatchAppendOperation(id sectorID, folderID folderID, index, count uint64) (op writeaheadlog.Operation, err error) {
+	persist := addSectorBatchAppendPersist{
+		ID:       id,
+		FolderID: folderID,
+		Index:    index,
+		Count:    count,
+	}
+	walBytes, err := rlp.EncodeToBytes(persist)
+	if err != nil {
+		return writeaheadlog.Operation{}, err
+	}
+	op = writeaheadlog.Operation{
+		Name: opNameAddSectorBatchAppend,
+		Data: walBytes,
+	}
+	return op, nil
+}
+
+// processNormal process for the normal execution
+func (update *addSectorBatchUpdate) processNormal(manager *storageManager) (err error) {
+	if err = manager.db.writeBatch(update.batch); err != nil {
+		return
+	}
+	return
+}
+
+// prepareCommitted prepare for the recovery
+func (update *addSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
+	return nil
+}
+
+// processCommitted process for the recovery
+func (update *addSectorBatchUpdate) processCommitted(manager *storageManager) (err error) {
+	return errRevert
 }
