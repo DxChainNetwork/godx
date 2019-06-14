@@ -625,7 +625,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a revision transaction to the transaction pool.
-		if _, err := storage.SendContractRevisionTX(h.b, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+		if _, err := storage.SendContractHostRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
 			h.log.Info("Error sending a revision transaction:", err)
 			return
 		}
@@ -718,7 +718,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
-		if _, err := storage.SendStorageProofTX(h.b, fromAddress, scBytes); err != nil {
+		if _, err := storage.SendStorageHostProofTX(h.ethBackend, fromAddress, scBytes); err != nil {
 			h.log.Info("Error sending a storage proof transaction:", err)
 			return
 		}
