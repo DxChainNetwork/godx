@@ -34,6 +34,7 @@ func (h *HostDeBugAPI) HelloWorld(ctx context.Context) string {
 	return "confirmed! host api is working"
 }
 
+//Configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
 func (h *HostDeBugAPI) SetPaymentAddress(paymentAddress common.Address) bool {
 	account := accounts.Account{Address: paymentAddress}
 	_, err := h.storagehost.ethBackend.AccountManager().Find(account)
@@ -49,6 +50,7 @@ func (h *HostDeBugAPI) SetPaymentAddress(paymentAddress common.Address) bool {
 	return true
 }
 
+//Get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
 	h.storagehost.lock.RLock()
 	paymentAddress := h.storagehost.config.PaymentAddress
@@ -58,10 +60,13 @@ func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
 		return paymentAddress, nil
 	}
 
+	//Local node does not contain wallet
 	if wallets := h.storagehost.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 			paymentAddress := accounts[0].Address
 			h.storagehost.lock.Lock()
+			//the first address in the local wallet will be used as the paymentAddress by default.
 			h.storagehost.config.PaymentAddress = paymentAddress
 			h.storagehost.lock.Unlock()
 			h.storagehost.log.Info("host automatically sets your wallet's first account as paymentAddress")
