@@ -176,3 +176,56 @@ func (cm *ContractManager) IsRenewing(contractID storage.ContractID) (renewing b
 	_, renewing = cm.renewing[contractID]
 	return
 }
+
+// HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by the output
+func (cm *ContractManager) HostHealthMapByID(hostIDs []enode.ID) (infoTable storage.HostHealthInfoTable) {
+	// loop through the storage host id provided
+	for _, id := range hostIDs {
+		// get the storage host information first
+		info, exists := cm.hostManager.RetrieveHostInfo(id)
+		if !exists {
+			continue
+		}
+
+		// get the contract id signed with that storage host
+		cm.lock.RLock()
+		contractID, exists := cm.hostToContract[id]
+		cm.lock.RUnlock()
+		if !exists {
+			continue
+		}
+
+		// based on the contractID, get the contract status
+		contract, exists := cm.activeContracts.RetrieveContractMetaData(contractID)
+		if !exists {
+			continue
+		}
+
+		// save the information into HostHealthInfo table
+		infoTable[id] = storage.HostHealthInfo{
+			Offline:      isOffline(info),
+			GoodForRenew: contract.Status.RenewAbility,
+		}
+	}
+	return
+}
+
+// HostHealthMap returns all storage host information and contract information from active contract list
+func (cm *ContractManager) HostHealthMap() (infoTable storage.HostHealthInfoTable) {
+	// loop through all active contracts
+	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
+		// find the storage host based on the enode id
+		info, exists := cm.hostManager.RetrieveHostInfo(contract.EnodeID)
+		if !exists {
+			continue
+		}
+
+		// save the information into HostHealthInfo Table
+		infoTable[contract.EnodeID] = storage.HostHealthInfo{
+			Offline:      isOffline(info),
+			GoodForRenew: contract.Status.RenewAbility,
+		}
+	}
+
+	return
+}
