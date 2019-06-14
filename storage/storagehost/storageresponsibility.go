@@ -1104,12 +1104,12 @@ func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64
 
 	existingItems, err := GetHeight(db, height)
 	if err != nil {
-		existingItems = make([]byte, 1)
+		existingItems = make([]byte, 0)
 	}
 
 	existingItems = append(existingItems, storageContractID[:]...)
 
-	return scdb.StoreWithPrefix(storageContractID, existingItems, PrefixHeight)
+	return scdb.StoreWithPrefix(height, existingItems, PrefixHeight)
 }
 
 //Delete task by block height
