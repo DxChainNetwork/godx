@@ -64,8 +64,9 @@ type (
 // whether the data has merkle root root is not validated here, and assumed valid
 func (sm *storageManager) AddSector(root common.Hash, data []byte) (err error) {
 	if err = sm.tm.Add(); err != nil {
-		return
+		return errStopped
 	}
+	defer sm.tm.Done()
 	// validate the add sector request
 	if err = validateAddSector(root, data); err != nil {
 		return fmt.Errorf("validation failed: %v", err)

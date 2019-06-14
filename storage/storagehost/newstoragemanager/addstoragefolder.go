@@ -40,8 +40,9 @@ type (
 func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error) {
 	// Register in the thread manager
 	if err = sm.tm.Add(); err != nil {
-		return
+		return errStopped
 	}
+	defer sm.tm.Done()
 	// validate the add storage folder
 	if err = sm.validateAddStorageFolder(path, size); err != nil {
 		return

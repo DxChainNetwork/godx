@@ -11,6 +11,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/log"
 	"path/filepath"
+	"time"
 )
 
 type (
@@ -80,12 +81,16 @@ func (sm *storageManager) Start() (err error) {
 	if err != nil {
 		return fmt.Errorf("cannot open the wal: %v", err)
 	}
-	// Create goroutines go process unfinished transactions
-	for _, txn := range txns {
+	// Create goroutines to process unfinished transactions
+	// The txn should be processed in reverse order (all recovered transactions are to be reverted)
+	for i := len(txns) - 1; i >= 0; i-- {
 		// If the module is stopped, return
 		if sm.stopped() {
 			return nil
 		}
+		// Wait for the last update to lock the corresponding resource
+		<-time.After(20 * time.Millisecond)
+		txn := txns[i]
 		// define the process target
 		target := targetRecoverCommitted
 		// decode the update
@@ -105,7 +110,10 @@ func (sm *storageManager) Start() (err error) {
 		}
 		// This function shall be called with a background thread. Since the error has been
 		// logged in prepareProcessReleaseUpdate, it's safe not to handle the error here.
-		go sm.prepareProcessReleaseUpdate(up, target)
+		go func(up update, target uint8) {
+			_ = sm.prepareProcessReleaseUpdate(up, target)
+			sm.tm.Done()
+		}(up, target)
 	}
 	return nil
 }

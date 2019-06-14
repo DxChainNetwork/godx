@@ -43,7 +43,20 @@ type (
 	}
 )
 
+// AddSectorBatch add the sectors to the storage manager. The sectors are assumed to exist in
+// storage manager before calling this function. The operation is atomic, that is, if any error
+// happened during the update, all the operation will not be performed.
+//
+// Note:
+//   1. The added sectors must be previously stored in storage manager, else return an error
+//   2. Each two of the added sectors must not share the same root, else the function will
+//      be blocked permanently.
 func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
+	if err = sm.tm.Add(); err != nil {
+		return errStopped
+	}
+	defer sm.tm.Done()
+
 	// If no root input, no need to update. Simply return a nil error
 	if len(roots) == 0 {
 		return
@@ -91,9 +104,6 @@ func (update *addSectorBatchUpdate) str() (s string) {
 
 // recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
-	if err = manager.tm.Add(); err != nil {
-		return errStopped
-	}
 	persist := addSectorBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -115,7 +125,6 @@ func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err e
 
 // prepare is the function to be called during prepare stage
 func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint8) (err error) {
-	fmt.Println("prepare")
 	update.batch = manager.db.newBatch()
 	switch target {
 	case targetNormal:
@@ -130,10 +139,15 @@ func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint
 
 // prepare is the function to be called during process stage
 func (update *addSectorBatchUpdate) process(manager *storageManager, target uint8) (err error) {
-	fmt.Println("process")
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
+		if manager.disrupter.disrupt("add batch process stop") {
+			return errStopped
+		}
+		if manager.disrupter.disrupt("add batch process") {
+			return errDisrupted
+		}
 	case targetRecoverCommitted:
 		err = update.processCommitted(manager)
 	default:
@@ -145,20 +159,13 @@ func (update *addSectorBatchUpdate) process(manager *storageManager, target uint
 // release is to release the update and do error handling
 // Checks for the existence of all sectors and append to the transaction
 func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	fmt.Println("lalalal", upErr)
 	// release all sector locks
 	defer func() {
 		// release all locks
 		for _, s := range update.sectors {
-			//fmt.Printf("try unlocking %x\n", s.id)
 			manager.sectorLocks.unlockSector(s.id)
-			fmt.Printf("unlocked %x\n", s.id)
 		}
 	}()
-	//fmt.Println("length", len(update.ids))
-	//for _, id := range update.ids {
-	//fmt.Printf("releasing %x\n", id)
-	//}
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -202,12 +209,9 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 // prepareNormal prepare for the normal execution
 func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err error) {
 	var once sync.Once
-	fmt.Println(1)
+	// lock all sectors
+	manager.sectorLocks.lockSectors(update.ids)
 	for _, id := range update.ids {
-		// lock the sector
-		fmt.Printf("try locking %x\n", id)
-		manager.sectorLocks.lockSector(id)
-		fmt.Printf("locked %x\n", id)
 		s, err := manager.db.getSector(id)
 		if err != nil {
 			manager.sectorLocks.unlockSector(id)
@@ -242,7 +246,6 @@ func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err 
 			return err
 		}
 	}
-	fmt.Println(2)
 	return
 }
 
@@ -267,15 +270,51 @@ func createAddBatchAppendOperation(id sectorID, folderID folderID, index, count 
 
 // processNormal process for the normal execution
 func (update *addSectorBatchUpdate) processNormal(manager *storageManager) (err error) {
-	fmt.Println(3)
 	if err = <-update.txn.Commit(); err != nil {
 		return
 	}
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return
 	}
-	fmt.Println(4)
 	return
+}
+
+// decodeAddSectorBatchUpdate decode the addSectorBatchUpdate from the transaction
+func decodeAddSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *addSectorBatchUpdate, err error) {
+	if len(txn.Operations) == 0 {
+		return nil, errors.New("empty transaction")
+	}
+	// The first operation is addSectorBatchInitPersist
+	initBytes := txn.Operations[0].Data
+	var initPersist addSectorBatchInitPersist
+	if err = rlp.DecodeBytes(initBytes, &initPersist); err != nil {
+		return
+	}
+	update = &addSectorBatchUpdate{
+		ids: initPersist.IDs,
+		txn: txn,
+	}
+	if len(txn.Operations) == 1 {
+		return
+	}
+	// Decode the append operations
+	for _, appendOp := range txn.Operations[1:] {
+		if appendOp.Name != opNameAddSectorBatchAppend {
+			return nil, errors.New("for addSectorBatchUpdate, operation name not expected")
+		}
+		var persist addSectorBatchAppendPersist
+		if err = rlp.DecodeBytes(appendOp.Data, &persist); err != nil {
+			return nil, err
+		}
+		s := &sector{
+			id:       persist.ID,
+			folderID: persist.FolderID,
+			index:    persist.Index,
+			count:    persist.Count,
+		}
+		update.sectors = append(update.sectors, s)
+	}
+	return update, nil
 }
 
 // prepareCommitted prepare for the recovery

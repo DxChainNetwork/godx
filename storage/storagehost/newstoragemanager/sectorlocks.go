@@ -85,20 +85,26 @@ func (sls *sectorLocks) unlockSector(id sectorID) {
 	l.unlock()
 }
 
+// lockSectors locks all sectors at once. common.Lock is used to prevent dead lock
 func (sls *sectorLocks) lockSectors(ids []sectorID) {
+	locks := make([]*common.TryLock, 0, len(ids))
+
 	sls.lock.Lock()
-	// If the id is in the map, increment the waiting.
-	// If not in map, create a new lock
-	l, exist := sls.locks[id]
-	if exist {
-		atomic.AddUint32(&l.waiting, 1)
-	} else {
-		l = &sectorLock{
-			waiting: 1,
+	for _, id := range ids {
+		// If the id is in the map, increment the waiting.
+		// If not in map, create a new lock
+		l, exist := sls.locks[id]
+		if exist {
+			atomic.AddUint32(&l.waiting, 1)
+		} else {
+			l = &sectorLock{
+				waiting: 1,
+			}
+			sls.locks[id] = l
 		}
-		sls.locks[id] = l
+		locks = append(locks, &l.tl)
 	}
 	sls.lock.Unlock()
 
-	l.lock()
+	common.Lock(locks...)
 }

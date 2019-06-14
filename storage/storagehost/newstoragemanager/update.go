@@ -37,6 +37,8 @@ func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error
 		up, err = decodeAddStorageFolderUpdate(txn)
 	case opNameAddSector:
 		up, err = decodeAddSectorUpdate(txn)
+	case opNameAddSectorBatch:
+		up, err = decodeAddSectorBatchUpdate(txn)
 	default:
 		err = errInvalidTransactionType
 	}
@@ -45,7 +47,6 @@ func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error
 
 // prepareProcessReleaseUpdate is called with a goroutine to prepare, process, release the update.
 func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (upErr *updateError) {
-	defer sm.tm.Done()
 	// register the error handling
 	upErr = &updateError{}
 	defer func() {
