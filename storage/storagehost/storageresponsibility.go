@@ -222,7 +222,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 		h.lock.Lock()
 		defer h.lock.Unlock()
 		if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-			h.log.Info("insertStorageResponsibility called with an responsibility that is not locked")
+			h.log.Crit("insertStorageResponsibility called with an responsibility that is not locked")
 		}
 
 		//Submit revision time exceeds storage responsibility expiration time
@@ -289,7 +289,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 	err6 := h.queueTaskItem(so.expiration()+postponedExecution*2, so.id())
 	err = common.ErrCompose(err1, err2, err3, err4, err5, err6)
 	if err != nil {
-		h.log.Info("Error with task item, redacting responsibility, id", so.id())
+		h.log.Error("Error with task item, redacting responsibility, id", so.id())
 		return common.ErrCompose(err, h.removeStorageResponsibility(so, rejected))
 	}
 
@@ -299,7 +299,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-		h.log.Info("modifyStorageResponsibility called with an responsibility that is not locked")
+		h.log.Crit("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
 	//Need enough time to submit revision
@@ -309,14 +309,14 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 	//sectorsGained and gainedSectorData must have the same length
 	if len(sectorsGained) != len(gainedSectorData) {
-		h.log.Crit("sectorsGained length : ", len(sectorsGained), " and gainedSectorData length:", len(gainedSectorData))
+		h.log.Warn("sectorsGained length : ", len(sectorsGained), " and gainedSectorData length:", len(gainedSectorData))
 		return errInsaneRevision
 	}
 
 	for _, data := range gainedSectorData {
 		//No 4MB sector has no meaning
 		if uint64(len(data)) != storage.SectorSize {
-			h.log.Crit("No 4MB sector has no meaning,sector size length ", len(data))
+			h.log.Warn("No 4MB sector has no meaning,sector size length ", len(data))
 			return errInsaneRevision
 		}
 	}
@@ -328,7 +328,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 		//If the adding or update fails,the added sectors should be
 		//removed and the StorageResponsibility should be considered invalid.
 		if err != nil {
-			h.log.Crit("Error writing data to the sector", err)
+			h.log.Error("Error writing data to the sector", err)
 			break
 		}
 	}
@@ -408,7 +408,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 	// Delete storage responsibility from the database.
 	err := h.deleteStorageResponsibilities(scids)
 	if err != nil {
-		h.log.Warn("unable to delete responsibility: ", err)
+		h.log.Error("unable to delete responsibility: ", err)
 		return err
 	}
 
@@ -539,7 +539,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
 	if err != nil {
-		h.log.Warn("Could not get storage Responsibility:", err)
+		h.log.Error("Could not get storage Responsibility:", err)
 		return
 	}
 
@@ -554,7 +554,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, rejected)
 			if err != nil {
-				h.log.Info("failed to delete storage responsibility", err)
+				h.log.Error("failed to delete storage responsibility", err)
 			}
 			h.lock.Unlock()
 			return
@@ -565,7 +565,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
 		h.lock.Unlock()
 		if err != nil {
-			h.log.Info("Error queuing task item:", err)
+			h.log.Error("Error queuing task item:", err)
 		}
 		return
 	}
@@ -577,7 +577,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, rejected)
 			if err != nil {
-				h.log.Info("failed to delete storage responsibility", err)
+				h.log.Error("failed to delete storage responsibility", err)
 			}
 			h.lock.Unlock()
 			return
@@ -588,34 +588,34 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
 		h.lock.Unlock()
 		if err != nil {
-			h.log.Info("Error queuing action item:", err)
+			h.log.Error("Error queuing action item:", err)
 		}
 
 		scrv := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 		scBytes, err := rlp.EncodeToBytes(scrv)
 		if err != nil {
-			h.log.Info("Error when serializing revision:", err)
+			h.log.Error("Error when serializing revision:", err)
 			return
 		}
 
 		//The host sends a revision transaction to the transaction pool.
 		if _, err := storage.SendContractHostRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
-			h.log.Info("Error sending a revision transaction:", err)
+			h.log.Error("Error sending a revision transaction:", err)
 			return
 		}
 	}
 
 	//If revision meets the condition, a proof transaction will be submitted.
 	if !so.StorageProofConfirmed && h.blockHeight >= so.expiration()+postponedExecution {
-		h.log.Debug("The host is ready to submit a proof of transaction,id: ", so.id())
+		h.log.Error("The host is ready to submit a proof of transaction,id: ", so.id())
 
 		if len(so.SectorRoots) == 0 {
-			h.log.Debug("The sector is empty and no storage operation appears, id", so.id())
+			h.log.Error("The sector is empty and no storage operation appears, id", so.id())
 			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, succeeded)
 			h.lock.Unlock()
 			if err != nil {
-				h.log.Info("Error removing storage Responsibility:", err)
+				h.log.Error("Error removing storage Responsibility:", err)
 			}
 			return
 		}
@@ -626,7 +626,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 			err := h.removeStorageResponsibility(so, failed)
 			h.lock.Unlock()
 			if err != nil {
-				h.log.Info("Error removing storage Responsibility:", err)
+				h.log.Error("Error removing storage Responsibility:", err)
 			}
 			return
 		}
@@ -634,7 +634,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		//The storage host side gets the index of the data containing the segment
 		segmentIndex, err := h.storageProofSegment(so.OriginStorageContract)
 		if err != nil {
-			h.log.Debug("An error occurred while getting the storage certificate from the storage host:", err)
+			h.log.Error("An error occurred while getting the storage certificate from the storage host:", err)
 			return
 		}
 
@@ -643,7 +643,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		sectorBytes, err := h.ReadSector(sectorRoot)
 		//No content can be read from the memory, indicating that the storage host is not storing.
 		if err != nil {
-			h.log.Debug("the storage host is not storing, error:", err)
+			h.log.Error("the storage host is not storing, error:", err)
 			return
 		}
 
@@ -658,7 +658,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		ct := merkle.NewCachedTree(log2SectorSize)
 		err = ct.SetIndex(segmentIndex)
 		if err != nil {
-			h.log.Crit("cannot call SetIndex on Tree ", err)
+			h.log.Error("cannot call SetIndex on Tree ", err)
 		}
 		for _, root := range so.SectorRoots {
 			ct.Push(root)
@@ -675,25 +675,25 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		account := accounts.Account{Address: fromAddress}
 		wallet, err := h.ethBackend.AccountManager().Find(account)
 		if err != nil {
-			h.log.Info("There was an error opening the wallet:", err)
+			h.log.Error("There was an error opening the wallet:", err)
 			return
 		}
 		spSign, err := wallet.SignHash(account, sp.RLPHash().Bytes())
 		if err != nil {
-			h.log.Info("Error when sign data:", err)
+			h.log.Error("Error when sign data:", err)
 			return
 		}
 		sp.Signature = spSign
 
 		scBytes, err := rlp.EncodeToBytes(sp)
 		if err != nil {
-			h.log.Info("Error when serializing proof:", err)
+			h.log.Error("Error when serializing proof:", err)
 			return
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
 		if _, err := storage.SendStorageHostProofTX(h.ethBackend, fromAddress, scBytes); err != nil {
-			h.log.Info("Error sending a storage proof transaction:", err)
+			h.log.Error("Error sending a storage proof transaction:", err)
 			return
 		}
 
@@ -702,7 +702,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
 		h.lock.Unlock()
 		if err != nil {
-			h.log.Info("Error queuing task item:", err)
+			h.log.Warn("Error queuing task item:", err)
 		}
 	}
 
@@ -1031,7 +1031,7 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	for i := range h.lockedStorageResponsibility {
 		so, err := GetStorageResponsibility(h.db, i)
 		if err != nil {
-			h.log.Crit(errGetStorageResponsibility, err)
+			h.log.Error(errGetStorageResponsibility, err)
 			continue
 		}
 
