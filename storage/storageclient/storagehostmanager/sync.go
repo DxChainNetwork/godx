@@ -35,7 +35,7 @@ func (shm *StorageHostManager) subscribeChainChangEvent() {
 }
 
 // analyzeChainEventChange will analyze block changing event and update the corresponded
-// storage host manager field (blockheight)
+// storage host manager field (block height)
 func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEvent) {
 
 	revert := len(change.RevertedBlockHashes)
