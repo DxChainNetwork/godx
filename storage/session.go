@@ -17,9 +17,9 @@ import (
 var (
 	ErrClientDisconnect = errors.New("storage client disconnect proactively")
 )
-const (
 
-	HostSettingMsg = 0x20
+const (
+	HostSettingMsg         = 0x20
 	HostSettingResponseMsg = 0x21
 
 	// Storage Contract Negotiate Protocol belonging to eth/64
