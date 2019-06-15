@@ -6,9 +6,7 @@ package storageclient
 
 import (
 	"context"
-	"errors"
 	"math/big"
-	"reflect"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -17,10 +15,8 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/event"
-	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -37,52 +33,14 @@ type ActiveContractsAPI struct {
 	Canceled     bool
 }
 
-// ParsedAPI will parse the APIs saved in the Ethereum
-// and get the ones needed
-type ParsedAPI struct {
-	netInfo *ethapi.PublicNetAPI
-	account *ethapi.PrivateAccountAPI
-	ethInfo *ethapi.PublicEthereumAPI
-}
-
-// filterAPIs will filter the APIs saved in the Ethereum and
-// save them into ParsedAPI data structure
-func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
-	for _, api := range apis {
-		switch typ := reflect.TypeOf(api.Service); typ {
-		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
-			netAPI := api.Service.(*ethapi.PublicNetAPI)
-			if netAPI == nil {
-				return errors.New("failed to acquire netInfo information")
-			}
-			sc.info.netInfo = netAPI
-		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
-			accountAPI := api.Service.(*ethapi.PrivateAccountAPI)
-			if accountAPI == nil {
-				return errors.New("failed to acquire account information")
-			}
-			sc.info.account = accountAPI
-		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
-			ethAPI := api.Service.(*ethapi.PublicEthereumAPI)
-			if ethAPI == nil {
-				return errors.New("failed to acquire eth information")
-			}
-			sc.info.ethInfo = ethAPI
-		default:
-			continue
-		}
-	}
-	return nil
-}
-
 // Online will be used to indicate if the local node is connected to the internet
 func (sc *StorageClient) Online() bool {
-	return sc.info.netInfo.PeerCount() > 0
+	return sc.info.NetInfo.PeerCount() > 0
 }
 
 // Syncing will be used to indicate if the local node is syncing with the blockchain
 func (sc *StorageClient) Syncing() bool {
-	sync, _ := sc.info.ethInfo.Syncing()
+	sync, _ := sc.info.EthInfo.Syncing()
 	syncing, ok := sync.(bool)
 	if ok && !syncing {
 		return false
@@ -152,7 +110,11 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 // GetFileSystem will get the file system
 func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return sc.fileSystem
+}
 
+// send contract create tx
+func (sc *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return sc.info.StorageTx.SendContractCreateTX(clientAddr, input)
 }
 
 // calculate the proof ranges that should be used to verify a

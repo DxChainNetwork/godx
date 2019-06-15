@@ -53,6 +53,7 @@ type ClientBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 }
 
 // the parameters to download from outer request

@@ -38,7 +38,6 @@ const (
 	ContractCreateTransaction = "ContractCreate"
 	CommitRevisionTransaction = "CommitRevision"
 	StorageProofTransaction   = "StorageProof"
-	ContractRenewTransaction  = "ContractRenew"
 )
 
 var PrecompiledEVMFileContracts = map[common.Address]string{
@@ -46,7 +45,6 @@ var PrecompiledEVMFileContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{10}): ContractCreateTransaction,
 	common.BytesToAddress([]byte{11}): CommitRevisionTransaction,
 	common.BytesToAddress([]byte{12}): StorageProofTransaction,
-	common.BytesToAddress([]byte{13}): ContractRenewTransaction,
 }
 
 type PrecompiledContract interface {

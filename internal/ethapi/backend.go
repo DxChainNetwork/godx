@@ -113,6 +113,20 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
+		}, {
+
+			// open rpc to out
+			Namespace: "storagetx",
+			Version:   "1.0",
+			Service:   NewPublicStorageContractTxAPI(apiBackend, nonceLock),
+			Public:    true,
+		}, {
+
+			// only use in system, not for out rpc
+			Namespace: "storagetx",
+			Version:   "1.0",
+			Service:   NewPrivateStorageContractTxAPI(apiBackend, nonceLock),
+			Public:    false,
 		},
 	}
 }

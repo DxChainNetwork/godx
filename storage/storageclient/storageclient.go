@@ -77,7 +77,7 @@ type StorageClient struct {
 	tm   threadmanager.ThreadManager
 
 	// information on network, block chain, and etc.
-	info       ParsedAPI
+	info       storage.ParsedAPI
 	ethBackend storage.EthBackend
 	apiBackend ethapi.Backend
 
@@ -124,7 +124,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 	sc.ethBackend = b
 
 	// getting all needed API functions
-	if err = sc.filterAPIs(b.APIs()); err != nil {
+	if err = storage.FilterAPIs(b.APIs(), sc.info); err != nil {
 		return
 	}
 

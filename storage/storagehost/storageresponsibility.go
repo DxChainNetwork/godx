@@ -590,7 +590,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a revision transaction to the transaction pool.
-		if _, err := storage.SendContractHostRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+		if _, err := h.SendStorageContractRevisionTx(scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
 			h.log.Warn("Error sending a revision transaction", "err", err)
 			return
 		}
@@ -683,7 +683,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
-		if _, err := storage.SendStorageHostProofTX(h.ethBackend, fromAddress, scBytes); err != nil {
+		if _, err := h.SendStorageContractRevisionTx(fromAddress, scBytes); err != nil {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
@@ -1030,6 +1030,11 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	}
 
 	return sos
+}
+
+// send revision contract tx
+func (h *StorageHost) SendStorageContractRevisionTx(from common.Address, input []byte) (common.Hash, error) {
+	return h.parseAPI.StorageTx.SendContractRevisionTX(from, input)
 }
 
 //StoreStorageResponsibility storage storageResponsibility from DB

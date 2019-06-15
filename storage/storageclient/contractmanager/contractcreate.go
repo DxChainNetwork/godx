@@ -313,8 +313,8 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
+	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
 	// wrap some information about this contract

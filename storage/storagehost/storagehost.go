@@ -104,6 +104,8 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 
 	ethBackend storage.EthBackend
+
+	parseAPI storage.ParsedAPI
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
@@ -113,6 +115,13 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
+
+	// parse storage contract tx API
+	err := storage.FilterAPIs(h.ethBackend.APIs(), h.parseAPI)
+	if err != nil {
+		h.log.Error("failed to parse storage contract tx API for host", "error", err)
+		return
+	}
 
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
