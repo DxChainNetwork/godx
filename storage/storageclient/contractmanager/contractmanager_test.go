@@ -7,6 +7,9 @@ package contractmanager
 import (
 	"context"
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -18,8 +21,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"math/big"
-	"testing"
 )
 
 func TestContractManager_Start(t *testing.T) {
@@ -169,4 +170,8 @@ func (st *storageClientBackendContractManager) Disconnect(session *storage.Sessi
 
 func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
 	return nil, nil
+}
+
+func (st *storageClientBackendContractManager) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return common.Hash{}, nil
 }
