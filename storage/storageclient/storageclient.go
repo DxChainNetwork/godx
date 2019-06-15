@@ -903,23 +903,6 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 		return nil, errors.New("local path must be absolute")
 	}
 
-	if p.Offset == entry.FileSize() && entry.FileSize() != 0 {
-		return nil, errors.New("offset cannot out the index of remote file")
-	}
-
-	// if length == 0, download the rest file.
-	if p.Length == 0 {
-		if p.Offset > entry.FileSize() {
-			return nil, errors.New("offset greater than the size of remote file")
-		}
-		p.Length = entry.FileSize() - p.Offset
-	}
-
-	// check whether offset and length is valid
-	if p.Offset < 0 || p.Offset+p.Length > entry.FileSize() {
-		return nil, fmt.Errorf("offset or length is invalid, remote file size is %d", entry.FileSize())
-	}
-
 	// instantiate the file to write the downloaded data
 	var dw writeDestination
 	var destinationType string
@@ -937,11 +920,15 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 		destinationString: p.WriteToLocalPath,
 		file:              entry.DxFile.Snapshot(),
 		latencyTarget:     25e3 * time.Millisecond,
-		length:            p.Length,
-		needsMemory:       true,
-		offset:            p.Offset,
-		overdrive:         3,
-		priority:          5,
+
+		// always download the whole file
+		length:      entry.FileSize(),
+		needsMemory: true,
+
+		// always download from 0
+		offset:    0,
+		overdrive: 3,
+		priority:  5,
 	})
 	if closer, ok := dw.(io.Closer); err != nil && ok {
 		closeErr := closer.Close()

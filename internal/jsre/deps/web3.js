@@ -5639,7 +5639,7 @@ module.exports = Net;
             var download = new Method({
               name: 'download',
               call: 'storageclient_downloadSync',
-              params: 4,
+              params: 2,
             });
 
             var setClientSetting = new Method({
