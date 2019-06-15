@@ -208,12 +208,7 @@ func (h *StorageHost) queueTaskItem(height uint64, id common.Hash) error {
 		h.log.Info("It is not appropriate to arrange such a task")
 	}
 
-	err := StoreHeight(h.db, id, height)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return StoreHeight(h.db, id, height)
 }
 
 //InsertStorageResponsibility insert a storage Responsibility to the storage host.
