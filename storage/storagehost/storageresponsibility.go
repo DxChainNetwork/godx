@@ -76,7 +76,7 @@ type (
 		StorageContractRevisions []types.StorageContractRevision
 		ResponsibilityStatus     storageResponsibilityStatus
 
-		FormContractConfirmed      bool
+		CreateContractConfirmed    bool
 		StorageProofConfirmed      bool
 		StorageProofConstructed    bool
 		StorageRevisionConfirmed   bool
@@ -217,18 +217,18 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 		h.lock.Lock()
 		defer h.lock.Unlock()
 		if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-			h.log.Crit("insertStorageResponsibility called with an responsibility that is not locked")
+			h.log.Error("insertStorageResponsibility called with an responsibility that is not locked")
 		}
 
 		//Submit revision time exceeds storage responsibility expiration time
 		if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
-			h.log.Crit("failed to submit revision in storage responsibility due date")
+			h.log.Error("failed to submit revision in storage responsibility due date")
 			return errNotAllowed
 		}
 
 		//Not enough time to submit proof of storage, no need to put in the task force
 		if so.expiration()+postponedExecution >= so.proofDeadline() {
-			h.log.Crit("Not enough time to submit proof of storage")
+			h.log.Error("Not enough time to submit proof of storage")
 			return errNotAllowed
 		}
 
@@ -294,7 +294,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-		h.log.Crit("modifyStorageResponsibility called with an responsibility that is not locked")
+		h.log.Error("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
 	//Need enough time to submit revision
@@ -391,7 +391,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 		if h.blockHeight > so.NegotiationBlockNumber+responseTimeout {
 			scids = append(scids, so.id())
 		}
-		if !so.FormContractConfirmed {
+		if !so.CreateContractConfirmed {
 			return errTransactionNotConfirmed
 		}
 	}
@@ -539,7 +539,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		return
 	}
 
-	if !so.FormContractConfirmed {
+	if !so.CreateContractConfirmed {
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the contract transaction has not been confirmed, delete the storage responsibility, id", so.id())
 			h.lock.Lock()
@@ -827,13 +827,13 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for _, id := range formContractIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
-			so.FormContractConfirmed = true
+			so.CreateContractConfirmed = true
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -842,11 +842,11 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
 			if len(so.StorageContractRevisions) < 1 {
-				h.log.Crit("Storage contract cannot get revisions,id ", so.id())
+				h.log.Error("Storage contract cannot get revisions,id ", so.id())
 				continue
 			}
 			//To prevent vicious attacks, determine the consistency of the revision number.
@@ -855,7 +855,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			}
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -864,13 +864,13 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
 			so.StorageProofConfirmed = true
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -907,7 +907,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Rollback contract transaction
 		formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockReverted)
 		if errGetBlock != nil {
-			h.log.Crit("Failed to get the data from the block as expected ", errGetBlock)
+			h.log.Error("Failed to get the data from the block as expected ", errGetBlock)
 			continue
 		}
 
@@ -915,13 +915,13 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for _, id := range formContractIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
-			so.FormContractConfirmed = false
+			so.CreateContractConfirmed = false
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -930,13 +930,13 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
 			so.StorageRevisionConfirmed = false
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -945,13 +945,13 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Crit(errGetStorageResponsibility, errGet)
+				h.log.Error(errGetStorageResponsibility, errGet)
 				continue
 			}
 			so.StorageProofConfirmed = false
 			errPut := putStorageResponsibility(h.db, so)
 			if errPut != nil {
-				h.log.Crit(errPutStorageResponsibility, errPut)
+				h.log.Error(errPutStorageResponsibility, errPut)
 				continue
 			}
 		}
@@ -985,7 +985,7 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var sc types.StorageContract
 			err := rlp.DecodeBytes(tx.Data(), &sc)
 			if err != nil {
-				h.log.Crit("Error when serializing storage contract:", err)
+				h.log.Error("Error when serializing storage contract:", err)
 				continue
 			}
 			formContractIDs = append(formContractIDs, sc.RLPHash())
@@ -993,7 +993,7 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var scr types.StorageContractRevision
 			err := rlp.DecodeBytes(tx.Data(), &scr)
 			if err != nil {
-				h.log.Crit("Error when serializing revision:", err)
+				h.log.Error("Error when serializing revision:", err)
 				continue
 			}
 			revisionIDs[scr.ParentID] = scr.NewRevisionNumber
@@ -1001,7 +1001,7 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var sp types.StorageProof
 			err := rlp.DecodeBytes(tx.Data(), &sp)
 			if err != nil {
-				h.log.Crit("Error when serializing proof:", err)
+				h.log.Error("Error when serializing proof:", err)
 				continue
 			}
 			storageProofIDs = append(storageProofIDs, sp.ParentID)
