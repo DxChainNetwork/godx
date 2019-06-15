@@ -43,6 +43,9 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error)
 		return errStopped
 	}
 	defer sm.tm.Done()
+
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
 	// validate the add storage folder
 	if err = sm.validateAddStorageFolder(path, size); err != nil {
 		return
@@ -227,6 +230,10 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		if newErr := update.folder.dataFile.Close(); newErr != nil {
 			err = common.ErrCompose(err, newErr)
 		}
+		// Delete the entry in database
+		if newErr := manager.db.deleteStorageFolder(update.folder); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
 	}
 	// If the processErr is os.ErrExist, which means that the file not exist during validation,
 	// but during process, some other program (or user) created a file in the path, keep that
@@ -240,10 +247,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 	// delete folder in the update
 	// The folders is locked before prepare. So it shall be safe to delete the entry
 	delete(manager.folders.sfs, update.path)
-	// Delete the entry in database
-	if newErr := manager.db.deleteStorageFolder(update.folder); newErr != nil {
-		err = common.ErrCompose(err, newErr)
-	}
+
 	// release the transaction
 	if upErr.processErr != nil && update.txn != nil {
 		err = common.ErrCompose(err, update.txn.Release())

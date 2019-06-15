@@ -71,6 +71,26 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	return sf, nil
 }
 
+// getFolders return the map from folder id to locked folders
+// folder manager should be locked before use
+func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]*storageFolder, err error) {
+	fm.lock.Lock()
+	var locks []*common.TryLock
+	folders = make(map[folderID]*storageFolder)
+	for _, path := range folderPaths {
+		sf, exist := fm.sfs[path]
+		if !exist {
+			return make(map[folderID]*storageFolder), fmt.Errorf("folder not exist")
+		}
+		locks = append(locks, &sf.lock)
+		folders[sf.id] = sf
+	}
+	fm.lock.Unlock()
+
+	common.Lock(locks...)
+	return
+}
+
 // delete delete the entry in folder manager
 // Note this function is not thread safe
 func (fm *folderManager) delete(path string) {

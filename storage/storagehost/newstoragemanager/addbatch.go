@@ -57,6 +57,9 @@ func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
 	}
 	defer sm.tm.Done()
 
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
+
 	// If no root input, no need to update. Simply return a nil error
 	if len(roots) == 0 {
 		return

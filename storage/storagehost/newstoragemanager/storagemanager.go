@@ -35,6 +35,11 @@ type (
 		wal        *writeaheadlog.Wal
 		tm         *threadmanager.ThreadManager
 
+		// lock is the structure used to separate resize/delete from other function calls.
+		// This is to resolve the dead lock caused from the different sequence of locking
+		// sector and then folder
+		lock common.WPLock
+
 		// disrupter is used only for test
 		disrupter *disrupter
 	}

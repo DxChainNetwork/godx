@@ -67,6 +67,9 @@ func (sm *storageManager) AddSector(root common.Hash, data []byte) (err error) {
 		return errStopped
 	}
 	defer sm.tm.Done()
+
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
 	// validate the add sector request
 	if err = validateAddSector(root, data); err != nil {
 		return fmt.Errorf("validation failed: %v", err)

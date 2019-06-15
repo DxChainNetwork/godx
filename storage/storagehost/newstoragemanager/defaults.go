@@ -22,6 +22,10 @@ const (
 
 	opNameAddSectorBatch       = "add sector batch"
 	opNameAddSectorBatchAppend = "add sector batch append"
+
+	opNameDeleteSectorBatch    = "delete sector batch"
+	opNameDeleteVirtualSector  = "delete vritual sector"
+	opNameDeletePhysicalSector = "delete physical sector"
 )
 
 const (
