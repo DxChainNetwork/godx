@@ -34,7 +34,7 @@ func TestWPLock(t *testing.T) {
 	select {
 	case <-waitChan:
 		t.Fatalf("Write blocked by read")
-	case <-time.After(3000 * time.Millisecond):
+	case <-time.After(2000 * time.Millisecond):
 		t.Fatal("time out")
 	case s := <-writeChan:
 		if s != "Test" {
