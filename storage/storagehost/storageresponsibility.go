@@ -345,11 +345,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 			return errOld
 		}
 
-		errOld = putStorageResponsibility(h.db, so)
-		if errOld != nil {
-			return errOld
-		}
-		return nil
+		return putStorageResponsibility(h.db, so)
 	}()
 
 	if errDBso != nil {
