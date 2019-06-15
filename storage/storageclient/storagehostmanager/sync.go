@@ -5,10 +5,12 @@
 package storagehostmanager
 
 import (
-	"fmt"
-
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
+	"time"
 )
 
 // subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
@@ -39,52 +41,108 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	revert := len(change.RevertedBlockHashes)
 	apply := len(change.AppliedBlockHashes)
 
-	// TODO (mzhang): delete those Println after finished debugging
-	fmt.Println("Applied Blocks", apply)
-	fmt.Println("Reverted Blocks", revert)
-
 	// update the block height
+	shm.lock.Lock()
 	for i := 0; i < revert; i++ {
-		shm.lock.Lock()
 		shm.blockHeight--
-		shm.lock.Unlock()
 		if shm.blockHeight < 0 {
 			shm.log.Error("the block height stores in StorageHostManager should be positive")
-			shm.lock.Lock()
 			shm.blockHeight = 0
-			shm.lock.Unlock()
 			break
 		}
 	}
 
 	for i := 0; i < apply; i++ {
-
-		// TODO (mzhang): delete those Println after finished debugging
-
-		fmt.Println(shm.blockHeight)
-		shm.lock.Lock()
 		shm.blockHeight++
-		shm.lock.Unlock()
 	}
+	shm.lock.Unlock()
 
 	// get the block information
 	for _, hash := range change.AppliedBlockHashes {
-		txs, err := shm.b.GetTxByBlockHash(hash)
+		hostAnnouncements, _, err := shm.b.GetHostAnnouncementWithBlockHash(hash)
 		if err != nil {
-			errMsg := fmt.Sprintf("failed to get transaction information from the block with the hash %v: %s",
-				hash.String(), err.Error())
-			shm.log.Error(errMsg)
+			shm.log.Error("error extracting host announcement", "block hash", hash, "err", err.Error())
 			continue
 		}
-		shm.analyzeTransactions(txs)
+		shm.analyzeHostAnnouncements(hostAnnouncements)
 	}
 }
 
-// analyzeTransactions will get the transaction from the block, analyze them
-// to acquire any host announcement
-func (shm *StorageHostManager) analyzeTransactions(txs types.Transactions) {
-	// TODO (mzhang): wait for the storage host announce data structure
-	//for _, tx := range txs {
-	//
-	//}
+// analyzeHostAnnouncements will parse the storage host announcement and insert it into the storage host
+// manager
+func (shm *StorageHostManager) analyzeHostAnnouncements(hostAnnouncements []types.HostAnnouncement) {
+	// check if the block contains host announcements information
+	if len(hostAnnouncements) == 0 {
+		return
+	}
+
+	// loop through the hostAnnouncements,
+	for _, announcement := range hostAnnouncements {
+		info, err := parseHostAnnouncement(announcement)
+		if err != nil {
+			shm.log.Error("failed to parse the announcement information", "err", err.Error())
+			continue
+		}
+
+		shm.insertStorageHostInformation(info)
+	}
+}
+
+// insertStorageHostInformation will insert the storage host information into the storage
+// host manager
+func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInfo) {
+	// check if the storage host information already existed
+	oldInfo, exists := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
+	if !exists {
+		// if not existed before, modify the FirstSeen and insert into storage host manager,
+		// start the scan loop
+		info.FirstSeen = shm.blockHeight
+		if err := shm.insert(info); err != nil {
+			shm.log.Error("unable to insert the storage host information", "err", err.Error())
+		}
+
+		// start the scan
+		shm.scanValidation(info)
+		return
+	}
+
+	// if the storage host information already existed, update the settings
+	oldInfo.EnodeURL = info.EnodeURL
+	oldInfo.EnodeID = info.EnodeID
+	oldInfo.IP = info.IP
+
+	// check if the ip address has been changed, if so, update the IP network field
+	// and update the LastIPNetWorkChange time
+	networkAddr, err := storagehosttree.IPNetwork(oldInfo.IP)
+	if err != nil {
+		shm.log.Error("failed to extract the network address from the IP address", "err", err.Error())
+	} else {
+		if networkAddr.String() != oldInfo.IPNetwork {
+			oldInfo.IPNetwork = networkAddr.String()
+			oldInfo.LastIPNetWorkChange = time.Now()
+		}
+	}
+
+	// modify the old storage host information
+	if err := shm.modify(oldInfo); err != nil {
+		shm.log.Error("failed to modify the old storage host information", "err", err.Error())
+	}
+
+	// start the scan
+	shm.scanValidation(oldInfo)
+}
+
+// parseHostAnnouncement will parse the storage host announcement into storage.HostInfo type
+func parseHostAnnouncement(announcement types.HostAnnouncement) (hostInfo storage.HostInfo, err error) {
+	hostInfo.EnodeURL = announcement.NetAddress
+
+	// parse the enode URL, get enode id and ip address
+	node, err := enode.ParseV4(announcement.NetAddress)
+	if err != nil {
+		return
+	}
+	hostInfo.EnodeID = node.ID()
+	hostInfo.IP = node.IP().String()
+
+	return
 }

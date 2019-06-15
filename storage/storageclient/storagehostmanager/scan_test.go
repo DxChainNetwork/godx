@@ -181,3 +181,7 @@ func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hos
 func (st *storageClientBackendTestData) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
 	return nil, nil
 }
+
+func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	return
+}

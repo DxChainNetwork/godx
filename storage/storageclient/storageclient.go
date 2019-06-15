@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/rlp"
 	"io"
 	"math/big"
 	"math/bits"
@@ -1000,7 +1002,7 @@ func (client *StorageClient) DownloadSync(p storage.ClientDownloadParameters) er
 	}
 }
 
-// performs a file download without blocking until the download is finished
+// DownloadAsync will perform a file download without blocking until the download is finished
 func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
@@ -1009,4 +1011,35 @@ func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) e
 
 	_, err := client.managedDownload(p)
 	return err
+}
+
+//GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
+func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	precompiled := vm.PrecompiledEVMFileContracts
+	block, err := sc.ethBackend.GetBlockByHash(blockHash)
+	if err != nil {
+		errGet = err
+		return
+	}
+	number = block.NumberU64()
+	txs := block.Transactions()
+	for _, tx := range txs {
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.HostAnnounceTransaction:
+			var hac types.HostAnnouncement
+			err := rlp.DecodeBytes(tx.Data(), &hac)
+			if err != nil {
+				sc.log.Crit("Rlp decoding error as hostAnnouncements:", err)
+				continue
+			}
+			hostAnnouncements = append(hostAnnouncements, hac)
+		default:
+			continue
+		}
+	}
+	return
 }
