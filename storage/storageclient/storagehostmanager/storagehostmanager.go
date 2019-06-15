@@ -72,7 +72,7 @@ func New(persistDir string) *StorageHostManager {
 	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
 
-	shm.log.Info("Storage host manager initialized")
+	shm.log.Info("Storage Host Manager Initialized")
 
 	return shm
 }
@@ -110,7 +110,7 @@ func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	return nil
 }
 
-// Close will send stop signal to threadmanager, terminate all the
+// Close will send stop signal to routine manager, terminate all the
 // running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()

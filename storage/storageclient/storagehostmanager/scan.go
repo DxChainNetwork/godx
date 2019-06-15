@@ -5,7 +5,6 @@
 package storagehostmanager
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -189,7 +188,7 @@ func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
 // updateHostSettings will connect to the host, grabbing the settings,
 // and update the host pool
 func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
-	shm.log.Info("Started updating the storage host", hi.EnodeURL)
+	shm.log.Info("Started updating the storage host", "Host ID", hi.EnodeURL)
 
 	// get the IP network and check if it is changed
 	ipnet, err := storagehosttree.IPNetwork(hi.IP)
@@ -200,7 +199,7 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	}
 
 	if err != nil {
-		log.Warn("UpdateHostConfig: failed to get the IP network information", err.Error())
+		log.Error("failed to get the IP network information", "err", err.Error())
 	}
 
 	// update the historical interactions
@@ -214,9 +213,7 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)
 	if err != nil {
-		errMsg := fmt.Sprintf("Failed to get storage host %v external setting: %s",
-			hi.EnodeURL, err.Error())
-		log.Error(errMsg)
+		log.Warn("failed to get storage host external setting", "hostID", hi.EnodeID, "err", err.Error())
 	} else {
 		hi.HostExtConfig = hostConfig
 	}
