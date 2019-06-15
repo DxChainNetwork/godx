@@ -24,13 +24,15 @@ import (
 )
 
 const (
-	postponedExecutionBuffer    = uint64(144)              //Total time to sign the contract
-	postponedExecution          = 3                        //Total length of time to start a test task
-	ConfirmedBufferHeight       = 40                       //signing transaction not confirmed maximum time
-	PrefixStorageResponsibility = "StorageResponsibility-" //DB Prefix for StorageResponsibility
-	PrefixHeight                = "height-"                //DB Prefix for task
+	postponedExecutionBuffer    = uint64(144) //Total time to sign the contract
+	postponedExecution          = 3           //Total length of time to start a test task
+	confirmedBufferHeight       = 40          //signing transaction not confirmed maximum time
 	errGetStorageResponsibility = "failed to get data from DB as I wished "
 	errPutStorageResponsibility = "failed to put data from DB as I wished "
+	//PrefixStorageResponsibility db prefix for StorageResponsibility
+	PrefixStorageResponsibility = "StorageResponsibility-"
+	//PrefixHeight db prefix for task
+	PrefixHeight = "height-"
 )
 
 //Storage contract should not be empty
@@ -40,7 +42,7 @@ const (
 	unresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning
 	rejected                                      //Storage responsibility never begins
 	succeeded                                     // Successful storage responsibility
-	failed                                        //failed storage responsibility
+	failed                                        //Failed storage responsibility
 )
 
 var (
@@ -52,7 +54,7 @@ var (
 )
 
 type (
-	//Storage contract management and maintenance on the storage host side
+	//StorageResponsibility storage contract management and maintenance on the storage host side
 	StorageResponsibility struct {
 		//Store the root set of related metadata
 		SectorRoots []common.Hash
@@ -117,7 +119,7 @@ func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
 	return DeleteStorageResponsibility(db, sc)
 }
 
-//returns expired block number
+//Returns expired block number
 func (so *StorageResponsibility) expiration() uint64 {
 	//If there is revision, return NewWindowStart
 	if len(so.StorageContractRevisions) > 0 {
@@ -275,7 +277,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 	errContractCreate := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
 	errContractCreateDoubleTime := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
 
-	//insert the chTeck revision task in the task queue.
+	//insert the check revision task in the task queue.
 	errRevision := h.queueTaskItem(so.expiration()-postponedExecutionBuffer, so.id())
 	errRevisionDoubleTime := h.queueTaskItem(so.expiration()-postponedExecutionBuffer+postponedExecution, so.id())
 
@@ -383,12 +385,12 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	return nil
 }
 
-//Remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
+//PruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 	sos := h.StorageResponsibilities()
 	var scids []common.Hash
 	for _, so := range sos {
-		if h.blockHeight > so.NegotiationBlockNumber+ConfirmedBufferHeight {
+		if h.blockHeight > so.NegotiationBlockNumber+confirmedBufferHeight {
 			scids = append(scids, so.id())
 		}
 		if !so.CreateContractConfirmed {
@@ -687,7 +689,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		h.lock.Lock()
-		//insert the check proof task in the task queue.
+		//Insert the check proof task in the task queue.
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
 		h.lock.Unlock()
 		if err != nil {
@@ -714,7 +716,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 
 }
 
-// Get the storage proof
+//MerkleProof get the storage proof
 func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
 	t := merkle.NewTree()
 	//This error doesn't mean anything to us.
@@ -768,7 +770,7 @@ func calculateLeaves(dataSize uint64) uint64 {
 	return numSegments
 }
 
-//Handle when a new block is generated or a block is rolled back
+//HostBlockHeightChange handle when a new block is generated or a block is rolled back
 func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
 
 	h.lock.Lock()
@@ -790,7 +792,7 @@ func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
 
 }
 
-// subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
+// subscribeChainChangeEvent will receive changes on the block chain (blocks added / reverted)
 // once received, a function will be triggered to analyze those blocks
 func (h *StorageHost) subscribeChainChangEvent() {
 	if err := h.tm.Add(); err != nil {
@@ -811,7 +813,7 @@ func (h *StorageHost) subscribeChainChangEvent() {
 	}
 }
 
-//Block executing the main chain
+//ApplyBlockHashesStorageResponsibility block executing the main chain
 func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash) []common.Hash {
 	var taskItems []common.Hash
 	for _, blockApply := range blocks {
@@ -899,7 +901,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 	return taskItems
 }
 
-//Handling rolled back blocks
+//RevertedBlockHashesStorageResponsibility handling rolled back blocks
 func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.Hash) {
 	for _, blockReverted := range blocks {
 		//Rollback contract transaction
@@ -962,7 +964,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 
 }
 
-//Analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
+//GetAllStorageContractIDsWithBlockHash analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
 func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (ContractCreateIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
 	revisionIDs = make(map[common.Hash]uint64)
 	precompiled := vm.PrecompiledEVMFileContracts
@@ -1030,7 +1032,7 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	return sos
 }
 
-//storage storage responsibility from DB
+//StoreStorageResponsibility storage storageResponsibility from DB
 func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
 	scdb := ethdb.StorageContractDB{db}
 	data, err := rlp.EncodeToBytes(so)
@@ -1040,13 +1042,13 @@ func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash
 	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageResponsibility)
 }
 
-//Delete storage responsibility from DB
+//DeleteStorageResponsibility delete storageResponsibility from DB
 func DeleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
 	scdb := ethdb.StorageContractDB{db}
 	return scdb.DeleteWithPrefix(storageContractID, PrefixStorageResponsibility)
 }
 
-//Read storage responsibility from DB
+//GetStorageResponsibility get storageResponsibility from DB
 func GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
 	scdb := ethdb.StorageContractDB{db}
 	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixStorageResponsibility)
@@ -1061,7 +1063,7 @@ func GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) 
 	return so, nil
 }
 
-//Storage task by block height
+//StoreHeight storage task by block height
 func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64) error {
 	scdb := ethdb.StorageContractDB{db}
 
@@ -1075,13 +1077,13 @@ func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64
 	return scdb.StoreWithPrefix(height, existingItems, PrefixHeight)
 }
 
-//Delete task by block height
+//DeleteHeight delete task by block height
 func DeleteHeight(db ethdb.Database, height uint64) error {
 	scdb := ethdb.StorageContractDB{db}
 	return scdb.DeleteWithPrefix(height, PrefixHeight)
 }
 
-//Get the task by block height
+//GetHeight get the task by block height
 func GetHeight(db ethdb.Database, height uint64) ([]byte, error) {
 	scdb := ethdb.StorageContractDB{db}
 	valueBytes, err := scdb.GetWithPrefix(height, PrefixHeight)
