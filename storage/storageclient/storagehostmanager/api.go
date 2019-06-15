@@ -37,20 +37,6 @@ func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []sto
 	return api.shm.storageHostTree.All()
 }
 
-// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
-// that are used to configure settings
-type PrivateStorageHostManagerAPI struct {
-	shm *StorageHostManager
-}
-
-// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
-// which implemented a bunch of API methods
-func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
-	return &PrivateStorageHostManagerAPI{
-		shm: shm,
-	}
-}
-
 // StorageHost will return a specific host detailed information from the storage host pool
 func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo {
 	var enodeid enode.ID
@@ -86,6 +72,20 @@ func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHo
 	}
 
 	return
+}
+
+// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
+// that are used to configure settings
+type PrivateStorageHostManagerAPI struct {
+	shm *StorageHostManager
+}
+
+// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
+// which implemented a bunch of API methods
+func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
+	return &PrivateStorageHostManagerAPI{
+		shm: shm,
+	}
 }
 
 // PublicHostManagerDebugAPI defines the object used to call eligible APIs

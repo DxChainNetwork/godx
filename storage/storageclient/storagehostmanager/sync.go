@@ -116,11 +116,9 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 	networkAddr, err := storagehosttree.IPNetwork(oldInfo.IP)
 	if err != nil {
 		shm.log.Error("failed to extract the network address from the IP address", "err", err.Error())
-	} else {
-		if networkAddr.String() != oldInfo.IPNetwork {
-			oldInfo.IPNetwork = networkAddr.String()
-			oldInfo.LastIPNetWorkChange = time.Now()
-		}
+	} else if networkAddr.String() != oldInfo.IPNetwork {
+		oldInfo.IPNetwork = networkAddr.String()
+		oldInfo.LastIPNetWorkChange = time.Now()
 	}
 
 	// modify the old storage host information

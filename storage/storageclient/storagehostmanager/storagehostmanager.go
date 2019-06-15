@@ -169,9 +169,28 @@ func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) 
 	return shm.rent
 }
 
-// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided.
+// Before returning the storage host information, the settings will be validated first
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
-	return shm.storageHostTree.RetrieveHostInfo(id)
+	shm.lock.Lock()
+	whitelist := shm.filterMode == WhitelistFilter
+	filteredHosts := shm.filteredHosts
+	shm.lock.Unlock()
+
+	// get the storage host information
+	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
+		return
+	}
+
+	// check if the storage host belongs to filtered hosts
+	_, exist := filteredHosts[hi.EnodeID]
+	hi.Filtered = whitelist != exist
+
+	// update host historical interaction record before returning
+	shm.lock.RLock()
+	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
+	shm.lock.RUnlock()
+	return
 }
 
 // SetIPViolationCheck will set the ipViolationCheck to be true. For storage hosts

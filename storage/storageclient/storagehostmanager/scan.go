@@ -26,10 +26,7 @@ func (shm *StorageHostManager) scan() {
 	shm.waitSync()
 
 	// get all storage hosts who have not been scanned before or no historical information
-	shm.lock.RLock()
 	allStorageHosts := shm.storageHostTree.All()
-	shm.lock.RUnlock()
-
 	for _, host := range allStorageHosts {
 		if len(host.ScanRecords) == 0 {
 			shm.scanValidation(host)
@@ -53,6 +50,9 @@ func (shm *StorageHostManager) autoScan() {
 		var onlineHosts, offlineHosts []storage.HostInfo
 		allStorageHosts := shm.storageHostTree.All()
 		for _, host := range allStorageHosts {
+
+			// check if the number of online hosts or the length of offlineHosts exceed
+			// the max scan quantity
 			if len(onlineHosts) >= scanQuantity && len(offlineHosts) >= scanQuantity {
 				break
 			}
@@ -70,7 +70,8 @@ func (shm *StorageHostManager) autoScan() {
 			}
 		}
 
-		// queued for scan
+		// queued for scan, online storage host has higher
+		// priority to be scanned than offline storage host
 		for _, host := range onlineHosts {
 			shm.scanValidation(host)
 		}
@@ -100,14 +101,12 @@ func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
 	// verify if the storage host is already in scan pool
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
-
 	_, exists := shm.scanLookup[hi.EnodeID]
-
 	if exists {
 		return
 	}
 
-	// if not, add it to the pool and scanning list
+	// if not, add it to the scan look up and scan wait list
 	shm.scanLookup[hi.EnodeID] = struct{}{}
 	shm.scanWaitList = append(shm.scanWaitList, hi)
 
@@ -124,17 +123,20 @@ func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
 // afterwards, the host needed to be scanned will be passed in through channel
 // NOTE: multiple go routines will be activated to handle scan request
 func (shm *StorageHostManager) scanStart() {
+	// add go routine
 	if err := shm.tm.Add(); err != nil {
 		return
 	}
 	defer shm.tm.Done()
 
 	scanWorker := make(chan storage.HostInfo)
-	// used for scanExecute termination
+	// used for scanExecute termination, once the channel closed
+	// all the worker will be terminated
 	defer close(scanWorker)
 
 	for {
 		shm.lock.Lock()
+		// if there are no tasks need to be scanned anymore, exit
 		if len(shm.scanWaitList) == 0 {
 			shm.scanWait = false
 			shm.lock.Unlock()
@@ -148,6 +150,7 @@ func (shm *StorageHostManager) scanStart() {
 		workers := shm.scanningWorkers
 		shm.lock.Unlock()
 
+		// start the scan execution
 		if workers < maxWorkersAllowed {
 			go shm.scanExecute(scanWorker)
 		}
@@ -165,6 +168,8 @@ func (shm *StorageHostManager) scanStart() {
 // it will terminate along with termination of scan start
 func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
 	shm.log.Debug("Started Scan Execution")
+
+	// add one more go routine
 	if err := shm.tm.Add(); err != nil {
 		return
 	}
@@ -191,14 +196,13 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	shm.log.Info("Started updating the storage host", "Host ID", hi.EnodeURL)
 
 	// get the IP network and check if it is changed
+	// this is needed because the storage host can change its settings directly
 	ipnet, err := storagehosttree.IPNetwork(hi.IP)
 
 	if err == nil && ipnet.String() != hi.IPNetwork {
 		hi.IPNetwork = ipnet.String()
 		hi.LastIPNetWorkChange = time.Now()
-	}
-
-	if err != nil {
+	} else if err != nil {
 		log.Error("failed to get the IP network information", "err", err.Error())
 	}
 
