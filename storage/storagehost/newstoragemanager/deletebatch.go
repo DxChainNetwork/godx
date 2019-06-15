@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/rlp"
 	"strings"
+	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -37,7 +38,7 @@ type (
 	}
 
 	// deleteVritualBatchPersist is the persist for appended operations for deleting a virtual sector
-	deleteVritualSectorPersist struct {
+	deleteVirtualSectorPersist struct {
 		ID       sectorID
 		FolderID folderID
 		Index    uint64
@@ -156,14 +157,77 @@ func (update *deleteSectorBatchUpdate) prepareNormal(manager *storageManager) (e
 	if err = update.loadSectorsAndFolders(manager); err != nil {
 		return fmt.Errorf("cannot load sectors and folders: %v", err)
 	}
+	var once sync.Once
 	// update entries and write to database and wal
 	for _, sector := range update.sectors {
+		var op writeaheadlog.Operation
 		if sector.count <= 1 {
-			// Delete the physical sector
+			// Update memory
 			sector.count = 0
-
+			sf, exist := update.folders[sector.folderID]
+			if !exist {
+				return fmt.Errorf("folder [%v] for sector [%x] not found", sector.folderID, sector.id)
+			}
+			if err = sf.setFreeSectorSlot(sector.index); err != nil {
+				return fmt.Errorf("set free sector for [%x] failed", sector.id)
+			}
+			// update batch. Delete the sector, delete folder Sector, update folder
+			update.batch = manager.db.deleteSectorToBatch(update.batch, sector.id)
+			update.batch = manager.db.deleteFolderSectorToBatch(update.batch, sector.folderID, sector.id)
+			update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, sf)
+			if err != nil {
+				return fmt.Errorf("save storage folder to batch error: %v", err)
+			}
+			// Create the operation
+			persist := deletePhysicalSectorPersist {
+				ID: sector.id,
+				FolderID: sector.folderID,
+				Index: sector.index,
+				Count: sector.count,
+			}
+			b, err := rlp.EncodeToBytes(persist)
+			if err != nil {
+				return err
+			}
+			op = writeaheadlog.Operation{
+				Name: opNameDeletePhysicalSector,
+				Data: b,
+			}
 		} else {
 			// Delete the virtual sector
+			sector.count--
+			// Write the batch
+			update.batch, err = manager.db.saveSectorToBatch(update.batch, sector, false)
+			if err != nil {
+				return err
+			}
+			persist := deleteVirtualSectorPersist{
+				ID: sector.id,
+				FolderID: sector.folderID,
+				Index: sector.index,
+				Count: sector.count,
+			}
+			b, err := rlp.EncodeToBytes(persist)
+			if err != nil {
+				return err
+			}
+			op = writeaheadlog.Operation{
+				Name: opNameDeleteVirtualSector,
+				Data: b,
+			}
+		}
+		// Wait for init to complete just once
+		once.Do(func() {
+			if <-update.txn.InitComplete; update.txn.InitErr != nil {
+				update.txn = nil
+				err = update.txn.InitErr
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("wal init error: %v", err)
+		}
+		if err = <-update.txn.Append([]writeaheadlog.Operation{op}); err != nil {
+			return err
 		}
 	}
 	return
@@ -203,6 +267,12 @@ func (update *deleteSectorBatchUpdate) loadSectorsAndFolders(manager *storageMan
 }
 
 func (update *deleteSectorBatchUpdate) processNormal(manager *storageManager) (err error) {
+	if err = <- update.txn.Commit(); err != nil {
+		return err
+	}
+	if err = manager.db.writeBatch(update.batch); err != nil {
+		return err
+	}
 	return
 }
 

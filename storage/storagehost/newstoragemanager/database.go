@@ -169,6 +169,12 @@ func (db *database) saveStorageFolderToBatch(batch *leveldb.Batch, sf *storageFo
 	return batch, nil
 }
 
+// deleteStorageFolderToBatch delete the folder id to sector id
+func (db *database) deleteFolderSectorToBatch(batch *leveldb.Batch, folderID folderID, sectorID sectorID) (newBatch *leveldb.Batch) {
+	batch.Delete(makeFolderSectorKey(folderID, sectorID))
+	return batch
+}
+
 // loadStorageFolder get the storage folder with the index from db
 func (db *database) loadStorageFolder(path string) (sf *storageFolder, err error) {
 	// make the folder key
@@ -312,6 +318,12 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 		batch.Put(folderToSectorKey, []byte{})
 	}
 	return batch, nil
+}
+
+// deleteSectorToBatch add the delete sector to the batch
+func (db *database) deleteSectorToBatch(batch *leveldb.Batch, id sectorID) (newBatch *leveldb.Batch){
+	batch.Delete(makeSectorKey(id))
+	return batch
 }
 
 // makeFolderKey makes the folder key which is storageFolder_${folderPath}
