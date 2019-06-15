@@ -27,15 +27,15 @@ var sectorHeight = func() uint64 {
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
-func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral *big.Int) error {
+func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
-	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 3 {
+	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 2 {
 		return errBadContractOutputCounts
 	}
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if so.expiration()-revisionSubmissionBuffer <= blockHeight {
+	if so.expiration()-postponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 
@@ -76,7 +76,7 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
 		return fmt.Errorf("client increased its valid proof output: %v", errHighRenterValidOutput)
 	}
-	fromRenter := new(big.Int).Sub(oldFCR.NewValidProofOutputs[0].Value, revision.NewValidProofOutputs[0].Value)
+	fromRenter := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
 	// Verify that enough money was transferred.
 	if fromRenter.Cmp(expectedExchange) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromRenter)
@@ -87,7 +87,8 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
 		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
-	toHost := new(big.Int).Sub(revision.NewValidProofOutputs[1].Value, oldFCR.NewValidProofOutputs[1].Value)
+	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
+
 	// Verify that enough money was transferred.
 	if toHost.Cmp(fromRenter) != 0 {
 		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
@@ -105,7 +106,7 @@ func VerifyRevision(so *StorageObligation, revision *types.StorageContractRevisi
 	// expected. If the new misesd output is greater than the old one, the host
 	// is actually posting negative collateral, which is fine.
 	if revision.NewMissedProofOutputs[1].Value.Cmp(oldFCR.NewMissedProofOutputs[1].Value) <= 0 {
-		collateral := new(big.Int).Sub(oldFCR.NewMissedProofOutputs[1].Value, revision.NewMissedProofOutputs[1].Value)
+		collateral := common.NewBigInt(oldFCR.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(revision.NewMissedProofOutputs[1].Value.Int64()))
 		if collateral.Cmp(expectedCollateral) > 0 {
 			s := fmt.Sprintf("host expected to post at most %v collateral, but contract has host posting %v: ", expectedCollateral, collateral)
 			return ExtendErr(s, errLowHostMissedOutput)
@@ -143,9 +144,9 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 		return errBadFileMerkleRoot
 	}
 
-	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
-	if sc.WindowStart <= blockHeight+revisionSubmissionBuffer {
-		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the revisionSubmissionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, revisionSubmissionBuffer, sc.WindowStart, blockHeight+revisionSubmissionBuffer)
+	// WindowStart must be at least postponedExecutionBuffer blocks into the future
+	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
 		return errEarlyWindow
 	}
 
@@ -183,13 +184,13 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	}
 	// Check that the collateral does not exceed the maximum amount of
 	// collateral allowed.
-	depositMinusContractPrice := new(big.Int).Sub(sc.ValidProofOutputs[1].Value, externalConfig.ContractPrice.BigIntPtr())
-	if depositMinusContractPrice.Cmp(&config.MaxDeposit) > 0 {
+	depositMinusContractPrice := common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(externalConfig.ContractPrice)
+	if depositMinusContractPrice.Cmp(common.NewBigInt(config.MaxDeposit.Int64())) > 0 {
 		return errMaxCollateralReached
 	}
 	// Check that the host has enough room in the collateral budget to add this
 	// collateral.
-	if new(big.Int).Add(&lockedStorageDeposit, depositMinusContractPrice).Cmp(&config.DepositBudget) > 0 {
+	if lockedStorageDeposit.Add(depositMinusContractPrice).Cmp(common.NewBigInt(config.DepositBudget.Int64())) > 0 {
 		return errCollateralBudgetExceeded
 	}
 
@@ -209,15 +210,15 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	return nil
 }
 
-func FinalizeStorageObligation(h *StorageHost, so StorageObligation) error {
-	// Get a lock on the storage obligation
-	lockErr := h.managedTryLockStorageObligation(so.id(), storage.ObligationLockTimeout)
+func FinalizeStorageResponsibility(h *StorageHost, so StorageResponsibility) error {
+	// Get a lock on the storage responsibility
+	lockErr := h.checkAndTryLockStorageResponsibility(so.id(), storage.ResponsibilityLockTimeout)
 	if lockErr != nil {
 		return lockErr
 	}
-	defer h.managedUnlockStorageObligation(so.id())
+	defer h.checkAndUnlockStorageResponsibility(so.id())
 
-	if err := h.managedAddStorageObligation(so); err != nil {
+	if err := h.InsertStorageResponsibility(so); err != nil {
 		return err
 	}
 	return nil
@@ -234,7 +235,7 @@ func VerifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if existingRevision.NewWindowStart-revisionSubmissionBuffer <= blockHeight {
+	if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 

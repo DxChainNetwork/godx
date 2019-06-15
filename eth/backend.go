@@ -751,3 +751,7 @@ func (s *Ethereum) SuggestPrice(ctx context.Context) (*big.Int, error) {
 func (s *Ethereum) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return s.APIBackend.GetPoolNonce(ctx, addr)
 }
+
+func (s *Ethereum) GetBlockByNumber(number uint64) (*types.Block, error) {
+	return s.APIBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
+}

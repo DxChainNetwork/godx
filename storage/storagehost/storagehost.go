@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/bits"
 	"os"
 	"path/filepath"
@@ -92,7 +91,7 @@ type StorageHost struct {
 	// storage host manager for manipulating the file storage system
 	sm.StorageManager
 
-	lockedStorageObligations map[common.Hash]*TryMutex
+	lockedStorageResponsibility map[common.Hash]*TryMutex
 
 	// things for log and persistence
 	// TODO: database to store the info of storage obligation, here just a mock
@@ -114,6 +113,9 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
+
+	// subscribe block chain change event
+	go h.subscribeChainChangEvent()
 }
 
 // New Initialize the Host, including init the structure
@@ -121,8 +123,9 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 func New(persistDir string) (*StorageHost, error) {
 	// do a host creation, but incomplete config
 	host := StorageHost{
-		log:        log.New(),
-		persistDir: persistDir,
+		log:                         log.New(),
+		persistDir:                  persistDir,
+		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
 		// TODO: init the storageHostObligation
 	}
 
@@ -181,8 +184,10 @@ func New(persistDir string) (*StorageHost, error) {
 		// just log the cannot syn problem, the does not sever enough to panic the system
 		host.log.Warn(tmErr.Error())
 	}
-
-	// TODO: storageObligation handle
+	//Delete residual storage responsibility
+	if err = host.PruneStaleStorageResponsibilities(); err != nil {
+		host.log.Info("Could not prune stale storage responsibilities:", err)
+	}
 
 	// TODO: Init the networking
 
@@ -489,19 +494,22 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
-	so := StorageObligation{
-		SectorRoots:              nil,
-		ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
-		LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
-		PotentialStorageRevenue:  big.NewInt(0),
-		RiskedCollateral:         big.NewInt(0),
-		NegotiationHeight:        h.blockHeight,
+	so := StorageResponsibility{
+		SectorRoots: nil,
+		//ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
+		ContractCost: h.externalConfig().ContractPrice,
+		//LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
+		LockedStorageDeposit: common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
+		//PotentialStorageRevenue:  big.NewInt(0),
+		PotentialStorageRevenue: common.BigInt0,
+		//RiskedStorageDeposit:         big.NewInt(0),
+		RiskedStorageDeposit:     common.BigInt0,
+		NegotiationBlockNumber:   h.blockHeight,
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
 
-	if err := FinalizeStorageObligation(h, so); err != nil {
-
+	if err := FinalizeStorageResponsibility(h, so); err != nil {
 		return ExtendErr("finalize storage obligation error", err)
 	}
 
@@ -519,7 +527,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage obligation
-	so, err := GetStorageObligation(h.db, uploadRequest.StorageContractID)
+	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
 
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
@@ -532,7 +540,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Process each action
 	newRoots := append([]common.Hash(nil), so.SectorRoots...)
 	sectorsChanged := make(map[uint64]struct{})
-	var bandwidthRevenue *big.Int
+	//var bandwidthRevenue *big.Int
+	var bandwidthRevenue common.BigInt
 	var sectorsRemoved []common.Hash
 	var sectorsGained []common.Hash
 	var gainedSectorData [][]byte
@@ -548,7 +557,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 			sectorsChanged[uint64(len(newRoots))-1] = struct{}{}
 
 			// Update finances
-			bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.UploadBandwidthPrice.MultUint64(storage.SectorSize).BigIntPtr())
+			//bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.UploadBandwidthPrice.MultUint64(storage.sectorSize).BigIntPtr())
+			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 
 		default:
 
@@ -556,13 +566,21 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		}
 	}
 
-	var storageRevenue, newDeposit *big.Int
+	//var storageRevenue, newDeposit *big.Int
+	var storageRevenue, newDeposit common.BigInt
 	if len(newRoots) > len(so.SectorRoots) {
 		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
-		blocksRemaining := so.ProofDeadline() - currentBlockHeight
-		blockBytesCurrency := new(big.Int).Mul(big.NewInt(int64(blocksRemaining)), big.NewInt(int64(bytesAdded)))
-		storageRevenue = new(big.Int).Mul(blockBytesCurrency, settings.StoragePrice.BigIntPtr())
-		newDeposit = newDeposit.Add(newDeposit, new(big.Int).Mul(blockBytesCurrency, settings.Deposit.BigIntPtr()))
+		blocksRemaining := so.proofDeadline() - currentBlockHeight
+		//blockBytesCurrency := new(big.Int).Mul(big.NewInt(int64(blocksRemaining)), big.NewInt(int64(bytesAdded)))
+
+		blockBytesCurrency := common.NewBigIntUint64(blocksRemaining).Mult(common.NewBigIntUint64(bytesAdded))
+
+		//storageRevenue = new(big.Int).Mul(blockBytesCurrency, settings.StoragePrice.BigIntPtr())
+		storageRevenue = blockBytesCurrency.Mult(settings.StoragePrice)
+
+		//newDeposit = newDeposit.Add(newDeposit, new(big.Int).Mul(blockBytesCurrency, settings.Deposit.BigIntPtr()))
+		newDeposit = newDeposit.Add(blockBytesCurrency.Mult(settings.Deposit))
+
 	}
 
 	// If a Merkle proof was requested, construct it
@@ -593,7 +611,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Verify the new revision
-	newRevenue := new(big.Int).Add(storageRevenue.Add(storageRevenue, bandwidthRevenue), settings.BaseRPCPrice.BigIntPtr())
+	//newRevenue := new(big.Int).Add(storageRevenue.Add(storageRevenue, bandwidthRevenue), settings.BaseRPCPrice.BigIntPtr())
+
+	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
+
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 
@@ -637,7 +658,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Calculate bandwidth cost of proof
 	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
 
-	bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
+	//bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
+
+	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
 
@@ -659,11 +682,15 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// Update the storage obligation
 	so.SectorRoots = newRoots
-	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
-	so.RiskedCollateral = so.RiskedCollateral.Add(so.RiskedCollateral, newDeposit)
-	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
+	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
+	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
+	//so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
+
+	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(storageRevenue)
+	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
+	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-	err = h.modifyStorageObligation(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
 	if err != nil {
 
 		return err
@@ -716,7 +743,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}()
 
 	// get storage obligation
-	so, err := GetStorageObligation(h.db, req.StorageContractID)
+	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
 	}
@@ -814,11 +841,13 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}
 
 	// update the storage obligation.
-	paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
-	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
+	//paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
+	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
+	//so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
+	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	h.lock.Lock()
-	err = h.modifyStorageObligation(so, nil, nil, nil)
+	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
 
