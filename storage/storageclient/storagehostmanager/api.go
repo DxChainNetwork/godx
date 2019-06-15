@@ -37,8 +37,6 @@ func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []sto
 	return api.shm.storageHostTree.All()
 }
 
-// TODO: (mzhang) search based on the public key
-
 // PrivateStorageHostManagerAPI defines the object used to call eligible APIs
 // that are used to configure settings
 type PrivateStorageHostManagerAPI struct {

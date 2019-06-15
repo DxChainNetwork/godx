@@ -123,7 +123,7 @@ func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
 
 // scanStart will update the scan wait list and scan look up map
 // afterwards, the host needed to be scanned will be passed in through channel
-// NOTE: multiple go routines will be activated to handle scan requet
+// NOTE: multiple go routines will be activated to handle scan request
 func (shm *StorageHostManager) scanStart() {
 	if err := shm.tm.Add(); err != nil {
 		return
