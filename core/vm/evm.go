@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"reflect"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -500,16 +499,11 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		err      error
 	)
 
-	scSet := types.StorageContractSet{}
-	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
+	ha := types.HostAnnouncement{}
+	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &ha)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		return nil, gasDecode, errDec
-	}
-
-	ha := scSet.HostAnnounce
-	if !reflect.DeepEqual(ha, types.HostAnnouncement{}) {
-		return nil, gasDecode, errors.New("empty host announcement")
 	}
 
 	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, ha, uint64(0), [][]byte{ha.Signature})
@@ -539,16 +533,11 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	)
 
 	// rlp decode and calculate gas used
-	scSet := types.StorageContractSet{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
+	sc := types.StorageContract{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &sc)
 	errDecode, _ := resultDecode[0].(error)
 	if errDecode != nil {
 		return nil, gasRemainDecode, errDecode
-	}
-
-	sc := scSet.StorageContract
-	if !reflect.DeepEqual(sc, types.StorageContract{}) {
-		return nil, gasRemainDecode, errors.New("empty storage contract")
 	}
 
 	// create the expired storage contract status address (e.g. "expired_storage_contract_1500")
@@ -693,16 +682,11 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		snapshot = state.Snapshot()
 	)
 
-	scSet := types.StorageContractSet{}
-	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
+	scr := types.StorageContractRevision{}
+	gasRemainDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &scr)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDecode, errDec
-	}
-
-	scr := scSet.StorageContractRevision
-	if !reflect.DeepEqual(scr, types.StorageContractRevision{}) {
-		return nil, gasRemainDecode, errors.New("empty storage contract revision")
 	}
 
 	// check if the account exist
@@ -799,16 +783,11 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 		snapshot = state.Snapshot()
 	)
 
-	scSet := types.StorageContractSet{}
-	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &scSet)
+	sp := types.StorageProof{}
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &sp)
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
-	}
-
-	sp := scSet.StorageProof
-	if !reflect.DeepEqual(sp, types.StorageProof{}) {
-		return nil, gasRemainDec, errors.New("empty storage proof")
 	}
 
 	currentHeight := evm.BlockNumber.Uint64()

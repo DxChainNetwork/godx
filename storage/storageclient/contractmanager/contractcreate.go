@@ -308,16 +308,12 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		return storage.ContractMetaData{}, err
 	}
 
-	// the real input data of transaction
-	scSet := types.StorageContractSet{}
-	scSet.StorageContract = storageContract
-
-	scSetBytes, err := rlp.EncodeToBytes(scSet)
+	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scSetBytes); err != nil {
+	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 

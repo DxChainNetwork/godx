@@ -9,7 +9,6 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/rlp"
 )
 
 type StorageContractRLPHash interface {
@@ -139,23 +138,4 @@ func (sp StorageProof) RLPHash() common.Hash {
 		sp.Segment,
 		sp.HashSet,
 	})
-}
-
-// the real payload data that put into transaction is StorageContractSet
-type StorageContractSet struct {
-	HostAnnounce            HostAnnouncement
-	StorageContract         StorageContract
-	StorageContractRevision StorageContractRevision
-	StorageProof            StorageProof
-}
-
-// resolve StorageContractSet from a transaction
-func ResolveStorageContractSet(tx *Transaction) (*StorageContractSet, error) {
-	payload := tx.Data()
-	sc := StorageContractSet{}
-	err := rlp.DecodeBytes(payload, &sc)
-	if err != nil {
-		return nil, err
-	}
-	return &sc, nil
 }
