@@ -56,7 +56,7 @@ func (shm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64
 	return base
 }
 
-// depostFactor calculates the factor value based on the storage host's deposit setting. The higher
+// depositFactorCalc calculates the factor value based on the storage host's deposit setting. The higher
 // the deposit is, the higher evaluation it will get
 func (shm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
 

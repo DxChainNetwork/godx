@@ -174,11 +174,11 @@ func (st *storageClientBackendTestData) AccountManager() *accounts.Manager {
 	return nil
 }
 
-func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeURL string) error {
 	return nil
 }
 
-func (st *storageClientBackendTestData) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
 	return nil, nil
 }
 

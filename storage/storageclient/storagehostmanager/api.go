@@ -167,6 +167,8 @@ func (api *PublicHostManagerDebugAPI) InsertHostInfoHighEval(id enode.ID) (err e
 	return api.shm.insert(hi)
 }
 
+// InsertHostInfoLowEval is used for the test case in contractManager module, which is used
+// to insert contract with lower evaluation (evaluation that is smaller than 1)
 func (api *PublicHostManagerDebugAPI) InsertHostInfoLowEval(id enode.ID) (err error) {
 	hi := hostInfoGeneratorLowEvaluation(id)
 	return api.shm.insert(hi)
