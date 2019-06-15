@@ -30,7 +30,7 @@ const (
 	PrefixStorageResponsibility = "StorageResponsibility-" //DB Prefix for StorageResponsibility
 	PrefixHeight                = "height-"                //DB Prefix for task
 	errGetStorageResponsibility = "failed to get data from DB as I wished "
-	errPutStorageResponsibility = "failed to get data from DB as I wished "
+	errPutStorageResponsibility = "failed to put data from DB as I wished "
 )
 
 //Storage contract should not be empty
@@ -87,19 +87,18 @@ type (
 )
 
 func (i storageResponsibilityStatus) String() string {
-	if i == 0 {
+	switch i {
+	case 0:
 		return "unresolved"
-	}
-	if i == 1 {
+	case 1:
 		return "rejected"
-	}
-	if i == 2 {
+	case 2:
 		return "succeeded"
-	}
-	if i == 3 {
+	case 3:
 		return "failed"
+	default:
+		return "storageResponsibilityStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
-	return "storageResponsibilityStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 }
 
 func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageResponsibility, error) {
@@ -111,19 +110,11 @@ func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageRespons
 }
 
 func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
-	err := StoreStorageResponsibility(db, so.id(), so)
-	if err != nil {
-		return err
-	}
-	return nil
+	return StoreStorageResponsibility(db, so.id(), so)
 }
 
 func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
-	err := DeleteStorageResponsibility(db, sc)
-	if err != nil {
-		return err
-	}
-	return nil
+	return DeleteStorageResponsibility(db, sc)
 }
 
 //returns expired block number
@@ -409,7 +400,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 		if h.blockHeight > so.NegotiationBlockNumber+responseTimeout {
 			scids = append(scids, so.id())
 		}
-		if so.FormContractConfirmed == false {
+		if !so.FormContractConfirmed {
 			return errTransactionNotConfirmed
 		}
 	}
@@ -417,18 +408,12 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 	// Delete storage responsibility from the database.
 	err := h.deleteStorageResponsibilities(scids)
 	if err != nil {
-		h.log.Info("unable to delete responsibility: ", err)
+		h.log.Warn("unable to delete responsibility: ", err)
 		return err
 	}
 
 	// Update the financial metrics of the host.
-	err = h.resetFinancialMetrics()
-	if err != nil {
-		h.log.Info("unable to reset host financial metrics: ", err)
-		return err
-	}
-
-	return nil
+	return h.resetFinancialMetrics()
 }
 
 //No matter what state the storage responsibility will be deleted
@@ -437,10 +422,10 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 	//Unchecked error, even if there is an error, we want to delete
 	h.RemoveSectorBatch(so.SectorRoots)
 
-	if sos == unresolved {
+	switch sos {
+	case unresolved:
 		h.log.Info("storage responsibility 'unresolved' during call to removeStorageResponsibility, id", so.id())
-	}
-	if sos == rejected {
+	case rejected:
 		if h.financialMetrics.TransactionFeeExpenses.Cmp(so.TransactionFeeExpenses) >= 0 {
 			h.log.Info("Rejecting storage responsibility expiring at block ", so.expiration(), ", current height is ", h.blockHeight, ". Potential revenue is ", h.financialMetrics.PotentialContractCompensation.Add(h.financialMetrics.PotentialStorageRevenue).Add(h.financialMetrics.PotentialDownloadBandwidthRevenue).Add(h.financialMetrics.PotentialUploadBandwidthRevenue))
 
@@ -453,9 +438,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 			h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(so.RiskedStorageDeposit)
 			h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Sub(so.TransactionFeeExpenses)
 		}
-	}
-
-	if sos == succeeded {
+	case succeeded:
 		revenue := so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 		//No storage responsibility for file upload or download does not require proof of storage
 		if len(so.SectorRoots) == 0 {
@@ -478,9 +461,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 		h.financialMetrics.DownloadBandwidthRevenue = h.financialMetrics.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 		h.financialMetrics.UploadBandwidthRevenue = h.financialMetrics.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
 
-	}
-
-	if sos == failed {
+	case failed:
 		// Remove the responsibility statistics as potential risk and income.
 		h.log.Info("Missed storage proof. Revenue would have been", so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue))
 
@@ -494,17 +475,13 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 		// Add the responsibility statistics as loss.
 		h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.RiskedStorageDeposit)
 		h.financialMetrics.LostRevenue = h.financialMetrics.LostRevenue.Add(so.ContractCost).Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
+
 	}
 
 	h.financialMetrics.ContractCount--
 	so.ResponsibilityStatus = sos
 	so.SectorRoots = []common.Hash{}
-	errDb := StoreStorageResponsibility(h.db, so.id(), so)
-	if errDb != nil {
-		return errDb
-	}
-
-	return nil
+	return StoreStorageResponsibility(h.db, so.id(), so)
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
@@ -517,7 +494,8 @@ func (h *StorageHost) resetFinancialMetrics() error {
 		// Submit transaction fee first
 		fm.TransactionFeeExpenses = fm.TransactionFeeExpenses.Add(so.TransactionFeeExpenses)
 		// Update the other financial values based on the responsibility status.
-		if so.ResponsibilityStatus == unresolved {
+		switch so.ResponsibilityStatus {
+		case unresolved:
 			fm.ContractCount++
 			fm.PotentialContractCompensation = fm.PotentialContractCompensation.Add(so.ContractCost)
 			fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.LockedStorageDeposit)
@@ -525,23 +503,19 @@ func (h *StorageHost) resetFinancialMetrics() error {
 			fm.RiskedStorageDeposit = fm.RiskedStorageDeposit.Add(so.RiskedStorageDeposit)
 			fm.PotentialDownloadBandwidthRevenue = fm.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 			fm.PotentialUploadBandwidthRevenue = fm.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
-		}
-		if so.ResponsibilityStatus == succeeded {
+		case succeeded:
 			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
 			fm.StorageRevenue = fm.StorageRevenue.Add(so.PotentialStorageRevenue)
 			fm.DownloadBandwidthRevenue = fm.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 			fm.UploadBandwidthRevenue = fm.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
-		}
-		if so.ResponsibilityStatus == failed {
+		case failed:
 			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
 			if !so.RiskedStorageDeposit.IsNeg() {
 				// Storage responsibility failed with risked collateral.
 				fm.LostRevenue = fm.LostRevenue.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 				fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.RiskedStorageDeposit)
 			}
-
 		}
-
 	}
 
 	h.financialMetrics = fm
@@ -565,7 +539,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
 	if err != nil {
-		h.log.Info("Could not get storage Responsibility:", err)
+		h.log.Warn("Could not get storage Responsibility:", err)
 		return
 	}
 
@@ -735,7 +709,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	// Save the storage Responsibility.
 	errDB := StoreStorageResponsibility(h.db, soid, so)
 	if errDB != nil {
-		h.log.Info("Error updating the storage Responsibility", errDB)
+		h.log.Warn("Error updating the storage Responsibility", errDB)
 	}
 
 	//If the submission of the storage certificate is successful during the non-expiration period, this deletes the storage responsibility
@@ -744,7 +718,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		h.lock.Lock()
 		err := h.removeStorageResponsibility(so, succeeded)
 		if err != nil {
-			h.log.Info("failed to delete storage responsibility", err)
+			h.log.Warn("failed to delete storage responsibility", err)
 		}
 		h.lock.Unlock()
 	}
@@ -822,7 +796,7 @@ func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
 
 	err := h.syncConfig()
 	if err != nil {
-		h.log.Info("ERROR: could not save during ProcessConsensusChange:", err)
+		h.log.Error("could not save during ProcessConsensusChange:", err)
 	}
 
 }
