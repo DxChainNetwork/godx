@@ -29,10 +29,11 @@ var storageClientCommand = cli.Command{
 		},
 
 		{
-			Name:        "setpayment",
-			Usage:       "set storage client payment information",
+			Name:        "setsetting",
+			Usage:       "set storage client settings",
 			ArgsUsage:   "",
-			Action:      utils.MigrateFlags(setPayment),
+			Action:      utils.MigrateFlags(setClientSetting),
+			Flags:       storageClientFlags,
 			Description: `set storage client payment information`,
 		},
 
@@ -76,22 +77,34 @@ func getPayment(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("failed to get storage client payment information: %s", err.Error())
 	}
+
 	fmt.Println(result)
 	return nil
 }
 
-func setPayment(ctx *cli.Context) error {
+func setClientSetting(ctx *cli.Context) error {
 	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	var result string
-	err = client.Call(&result, "storageclient_setPayment")
+	// check if the flag is set
+	if !ctx.GlobalIsSet(utils.PeriodFlag.Name) {
+		utils.Fatalf("please use --memorylimit flag to specify the memory limitation")
+	}
+
+	// get the value from the flag
+	limit := ctx.GlobalUint64(utils.StorageClientMemoryFlag.Name)
+	if limit <= 0 {
+		utils.Fatalf("memory limitation must be greater than 0")
+	}
+
+	var response string
+	err = client.Call(&response, "storageclient_setClientSetting")
 	if err != nil {
 		utils.Fatalf("failed to configure storage client payment settings: %s", err.Error())
 	}
-	fmt.Println(result)
+	fmt.Println(response)
 	return nil
 }
 

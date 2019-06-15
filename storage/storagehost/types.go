@@ -3,9 +3,10 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rpc"
-	"math/big"
 )
 
 var (
@@ -166,22 +167,20 @@ type (
 
 	// HostFinancialMetrics record the financial element for host
 	HostFinancialMetrics struct {
-		ContractCount                 uint64  `json:"contractcount"`
-		ContractCompensation          big.Int `json:"contractcompensation"`
-		PotentialContractCompensation big.Int `json:"potentialcontractcompensation"`
-
-		LockedStorageDeposit    big.Int `json:"lockedstoragedeposit"`
-		LostRevenue             big.Int `json:"lostrevenue"`
-		LostStorageDeposit      big.Int `json:"loststoragedeposit"`
-		PotentialStorageRevenue big.Int `json:"potentialstoragerevenue"`
-		RiskedStorageDeposit    big.Int `json:"riskedstoragedeposit"`
-		StorageRevenue          big.Int `json:"storagerevenue"`
-		TransactionFeeExpenses  big.Int `json:"transactionfeeexpenses"`
-
-		DownloadBandwidthRevenue          big.Int `json:"downloadbandwidthrevenue"`
-		PotentialDownloadBandwidthRevenue big.Int `json:"potentialdownloadbandwidthrevenue"`
-		PotentialUploadBandwidthRevenue   big.Int `json:"potentialuploadbandwidthrevenue"`
-		UploadBandwidthRevenue            big.Int `json:"uploadbandwidthrevenue"`
+		ContractCount                     uint64        `json:"contractcount"`
+		ContractCompensation              common.BigInt `json:"contractcompensation"`
+		PotentialContractCompensation     common.BigInt `json:"potentialcontractcompensation"`
+		LockedStorageDeposit              common.BigInt `json:"lockedstoragedeposit"`
+		LostRevenue                       common.BigInt `json:"lostrevenue"`
+		LostStorageDeposit                common.BigInt `json:"loststoragedeposit"`
+		PotentialStorageRevenue           common.BigInt `json:"potentialstoragerevenue"`
+		RiskedStorageDeposit              common.BigInt `json:"riskedstoragedeposit"`
+		StorageRevenue                    common.BigInt `json:"storagerevenue"`
+		TransactionFeeExpenses            common.BigInt `json:"transactionfeeexpenses"`
+		DownloadBandwidthRevenue          common.BigInt `json:"downloadbandwidthrevenue"`
+		PotentialDownloadBandwidthRevenue common.BigInt `json:"potentialdownloadbandwidthrevenue"`
+		PotentialUploadBandwidthRevenue   common.BigInt `json:"potentialuploadbandwidthrevenue"`
+		UploadBandwidthRevenue            common.BigInt `json:"uploadbandwidthrevenue"`
 	}
 
 	ErrorRevision       string

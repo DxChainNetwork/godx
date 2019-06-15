@@ -4,6 +4,21 @@
 
 package storageclient
 
+import (
+	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
+)
+
+// ActiveContractAPI is used to re-format the contract information that is going to
+// be displayed on the console
+type ActiveContractsAPIDisplay struct {
+	ContractID   string
+	HostID       string
+	AbleToUpload bool
+	AbleToRenew  bool
+	Canceled     bool
+}
+
 // PublicStorageClientAPI defines the object used to call eligible public APIs
 // are used to acquire information
 type PublicStorageClientAPI struct {
@@ -16,9 +31,9 @@ func NewPublicStorageClientAPI(sc *StorageClient) *PublicStorageClientAPI {
 	return &PublicStorageClientAPI{sc}
 }
 
-// Payment returns the current payment settings
-func (api *PublicStorageClientAPI) Payment() string {
-	return "working in progress: getting payment information"
+// StorageClientSetting will retrieve the current storage client settings
+func (api *PublicStorageClientAPI) StorageClientSetting() (setting storage.ClientSettingAPIDisplay) {
+	return formatClientSetting(api.sc.RetrieveClientSetting())
 }
 
 // MemoryAvailable returns current memory available
@@ -43,13 +58,103 @@ func NewPrivateStorageClientAPI(sc *StorageClient) *PrivateStorageClientAPI {
 	return &PrivateStorageClientAPI{sc}
 }
 
-// SetPayment allows user to configure storage payment settings
-// which will be used to select eligible the StorageHost
-func (api *PrivateStorageClientAPI) SetPayment() string {
-	return "working in progress: setting payment information"
-}
-
 // SetMemoryLimit allows user to expand or shrink the current memory limit
 func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
 	return api.sc.memoryManager.SetMemoryLimit(amount)
+}
+
+// SetClientSetting will configure the client setting based on the user input data
+func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string) (resp string, err error) {
+	prevClientSetting := api.sc.RetrieveClientSetting()
+	var currentSetting storage.ClientSetting
+
+	if currentSetting, err = parseClientSetting(settings, prevClientSetting); err != nil {
+		err = fmt.Errorf("form contract failed, failed to parse the client settings: %s", err.Error())
+		return
+	}
+
+	// if user entered any 0s for the rent payment, set them to the default rentPayment settings
+	currentSetting = clientSettingGetDefault(currentSetting)
+
+	// call set client setting methods
+	if err = api.sc.SetClientSetting(currentSetting); err != nil {
+		err = fmt.Errorf("failed to set the client settings: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("Successfully set the storage client setting, you can use storageclient.setting() to verify")
+
+	return
+}
+
+// CancelAllContracts will cancel all contracts signed with storage client by
+// marking all active contracts as canceled, not good for uploading, and not good
+// for renewing
+func (api *PrivateStorageClientAPI) CancelAllContracts() (resp string) {
+	if err := api.sc.CancelContracts(); err != nil {
+		resp = fmt.Sprintf("Failed to cancel all contracts: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("All contracts are successfully canceled")
+	return resp
+}
+
+// ActiveContracts will retrieve all active contracts and display their general information
+func (api *PrivateStorageClientAPI) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
+	activeContracts = api.sc.ActiveContracts()
+	return
+}
+
+// ContractDetail will retrieve detailed contract information
+func (api *PrivateStorageClientAPI) ContractDetail(contractID string) (detail ContractMetaDataAPIDisplay, err error) {
+	// convert the string into contractID format
+	var convertContractID storage.ContractID
+	if convertContractID, err = storage.StringToContractID(contractID); err != nil {
+		err = fmt.Errorf("the contract id provided is not valid, it must be in type of string")
+		return
+	}
+
+	// get the contract detail
+	contract, exists := api.sc.ContractDetail(convertContractID)
+	if !exists {
+		err = fmt.Errorf("the contract with %v does not exist", contractID)
+		return
+	}
+
+	// format the contract meta data
+	detail = formatContractMetaData(contract)
+
+	return
+}
+
+// PublicStorageClientDebugAPI defines the object used to call eligible public APIs
+// that are used to mock data
+type PublicStorageClientDebugAPI struct {
+	sc *StorageClient
+}
+
+// NewPublicStorageClientDebugAPI initialize NewPublicStorageClientDebugAPI object
+// which implemented a bunch of API methods
+func NewPublicStorageClientDebugAPI(sc *StorageClient) *PublicStorageClientDebugAPI {
+	return &PublicStorageClientDebugAPI{sc}
+}
+
+// InsertActiveContracts will create some random contracts based on the amount user entered
+// and inserted them into activeContracts field
+func (api *PublicStorageClientDebugAPI) InsertActiveContracts(amount int) (resp string, err error) {
+	// validate user input
+	if amount <= 0 {
+		err = fmt.Errorf("the amount you entered %v must be greater than 0", amount)
+		return
+	}
+
+	// insert random active contracts
+	if err = api.sc.contractManager.InsertRandomActiveContracts(amount); err != nil {
+		err = fmt.Errorf("failed to insert mocked active contracts: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("Successfully inserted %v mocked active contracts", amount)
+	return
 }

@@ -18,7 +18,7 @@ const (
 const (
 	DefaultMaxDownloadSpeed = 0
 	DefaultMaxUploadSpeed   = 0
-	DefaultStreamCacheSize  = 2
+	DefaultPacketSize       = 4 * 4096
 
 	// frequency to check whether storage client is online
 	OnlineCheckFrequency = time.Second * 10
@@ -49,3 +49,35 @@ const (
 const (
 	DxFileExtension = ".dx"
 )
+
+var currencyIndexMap = map[string]uint64{
+	"wei":        1,
+	"kwei":       1e3,
+	"mwei":       1e6,
+	"gwei":       1e9,
+	"microether": 1e12,
+	"milliether": 1e15,
+	"ether":      1e18,
+}
+
+var dataSizeMultiplier = map[string]uint64{
+	"kb":  1e3,
+	"mb":  1e6,
+	"gb":  1e9,
+	"tb":  1e12,
+	"kib": 1 << 10,
+	"mib": 1 << 20,
+	"gib": 1 << 30,
+	"tib": 1 << 40,
+}
+
+var speedMultiplier = map[string]int64{
+	"bps":  1,
+	"kbps": 1e3,
+	"mbps": 1e6,
+	"gbps": 1e9,
+	"tbps": 1e12,
+}
+
+var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",
+	"redundancy", "violation", "uploadspeed", "downloadspeed"}

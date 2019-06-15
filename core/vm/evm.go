@@ -481,7 +481,7 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	switch txType {
 	case HostAnnounceTransaction:
 		return evm.HostAnnounceTx(caller, data, gas)
-	case FormContractTransaction:
+	case ContractCreateTransaction:
 		return evm.FormContractTx(caller, data, gas)
 	case CommitRevisionTransaction:
 		return evm.CommitRevisionTx(caller, data, gas)

@@ -162,6 +162,17 @@ var (
 
 	storageClientFlags = []cli.Flag{
 		utils.StorageClientMemoryFlag,
+		utils.PeriodFlag,
+		utils.HostsFlag,
+		utils.RenewFlag,
+		utils.FundFlag,
+		utils.ExpectedStorageFlag,
+		utils.ExpectedUploadFlag,
+		utils.ExpectedDownloadFlag,
+		utils.ExpectedRedundancyFlag,
+		utils.MaxUploadLimitFlag,
+		utils.MaxDownloadLimitFlag,
+		utils.IPViolationFlag,
 	}
 
 	storageHostManagerTestFlags = []cli.Flag{

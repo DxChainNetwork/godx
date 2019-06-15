@@ -5,26 +5,28 @@
 package storage
 
 import (
-	"github.com/DxChainNetwork/godx/common"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
-// TODO (mzhang): the blocks time is dependent on block frequency. Normally, it will be 10 min/b
-// but discuss with the team
+// The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
+// can be generated in an hour
 var (
-	BlockPerHour   = uint64(6)
+	BlockPerMin    = uint64(4)
+	BlockPerHour   = uint64(240)
 	BlocksPerDay   = 24 * BlockPerHour
 	BlocksPerWeek  = 7 * BlocksPerDay
 	BlocksPerMonth = 30 * BlocksPerDay
 	BlocksPerYear  = 365 * BlocksPerDay
 
-	ObligationLockTimeout = 60 * time.Second
+	ResponsibilityLockTimeout = 60 * time.Second
 )
 
-// TODO (mzhang): Discuss with team, came up with reasonable default value
+// Default rentPayment values
 var (
 	DefaultRentPayment = RentPayment{
-		Payment:      common.NewBigInt(500),
+		Fund:         common.NewBigInt(500),
 		StorageHosts: 50,
 		Period:       3 * BlocksPerMonth,
 		RenewWindow:  BlocksPerMonth,
