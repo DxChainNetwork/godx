@@ -29,7 +29,7 @@ var sectorHeight = func() uint64 {
 // the revision does not attempt any malicious or unexpected changes.
 func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
-	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 3 {
+	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 2 {
 		return errBadContractOutputCounts
 	}
 

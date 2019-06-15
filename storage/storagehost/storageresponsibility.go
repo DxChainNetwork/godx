@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	postponedExecutionBuffer    = uint64(144)
-	postponedExecution          = 3
-	responseTimeout             = 40
+	postponedExecutionBuffer    = uint64(144)              //Total time to sign the contract
+	postponedExecution          = 3                        //Total length of time to start a test task
+	ConfirmedBufferHeight       = 40                       //signing transaction not confirmed maximum time
 	PrefixStorageResponsibility = "StorageResponsibility-" //DB Prefix for StorageResponsibility
 	PrefixHeight                = "height-"                //DB Prefix for task
 	errGetStorageResponsibility = "failed to get data from DB as I wished "
@@ -271,18 +271,18 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	//insert the check form contract task in the task queue.
-	err1 := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
-	err2 := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
+	//insert the check  contract create task in the task queue.
+	errContractCreate := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
+	errContractCreateDoubleTime := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
 
-	//insert the check revision task in the task queue.
-	err3 := h.queueTaskItem(so.expiration()-postponedExecutionBuffer, so.id())
-	err4 := h.queueTaskItem(so.expiration()-postponedExecutionBuffer+postponedExecution, so.id())
+	//insert the chTeck revision task in the task queue.
+	errRevision := h.queueTaskItem(so.expiration()-postponedExecutionBuffer, so.id())
+	errRevisionDoubleTime := h.queueTaskItem(so.expiration()-postponedExecutionBuffer+postponedExecution, so.id())
 
 	//insert the check proof task in the task queue.
-	err5 := h.queueTaskItem(so.expiration()+postponedExecution, so.id())
-	err6 := h.queueTaskItem(so.expiration()+postponedExecution*2, so.id())
-	err = common.ErrCompose(err1, err2, err3, err4, err5, err6)
+	errProof := h.queueTaskItem(so.expiration()+postponedExecution, so.id())
+	errProofDoubleTime := h.queueTaskItem(so.expiration()+postponedExecution*2, so.id())
+	err = common.ErrCompose(errContractCreate, errContractCreateDoubleTime, errRevision, errRevisionDoubleTime, errProof, errProofDoubleTime)
 	if err != nil {
 		h.log.Warn("Error with task item, redacting responsibility", "id", so.id())
 		return common.ErrCompose(err, h.removeStorageResponsibility(so, rejected))
@@ -388,7 +388,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 	sos := h.StorageResponsibilities()
 	var scids []common.Hash
 	for _, so := range sos {
-		if h.blockHeight > so.NegotiationBlockNumber+responseTimeout {
+		if h.blockHeight > so.NegotiationBlockNumber+ConfirmedBufferHeight {
 			scids = append(scids, so.id())
 		}
 		if !so.CreateContractConfirmed {
@@ -816,13 +816,13 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 	var taskItems []common.Hash
 	for _, blockApply := range blocks {
 		//apply contract transaction
-		formContractIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockApply)
+		ContractCreateIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockApply)
 		if errGetBlock != nil {
 			continue
 		}
 
 		//Traverse all contract transactions and modify storage responsibility status
-		for _, id := range formContractIDsApply {
+		for _, id := range ContractCreateIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
 				h.log.Warn(errGetStorageResponsibility, "err", errGet)
@@ -903,14 +903,14 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.Hash) {
 	for _, blockReverted := range blocks {
 		//Rollback contract transaction
-		formContractIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockReverted)
+		ContractCreateIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockReverted)
 		if errGetBlock != nil {
 			h.log.Warn("Failed to get the data from the block as expected ", "err", errGetBlock)
 			continue
 		}
 
-		//Traverse all formContract transactions and modify storage responsibility status
-		for _, id := range formContractIDs {
+		//Traverse all ContractCreate transactions and modify storage responsibility status
+		for _, id := range ContractCreateIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
 				h.log.Warn(errGetStorageResponsibility, "err", errGet)
@@ -963,7 +963,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 }
 
 //Analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
-func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (formContractIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
+func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (ContractCreateIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
 	revisionIDs = make(map[common.Hash]uint64)
 	precompiled := vm.PrecompiledEVMFileContracts
 	block, err := h.ethBackend.GetBlockByHash(blockHash)
@@ -979,14 +979,14 @@ func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Has
 			continue
 		}
 		switch p {
-		case vm.FormContractTransaction:
+		case vm.ContractCreateTransaction:
 			var sc types.StorageContract
 			err := rlp.DecodeBytes(tx.Data(), &sc)
 			if err != nil {
 				h.log.Warn("Error when serializing storage contract:", "err", err)
 				continue
 			}
-			formContractIDs = append(formContractIDs, sc.RLPHash())
+			ContractCreateIDs = append(ContractCreateIDs, sc.RLPHash())
 		case vm.CommitRevisionTransaction:
 			var scr types.StorageContractRevision
 			err := rlp.DecodeBytes(tx.Data(), &scr)

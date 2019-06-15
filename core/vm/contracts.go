@@ -35,7 +35,7 @@ import (
 
 const (
 	HostAnnounceTransaction   = "HostAnnounce"
-	FormContractTransaction   = "FormContract"
+	ContractCreateTransaction = "ContractCreate"
 	CommitRevisionTransaction = "CommitRevision"
 	StorageProofTransaction   = "StorageProof"
 	ContractRenewTransaction  = "ContractRenew"
@@ -43,7 +43,7 @@ const (
 
 var PrecompiledEVMFileContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
-	common.BytesToAddress([]byte{10}): FormContractTransaction,
+	common.BytesToAddress([]byte{10}): ContractCreateTransaction,
 	common.BytesToAddress([]byte{11}): CommitRevisionTransaction,
 	common.BytesToAddress([]byte{12}): StorageProofTransaction,
 	common.BytesToAddress([]byte{13}): ContractRenewTransaction,
