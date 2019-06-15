@@ -5,11 +5,15 @@
 package storage
 
 import (
+	"context"
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 )
 
@@ -25,6 +29,11 @@ type EthBackend interface {
 
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -35,6 +44,14 @@ type ClientBackend interface {
 	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
+	SetupConnection(hostEnodeUrl string) (*Session, error)
+	AccountManager() *accounts.Manager
+	Disconnect(session *Session, hostEnodeUrl string) error
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
 // the parameters to download from outer request

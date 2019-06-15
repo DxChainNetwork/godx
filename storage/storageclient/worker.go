@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/common"
+
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -56,7 +58,7 @@ type worker struct {
 func (c *StorageClient) activateWorkerPool() {
 
 	// get all contracts in client
-	contractMap := c.storageHostManager.GetStorageContractSet().Contracts()
+	contractMap := c.contractManager.GetStorageContractSet().Contracts()
 
 	// new a worker for a contract that haven't a worker
 	for id, contract := range contractMap {
@@ -74,12 +76,12 @@ func (c *StorageClient) activateWorkerPool() {
 				DownloadCost:           h.DownloadCost,
 				StorageCost:            h.StorageCost,
 				TotalCost:              contract.Header().TotalCost,
-				GasFee:                 h.GasFee,
+				GasCost:                h.GasFee,
 				ContractFee:            h.ContractFee,
 				Status:                 h.Status,
 
 				// the amount remaining in the contract that the client can spend.
-				ClientBalance: h.LatestContractRevision.NewValidProofOutputs[0].Value,
+				ContractBalance: common.PtrBigInt(h.LatestContractRevision.NewValidProofOutputs[0].Value),
 			}
 
 			worker := &worker{
