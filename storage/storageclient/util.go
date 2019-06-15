@@ -6,24 +6,20 @@ package storageclient
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
-	"github.com/DxChainNetwork/godx/params"
 	"math/big"
 	"reflect"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
@@ -157,16 +153,6 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return sc.fileSystem
 
-}
-
-// calculate Enode.ID, reference:
-// p2p/discover/node.go:41
-// p2p/discover/node.go:59
-func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
-	var pubBytes [64]byte
-	math.ReadBits(pubkey.X, pubBytes[:len(pubBytes)/2])
-	math.ReadBits(pubkey.Y, pubBytes[len(pubBytes)/2:])
-	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
 // calculate the proof ranges that should be used to verify a
