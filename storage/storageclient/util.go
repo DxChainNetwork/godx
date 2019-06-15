@@ -8,13 +8,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
-	"github.com/DxChainNetwork/godx/params"
 	"math/big"
 	"reflect"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
@@ -24,6 +22,7 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
@@ -44,9 +43,10 @@ type ActiveContractsAPI struct {
 // ParsedAPI will parse the APIs saved in the Ethereum
 // and get the ones needed
 type ParsedAPI struct {
-	netInfo *ethapi.PublicNetAPI
-	account *ethapi.PrivateAccountAPI
-	ethInfo *ethapi.PublicEthereumAPI
+	netInfo   *ethapi.PublicNetAPI
+	account   *ethapi.PrivateAccountAPI
+	ethInfo   *ethapi.PublicEthereumAPI
+	storageTx *ethapi.PrivateStorageContractTxAPI
 }
 
 // filterAPIs will filter the APIs saved in the Ethereum and
@@ -72,6 +72,12 @@ func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
 				return errors.New("failed to acquire eth information")
 			}
 			sc.info.ethInfo = ethAPI
+		case reflect.TypeOf(&ethapi.PrivateStorageContractTxAPI{}):
+			storageTx := api.Service.(*ethapi.PrivateStorageContractTxAPI)
+			if storageTx == nil {
+				return errors.New("failed to acquire storage tx sending API")
+			}
+			sc.info.storageTx = storageTx
 		default:
 			continue
 		}
@@ -156,7 +162,11 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 // GetFileSystem will get the file system
 func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return sc.fileSystem
+}
 
+// send contract create tx
+func (sc *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return sc.info.storageTx.SendContractCreateTX(clientAddr, input)
 }
 
 // calculate Enode.ID, reference:

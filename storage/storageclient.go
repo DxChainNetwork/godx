@@ -6,17 +6,16 @@ package storage
 
 import (
 	"context"
-	"github.com/DxChainNetwork/godx/params"
 	"io"
 	"math/big"
-
-	"github.com/DxChainNetwork/godx/p2p/enode"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 )
 
@@ -55,6 +54,7 @@ type ClientBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 }
 
 // a metadata about a storage contract.
