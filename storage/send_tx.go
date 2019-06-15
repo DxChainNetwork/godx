@@ -166,3 +166,110 @@ func SendStorageProofTX(b ClientBackend, from common.Address, input []byte) (com
 	}
 	return txHash, nil
 }
+
+// PublicTransactionPoolAPI exposes methods for the RPC interface
+type ContractHostTxAPI struct {
+	eth       EthBackend
+	nonceLock *ethapi.AddrLocker
+}
+
+// NewPublicTransactionPoolAPI creates a new RPC service with methods specific for the transaction pool.
+func NewContractHostTxAPI(eth EthBackend) *ContractHostTxAPI {
+	nonceLock := new(ethapi.AddrLocker)
+	return &ContractHostTxAPI{eth, nonceLock}
+}
+
+// send contract revision tx, only triggered when host received consensus change, not for outer request
+func SendContractHostRevisionTX(eth EthBackend, from common.Address, input []byte) (common.Hash, error) {
+	scTxAPI := NewContractHostTxAPI(eth)
+	to := common.Address{}
+	to.SetBytes([]byte{11})
+	ctx := context.Background()
+	txHash, err := scTxAPI.sendStorageContractTX(ctx, from, to, input)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// send storage proof tx, only triggered when host received consensus change, not for outer request
+func SendStorageHostProofTX(eth EthBackend, from common.Address, input []byte) (common.Hash, error) {
+	scTxAPI := NewContractHostTxAPI(eth)
+	to := common.Address{}
+	to.SetBytes([]byte{12})
+	ctx := context.Background()
+	txHash, err := scTxAPI.sendStorageContractTX(ctx, from, to, input)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// construct tx with args
+func (args *SendStorageContractTxArgs) setHostDefaultsTX(ctx context.Context, eth EthBackend) (*types.Transaction, error) {
+	args.Gas = new(hexutil.Uint64)
+	*(*uint64)(args.Gas) = 90000
+
+	price, err := eth.SuggestPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+	args.GasPrice = (*hexutil.Big)(price)
+
+	nonce, err := eth.GetPoolNonce(ctx, args.From)
+	if err != nil {
+		return nil, err
+	}
+	args.Nonce = (*hexutil.Uint64)(&nonce)
+
+	if args.To == (common.Address{}) || args.Input == nil {
+		return nil, errors.New(`storage contract tx without to or input`)
+	}
+
+	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+}
+
+func (sc *ContractHostTxAPI) sendStorageContractTX(ctx context.Context, from, to common.Address, input []byte) (common.Hash, error) {
+
+	// construct args
+	args := SendStorageContractTxArgs{
+		From: from,
+		To:   to,
+	}
+	args.Input = (*hexutil.Bytes)(&input)
+
+	// find the account of the address from
+	account := accounts.Account{Address: args.From}
+	wallet, err := sc.eth.AccountManager().Find(account)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	sc.nonceLock.LockAddr(args.From)
+	defer sc.nonceLock.UnlockAddr(args.From)
+
+	// construct tx
+	tx, err := args.setHostDefaultsTX(ctx, sc.eth)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// get chain ID
+	var chainID *big.Int
+	if config := sc.eth.ChainConfig(); config.IsEIP155(sc.eth.CurrentBlock().Number()) {
+		chainID = config.ChainID
+	}
+
+	// sign the tx by using from's wallet
+	signed, err := wallet.SignTx(account, tx, chainID)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// send tx to txpool
+	if err := sc.eth.SendTx(ctx, tx); err != nil {
+		return common.Hash{}, err
+	}
+
+	return signed.Hash(), nil
+}
