@@ -67,9 +67,6 @@ func (sm *storageManager) DeleteSectorBatch(roots []common.Hash) (err error) {
 	}
 	defer sm.tm.Done()
 
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
-
 	if len(roots) == 0 {
 		return
 	}
@@ -117,6 +114,7 @@ func (update *deleteSectorBatchUpdate) str() (s string) {
 
 // recordIntent record the intent of deleteSectorBatchUpdate
 func (update *deleteSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	persist := deleteBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -328,6 +326,7 @@ func (update *deleteSectorBatchUpdate) release(manager *storageManager, upErr *u
 		for _, folder := range update.folders {
 			folder.lock.Unlock()
 		}
+		manager.lock.RUnlock()
 	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
@@ -429,6 +428,7 @@ func decodeDeleteSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *dele
 
 // lockResource loads and locks the sectors and folders used in the udpate
 func (update *deleteSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	// lock all sectors
 	manager.sectorLocks.lockSectors(update.ids)
 	// folderPaths are the path to lock together

@@ -57,9 +57,6 @@ func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
 	}
 	defer sm.tm.Done()
 
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
-
 	// If no root input, no need to update. Simply return a nil error
 	if len(roots) == 0 {
 		return
@@ -107,6 +104,7 @@ func (update *addSectorBatchUpdate) str() (s string) {
 
 // recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	persist := addSectorBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -174,6 +172,7 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 		for _, s := range update.sectors {
 			manager.sectorLocks.unlockSector(s.id)
 		}
+		manager.lock.RUnlock()
 	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
@@ -343,6 +342,7 @@ func decodeAddSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *addSect
 
 // lockResource locks the resource during recover
 func (update *addSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	manager.sectorLocks.lockSectors(update.ids)
 	return
 }

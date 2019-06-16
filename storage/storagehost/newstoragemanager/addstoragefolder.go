@@ -44,8 +44,6 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error)
 	}
 	defer sm.tm.Done()
 
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
 	// validate the add storage folder
 	if err = sm.validateAddStorageFolder(path, size); err != nil {
 		return
@@ -157,6 +155,8 @@ func (update *addStorageFolderUpdate) str() (s string) {
 
 // recordIntent record the intent to wal to record the add folder intent
 func (update *addStorageFolderUpdate) recordIntent(manager *storageManager) (err error) {
+	manager.lock.RLock()
+
 	data, err := rlp.EncodeToBytes(update)
 	if err != nil {
 		return
@@ -211,6 +211,7 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 			update.folder.status = folderAvailable
 			update.folder.lock.Unlock()
 		}
+		manager.lock.RUnlock()
 	}()
 
 	// If no error happened during update, release the transaction and return
@@ -354,6 +355,7 @@ func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addSt
 
 // lockResource locks the resource during recover
 func (update *addStorageFolderUpdate) lockResource(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	// lock the folders until release
 	manager.folders.lock.Lock()
 

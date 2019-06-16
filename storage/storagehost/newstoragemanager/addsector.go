@@ -68,8 +68,6 @@ func (sm *storageManager) AddSector(root common.Hash, data []byte) (err error) {
 	}
 	defer sm.tm.Done()
 
-	sm.lock.RLock()
-	defer sm.lock.RUnlock()
 	// validate the add sector request
 	if err = validateAddSector(root, data); err != nil {
 		return fmt.Errorf("validation failed: %v", err)
@@ -124,6 +122,7 @@ func (update *addSectorUpdate) str() (s string) {
 // 1. Create the update
 // 2. write the initial transaction to wal
 func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	pUpdate := addSectorInitPersist{
 		ID:   update.id,
 		Data: update.data,
@@ -202,6 +201,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 			update.folder.lock.Unlock()
 		}
 		manager.sectorLocks.unlockSector(update.id)
+		manager.lock.RUnlock()
 	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
@@ -455,6 +455,7 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 
 // lockResource locks the resource during recover
 func (update *addSectorUpdate) lockResource(manager *storageManager) (err error) {
+	manager.lock.RLock()
 	manager.sectorLocks.lockSector(update.id)
 	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
 	if err != nil {
