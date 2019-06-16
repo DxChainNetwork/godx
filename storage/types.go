@@ -17,17 +17,19 @@ import (
 
 const (
 	// DxFileExt is the extension of DxFile
-	DxFileExt = ".dxfile"
+	DxFileExt     = ".dxfile"
+	ConfigVersion = "1.0.1"
 )
 
 type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
-		AcceptingContracts   bool   `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64 `json:"maxdownloadbatchsize"`
-		MaxDuration          uint64 `json:"maxduration"`
-		MaxReviseBatchSize   uint64 `json:"maxrevisebatchSize"`
-		WindowSize           uint64 `json:"windowsize"`
+		AcceptingContracts   bool           `json:"acceptingcontracts"`
+		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchsize"`
+		MaxDuration          uint64         `json:"maxduration"`
+		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
+		WindowSize           uint64         `json:"windowsize"`
+		PaymentAddress       common.Address `json:"paymentaddress"`
 
 		Deposit       big.Int `json:"deposit"`
 		DepositBudget big.Int `json:"depositbudget"`
@@ -43,14 +45,14 @@ type (
 
 	// HostExtConfig make group of host setting to broadcast as object
 	HostExtConfig struct {
-		AcceptingContracts   bool   `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64 `json:"maxdownloadbatchSize"`
-		MaxDuration          uint64 `json:"maxduration"`
-		MaxReviseBatchSize   uint64 `json:"maxrevisebatchSize"`
-
-		RemainingStorage uint64 `json:"remainingstorage"`
-		SectorSize       uint64 `json:"sectorsize"`
-		TotalStorage     uint64 `json:"totalstorage"`
+		AcceptingContracts   bool           `json:"acceptingcontracts"`
+		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchSize"`
+		MaxDuration          uint64         `json:"maxduration"`
+		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
+		PaymentAddress       common.Address `json:"paymentaddress"`
+		RemainingStorage     uint64         `json:"remainingstorage"`
+		SectorSize           uint64         `json:"sectorsize"`
+		TotalStorage         uint64         `json:"totalstorage"`
 
 		WindowSize uint64 `json:"windowsize"`
 
