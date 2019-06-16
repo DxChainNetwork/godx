@@ -5624,9 +5624,9 @@ module.exports = Net;
                 params: 0,
             });
 
-            var getClientPaymentAddress = new Method({
-                name: 'getClientPaymentAddress',
-                call: 'storageclient_getClientPaymentAddress',
+            var getPaymentAddress = new Method({
+                name: 'getPaymentAddress',
+                call: 'storageclient_getPaymentAddress',
                 params: 0,
              });
 
@@ -5648,9 +5648,9 @@ module.exports = Net;
                 params: 1,
             });
 
-            var setClientPaymentAddress = new Method({
-                name: 'setClientPaymentAddress',
-                call: 'storageclient_setClientPaymentAddress',
+            var setPaymentAddress = new Method({
+                name: 'setPaymentAddress',
+                call: 'storageclient_setPaymentAddress',
                 params: 1,
             });
 
@@ -5686,8 +5686,8 @@ module.exports = Net;
                 setMemoryLimit,
                 setClientSetting,
                 clientSetting,
-                setClientPaymentAddress,
-                getClientPaymentAddress,
+                setPaymentAddress,
+                getPaymentAddress,
                 canceled,
                 activeContracts,
                 contractDetail,
