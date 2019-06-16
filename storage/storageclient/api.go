@@ -50,7 +50,7 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
 }
 
-//Get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+//GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (api *PublicStorageClientAPI) GetPaymentAddress() (common.Address, error) {
 	api.sc.lock.Lock()
 	paymentAddress := api.sc.PaymentAddress
@@ -117,7 +117,7 @@ func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string)
 	return
 }
 
-//Configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
 func (api *PrivateStorageClientAPI) SetPaymentAddress(paymentAddress common.Address) bool {
 	account := accounts.Account{Address: paymentAddress}
 	_, err := api.sc.ethBackend.AccountManager().Find(account)
