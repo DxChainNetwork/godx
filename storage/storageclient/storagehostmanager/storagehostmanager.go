@@ -69,7 +69,7 @@ func New(persistDir string) *StorageHostManager {
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
-	shm.filteredTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
 	shm.log.Info("Storage Host Manager Initialized")

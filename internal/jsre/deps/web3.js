@@ -5729,11 +5729,32 @@ module.exports = Net;
                 params: 0,
             });
 
+            var filterMode = new Method({
+                name: 'filterMode',
+                call: 'hostmanager_filterMode',
+                params: 0,
+            });
+
+            var setFilterMode = new Method({
+                name: 'setFilterMode',
+                call: 'hostmanager_setFilterMode',
+                params: 2,
+            });
+
+            var filteredHosts = new Method({
+                name: 'filtered',
+                call: 'hostmanager_filteredHosts',
+                params: 0,
+            });
+
             return [
                 allhosts,
                 activehosts,
                 hostinfo,
                 rank,
+                filterMode,
+                setFilterMode,
+                filteredHosts,
             ];
         };
 

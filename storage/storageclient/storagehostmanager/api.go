@@ -74,6 +74,16 @@ func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHo
 	return
 }
 
+// FilterMode will return the current storage host manager filter mode setting
+func (api *PublicStorageHostManagerAPI) FilterMode() (fm string) {
+	return api.shm.RetrieveFilterMode()
+}
+
+// FilteredHosts will return hosts stored in the filtered host tree
+func (api *PublicStorageHostManagerAPI) FilteredHosts() (allFiltered []storage.HostInfo) {
+	return api.shm.filteredTree.All()
+}
+
 // PrivateStorageHostManagerAPI defines the object used to call eligible APIs
 // that are used to configure settings
 type PrivateStorageHostManagerAPI struct {
@@ -86,6 +96,24 @@ func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHos
 	return &PrivateStorageHostManagerAPI{
 		shm: shm,
 	}
+}
+
+// SetFilterMode will be used to change the current storage host manager
+// filter mode settings. There are total of 3 filter modes available
+func (api *PrivateStorageHostManagerAPI) SetFilterMode(fm string, hostInfos []enode.ID) (resp string, err error) {
+	var filterMode FilterMode
+	if filterMode, err = ToFilterMode(fm); err != nil {
+		err = fmt.Errorf("failed to set the filter mode: %s", err.Error())
+		return
+	}
+
+	if err = api.shm.SetFilterMode(filterMode, hostInfos); err != nil {
+		err = fmt.Errorf("failed to set the filter mode: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("the filter mode has been successfully set to %s", fm)
+	return
 }
 
 // PublicHostManagerDebugAPI defines the object used to call eligible APIs
