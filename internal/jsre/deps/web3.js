@@ -5822,12 +5822,19 @@ module.exports = Net;
                 params: 1,
             });
 
+            var retrieveRentPaymentInfo = new Method({
+                name: 'rentPayment',
+                call: 'hostmanagerdebug_retrieveRentPaymentInfo',
+                params: 0,
+            });
+
             return [
                 isOnline,
                 isSyncing,
                 blockHeight,
                 insertHostInfo,
                 insertActiveHostInfo,
+                retrieveRentPaymentInfo,
             ];
         };
 

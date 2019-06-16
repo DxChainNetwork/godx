@@ -173,3 +173,9 @@ func (api *PublicHostManagerDebugAPI) InsertHostInfoLowEval(id enode.ID) (err er
 	hi := hostInfoGeneratorLowEvaluation(id)
 	return api.shm.insert(hi)
 }
+
+// RetrieveRentPaymentInfo is used to get the rentPayment settings, which is used for debugging
+// purposes
+func (api *PublicHostManagerDebugAPI) RetrieveRentPaymentInfo() (rentPayment storage.RentPayment) {
+	return api.shm.RetrieveRentPayment()
+}

@@ -8,7 +8,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
@@ -203,7 +202,7 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 		hi.IPNetwork = ipnet.String()
 		hi.LastIPNetWorkChange = time.Now()
 	} else if err != nil {
-		log.Error("failed to get the IP network information", "err", err.Error())
+		shm.log.Error("failed to get the IP network information", "err", err.Error())
 	}
 
 	// update the historical interactions
@@ -217,7 +216,7 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)
 	if err != nil {
-		log.Warn("failed to get storage host external setting", "hostID", hi.EnodeID, "err", err.Error())
+		shm.log.Warn("failed to get storage host external setting", "hostID", hi.EnodeID, "err", err.Error())
 	} else {
 		hi.HostExtConfig = hostConfig
 	}
@@ -227,6 +226,8 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 
 	// update the host information
 	shm.hostInfoUpdate(hi, err)
+
+	shm.log.Debug("Storage Host Information Updated", "enodeID", hi.EnodeID)
 }
 
 // retrieveHostSetting will establish connection to the corresponded storage host
