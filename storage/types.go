@@ -11,13 +11,12 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/DxChainNetwork/godx/internal/ethapi"
-	"github.com/DxChainNetwork/godx/rpc"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rpc"
 )
 
 const (
@@ -293,7 +292,7 @@ type ParsedAPI struct {
 
 // filterAPIs will filter the APIs saved in the Ethereum and
 // save them into ParsedAPI data structure
-func FilterAPIs(apis []rpc.API, parseAPI ParsedAPI) error {
+func FilterAPIs(apis []rpc.API, parseAPI *ParsedAPI) error {
 	for _, api := range apis {
 		switch typ := reflect.TypeOf(api.Service); typ {
 		case reflect.TypeOf(&ethapi.PublicNetAPI{}):

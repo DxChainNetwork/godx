@@ -124,7 +124,7 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 	sc.ethBackend = b
 
 	// getting all needed API functions
-	if err = storage.FilterAPIs(b.APIs(), sc.info); err != nil {
+	if err = storage.FilterAPIs(b.APIs(), &sc.info); err != nil {
 		return
 	}
 

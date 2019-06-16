@@ -117,7 +117,7 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 	h.ethBackend = eth
 
 	// parse storage contract tx API
-	err := storage.FilterAPIs(h.ethBackend.APIs(), h.parseAPI)
+	err := storage.FilterAPIs(h.ethBackend.APIs(), &h.parseAPI)
 	if err != nil {
 		h.log.Error("failed to parse storage contract tx API for host", "error", err)
 		return
