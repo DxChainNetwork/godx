@@ -172,17 +172,20 @@ func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) 
 // RetrieveHostInfo will acquire the storage host information based on the enode ID provided.
 // Before returning the storage host information, the settings will be validated first
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
-	shm.lock.Lock()
+	shm.lock.RLock()
 	whitelist := shm.filterMode == WhitelistFilter
 	filteredHosts := shm.filteredHosts
-	shm.lock.Unlock()
+	shm.lock.RUnlock()
 
 	// get the storage host information
 	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
 		return
 	}
 
-	// check if the storage host belongs to filtered hosts
+	// check if the storage host should be filtered
+	// if WhitelistFilter and the host is stored inside the filtered host, meaning not filtered
+	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
+	// cannot sign contract with it
 	_, exist := filteredHosts[hi.EnodeID]
 	hi.Filtered = whitelist != exist
 
@@ -302,9 +305,15 @@ func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail s
 
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
+	// insert the host information into the storage host tree
 	err := shm.storageHostTree.Insert(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID]
 
+	// check if the host information contained in the filtered host
+	shm.lock.RLock()
+	_, exists := shm.filteredHosts[hi.EnodeID]
+	shm.lock.RUnlock()
+
+	// if the filter mode is the whitelist, add the one into filtered host tree
 	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {

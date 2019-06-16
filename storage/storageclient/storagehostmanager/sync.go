@@ -108,7 +108,6 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 
 	// if the storage host information already existed, update the settings
 	oldInfo.EnodeURL = info.EnodeURL
-	oldInfo.EnodeID = info.EnodeID
 	oldInfo.IP = info.IP
 
 	// check if the ip address has been changed, if so, update the IP network field

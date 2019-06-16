@@ -27,7 +27,7 @@ const (
 // SetFilterMode will be used to set the host ip filter mode. Actions are required only
 // when the mode is set to be whitelist, meaning that only the storage host in both whitelist
 // and hostPool can be inserted into the filteredTree
-func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID) error {
+func (shm *StorageHostManager) SetFilterMode(fm FilterMode, hostInfo []enode.ID) error {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
 
@@ -36,16 +36,16 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID
 		return nil
 	}
 
-	// if the filter mode is not disabled and it is not whitelist, then return error
+	// if the filter mode is not disabled and it is not hostInfo, then return error
 	if fm != WhitelistFilter {
 		return errors.New("filter mode provided not recognized")
 	}
 
-	// if filter mode is whitelist
+	// if filter mode is blacklist filter
 
-	// check the number of hosts in the whitelist, if there are no whitelist hosts defined, return error
-	if len(whitelist) == 0 {
-		return errors.New("failed to set whitelist filter mode, empty whitelist")
+	// check the number of hosts in the hostInfo, if there are no hostInfo hosts defined, return error
+	if len(hostInfo) == 0 {
+		return errors.New("failed to set the filter mode, empty hostInfo")
 	}
 
 	// initialize filtered tree
@@ -54,20 +54,15 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, whitelist []enode.ID
 	shm.filterMode = fm
 
 	// update the filter host
-	for _, id := range whitelist {
-		_, exist := shm.filteredHosts[id]
-		if !exist {
-			shm.filteredHosts[id] = struct{}{}
-		}
+	for _, id := range hostInfo {
+		shm.filteredHosts[id] = struct{}{}
 	}
 
-	// insert the host in the whitelist into the filtered tree
+	// insert the hosts contained in the white list to the filtered tree
 	allHosts := shm.storageHostTree.All()
 	for _, host := range allHosts {
-		_, exist := shm.filteredHosts[host.EnodeID]
-		if exist {
-			err := shm.filteredTree.Insert(host)
-			if err != nil {
+		if _, exist := shm.filteredHosts[host.EnodeID]; exist {
+			if err := shm.filteredTree.Insert(host); err != nil {
 				return err
 			}
 		}
