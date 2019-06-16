@@ -225,6 +225,22 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		upErr.prepareErr = nil
 		return
 	}
+	// delete folder in memory
+	// The folders is locked before prepare. So it shall be safe to delete the entry
+	delete(manager.folders.sfs, update.path)
+	// If update failed at update stage, revert the memory and commit release the transaction
+	if upErr.prepareErr != nil {
+		if <-update.txn.InitComplete; update.txn.InitErr != nil {
+			update.txn = nil
+			err = update.txn.InitErr
+		}
+		newErr := <-update.txn.Commit()
+		err = common.ErrCompose(err, newErr)
+
+		newErr = update.txn.Release()
+		err = common.ErrCompose(err, newErr)
+		return
+	}
 	// Close the folder datafile
 	if update.folder != nil {
 		if newErr := update.folder.dataFile.Close(); newErr != nil {
@@ -244,9 +260,6 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 			err = common.ErrCompose(err, newErr)
 		}
 	}
-	// delete folder in the update
-	// The folders is locked before prepare. So it shall be safe to delete the entry
-	delete(manager.folders.sfs, update.path)
 
 	// release the transaction
 	if upErr.processErr != nil && update.txn != nil {

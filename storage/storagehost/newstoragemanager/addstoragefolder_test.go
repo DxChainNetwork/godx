@@ -111,7 +111,6 @@ func TestAddStorageFolderRecover(t *testing.T) {
 
 // TestAddStorageFolderExhaustive exhaustively test the add storage folder
 func TestAddStorageFolderExhaustive(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	d := newDisrupter()
 	sm := newTestStorageManager(t, "", d)
 	numFolders := 100

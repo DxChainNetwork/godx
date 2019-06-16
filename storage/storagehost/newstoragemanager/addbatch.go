@@ -132,6 +132,12 @@ func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
+		if manager.disrupter.disrupt("add batch prepare") {
+			return errDisrupted
+		}
+		if manager.disrupter.disrupt("add batch prepare stop") {
+			return errStopped
+		}
 	case targetRecoverCommitted:
 		err = update.prepareCommitted(manager)
 	default:
@@ -182,7 +188,22 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 	}
 	// If some error happened at prepare stage, no need to do anything, just release the transaction
 	if upErr.prepareErr != nil {
-		err = update.txn.Release()
+		// revert the memory
+		for _, s := range update.sectors {
+			if s.count > 1 {
+				s.count--
+			}
+		}
+		// release the transaction
+		if <-update.txn.InitComplete; update.txn.InitErr != nil {
+			update.txn = nil
+			err = update.txn.InitErr
+		}
+		newErr := <-update.txn.Commit()
+		err = common.ErrCompose(err, newErr)
+
+		newErr = update.txn.Release()
+		err = common.ErrCompose(err, newErr)
 		return
 	}
 	// If some error happened at process stage, we need to revert the db sectors.

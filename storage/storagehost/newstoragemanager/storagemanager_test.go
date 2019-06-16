@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
 // tempDir removes and creates the folder named dxfile under the temp directory.
 func tempDir(dirs ...string) string {
 	path := filepath.Join(os.TempDir(), "storagemanager", filepath.Join(dirs...))
@@ -112,7 +116,6 @@ func TestEmptyStorageManager(t *testing.T) {
 
 // randomFolderPath create a random folder path under the testing directory
 func randomFolderPath(t *testing.T, extra string) (path string) {
-	rand.Seed(time.Now().UnixNano())
 	path = filepath.Join(os.TempDir(), "storagemanager", filepath.Join(t.Name()), extra)
 	b := make([]byte, 16)
 	rand.Read(b)

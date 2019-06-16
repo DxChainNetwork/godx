@@ -17,7 +17,6 @@ import (
 
 // TestAddBatchConcurrent test adding batch normally as concurrent
 func TestAddBatchConcurrent(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	sm := newTestStorageManager(t, "", newDisrupter())
 	// Create one folder
 	path := randomFolderPath(t, "")
@@ -102,7 +101,6 @@ func TestAddBatchConcurrent(t *testing.T) {
 
 // TestAddBatchError test AddBatch with error input
 func TestAddBatchError(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
 	sm := newTestStorageManager(t, "", newDisrupter())
 	// Create one folder
 	path := randomFolderPath(t, "")
@@ -168,141 +166,156 @@ func TestAddBatchError(t *testing.T) {
 // TestAddBatchRecover test the add batch for recover
 // After restart, should not exist
 func TestAddBatchRecover(t *testing.T) {
-	d := newDisrupter().register("add batch process stop", func() bool { return true })
-	rand.Seed(time.Now().UnixNano())
-	sm := newTestStorageManager(t, "", d)
-	// Create one folder
-	path := randomFolderPath(t, "")
-	size := uint64(1 << 25)
-	if err := sm.AddStorageFolder(path, size); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		keyWord string
+		numTxn  int
+	}{
+		{"add batch process stop", 1},
+		{"add batch prepare stop", 0},
 	}
-	// insert three sectors
-	type expect struct {
-		root  common.Hash
-		count int
-		data  []byte
-	}
-	sectors := size / storage.SectorSize
-	expects := make([]expect, 0, sectors)
-	for i := 0; i != int(sectors); i++ {
-		// Add 8 sectors
-		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
-		if err := sm.AddSector(root, data); err != nil {
+	for _, test := range tests {
+		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		sm := newTestStorageManager(t, "", d)
+		// Create one folder
+		path := randomFolderPath(t, "")
+		size := uint64(1 << 25)
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatal(err)
 		}
-		expects = append(expects, expect{
-			data:  data,
-			root:  root,
-			count: 1,
-		})
-	}
-	batch := make([]common.Hash, 0, 3)
-	selectedIndex := rand.Perm(int(sectors))[:3]
-	for _, i := range selectedIndex {
-		batch = append(batch, expects[i].root)
-	}
-	if err := sm.AddSectorBatch(batch); err != nil {
-		upErr, ok := err.(*updateError)
-		if !ok {
-			t.Fatalf("returned error not updateError type")
+		// insert three sectors
+		type expect struct {
+			root  common.Hash
+			count int
+			data  []byte
 		}
-		if !upErr.isNil() {
-			t.Fatalf("errStopped should not return error")
+		sectors := size / storage.SectorSize
+		expects := make([]expect, 0, sectors)
+		for i := 0; i != int(sectors); i++ {
+			// Add 8 sectors
+			data := randomBytes(storage.SectorSize)
+			root := merkle.Root(data)
+			if err := sm.AddSector(root, data); err != nil {
+				t.Fatal(err)
+			}
+			expects = append(expects, expect{
+				data:  data,
+				root:  root,
+				count: 1,
+			})
 		}
-	}
-	// Check the values
-	if err := checkFoldersHasExpectedSectors(sm, 8); err != nil {
-		t.Fatal(err)
-	}
-	sm.shutdown(t, 10*time.Second)
-	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 1); err != nil {
-		t.Fatal(err)
-	}
-	// Reopen the storage manager
-	newSM, err := New(sm.persistDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = newSM.Start(); err != nil {
-		t.Fatal(err)
-	}
-	// wait for the updates to complete
-	<-time.After(300 * time.Millisecond)
-	for _, expect := range expects {
-		if err := checkSectorExist(expect.root, newSM, expect.data, uint64(expect.count)); err != nil {
+		batch := make([]common.Hash, 0, 3)
+		selectedIndex := rand.Perm(int(sectors))[:3]
+		for _, i := range selectedIndex {
+			batch = append(batch, expects[i].root)
+		}
+		if err := sm.AddSectorBatch(batch); err != nil {
+			upErr, ok := err.(*updateError)
+			if !ok {
+				t.Fatalf("returned error not updateError type")
+			}
+			if !upErr.isNil() {
+				t.Fatalf("errStopped should not return error")
+			}
+		}
+		// Check the values
+		if err := checkFoldersHasExpectedSectors(sm, 8); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := checkFoldersHasExpectedSectors(newSM, 8); err != nil {
-		t.Fatal(err)
-	}
-	newSM.shutdown(t, 10*time.Second)
-	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
-		t.Fatal(err)
+		sm.shutdown(t, 10*time.Second)
+		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
+			t.Fatal(err)
+		}
+		// Reopen the storage manager
+		newSM, err := New(sm.persistDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = newSM.Start(); err != nil {
+			t.Fatal(err)
+		}
+		// wait for the updates to complete
+		<-time.After(300 * time.Millisecond)
+		for _, expect := range expects {
+			if err := checkSectorExist(expect.root, newSM, expect.data, uint64(expect.count)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := checkFoldersHasExpectedSectors(newSM, 8); err != nil {
+			t.Fatal(err)
+		}
+		newSM.shutdown(t, 10*time.Second)
+		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 // TestAddBatchError test AddBatch with error input
 func TestAddBatchProcessDisrupt(t *testing.T) {
-	rand.Seed(time.Now().UnixNano())
-	d := newDisrupter().register("add batch process", func() bool { return true })
-	sm := newTestStorageManager(t, "", d)
-	// Create one folder
-	path := randomFolderPath(t, "")
-	size := uint64(1 << 25)
-	if err := sm.AddStorageFolder(path, size); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		keyWord string
+	}{
+		{"add batch process"},
+		{"add batch prepare"},
 	}
-	// insert three sectors
-	type expect struct {
-		root  common.Hash
-		count int
-		data  []byte
-	}
-	sectors := size / storage.SectorSize
-	expects := make([]expect, 0, sectors)
-	for i := 0; i != int(sectors); i++ {
-		// Add 8 sectors
-		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
-		if err := sm.AddSector(root, data); err != nil {
+	for _, test := range tests {
+		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		sm := newTestStorageManager(t, "", d)
+		// Create one folder
+		path := randomFolderPath(t, "")
+		size := uint64(1 << 25)
+		if err := sm.AddStorageFolder(path, size); err != nil {
 			t.Fatal(err)
 		}
-		expects = append(expects, expect{
-			data:  data,
-			root:  root,
-			count: 1,
-		})
-	}
-	batch := make([]common.Hash, 0, 3)
-	selectedIndex := rand.Perm(int(sectors))[:3]
-	for _, i := range selectedIndex {
-		batch = append(batch, expects[i].root)
-	}
-	if err := sm.AddSectorBatch(batch); err != nil {
-		upErr, ok := err.(*updateError)
-		if !ok {
-			t.Fatalf("returned error not updateError type")
+		// insert three sectors
+		type expect struct {
+			root  common.Hash
+			count int
+			data  []byte
 		}
-		if upErr.processErr == nil {
-			t.Fatalf("disrupt should give error")
+		sectors := size / storage.SectorSize
+		expects := make([]expect, 0, sectors)
+		for i := 0; i != int(sectors); i++ {
+			// Add 8 sectors
+			data := randomBytes(storage.SectorSize)
+			root := merkle.Root(data)
+			if err := sm.AddSector(root, data); err != nil {
+				t.Fatal(err)
+			}
+			expects = append(expects, expect{
+				data:  data,
+				root:  root,
+				count: 1,
+			})
 		}
-	} else {
-		t.Fatal("disrupt should give error")
-	}
-	// Check the values
-	for _, expect := range expects {
-		if err := checkSectorExist(expect.root, sm, expect.data, uint64(expect.count)); err != nil {
+		batch := make([]common.Hash, 0, 3)
+		selectedIndex := rand.Perm(int(sectors))[:3]
+		for _, i := range selectedIndex {
+			batch = append(batch, expects[i].root)
+		}
+		if err := sm.AddSectorBatch(batch); err != nil {
+			upErr, ok := err.(*updateError)
+			if !ok {
+				t.Fatalf("returned error not updateError type")
+			}
+			if upErr.processErr == nil && upErr.prepareErr == nil {
+				t.Fatalf("disrupt should give error")
+			}
+		} else {
+			t.Fatal("disrupt should give error")
+		}
+		// Check the values
+		for _, expect := range expects {
+			if err := checkSectorExist(expect.root, sm, expect.data, uint64(expect.count)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := checkFoldersHasExpectedSectors(sm, 8); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if err := checkFoldersHasExpectedSectors(sm, 8); err != nil {
-		t.Fatal(err)
-	}
-	sm.shutdown(t, 10*time.Second)
-	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
-		t.Fatal(err)
+		sm.shutdown(t, 10*time.Second)
+		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

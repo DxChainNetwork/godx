@@ -370,7 +370,7 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 		return err
 	}
 	if sector.count != count {
-		return fmt.Errorf("sector count not expected. Got %v, Expect %v", sector.count, count)
+		return fmt.Errorf("db sector count not expected. Got %v, Expect %v", sector.count, count)
 	}
 	folderID := sector.folderID
 	folderPath, err := sm.db.getFolderPath(folderID)
@@ -452,14 +452,14 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 // has expected number of stored segments
 func checkFoldersHasExpectedSectors(sm *storageManager, expect int) (err error) {
 	if err = checkExpectStoredSectors(sm.folders.sfs, expect); err != nil {
-		return err
+		return fmt.Errorf("memory %v", err)
 	}
 	folders, err := sm.db.loadAllStorageFolders()
 	if err != nil {
 		return err
 	}
 	if err = checkExpectStoredSectors(folders, expect); err != nil {
-		return err
+		return fmt.Errorf("db: %v", err)
 	}
 	iter := sm.db.lvl.NewIterator(util.BytesPrefix([]byte(prefixFolderSector)), nil)
 	var count int
