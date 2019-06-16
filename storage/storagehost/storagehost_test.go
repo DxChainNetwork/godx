@@ -63,73 +63,73 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 }
 
 // Test if changing setting would result the change of the setting file
-//func TestStorageHost_DataPreservation(t *testing.T) {
-//	// clear the saved data for testing
-//	remmoveFolders("./testdata/", t)
-//	defer remmoveFolders("./testdata/", t)
-//
-//	// try to do the first data json renew, use the default value
-//	host, err := New("./testdata/")
-//	if err != nil {
-//		t.Errorf(err.Error())
-//	}
-//
-//	// extract the persistence data from host
-//	persist1 := host.extractPersistence()
-//
-//	for Iterations := 10; Iterations > 0; Iterations-- {
-//
-//		// close the host to check if it can save the data as expected
-//		if err := host.Close(); err != nil {
-//			t.Errorf(err.Error())
-//		}
-//
-//		// renew the host again, check if match the data saving before closed
-//		host, err = New("./testdata/")
-//		if err != nil {
-//			t.Errorf(err.Error())
-//		}
-//
-//		persist2 := host.extractPersistence()
-//
-//		if !reflect.DeepEqual(persist1, persist2) {
-//			spew.Dump(persist1)
-//			spew.Dump(persist2)
-//			t.Errorf("two persistance does not equal to each other")
-//		}
-//
-//		// change serveral part in the setting again, use the random value
-//		// NOTE: this number does not make any sense, just for checking
-//		// 		if the related method indeed can change and persist the host
-//
-//		// host primitive variable
-//		host.broadcast = rand.Float32() < 0.5
-//		host.revisionNumber = uint64(rand.Intn(RANDRANGE))
-//		// host setting structure
-//		host.config.AcceptingContracts = rand.Float32() < 0.5
-//		host.config.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
-//		// host financial Metrics
-//		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
-//		host.financialMetrics.StorageRevenue = common.NewBigInt(RANDRANGE)
-//
-//		// extract the persistence information
-//		persist1 = host.extractPersistence()
-//
-//		// make sure the persistence indeed loaded by the host
-//		if host.broadcast != persist1.BroadCast ||
-//			host.revisionNumber != persist1.RevisionNumber ||
-//			host.config.AcceptingContracts != persist1.Config.AcceptingContracts ||
-//			!reflect.DeepEqual(host.config.Deposit, persist1.Config.Deposit) ||
-//			host.financialMetrics.ContractCount != persist1.FinalcialMetrics.ContractCount ||
-//			!reflect.DeepEqual(host.financialMetrics.StorageRevenue, persist1.FinalcialMetrics.StorageRevenue) {
-//			t.Errorf("persistence extracted from host does not match the expected")
-//		}
-//	}
-//
-//	if err := host.Close(); err != nil {
-//		t.Errorf(err.Error())
-//	}
-//}
+func TestStorageHost_DataPreservation(t *testing.T) {
+	// clear the saved data for testing
+	remmoveFolders("./testdata/", t)
+	defer remmoveFolders("./testdata/", t)
+
+	// try to do the first data json renew, use the default value
+	host, err := New("./testdata/")
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+
+	// extract the persistence data from host
+	persist1 := host.extractPersistence()
+
+	for Iterations := 10; Iterations > 0; Iterations-- {
+
+		// close the host to check if it can save the data as expected
+		//if err := host.Close(); err != nil {
+		//	t.Errorf(err.Error())
+		//}
+
+		// renew the host again, check if match the data saving before closed
+		//host, err = New("./testdata/")
+		//if err != nil {
+		//	t.Errorf(err.Error())
+		//}
+
+		persist2 := host.extractPersistence()
+
+		if !reflect.DeepEqual(persist1, persist2) {
+			spew.Dump(persist1)
+			spew.Dump(persist2)
+			t.Errorf("two persistance does not equal to each other")
+		}
+
+		// change serveral part in the setting again, use the random value
+		// NOTE: this number does not make any sense, just for checking
+		// 		if the related method indeed can change and persist the host
+
+		// host primitive variable
+		host.broadcast = rand.Float32() < 0.5
+		host.revisionNumber = uint64(rand.Intn(RANDRANGE))
+		// host setting structure
+		host.config.AcceptingContracts = rand.Float32() < 0.5
+		host.config.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
+		// host financial Metrics
+		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
+		host.financialMetrics.StorageRevenue = common.NewBigInt(RANDRANGE)
+
+		// extract the persistence information
+		persist1 = host.extractPersistence()
+
+		// make sure the persistence indeed loaded by the host
+		if host.broadcast != persist1.BroadCast ||
+			host.revisionNumber != persist1.RevisionNumber ||
+			host.config.AcceptingContracts != persist1.Config.AcceptingContracts ||
+			!reflect.DeepEqual(host.config.Deposit, persist1.Config.Deposit) ||
+			host.financialMetrics.ContractCount != persist1.FinalcialMetrics.ContractCount ||
+			!reflect.DeepEqual(host.financialMetrics.StorageRevenue, persist1.FinalcialMetrics.StorageRevenue) {
+			t.Errorf("persistence extracted from host does not match the expected")
+		}
+	}
+
+	if err := host.Close(); err != nil {
+		t.Errorf(err.Error())
+	}
+}
 
 func TestStorageHost_SetIntSetting(t *testing.T) {
 	// clear the saved data for testing
