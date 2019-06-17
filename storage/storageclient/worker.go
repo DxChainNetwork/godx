@@ -5,13 +5,10 @@
 package storageclient
 
 import (
-	"encoding/binary"
 	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -247,22 +244,8 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	// calculate a seed for twofishgcm
-	sectorIndex := uds.segmentMap[w.hostID.String()].index
-	segmentIndexBytes := make([]byte, 8)
-	binary.PutUvarint(segmentIndexBytes, uds.segmentIndex)
-	sectorIndexBytes := make([]byte, 8)
-	binary.PutUvarint(sectorIndexBytes, sectorIndex)
-	seed := crypto.Keccak256(segmentIndexBytes, sectorIndexBytes)
-
-	// create a twofishgcm key
-	key, err := crypto.NewCipherKey(crypto.GCMCipherCode, seed)
-	if err != nil {
-		w.client.log.Error("failed to new cipher key", "error", err)
-		return
-	}
-
 	// decrypt the sector
+	key := uds.clientFile.CipherKey()
 	decryptedSector, err := key.DecryptInPlace(sectorData)
 	if err != nil {
 		w.client.log.Debug("worker failed to decrypt sector", "error", err)
@@ -271,6 +254,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	// mark the sector as completed
+	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	uds.mu.Lock()
 	uds.markSectorCompleted(sectorIndex)
 	uds.sectorsRegistered--
