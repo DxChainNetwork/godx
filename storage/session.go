@@ -123,6 +123,9 @@ type Session struct {
 
 	// indicate this session is busy, it is true when uploading or downloading
 	busy int32
+
+	// upload and download tash is done, signal the renew goroutine
+	revisionDone chan struct{}
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
@@ -161,6 +164,11 @@ func (s * Session) ResetBusy() bool {
 
 func (s * Session) IsBusy() bool {
 	return atomic.LoadInt32(&s.busy) == BUSY
+}
+
+// when we renew but upload or download now, we wait for the revision done
+func (s *Session) RevisionDone() chan struct{} {
+	return s.revisionDone
 }
 
 func (s *Session) getConn() net.Conn {

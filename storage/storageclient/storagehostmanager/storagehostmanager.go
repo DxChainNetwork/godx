@@ -14,10 +14,8 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
@@ -27,9 +25,6 @@ type StorageHostManager struct {
 	// storage client and eth backend
 	b   storage.ClientBackend
 	eth storage.EthBackend
-
-	// peer to peer communication
-	p2pServer *p2p.Server
 
 	rent            storage.RentPayment
 	evalFunc        storagehosttree.EvaluationFunc
@@ -59,9 +54,6 @@ type StorageHostManager struct {
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
-
-	// storage contract set
-	scs contractset.StorageContractSet
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
@@ -80,17 +72,6 @@ func New(persistDir string) *StorageHostManager {
 	shm.filteredTree = storagehosttree.New(shm.evalFunc)
 	shm.log = log.New()
 
-	// init storage contract set
-	scs, err := contractset.New(persistDir)
-	if err != nil {
-		shm.log.Error("failed to new storage contract set", "error", err)
-	}
-
-	// New func maybe return error and not nil StorageContractSet
-	if scs != nil {
-		shm.scs = *scs
-	}
-
 	shm.log.Info("Storage host manager initialized")
 
 	return shm
@@ -98,10 +79,9 @@ func New(persistDir string) *StorageHostManager {
 
 // Start will start to load prior settings, start go routines to automatically save
 // the settings every 2 min, and go routine to start storage host maintenance
-func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
+func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	// initialization
 	shm.b = b
-	shm.p2pServer = server
 
 	// load prior settings
 	err := shm.loadSettings()
@@ -182,17 +162,31 @@ func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err err
 	return
 }
 
+// RetrieveRentPayment will return the current rent payment settings for storage host manager
+func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+	return shm.rent
+}
+
 // RetrieveHostInfo will acquire the storage host information based on the enode ID provided
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
 	return shm.storageHostTree.RetrieveHostInfo(id)
 }
 
-// EnableIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
+// SetIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
 // who are located in the same network, they will be marked as bad storage hosts
-func (shm *StorageHostManager) EnableIPViolationCheck() {
+func (shm *StorageHostManager) SetIPViolationCheck(violationCheck bool) {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
-	shm.ipViolationCheck = true
+	shm.ipViolationCheck = violationCheck
+}
+
+// RetrieveIPViolationCheckSetting will return the current tipViolationCheck
+func (shm *StorageHostManager) RetrieveIPViolationCheckSetting() (violationCheck bool) {
+	shm.lock.RLock()
+	shm.lock.RUnlock()
+	return shm.ipViolationCheck
 }
 
 // FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same
@@ -327,9 +321,4 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
-}
-
-// get storage contract set
-func (shm *StorageHostManager) GetStorageContractSet() *contractset.StorageContractSet {
-	return &shm.scs
 }

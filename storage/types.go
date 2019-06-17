@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"fmt"
 	"math/big"
 	"time"
 
@@ -14,7 +15,15 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
+var (
+	// define the program running environment: test, prod
+	ENV = Env_Prod
+)
+
 const (
+	Env_Prod = "prod"
+	Env_Test = "test"
+
 	// DxFileExt is the extension of DxFile
 	DxFileExt = ".dxfile"
 )
@@ -107,22 +116,56 @@ type (
 	}
 )
 
+// RentPayment stores the StorageClient payment settings for renting the storage space from the host
+type RentPayment struct {
+	Fund         common.BigInt `json:"fund"`
+	StorageHosts uint64        `json:"storagehosts"`
+	Period       uint64        `json:"period"`
+	RenewWindow  uint64        `json:"renewwindow"`
+
+	// ExpectedStorage is amount of data expected to be stored
+	ExpectedStorage uint64 `json:"expectedstorage"`
+	// ExpectedUpload is expected amount of data upload before redundancy / block
+	ExpectedUpload uint64 `json:"expectedupload"`
+	// ExpectedDownload is expected amount of data downloaded / block
+	ExpectedDownload uint64 `json:"expecteddownload"`
+	// ExpectedRedundancy is the average redundancy of files uploaded
+	ExpectedRedundancy float64 `json:"expectedredundancy"`
+}
+
+// ClientSetting defines the settings that client used to create contract with other peers,
+// where EnableIPViolation specifies if the host with same network IP addresses will be filtered
+// out or not
+type ClientSetting struct {
+	RentPayment       RentPayment `json:"rentpayment"`
+	EnableIPViolation bool        `json:"enableipviolation"`
+	MaxUploadSpeed    int64       `json:"maxuploadspeed"`
+	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
+}
+
+// both RentPaymentAPIDisplay and ClientSettingAPIDisplay are used for API configurations
 type (
-	// RentPayment stores the StorageClient payment settings for renting the storage space from the host
-	RentPayment struct {
-		Payment      common.BigInt `json:"payment"`
-		StorageHosts uint64        `json:"storagehosts"`
-		Period       uint64        `json:"period"`
-		RenewWindow  uint64        `json:"renewwindow"`
+	RentPaymentAPIDisplay struct {
+		Fund         string `json:"Fund"`
+		StorageHosts string `json:"Number of Storage Hosts"`
+		Period       string `json:"Storage Time"`
+		RenewWindow  string `json:"Renew Time"`
 
 		// ExpectedStorage is amount of data expected to be stored
-		ExpectedStorage uint64 `json:"expectedstorage"`
+		ExpectedStorage string `json:"Expected Storage"`
 		// ExpectedUpload is expected amount of data upload before redundancy / block
-		ExpectedUpload uint64 `json:"expectedupload"`
+		ExpectedUpload string `json:"Expected Upload"`
 		// ExpectedDownload is expected amount of data downloaded / block
-		ExpectedDownload uint64 `json:"expecteddownload"`
+		ExpectedDownload string `json:"Expected Download"`
 		// ExpectedRedundancy is the average redundancy of files uploaded
-		ExpectedRedundancy float64 `json:"expectedredundancy"`
+		ExpectedRedundancy string `json:"Expected Redundancy"`
+	}
+
+	ClientSettingAPIDisplay struct {
+		RentPayment       RentPaymentAPIDisplay `json:"RentPayment Setting"`
+		EnableIPViolation string                `json:"IP Violation Check Status"`
+		MaxUploadSpeed    string                `json:"Max Upload Speed"`
+		MaxDownloadSpeed  string                `json:"Max Download Speed"`
 	}
 )
 
@@ -136,6 +179,11 @@ type (
 		Canceled      bool
 	}
 
+	RecoverableContract struct {
+		ID      ContractID
+		EnodeID enode.ID
+	}
+
 	ContractMetaData struct {
 		ID                     ContractID
 		EnodeID                enode.ID
@@ -143,24 +191,53 @@ type (
 		StartHeight            uint64
 		EndHeight              uint64
 
-		// TODO (mzhang): is it necessary to convert this type to
-		// common.BigInt type? for calculation convenience
-		ClientBalance *big.Int
+		ContractBalance common.BigInt
 
 		UploadCost   common.BigInt
 		DownloadCost common.BigInt
 		StorageCost  common.BigInt
-		TotalCost    common.BigInt
 
-		GasFee      common.BigInt
+		// contract available fund
+		TotalCost common.BigInt
+
+		GasCost     common.BigInt
 		ContractFee common.BigInt
 
 		Status ContractStatus
+	}
+
+	// PeriodCost specifies cost storage client needs to pay within one
+	// period cycle. It includes cost for all contracts
+	PeriodCost struct {
+		// ContractFees = ContractFee + GasFee
+		ContractFees     common.BigInt `json:"contractfees"`
+		UploadCost       common.BigInt `json:"uploadcost"`
+		DownloadCost     common.BigInt `json:"downloadcost"`
+		StorageCost      common.BigInt `json:"storagecost"`
+		PrevContractCost common.BigInt `json:"prevcontractcost"`
+
+		ContractFund             common.BigInt `json:"contractfund"`
+		UnspentFund              common.BigInt `json:"unspentfund"`
+		WithheldFund             common.BigInt `json:"withheadfund"`
+		WithheldFundReleaseBlock uint64        `json:"withheldfundreleaseblock"`
 	}
 )
 
 func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
+}
+
+func StringToContractID(s string) (id ContractID, err error) {
+	// decode the string to byte slice
+	decodedString, err := hexutil.Decode(s)
+	if err != nil {
+		err = fmt.Errorf("failed to convert the string %s back to contractID: %s", s, err.Error())
+		return
+	}
+
+	// convert the byte slice to ContractID
+	copy(id[:], decodedString)
+	return
 }
 
 type (

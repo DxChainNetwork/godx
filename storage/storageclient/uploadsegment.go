@@ -77,7 +77,7 @@ func (uc *unfinishedUploadSegment) notifyBackupWorkers() {
 	uc.workerBackups = uc.workerBackups[:0]
 	uc.mu.Unlock()
 
-	assignSectorTaskToWorker(backupWorkers, uc)
+	//assignSectorTaskToWorker(backupWorkers, uc)
 
 	for i := 0; i < len(backupWorkers); i++ {
 		backupWorkers[i].signalUploadChan(uc)
@@ -120,11 +120,11 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 	}
 	sc.lock.Unlock()
 
-	assignSectorTaskToWorker(workers, uc)
+	sc.assignSectorTaskToWorker(workers, uc)
 }
 
 // assignSectorTaskToWorker will assign non uploaded sector to worker
-func assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
+func (sc *StorageClient) assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
 	for _, w := range workers {
 		if w.isReady(uc) {
 			w.pendingSegments = append(w.pendingSegments, uc)
@@ -214,7 +214,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		segment.workersRemain = 0
 		sc.memoryManager.Return(erasureCodingMemory + sectorCompletedMemory)
 		segment.memoryReleased += erasureCodingMemory + sectorCompletedMemory
-		sc.log.Debug("retrieve logical data of a segment failed:", err)
+		sc.log.Error("retrieve logical data of a segment failed:", err)
 		return
 	}
 
@@ -231,7 +231,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		for i := 0; i < len(segment.physicalSegmentData); i++ {
 			segment.physicalSegmentData[i] = nil
 		}
-		sc.log.Debug("Erasure encode physical data of a segment failed:", err)
+		sc.log.Error("Erasure encode physical data of a segment failed:", err)
 		return
 	}
 
@@ -252,10 +252,9 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 			segment.physicalSegmentData[i] = nil
 		} else {
 			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
-			// TODO Discuss 加密失败之后，是传明文还是忽略该segment
 			if err != nil {
-				//segment.physicalSegmentData[i] = nil
-				sc.log.Debug("encrypt segment after erasure encode failed: ", err)
+				segment.physicalSegmentData[i] = nil
+				sc.log.Error("encrypt segment after erasure encode failed: ", err)
 			} else {
 				segment.physicalSegmentData[i] = cipherData
 			}
@@ -297,10 +296,10 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && needDownload {
-		sc.log.Debug("failed to read file, downloading instead:", err)
+		sc.log.Error("failed to read file, downloading instead:", err)
 		return sc.downloadLogicalSegmentData(segment)
 	} else if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		sc.log.Debug("failed to read file locally:", err)
+		sc.log.Error("failed to read file locally:", err)
 		return errors.New("failed to read file locally")
 	}
 	segment.logicalSegmentData = buf.buf
@@ -342,7 +341,7 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 		sc.updateUploadSegmentStuckStatus(uc)
 		err := uc.fileEntry.Close()
 		if err != nil {
-			sc.log.Debug("file not closed after segment upload complete: %v %v", uc.fileEntry.DxPath(), err)
+			sc.log.Error("file not closed after segment upload complete: %v %v", uc.fileEntry.DxPath(), err)
 		}
 		sc.uploadHeap.mu.Lock()
 		delete(sc.uploadHeap.pendingSegments, uc.id)
@@ -388,14 +387,12 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 // updateUploadSegmentStuckStatus checks to see if the repair was
 // successful and then updates the segment's stuck status
 func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegment) {
-	// Grab necessary information from upload Segment under lock
-	uc.mu.Lock()
+	// Grab necessary information from upload segment under lock
 	index := uc.id.index
 	stuck := uc.stuck
 	sectorsCompleteNum := uc.sectorsCompletedNum
 	sectorsNeedNum := uc.sectorsAllNeedNum
 	stuckRepair := uc.stuckRepair
-	uc.mu.Unlock()
 
 	// Determine if repair was successful
 	successfulRepair := (1-RemoteRepairDownloadThreshold)*float64(sectorsNeedNum) <= float64(sectorsCompleteNum)
@@ -406,9 +403,13 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 	case <-sc.tm.StopChan():
 		clientOffline = true
 	default:
-		// Check that the storage client is still online
-		if !sc.Online() {
-			clientOffline = true
+		if storage.ENV == storage.Env_Test {
+			clientOffline = false
+		} else {
+			// Check that the storage client is still online
+			if !sc.Online() {
+				clientOffline = true
+			}
 		}
 	}
 
@@ -425,7 +426,7 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 	}
 
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {
-		sc.log.Debug("could not set segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
+		sc.log.Error("could not set segment %v stuck status for file %v: %v", uc.id, uc.fileEntry.DxPath(), err)
 	}
 
 	dxPath := uc.fileEntry.DxPath()

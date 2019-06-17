@@ -1,12 +1,11 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
-// License 2.0 that can be found in the LICENSE file.
+// License 2.0 that can be found in the LICENSE file
 
 package storageclient
 
 import (
 	"context"
-	"crypto/rand"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -17,18 +16,20 @@ import (
 	"github.com/DxChainNetwork/godx/eth/downloader"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"math/big"
+	"math/rand"
 	"os"
 	"os/user"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 var hashes = []string{"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd51",
@@ -76,7 +77,7 @@ func newStorageClientTester(t *testing.T) *StorageClientTester {
 // For only test: add mock workers to workpool
 func mockAddWorkers(n int, client *StorageClient) {
 	for i := 0; i < n; i++ {
-		contractID := common.HexToHash(hashes[i])
+		contractID := storage.ContractID(common.HexToHash(hashes[i]))
 		worker := &worker{
 			contract:       storage.ClientContract{ContractID: contractID},
 			hostID:         enode.RandomID(enode.ID{}, i),
@@ -92,6 +93,7 @@ func mockAddWorkers(n int, client *StorageClient) {
 // randomDxPath creates a random DxPath which is a string of byte slice of length 16
 func randomDxPath() storage.DxPath {
 	b := make([]byte, 16)
+	rand.Seed(time.Now().UnixNano())
 	_, err := rand.Read(b)
 	if err != nil {
 		panic(err)
@@ -111,18 +113,6 @@ func homeDir() string {
 		return usr.HomeDir
 	}
 	return ""
-}
-
-func newTestServer() *p2p.Server {
-	config := p2p.Config{
-		Name:       "test",
-		MaxPeers:   10,
-		ListenAddr: "127.0.0.1:0",
-	}
-	server := &p2p.Server{
-		Config: config,
-	}
-	return server
 }
 
 type BackendTest struct{}
@@ -257,4 +247,68 @@ func (b *BackendTest) ChainConfig() *params.ChainConfig {
 
 func (b *BackendTest) CurrentBlock() *types.Block {
 	return nil
+}
+
+
+/*
+_____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _
+|  __ \|  __ \|_   _\ \    / /\|__   __|  ____|      |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
+| |__) | |__) | | |  \ \  / /  \  | |  | |__         | |__  | |  | |  \| | |       | |    | || |  | |  \| |
+|  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|        |  __| | |  | | . ` | |       | |    | || |  | | . ` |
+| |    | | \ \ _| |_   \  / ____ \| |  | |____       | |    | |__| | |\  | |____   | |   _| || |__| | |\  |
+|_|    |_|  \_\_____|   \/_/    \_\_|  |______|      |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
+
+*/
+
+func settingValidation(settings storage.ClientSetting) (expectedErr bool) {
+	if settings.MaxUploadSpeed < 0 || settings.MaxDownloadSpeed < 0 {
+		return true
+	}
+
+	if err := contractmanager.RentPaymentValidation(settings.RentPayment); err != nil {
+		return true
+	}
+
+	return false
+}
+
+func randomClientSettingsGenerator() (settings storage.ClientSetting) {
+	settings = storage.ClientSetting{
+		RentPayment:       randRentPaymentGenerator(),
+		EnableIPViolation: true,
+		MaxUploadSpeed:    randInt64(),
+		MaxDownloadSpeed:  randInt64(),
+	}
+
+	return
+}
+
+func randRentPaymentGenerator() (rentPayment storage.RentPayment) {
+	rentPayment = storage.RentPayment{
+		Fund:               common.RandomBigInt(),
+		StorageHosts:       randUint64(),
+		Period:             randUint64(),
+		RenewWindow:        randUint64(),
+		ExpectedStorage:    randUint64(),
+		ExpectedUpload:     randUint64(),
+		ExpectedDownload:   randUint64(),
+		ExpectedRedundancy: randFloat64(),
+	}
+
+	return
+}
+
+func randUint64() (randUint uint64) {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Uint64()
+}
+
+func randFloat64() (randFloat float64) {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Float64()
+}
+
+func randInt64() (randBool int64) {
+	rand.Seed(time.Now().UnixNano())
+	return int64(rand.Int())
 }

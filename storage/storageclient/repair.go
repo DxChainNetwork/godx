@@ -29,10 +29,11 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 		return fmt.Errorf("unable to open Dxfile %v, error: %v", dxPath, err)
 	}
 	defer sf.Close()
+
 	// Add stuck segments from file to repair heap
 	files := []*dxfile.FileSetEntryWithID{sf}
 	hosts := sc.refreshHostsAndWorkers()
-	hostHealthInfoTable := sc.getClientHostHealthInfoTable(files)
+	hostHealthInfoTable := sc.contractManager.HostHealthMap()
 	sc.createAndPushSegments(files, hosts, targetStuckSegments, hostHealthInfoTable)
 	return nil
 }
@@ -52,16 +53,19 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 	if os.IsNotExist(err) {
 		// Remember initial Error
 		initError := err
+
 		// Metadata file does not exists, check if directory is empty
 		fileInfos, err := ioutil.ReadDir(string(sysPath))
 		if err != nil {
 			return dxdir.Metadata{}, err
 		}
+
 		// If the directory is empty and is not the root directory, assume it
 		// was deleted so do not create a metadata file
 		if len(fileInfos) == 0 && !dxPath.IsRoot() {
 			return dxdir.Metadata{}, initError
 		}
+
 		// If we are at the root directory or the directory is not empty, create
 		// a metadata file
 		dxDir, err = sc.fileSystem.DirSet().NewDxDir(dxPath)

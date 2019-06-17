@@ -55,16 +55,18 @@ func (w *worker) killUploading() {
 
 // AppendUploadSegment - Append a segment to the heap to the pendingSegments of worker and the signal the uploadChan
 func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
-	//utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostPublicKey)
-	//goodForUpload := exists && utility.GoodForUpload
-	goodForUpload := true
+	uploadAbility := false
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+		uploadAbility = meta.Status.UploadAbility
+	}
+
 	w.mu.Lock()
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
-	if !goodForUpload || uploadTerminated || onCoolDown {
+	if !uploadAbility || uploadTerminated || onCoolDown {
 		w.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.HostID.String())
 		return
 	}
 	w.pendingSegments = append(w.pendingSegments, uc)
@@ -101,21 +103,26 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 }
 
 // isReady indicates that a worker is ready for uploading a segment
-// It must be goodForUpload, not on cool down and not terminated
+// It must be UploadAbility, not on cool down and not terminated
 func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	//utility, exists := w.client.hostContractor.ContractUtility(w.contract.HostPublicKey)
-	//goodForUpload := exists && utility.GoodForUpload
-	goodForUpload := true
+	uploadAbility := false
+	if storage.ENV == storage.Env_Test {
+		uploadAbility = true
+	}
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+		uploadAbility = meta.Status.UploadAbility
+	}
+
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 
-	if !goodForUpload || uploadTerminated || onCoolDown {
+	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !goodForUpload, uploadTerminated, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.HostID.String())
 		return false
 	}
 	return true
@@ -131,11 +138,13 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
-	contractID := storage.ContractID(w.contract.ContractID)
+	contractID := w.contract.ContractID
 
-	w.client.lock.Lock()
+	// we must make sure that renew and revision consistency
+	w.client.sessionLock.Lock()
+
 	// Renew is doing, refuse upload/download
-	if _, ok := w.client.renewFlags[contractID]; ok {
+	if w.client.contractManager.IsRenewing(contractID) {
 		w.client.log.Debug("renew contract is doing, can't upload")
 		w.uploadFailed(uc, sectorIndex)
 		return
@@ -146,14 +155,13 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	if !ok || session == nil || session.IsClosed() {
 		s, err := w.client.ethBackend.SetupConnection(w.contract.HostID.String())
 		if err != nil {
-			w.client.log.Debug("Worker failed to setup an connection:", err)
+			w.client.log.Error("Worker failed to setup an connection:", err)
 			w.uploadFailed(uc, sectorIndex)
 			return
 		}
 
-		w.client.sessionLock.Lock()
+
 		w.client.sessionSet[contractID] = s
-		w.client.sessionLock.Unlock()
 		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
 			s.SetHostInfo(&hostInfo)
 		}
@@ -162,12 +170,16 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 
 	// Set flag true while uploading
 	session.SetBusy()
-	w.client.lock.Unlock()
+	defer func(){
+		session.ResetBusy()
+		session.RevisionDone() <- struct{}{}
+	}()
+	w.client.sessionLock.Unlock()
 
 	// upload segment to host
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
-		w.client.log.Debug("Worker failed to upload via the editor:", err)
+		w.client.log.Error("Worker failed to upload via the editor:", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
@@ -208,9 +220,11 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
-	//utility, exists := w.client.contractManager.hostContractor.ContractUtility(w.contract.HostEnodeUrl)
-	//goodForUpload := exists && utility.GoodForUpload
-	goodForUpload := true
+	uploadAbility := false
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+		uploadAbility = meta.Status.UploadAbility
+	}
+
 	w.mu.Lock()
 	onCoolDown := w.onUploadCoolDown()
 	w.mu.Unlock()
@@ -221,12 +235,12 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	_, candidateHost := uc.unusedHosts[w.contract.HostID.String()]
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
-	// If the Segment does not need help from this worker, release the segment
-	if isComplete || !candidateHost || !goodForUpload || onCoolDown {
+	// If the segment does not need help from this worker, release the segment
+	if isComplete || !candidateHost || !uploadAbility || onCoolDown {
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Worker dropping a Segment while processing", isComplete, !candidateHost, !goodForUpload, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Worker dropping a segment while processing", isComplete, !candidateHost, !uploadAbility, onCoolDown, w.contract.HostID.String())
 		return nil, 0
 	}
 

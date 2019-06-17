@@ -11,7 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -59,15 +58,14 @@ type worker struct {
 // update the worker pool to match.
 func (sc *StorageClient) activateWorkerPool() {
 	// get all contracts in client
-	contractMap := sc.storageHostManager.GetStorageContractSet().Contracts()
+	contractMap := sc.contractManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
 		sc.lock.Lock()
-		_, exists := sc.workerPool[id]
-		if !exists {
+		if _, exist := sc.workerPool[id]; exist {
 			clientContract := storage.ClientContract{
-				ContractID:  common.Hash(id),
+				ContractID:  id,
 				HostID:      contract.Header().EnodeID,
 				StartHeight: contract.Header().StartHeight,
 				EndHeight:   contract.Header().EndHeight,
@@ -82,7 +80,7 @@ func (sc *StorageClient) activateWorkerPool() {
 				//UploadSpending:   common.NewBigInt(1),
 
 				// record utility information about the contract.
-				//Utility ContractUtility
+				Status:contract.Status(),
 
 				// the amount of money that the client spent or locked while forming a contract.
 				TotalCost: contract.Header().TotalCost,
@@ -117,6 +115,7 @@ func (sc *StorageClient) activateWorkerPool() {
 	for id, worker := range sc.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
+			delete(sc.sessionSet, id)
 			delete(sc.workerPool, id)
 			close(worker.killChan)
 		}

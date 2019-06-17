@@ -2528,8 +2528,10 @@ var HostDebug = require('./web3/methods/hostdebug');
 
 var storageclient = require('./web3/methods/storageclient');
 var storagehostmanager = require('./web3/methods/storagehostmanager');
+var clientdebug = require('./web3/methods/clientdebug');
 var clientfilesdebug = require('./web3/methods/clientfilesdebug');
 var clientfiles = require('./web3/methods/clientfiles');
+
 
 
 function Web3 (provider) {
@@ -2544,9 +2546,9 @@ function Web3 (provider) {
 
     this.storageclient = new storageclient(this);
     this.storagehostmanager = new storagehostmanager(this);
+    this.clientdebug = new clientdebug(this);
     this.clientfilesdebug = new clientfilesdebug(this);
-    this.clientfiles = new clientfiles(this)
-
+    this.clientfiles = new clientfiles(this);
     this.hostdebug = new HostDebug(this);
 
     this.bzz = new Swarm(this);
@@ -2646,7 +2648,9 @@ Web3.prototype.createBatch = function () {
 module.exports = Web3;
 
 
-},{ "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/storagehostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+
+},{ "./web3/methods/clientdebug": 202, "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/storagehostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+
 
 /*
     This file is part of web3.js.
@@ -5613,17 +5617,6 @@ module.exports = Net;
 
 
         var methods = function () {
-            var payment = new Method({
-                name: 'payment',
-                call: 'storageclient_payment',
-                params: 0,
-            });
-
-            var setpayment = new Method({
-                name: 'setPayment',
-                call: 'storageclient_setPayment',
-                params: 0,
-            });
 
             var memory = new Method({
                 name: 'memory',
@@ -5648,14 +5641,48 @@ module.exports = Net;
                 call: 'storageclient_upload',
                 params: 2,
             });
+            var setClientSetting = new Method({
+                name: 'setClientSetting',
+                call: 'storageclient_setClientSetting',
+                params: 1,
+            });
+
+            var clientSetting = new Method({
+                name: 'setting',
+                call: 'storageclient_storageClientSetting',
+                params: 0,
+            });
+
+
+            var canceled = new Method({
+                name: 'cancelAllContracts',
+                call: 'storageclient_cancelAllContracts',
+                params: 0,
+            });
+
+            var activeContracts = new Method({
+                name: 'contracts',
+                call: 'storageclient_activeContracts',
+                params: 0,
+            });
+
+            var contractDetail = new Method({
+                name: 'contract',
+                call: 'storageclient_contractDetail',
+                params: 1,
+            });
+
 
             return [
-                payment,
-                setpayment,
                 memory,
                 memorylimit,
                 setMemoryLimit,
                 upload,
+                setClientSetting,
+                clientSetting,
+                canceled,
+                activeContracts,
+                contractDetail,
             ];
         };
 
@@ -5716,6 +5743,40 @@ module.exports = Net;
 
         module.exports = storagehostmanager;
     }, {"../method":36}],
+
+    202: [function(require,module,exports){
+
+        "use strict";
+
+        var Method = require('../method');
+
+        function clientdebug(web3){
+            this._requestManager = web3._requestManager;
+
+            var self = this;
+
+            methods().forEach(function(method) {
+                method.attachToObject(self);
+                method.setRequestManager(self._requestManager);
+            });
+        }
+
+
+        var methods = function () {
+            var insertContract = new Method({
+                name: 'insertContract',
+                call: 'clientdebug_insertActiveContracts',
+                params: 1,
+            });
+
+            return [
+                insertContract,
+            ];
+        };
+
+        module.exports = clientdebug;
+    }, {"../method":36}],
+
 
     40:[function(require,module,exports){
 /*

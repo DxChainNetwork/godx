@@ -10,6 +10,7 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/pborman/uuid"
 	"io"
 	"io/ioutil"
@@ -21,12 +22,15 @@ import (
 	"testing"
 )
 
+func init() {
+	storage.ENV = storage.Env_Test
+}
+
 // Upload test case has many dependencies modules. Now we test each critical function
 func testUploadDirectory(t *testing.T) {
 	rt := newStorageClientTester(t)
-	server := newTestServer()
 
-	rt.Client.Start(rt.Backend, server, rt.Backend)
+	rt.Client.Start(rt.Backend, rt.Backend)
 	defer rt.Client.Close()
 
 	localFilePath := filepath.Join(homeDir(), "uploadtestfiles")
@@ -38,7 +42,7 @@ func testUploadDirectory(t *testing.T) {
 
 	testUploadFile, err := ioutil.TempFile(localFilePath, "*")
 
-	if _, err := testUploadFile.Write(generateRandomBytes()); err != nil {
+	if _, err := testUploadFile.Write(generateRandomBytes(8)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -51,7 +55,7 @@ func testUploadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	params := FileUploadParams{
+	params := proto.FileUploadParams{
 		Source:      testUploadFile.Name(),
 		DxPath:      storage.DxPath{Path: uuid.New()},
 		ErasureCode: ec,
@@ -128,23 +132,44 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 }
 
 func TestReadFromLocalFile(t *testing.T) {
-	filePath, fileSize, fileHash := generateFile(t, homeDir()+"/uploadtestfiles")
+	// generate how many MB data
+	mb := 9
+	filePath, fileSize, fileHash := generateFile(t, homeDir()+"/uploadtestfiles", mb)
 
 	osFile, err := os.Open(filePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	buf := NewDownloadBuffer(uint64(fileSize), 1<<22)
+	buf := NewDownloadBuffer(uint64(fileSize), storage.SectorSize)
 	sr := io.NewSectionReader(osFile, 0, int64(fileSize))
 	_, err = buf.ReadFrom(sr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if fileHash != crypto.Keccak256Hash(buf.buf...) {
-		t.Fatal("write and read content is not the same")
+	if remainder := mb % 4; remainder != 0 {
+		if fileHash == crypto.Keccak256Hash(buf.buf...) {
+			t.Fatal("write and read content is not the same")
+		}
+
+		index := mb/4
+		sector := buf.buf[index]
+		if len(sector) != int(storage.SectorSize) {
+			t.Fatal("completion data length not equal sector size")
+		}
+
+		for start := remainder << 20;start < len(sector); start++ {
+			if sector[start] != 0 {
+				t.Fatal("completion data not equal zero")
+			}
+		}
+	} else {
+		if fileHash != crypto.Keccak256Hash(buf.buf...) {
+			t.Fatal("write and read content is not the same")
+		}
 	}
+
 
 	if err := osFile.Close(); err != nil {
 		t.Fatal(err)
@@ -155,7 +180,7 @@ func TestReadFromLocalFile(t *testing.T) {
 	}
 }
 
-func generateFile(t *testing.T, localFilePath string) (string, int, common.Hash) {
+func generateFile(t *testing.T, localFilePath string, mb int) (string, int, common.Hash) {
 	_, err := os.Stat(localFilePath)
 	if os.IsNotExist(err) {
 		os.Mkdir(localFilePath, os.ModePerm)
@@ -163,7 +188,7 @@ func generateFile(t *testing.T, localFilePath string) (string, int, common.Hash)
 
 	testUploadFile, err := ioutil.TempFile(localFilePath, "*"+storage.DxFileExt)
 
-	bytes := generateRandomBytes()
+	bytes := generateRandomBytes(mb)
 	if _, err := testUploadFile.Write(bytes); err != nil {
 		t.Fatal(err)
 	}
@@ -175,10 +200,10 @@ func generateFile(t *testing.T, localFilePath string) (string, int, common.Hash)
 	return testUploadFile.Name(), len(bytes), crypto.Keccak256Hash(bytes)
 }
 
-func generateRandomBytes() []byte {
+func generateRandomBytes(mb int) []byte {
 	var bytes []byte
 	for i := 0; i < (1 << 20); i++ {
-		tmp := make([]byte, 8)
+		tmp := make([]byte, mb)
 		n := uint64(rand.Int63())
 		binary.BigEndian.PutUint64(tmp, n)
 		bytes = append(bytes, tmp...)

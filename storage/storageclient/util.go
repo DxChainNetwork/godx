@@ -5,11 +5,17 @@
 package storageclient
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
+	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
+	"math/big"
 	"reflect"
 	"sort"
 	"time"
+
+	"github.com/DxChainNetwork/godx/accounts"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -23,12 +29,21 @@ import (
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/merkletree"
 	"io/ioutil"
 	"path/filepath"
 )
+
+// ActiveContractAPI is used to re-format the contract information that is going to
+// be displayed on the console
+type ActiveContractsAPI struct {
+	ID           storage.ContractID
+	HostID       enode.ID
+	AbleToUpload bool
+	AbleToRenew  bool
+	Canceled     bool
+}
 
 // ParsedAPI will parse the APIs saved in the Ethereum
 // and get the ones needed
@@ -112,17 +127,17 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 }
 
 // DirInfo returns the Directory Information of the dxdir
-func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
+func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (proto.DirectoryInfo, error) {
 	entry, err := sc.fileSystem.DirSet().Open(dxPath)
 	if err != nil {
-		return DirectoryInfo{}, err
+		return proto.DirectoryInfo{}, err
 	}
 	defer entry.Close()
 	// Grab the health information and return the Directory Info, the worst
 	// health will be returned. Depending on the directory and its contents that
 	// could either be health or stuckHealth
 	metadata := entry.Metadata()
-	return DirectoryInfo{
+	return proto.DirectoryInfo{
 		NumFiles:         metadata.NumFiles,
 		NumStuckSegments: metadata.NumStuckSegments,
 		TotalSize:        metadata.TotalSize,
@@ -137,14 +152,14 @@ func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (DirectoryInfo, error) {
 }
 
 // DirList get directories and files in the dxdir
-func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]DirectoryInfo, []FileInfo, error) {
+func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]proto.DirectoryInfo, []proto.FileInfo, error) {
 	if err := sc.tm.Add(); err != nil {
 		return nil, nil, err
 	}
 	defer sc.tm.Done()
 
-	var dirs []DirectoryInfo
-	var files []FileInfo
+	var dirs []proto.DirectoryInfo
+	var files []proto.FileInfo
 	// Get DirectoryInfo
 	di, err := sc.DirInfo(dxPath)
 	if err != nil {
@@ -174,43 +189,46 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]DirectoryInfo, []File
 		if ext != storage.DxFileExt {
 			continue
 		}
-		// Grab dxfile
-		// fileName := strings.TrimSuffix(fi.Name(), modules.SiaFileExtension)
-		// fileSiaPath, err := dxPath.Join(fileName)
-		//if err != nil {
-		//	return nil, nil, err
-		//}
-		// TODO fileinfo
-		//file, err := sc.File(fileSiaPath)
-		//if err != nil {
-		//	return nil, nil, err
-		//}
-		files = append(files, FileInfo{})
+		files = append(files, proto.FileInfo{})
 	}
 	return dirs, files, nil
 }
 
-// TODO complete modules/storage client/storage client.go:478
-func (sc *StorageClient) getClientHostHealthInfoTable(entries []*dxfile.FileSetEntryWithID) storage.HostHealthInfoTable {
-	infoMap := make(storage.HostHealthInfoTable, 1)
+func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+	return sc.ethBackend.SetupConnection(hostEnodeUrl)
+}
+func (sc *StorageClient) AccountManager() *accounts.Manager {
+	return sc.ethBackend.AccountManager()
+}
 
-	for _, e := range entries {
-		var used []enode.ID
-		for _, id := range e.HostIDs() {
-			used = append(used, id)
-		}
+func (sc *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+	return sc.ethBackend.Disconnect(session, hostEnodeUrl)
+}
 
-		if err := e.UpdateUsedHosts(used); err != nil {
-			sc.log.Debug("Could not update used hosts:", err)
-		}
-	}
+func (sc *StorageClient) ChainConfig() *params.ChainConfig {
+	return sc.ethBackend.ChainConfig()
+}
 
-	return infoMap
+func (sc *StorageClient) CurrentBlock() *types.Block {
+	return sc.ethBackend.CurrentBlock()
+}
+
+func (sc *StorageClient) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return sc.ethBackend.SendTx(ctx, signedTx)
+}
+
+func (sc *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return sc.ethBackend.SuggestPrice(ctx)
+}
+
+func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return sc.ethBackend.GetPoolNonce(ctx, addr)
 }
 
 // GetFileSystem will get the file system
 func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return sc.fileSystem
+
 }
 
 // calculate Enode.ID, reference:

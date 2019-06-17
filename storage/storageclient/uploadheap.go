@@ -175,16 +175,8 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		}
 		for sectorIndex, sectorSet := range sectors {
 			for _, sector := range sectorSet {
-				// Get the contract for the sector
-				// TODO get contractUtility from hostmanager
-				// contractUtility, exists := sc.storageHostManager.ContractUtility(sector.HostID)
-				//if !exists {
-				//	// File contract does not seem to be part of the host anymore.
-				//	continue
-				//}
-
-				contractUtility := storage.ContractUtility{}
-				if !contractUtility.GoodForRenew {
+				contractID := sc.contractManager.GetStorageContractSet().GetContractIDByHostID(sector.HostID)
+				if meta, ok := sc.contractManager.GetStorageContractSet().RetrieveContractMetaData(contractID); !ok || !meta.Status.RenewAbility {
 					continue
 				}
 
@@ -356,17 +348,15 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 		return
 	}
 
-	// Build the unfinished upload Segments and add them to the upload heap
-	// TODO - offline, goodForRenew, _ := sc.managedContractUtilityMaps()
-	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
+	hostHealthInfoTable := sc.contractManager.HostHealthMap()
 
 	switch target {
 	case targetStuckSegments:
 		sc.log.Debug("Adding stuck segment to heap")
-		sc.createAndPushRandomSegment(files, hosts, target, nilHostHealthInfoTable)
+		sc.createAndPushRandomSegment(files, hosts, target, hostHealthInfoTable)
 	case targetUnstuckSegments:
 		sc.log.Debug("Adding unstuck segments to heap")
-		sc.createAndPushSegments(files, hosts, target, nilHostHealthInfoTable)
+		sc.createAndPushSegments(files, hosts, target, hostHealthInfoTable)
 	default:
 		sc.log.Debug("repair target not recognized", target)
 	}
@@ -423,7 +413,7 @@ func (sc *StorageClient) doProcessNextSegment(uuc *unfinishedUploadSegment) erro
 // refreshHostsAndWorkers will reset the set of hosts and the set of
 // workers for the storage client
 func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
-	currentContracts := sc.storageHostManager.GetStorageContractSet().Contracts()
+	currentContracts := sc.contractManager.GetStorageContractSet().Contracts()
 	hosts := make(map[string]struct{})
 	for _, contract := range currentContracts {
 		hosts[contract.Header().EnodeID.String()] = struct{}{}
