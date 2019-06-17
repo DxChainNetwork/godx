@@ -197,9 +197,9 @@ func VerifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	// The unlock hash for the file contract must match the unlock hash that
 	// the host knows how to spend.
 	expectedUH := types.UnlockConditions{
-		PaymentAddresses: []ecdsa.PublicKey{
-			*clientPK,
-			*hostPK,
+		PaymentAddresses: []common.Address{
+			crypto.PubkeyToAddress(*clientPK),
+			crypto.PubkeyToAddress(*hostPK),
 		},
 		SignaturesRequired: 2,
 	}.UnlockHash()

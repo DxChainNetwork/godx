@@ -5,7 +5,6 @@
 package storagehost
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/bits"
@@ -527,9 +526,9 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	storageContractRevision := types.StorageContractRevision{
 		ParentID: sc.RLPHash(),
 		UnlockConditions: types.UnlockConditions{
-			PaymentAddresses: []ecdsa.PublicKey{
-				*clientPK,
-				*hostPK,
+			PaymentAddresses: []common.Address{
+				crypto.PubkeyToAddress(*clientPK),
+				crypto.PubkeyToAddress(*hostPK),
 			},
 			SignaturesRequired: 2,
 		},
