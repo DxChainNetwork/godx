@@ -80,14 +80,14 @@ type StorageProof struct {
 	Signature []byte
 }
 
-// calculate the hash of HostAnnouncement
+// RLPHash calculate the hash of HostAnnouncement
 func (ha HostAnnouncement) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		ha.NetAddress,
 	})
 }
 
-// calculate the hash of StorageContract
+// RLPHash calculate the hash of StorageContract
 func (sc StorageContract) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		sc.FileSize,
@@ -102,12 +102,12 @@ func (sc StorageContract) RLPHash() common.Hash {
 	})
 }
 
-// calculate the ID of StorageContract
+// ID calculate the ID of StorageContract
 func (sc StorageContract) ID() common.Hash {
 	return common.Hash(sc.RLPHash())
 }
 
-// calculate the hash of UnlockCondition
+// UnlockHash calculate the hash of UnlockCondition
 func (uc UnlockConditions) UnlockHash() common.Hash {
 	return rlpHash([]interface{}{
 		uc.Timelock,
@@ -116,7 +116,7 @@ func (uc UnlockConditions) UnlockHash() common.Hash {
 	})
 }
 
-// calculate the hash of StorageContractRevision
+// RLPHash calculate the hash of StorageContractRevision
 func (scr StorageContractRevision) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		scr.ParentID,
@@ -131,7 +131,7 @@ func (scr StorageContractRevision) RLPHash() common.Hash {
 	})
 }
 
-// calculate the hash of StorageProof
+// RLPHash calculate the hash of StorageProof
 func (sp StorageProof) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		sp.ParentID,

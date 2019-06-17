@@ -676,14 +676,14 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 		sp.Signature = spSign
 
-		scBytes, err := rlp.EncodeToBytes(sp)
+		spBytes, err := rlp.EncodeToBytes(sp)
 		if err != nil {
 			h.log.Warn("Error when serializing proof", "err", err)
 			return
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
-		if _, err := h.SendStorageContractRevisionTx(fromAddress, scBytes); err != nil {
+		if _, err := h.SendStorageProofTx(fromAddress, spBytes); err != nil {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
@@ -1032,9 +1032,14 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	return sos
 }
 
-// send revision contract tx
+// SendStorageContractRevisionTx send revision contract tx
 func (h *StorageHost) SendStorageContractRevisionTx(from common.Address, input []byte) (common.Hash, error) {
 	return h.parseAPI.StorageTx.SendContractRevisionTX(from, input)
+}
+
+// SendStorageProofTx send storage proof tx
+func (h *StorageHost) SendStorageProofTx(from common.Address, input []byte) (common.Hash, error) {
+	return h.parseAPI.StorageTx.SendStorageProofTX(from, input)
 }
 
 //StoreStorageResponsibility storage storageResponsibility from DB
