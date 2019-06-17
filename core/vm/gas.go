@@ -18,12 +18,11 @@ package vm
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/ethdb"
-
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -102,7 +101,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		result = append(result, nil)
 		return gas, result
 
-		//CheckFormContract
+		//CheckContractCreate
 	case func(*EVM, types.StorageContract, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, GasCalculationinsufficient)

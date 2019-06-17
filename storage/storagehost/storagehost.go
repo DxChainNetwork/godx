@@ -442,7 +442,7 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// this RPC call contains two request/response exchanges.
-	s.SetDeadLine(storage.FormContractTime)
+	s.SetDeadLine(storage.ContractCreateTime)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
