@@ -74,7 +74,7 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 // getFolders return the map from folder id to locked folders
 // folder manager should be locked before use
 func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]*storageFolder, err error) {
-	fm.lock.Lock()
+	fm.lock.RLock()
 	var locks []*common.TryLock
 	folders = make(map[folderID]*storageFolder)
 	for _, path := range folderPaths {
@@ -85,7 +85,7 @@ func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]
 		locks = append(locks, &sf.lock)
 		folders[sf.id] = sf
 	}
-	fm.lock.Unlock()
+	fm.lock.RUnlock()
 
 	common.Lock(locks...)
 	return

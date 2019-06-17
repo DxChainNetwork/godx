@@ -197,6 +197,7 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 		if <-update.txn.InitComplete; update.txn.InitErr != nil {
 			update.txn = nil
 			err = update.txn.InitErr
+			return
 		}
 		newErr := <-update.txn.Commit()
 		err = common.ErrCompose(err, newErr)

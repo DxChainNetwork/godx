@@ -225,6 +225,7 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 		if <-update.txn.InitComplete; update.txn.InitErr != nil {
 			update.txn = nil
 			err = update.txn.InitErr
+			return
 		}
 		newErr := <-update.txn.Commit()
 		err = common.ErrCompose(err, newErr)

@@ -26,6 +26,8 @@ const (
 	opNameDeleteSectorBatch    = "delete sector batch"
 	opNameDeleteVirtualSector  = "delete vritual sector"
 	opNameDeletePhysicalSector = "delete physical sector"
+
+	opNameExpandFolder = "expand folder"
 )
 
 const (

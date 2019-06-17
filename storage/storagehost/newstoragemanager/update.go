@@ -44,6 +44,8 @@ func decodeFromTransaction(txn *writeaheadlog.Transaction) (up update, err error
 		up, err = decodeAddSectorBatchUpdate(txn)
 	case opNameDeleteSectorBatch:
 		up, err = decodeDeleteSectorBatchUpdate(txn)
+	case opNameExpandFolder:
+		up, err = decodeExpandFolderUpdate(txn)
 	default:
 		err = errInvalidTransactionType
 	}
