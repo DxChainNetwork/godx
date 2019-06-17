@@ -241,6 +241,7 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
 		Sign:            clientContractSign,
+		Renew:           false,
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {

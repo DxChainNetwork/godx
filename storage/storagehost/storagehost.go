@@ -567,6 +567,15 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
 
+	if req.Renew {
+		oldso, err := GetStorageResponsibility(h.db, req.OldContractID)
+		if err != nil {
+			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
+		} else {
+			so.SectorRoots = oldso.SectorRoots
+		}
+	}
+
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
 		s.SendErrorMsg(err)
 		return ExtendErr("finalize storage obligation error", err)
