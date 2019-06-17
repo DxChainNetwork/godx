@@ -5,7 +5,6 @@
 package contractmanager
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -41,9 +40,9 @@ func randomContractGenerator(contractEndHeight uint64) (ch contractset.ContractH
 				{randomAddressGenerator(), big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
+				PaymentAddresses: []common.Address{
+					randomAddressGenerator(),
+					randomAddressGenerator(),
 				},
 			},
 		},

@@ -5,13 +5,11 @@
 package contractmanager
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
@@ -163,7 +161,7 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
+	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
@@ -174,17 +172,12 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	uc := types.UnlockConditions{
-		PublicKeys: []ecdsa.PublicKey{
-			clientPublicKey,
-			host.NodePubKey,
+		PaymentAddresses: []common.Address{
+			clientPaymentAddress,
+			host.PaymentAddress,
 		},
 		SignaturesRequired: 2,
 	}
-
-	//Calculate the account address of the client
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
-	//Calculate the account address of the host
-	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 
 	// Create storage contract
 	storageContract := types.StorageContract{
@@ -198,13 +191,13 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientPaymentAddress},
 			// Deposit is returned to host
-			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
+			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
-			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientPaymentAddress},
+			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 	}
 
@@ -221,7 +214,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}()
 
 	//Find the wallet based on the account address
-	account := accounts.Account{Address: clientAddr}
+	account := accounts.Account{Address: clientPaymentAddress}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
@@ -315,7 +308,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
+	if _, err := storage.SendFormContractTX(cm.b, clientPaymentAddress, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
 	}
 

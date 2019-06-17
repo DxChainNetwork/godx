@@ -527,7 +527,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	storageContractRevision := types.StorageContractRevision{
 		ParentID: sc.RLPHash(),
 		UnlockConditions: types.UnlockConditions{
-			PublicKeys: []ecdsa.PublicKey{
+			PaymentAddresses: []ecdsa.PublicKey{
 				*clientPK,
 				*hostPK,
 			},

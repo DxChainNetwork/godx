@@ -247,7 +247,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 
 		uc = types.UnlockConditions{
 			Timelock:           currentHeight,
-			PublicKeys:         []ecdsa.PublicKey{clientPubkey, hostPubkey},
+			PaymentAddresses:   []ecdsa.PublicKey{clientPubkey, hostPubkey},
 			SignaturesRequired: 2,
 		}
 

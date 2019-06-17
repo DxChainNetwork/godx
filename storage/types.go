@@ -112,13 +112,13 @@ type (
 	}
 )
 type ContractParams struct {
-	Allowance       RentPayment
-	HostEnodeUrl    string
-	Funding         common.BigInt
-	StartHeight     uint64
-	EndHeight       uint64
-	ClientPublicKey ecdsa.PublicKey
-	Host            HostInfo
+	Allowance            RentPayment
+	HostEnodeUrl         string
+	Funding              common.BigInt
+	StartHeight          uint64
+	EndHeight            uint64
+	ClientPaymentAddress common.Address
+	Host                 HostInfo
 }
 
 // RentPayment stores the StorageClient payment settings for renting the storage space from the host
