@@ -156,6 +156,11 @@ func (update *addStorageFolderUpdate) str() (s string) {
 // recordIntent record the intent to wal to record the add folder intent
 func (update *addStorageFolderUpdate) recordIntent(manager *storageManager) (err error) {
 	manager.lock.RLock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+		}
+	}()
 
 	data, err := rlp.EncodeToBytes(update)
 	if err != nil {
@@ -359,10 +364,14 @@ func (update *addStorageFolderUpdate) lockResource(manager *storageManager) (err
 	manager.lock.RLock()
 	// lock the folders until release
 	manager.folders.lock.Lock()
-
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+			manager.folders.lock.Unlock()
+		}
+	}()
 	update.folder, err = manager.folders.get(update.path)
 	if err != nil {
-		manager.folders.lock.Unlock()
 		return err
 	}
 	return nil

@@ -3,6 +3,7 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -44,7 +45,20 @@ func (sm *storageManager) expandFolder(folderPath string, size uint64) (err erro
 
 	// get the previous numSectors of the folder
 	sm.lock.RLock()
-	// TODO: implement this
+
+	update := sm.createExpandFolderUpdate(folderPath, size)
+	if err = update.recordIntent(sm); err != nil {
+		return
+	}
+	if err = sm.prepareProcessReleaseUpdate(update); err != nil {
+		upErr := err.(*updateError)
+		if !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
+		return
+	}
 	return
 }
 
@@ -76,6 +90,7 @@ func (update *expandFolderUpdate) recordIntent(manager *storageManager) (err err
 	// it right now
 	defer func() {
 		if err != nil {
+			manager.lock.RUnlock()
 			update.folder.lock.Unlock()
 		}
 	}()

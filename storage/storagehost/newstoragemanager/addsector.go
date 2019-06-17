@@ -123,6 +123,11 @@ func (update *addSectorUpdate) str() (s string) {
 // 2. write the initial transaction to wal
 func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error) {
 	manager.lock.RLock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+		}
+	}()
 	pUpdate := addSectorInitPersist{
 		ID:   update.id,
 		Data: update.data,
@@ -458,9 +463,14 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 func (update *addSectorUpdate) lockResource(manager *storageManager) (err error) {
 	manager.lock.RLock()
 	manager.sectorLocks.lockSector(update.id)
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+			manager.sectorLocks.unlockSector(update.id)
+		}
+	}()
 	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
 	if err != nil {
-		manager.sectorLocks.unlockSector(update.id)
 		return
 	}
 	manager.folders.lock.RLock()

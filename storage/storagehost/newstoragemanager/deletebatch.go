@@ -115,6 +115,11 @@ func (update *deleteSectorBatchUpdate) str() (s string) {
 // recordIntent record the intent of deleteSectorBatchUpdate
 func (update *deleteSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
 	manager.lock.RLock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+		}
+	}()
 	persist := deleteBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -432,6 +437,14 @@ func (update *deleteSectorBatchUpdate) lockResource(manager *storageManager) (er
 	manager.lock.RLock()
 	// lock all sectors
 	manager.sectorLocks.lockSectors(update.ids)
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+			for _, id := range update.ids {
+				manager.sectorLocks.unlockSector(id)
+			}
+		}
+	}()
 	// folderPaths are the path to lock together
 	var folderPaths []string
 	for _, op := range update.txn.Operations[1:] {

@@ -105,6 +105,11 @@ func (update *addSectorBatchUpdate) str() (s string) {
 // recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
 	manager.lock.RLock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+		}
+	}()
 	persist := addSectorBatchInitPersist{
 		IDs: update.ids,
 	}
