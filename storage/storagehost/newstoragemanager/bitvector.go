@@ -4,7 +4,9 @@
 
 package newstoragemanager
 
-import "github.com/DxChainNetwork/godx/common/math"
+import (
+	"github.com/DxChainNetwork/godx/common/math"
+)
 
 // bitVector is used to represent a boolean vector of size 64
 // the decimal number is considered as binary, and each bit
@@ -49,7 +51,7 @@ func expandUsage(usage []bitVector, targetNumSectors uint64) (res []bitVector) {
 		targetUsageSize++
 	}
 	curSize := len(usage)
-	res = append(usage, make([]bitVector, curSize)...)
+	res = append(usage, make([]bitVector, int(targetUsageSize)-curSize)...)
 	return
 }
 

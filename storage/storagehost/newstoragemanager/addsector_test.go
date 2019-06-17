@@ -410,8 +410,10 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 	}
 	// check whether the sector data is saved correctly
 	b := make([]byte, storage.SectorSize)
+	fmt.Println(sector.index * storage.SectorSize)
 	n, err := mmFolder.dataFile.ReadAt(b, int64(sector.index*storage.SectorSize))
 	if err != nil {
+		fmt.Println("err", err)
 		return err
 	}
 	mmFolder.lock.Unlock()

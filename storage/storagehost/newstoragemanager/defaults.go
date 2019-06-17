@@ -24,7 +24,7 @@ const (
 	opNameAddSectorBatchAppend = "add sector batch append"
 
 	opNameDeleteSectorBatch    = "delete sector batch"
-	opNameDeleteVirtualSector  = "delete vritual sector"
+	opNameDeleteVirtualSector  = "delete virtual sector"
 	opNameDeletePhysicalSector = "delete physical sector"
 
 	opNameExpandFolder   = "expand folder"

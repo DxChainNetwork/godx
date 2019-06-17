@@ -7,11 +7,12 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"sync"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -63,7 +64,19 @@ func (sm *storageManager) shrinkFolder(folderPath string, targetSize uint64) (er
 	defer sm.tm.Done()
 
 	update := createShrinkFolderUpdate(folderPath, targetSize)
-	// TODO: implement this
+	if err = update.recordIntent(sm); err != nil {
+		return err
+	}
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
+		upErr := err.(*updateError)
+		if !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
+		return
+	}
+	return
 }
 
 func createShrinkFolderUpdate(folderPath string, targetSize uint64) (update *shrinkFolderUpdate) {
@@ -145,7 +158,6 @@ func (update *shrinkFolderUpdate) process(manager *storageManager, target uint8)
 func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err error) {
 	var once sync.Once
 	update.targetFolder.status = folderUnavailable
-	update.targetFolder.numSectors = update.targetNumSectors
 	update.folders[update.targetFolder.id] = update.targetFolder
 	// get all related sectors
 	ids := manager.db.getAllSectorsIDsFromFolder(update.targetFolder.id)
@@ -168,7 +180,7 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 		} else if err == errFolderAlreadyFull {
 			relocatedFolder, index, err = manager.folders.selectFolderToAdd()
 			if err != nil {
-				return
+				return err
 			}
 		} else {
 			return fmt.Errorf("cannot get free s index")
@@ -178,11 +190,11 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 		}
 		// Update the memory
 		if err = update.targetFolder.setFreeSectorSlot(s.index); err != nil {
-			return
+			return err
 		}
 		if err = relocatedFolder.setUsedSectorSlot(index); err != nil {
 			_ = update.targetFolder.setFreeSectorSlot(s.index)
-			return
+			return err
 		}
 		relocate := sectorRelocation{
 			ID: s.id,
@@ -202,7 +214,7 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 			}
 		})
 		if err != nil {
-			return
+			return err
 		}
 		b, err := rlp.EncodeToBytes(relocate)
 		if err != nil {
@@ -213,7 +225,7 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 			Data: b,
 		}
 		if err = <-update.txn.Append([]writeaheadlog.Operation{op}); err != nil {
-			return
+			return err
 		}
 		// Append the database batch
 		newSector := &sector{
@@ -225,23 +237,45 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 		update.batch = manager.db.deleteFolderSectorToBatch(update.batch, s.folderID, s.id)
 		update.batch, err = manager.db.saveSectorToBatch(update.batch, newSector, true)
 		if err != nil {
-			return
+			return err
 		}
 		update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, update.targetFolder)
 		if err != nil {
-			return
+			return err
 		}
 		if relocatedFolder != update.targetFolder {
 			update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, relocatedFolder)
 			if err != nil {
-				return
+				return err
 			}
 		}
 	}
+	// Finally, shrink the folder
+	update.targetFolder.numSectors = update.targetNumSectors
+	update.targetFolder.usage = shrinkUsage(update.targetFolder.usage, update.prevNumSectors)
+	update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, update.targetFolder)
 	return
 }
 
 func (update *shrinkFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
+	// load all folders to update
+	sf, err := manager.folders.getWithoutLock(update.folderPath)
+	if err != nil {
+		return err
+	}
+	update.targetFolder = sf
+	update.folders[sf.id] = sf
+	for _, relocate := range update.relocates {
+		path, err := manager.db.getFolderPath(relocate.NewLocation.FolderID)
+		if err != nil {
+			return err
+		}
+		sf, err = manager.folders.getWithoutLock(path)
+		if err != nil {
+			return err
+		}
+		update.folders[sf.id] = sf
+	}
 	return
 }
 
@@ -297,14 +331,99 @@ func (update *shrinkFolderUpdate) release(manager *storageManager, upErr *update
 	}
 	if upErr.prepareErr != nil {
 		// revert memory
+		err = update.revert(manager, true)
+		if <-update.txn.InitComplete; update.txn.InitErr != nil {
+			update.txn = nil
+			err = update.txn.InitErr
+			return
+		}
+		newErr := <-update.txn.Commit()
+		err = common.ErrCompose(err, newErr)
+
+		newErr = update.txn.Release()
+		err = common.ErrCompose(err, newErr)
+		return
 	}
 	// If any error happened in process, the last operation to truncate the file
 	// must not have been processed and succeeded. So all the data are still safely stored on
 	// the original file. It would be safe to revert all the relocates.
+	newErr := update.revert(manager, false)
+	err = common.ErrCompose(err, newErr)
+	// release the transaction
+	newErr = update.txn.Release()
+	err = common.ErrCompose(err, newErr)
+	return
+}
+
+func (update shrinkFolderUpdate) revert(manager *storageManager, memoryOnly bool) (err error) {
+	batch := manager.db.newBatch()
+	var newErr error
+	// first grow the folder to prevSize
+	if update.targetFolder.numSectors != update.prevNumSectors {
+		update.targetFolder.numSectors = update.prevNumSectors
+		update.targetFolder.usage = expandUsage(update.targetFolder.usage, update.prevNumSectors)
+	}
+	// Then update relocates
+	for _, relocate := range update.relocates {
+		prevLocation := relocate.PrevLocation
+		newLocation := relocate.NewLocation
+		_ = update.folders[prevLocation.FolderID].setUsedSectorSlot(prevLocation.Index)
+		_ = update.folders[newLocation.FolderID].setFreeSectorSlot(newLocation.Index)
+		if !memoryOnly {
+			s := &sector{
+				id:       relocate.ID,
+				folderID: prevLocation.FolderID,
+				index:    prevLocation.Index,
+				count:    prevLocation.Count,
+			}
+			batch, newErr = manager.db.saveSectorToBatch(batch, s, true)
+			if err != nil {
+				err = common.ErrCompose(err, newErr)
+				continue
+			}
+			if prevLocation.FolderID == newLocation.FolderID {
+				continue
+			}
+			batch, newErr = manager.db.saveStorageFolderToBatch(batch, update.folders[newLocation.FolderID])
+			batch = manager.db.deleteFolderSectorToBatch(batch, newLocation.FolderID, relocate.ID)
+		}
+	}
+	if !memoryOnly {
+		batch, newErr = manager.db.saveStorageFolderToBatch(batch, update.targetFolder)
+		err = common.ErrCompose(err, newErr)
+	}
+	if newErr = manager.db.writeBatch(batch); newErr != nil {
+		err = common.ErrCompose(err, newErr)
+		return
+	}
 	return
 }
 
 func (update *shrinkFolderUpdate) lockResource(manager *storageManager) (err error) {
 	manager.lock.Lock()
+	return
+}
+
+func decodeShrinkFolderUpdate(txn *writeaheadlog.Transaction) (update *shrinkFolderUpdate, err error) {
+	var initPersist shrinkFolderInitPersist
+	if err = rlp.DecodeBytes(txn.Operations[0].Data, &initPersist); err != nil {
+		return nil, err
+	}
+	update = &shrinkFolderUpdate{
+		folderPath:       initPersist.FolderPath,
+		prevNumSectors:   initPersist.PrevNumSectors,
+		targetNumSectors: initPersist.TargetNumSectors,
+	}
+	// decode the rest
+	for _, op := range txn.Operations[1:] {
+		if op.Name != opNameRelocateSector {
+			return nil, fmt.Errorf("invalid op name: %v", op.Name)
+		}
+		var relocate sectorRelocation
+		if err = rlp.DecodeBytes(op.Data, &relocate); err != nil {
+			return nil, err
+		}
+		update.relocates = append(update.relocates, relocate)
+	}
 	return
 }

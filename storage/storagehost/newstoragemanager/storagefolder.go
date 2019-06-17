@@ -105,7 +105,7 @@ func (sf *storageFolder) load() (err error) {
 		err = errors.New("file size too small")
 		return
 	}
-	if sf.dataFile, err = os.Open(datafilePath); err != nil {
+	if sf.dataFile, err = os.OpenFile(datafilePath, os.O_RDWR, 0600); err != nil {
 		sf.status = folderUnavailable
 		return
 	}

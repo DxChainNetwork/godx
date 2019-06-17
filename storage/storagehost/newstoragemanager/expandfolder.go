@@ -3,6 +3,8 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -43,14 +45,11 @@ func (sm *storageManager) expandFolder(folderPath string, size uint64) (err erro
 	}
 	defer sm.tm.Done()
 
-	// get the previous numSectors of the folder
-	sm.lock.RLock()
-
 	update := sm.createExpandFolderUpdate(folderPath, size)
 	if err = update.recordIntent(sm); err != nil {
 		return
 	}
-	if err = sm.prepareProcessReleaseUpdate(update); err != nil {
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
 		upErr := err.(*updateError)
 		if !upErr.isNil() {
 			sm.logError(update, upErr)
@@ -121,6 +120,12 @@ func (update *expandFolderUpdate) prepare(manager *storageManager, target uint8)
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
+		if manager.disrupter.disrupt("expand folder prepare normal") {
+			return errDisrupted
+		}
+		if manager.disrupter.disrupt("expand folder prepare normal stop") {
+			return errStopped
+		}
 	case targetRecoverCommitted:
 		err = update.prepareCommitted(manager)
 	default:
@@ -153,6 +158,12 @@ func (update *expandFolderUpdate) process(manager *storageManager, target uint8)
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
+		if manager.disrupter.disrupt("expand folder process normal") {
+			return errDisrupted
+		}
+		if manager.disrupter.disrupt("expand folder process normal stop") {
+			return errStopped
+		}
 	case targetRecoverCommitted:
 		err = update.processCommitted(manager)
 	default:
@@ -216,14 +227,29 @@ func (update *expandFolderUpdate) release(manager *storageManager, upErr *update
 	// If process error
 	// revert the memory
 	update.folder.numSectors = update.prevNumSectors
+	fmt.Printf("%+v\n", *update.folder.dataFile)
 	update.folder.usage = shrinkUsage(update.folder.usage, update.prevNumSectors)
 	// revert the database
 	batch := manager.db.newBatch()
 	batch, newErr := manager.db.saveStorageFolderToBatch(batch, update.folder)
 	err = common.ErrCompose(err, newErr)
-	// revert the file data
-	newErr = update.folder.dataFile.Truncate(int64(numSectorsToSize(update.prevNumSectors)))
+	// apply the batch
+	newErr = manager.db.writeBatch(batch)
 	err = common.ErrCompose(err, newErr)
+	// revert the file data
+	fmt.Println("truncating", int64(numSectorsToSize(update.prevNumSectors)))
+	fileInfo, _ := os.Stat(filepath.Join(update.folder.path, dataFileName))
+	fmt.Println("file size before truncate", fileInfo.Size())
+	fmt.Println(numSectorsToSize(update.targetNumSectors))
+	newErr = update.folder.dataFile.Truncate(int64(numSectorsToSize(update.prevNumSectors)))
+	fileInfo, _ = os.Stat(filepath.Join(update.folder.path, dataFileName))
+	fmt.Println("file size after truncate", fileInfo.Size())
+	fmt.Println(newErr)
+	err = common.ErrCompose(err, newErr)
+	// release the transaction
+	newErr = update.txn.Release()
+	err = common.ErrCompose(err, newErr)
+	fmt.Println("release err", err)
 	return
 }
 
