@@ -21,15 +21,16 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
@@ -66,7 +67,7 @@ type StorageClient struct {
 	workerPool map[storage.ContractID]*worker
 
 	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []proto.StorageHostEntry
+	lastEstimationStorageHost []storage.HostInfo
 
 	// Directories and File related
 	persist        persistence
@@ -1012,4 +1013,35 @@ func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) e
 
 	_, err := client.managedDownload(p)
 	return err
+}
+
+//Get the HostAnnouncements and block height through the hash of the block
+func (c *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	precompiled := vm.PrecompiledEVMFileContracts
+	block, err := c.ethBackend.GetBlockByHash(blockHash)
+	if err != nil {
+		errGet = err
+		return
+	}
+	number = block.NumberU64()
+	txs := block.Transactions()
+	for _, tx := range txs {
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.HostAnnounceTransaction:
+			var hac types.HostAnnouncement
+			err := rlp.DecodeBytes(tx.Data(), &hac)
+			if err != nil {
+				c.log.Crit("Rlp decoding error as hostAnnouncements:", err)
+				continue
+			}
+			hostAnnouncements = append(hostAnnouncements, hac)
+		default:
+			continue
+		}
+	}
+	return
 }

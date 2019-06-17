@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -19,12 +18,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
-)
-
-var (
-	zeroValue = new(big.Int).SetInt64(0)
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -298,7 +292,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 
 	// TODO (mzhang): wait for HZ to modify the params
 	// 3. form the contract renew needed params
-	params := proto.ContractParams{}
+	params := storage.ContractParams{}
 
 	// 4. contract renew
 	if renewedContract, err = cm.ContractRenew(renewContract, params); err != nil {
@@ -353,30 +347,23 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	return
 }
 
-// ContractRenew will perform the renew operation to the contract provided by the caller
-func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (md storage.ContractMetaData, err error) {
+//A renew transaction initiated by the storage client
+func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params storage.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
-
 	lastRev := contract.GetLatestContractRevision()
-
-	// Extract vars from params, for convenience
 	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
-	var basePrice, baseCollateral *big.Int
+	var basePrice, baseCollateral common.BigInt
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
-		timeExtension := uint64((endHeight + host.WindowSize) - lastRev.NewWindowEnd)
-		basePrice = new(big.Int).Mul(host.StoragePrice, new(big.Int).SetUint64(lastRev.NewFileSize))
-		basePrice = new(big.Int).Mul(basePrice, new(big.Int).SetUint64(timeExtension))
-		// cost of already uploaded data that needs to be covered by the renewed contract.
-		baseCollateral = new(big.Int).Mul(host.Collateral, new(big.Int).SetUint64(lastRev.NewFileSize))
-		baseCollateral = new(big.Int).Mul(baseCollateral, new(big.Int).SetUint64(timeExtension))
-		// same as basePrice.
+		timeExtension := uint64(endHeight+host.WindowSize) - lastRev.NewWindowEnd
+		basePrice = host.StoragePrice.Mult(common.NewBigIntUint64(lastRev.NewFileSize)).Mult(common.NewBigIntUint64(timeExtension))
+		baseCollateral = host.Deposit.Mult(common.NewBigIntUint64(lastRev.NewFileSize)).Mult(common.NewBigIntUint64(timeExtension))
 	}
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
+	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
 	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
@@ -387,30 +374,29 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		baseCollateral = hostCollateral
 	}
 
+	//Calculate the account address of the client
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
-	var hostMiss *big.Int
-	hostMiss = new(big.Int).Sub(hostCollateral, baseCollateral)
-	hostMiss = new(big.Int).Add(hostMiss, host.ContractPrice)
+	//Calculate the account address of the host
+	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         lastRev.NewFileSize,
 		FileMerkleRoot:   lastRev.NewFileMerkleRoot, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
 		UnlockHash:       lastRev.NewUnlockHash,
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
 			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
+			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostMiss, Address: hostAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
+			{Value: hostPayout.Sub(baseCollateral).Add(host.ContractPrice).BigIntPtr(), Address: hostAddr},
 		},
 	}
 
@@ -431,11 +417,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// Setup connection with storage host
-	session, err := cm.b.SetupConnection(host.NetAddress)
+	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.NetAddress)
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -525,11 +511,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
 		EndHeight:              endHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		TotalCost:              funding,
+		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,
 		Status: storage.ContractStatus{
 			UploadAbility: true,
@@ -561,11 +547,10 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 }
 
 // calculate client and host collateral
-func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
-
+func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
-		host.StoragePrice.SetInt64(1)
+		host.StoragePrice = common.NewBigIntUint64(1)
 	}
 
 	// Underflow check.
@@ -575,28 +560,23 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 	}
 
 	// Calculate clientPayout.
-	clientPayout = new(big.Int).Sub(funding, host.ContractPrice)
-	clientPayout = clientPayout.Sub(clientPayout, basePrice)
+	clientPayout = funding.Sub(host.ContractPrice).Sub(basePrice)
 
 	// Calculate hostCollateral
-	maxStorageSizeTime := new(big.Int).Div(clientPayout, host.StoragePrice)
-	maxStorageSizeTime = maxStorageSizeTime.Mul(maxStorageSizeTime, host.Collateral)
-	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
-	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(period))
-	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(expectedStorage))
-	maxClientCollateral := host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(5))
+	maxStorageSizeTime := clientPayout.Div(host.StoragePrice)
+	hostCollateral = maxStorageSizeTime.Mult(host.Deposit).Add(baseCollateral)
+	maxClientCollateral := host.Deposit.Mult(common.NewBigIntUint64(period)).Mult(common.NewBigIntUint64(expectedStorage)).Mult(common.NewBigIntUint64(5))
 	if hostCollateral.Cmp(maxClientCollateral) > 0 {
 		hostCollateral = maxClientCollateral
 	}
 
 	// Don't add more collateral than the host is willing to put into a single
 	// contract.
-	if hostCollateral.Cmp(host.MaxCollateral) > 0 {
-		hostCollateral = host.MaxCollateral
+	if hostCollateral.Cmp(host.MaxDeposit) > 0 {
+		hostCollateral = host.MaxDeposit
 	}
 
 	// Calculate hostPayout.
-	hostCollateral.Add(hostCollateral, host.ContractPrice)
-	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
+	hostPayout = hostCollateral.Add(host.ContractPrice).Add(basePrice)
 	return
 }
