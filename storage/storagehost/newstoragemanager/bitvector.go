@@ -31,14 +31,33 @@ func (vec *bitVector) clearUsage(idx uint64) {
 	*vec = *vec & bitVector(mask)
 }
 
-// EmptyUsage create a new empty bitVector slice used as usage in storageFolder with the
+// emptyUsage create a new empty bitVector slice used as usage in storageFolder with the
 // expected size
-func EmptyUsage(size uint64) (usage []bitVector) {
+func emptyUsage(size uint64) (usage []bitVector) {
 	numSectors := sizeToNumSectors(size)
 	usageSize := numSectors / bitVectorGranularity
 	if numSectors%bitVectorGranularity != 0 {
 		usageSize++
 	}
 	usage = make([]bitVector, usageSize)
+	return
+}
+
+func expandUsage(usage []bitVector, targetNumSectors uint64) (res []bitVector) {
+	targetUsageSize := targetNumSectors / bitVectorGranularity
+	if targetNumSectors%bitVectorGranularity != 0 {
+		targetUsageSize++
+	}
+	curSize := len(usage)
+	res = append(usage, make([]bitVector, curSize)...)
+	return
+}
+
+func shrinkUsage(usage []bitVector, targetNumSectors uint64) (res []bitVector) {
+	targetUsageSize := targetNumSectors / bitVectorGranularity
+	if targetNumSectors%bitVectorGranularity != 0 {
+		targetUsageSize++
+	}
+	res = usage[:targetUsageSize]
 	return
 }

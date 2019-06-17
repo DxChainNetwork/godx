@@ -128,7 +128,7 @@ func TestAddStorageFolderExhaustive(t *testing.T) {
 		size := numSectors * storage.SectorSize
 		sf := &storageFolder{
 			path:       path,
-			usage:      EmptyUsage(size),
+			usage:      emptyUsage(size),
 			numSectors: numSectors,
 		}
 		// only update the expected folder if not using the exist path

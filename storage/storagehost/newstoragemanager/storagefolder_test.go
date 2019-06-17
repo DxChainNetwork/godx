@@ -19,7 +19,7 @@ func TestFreeSectorIndex(t *testing.T) {
 	for i, test := range tests {
 		sf := &storageFolder{
 			numSectors: test.numSectors,
-			usage:      EmptyUsage(numSectorsToSize(test.numSectors)),
+			usage:      emptyUsage(numSectorsToSize(test.numSectors)),
 		}
 		for sectorIndex := 0; sectorIndex != int(test.numSectors); sectorIndex++ {
 			selected, err := sf.freeSectorIndex()

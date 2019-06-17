@@ -291,7 +291,7 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		id:         id,
 		status:     folderUnavailable,
 		path:       update.path,
-		usage:      EmptyUsage(update.size),
+		usage:      emptyUsage(update.size),
 		numSectors: sizeToNumSectors(update.size),
 	}
 	sf.lock.Lock()

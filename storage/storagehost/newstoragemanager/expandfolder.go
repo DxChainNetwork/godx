@@ -133,6 +133,7 @@ func (update *expandFolderUpdate) prepare(manager *storageManager, target uint8)
 func (update *expandFolderUpdate) prepareNormal(manager *storageManager) (err error) {
 	// Update the memory folder
 	update.folder.numSectors = update.targetNumSectors
+	update.folder.usage = expandUsage(update.folder.usage, update.targetNumSectors)
 	// update the db batch
 	if update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, update.folder); err != nil {
 		return err
@@ -198,6 +199,7 @@ func (update *expandFolderUpdate) release(manager *storageManager, upErr *update
 	if upErr.prepareErr != nil {
 		// If error happened at prepare stage, revert the memory
 		update.folder.numSectors = update.prevNumSectors
+		update.folder.usage = shrinkUsage(update.folder.usage, update.prevNumSectors)
 		// commit and release the transaction
 		if <-update.txn.InitComplete; update.txn.InitErr != nil {
 			update.txn = nil
@@ -214,12 +216,13 @@ func (update *expandFolderUpdate) release(manager *storageManager, upErr *update
 	// If process error
 	// revert the memory
 	update.folder.numSectors = update.prevNumSectors
-	// revert the file data
-	newErr := update.folder.dataFile.Truncate(int64(numSectorsToSize(update.prevNumSectors)))
-	err = common.ErrCompose(err, newErr)
+	update.folder.usage = shrinkUsage(update.folder.usage, update.prevNumSectors)
 	// revert the database
 	batch := manager.db.newBatch()
-	batch, newErr = manager.db.saveStorageFolderToBatch(batch, update.folder)
+	batch, newErr := manager.db.saveStorageFolderToBatch(batch, update.folder)
+	err = common.ErrCompose(err, newErr)
+	// revert the file data
+	newErr = update.folder.dataFile.Truncate(int64(numSectorsToSize(update.prevNumSectors)))
 	err = common.ErrCompose(err, newErr)
 	return
 }
