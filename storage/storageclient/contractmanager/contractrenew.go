@@ -446,6 +446,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
 		Sign:            clientContractSign,
+		Renew:           true,
+		OldContractID:   lastRev.ParentID,
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {

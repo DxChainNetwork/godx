@@ -40,6 +40,8 @@ type (
 	ContractCreateRequest struct {
 		StorageContract types.StorageContract
 		Sign            []byte
+		Renew           bool
+		OldContractID   common.Hash
 	}
 
 	// UploadRequest contains the request parameters for RPCUpload.
