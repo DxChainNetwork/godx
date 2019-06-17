@@ -5626,6 +5626,12 @@ module.exports = Net;
                 params: 0,
             });
 
+            var getPaymentAddress = new Method({
+                name: 'getPaymentAddress',
+                call: 'storageclient_getPaymentAddress',
+                params: 0,
+             });
+
             var memorylimit = new Method({
                 name: 'memoryLimit',
                 call: 'storageclient_memoryLimit',
@@ -5641,6 +5647,12 @@ module.exports = Net;
             var setClientSetting = new Method({
                 name: 'setClientSetting',
                 call: 'storageclient_setClientSetting',
+                params: 1,
+            });
+
+            var setPaymentAddress = new Method({
+                name: 'setPaymentAddress',
+                call: 'storageclient_setPaymentAddress',
                 params: 1,
             });
 
@@ -5676,6 +5688,8 @@ module.exports = Net;
                 setMemoryLimit,
                 setClientSetting,
                 clientSetting,
+                setPaymentAddress,
+                getPaymentAddress,
                 canceled,
                 activeContracts,
                 contractDetail,
@@ -13945,6 +13959,18 @@ module.exports = Web3;
         params: 0,
       });
 
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddress',
+        call: 'hostdebug_setPaymentAddress',
+        params: 1,
+      });
+
+      var getPaymentAddress = new Method({
+        name: 'getPaymentAddress',
+        call: 'hostdebug_getPaymentAddress',
+        params: 0,
+      });
+
       var persistdir = new Method({
         name: 'persistdir',
         call: 'hostdebug_persistdir',
@@ -14003,6 +14029,8 @@ module.exports = Web3;
 
       return [
         helloWorld,
+        getPaymentAddress,
+        setPaymentAddress,
         persistdir,
         printStorageHost,
         printInternalSetting,

@@ -2,6 +2,12 @@ package storagehost
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/DxChainNetwork/godx/accounts"
+
+	"github.com/DxChainNetwork/godx/common"
+
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -26,6 +32,48 @@ func NewHostDebugAPI(storagehost *StorageHost) *HostDeBugAPI {
 // HelloWorld just test if the debug API is working, could be called in console
 func (h *HostDeBugAPI) HelloWorld(ctx context.Context) string {
 	return "confirmed! host api is working"
+}
+
+//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+func (h *HostDeBugAPI) SetPaymentAddress(paymentAddress common.Address) bool {
+	account := accounts.Account{Address: paymentAddress}
+	_, err := h.storagehost.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		h.storagehost.log.Error("You must set up an account owned by your local wallet!")
+		return false
+	}
+
+	h.storagehost.lock.Lock()
+	h.storagehost.config.PaymentAddress = paymentAddress
+	h.storagehost.lock.Unlock()
+
+	return true
+}
+
+//GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
+	h.storagehost.lock.RLock()
+	paymentAddress := h.storagehost.config.PaymentAddress
+	h.storagehost.lock.RUnlock()
+
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+
+	//Local node does not contain wallet
+	if wallets := h.storagehost.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			paymentAddress := accounts[0].Address
+			h.storagehost.lock.Lock()
+			//the first address in the local wallet will be used as the paymentAddress by default.
+			h.storagehost.config.PaymentAddress = paymentAddress
+			h.storagehost.lock.Unlock()
+			h.storagehost.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			return paymentAddress, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
 // Version gives a mock version of the debugapi

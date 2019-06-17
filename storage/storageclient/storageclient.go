@@ -75,6 +75,9 @@ type StorageClient struct {
 	persistDir     string
 	staticFilesDir string
 
+	//storage client is used as the address to sign the storage contract and pays for the money
+	PaymentAddress common.Address
+
 	// Utilities
 	log  log.Logger
 	lock sync.Mutex
