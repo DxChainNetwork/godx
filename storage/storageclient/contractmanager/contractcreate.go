@@ -236,6 +236,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
 		Sign:            clientContractSign,
+		Renew:           false,
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {

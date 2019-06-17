@@ -552,18 +552,27 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
 	so := StorageResponsibility{
-		SectorRoots: nil,
-		//ContractCost:             h.externalConfig().ContractPrice.BigIntPtr(),
-		ContractCost: h.externalConfig().ContractPrice,
-		//LockedCollateral:         new(big.Int).Sub(sc.ValidProofOutputs[1].Value, h.externalConfig().ContractPrice.BigIntPtr()),
-		LockedStorageDeposit: common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
-		//PotentialStorageRevenue:  big.NewInt(0),
-		PotentialStorageRevenue: common.BigInt0,
-		//RiskedStorageDeposit:         big.NewInt(0),
+		SectorRoots:              nil,
+		ContractCost:             h.externalConfig().ContractPrice,
+		LockedStorageDeposit:     common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
+		PotentialStorageRevenue:  common.BigInt0,
 		RiskedStorageDeposit:     common.BigInt0,
 		NegotiationBlockNumber:   h.blockHeight,
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
+	}
+
+	if req.Renew {
+		oldso, err := GetStorageResponsibility(h.db, req.OldContractID)
+		if err != nil {
+			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
+		} else {
+			so.SectorRoots = oldso.SectorRoots
+		}
+		renewRevenue := renewBasePrice(so, h.externalConfig(), req.StorageContract)
+		so.ContractCost = common.NewBigInt(req.StorageContract.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice).Sub(renewRevenue)
+		so.PotentialStorageRevenue = renewRevenue
+		so.RiskedStorageDeposit = renewBaseDeposit(so, h.externalConfig(), req.StorageContract)
 	}
 
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
@@ -572,6 +581,26 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
+}
+
+// renewBasePrice returns the base cost of the storage in the  contract,
+// using the host external settings and the starting file contract.
+func renewBasePrice(so StorageResponsibility, settings storage.HostExtConfig, fc types.StorageContract) common.BigInt {
+	if fc.WindowEnd <= so.proofDeadline() {
+		return common.BigInt0
+	}
+	timeExtension := fc.WindowEnd - so.proofDeadline()
+	return settings.StoragePrice.Mult(common.NewBigIntUint64(fc.FileSize)).Mult(common.NewBigIntUint64(uint64(timeExtension)))
+}
+
+// renewBaseDeposit returns the base cost of the storage in the  contract,
+// using the host external settings and the starting  contract.
+func renewBaseDeposit(so StorageResponsibility, settings storage.HostExtConfig, fc types.StorageContract) common.BigInt {
+	if fc.WindowEnd <= so.proofDeadline() {
+		return common.BigInt0
+	}
+	timeExtension := fc.WindowEnd - so.proofDeadline()
+	return settings.Deposit.Mult(common.NewBigIntUint64(fc.FileSize)).Mult(common.NewBigIntUint64(uint64(timeExtension)))
 }
 
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
