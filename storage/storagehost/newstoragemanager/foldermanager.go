@@ -71,6 +71,15 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	return sf, nil
 }
 
+// getWithoutLock get the folder without lock from the folder manager
+func (fm *folderManager) getWithoutLock(path string) (sf *storageFolder, err error) {
+	sf, exist := fm.sfs[path]
+	if !exist {
+		return nil, errors.New("path not exist")
+	}
+	return sf, nil
+}
+
 // getFolders return the map from folder id to locked folders
 // folder manager should be locked before use
 func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]*storageFolder, err error) {
@@ -156,4 +165,22 @@ func (fm *folderManager) selectFolderToAddWithRetry(retryTimes int) (sf *storage
 		<-time.After(100 * time.Millisecond)
 	}
 	return nil, 0, err
+}
+
+// validateShink validates the shrinkFolderrUpdate for whether all the stored sectors
+// could be stored in the folders.
+// The function does not contain any lock operations
+func (fm *folderManager) validateShrink(folderPath string, targetNumSector uint64) (err error) {
+	freeSectors := uint64(0)
+	for path, sf := range fm.sfs {
+		if path == folderPath {
+			continue
+		}
+		freeSectors += sf.numSectors - sf.storedSectors
+	}
+	freeSectors += targetNumSector
+	if freeSectors < fm.sfs[folderPath].storedSectors {
+		return fmt.Errorf("not enough storage space for shrink")
+	}
+	return
 }

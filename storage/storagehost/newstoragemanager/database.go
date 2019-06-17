@@ -252,6 +252,18 @@ func (db *database) loadStorageFolderByID(id folderID) (sf *storageFolder, err e
 	return
 }
 
+// getAllSectorsIDsFromFolder get all sector ids from a folder specified by folderID
+func (db *database) getAllSectorsIDsFromFolder(folderID folderID) (sectorIDs []sectorID) {
+	prefix := folderSectorPrefix(folderID)
+	iter := db.lvl.NewIterator(util.BytesPrefix(prefix), nil)
+	for iter.Next() {
+		key := string(iter.Key())
+		sectorID := sectorID(common.HexToHash(key[len(key)-common.HashLength:]))
+		sectorIDs = append(sectorIDs, sectorID)
+	}
+	return
+}
+
 // makeKey create the key. Add _ in each of the arguments
 func makeKey(ss ...string) (key []byte) {
 	if len(ss) == 0 {
@@ -321,7 +333,7 @@ func (db *database) saveSectorToBatch(batch *leveldb.Batch, sector *sector, fold
 }
 
 // deleteSectorToBatch add the delete sector to the batch
-func (db *database) deleteSectorToBatch(batch *leveldb.Batch, id sectorID) (newBatch *leveldb.Batch){
+func (db *database) deleteSectorToBatch(batch *leveldb.Batch, id sectorID) (newBatch *leveldb.Batch) {
 	batch.Delete(makeSectorKey(id))
 	return batch
 }

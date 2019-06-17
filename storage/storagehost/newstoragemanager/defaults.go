@@ -27,7 +27,9 @@ const (
 	opNameDeleteVirtualSector  = "delete vritual sector"
 	opNameDeletePhysicalSector = "delete physical sector"
 
-	opNameExpandFolder = "expand folder"
+	opNameExpandFolder   = "expand folder"
+	opNameShrinkFolder   = "shrink folder"
+	opNameRelocateSector = "relocate sector"
 )
 
 const (
