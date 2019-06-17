@@ -225,6 +225,7 @@ func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
 }
 
+// StringToContractID convert string to ContractID
 func StringToContractID(s string) (id ContractID, err error) {
 	// decode the string to byte slice
 	decodedString, err := hexutil.Decode(s)
@@ -271,14 +272,16 @@ type (
 )
 
 const (
-	// 4 MB
+	// SectorSize is 4 MB
 	SectorSize = uint64(1 << 22)
-	HashSize   = 32
 
-	// the segment size is used when taking the Merkle root of a file.
+	// HashSize is 32 bits
+	HashSize = 32
+
+	// SegmentSize is the segment size is used when taking the Merkle root of a file.
 	SegmentSize = 64
 
-	// the minimum size of an RPC message. If an encoded message
+	// RPCMinLen is the minimum size of an RPC message. If an encoded message
 	// would be smaller than RPCMinLen, it is padded with random data.
 	RPCMinLen = uint64(4096)
 )
@@ -292,7 +295,7 @@ type ParsedAPI struct {
 	StorageTx *ethapi.PrivateStorageContractTxAPI
 }
 
-// filterAPIs will filter the APIs saved in the Ethereum and
+// FilterAPIs will filter the APIs saved in the Ethereum and
 // save them into ParsedAPI data structure
 func FilterAPIs(apis []rpc.API, parseAPI *ParsedAPI) error {
 	for _, api := range apis {

@@ -131,7 +131,7 @@ func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
 	}
 }
 
-// request memory to download segment, will block until memory is available
+// Request memory to download segment, will block until memory is available
 func (c *StorageClient) acquireMemoryForDownloadSegment(uds *unfinishedDownloadSegment) bool {
 
 	// the amount of memory required is equal minimum number of sectors plus the overdrive amount.
@@ -140,7 +140,7 @@ func (c *StorageClient) acquireMemoryForDownloadSegment(uds *unfinishedDownloadS
 	return c.memoryManager.Request(memoryRequired, true)
 }
 
-// pass a segment out to all of the workers.
+// Pass a segment out to all of the workers.
 func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownloadSegment) {
 
 	// distribute the segment to workers, marking the number of workers that have received the work.
@@ -158,7 +158,7 @@ func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownlo
 	uds.cleanUp()
 }
 
-// add a segment to the download heap
+// Add a segment to the download heap
 func (c *StorageClient) addSegmentToDownloadHeap(uds *unfinishedDownloadSegment) {
 
 	// the sole purpose of the heap is to block workers from receiving a segment until memory has been allocated

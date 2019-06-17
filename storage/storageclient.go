@@ -20,12 +20,12 @@ import (
 // EthBackend is an interface used to get methods implemented by Ethereum
 type EthBackend interface {
 	APIs() []rpc.API
-	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
-	SetupConnection(hostEnodeUrl string) (*Session, error)
-	Disconnect(session *Session, hostEnodeUrl string) error
+	SetupConnection(hostEnodeURL string) (*Session, error)
+	Disconnect(session *Session, hostEnodeURL string) error
 	GetBlockByNumber(number uint64) (*types.Block, error)
 
 	AccountManager() *accounts.Manager
@@ -42,12 +42,12 @@ type EthBackend interface {
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
-	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
-	SetupConnection(hostEnodeUrl string) (*Session, error)
+	SetupConnection(hostEnodeURL string) (*Session, error)
 	AccountManager() *accounts.Manager
-	Disconnect(session *Session, hostEnodeUrl string) error
+	Disconnect(session *Session, hostEnodeURL string) error
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -56,7 +56,7 @@ type ClientBackend interface {
 	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 }
 
-// the parameters to download from outer request
+// DownloadParameters is the parameters to download from outer request
 type DownloadParameters struct {
 	RemoteFilePath   string
 	WriteToLocalPath string

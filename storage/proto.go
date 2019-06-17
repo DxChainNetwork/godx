@@ -21,21 +21,21 @@ const (
 
 const (
 
-	// the amount of time that host provide host settings
+	// HostSettingTime is the amount of time that host provide host settings
 	HostSettingTime = 60 * time.Second
 
-	// the amount of time that the client and host have to negotiate a download request batch.
+	// DownloadTime is the amount of time that the client and host have to negotiate a download request batch.
 	DownloadTime = 600 * time.Second
 
-	// the minimum amount of time that the client and host have to negotiate a storage contract revision.
+	// ContractRevisionTime is the minimum amount of time that the client and host have to negotiate a storage contract revision.
 	ContractRevisionTime = 600 * time.Second
 
-	// the amount of time that the client and host have to negotiate a new storage contract.
+	// FormContractTime is the amount of time that the client and host have to negotiate a new storage contract.
 	FormContractTime = 360 * time.Second
 )
 
 type (
-	// Structure about 'Storage Create' protocol
+
 	// ContractCreateRequest contains storage contract info and client pk
 	ContractCreateRequest struct {
 		StorageContract types.StorageContract

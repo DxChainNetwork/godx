@@ -27,7 +27,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -86,9 +85,6 @@ type StorageClient struct {
 
 	// get the P2P server for adding peer
 	p2pServer *p2p.Server
-
-	// file management.
-	staticFileSet *dxfile.FileSet
 }
 
 // New initializes StorageClient object

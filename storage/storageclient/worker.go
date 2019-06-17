@@ -17,7 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// A worker listens for work on a certain host.
+// Listen for a work on a certain host.
 type worker struct {
 
 	// The contract and host used by this worker.
@@ -53,7 +53,7 @@ type worker struct {
 	mu       sync.Mutex
 }
 
-// activateWorkerPool will grab the set of contracts from the contract manager and
+// ActivateWorkerPool will grab the set of contracts from the contract manager and
 // update the worker pool to match.
 func (c *StorageClient) activateWorkerPool() {
 
@@ -120,7 +120,7 @@ func (c *StorageClient) activateWorkerPool() {
 	c.lock.Unlock()
 }
 
-// workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
+// WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
 
 	// TODO: kill上传任务
@@ -161,7 +161,7 @@ func (w *worker) workLoop() {
 	}
 }
 
-// drop all of the download task given to the worker.
+// Drop all of the download task given to the worker.
 func (w *worker) killDownloading() {
 	w.downloadMu.Lock()
 	var removedSegments []*unfinishedDownloadSegment
@@ -176,7 +176,7 @@ func (w *worker) killDownloading() {
 	}
 }
 
-// add a segment to the worker's queue.
+// Add a segment to the worker's queue.
 func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
 	w.downloadMu.Lock()
 	terminated := w.downloadTerminated
@@ -197,7 +197,7 @@ func (w *worker) queueDownloadSegment(uds *unfinishedDownloadSegment) {
 	}
 }
 
-// pull the next potential segment out of the work queue for downloading.
+// Pull the next potential segment out of the work queue for downloading.
 func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	w.downloadMu.Lock()
 	defer w.downloadMu.Unlock()
@@ -210,7 +210,7 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	return nextSegment
 }
 
-// actually perform a download task
+// Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	// check the uds whether can be the worker performed
@@ -291,7 +291,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	uds.mu.Unlock()
 }
 
-// check the given download segment whether there is work to do, and update its info
+// Check the given download segment whether there is work to do, and update its info
 func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinishedDownloadSegment {
 	uds.mu.Lock()
 	segmentComplete := uds.sectorsCompleted >= uds.erasureCode.MinSectors() || uds.download.isComplete()
@@ -326,7 +326,7 @@ func (w *worker) processDownloadSegment(uds *unfinishedDownloadSegment) *unfinis
 	return nil
 }
 
-// returns true if the worker is on cooldown for download failure.
+// Return true if the worker is on cooldown for download failure.
 func (w *worker) onDownloadCooldown() bool {
 	requiredCooldown := DownloadFailureCooldown
 	for i := 0; i < w.ownedDownloadConsecutiveFailures && i < MaxConsecutivePenalty; i++ {
@@ -335,7 +335,7 @@ func (w *worker) onDownloadCooldown() bool {
 	return time.Now().Before(w.ownedDownloadRecentFailure.Add(requiredCooldown))
 }
 
-// remove the worker from an unfinished download segment,
+// Remove the worker from an unfinished download segment,
 // and then un-register the sectors that it grabbed.
 //
 // NOTE: This function should only be called when a worker download fails.
