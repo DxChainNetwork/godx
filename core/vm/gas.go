@@ -18,12 +18,11 @@ package vm
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/ethdb"
-
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -42,8 +41,8 @@ const (
 )
 
 var (
-	GasCalculationParamsNumberWorng = errors.New("The parameter was wrong.")
-	GasCalculationinsufficient      = errors.New("This gas is insufficient")
+	errGasCalculationParamsNumberWrong = errors.New("the parameter was wrong")
+	errGasCalculationInsufficient      = errors.New("this gas is insufficient")
 )
 
 // calcGas returns the actual gas cost of the call.
@@ -68,12 +67,12 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	return callCost.Uint64(), nil
 }
 
-// calculate the gas of storage contract execution
+// RemainGas calculate the gas of storage contract execution
 func RemainGas(args ...interface{}) (uint64, []interface{}) {
 	result := make([]interface{}, 0)
 	gas, ok := args[0].(uint64)
 	if len(args) < 2 || !ok {
-		result = append(result, GasCalculationParamsNumberWorng)
+		result = append(result, errGasCalculationParamsNumberWrong)
 		return gas, result
 	}
 
@@ -82,11 +81,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 	// rlp.DecodeBytes
 	case func([]byte, interface{}) error:
 		if gas < params.DecodeGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 4 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		paramsPre, ok := args[2].([]byte)
@@ -102,14 +101,14 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		result = append(result, nil)
 		return gas, result
 
-		//CheckFormContract
+		//CheckContractCreate
 	case func(*EVM, types.StorageContract, uint64) error:
 		if gas < params.CheckFileGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		evm, _ := args[2].(*EVM)
@@ -127,11 +126,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		//CheckReversionContract
 	case func(*EVM, types.StorageContractRevision, uint64) error:
 		if gas < params.CheckFileGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		evm, _ := args[2].(*EVM)
@@ -149,11 +148,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		//CheckStorageProof
 	case func(*EVM, types.StorageProof, uint64) error:
 		if gas < params.CheckFileGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		evm, _ := args[2].(*EVM)
@@ -171,11 +170,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		//StoreStorageContract
 	case func(ethdb.Database, common.Hash, types.StorageContract) error:
 		if gas < params.SstoreSetGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		db, _ := args[2].(ethdb.Database)
@@ -193,11 +192,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		//StoreExpireStorageContract
 	case func(ethdb.Database, common.Hash, uint64) error:
 		if gas < params.SstoreSetGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		db, _ := args[2].(ethdb.Database)
@@ -215,11 +214,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		//CheckMultiSignatures
 	case func(interface{}, uint64, [][]byte) error:
 		if gas < params.CheckMultiSignaturesGas {
-			result = append(result, GasCalculationinsufficient)
+			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
 		if len(args) != 5 {
-			result = append(result, GasCalculationParamsNumberWorng)
+			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
 		bl, _ := args[4].(uint64)
@@ -233,7 +232,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		result = append(result, nil)
 		return gas, result
 	default:
-		result = append(result, GasCalculationParamsNumberWorng)
+		result = append(result, errGasCalculationParamsNumberWrong)
 		return gas, result
 	}
 

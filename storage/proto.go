@@ -37,7 +37,7 @@ const (
 	ContractRevisionTime = 600 * time.Second
 
 	// the amount of time that the client and host have to negotiate a new storage contract.
-	FormContractTime = 360 * time.Second
+	ContractCreateTime = 360 * time.Second
 )
 
 type (

@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/core/vm"
-	"github.com/DxChainNetwork/godx/rlp"
 	"io"
 	"math/big"
 	"math/bits"
@@ -23,9 +21,11 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
@@ -1022,6 +1022,7 @@ func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) e
 func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	precompiled := vm.PrecompiledEVMFileContracts
 	block, err := sc.ethBackend.GetBlockByHash(blockHash)
+
 	if err != nil {
 		errGet = err
 		return
@@ -1038,7 +1039,9 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 			var hac types.HostAnnouncement
 			err := rlp.DecodeBytes(tx.Data(), &hac)
 			if err != nil {
+
 				sc.log.Crit("Rlp decoding error as hostAnnouncements:", err)
+
 				continue
 			}
 			hostAnnouncements = append(hostAnnouncements, hac)
@@ -1047,4 +1050,31 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 		}
 	}
 	return
+}
+
+//GetPaymentAddress get the account address used to sign the storage contract.
+// If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+func (sc *StorageClient) GetPaymentAddress() (common.Address, error) {
+	sc.lock.Lock()
+	paymentAddress := sc.PaymentAddress
+	sc.lock.Unlock()
+
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+
+	//Local node does not contain wallet
+	if wallets := sc.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
+		if accountList := wallets[0].Accounts(); len(accountList) > 0 {
+			paymentAddress := accountList[0].Address
+			sc.lock.Lock()
+			//the first address in the local wallet will be used as the paymentAddress by default.
+			sc.PaymentAddress = paymentAddress
+			sc.lock.Unlock()
+			sc.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			return paymentAddress, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
