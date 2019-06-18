@@ -333,7 +333,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	if err != nil {
 		for j := 0; j < i; j++ {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.RemoveSector(sectorsGained[j])
+			h.DeleteSector(sectorsGained[j])
 		}
 		return err
 	}
@@ -354,14 +354,14 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 		//This operation is wrong, you need to restore the sector
 		for i := range sectorsGained {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.RemoveSector(sectorsGained[i])
+			h.DeleteSector(sectorsGained[i])
 		}
 		return errDBso
 	}
 	//Delete the deleted sector
 	for k := range sectorsRemoved {
 		//The error of restoring a sector doesn't make any sense to us.
-		h.RemoveSector(sectorsRemoved[k])
+		h.DeleteSector(sectorsRemoved[k])
 	}
 
 	// Update the financial information for the storage responsibility - apply the
@@ -413,7 +413,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos storageResponsibilityStatus) error {
 
 	//Unchecked error, even if there is an error, we want to delete
-	h.RemoveSectorBatch(so.SectorRoots)
+	h.DeleteSectorBatch(so.SectorRoots)
 
 	switch sos {
 	case unresolved:

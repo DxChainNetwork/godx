@@ -177,6 +177,7 @@ func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
+	return nil
 }
 
 // New Initialize the Host, including init the structure

@@ -394,6 +394,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   filesystem.NewPublicFileSystemAPI(s.storageClient.GetFileSystem()),
 				Public:    true,
+			}, {
+				Namespace: "storagehost",
+				Version:   "1.0",
+				Service:   storagehost.NewHostPrivateAPI(s.storageHost),
+				Public:    false,
 			},
 		}...)
 	}
