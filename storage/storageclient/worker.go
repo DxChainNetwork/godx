@@ -210,6 +210,13 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) {
 
+	// check this contract whether is renewing
+	contractID := w.contract.ID
+	if w.client.contractManager.IsRenewing(contractID) {
+		w.client.log.Debug("renew contract is doing, can't download")
+		return
+	}
+
 	// check the uds whether can be the worker performed
 	uds = w.processDownloadSegment(uds)
 	if uds == nil {

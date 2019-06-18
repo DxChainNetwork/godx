@@ -535,9 +535,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		estProofHashes = uint64(len(req.Sections) * estHashesPerProof)
 	}
 	estBandwidth := totalLength + estProofHashes*uint64(storage.HashSize)
-	if estBandwidth < storage.RPCMinLen {
-		estBandwidth = storage.RPCMinLen
-	}
 
 	// calculate sector accesses
 	sectorAccesses := make(map[common.Hash]struct{})
@@ -790,22 +787,17 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	}
 
 	// calculate which segments to download
-	minSegment, minSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
-	maxSegment, maxSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
+	startSegmentIndex, startSegmentOffset := params.file.SegmentIndexByOffset(params.offset)
+	endSegmentIndex, endSegmentOffset := params.file.SegmentIndexByOffset(params.offset + params.length)
 
-	if maxSegment > 0 && maxSegmentOffset == 0 {
-		maxSegment--
-	}
-
-	// check the requested segment number
-	if minSegment == params.file.NumSegments() || maxSegment == params.file.NumSegments() {
-		return nil, errors.New("download segment out the boundary of the remote file")
+	if endSegmentIndex > 0 && endSegmentOffset == 0 {
+		endSegmentIndex--
 	}
 
 	// map from the host id to the index of the sector within the segment
-	segmentMaps := make([]map[string]downloadSectorInfo, maxSegment-minSegment+1)
-	for segmentIndex := minSegment; segmentIndex <= maxSegment; segmentIndex++ {
-		segmentMaps[segmentIndex-minSegment] = make(map[string]downloadSectorInfo)
+	segmentMaps := make([]map[string]downloadSectorInfo, endSegmentIndex-startSegmentIndex+1)
+	for segmentIndex := startSegmentIndex; segmentIndex <= endSegmentIndex; segmentIndex++ {
+		segmentMaps[segmentIndex-startSegmentIndex] = make(map[string]downloadSectorInfo)
 		sectors, err := params.file.Sectors(uint64(segmentIndex))
 		if err != nil {
 			return nil, err
@@ -814,11 +806,11 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 			for _, sector := range sectorSet {
 
 				// check that a worker should not have two sectors for the same segment
-				_, exists := segmentMaps[segmentIndex-minSegment][sector.HostID.String()]
+				_, exists := segmentMaps[segmentIndex-startSegmentIndex][sector.HostID.String()]
 				if exists {
 					client.log.Error("a worker has multiple sectors for the same segment")
 				}
-				segmentMaps[segmentIndex-minSegment][sector.HostID.String()] = downloadSectorInfo{
+				segmentMaps[segmentIndex-startSegmentIndex][sector.HostID.String()] = downloadSectorInfo{
 					index: uint64(sectorIndex),
 					root:  sector.MerkleRoot,
 				}
@@ -830,20 +822,20 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 	writeOffset := int64(0)
 
 	// record how many segments remained after every downloading
-	d.segmentsRemaining += maxSegment - minSegment + 1
+	d.segmentsRemaining += endSegmentIndex - startSegmentIndex + 1
 
 	// queue the downloads for each segment
-	for i := minSegment; i <= maxSegment; i++ {
+	for i := startSegmentIndex; i <= endSegmentIndex; i++ {
 		uds := &unfinishedDownloadSegment{
 			destination:  params.destination,
 			erasureCode:  params.file.ErasureCode(),
 			segmentIndex: i,
-			segmentMap:   segmentMaps[i-minSegment],
+			segmentMap:   segmentMaps[i-startSegmentIndex],
 			segmentSize:  params.file.SegmentSize(),
 			sectorSize:   params.file.SectorSize(),
 
 			// increase target by 25ms per segment
-			latencyTarget:       params.latencyTarget + (25 * time.Duration(i-minSegment)),
+			latencyTarget:       params.latencyTarget + (25 * time.Duration(i-startSegmentIndex)),
 			needsMemory:         params.needsMemory,
 			priority:            params.priority,
 			completedSectors:    make([]bool, params.file.ErasureCode().NumSectors()),
@@ -854,15 +846,15 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 		}
 
 		// set the offset of the segment to begin downloading
-		if i == minSegment {
-			uds.fetchOffset = minSegmentOffset
+		if i == startSegmentIndex {
+			uds.fetchOffset = startSegmentOffset
 		} else {
 			uds.fetchOffset = 0
 		}
 
 		// set the number of bytes to download the segment
-		if i == maxSegment && maxSegmentOffset != 0 {
-			uds.fetchLength = maxSegmentOffset - uds.fetchOffset
+		if i == endSegmentIndex && endSegmentOffset != 0 {
+			uds.fetchLength = endSegmentOffset - uds.fetchOffset
 		} else {
 			uds.fetchLength = params.file.SegmentSize() - uds.fetchOffset
 		}
@@ -898,8 +890,20 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if p.WriteToLocalPath == "" {
 		return nil, errors.New("not specified local path")
 	}
+
+	// if the parameter WriteToLocalPath is not a absolute path, set default
 	if p.WriteToLocalPath != "" && !filepath.IsAbs(p.WriteToLocalPath) {
-		return nil, errors.New("local path must be absolute")
+		fileInfo, err := os.Stat(p.WriteToLocalPath)
+		if err != nil {
+			return nil, err
+		}
+
+		nowFormat := time.Now().Format(time.RFC3339)
+		if fileInfo.IsDir() {
+			p.WriteToLocalPath = client.persistDir + p.WriteToLocalPath + "/download_" + nowFormat
+		} else {
+			p.WriteToLocalPath = client.persistDir + "/download" + p.WriteToLocalPath
+		}
 	}
 
 	// instantiate the file to write the downloaded data

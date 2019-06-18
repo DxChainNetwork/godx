@@ -24,9 +24,8 @@ import (
 )
 
 const (
-	postponedExecutionBuffer    = uint64(144) //Total time to sign the contract
-	postponedExecution          = 3           //Total length of time to start a test task
-	confirmedBufferHeight       = 40          //signing transaction not confirmed maximum time
+	postponedExecution          = 3  //Total length of time to start a test task
+	confirmedBufferHeight       = 40 //signing transaction not confirmed maximum time
 	errGetStorageResponsibility = "failed to get data from DB as I wished "
 	errPutStorageResponsibility = "failed to put data from DB as I wished "
 	//PrefixStorageResponsibility db prefix for StorageResponsibility
@@ -36,7 +35,12 @@ const (
 )
 
 //Storage contract should not be empty
-var emptyStorageContract = types.StorageContract{}
+var (
+	emptyStorageContract = types.StorageContract{}
+
+	//Total time to sign the contract
+	postponedExecutionBuffer = storage.BlocksPerDay
+)
 
 const (
 	unresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning

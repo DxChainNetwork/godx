@@ -280,10 +280,6 @@ const (
 
 	// SegmentSize is the segment size is used when taking the Merkle root of a file.
 	SegmentSize = 64
-
-	// RPCMinLen is the minimum size of an RPC message. If an encoded message
-	// would be smaller than RPCMinLen, it is padded with random data.
-	RPCMinLen = uint64(4096)
 )
 
 // ParsedAPI will parse the APIs saved in the Ethereum
