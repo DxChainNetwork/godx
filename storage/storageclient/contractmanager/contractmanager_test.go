@@ -170,3 +170,7 @@ func (st *storageClientBackendContractManager) Disconnect(session *storage.Sessi
 func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
 	return nil, nil
 }
+
+func (st *storageClientBackendContractManager) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	return
+}

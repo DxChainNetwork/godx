@@ -161,7 +161,7 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 	}
 
 	// if not, get all hosts information and reset the tree
-	hostinfos := t.all()
+	hostInfos := t.all()
 
 	t.root = &node{
 		count: 1,
@@ -171,8 +171,8 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 
 	// re-insert the host information
 	var errs error
-	for _, hostinfo := range hostinfos {
-		err := t.insert(hostinfo)
+	for _, hostInfo := range hostInfos {
+		err := t.insert(hostInfo)
 		if err != nil {
 			errs = common.ErrCompose(errs, err)
 		}
