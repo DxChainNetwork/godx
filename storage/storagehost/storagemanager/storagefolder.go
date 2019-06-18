@@ -36,11 +36,6 @@ type (
 		// represent in decimal, but use as binary
 		usage []bitVector
 
-		// TODO: Remove or add back freeSectors
-		//// free Sectors mark the sector actually free but marked as used
-		//// in Usage
-		//freeSectors map[sectorID]uint32
-
 		// sector is the total number of sector in this folder
 		numSectors uint64
 

@@ -165,6 +165,12 @@ func (sm *storageManager) Close() (fullErr error) {
 // ResizeFolder resize the folder to specified size
 func (sm *storageManager) ResizeFolder(folderPath string, size uint64) (err error) {
 	// Read the folder numSectors
+	if sizeToNumSectors(size) > maxSectorsPerFolder {
+		return fmt.Errorf("folder size too large")
+	}
+	if sizeToNumSectors(size) < minSectorsPerFolder {
+		return fmt.Errorf("folder size too small")
+	}
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
