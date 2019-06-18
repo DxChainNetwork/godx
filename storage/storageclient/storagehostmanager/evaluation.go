@@ -14,25 +14,25 @@ import (
 
 // calculateEvaluationFunc will generate the function that returns the storage host evaluation
 // for each factor
-func (hm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) storagehosttree.EvaluationFunc {
+func (shm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) storagehosttree.EvaluationFunc {
 	return func(info storage.HostInfo) storagehosttree.HostEvaluation {
 		return storagehosttree.EvaluationCriteria{
-			PresenceFactor:         hm.presenceFactorCalc(info),
-			DepositFactor:          hm.depositFactorCalc(info, rent),
-			InteractionFactor:      hm.interactionFactorCalc(info),
-			ContractPriceFactor:    hm.contractPriceFactorCalc(info, rent),
-			StorageRemainingFactor: hm.storageRemainingFactorCalc(info),
-			UptimeFactor:           hm.uptimeFactorCalc(info),
+			PresenceFactor:         shm.presenceFactorCalc(info),
+			DepositFactor:          shm.depositFactorCalc(info, rent),
+			InteractionFactor:      shm.interactionFactorCalc(info),
+			ContractPriceFactor:    shm.contractPriceFactorCalc(info, rent),
+			StorageRemainingFactor: shm.storageRemainingFactorCalc(info),
+			UptimeFactor:           shm.uptimeFactorCalc(info),
 		}
 	}
 }
 
 // presenceFactorCalc calculates the factor value based on the existence of the
 // storage host. The earlier it was discovered, the presence factor will be higher
-func (hm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 {
+func (shm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 {
 	var base float64 = 1
 
-	switch presence := hm.blockHeight - info.FirstSeen; {
+	switch presence := shm.blockHeight - info.FirstSeen; {
 	case presence < 0:
 		return base
 	case presence < 144:
@@ -56,9 +56,9 @@ func (hm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 
 	return base
 }
 
-// depostFactor calculates the factor value based on the storage host's deposit setting. The higher
+// depositFactorCalc calculates the factor value based on the storage host's deposit setting. The higher
 // the deposit is, the higher evaluation it will get
-func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
+func (shm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
 
 	// make sure RentPayment's fields are non zeros
 	rentPaymentValidation(storage.RentPayment{})
@@ -98,7 +98,7 @@ func (hm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent stor
 
 // interactionFactorCalc calculates the factor value based on the historical success interactions
 // and failed interactions. More success interactions will cause higher evaluation
-func (hm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float64 {
+func (shm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float64 {
 	hs := info.HistoricSuccessfulInteractions + 30
 	hf := info.HistoricFailedInteractions + 1
 	ratio := hs / (hs + hf)
@@ -107,7 +107,7 @@ func (hm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float
 
 // contractPriceFactorCalc calculates the factor value based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
-func (hm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
+func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
 	// make sure the rent has non-zero fields
 	rentPaymentValidation(rent)
 
@@ -152,7 +152,7 @@ func (hm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, ren
 
 // storageRemainingFactorCalc calculates the factor value based on the storage remaining, the more storage
 // space the storage host remained, higher evaluation it will got
-func (hm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo) float64 {
+func (shm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo) float64 {
 	var base float64 = 1
 
 	switch rs := info.RemainingStorage; {
@@ -182,7 +182,7 @@ func (hm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo) 
 }
 
 // uptimeFactorCalc will punish the storage host who are frequently been offline
-func (hm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
+func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
 	switch length := len(info.ScanRecords); length {
 	case 0:
 		return 0.25
@@ -200,12 +200,12 @@ func (hm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
 		}
 		return 0.05
 	default:
-		return hm.uptimeEvaluation(info)
+		return shm.uptimeEvaluation(info)
 	}
 }
 
 // uptimeEvaluation will evaluate the uptime the storage host has
-func (hm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
+func (shm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 	downtime := info.HistoricDowntime
 	uptime := info.HistoricUptime
 	recentScanTime := info.ScanRecords[0].Timestamp
@@ -214,7 +214,7 @@ func (hm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 	for _, record := range info.ScanRecords[1:] {
 		// scan time validation
 		if recentScanTime.After(record.Timestamp) {
-			hm.log.Warn("Warning: the scan records is not sorted based on the scan time")
+			shm.log.Warn("the scan records is not sorted based on the scan time")
 			continue
 		}
 

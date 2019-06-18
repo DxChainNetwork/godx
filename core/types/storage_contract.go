@@ -16,7 +16,6 @@ type StorageContractRLPHash interface {
 }
 
 type HostAnnouncement struct {
-
 	// host enode url
 	NetAddress string
 	Signature  []byte

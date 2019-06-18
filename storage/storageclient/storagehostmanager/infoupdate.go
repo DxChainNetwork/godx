@@ -1,7 +1,6 @@
 package storagehostmanager
 
 import (
-	"fmt"
 	"math"
 	"time"
 
@@ -62,7 +61,7 @@ func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 		time.Now().Sub(storedInfo.ScanRecords[0].Timestamp) > maxDowntime {
 		err := shm.remove(storedInfo.EnodeID)
 		if err != nil {
-			log.Error("failed to remove the storage host from the tree: %s", storedInfo.EnodeID.String())
+			log.Error("failed to remove the storage host from the tree", "hostID", storedInfo.EnodeID.String(), "err", err.Error())
 		}
 		return
 	}
@@ -86,12 +85,12 @@ func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
 	if !exists {
 		err := shm.insert(storedInfo)
 		if err != nil {
-			log.Error("failed to insert the storage host information: ", err.Error())
+			log.Error("failed to insert the storage host information", "err", err.Error())
 		}
 	} else {
 		err := shm.modify(storedInfo)
 		if err != nil {
-			log.Error("failed to modify the storage host information: ", err.Error())
+			log.Error("failed to modify the storage host information", "err", err.Error())
 		}
 	}
 
@@ -167,7 +166,7 @@ func (shm *StorageHostManager) IncrementSuccessfulInteractions(id enode.ID) {
 	host.RecentSuccessfulInteractions++
 
 	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
-		shm.log.Error(fmt.Sprintf("failed to update successful interactions %s", err.Error()))
+		shm.log.Error("failed to update successful interactions", "err", err.Error())
 	}
 }
 
@@ -189,6 +188,6 @@ func (shm *StorageHostManager) IncrementFailedInteractions(id enode.ID) {
 	// update the recent failed interactions, recalculate the storage host evaluation
 	host.RecentFailedInteractions++
 	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
-		shm.log.Error(fmt.Sprintf("failed to update failed interactions %s", err.Error()))
+		shm.log.Error("failed to increment the failed interactions", "err", err.Error())
 	}
 }

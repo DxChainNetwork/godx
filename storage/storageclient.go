@@ -56,6 +56,7 @@ type ClientBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 }
 
 // a metadata about a storage contract.
