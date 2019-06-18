@@ -14,10 +14,8 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
@@ -27,9 +25,6 @@ type StorageHostManager struct {
 	// storage client and eth backend
 	b   storage.ClientBackend
 	eth storage.EthBackend
-
-	// peer to peer communication
-	p2pServer *p2p.Server
 
 	rent            storage.RentPayment
 	evalFunc        storagehosttree.EvaluationFunc
@@ -59,9 +54,6 @@ type StorageHostManager struct {
 	filteredTree  *storagehosttree.StorageHostTree
 
 	blockHeight uint64
-
-	// storage contract set
-	scs contractset.StorageContractSet
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
@@ -77,31 +69,19 @@ func New(persistDir string) *StorageHostManager {
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
-	shm.filteredTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
-	// init storage contract set
-	scs, err := contractset.New(persistDir)
-	if err != nil {
-		shm.log.Error("failed to new storage contract set", "error", err)
-	}
-
-	// New func maybe return error and not nil StorageContractSet
-	if scs != nil {
-		shm.scs = *scs
-	}
-
-	shm.log.Info("Storage host manager initialized")
+	shm.log.Info("Storage Host Manager Initialized")
 
 	return shm
 }
 
 // Start will start to load prior settings, start go routines to automatically save
 // the settings every 2 min, and go routine to start storage host maintenance
-func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend) error {
+func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	// initialization
 	shm.b = b
-	shm.p2pServer = server
 
 	// load prior settings
 	err := shm.loadSettings()
@@ -130,7 +110,7 @@ func (shm *StorageHostManager) Start(server *p2p.Server, b storage.ClientBackend
 	return nil
 }
 
-// Close will send stop signal to threadmanager, terminate all the
+// Close will send stop signal to routine manager, terminate all the
 // running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
@@ -182,17 +162,53 @@ func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err err
 	return
 }
 
-// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
-func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
-	return shm.storageHostTree.RetrieveHostInfo(id)
+// RetrieveRentPayment will return the current rent payment settings for storage host manager
+func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+	return shm.rent
 }
 
-// EnableIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided.
+// Before returning the storage host information, the settings will be validated first
+func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
+	shm.lock.RLock()
+	whitelist := shm.filterMode == WhitelistFilter
+	filteredHosts := shm.filteredHosts
+	shm.lock.RUnlock()
+
+	// get the storage host information
+	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
+		return
+	}
+
+	// check if the storage host should be filtered
+	// if WhitelistFilter and the host is stored inside the filtered host, meaning not filtered
+	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
+	// cannot sign contract with it
+	_, exist := filteredHosts[hi.EnodeID]
+	hi.Filtered = whitelist != exist
+
+	// update host historical interaction record before returning
+	shm.lock.RLock()
+	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
+	shm.lock.RUnlock()
+	return
+}
+
+// SetIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
 // who are located in the same network, they will be marked as bad storage hosts
-func (shm *StorageHostManager) EnableIPViolationCheck() {
+func (shm *StorageHostManager) SetIPViolationCheck(violationCheck bool) {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
-	shm.ipViolationCheck = true
+	shm.ipViolationCheck = violationCheck
+}
+
+// RetrieveIPViolationCheckSetting will return the current tipViolationCheck
+func (shm *StorageHostManager) RetrieveIPViolationCheckSetting() (violationCheck bool) {
+	shm.lock.RLock()
+	shm.lock.RUnlock()
+	return shm.ipViolationCheck
 }
 
 // FilterIPViolationHosts will evaluate the storage hosts passed in. For hosts located under the same
@@ -289,9 +305,15 @@ func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail s
 
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
+	// insert the host information into the storage host tree
 	err := shm.storageHostTree.Insert(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID]
 
+	// check if the host information contained in the filtered host
+	shm.lock.RLock()
+	_, exists := shm.filteredHosts[hi.EnodeID]
+	shm.lock.RUnlock()
+
+	// if the filter mode is the whitelist, add the one into filtered host tree
 	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {
@@ -327,9 +349,4 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
-}
-
-// get storage contract set
-func (shm *StorageHostManager) GetStorageContractSet() *contractset.StorageContractSet {
-	return &shm.scs
 }

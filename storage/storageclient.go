@@ -5,7 +5,10 @@
 package storage
 
 import (
+	"context"
+	"github.com/DxChainNetwork/godx/params"
 	"io"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 
@@ -26,9 +29,15 @@ type EthBackend interface {
 	GetBlockChain() *core.BlockChain
 	SetupConnection(hostEnodeUrl string) (*Session, error)
 	Disconnect(session *Session, hostEnodeUrl string) error
+	GetBlockByNumber(number uint64) (*types.Block, error)
 
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -39,11 +48,22 @@ type ClientBackend interface {
 	GetStorageHostSetting(hostEnodeUrl string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
+	SetupConnection(hostEnodeUrl string) (*Session, error)
+	AccountManager() *accounts.Manager
+	Disconnect(session *Session, hostEnodeUrl string) error
+	ChainConfig() *params.ChainConfig
+	CurrentBlock() *types.Block
+	SendTx(ctx context.Context, signedTx *types.Transaction) error
+	SuggestPrice(ctx context.Context) (*big.Int, error)
+	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
+	GetPaymentAddress() (common.Address, error)
+	IsRevisionSessionDone(contractID ContractID) bool
 }
 
 // a metadata about a storage contract.
 type ClientContract struct {
-	ContractID  common.Hash
+	ContractID  ContractID
 	HostID      enode.ID
 	Transaction types.Transaction
 
@@ -58,20 +78,11 @@ type ClientContract struct {
 	StorageSpending  common.BigInt
 	UploadSpending   common.BigInt
 
-	// record utility information about the contract.
-	Utility ContractUtility
+	// record status information about the contract.
+	Status ContractStatus
 
 	// the amount of money that the client spent or locked while forming a contract.
 	TotalCost common.BigInt
-}
-
-// record utility of a given contract.
-type ContractUtility struct {
-	GoodForUpload bool
-	GoodForRenew  bool
-
-	// only be set to false.
-	Locked bool
 }
 
 // the parameters to download from outer request
@@ -80,6 +91,6 @@ type ClientDownloadParameters struct {
 	HttpWriter  io.Writer
 	Length      uint64
 	Offset      uint64
-	DxFilePath  string
+	DxFilePath  DxPath
 	Destination string
 }

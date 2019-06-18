@@ -6,6 +6,7 @@ package dxfile
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -16,7 +17,7 @@ func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*storage.Inser
 		return nil, fmt.Errorf("file Offset cannot be negative: %d", offset)
 	}
 	return &storage.InsertUpdate{
-		FileName: df.filePath,
+		FileName: string(df.filePath),
 		Offset:   offset,
 		Data:     data,
 	}, nil
@@ -25,6 +26,6 @@ func (df *DxFile) createInsertUpdate(offset uint64, data []byte) (*storage.Inser
 // createDeleteUpdate create a DxFile deletion update
 func (df *DxFile) createDeleteUpdate() (*storage.DeleteUpdate, error) {
 	return &storage.DeleteUpdate{
-		FileName: df.filePath,
+		FileName: string(df.filePath),
 	}, nil
 }

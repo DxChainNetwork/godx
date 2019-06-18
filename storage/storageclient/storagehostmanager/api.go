@@ -7,6 +7,7 @@ package storagehostmanager
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -34,22 +35,6 @@ func (api *PublicStorageHostManagerAPI) ActiveStorageHosts() (activeStorageHosts
 // AllStorageHosts will return all storage hosts information stored from the storage host pool
 func (api *PublicStorageHostManagerAPI) AllStorageHosts() (allStorageHosts []storage.HostInfo) {
 	return api.shm.storageHostTree.All()
-}
-
-// TODO: (mzhang) search based on the public key
-
-// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
-// that are used to configure settings
-type PrivateStorageHostManagerAPI struct {
-	shm *StorageHostManager
-}
-
-// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
-// which implemented a bunch of API methods
-func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
-	return &PrivateStorageHostManagerAPI{
-		shm: shm,
-	}
 }
 
 // StorageHost will return a specific host detailed information from the storage host pool
@@ -86,6 +71,48 @@ func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHo
 		})
 	}
 
+	return
+}
+
+// FilterMode will return the current storage host manager filter mode setting
+func (api *PublicStorageHostManagerAPI) FilterMode() (fm string) {
+	return api.shm.RetrieveFilterMode()
+}
+
+// FilteredHosts will return hosts stored in the filtered host tree
+func (api *PublicStorageHostManagerAPI) FilteredHosts() (allFiltered []storage.HostInfo) {
+	return api.shm.filteredTree.All()
+}
+
+// PrivateStorageHostManagerAPI defines the object used to call eligible APIs
+// that are used to configure settings
+type PrivateStorageHostManagerAPI struct {
+	shm *StorageHostManager
+}
+
+// NewPrivateStorageHostManagerAPI initialize PrivateStorageHostManagerAPI object
+// which implemented a bunch of API methods
+func NewPrivateStorageHostManagerAPI(shm *StorageHostManager) *PrivateStorageHostManagerAPI {
+	return &PrivateStorageHostManagerAPI{
+		shm: shm,
+	}
+}
+
+// SetFilterMode will be used to change the current storage host manager
+// filter mode settings. There are total of 3 filter modes available
+func (api *PrivateStorageHostManagerAPI) SetFilterMode(fm string, hostInfos []enode.ID) (resp string, err error) {
+	var filterMode FilterMode
+	if filterMode, err = ToFilterMode(fm); err != nil {
+		err = fmt.Errorf("failed to set the filter mode: %s", err.Error())
+		return
+	}
+
+	if err = api.shm.SetFilterMode(filterMode, hostInfos); err != nil {
+		err = fmt.Errorf("failed to set the filter mode: %s", err.Error())
+		return
+	}
+
+	resp = fmt.Sprintf("the filter mode has been successfully set to %s", fm)
 	return
 }
 
@@ -148,4 +175,35 @@ func (api *PublicHostManagerDebugAPI) InsertActiveHostInfo(amount int) string {
 		}
 	}
 	return fmt.Sprintf("Successfully inserted %v Active Storage Host Information", amount)
+}
+
+// InsertHostInfoIPTime is used for the test case in contractManager module
+func (api *PublicHostManagerDebugAPI) InsertHostInfoIPTime(amount int, id enode.ID, ip string, ipChanged time.Time) (err error) {
+	for i := 0; i < amount; i++ {
+		hi := hostInfoGeneratorIPID(ip, id, ipChanged)
+		if err = api.shm.insert(hi); err != nil {
+			return
+		}
+	}
+	return
+}
+
+// InsertHostInfoHighEval is used for the test case in contractManager module, which is used
+// to insert contract with higher evaluation
+func (api *PublicHostManagerDebugAPI) InsertHostInfoHighEval(id enode.ID) (err error) {
+	hi := hostInfoGeneratorHighEvaluation(id)
+	return api.shm.insert(hi)
+}
+
+// InsertHostInfoLowEval is used for the test case in contractManager module, which is used
+// to insert contract with lower evaluation (evaluation that is smaller than 1)
+func (api *PublicHostManagerDebugAPI) InsertHostInfoLowEval(id enode.ID) (err error) {
+	hi := hostInfoGeneratorLowEvaluation(id)
+	return api.shm.insert(hi)
+}
+
+// RetrieveRentPaymentInfo is used to get the rentPayment settings, which is used for debugging
+// purposes
+func (api *PublicHostManagerDebugAPI) RetrieveRentPaymentInfo() (rentPayment storage.RentPayment) {
+	return api.shm.RetrieveRentPayment()
 }

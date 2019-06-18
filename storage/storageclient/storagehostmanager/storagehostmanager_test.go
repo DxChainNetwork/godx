@@ -32,11 +32,6 @@ func TestStorageHostManager_Insert(t *testing.T) {
 		t.Fatalf("failed to insert the host information into the storage host tree")
 	}
 
-	_, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
-	if exist {
-		t.Fatalf("the host information should not be inserted, it is not contained in the filtered host field")
-	}
-
 	shmtest1.filteredHosts[hostInfo.EnodeID] = struct{}{}
 	err = shmtest1.insert(hostInfo)
 	if err != nil && err != storagehosttree.ErrHostExists {
@@ -62,11 +57,6 @@ func TestStorageHostManager_Remove(t *testing.T) {
 	_, exist := shmtest1.storageHostTree.RetrieveHostInfo(hostInfo.EnodeID)
 	if exist {
 		t.Fatalf("failed to remove the host information into the storage host tree")
-	}
-
-	_, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
-	if !exist {
-		t.Fatalf("the host information should not be removed, it is not contained in the filtered host field")
 	}
 
 	shmtest1.filteredHosts[hostInfo.EnodeID] = struct{}{}
@@ -102,7 +92,7 @@ func TestStorageHostManager_FilterIPViolationHosts(t *testing.T) {
 	}
 
 	// enable ip violation check
-	shmtest1.EnableIPViolationCheck()
+	shmtest1.SetIPViolationCheck(true)
 	badHosts = shmtest1.FilterIPViolationHosts(hostIDs)
 	if len(badHosts) != 2 {
 		t.Fatalf("the filter mode is enabled, the number of bad hosts is expected to be 2, got %v",

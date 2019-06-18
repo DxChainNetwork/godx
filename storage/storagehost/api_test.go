@@ -1,13 +1,14 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"math/rand"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // Try the debug setter function
@@ -70,9 +71,9 @@ func TestHostDeBugAPI_LoadSetting(t *testing.T) {
 
 	financial := HostFinancialMetrics{
 		ContractCount:        uint64(rand.Intn(RANDRANGE)),
-		ContractCompensation: *big.NewInt(int64(rand.Intn(RANDRANGE))),
-		LockedStorageDeposit: *big.NewInt(int64(rand.Intn(RANDRANGE))),
-		LostRevenue:          *big.NewInt(int64(rand.Intn(RANDRANGE))),
+		ContractCompensation: common.NewBigInt(RANDRANGE),
+		LockedStorageDeposit: common.NewBigInt(RANDRANGE),
+		LostRevenue:          common.NewBigInt(RANDRANGE),
 	}
 
 	api.LoadIntConfig(internalSetting)

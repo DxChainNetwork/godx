@@ -4,9 +4,10 @@
 package eth
 
 import (
+	"sync"
+
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
-	"sync"
 )
 
 type Context interface {
@@ -17,7 +18,7 @@ type Context interface {
 type StorageContractContextInfo struct {
 	StorageContract         types.StorageContract
 	StorageContractRevision types.StorageContractRevision
-	StorageObligation       storagehost.StorageObligation
+	StorageObligation       storagehost.StorageResponsibility
 	Extra                   []byte
 }
 

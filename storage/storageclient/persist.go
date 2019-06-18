@@ -13,14 +13,13 @@ import (
 )
 
 var settingsMetadata = common.Metadata{
-	Header:  "Storage Client Settings",
+	Header:  "storage client Settings",
 	Version: PersistStorageClientVersion,
 }
 
 type persistence struct {
 	MaxDownloadSpeed int64
 	MaxUploadSpeed   int64
-	StreamCacheSize  uint64
 }
 
 func (sc *StorageClient) loadPersist() error {
@@ -54,7 +53,6 @@ func (sc *StorageClient) loadSettings() error {
 	if os.IsNotExist(err) {
 		sc.persist.MaxDownloadSpeed = DefaultMaxDownloadSpeed
 		sc.persist.MaxUploadSpeed = DefaultMaxUploadSpeed
-		sc.persist.StreamCacheSize = DefaultStreamCacheSize
 		err = sc.saveSettings()
 		if err != nil {
 			return err

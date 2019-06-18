@@ -187,10 +187,11 @@ func TestExpandFolderStop(t *testing.T) {
 		}
 		// shut down the sm
 		sm.shutdown(t, time.Second)
-		newSM, err := New(sm.persistDir)
+		newsm, err := New(sm.persistDir)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("cannot create a new sm: %v", err)
 		}
+		newSM := newsm.(*storageManager)
 		if err = newSM.Start(); err != nil {
 			t.Fatal(err)
 		}

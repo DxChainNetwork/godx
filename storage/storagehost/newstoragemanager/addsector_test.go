@@ -162,10 +162,11 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		newSM, err := New(sm.persistDir)
+		newsm, err := New(sm.persistDir)
 		if err != nil {
 			t.Fatalf("cannot create a new sm: %v", err)
 		}
+		newSM := newsm.(*storageManager)
 		if err = newSM.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -214,10 +215,11 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		newSM, err := New(sm.persistDir)
+		newsm, err := New(sm.persistDir)
 		if err != nil {
 			t.Fatalf("cannot create a new sm: %v", err)
 		}
+		newSM := newsm.(*storageManager)
 		if err = newSM.Start(); err != nil {
 			t.Fatal(err)
 		}

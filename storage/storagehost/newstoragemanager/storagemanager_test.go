@@ -95,22 +95,23 @@ func TestEmptyStorageManager(t *testing.T) {
 	}
 	sm.shutdown(t, 100*time.Millisecond)
 	// Create a new storage manager, which should have the same sectorSalt
-	newSm, err := New(sm.persistDir)
+	newsm, err := New(sm.persistDir)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("cannot create a new sm: %v", err)
 	}
-	if err = newSm.Start(); err != nil {
+	newSM := newsm.(*storageManager)
+	if err = newSM.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	if newSm.sectorSalt != prevSalt {
-		t.Fatalf("reopened storage manage not having the same sector salt\n\tprevious %v\n\tgot %v", prevSalt, newSm.sectorSalt)
+	if newSM.sectorSalt != prevSalt {
+		t.Fatalf("reopened storage manage not having the same sector salt\n\tprevious %v\n\tgot %v", prevSalt, newSM.sectorSalt)
 	}
-	if newSm.folders.size() != 0 {
-		t.Fatalf("folders size not empty: %v", newSm.folders.size())
+	if newSM.folders.size() != 0 {
+		t.Fatalf("folders size not empty: %v", newSM.folders.size())
 	}
-	if len(newSm.sectorLocks.locks) != 0 {
-		t.Fatalf("sector locks not emmpty: %v", len(newSm.sectorLocks.locks))
+	if len(newSM.sectorLocks.locks) != 0 {
+		t.Fatalf("sector locks not emmpty: %v", len(newSM.sectorLocks.locks))
 	}
 }
 

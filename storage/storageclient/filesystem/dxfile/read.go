@@ -7,6 +7,7 @@ package dxfile
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage"
 	"io"
 	"os"
 
@@ -16,7 +17,7 @@ import (
 
 // readDxFile create a new DxFile with a random ID, then open and read the dxfile from filepath
 // and load all params from the file.
-func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
+func readDxFile(filepath storage.SysPath, wal *writeaheadlog.Wal) (*DxFile, error) {
 	var ID FileID
 	_, err := rand.Read(ID[:])
 	if err != nil {
@@ -27,7 +28,7 @@ func readDxFile(filepath string, wal *writeaheadlog.Wal) (*DxFile, error) {
 		filePath: filepath,
 		wal:      wal,
 	}
-	f, err := os.OpenFile(filepath, os.O_RDONLY, 0777)
+	f, err := os.OpenFile(string(filepath), os.O_RDONLY, 0777)
 	if os.IsNotExist(err) {
 		return nil, err
 	}
