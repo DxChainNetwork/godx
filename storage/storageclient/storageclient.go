@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/rlp"
 	"io"
 	"math/big"
 	"math/bits"
@@ -28,7 +30,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
@@ -61,9 +62,6 @@ type StorageClient struct {
 	// List of workers that can be used for uploading and/or downloading.
 	workerPool map[storage.ContractID]*worker
 
-	// Cache the hosts from the last price estimation result
-	lastEstimationStorageHost []proto.StorageHostEntry
-
 	// Directories and File related
 	persist        persistence
 	persistDir     string
@@ -90,7 +88,6 @@ func New(persistDir string) (*StorageClient, error) {
 	var err error
 
 	sc := &StorageClient{
-		fileSystem:     filesystem.New(persistDir, &filesystem.AlwaysSuccessContractManager{}),
 		persistDir:     persistDir,
 		staticFilesDir: filepath.Join(persistDir, DxPathRoot),
 		log:            log.New(),
@@ -114,6 +111,9 @@ func New(persistDir string) (*StorageClient, error) {
 		err = fmt.Errorf("error initializing contract manager: %s", err.Error())
 		return nil, err
 	}
+
+	// initialize fileSystem
+	sc.fileSystem = filesystem.New(persistDir, sc.contractManager)
 
 	return sc, nil
 }
@@ -168,13 +168,11 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 		return nil
 	})
 
-	// TODO (mzhang): Subscribe consensus change
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
 
-	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
-
-	// TODO (mzhang): Register On Stop Thread Control Function, waiting for WAL
-
-	sc.log.Info("storage client started")
+	sc.log.Info("Storage Client Started")
 
 	return nil
 }
@@ -1009,7 +1007,7 @@ func (client *StorageClient) DownloadSync(p storage.ClientDownloadParameters) er
 	}
 }
 
-// performs a file download without blocking until the download is finished
+// DownloadAsync will perform a file download without blocking until the download is finished
 func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
@@ -1018,4 +1016,35 @@ func (client *StorageClient) DownloadAsync(p storage.ClientDownloadParameters) e
 
 	_, err := client.managedDownload(p)
 	return err
+}
+
+//GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
+func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	precompiled := vm.PrecompiledEVMFileContracts
+	block, err := sc.ethBackend.GetBlockByHash(blockHash)
+	if err != nil {
+		errGet = err
+		return
+	}
+	number = block.NumberU64()
+	txs := block.Transactions()
+	for _, tx := range txs {
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.HostAnnounceTransaction:
+			var hac types.HostAnnouncement
+			err := rlp.DecodeBytes(tx.Data(), &hac)
+			if err != nil {
+				sc.log.Crit("Rlp decoding error as hostAnnouncements:", err)
+				continue
+			}
+			hostAnnouncements = append(hostAnnouncements, hac)
+		default:
+			continue
+		}
+	}
+	return
 }

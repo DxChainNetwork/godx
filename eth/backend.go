@@ -379,6 +379,12 @@ func (s *Ethereum) APIs() []rpc.API {
 				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
 				Public:    true,
 			}, {
+				Namespace: "hostmanager",
+				Version:   "1.0",
+				Service:   storagehostmanager.NewPrivateStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
+				Public:    false,
+			},
+			{
 				Namespace: "clientfilesdebug",
 				Version:   "1.0",
 				Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
