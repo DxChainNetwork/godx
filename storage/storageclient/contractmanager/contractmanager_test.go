@@ -178,3 +178,7 @@ func (st *storageClientBackendContractManager) GetHostAnnouncementWithBlockHash(
 func (st *storageClientBackendContractManager) GetPaymentAddress() (address common.Address, err error) {
 	return
 }
+
+func (st *storageClientBackendContractManager) IsRevisionSessionDone(contractID storage.ContractID) bool {
+	return false
+}

@@ -165,7 +165,12 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.lock.Unlock()
 	}()
 
-	// TODO (mzhang): making sure that the oldContract will not be revised while renewing it, waiting for HZ
+	// if the contract is revising, return error directly
+	if !cm.b.IsRevisionSessionDone(renewContractID) {
+		renewCost = common.BigInt0
+		err = fmt.Errorf("the contract is revising, cannot be renewed")
+		return
+	}
 
 	// acquire the oldContract (contract that is about to be renewed)
 	oldContract, exists := cm.activeContracts.Acquire(renewContractID)
