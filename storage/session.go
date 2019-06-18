@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p"
@@ -19,6 +20,9 @@ var (
 )
 
 const (
+	IDLE = 0
+	BUSY = 1
+
 	HostSettingMsg         = 0x20
 	HostSettingResponseMsg = 0x21
 
@@ -114,8 +118,14 @@ type Session struct {
 
 	version int
 
-	host       HostInfo
+	host       *HostInfo
 	clientDisc chan error
+
+	// indicate this session is busy, it is true when uploading or downloading
+	busy int32
+
+	// upload and download tash is done, signal the renew goroutine
+	revisionDone chan struct{}
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
@@ -136,8 +146,29 @@ func (s *Session) ClientDiscChan() chan error {
 	return s.clientDisc
 }
 
+func (s *Session) SetHostInfo(hi *HostInfo) {
+	s.host = hi
+}
+
 func (s *Session) HostInfo() *HostInfo {
-	return &s.host
+	return s.host
+}
+
+func (s * Session) SetBusy() bool {
+	return atomic.CompareAndSwapInt32(&s.busy, IDLE, BUSY)
+}
+
+func (s * Session) ResetBusy() bool {
+	return atomic.CompareAndSwapInt32(&s.busy, BUSY, IDLE)
+}
+
+func (s * Session) IsBusy() bool {
+	return atomic.LoadInt32(&s.busy) == BUSY
+}
+
+// when we renew but upload or download now, we wait for the revision done
+func (s *Session) RevisionDone() chan struct{} {
+	return s.revisionDone
 }
 
 func (s *Session) getConn() net.Conn {
@@ -154,7 +185,6 @@ func (s *Session) SetDeadLine(d time.Duration) error {
 	return nil
 }
 
-// form contract protocol
 
 // RW() and SetRW() for only test
 func (s *Session) RW() p2p.MsgReadWriter {
@@ -247,4 +277,8 @@ func (s *Session) SendErrorMsg(err error) error {
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
 	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+}
+
+func (s *Session) IsClosed() bool {
+	return s.Peer.IsClosed()
 }

@@ -143,7 +143,7 @@ func (fs *FileSystem) Close() error {
 	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
-// SelectDxFileToFix selects a file with the health with the health of highest priority to repair
+// SelectDxFileToFix selects a file with the health of highest priority to repair
 func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 	curDir, err := fs.dirSet.Open(storage.RootDxPath())
 	if err != nil {
@@ -328,6 +328,14 @@ func (fs *FileSystem) RepairNeededChan() chan struct{} {
 // StuckFoundChan returns a channel that signals a stuck segment is found
 func (fs *FileSystem) StuckFoundChan() chan struct{} {
 	return fs.stuckFound
+}
+
+func (fs *FileSystem) DirSet() *dxdir.DirSet{
+	return fs.dirSet
+}
+
+func (fs *FileSystem) FileSet() *dxfile.FileSet {
+	return fs.fileSet
 }
 
 // dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
@@ -592,4 +600,8 @@ func randomUint32() uint32 {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return binary.LittleEndian.Uint32(b)
+}
+
+func (fs *FileSystem) FileRootDir() storage.SysPath{
+	return fs.fileRootDir
 }

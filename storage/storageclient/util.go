@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 
@@ -29,6 +30,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/merkletree"
+	"io/ioutil"
+	"path/filepath"
 )
 
 // ActiveContractAPI is used to re-format the contract information that is going to
@@ -120,6 +123,74 @@ func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEve
 // GetStorageHostManager will be used to acquire the storage host manager
 func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
 	return sc.storageHostManager
+}
+
+// DirInfo returns the Directory Information of the dxdir
+func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
+	entry, err := sc.fileSystem.DirSet().Open(dxPath)
+	if err != nil {
+		return storage.DirectoryInfo{}, err
+	}
+	defer entry.Close()
+	// Grab the health information and return the Directory Info, the worst
+	// health will be returned. Depending on the directory and its contents that
+	// could either be health or stuckHealth
+	metadata := entry.Metadata()
+	return storage.DirectoryInfo{
+		NumFiles:         metadata.NumFiles,
+		NumStuckSegments: metadata.NumStuckSegments,
+		TotalSize:        metadata.TotalSize,
+		Health:           metadata.Health,
+		StuckHealth:      metadata.StuckHealth,
+		MinRedundancy:    metadata.MinRedundancy,
+
+		TimeLastHealthCheck: time.Unix(int64(metadata.TimeLastHealthCheck), 0),
+		TimeModify:          time.Unix(int64(metadata.TimeModify), 0),
+		DxPath:              metadata.DxPath,
+	}, nil
+}
+
+// DirList get directories and files in the dxdir
+func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo, []storage.UploadFileInfo, error) {
+	if err := sc.tm.Add(); err != nil {
+		return nil, nil, err
+	}
+	defer sc.tm.Done()
+
+	var dirs []storage.DirectoryInfo
+	var files []storage.UploadFileInfo
+	// Get DirectoryInfo
+	di, err := sc.DirInfo(dxPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	dirs = append(dirs, di)
+	// Read Directory
+	fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(storage.SysPath(sc.staticFilesDir))))
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, fi := range fileInfos {
+		// Check for directories
+		if fi.IsDir() {
+			dirDxPath, err := dxPath.Join(fi.Name())
+			if err != nil {
+				return nil, nil, err
+			}
+			di, err := sc.DirInfo(dirDxPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			dirs = append(dirs, di)
+			continue
+		}
+		ext := filepath.Ext(fi.Name())
+		if ext != storage.DxFileExt {
+			continue
+		}
+		files = append(files, storage.UploadFileInfo{})
+	}
+	return dirs, files, nil
 }
 
 func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {

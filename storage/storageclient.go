@@ -62,7 +62,7 @@ type ClientBackend interface {
 
 // a metadata about a storage contract.
 type ClientContract struct {
-	ContractID  common.Hash
+	ContractID  ContractID
 	HostID      enode.ID
 	Transaction types.Transaction
 
@@ -77,20 +77,11 @@ type ClientContract struct {
 	StorageSpending  common.BigInt
 	UploadSpending   common.BigInt
 
-	// record utility information about the contract.
-	Utility ContractUtility
+	// record status information about the contract.
+	Status ContractStatus
 
 	// the amount of money that the client spent or locked while forming a contract.
 	TotalCost common.BigInt
-}
-
-// record utility of a given contract.
-type ContractUtility struct {
-	GoodForUpload bool
-	GoodForRenew  bool
-
-	// only be set to false.
-	Locked bool
 }
 
 // the parameters to download from outer request

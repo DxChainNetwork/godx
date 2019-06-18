@@ -50,6 +50,19 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
 }
 
+// Upload their local files to hosts made contract with
+func (api *PublicStorageClientAPI) Upload(source string, dxPath string) string {
+	param := storage.FileUploadParams{
+		Source: source,
+		DxPath: storage.DxPath{Path: dxPath},
+		Mode:   storage.Override,
+	}
+	if err := api.sc.Upload(param); err != nil {
+		return err.Error()
+	}
+	return "success"
+}
+
 //GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (api *PublicStorageClientAPI) GetPaymentAddress() (common.Address, error) {
 	return api.sc.GetPaymentAddress()

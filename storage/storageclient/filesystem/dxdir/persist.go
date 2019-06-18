@@ -18,6 +18,15 @@ var (
 	// ErrAlreadyDeleted is the error that happens when save or delete a DxDir
 	// that is already deleted
 	ErrAlreadyDeleted = errors.New("DxDir has already been deleted")
+
+	// ErrUploadDirectory indicates that we can't upload directory
+	ErrUploadDirectory = errors.New("cannot upload directory")
+
+	// ErrPathOverload is an error when a file already exists at that location
+	ErrPathOverload = errors.New("a file already exists at that location")
+
+	// ErrUnknownPath is an error when a file cannot be found with the given path
+	ErrUnknownPath = errors.New("no file known with that path")
 )
 
 // EncodeRLP define the RLP rule for DxDir. Only the metadata is RLP encoded.
