@@ -69,6 +69,10 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
+
+	// host announce
+	SignByNode (hash []byte) ([]byte, error)
+	GetHostEnodeURL() string
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {

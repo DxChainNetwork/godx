@@ -85,6 +85,69 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 	return txHash, nil
 }
 
+func (psc *PrivateStorageContractTxAPI) Announce(from common.Address) {
+	to := common.Address{}
+	to.SetBytes([]byte{9})
+	ctx := context.Background()
+
+	psc.sendHostAnnounceTX(ctx, psc.b, psc.nonceLock, from, to)
+}
+
+func (psc *PrivateStorageContractTxAPI) sendHostAnnounceTX(ctx context.Context, b Backend, nonceLock *AddrLocker, from, to common.Address) (common.Hash, error){
+	args := SendStorageContractTxArgs {
+		From:from,
+		To:to,
+	}
+
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: from}
+
+	wallet, err := psc.b.AccountManager().Find(account)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if args.Nonce == nil {
+		nonceLock.LockAddr(args.From)
+		defer nonceLock.UnlockAddr(args.From)
+	}
+
+	hostEnodeURL := psc.b.GetHostEnodeURL()
+	hostAnnouncement := types.HostAnnouncement{
+		NetAddress: hostEnodeURL,
+	}
+
+	hash := hostAnnouncement.RLPHash()
+	sign, err := psc.b.SignByNode(hash.Bytes())
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	payload := hexutil.Bytes(sign)
+	args.Input = &payload
+
+	// Set some sanity defaults and terminate on failure
+	var tx *types.Transaction
+	if tx, err = args.setDefaultsTX(ctx, b); err != nil {
+		return common.Hash{}, err
+	}
+
+	var chainID *big.Int
+	if config := b.ChainConfig(); config.IsEIP155(b.CurrentBlock().Number()) {
+		chainID = config.ChainID
+	}
+	signed, err := wallet.SignTx(account, tx, chainID)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if err := b.SendTx(ctx, signed); err != nil {
+		return common.Hash{}, err
+	}
+
+	return signed.Hash(), nil
+}
+
 // send storage contract tx，only need from、to、input（rlp encoded）
 //
 // NOTE: this is general func, you can construct different args to send 4 type txs, like host announce、form contract、contract revision、storage proof.
@@ -166,4 +229,42 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Back
 	}
 
 	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+}
+
+func buildTx(ctx context.Context, b Backend, nonceLock *AddrLocker, from, to common.Address, input []byte) (*types.Transaction, error){
+	args := &SendTxArgs{
+		From:from,
+		To:  &to,
+	}
+
+	args.Input = (*hexutil.Bytes)(&input)
+
+	// find the account of the address from
+	account := accounts.Account{Address: args.From}
+	wallet, err := b.AccountManager().Find(account)
+	if err != nil {
+		return nil, err
+	}
+
+	nonceLock.LockAddr(args.From)
+	defer nonceLock.UnlockAddr(args.From)
+
+	// construct tx
+	if err := args.setDefaults(ctx, b); err != nil {
+		return nil, err
+	}
+
+	// get chain ID
+	var chainID *big.Int
+	if config := b.ChainConfig(); config.IsEIP155(b.CurrentBlock().Number()) {
+		chainID = config.ChainID
+	}
+
+	// sign the tx by using from's wallet
+	signed, err := wallet.SignTx(account, args.toTransaction(), chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	return signed, nil
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto"
 	"math/big"
 	"runtime"
 	"sync"
@@ -556,6 +557,16 @@ func (s *Ethereum) NetVersion() uint64                 { return s.networkID }
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManager.downloader }
 func (s *Ethereum) GetCurrentBlockHeight() uint64      { return s.blockchain.CurrentHeader().Number.Uint64() }
 func (s *Ethereum) GetBlockChain() *core.BlockChain    { return s.blockchain }
+
+// Sign data with node private key. Now it is used to imply host identity
+func (s *Ethereum) SignWithNodeSk(hash []byte) ([]byte, error) {
+	return crypto.Sign(hash, s.server.Config.PrivateKey)
+}
+
+// Get host enode url from enode object
+func (s *Ethereum) GetHostEnodeURL() string {
+	return s.server.Self().String()
+}
 
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.

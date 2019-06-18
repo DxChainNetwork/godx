@@ -18,6 +18,7 @@ package les
 
 import (
 	"context"
+	"errors"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -199,4 +200,15 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	for i := 0; i < bloomFilterThreads; i++ {
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
+}
+
+// Light mode not supported now. so sign method returns error and
+// host enode url method returns empty string
+func (b *LesApiBackend) SignByNode (hash []byte) ([]byte, error) {
+	return nil, errors.New("light mode not supported")
+}
+
+// Get host enode url from enode object
+func (b *LesApiBackend) GetHostEnodeURL() string {
+	return ""
 }
