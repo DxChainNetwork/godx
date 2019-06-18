@@ -12,7 +12,9 @@ import (
 	"math/big"
 	"math/bits"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -901,25 +903,27 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 		return nil, errors.New("not specified local path")
 	}
 
-	// if the parameter WriteToLocalPath is not a absolute path, set default
+	// if the parameter WriteToLocalPath is not a absolute path, set default file name
 	if p.WriteToLocalPath != "" && !filepath.IsAbs(p.WriteToLocalPath) {
-		fileInfo, err := os.Stat(p.WriteToLocalPath)
+		if strings.Contains(p.WriteToLocalPath, "/") {
+			return nil, errors.New("should specify the file name not include directory，or specify absolute path")
+		}
+
+		if home := os.Getenv("HOME"); home == "" {
+			return nil, errors.New("not home env")
+		}
+
+		usr, err := user.Current()
 		if err != nil {
 			return nil, err
 		}
-
-		nowFormat := time.Now().Format(time.RFC3339)
-		if fileInfo.IsDir() {
-			p.WriteToLocalPath = client.persistDir + p.WriteToLocalPath + "/download_" + nowFormat
-		} else {
-			p.WriteToLocalPath = client.persistDir + "/download" + p.WriteToLocalPath
-		}
+		p.WriteToLocalPath = filepath.Join(usr.HomeDir, p.WriteToLocalPath)
 	}
 
 	// instantiate the file to write the downloaded data
 	var dw writeDestination
 	var destinationType string
-	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_WRONLY, entry.FileMode())
+	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, err
 	}
