@@ -152,7 +152,6 @@ type StorageHost struct {
 	lockedStorageResponsibility map[common.Hash]*TryMutex
 
 	// things for log and persistence
-	// TODO: database to store the info of storage obligation, here just a mock
 	db         *ethdb.LDBDatabase
 	persistDir string
 	log        log.Logger
@@ -166,11 +165,15 @@ type StorageHost struct {
 
 // Start loads all APIs and make them mapping, also introduce the account
 // manager as a member variable in side the StorageHost
-func (h *StorageHost) Start(eth storage.EthBackend) {
+func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 	// TODO: Start Load all APIs and make them mapping
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
+
+	if err = h.StorageManager.Start(); err != nil {
+		return err
+	}
 
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
@@ -254,7 +257,10 @@ func New(persistDir string) (*StorageHost, error) {
 
 // Close the storage host and persist the data
 func (h *StorageHost) Close() error {
-	return h.tm.Stop()
+	err := h.tm.Stop()
+	newErr := h.StorageManager.Close()
+	err = common.ErrCompose(err, newErr)
+	return err
 }
 
 // HostExtConfig return the host external config, which configure host through,

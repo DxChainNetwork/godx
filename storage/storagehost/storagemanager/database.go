@@ -80,15 +80,14 @@ func (db *database) getOrCreateSectorSalt() (salt sectorSalt, err error) {
 			return
 		}
 		return
-	} else {
-		var saltByte []byte
-		saltByte, err = db.lvl.Get([]byte(sectorSaltKey), nil)
-		if err != nil {
-			return
-		}
-		copy(salt[:], saltByte)
+	}
+	var saltByte []byte
+	saltByte, err = db.lvl.Get([]byte(sectorSaltKey), nil)
+	if err != nil {
 		return
 	}
+	copy(salt[:], saltByte)
+	return
 }
 
 // randomFolderID create a random folder id that does not exist in database.
@@ -115,7 +114,7 @@ func (db *database) randomFolderID() (id folderID, err error) {
 		}
 		return
 	}
-	err = errors.New("create random folder id maximum retries reached.")
+	err = errors.New("create random folder id maximum retries reached")
 	return
 }
 

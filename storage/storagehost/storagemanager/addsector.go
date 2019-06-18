@@ -294,7 +294,7 @@ func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error
 		// entry and there is no need to access the folder.
 		update.physical = false
 		update.sector = s
-		update.sector.count += 1
+		update.sector.count++
 		update.batch, err = manager.db.saveSectorToBatch(update.batch, update.sector, false)
 		if err != nil {
 			return

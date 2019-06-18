@@ -79,7 +79,7 @@ func (sls *sectorLocks) unlockSector(id sectorID) {
 		// from the map
 		delete(sls.locks, id)
 	}
-	l.waiting -= 1
+	l.waiting--
 	sls.lock.Unlock()
 
 	l.unlock()

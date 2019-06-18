@@ -10,12 +10,14 @@ import (
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"path/filepath"
 	"time"
 )
 
 type (
+	// StorageManager is the interface to be provided to upper function calls
 	StorageManager interface {
 		Start() error
 		Close() error
@@ -24,6 +26,10 @@ type (
 		DeleteSector(sectorRoot common.Hash) error
 		DeleteSectorBatch(sectorRoots []common.Hash) error
 		ReadSector(sectorRoot common.Hash) ([]byte, error)
+		AddStorageFolder(path string, size uint64) error
+		DeleteFolder(folderPath string) error
+		ResizeFolder(folderPath string, size uint64) error
+		Folders() []storage.HostFolder
 	}
 
 	storageManager struct {
@@ -215,6 +221,22 @@ func (sm *storageManager) DeleteFolder(folderPath string) (err error) {
 		return err
 	}
 	return nil
+}
+
+// Folders return all used folders
+func (sm *storageManager) Folders() []storage.HostFolder {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+
+	var folders []storage.HostFolder
+	for _, sf := range sm.folders.sfs {
+		folders = append(folders, storage.HostFolder{
+			Path:         sf.path,
+			TotalSectors: sf.numSectors,
+			UsedSectors:  sf.storedSectors,
+		})
+	}
+	return folders
 }
 
 // stopped return whether the current storage manager is stopped

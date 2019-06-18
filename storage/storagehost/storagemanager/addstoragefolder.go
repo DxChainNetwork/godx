@@ -49,7 +49,7 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error)
 		return
 	}
 	// create the update and record the intent
-	update := NewAddStorageFolderUpdate(path, size)
+	update := newAddStorageFolderUpdate(path, size)
 
 	// record the update intent
 	if err = update.recordIntent(sm); err != nil {
@@ -116,9 +116,9 @@ func (sm *storageManager) validateAddStorageFolder(path string, size uint64) (er
 	return nil
 }
 
-// NewAddStorageFolderUpdate create a new addStorageFolderUpdate
+// newAddStorageFolderUpdate create a new addStorageFolderUpdate
 // Note the size in the update is not the same as the input
-func NewAddStorageFolderUpdate(path string, size uint64) (update *addStorageFolderUpdate) {
+func newAddStorageFolderUpdate(path string, size uint64) (update *addStorageFolderUpdate) {
 	numSectors := sizeToNumSectors(size)
 	update = &addStorageFolderUpdate{
 		path: path,
