@@ -139,6 +139,17 @@ func (w *worker) killDownloading() {
 	w.downloadSegments = w.downloadSegments[:0]
 	w.downloadTerminated = true
 	w.downloadMu.Unlock()
+
+	// close connection after downloading
+	contractID := storage.ContractID(w.contract.ID)
+	session, ok := w.client.sessionSet[contractID]
+	if session != nil && ok {
+		delete(w.client.sessionSet, contractID)
+		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+			w.client.log.Debug("can't close connection after downloading", "error", err)
+		}
+	}
+
 	for i := 0; i < len(removedSegments); i++ {
 		removedSegments[i].removeWorker()
 	}
@@ -181,12 +192,39 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) {
 
+	// we must make sure that renew and revision consistency
+	w.client.sessionLock.Lock()
+
 	// check this contract whether is renewing
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
 		w.client.log.Debug("renew contract is doing, can't download")
 		return
 	}
+
+	// Setup an active connection to the host and we will reuse previous connection
+	session, ok := w.client.sessionSet[contractID]
+	if !ok || session == nil || session.IsClosed() {
+		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
+		if err != nil {
+			w.client.log.Error("failed to connect host for file downloading", "host_url", w.contract.EnodeID.String())
+			return
+		}
+
+		w.client.sessionSet[contractID] = s
+		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
+			s.SetHostInfo(&hostInfo)
+		}
+		session = s
+	}
+
+	// Set flag true while uploading
+	session.SetBusy()
+	defer func() {
+		session.ResetBusy()
+		session.RevisionDone() <- struct{}{}
+	}()
+	w.client.sessionLock.Unlock()
 
 	// check the uds whether can be the worker performed
 	uds = w.processDownloadSegment(uds)
@@ -200,19 +238,6 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	// for not supporting partial encoding, we need to download the whole sector every time.
 	fetchOffset, fetchLength := 0, storage.SectorSize
 	root := uds.segmentMap[w.hostID.String()].root
-
-	// setup connection
-	hostInfo, exist := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
-	if !exist {
-		w.client.log.Error("the host not exist in client", "host_id", w.hostID.String())
-		return
-	}
-	session, err := w.client.ethBackend.SetupConnection(hostInfo.EnodeURL)
-	if err != nil {
-		w.client.log.Error("failed to connect host for file downloading", "host_url", hostInfo.EnodeURL)
-		return
-	}
-	defer w.client.ethBackend.Disconnect(session, hostInfo.EnodeURL)
 
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
