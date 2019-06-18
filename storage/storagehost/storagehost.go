@@ -105,7 +105,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	}
 }
 
-// TODO: mock the database for storing storage obligation, currently use the
+// TODO: mock the database for storing storage responsibility, currently use the
 //  	 LDBDatabase, not sure which tables should be init here, modify the database
 //  	 for developer's convenience
 func (h *StorageHost) initDB() error {
@@ -123,7 +123,7 @@ func (h *StorageHost) initDB() error {
 	return nil
 }
 
-// TODO: load the database, storage obligation, currently mock loads the config from the database,
+// TODO: load the database, storage responsibility, currently mock loads the config from the database,
 //  	 if the config file load sucess
 func (h *StorageHost) loadFromDB() error {
 	return nil
@@ -152,7 +152,6 @@ type StorageHost struct {
 	lockedStorageResponsibility map[common.Hash]*TryMutex
 
 	// things for log and persistence
-	// TODO: database to store the info of storage obligation, here just a mock
 	db         *ethdb.LDBDatabase
 	persistDir string
 	log        log.Logger
@@ -193,7 +192,6 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		// TODO: init the storageHostObligation
 	}
 
 	var err error   // error potentially affect the system
@@ -589,7 +587,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
-		return ExtendErr("finalize storage obligation error", err)
+		return ExtendErr("finalize storage responsibility error", err)
 	}
 
 	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
@@ -628,10 +626,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
-	// Get revision from storage obligation
+	// Get revision from storage responsibility
 	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	settings := h.externalConfig()
@@ -775,7 +773,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 	newRevision.Signatures[0] = clientRevisionSign
 
-	// Update the storage obligation
+	// Update the storage responsibility
 	so.SectorRoots = newRoots
 	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
 	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
@@ -832,10 +830,10 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}()
 
-	// get storage obligation
+	// get storage responsibility
 	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	// check whether the contract is empty
@@ -921,7 +919,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	// update the storage obligation.
+	// update the storage responsibility.
 	//paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
 	//so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)

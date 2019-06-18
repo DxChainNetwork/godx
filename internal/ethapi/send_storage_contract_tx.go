@@ -7,6 +7,7 @@ package ethapi
 import (
 	"context"
 	"errors"
+	"github.com/DxChainNetwork/godx/rlp"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -85,33 +86,9 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 	return txHash, nil
 }
 
-func (psc *PrivateStorageContractTxAPI) Announce(from common.Address) {
-	to := common.Address{}
-	to.SetBytes([]byte{9})
-	ctx := context.Background()
 
-	psc.sendHostAnnounceTX(ctx, psc.b, psc.nonceLock, from, to)
-}
-
-func (psc *PrivateStorageContractTxAPI) sendHostAnnounceTX(ctx context.Context, b Backend, nonceLock *AddrLocker, from, to common.Address) (common.Hash, error){
-	args := SendStorageContractTxArgs {
-		From:from,
-		To:to,
-	}
-
-	// Look up the wallet containing the requested signer
-	account := accounts.Account{Address: from}
-
-	wallet, err := psc.b.AccountManager().Find(account)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	if args.Nonce == nil {
-		nonceLock.LockAddr(args.From)
-		defer nonceLock.UnlockAddr(args.From)
-	}
-
+func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) (common.Hash, error){
+	var e error
 	hostEnodeURL := psc.b.GetHostEnodeURL()
 	hostAnnouncement := types.HostAnnouncement{
 		NetAddress: hostEnodeURL,
@@ -122,30 +99,28 @@ func (psc *PrivateStorageContractTxAPI) sendHostAnnounceTX(ctx context.Context, 
 	if err != nil {
 		return common.Hash{}, err
 	}
+	hostAnnouncement.Signature = sign
 
-	payload := hexutil.Bytes(sign)
-	args.Input = &payload
-
-	// Set some sanity defaults and terminate on failure
-	var tx *types.Transaction
-	if tx, err = args.setDefaultsTX(ctx, b); err != nil {
-		return common.Hash{}, err
-	}
-
-	var chainID *big.Int
-	if config := b.ChainConfig(); config.IsEIP155(b.CurrentBlock().Number()) {
-		chainID = config.ChainID
-	}
-	signed, err := wallet.SignTx(account, tx, chainID)
+	payload, err := rlp.EncodeToBytes(hostAnnouncement)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	if err := b.SendTx(ctx, signed); err != nil {
-		return common.Hash{}, err
+	ctx := context.Background()
+	to := common.Address{}
+	to.SetBytes([]byte{9})
+
+	if tx, err := buildTx(ctx, psc.b, psc.nonceLock, from, to, payload); err == nil {
+		if err := psc.b.SendTx(ctx, tx); err == nil {
+			return tx.Hash(), nil
+		} else {
+			e = err
+		}
+	} else {
+		e = err
 	}
 
-	return signed.Hash(), nil
+	return common.Hash{}, e
 }
 
 // send storage contract tx，only need from、to、input（rlp encoded）

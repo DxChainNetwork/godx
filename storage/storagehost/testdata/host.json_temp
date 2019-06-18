@@ -1,0 +1,41 @@
+"DxChain StorageHost JSON"
+"DxChain host mock version"
+"0x7f75d88bf7a327d64534e1da9b137c118520ef82173bf79f0ee7a6f1eab578de"
+{
+	"blockHeight": 0,
+	"broadcast": false,
+	"revisionnumber": 0,
+	"finalcialmetrics": {
+		"contractcount": 0,
+		"contractcompensation": 0,
+		"potentialcontractcompensation": 0,
+		"lockedstoragedeposit": 0,
+		"lostrevenue": 0,
+		"loststoragedeposit": 0,
+		"potentialstoragerevenue": 0,
+		"riskedstoragedeposit": 0,
+		"storagerevenue": 0,
+		"transactionfeeexpenses": 0,
+		"downloadbandwidthrevenue": 0,
+		"potentialdownloadbandwidthrevenue": 0,
+		"potentialuploadbandwidthrevenue": 0,
+		"uploadbandwidthrevenue": 0
+	},
+	"config": {
+		"acceptingcontracts": false,
+		"maxdownloadbatchsize": 17825792,
+		"maxduration": 25920,
+		"maxrevisebatchSize": 17825792,
+		"windowsize": 144,
+		"paymentaddress": "0x0000000000000000000000000000000000000000",
+		"deposit": 0,
+		"depositbudget": 1000000,
+		"maxdeposit": 10000000000000000,
+		"minbaserpcprice": 2000,
+		"mincontractprice": 3000,
+		"mindownloadbandwidthprice": 4000,
+		"minsectoraccessprice": 5000,
+		"minstorageprice": 6000,
+		"minuploadbandwidthprice": 7000
+	}
+}
