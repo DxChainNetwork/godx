@@ -162,6 +162,8 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 
 	ethBackend storage.EthBackend
+
+	parseAPI storage.ParsedAPI
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
@@ -171,6 +173,13 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
+
+	// parse storage contract tx API
+	err := storage.FilterAPIs(h.ethBackend.APIs(), &h.parseAPI)
+	if err != nil {
+		h.log.Error("failed to parse storage contract tx API for host", "error", err)
+		return
+	}
 
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
@@ -450,14 +459,14 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
@@ -472,11 +481,11 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("get state db error", err)
 	}
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host balance insufficient", err)
 	}
 
@@ -484,32 +493,32 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("find host account error", err)
 	}
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host account sign storage contract error", err)
 	}
 
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := VerifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host verify storage contract failed", err)
 	}
 
 	// 2. After check, send host contract sign to client
 	sc.Signatures[1] = hostContractSign
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("send storage contract create sign by host", err)
 	}
 
@@ -517,12 +526,12 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
@@ -549,7 +558,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host sign revison error", err)
 	}
 
@@ -580,7 +589,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
-		s.SendErrorMsg(err)
 		return ExtendErr("finalize storage obligation error", err)
 	}
 
@@ -808,7 +816,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var req storage.DownloadRequest
 	err := beginMsg.Decode(req)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -831,10 +838,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
 	}
 
-	// Check the contract is empty
+	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		err := errors.New("no contract locked")
-		s.SendErrorMsg(err)
 		<-stopSignal
 		return err
 	}
@@ -850,18 +856,17 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		var err error
 		switch {
 		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
-			err = errors.New("download request has invalid sector bounds")
+			err = errors.New("download out boundary of sector")
 		case sec.Length == 0:
-			err = errors.New("length cannot be zero")
-		case req.MerkleProof && (sec.Offset%merkle.LeafSize != 0 || sec.Length%merkle.LeafSize != 0):
+			err = errors.New("length cannot be 0")
+		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
 			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
-			err = errors.New("wrong number of valid proof values")
+			err = errors.New("the number of valid proof values not match the old")
 		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
-			err = errors.New("wrong number of missed proof values")
+			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
-			s.SendErrorMsg(err)
 			return err
 		}
 	}
@@ -894,9 +899,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
-	if estBandwidth < storage.RPCMinLen {
-		estBandwidth = storage.RPCMinLen
-	}
 
 	// calculate total cost
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
@@ -904,7 +906,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = VerifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -912,13 +913,11 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -932,7 +931,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -942,7 +940,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// TODO: Fetch the requested data.
 		//sectorData, err := h.ReadSector(sec.MerkleRoot)
 		//if err != nil {
-		//	s.SendErrorMsg(err)
 		//	return err
 		//}
 		sectorData := []byte{}
@@ -983,7 +980,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 
 		if err := s.SendStorageContractDownloadData(resp); err != nil {
-			s.SendErrorMsg(err)
 			return err
 		}
 	}

@@ -10,8 +10,8 @@ import (
 	"sync"
 )
 
-// the types to write the logical data to the outer request
-type downloadDestination interface {
+// where to write the downloaded data
+type writeDestination interface {
 	WriteAt(data []byte, offset int64) (int, error)
 }
 
@@ -47,7 +47,7 @@ func (dw downloadBuffer) ReadFrom(r io.Reader) (int64, error) {
 
 		if err == io.ErrUnexpectedEOF || err == io.EOF {
 			n += int64(read)
-			return n ,nil
+			return n, nil
 		}
 
 		if err != nil {

@@ -332,8 +332,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(cm.b, clientPaymentAddress, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
+	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
 	// wrap some information about this contract
@@ -341,7 +341,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
-		EndHeight:              endHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,

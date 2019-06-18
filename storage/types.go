@@ -6,15 +6,19 @@ package storage
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/big"
+	"reflect"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 var (
@@ -248,6 +252,7 @@ func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
 }
 
+// StringToContractID convert string to ContractID
 func StringToContractID(s string) (id ContractID, err error) {
 	// decode the string to byte slice
 	decodedString, err := hexutil.Decode(s)
@@ -349,11 +354,57 @@ type (
 )
 
 const (
-	// 4 MB
+	// SectorSize is 4 MB
 	SectorSize = uint64(1 << 22)
-	HashSize   = 32
 
-	// the minimum size of an RPC message. If an encoded message
-	// would be smaller than RPCMinLen, it is padded with random data.
-	RPCMinLen = uint64(4096)
+	// HashSize is 32 bits
+	HashSize = 32
+
+	// SegmentSize is the segment size is used when taking the Merkle root of a file.
+	SegmentSize = 64
 )
+
+// ParsedAPI will parse the APIs saved in the Ethereum
+// and get the ones needed
+type ParsedAPI struct {
+	NetInfo   *ethapi.PublicNetAPI
+	Account   *ethapi.PrivateAccountAPI
+	EthInfo   *ethapi.PublicEthereumAPI
+	StorageTx *ethapi.PrivateStorageContractTxAPI
+}
+
+// FilterAPIs will filter the APIs saved in the Ethereum and
+// save them into ParsedAPI data structure
+func FilterAPIs(apis []rpc.API, parseAPI *ParsedAPI) error {
+	for _, api := range apis {
+		switch typ := reflect.TypeOf(api.Service); typ {
+		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
+			netAPI := api.Service.(*ethapi.PublicNetAPI)
+			if netAPI == nil {
+				return errors.New("failed to acquire netInfo information")
+			}
+			parseAPI.NetInfo = netAPI
+		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
+			accountAPI := api.Service.(*ethapi.PrivateAccountAPI)
+			if accountAPI == nil {
+				return errors.New("failed to acquire account information")
+			}
+			parseAPI.Account = accountAPI
+		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
+			ethAPI := api.Service.(*ethapi.PublicEthereumAPI)
+			if ethAPI == nil {
+				return errors.New("failed to acquire eth information")
+			}
+			parseAPI.EthInfo = ethAPI
+		case reflect.TypeOf(&ethapi.PrivateStorageContractTxAPI{}):
+			storageTx := api.Service.(*ethapi.PrivateStorageContractTxAPI)
+			if storageTx == nil {
+				return errors.New("failed to acquire storage tx sending API")
+			}
+			parseAPI.StorageTx = storageTx
+		default:
+			continue
+		}
+	}
+	return nil
+}

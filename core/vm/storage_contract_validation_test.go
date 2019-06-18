@@ -28,7 +28,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 		NetAddress: "127.0.0.1:8888",
 	}
 
-	sigHa, err := SignStorageContract(ha, prvKeyHost)
+	sigHa, err := crypto.Sign(ha.RLPHash().Bytes(), prvKeyHost)
 	if err != nil {
 		t.Errorf("failed to sign host announce: %v", err)
 	}
@@ -76,12 +76,12 @@ func TestCheckMultiSignatures(t *testing.T) {
 		RevisionNumber: 111,
 	}
 
-	sigsScByHost, err := SignStorageContract(sc, prvKeyHost)
+	sigsScByHost, err := crypto.Sign(sc.RLPHash().Bytes(), prvKeyHost)
 	if err != nil {
 		t.Errorf("host failed to sign host announce: %v", err)
 	}
 
-	sigsScByClient, err := SignStorageContract(sc, prvKeyClient)
+	sigsScByClient, err := crypto.Sign(sc.RLPHash().Bytes(), prvKeyClient)
 	if err != nil {
 		t.Errorf("client failed to sign host announce: %v", err)
 	}

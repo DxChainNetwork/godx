@@ -63,6 +63,18 @@ var storageClientCommand = cli.Command{
 			},
 			Description: `set storage client memory limit`,
 		},
+
+		{
+			Name:      "download",
+			Usage:     "download file by sync mode",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(downloadSync),
+			Flags: []cli.Flag{
+				utils.DownloadRemotePathFlag,
+				utils.DownloadLocalPathFlag,
+			},
+			Description: `download file by sync mode`,
+		},
 	},
 }
 
@@ -161,6 +173,60 @@ func setMemoryLimit(ctx *cli.Context) error {
 	}
 
 	fmt.Println(resp)
+	return nil
+}
+
+// download remote file by sync mode
+//
+// NOTE: RPC not support async download, because it is stateless, should block until download task done.
+func downloadSync(ctx *cli.Context) error {
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	if !ctx.GlobalIsSet(utils.DownloadLengthFlag.Name) {
+		utils.Fatalf("please use --length flag to specify the download length")
+	}
+
+	if !ctx.GlobalIsSet(utils.DownloadOffsetFlag.Name) {
+		utils.Fatalf("please use --offset flag to specify the download offset")
+	}
+
+	if !ctx.GlobalIsSet(utils.DownloadLocalPathFlag.Name) {
+		utils.Fatalf("please use --localpath flag to specify the download localpath")
+	}
+
+	if !ctx.GlobalIsSet(utils.DownloadRemotePathFlag.Name) {
+		utils.Fatalf("please use --remotepath flag to specify the download remotepath")
+	}
+
+	length := ctx.GlobalUint64(utils.DownloadLengthFlag.Name)
+	if length <= 0 {
+		utils.Fatalf("download length must be greater than 0")
+	}
+
+	offset := ctx.GlobalUint64(utils.DownloadOffsetFlag.Name)
+	if offset < 0 {
+		utils.Fatalf("download offset can not be negative")
+	}
+
+	localpath := ctx.GlobalString(utils.DownloadLocalPathFlag.Name)
+	if localpath == "" {
+		utils.Fatalf("download localpath can not be empty")
+	}
+
+	remotepath := ctx.GlobalString(utils.DownloadRemotePathFlag.Name)
+	if remotepath == "" {
+		utils.Fatalf("download remotepath can not be empty")
+	}
+
+	var result string
+	err = client.Call(&result, "storageclient_downloadSync", length, offset, localpath, remotepath)
+	if err != nil {
+		utils.Fatalf("failed to download by sync mode: %s", err.Error())
+	}
+	fmt.Println(result)
 	return nil
 }
 

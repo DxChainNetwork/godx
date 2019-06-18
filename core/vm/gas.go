@@ -22,7 +22,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -102,7 +101,7 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckContractCreate
-	case func(*EVM, types.StorageContract, uint64) error:
+	case func(StateDB, types.StorageContract, uint64) error:
 		if gas < params.CheckFileGas {
 			result = append(result, errGasCalculationInsufficient)
 			return gas, result
@@ -111,11 +110,11 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		fc, _ := args[3].(types.StorageContract)
 		bl, _ := args[4].(uint64)
 		gas -= params.CheckFileGas
-		err := i(evm, fc, bl)
+		err := i(state, fc, bl)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
@@ -124,20 +123,22 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckReversionContract
-	case func(*EVM, types.StorageContractRevision, uint64) error:
+	case func(StateDB, types.StorageContractRevision, uint64, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+
+		if len(args) != 6 {
 			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		scr, _ := args[3].(types.StorageContractRevision)
 		bl, _ := args[4].(uint64)
+		addr, _ := args[5].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(evm, scr, bl)
+		err := i(state, scr, bl, addr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
@@ -146,64 +147,23 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckStorageProof
-	case func(*EVM, types.StorageProof, uint64) error:
+	case func(StateDB, types.StorageProof, uint64, common.Address, common.Address) error:
 		if gas < params.CheckFileGas {
 			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+
+		if len(args) != 7 {
 			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
-		evm, _ := args[2].(*EVM)
+		state, _ := args[2].(StateDB)
 		sp, _ := args[3].(types.StorageProof)
 		bl, _ := args[4].(uint64)
+		statusAddr, _ := args[5].(common.Address)
+		contractAddr, _ := args[6].(common.Address)
 		gas -= params.CheckFileGas
-		err := i(evm, sp, bl)
-		if err != nil {
-			result = append(result, err)
-			return gas, result
-		}
-		result = append(result, nil)
-		return gas, result
-
-		//StoreStorageContract
-	case func(ethdb.Database, common.Hash, types.StorageContract) error:
-		if gas < params.SstoreSetGas {
-			result = append(result, errGasCalculationInsufficient)
-			return gas, result
-		}
-		if len(args) != 5 {
-			result = append(result, errGasCalculationParamsNumberWrong)
-			return gas, result
-		}
-		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(common.Hash)
-		sc, _ := args[4].(types.StorageContract)
-		gas -= params.SstoreSetGas
-		err := i(db, scid, sc)
-		if err != nil {
-			result = append(result, err)
-			return gas, result
-		}
-		result = append(result, nil)
-		return gas, result
-
-		//StoreExpireStorageContract
-	case func(ethdb.Database, common.Hash, uint64) error:
-		if gas < params.SstoreSetGas {
-			result = append(result, errGasCalculationInsufficient)
-			return gas, result
-		}
-		if len(args) != 5 {
-			result = append(result, errGasCalculationParamsNumberWrong)
-			return gas, result
-		}
-		db, _ := args[2].(ethdb.Database)
-		scid, _ := args[3].(common.Hash)
-		height, _ := args[4].(uint64)
-		gas -= params.SstoreSetGas
-		err := i(db, scid, height)
+		err := i(state, sp, bl, statusAddr, contractAddr)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
