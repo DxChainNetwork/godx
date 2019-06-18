@@ -3,9 +3,6 @@ package newstoragemanager
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -27,6 +24,8 @@ type (
 		txn *writeaheadlog.Transaction
 
 		batch *leveldb.Batch
+
+		unlockWhenRelease bool
 	}
 
 	expandFolderUpdatePersist struct {
@@ -77,7 +76,6 @@ func (update *expandFolderUpdate) str() (s string) {
 
 // record intent record the expand folder intent
 func (update *expandFolderUpdate) recordIntent(manager *storageManager) (err error) {
-	manager.lock.RLock()
 	// Open the storage folder to get the prevNumSectors
 	manager.folders.lock.RLock()
 	update.folder, err = manager.folders.get(update.folderPath)
@@ -87,12 +85,6 @@ func (update *expandFolderUpdate) recordIntent(manager *storageManager) (err err
 	}
 	// If recordIntent return error, folder lock will not be released in release function. Release
 	// it right now
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-			update.folder.lock.Unlock()
-		}
-	}()
 	update.prevNumSectors = update.folder.numSectors
 	// Record the intent to the wal
 	persist := expandFolderUpdatePersist{
@@ -195,7 +187,9 @@ func (update *expandFolderUpdate) processCommitted(manager *storageManager) (err
 func (update *expandFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	defer func() {
 		update.folder.lock.Unlock()
-		manager.lock.RUnlock()
+		if update.unlockWhenRelease {
+			manager.lock.RUnlock()
+		}
 	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
@@ -227,7 +221,6 @@ func (update *expandFolderUpdate) release(manager *storageManager, upErr *update
 	// If process error
 	// revert the memory
 	update.folder.numSectors = update.prevNumSectors
-	fmt.Printf("%+v\n", *update.folder.dataFile)
 	update.folder.usage = shrinkUsage(update.folder.usage, update.prevNumSectors)
 	// revert the database
 	batch := manager.db.newBatch()
@@ -237,19 +230,11 @@ func (update *expandFolderUpdate) release(manager *storageManager, upErr *update
 	newErr = manager.db.writeBatch(batch)
 	err = common.ErrCompose(err, newErr)
 	// revert the file data
-	fmt.Println("truncating", int64(numSectorsToSize(update.prevNumSectors)))
-	fileInfo, _ := os.Stat(filepath.Join(update.folder.path, dataFileName))
-	fmt.Println("file size before truncate", fileInfo.Size())
-	fmt.Println(numSectorsToSize(update.targetNumSectors))
 	newErr = update.folder.dataFile.Truncate(int64(numSectorsToSize(update.prevNumSectors)))
-	fileInfo, _ = os.Stat(filepath.Join(update.folder.path, dataFileName))
-	fmt.Println("file size after truncate", fileInfo.Size())
-	fmt.Println(newErr)
 	err = common.ErrCompose(err, newErr)
 	// release the transaction
 	newErr = update.txn.Release()
 	err = common.ErrCompose(err, newErr)
-	fmt.Println("release err", err)
 	return
 }
 
@@ -269,6 +254,7 @@ func decodeExpandFolderUpdate(txn *writeaheadlog.Transaction) (update *expandFol
 
 func (update *expandFolderUpdate) lockResource(manager *storageManager) (err error) {
 	manager.lock.RLock()
+	update.unlockWhenRelease = true
 	// get and lock the folder
 	if update.folder, err = manager.folders.get(update.folderPath); err != nil {
 		update.folder = nil

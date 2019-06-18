@@ -112,11 +112,9 @@ func TestExpandFolderDisrupt(t *testing.T) {
 		}
 		expandSize := uint64(storage.SectorSize * 65)
 		err := sm.expandFolder(path, expandSize)
-		fmt.Println(err)
 		if err == nil {
 			t.Fatal("disrupt does not give error")
 		}
-		fmt.Println(err)
 		for _, expect := range expects {
 			if err := checkSectorExist(expect.root, sm, expect.data, uint64(expect.count)); err != nil {
 				t.Fatal(err)
@@ -187,7 +185,6 @@ func TestExpandFolderStop(t *testing.T) {
 				t.Fatal("stop should give nil error")
 			}
 		}
-		fmt.Println(err)
 		// shut down the sm
 		sm.shutdown(t, time.Second)
 		newSM, err := New(sm.persistDir)

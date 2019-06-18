@@ -24,15 +24,24 @@ type (
 	shrinkFolderUpdate struct {
 		folderPath string
 
+		// numSectors before the update
 		prevNumSectors uint64
 
+		// numSectors after the update
 		targetNumSectors uint64
 
+		// The folder to shrink
 		targetFolder *storageFolder
 
+		// entries of relocates
 		relocates []sectorRelocation
 
+		// related storage folders as a map
 		folders map[folderID]*storageFolder
+
+		// unlockWhenRelease defines whether to unlock during release.
+		// The release behaviour could differ for normal or recover or delete folder operation
+		unlockWhenRelease bool
 
 		txn   *writeaheadlog.Transaction
 		batch *leveldb.Batch
@@ -59,6 +68,7 @@ type (
 
 // shrinkFolder shrink the folder to the target size
 func (sm *storageManager) shrinkFolder(folderPath string, targetSize uint64) (err error) {
+	// TODO: add size validation
 	if err = sm.tm.Add(); err != nil {
 		return errStopped
 	}
@@ -98,12 +108,9 @@ func (update *shrinkFolderUpdate) str() (s string) {
 
 // recordIntent record the intent to shrink the folder
 func (update *shrinkFolderUpdate) recordIntent(manager *storageManager) (err error) {
-	manager.lock.Lock()
-	defer func() {
-		if err != nil {
-			manager.lock.Unlock()
-		}
-	}()
+	// The shrink is triggered by upper function calls.
+	// The lock logic is done in upper function calls
+
 	// validate the shrink update. Checks for after the shrink, whether the rest of the folders could be stored
 	if err = manager.folders.validateShrink(update.folderPath, update.targetNumSectors); err != nil {
 		return
@@ -166,7 +173,9 @@ func (update *shrinkFolderUpdate) process(manager *storageManager, target uint8)
 func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err error) {
 	var once sync.Once
 	update.targetFolder.status = folderUnavailable
+	update.targetFolder.numSectors = update.targetNumSectors
 	update.folders[update.targetFolder.id] = update.targetFolder
+
 	// get all related sectors
 	ids := manager.db.getAllSectorsIDsFromFolder(update.targetFolder.id)
 	for _, id := range ids {
@@ -226,9 +235,17 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 		}
 	}
 	// Finally, shrink the folder, and add to batch
-	update.targetFolder.numSectors = update.targetNumSectors
 	update.targetFolder.usage = shrinkUsage(update.targetFolder.usage, update.prevNumSectors)
 	update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, update.targetFolder)
+	if err != nil {
+		return err
+	}
+	if manager.disrupter.disrupt("shrink folder prepare normal") {
+		return errDisrupted
+	}
+	if manager.disrupter.disrupt("shrink folder prepare normal stop") {
+		return errStopped
+	}
 	return
 }
 
@@ -316,7 +333,7 @@ func (update *shrinkFolderUpdate) processNormal(manager *storageManager) (err er
 			return fmt.Errorf("folder not in folders")
 		}
 		newIndex := relocate.NewLocation.Index
-		n, err = targetFolder.dataFile.WriteAt(b, int64(newIndex))
+		n, err = targetFolder.dataFile.WriteAt(b, int64(newIndex*storage.SectorSize))
 		if err != nil || n != int(storage.SectorSize) {
 			return fmt.Errorf("not full write")
 		}
@@ -324,6 +341,12 @@ func (update *shrinkFolderUpdate) processNormal(manager *storageManager) (err er
 	// write the db batch
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return err
+	}
+	if manager.disrupter.disrupt("shrink folder process normal") {
+		return errDisrupted
+	}
+	if manager.disrupter.disrupt("shrink folder process normal stop") {
+		return errStopped
 	}
 	if err = update.targetFolder.dataFile.Truncate(int64(numSectorsToSize(update.targetNumSectors))); err != nil {
 		return err
@@ -342,7 +365,9 @@ func (update *shrinkFolderUpdate) release(manager *storageManager, upErr *update
 		if err == nil {
 			update.targetFolder.status = folderAvailable
 		}
-		manager.lock.Unlock()
+		if update.unlockWhenRelease {
+			manager.lock.Unlock()
+		}
 	}()
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -449,6 +474,8 @@ func (update *shrinkFolderUpdate) revert(manager *storageManager, memoryOnly boo
 // lockResource locks the resource for shrinkFolderUpdate during recover
 func (update *shrinkFolderUpdate) lockResource(manager *storageManager) (err error) {
 	manager.lock.Lock()
+	// The update is triggered by recover. Unlock automatically
+	update.unlockWhenRelease = true
 	return
 }
 
@@ -462,6 +489,7 @@ func decodeShrinkFolderUpdate(txn *writeaheadlog.Transaction) (update *shrinkFol
 		folderPath:       initPersist.FolderPath,
 		prevNumSectors:   initPersist.PrevNumSectors,
 		targetNumSectors: initPersist.TargetNumSectors,
+		folders:          make(map[folderID]*storageFolder),
 	}
 	// decode the rest
 	for _, op := range txn.Operations[1:] {
@@ -474,5 +502,6 @@ func decodeShrinkFolderUpdate(txn *writeaheadlog.Transaction) (update *shrinkFol
 		}
 		update.relocates = append(update.relocates, relocate)
 	}
+	update.txn = txn
 	return
 }

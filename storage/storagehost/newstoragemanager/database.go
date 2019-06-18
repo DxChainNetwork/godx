@@ -207,7 +207,7 @@ func (db *database) deleteStorageFolder(sf *storageFolder) (err error) {
 	}
 
 	// Remove all entries in the iterator for folder to sector entries
-	iter := db.lvl.NewIterator(util.BytesPrefix(folderSectorPrefix(sf.id)), nil)
+	iter := db.lvl.NewIterator(util.BytesPrefix(makeFolderSectorPrefix(sf.id)), nil)
 	for iter.Next() {
 		batch.Delete(iter.Key())
 	}
@@ -254,11 +254,12 @@ func (db *database) loadStorageFolderByID(id folderID) (sf *storageFolder, err e
 
 // getAllSectorsIDsFromFolder get all sector ids from a folder specified by folderID
 func (db *database) getAllSectorsIDsFromFolder(folderID folderID) (sectorIDs []sectorID) {
-	prefix := folderSectorPrefix(folderID)
+	prefix := makeFolderSectorPrefix(folderID)
 	iter := db.lvl.NewIterator(util.BytesPrefix(prefix), nil)
 	for iter.Next() {
 		key := string(iter.Key())
-		sectorID := sectorID(common.HexToHash(key[len(key)-common.HashLength:]))
+		sectorIDStr := strings.TrimPrefix(key, string(makeFolderSectorPrefix(folderID)))
+		sectorID := sectorID(common.HexToHash(sectorIDStr))
 		sectorIDs = append(sectorIDs, sectorID)
 	}
 	return
@@ -362,8 +363,8 @@ func makeSectorKey(sectorID sectorID) (key []byte) {
 	return
 }
 
-// folderSectorPrefix make the prefix of folder id
-func folderSectorPrefix(id folderID) (prefix []byte) {
+// makeFolderSectorPrefix make the prefix of folder id
+func makeFolderSectorPrefix(id folderID) (prefix []byte) {
 	s := prefixFolderSector
 	s += "_"
 	s += strconv.FormatUint(uint64(id), 10)
