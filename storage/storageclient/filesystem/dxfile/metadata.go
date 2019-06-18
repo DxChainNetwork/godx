@@ -62,12 +62,12 @@ type (
 
 	// UpdateMetaData is the Metadata to be updated
 	UpdateMetaData struct {
-		Health           float64
-		StuckHealth      float64
+		Health           uint32
+		StuckHealth      uint32
 		LastHealthCheck  time.Time
 		NumStuckSegments uint64
 		RecentRepairTime time.Time
-		LastRedundancy   float64
+		Redundancy   	 uint32
 		Size             uint64
 		TimeModify       time.Time
 	}
@@ -173,7 +173,7 @@ func (df *DxFile) TimeLastHealthCheck() time.Time {
 	if int64(df.metadata.TimeRecentRepair) < 0 {
 		log.Crit("TimeRecentRepair uint64 overflow")
 	}
-	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
+	return time.Unix(int64(df.metadata.TimeLastHealthCheck), 0)
 }
 
 // SetTimeLastHealthCheck set and save df.metadata.TimeLastHealthCheck

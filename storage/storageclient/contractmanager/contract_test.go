@@ -590,7 +590,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 
 	// maintain contract status
 	if err := cm.maintainContractStatus(int(cm.rentPayment.StorageHosts)); err != nil {
-		t.Fatalf("failed to maintain the contract status")
+		t.Fatalf("failed to maintain the contract status: %s", err.Error())
 	}
 
 	// validation for hostNotExistsContract, lowEvalContracts, highEvalContracts

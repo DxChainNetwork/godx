@@ -23,9 +23,11 @@ type downloadBuffer struct {
 
 // create a new downloadBuffer
 func NewDownloadBuffer(length, sectorSize uint64) downloadBuffer {
+	// Completion the length multiple of sector size(4MB)
 	if length%sectorSize != 0 {
 		length += sectorSize - length%sectorSize
 	}
+
 	ddb := downloadBuffer{
 		buf:        make([][]byte, 0, length/sectorSize),
 		sectorSize: sectorSize,
@@ -42,9 +44,16 @@ func (dw downloadBuffer) ReadFrom(r io.Reader) (int64, error) {
 	var n int64
 	for len(dw.buf) > 0 {
 		read, err := io.ReadFull(r, dw.buf[0])
+
+		if err == io.ErrUnexpectedEOF || err == io.EOF {
+			n += int64(read)
+			return n ,nil
+		}
+
 		if err != nil {
 			return n, err
 		}
+
 		dw.buf = dw.buf[1:]
 		n += int64(read)
 	}
