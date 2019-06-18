@@ -1,4 +1,4 @@
-package newstoragemanager
+package storagemanager
 
 import (
 	"path/filepath"

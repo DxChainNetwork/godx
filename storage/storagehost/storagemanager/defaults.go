@@ -1,99 +1,80 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagemanager
 
-import (
-	"time"
-
-	"github.com/DxChainNetwork/godx/common"
+const (
+	// database related keys and prefixes
+	prefixFolder         = "storageFolder"
+	prefixFolderSector   = "folderToSector"
+	prefixFolderIDToPath = "folderIDToPath"
+	sectorSaltKey        = "sectorSalt"
+	prefixSector         = "sector"
 )
 
 const (
-	// STD and TST is the mode of setting for initialization
-	// of to fits both the testing and standard requirement
-	STD = iota
+	opNameAddStorageFolder = "add storage folder"
 
-	// TST is the mode of testing, the setting would be set to
-	// value of testing to increase the testing speed
-	TST
+	opNameAddSector         = "add sector"
+	opNameAddVirtualSector  = "add virtual sector"
+	opNameAddPhysicalSector = "add physical sector"
 
-	configFile = "config.sys"
-	walFile    = "wal.log"
+	opNameAddSectorBatch       = "add sector batch"
+	opNameAddSectorBatchAppend = "add sector batch append"
 
-	configFileTmp = "configTmp.sys"
-	walFileTmp    = "walTmp.log"
+	opNameDeleteSectorBatch    = "delete sector batch"
+	opNameDeleteVirtualSector  = "delete virtual sector"
+	opNameDeletePhysicalSector = "delete physical sector"
 
-	sectorMetaFileName = "sectormeta.dat"
-	sectorDataFileName = "sectordata.dat"
-
-	commitFrequency = 500 * time.Millisecond
-
-	granularity = 64
+	opNameExpandFolder   = "expand folder"
+	opNameShrinkFolder   = "shrink folder"
+	opNameRelocateSector = "relocate sector"
 )
 
-var (
-	// configMetadata is the metadata for indicating the config file
-	configMetadata = common.Metadata{
-		Header:  "Gdx storage manager config",
-		Version: "1.0",
-	}
-
-	// wal file
-	walMetadata = common.Metadata{
-		Header:  "Gdx storage manager WAL",
-		Version: "1.0",
-	}
-
-	// Mode indicate the current mode
-	Mode int
-	// MockFails to disrupt the system
-	MockFails map[string]bool
-	// SectorSize is the size of a sector
-	SectorSize uint64
-	// SectorMetaSize is the size of the sector's metadata
-	SectorMetaSize uint64
-	// MaxSectorPerFolder is the number of sector every folder would contain
-	MaxSectorPerFolder uint64
-	// MinSectorPerFolder is the minimum number of sector every folder would contain
-	MinSectorPerFolder uint64
-	// MaxStorageFolders is the limitation of maximum folder
-	MaxStorageFolders uint64
+const (
+	databaseFileName = "storagemanager.db"
+	walFileName      = "storagemanager.wal"
+	dataFileName     = "dxstorage.dat"
 )
 
-// SELECT is a map recording the setting value to used in each mode
-type SELECT map[int]interface{}
+const (
+	// target is the process target
+	// targetNormal is the normal execution of an update
+	targetNormal uint8 = iota
 
-// init first initialize the settings to a standard mode, if further
-// testing environment is needed, buildSetting would be called again to
-// switch the setting value
-func init() {
-	buildSetting(STD)
-}
+	// targetRecoverCommitted is the state of recovering a committed transaction
+	targetRecoverCommitted
+)
 
-// buildSetting help the initializer init the global vars. In order to fits
-// the data comfortable for both standard mode and testing mode, this function
-// may be called to switch data for caller's need
-func buildSetting(mode int) {
-	Mode = mode
-	MockFails = make(map[string]bool)
+const (
+	folderAvailable uint32 = iota
+	folderUnavailable
+)
 
-	SectorSize = SELECT{
-		STD: uint64(1 << 22),
-		TST: uint64(1 << 12),
-	}[mode].(uint64)
+const (
+	// maxSectorsPerFolder defines the maximum number of sectors in a folder
+	maxSectorsPerFolder uint64 = 1 << 32
 
-	MaxSectorPerFolder = SELECT{
-		STD: uint64(1 << 32),
-		TST: uint64(1 << 12),
-	}[mode].(uint64)
+	// minSectorsPerFolder defines the minimum number of sectors in a folder
+	minSectorsPerFolder uint64 = 1 << 3
 
-	MinSectorPerFolder = SELECT{
-		STD: uint64(1 << 6),
-		TST: uint64(1 << 6),
-	}[mode].(uint64)
+	// maxNumFolders defines the maximum number of storage folders
+	maxNumFolders = 1 << 16
+)
 
-	MaxStorageFolders = SELECT{
-		STD: uint64(1 << 16),
-		TST: uint64(1 << 3),
-	}[mode].(uint64)
+const (
+	// bitVectorGranularity is the granularity of one bitVector.
+	// Since bitVector is of type uint64, and each bit represents a single sector,
+	// so the granularity is 64 per bitVector
+	bitVectorGranularity = 64
+)
 
-	SectorMetaSize = 14
-}
+const (
+	// maxCreateFolderIDRetries defines maximum times of trying to create a folder id
+	maxCreateFolderIDRetries = 20
+
+	// maxFolderSelectionRetries is the max retry numbers used for selecting a folder to put a
+	// sector
+	maxFolderSelectionRetries = 3
+)

@@ -1,371 +1,389 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagemanager
 
 import (
 	"errors"
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/syndtr/goleveldb/leveldb"
+	"io"
 	"os"
 	"path/filepath"
-	"sync/atomic"
 )
 
-// prepareAddStorageFolder manage the first step for adding a folder
-func (sm *storageManager) prepareAddStorageFolder(path string, size uint64) (*storageFolder, error) {
-	var err error
-
-	// check the number of sectors
-	sectors := size / SectorSize
-
-	// check if the number of sector is less than maximum limitation
-	if sectors > MaxSectorPerFolder {
-		return nil, errors.New("folder size is too large")
+type (
+	// addStorageFolderUpdate is the structure used for add storage folder.
+	addStorageFolderUpdate struct {
+		path   string
+		size   uint64
+		txn    *writeaheadlog.Transaction
+		batch  *leveldb.Batch
+		folder *storageFolder
 	}
 
-	// check if the number of sector is more than minimum limitation
-	if sectors < MinSectorPerFolder {
-		return nil, errors.New("folder size is too small")
+	// addStorageFolderUpdatePersist is the structure of addStorageFolderUpdate
+	// only used for RLP. The fields are set to public, and use this structure
+	// only during the RLP encode and decode functions.
+	addStorageFolderUpdatePersist struct {
+		Path string
+		Size uint64
+	}
+)
+
+// AddStorageFolder add a storageFolder. The function could be called with a goroutine
+func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error) {
+	// Register in the thread manager
+	if err = sm.tm.Add(); err != nil {
+		return errStopped
+	}
+	defer sm.tm.Done()
+
+	// validate the add storage folder
+	if err = sm.validateAddStorageFolder(path, size); err != nil {
+		return
+	}
+	// create the update and record the intent
+	update := NewAddStorageFolderUpdate(path, size)
+
+	// record the update intent
+	if err = update.recordIntent(sm); err != nil {
+		err = fmt.Errorf("cannot record the intent for %v: %v", update.str(), err)
+		return
+	}
+	// prepare, process, and release the update
+	if err = sm.prepareProcessReleaseUpdate(update, targetNormal); err != nil {
+		upErr := err.(*updateError)
+		if !upErr.isNil() {
+			sm.logError(update, upErr)
+		} else {
+			err = nil
+		}
+		return
+	}
+	return
+}
+
+// validateAddStorageFolder validate the add storage folder request. Return error if validation failed
+func (sm *storageManager) validateAddStorageFolder(path string, size uint64) (err error) {
+	sm.folders.lock.Lock()
+	defer func() {
+		if err != nil {
+			sm.folders.lock.Unlock()
+		}
+	}()
+	// Check numSectors
+	numSectors := sizeToNumSectors(size)
+	if numSectors < minSectorsPerFolder {
+		err = fmt.Errorf("size too small")
+		return
+	}
+	if numSectors > maxSectorsPerFolder {
+		err = fmt.Errorf("size too large")
+		return
+	}
+	// check whether the folder path already exists
+	_, err = os.Stat(path)
+	if !os.IsNotExist(err) {
+		err = fmt.Errorf("folder already exists: %v", path)
+		return
+	}
+	// check whether the folders has exceed limit
+	if size := sm.folders.size(); size >= maxNumFolders {
+		err = fmt.Errorf("too many folders to manager")
+		return
+	}
+	// Check the existence of the folder in database
+	exist, err := sm.db.hasStorageFolder(path)
+	if err != nil {
+		err = fmt.Errorf("check existence error: %v", err)
+		return
+	}
+	if exist {
+		err = fmt.Errorf("folder already exist in database")
+		return
+	}
+	// Check the existence of the folder in folder manager
+	if sm.folders.exist(path) {
+		err = fmt.Errorf("folder already exist in memory")
+		return
+	}
+	return nil
+}
+
+// NewAddStorageFolderUpdate create a new addStorageFolderUpdate
+// Note the size in the update is not the same as the input
+func NewAddStorageFolderUpdate(path string, size uint64) (update *addStorageFolderUpdate) {
+	numSectors := sizeToNumSectors(size)
+	update = &addStorageFolderUpdate{
+		path: path,
+		size: numSectors * storage.SectorSize,
+	}
+	return
+}
+
+// EncodeRLP defines the rlp rule of the addStorageFolderUpdate
+func (update *addStorageFolderUpdate) EncodeRLP(w io.Writer) (err error) {
+	pUpdate := addStorageFolderUpdatePersist{
+		Path: update.path,
+		Size: update.size,
+	}
+	return rlp.Encode(w, pUpdate)
+}
+
+// DecodeRLP defines the rlp decode rule of the addStorageFolderUpdate
+func (update *addStorageFolderUpdate) DecodeRLP(st *rlp.Stream) (err error) {
+	var pUpdate addStorageFolderUpdatePersist
+	if err = st.Decode(&pUpdate); err != nil {
+		return
+	}
+	update.path, update.size = pUpdate.Path, pUpdate.Size
+	return nil
+}
+
+// str defines the user friendly string of the update
+func (update *addStorageFolderUpdate) str() (s string) {
+	// TODO: user friendly formatted print for size
+	s = fmt.Sprintf("Add storage folder [%v] of %v byte", update.path, update.size)
+	return
+}
+
+// recordIntent record the intent to wal to record the add folder intent
+func (update *addStorageFolderUpdate) recordIntent(manager *storageManager) (err error) {
+	manager.lock.RLock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+		}
+	}()
+
+	data, err := rlp.EncodeToBytes(update)
+	if err != nil {
+		return
+	}
+	op := writeaheadlog.Operation{
+		Name: opNameAddStorageFolder,
+		Data: data,
+	}
+	if update.txn, err = manager.wal.NewTransaction([]writeaheadlog.Operation{op}); err != nil {
+		return
+	}
+	return
+}
+
+// prepare is the interface function defined by update, which prepares an update.
+// For addStorageFolderUpdate, the prepare stage is defined by prepareNormal, prepareUncommitted,
+// prepareUncommitted based on the target.
+func (update *addStorageFolderUpdate) prepare(manager *storageManager, target uint8) (err error) {
+	// In the prepare stage, the folder in the folder manager should be locked and removed.
+	// Create the database batch, and write new data or delete data in the database
+	update.batch = manager.db.newBatch()
+	switch target {
+	case targetNormal:
+		err = update.prepareNormal(manager)
+	case targetRecoverCommitted:
+		err = update.prepareCommitted(manager)
+	default:
+		err = errors.New("unknown target")
+	}
+	return
+}
+
+// process process the update with specified target
+func (update *addStorageFolderUpdate) process(manager *storageManager, target uint8) (err error) {
+	switch target {
+	case targetNormal:
+		err = update.processNormal(manager)
+	case targetRecoverCommitted:
+		err = update.processCommitted(manager)
+	default:
+		err = errors.New("unknown target")
+	}
+	return
+}
+
+// release handle all errors and release the transaction
+func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
+	// After all release operation completes, unlock the folder and the folder manager
+	defer func() {
+		manager.folders.lock.Unlock()
+		if update.folder != nil {
+			update.folder.status = folderAvailable
+			update.folder.lock.Unlock()
+		}
+		manager.lock.RUnlock()
+	}()
+
+	// If no error happened during update, release the transaction and return
+	if upErr == nil || upErr.isNil() {
+		err = update.txn.Release()
+		return
+	}
+	if upErr.hasErrStopped() {
+		// If the storage manager has been stopped, simply do nothing and return
+		// hand it to the next open
+		upErr.processErr = nil
+		upErr.prepareErr = nil
+		return
+	}
+	// delete folder in memory
+	// The folders is locked before prepare. So it shall be safe to delete the entry
+	delete(manager.folders.sfs, update.path)
+	// If update failed at update stage, revert the memory and commit release the transaction
+	if upErr.prepareErr != nil {
+		if <-update.txn.InitComplete; update.txn.InitErr != nil {
+			update.txn = nil
+			err = update.txn.InitErr
+			return
+		}
+		newErr := <-update.txn.Commit()
+		err = common.ErrCompose(err, newErr)
+
+		newErr = update.txn.Release()
+		err = common.ErrCompose(err, newErr)
+		return
+	}
+	// Close the folder datafile
+	if update.folder != nil {
+		if newErr := update.folder.dataFile.Close(); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+		// Delete the entry in database
+		if newErr := manager.db.deleteStorageFolder(update.folder); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
+	}
+	// If the processErr is os.ErrExist, which means that the file not exist during validation,
+	// but during process, some other program (or user) created a file in the path, keep that
+	// file, which might be useful to other programs. So delete the file only if the processErr
+	// is not os.ErrExist
+	if upErr.processErr != os.ErrExist {
+		if newErr := os.Remove(filepath.Join(update.path, dataFileName)); newErr != nil {
+			err = common.ErrCompose(err, newErr)
+		}
 	}
 
-	// check if sectors could be map to each granularity exactly
-	if sectors%granularity != 0 {
-		return nil, errors.New("folder size should be a multiple of 64")
+	// release the transaction
+	if upErr.processErr != nil && update.txn != nil {
+		err = common.ErrCompose(err, update.txn.Release())
 	}
+	return
+}
 
-	// if the mode is not standard mode, a relative path is allowed to use
-	// for simplify the testing
-	if Mode == STD && !filepath.IsAbs(path) {
-		return nil, errors.New("given path is not an absolute path")
+// prepareNormal defines the prepare stage behaviour with the targetNormal.
+// In this scenario,
+// 1. lock the folders and check for whether the folder exist in folders. if exist, return error
+// 2. a new folder should be written to the batch
+// 3. Create a new locked folder and insert to the folder map
+// 4. The underlying transaction is committed.
+func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (err error) {
+	// construct the storage folder, lock the folder and register to manager.folders
+	id, err := manager.db.randomFolderID()
+	if err != nil {
+		return fmt.Errorf("cannot create id: %v", err)
 	}
-
-	// create a folder object
 	sf := &storageFolder{
-		path:        path,
-		usage:       make([]BitVector, sectors/granularity),
-		freeSectors: make(map[sectorID]uint32),
-		folderLock:  new(folderLock),
+		id:         id,
+		status:     folderUnavailable,
+		path:       update.path,
+		usage:      emptyUsage(update.size),
+		numSectors: sizeToNumSectors(update.size),
 	}
-
-	// in order to prevent duplicate add
-	// or create a folder which adding in progress use the wal
-	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
-
-	// check if the number of folder does not exceed the limitation
-	// this number must fits the folder which is adding in progress
-	if uint64(len(sm.folders)) >= MaxStorageFolders {
-		return nil, errors.New("reach the limitation of maximum number of folder")
+	sf.lock.Lock()
+	// For normal execution, the folders has already been locked. And the folder is also locked.
+	if err = manager.folders.addFolder(sf); err != nil {
+		err = fmt.Errorf("folder cannot register to storageManager: %v", err)
+		return
 	}
-
-	// loop through the folders in memory, if the folder intend to
-	// override a existing storage folder, return an error
-	for _, f := range sm.folders {
-		if path == f.path {
-			return nil, ErrFolderAlreadyExist
-		}
-	}
-
-	//find a random index for folder
-	sf.index, err = randomFolderIndex(sm.folders)
+	update.folder = sf
+	// Put the storageFolder in the batch
+	update.batch, err = manager.db.saveStorageFolderToBatch(update.batch, sf)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("cannot create save storage folder batch: %v", err)
 	}
-
-	// lock the folder, mark as cannot use until the folder addition been processed
-	sf.folderLock.Lock()
-	sm.folders[sf.index] = sf
-
-	// extract the config for the folder and write into log
-	sfConfig := extractFolder(*sf)
-	err = sm.wal.writeEntry(logEntry{PrepareAddStorageFolder: []folderPersist{sfConfig}})
-	if err != nil {
-		return nil, errors.New("cannot write wal")
+	if <-update.txn.InitComplete; update.txn.InitErr != nil {
+		return fmt.Errorf("cannot initialize the trnasaction: %v", update.txn.InitErr)
 	}
-
-	return sf, nil
+	return
 }
 
-// processAddStorageFolder start to create metadata files and sector file
-// for the folder object. Also include truncating
-func (sm *storageManager) processAddStorageFolder(sf *storageFolder) error {
-	// at the end of the operation, the folder can be used, do unlock
-	defer sf.folderLock.Unlock()
-	var err error
-
-	// defer the error handling process
-	defer func(sf *storageFolder) {
-		if err == nil {
-			return
-		}
-		// if the error is caused by the existing of sector or meta file
-		// just cancel the operation
-		if err == ErrDataFileAlreadyExist {
-			err = common.ErrCompose(err, sm.cancelAddStorageFolder(sf))
-			return
-		}
-
-		// if the error is caused by other error, need to revert the operation
-		err = common.ErrCompose(err, sm.revertAddStorageFolder(sf))
-	}(sf)
-
-	// this step is to make sure the metadata and sector data not exist
-	// int the folder, to avoid the override of data
-	_, metaErr := os.Stat(filepath.Join(sf.path, sectorMetaFileName))
-	_, dataErr := os.Stat(filepath.Join(sf.path, sectorDataFileName))
-	err = common.ErrCompose(metaErr, dataErr)
-	if err == nil {
-		// if any of them can be checked without error,
-		// means the sector and metadata exist in the folder
-		err = ErrDataFileAlreadyExist
-		return err
-	} else if !os.IsNotExist(metaErr) || !os.IsNotExist(dataErr) {
-		// if the error is not caused by non existing of file
-		// TODO: log warning or crash
+// processNormal process the update as normal, which will
+// 1. create the folder in location specified by path
+// 2. Write the batch to db
+// Note in this function, if file exist will return os.ErrExist, which should be handled in
+// release
+func (update *addStorageFolderUpdate) processNormal(manager *storageManager) (err error) {
+	if err = <-update.txn.Commit(); err != nil {
+		return fmt.Errorf("cannot commit the transaction: %v", err)
 	}
-
-	// create all the directory
-	if err = os.MkdirAll(sf.path, 0700); err != nil {
+	// check again whether the folder exists
+	if _, err := os.Stat(filepath.Join(update.path)); !os.IsNotExist(err) {
+		return os.ErrExist
+	}
+	// create the directory
+	if err = os.MkdirAll(update.path, 0700); err != nil {
 		return err
 	}
-
-	// create the metadata file
-	sf.sectorMeta, err = os.Create(filepath.Join(sf.path, sectorMetaFileName))
+	// create the data file
+	update.folder.dataFile, err = os.Create(filepath.Join(update.path, dataFileName))
 	if err != nil {
+		return
+	}
+	// truncate the data file
+	if err = update.folder.dataFile.Truncate(int64(update.size)); err != nil {
 		return err
 	}
-
-	// create the sector file
-	sf.sectorData, err = os.Create(filepath.Join(sf.path, sectorDataFileName))
-	if err != nil {
+	// write the batch to database
+	if err = manager.db.writeBatch(update.batch); err != nil {
 		return err
 	}
-
-	if Mode == TST && MockFails["ADD_FAIL"] {
-		err = ErrMock
-		return err
-	}
-
-	// try to truncate the sector file
-	err = sf.sectorData.Truncate(int64(len(sf.usage) * granularity * int(SectorSize)))
-	if err != nil {
-		return err
-	}
-
-	// try to truncate the meta file
-	err = sf.sectorMeta.Truncate(int64(len(sf.usage) * granularity * int(SectorMetaSize)))
-	if err != nil {
-		return err
-	}
-
-	// lock the wal
-	sm.wal.lock.Lock()
-
-	// re update the folder mapping
-	sm.folders[sf.index] = sf
-
-	if Mode == TST && MockFails["ADD_EXIT"] {
-		sm.wal.lock.Unlock()
-		sm.stopChan <- struct{}{}
-		return nil
-	}
-
-	// extract the folder information and write to entry
-	sfConfig := extractFolder(*sf)
-	err = sm.wal.writeEntry(logEntry{ProcessedAddStorageFolder: []folderPersist{sfConfig}})
-	if err != nil {
-		sm.wal.lock.Unlock()
-		return errors.New("cannot write wal, consider crashing in future")
-	}
-
-	sm.wal.lock.Unlock()
-
-	return nil
+	return
 }
 
-// revertAddStorageFolder revert the change of the storage folder
-func (sm *storageManager) revertAddStorageFolder(sf *storageFolder) error {
-	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
-
-	var err error
-
-	// delete the folder from the mapping
-	delete(sm.folders, sf.index)
-
-	// extract the information of folder to be removed
-	// and record the folder information to the log
-	folder := extractFolder(*sf)
-	err = sm.wal.writeEntry(logEntry{RevertAddStorageFolder: []folderPersist{folder}})
-	if err != nil {
-		// TODO : consider just crashing the system to prevent corruption
-		return errors.New("cannot write wal, consider crashing in the future")
+// decodeAddStorageFolderUpdate decode the transaction to the addStorageFolderUpdate
+func decodeAddStorageFolderUpdate(txn *writeaheadlog.Transaction) (update *addStorageFolderUpdate, err error) {
+	// only the data in the first operation is needed
+	if len(txn.Operations) < 1 {
+		return nil, fmt.Errorf("add storage folder transaction not having operation")
 	}
-
-	// close and remove the sector file, metadata file
-
-	err = common.ErrCompose(err, sf.sectorData.Close())
-	err = common.ErrCompose(err, sf.sectorMeta.Close())
-	// using of removeAll to simplify the case that the sector or meta file have not been create yet
-	err = common.ErrCompose(err, os.RemoveAll(filepath.Join(sf.path, sectorDataFileName)))
-	err = common.ErrCompose(err, os.RemoveAll(filepath.Join(sf.path, sectorMetaFileName)))
-
-	return err
+	b := txn.Operations[0].Data
+	if err = rlp.DecodeBytes(b, &update); err != nil {
+		return
+	}
+	update.txn = txn
+	return
 }
 
-func (sm *storageManager) cancelAddStorageFolder(sf *storageFolder) error {
-	sm.wal.lock.Lock()
-	defer sm.wal.lock.Unlock()
-
-	// TODO: dangerous operation, may clean out an already mapped memory
-	// delete the folder from the mapping
-	delete(sm.folders, sf.index)
-
-	// extract the information of folder to be removed
-	// and record the folder information to the log
-	folder := extractFolder(*sf)
-	err := sm.wal.writeEntry(logEntry{CancelAddStorageFolder: []folderPersist{folder}})
+// lockResource locks the resource during recover
+func (update *addStorageFolderUpdate) lockResource(manager *storageManager) (err error) {
+	manager.lock.RLock()
+	// lock the folders until release
+	manager.folders.lock.Lock()
+	defer func() {
+		if err != nil {
+			manager.lock.RUnlock()
+			manager.folders.lock.Unlock()
+		}
+	}()
+	update.folder, err = manager.folders.get(update.path)
 	if err != nil {
-		//TODO: consider crashing the system to prevent corruption
 		return err
 	}
 	return nil
 }
 
-// find the already processed folder
-func findProcessedFolderAddition(entries []logEntry) []folderPersist {
-	entryMap := make(map[uint16]folderPersist)
-	// loop through the entry and find the processed addition
-	for _, entry := range entries {
-		for _, sf := range entry.ProcessedAddStorageFolder {
-			entryMap[sf.Index] = sf
-		}
-	}
-	// convert the map to array
-	var folders []folderPersist
-	for _, sf := range entryMap {
-		folders = append(folders, sf)
-	}
-	return folders
+// prepareCommitted is the function called in prepare stage as preparing committed updates
+func (update *addStorageFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
+	return
 }
 
-// find all the unprocessed folder addition, return a array of folder
-// which have not start to do operation yet
-func findUnprocessedFolderAddition(entries []logEntry) []folderPersist {
-	entryMap := make(map[uint16]folderPersist)
-
-	// loop through the entries
-	for _, entry := range entries {
-		// add all the folder in prepare stage
-		for _, sf := range entry.PrepareAddStorageFolder {
-			entryMap[sf.Index] = sf
-		}
-
-		// delete all the folder processed add operation
-		for _, sf := range entry.ProcessedAddStorageFolder {
-			delete(entryMap, sf.Index)
-		}
-
-		// delete all the folder in revert state
-		for _, sf := range entry.RevertAddStorageFolder {
-			delete(entryMap, sf.Index)
-		}
-
-		for _, sf := range entry.CancelAddStorageFolder {
-			delete(entryMap, sf.Index)
-		}
-
-		// TODO: delete the folder in removal stage
-	}
-
-	// convert map to array
-	var folders []folderPersist
-	for _, sf := range entryMap {
-		folders = append(folders, sf)
-	}
-	return folders
-}
-
-// if the prepare stage is logged, which means there is no duplication in folders,
-// so no worry about delete data already exist
-func (sm *storageManager) clearUnprocessedAddition(unProcessedAddition []folderPersist) {
-	var err error
-	// check through all unprocessed additions
-	for _, sf := range unProcessedAddition {
-		f, exists := sm.folders[sf.Index]
-
-		// if the folder not exist
-		if !exists {
-			if err := os.RemoveAll(sf.Path); err != nil {
-				// TODO: log: consider if this is an dangerous operation or not
-			}
-			continue
-		}
-		if f.sectorData != nil {
-			// close sector metadata file
-			if err = f.sectorMeta.Close(); err != nil {
-				// TODO: log
-			}
-			// remove the meta data
-			if err = os.RemoveAll(filepath.Join(f.path, sectorMetaFileName)); err != nil {
-				// TODO: log
-			}
-			// close sector data file
-			if err = f.sectorData.Close(); err != nil {
-				// TODO: log
-			}
-			// remove the sector data file
-			if err = os.RemoveAll(filepath.Join(f.path, sectorDataFileName)); err != nil {
-				// TODO: log
-			}
-		}
-		// delete the record from memory
-		delete(sm.folders, sf.Index)
-	}
-}
-
-// commit the processed additions, mainly do create the folder object and load into the memory
-func (sm *storageManager) commitProcessedAddition(processedAddition []folderPersist) {
-	// loop through the processed additions
-	for _, sf := range processedAddition {
-		// check if is recorded in the memory
-		f, exists := sm.folders[sf.Index]
-		// if the folder exist in memory, close the files,
-		// and will be reopen after this block in order to get refresh
-		if exists {
-			// if folder object exist in the memory
-			if f.sectorMeta != nil {
-				// availability handle below
-				_ = f.sectorMeta.Close()
-			}
-
-			if f.sectorData != nil {
-				// availability handle below
-				_ = f.sectorData.Close()
-			}
-		}
-
-		f = &storageFolder{
-			index: sf.Index,
-			path:  sf.Path,
-			usage: sf.Usage,
-		}
-
-		atomic.StoreUint64(&f.atomicUnavailable, 0)
-
-		var err error
-
-		// only the folder could be open can be recorded
-		f.sectorMeta, err = os.OpenFile(filepath.Join(sf.Path, sectorMetaFileName), os.O_RDWR, 0700)
-		if err != nil {
-			// if there is error, not load the things to memory
-			continue
-		}
-
-		f.sectorData, err = os.OpenFile(filepath.Join(sf.Path, sectorDataFileName), os.O_RDWR, 0700)
-		if err != nil {
-			// if there is error, not load the things to memory
-			continue
-		}
-
-		// load the folder to memory
-		sm.folders[f.index] = f
-	}
+// processCommitted is the function called in process stage as processing committed an uncommitted updates
+func (update *addStorageFolderUpdate) processCommitted(manager *storageManager) (err error) {
+	// Do nothing, just return errRevert.
+	return errRevert
 }

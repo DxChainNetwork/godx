@@ -1,75 +1,198 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagemanager
 
 import (
+	"crypto/rand"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"io"
 	"os"
-	"sync"
-	"sync/atomic"
-	"unsafe"
+	"path/filepath"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
-// storage Folder is an object representation of folder
-// for storing the files and sectors
-type storageFolder struct {
-	// atomicUnavailable mark if the folder is damaged or not
-	atomicUnavailable uint64
+type (
+	storageFolder struct {
+		// id is a uint32 associated with a folder. It is randomly generated
+		// unique key of a folder.
+		id folderID
 
-	// index represent the index of the folder
-	index uint16
-	// path represent the path of the folder
-	path string
-	// usage mark the usage, every 64 sector come to form a BitVector
-	// represent in decimal, but use as binary
-	usage []BitVector
+		// status is the atomic field mark if the folder is damaged or not
+		// folderAvailable / folderUnavailable
+		status uint32
 
-	// free Sectors mark the sector actually free but marked as used
-	// in usage
-	freeSectors map[sectorID]uint32
+		// Path represent the Path of the folder
+		path string
 
-	// sector is the number of sector in this folder
-	sectors uint64
+		// Usage mark the Usage, every 64 sector come to form a bitVector
+		// represent in decimal, but use as binary
+		usage []bitVector
 
-	// meta data point to an os file storing the metadata of sector
-	sectorMeta *os.File
+		// TODO: Remove or add back freeSectors
+		//// free Sectors mark the sector actually free but marked as used
+		//// in Usage
+		//freeSectors map[sectorID]uint32
 
-	// data point to an os file storing the data of sector
-	sectorData *os.File
+		// sector is the total number of sector in this folder
+		numSectors uint64
 
-	// folderLock locked the storage folder to prevent racing
-	folderLock *folderLock
-}
+		// StoredSectors is the number of sectors stored in the folder
+		storedSectors uint64
 
-const folderMutex = 1 << iota
+		// folderLock locked the storage folder to prevent racing
+		lock common.TryLock
 
-// folder lock to lock a folder, implement locker
-type folderLock struct {
-	lock sync.Mutex
-}
-
-func (fl *folderLock) Lock() {
-	fl.lock.Lock()
-}
-
-func (fl *folderLock) Unlock() {
-	fl.lock.Unlock()
-}
-
-// TryLock try to lock the folder if there is no lock and return true
-// if it is already locked, do nothing and return false
-func (fl *folderLock) TryLock() bool {
-	return atomic.CompareAndSwapInt32((*int32)(unsafe.Pointer(&fl.lock)), 0, folderMutex)
-}
-
-// existingStorageFolder find all the existing storage folder
-func (sm *storageManager) existingStorageFolder() []*storageFolder {
-	sfs := make([]*storageFolder, 0)
-	// loop through the folder map, add all available folder to the slice
-	for _, sf := range sm.folders {
-		// check if the folder is available or not
-		if atomic.LoadUint64(&sf.atomicUnavailable) == 1 {
-			continue
-		}
-		sfs = append(sfs, sf)
+		// dataFile is the file where all the data sectors locates
+		dataFile *os.File
 	}
 
-	return sfs
+	// storageFolderPersist defines the persist data to be stored in database
+	// The data is stored as "storagefolder_${folderID}" -> storageFolderPersist
+	storageFolderPersist struct {
+		ID            uint32
+		Path          string
+		Usage         []bitVector
+		NumSectors    uint64
+		StoredSectors uint64
+	}
+
+	folderID uint32
+)
+
+// EncodeRLP defines the encode rule of the storage folder
+func (sf *storageFolder) EncodeRLP(w io.Writer) (err error) {
+	sfp := storageFolderPersist{
+		ID:            uint32(sf.id),
+		Path:          sf.path,
+		Usage:         sf.usage,
+		NumSectors:    sf.numSectors,
+		StoredSectors: sf.storedSectors,
+	}
+	return rlp.Encode(w, sfp)
+}
+
+// DecodeRLP defines the decode rule of the storage folder.
+// Note the decoded storageFolder index field is not filled by the rlp decode rule
+func (sf *storageFolder) DecodeRLP(st *rlp.Stream) (err error) {
+	var sfp storageFolderPersist
+	if err = st.Decode(&sfp); err != nil {
+		return
+	}
+	sf.id, sf.path, sf.usage, sf.numSectors, sf.storedSectors = folderID(sfp.ID), sfp.Path, sfp.Usage, sfp.NumSectors, sfp.StoredSectors
+	sf.status = folderAvailable
+	return
+}
+
+// load load the storage folder data file.
+func (sf *storageFolder) load() (err error) {
+	datafilePath := filepath.Join(sf.path, dataFileName)
+	fileInfo, err := os.Stat(datafilePath)
+	if os.IsNotExist(err) {
+		sf.status = folderUnavailable
+		err = errors.New("data file not exist")
+		return
+	}
+	if fileInfo.Size() < int64(sf.numSectors)*int64(storage.SectorSize) {
+		sf.status = folderUnavailable
+		err = errors.New("file size too small")
+		return
+	}
+	if sf.dataFile, err = os.OpenFile(datafilePath, os.O_RDWR, 0600); err != nil {
+		sf.status = folderUnavailable
+		return
+	}
+	return
+}
+
+// freeSectorIndex randomly find a free slot to insert the sector.
+// If cannot find such a slot, return errFolderAlreadyFull
+// Note this function must be called with lock protected
+func (sf *storageFolder) freeSectorIndex() (index uint64, err error) {
+	if sf.storedSectors >= sf.numSectors {
+		return 0, errFolderAlreadyFull
+	}
+	startIndex := randomUint64() % sf.numSectors
+	index = startIndex
+	// Loop through all indexes
+	for {
+		usageIndex := index / bitVectorGranularity
+		bitIndex := index % bitVectorGranularity
+		if sf.usage[usageIndex] == math.MaxUint64 {
+			// Skip to the next usage
+			index = (usageIndex + 1) * bitVectorGranularity
+			if index >= sf.numSectors {
+				index = 0
+			}
+			continue
+		}
+		if sf.usage[usageIndex].isFree(bitIndex) {
+			return
+		}
+		index++
+		if index >= sf.numSectors {
+			index = 0
+		}
+		// If index has returned to the starting point, break and return
+		if index == startIndex {
+			break
+		}
+	}
+	return 0, errFolderAlreadyFull
+}
+
+// setFreeSectorSlot set the slot specified by the index to free.
+// If the slot is already freed, report an error
+// Note the storage folder must be locked to use this function
+func (sf *storageFolder) setFreeSectorSlot(index uint64) (err error) {
+	usageIndex := index / bitVectorGranularity
+	bitIndex := index % bitVectorGranularity
+	if sf.usage[usageIndex].isFree(bitIndex) {
+		err = fmt.Errorf("sector slot %d already free", index)
+		return
+	}
+	sf.usage[usageIndex].clearUsage(bitIndex)
+	sf.storedSectors--
+	return
+}
+
+// setUsedSectorSlot set the slot specified by the index to used
+// If the slot is already used, report an error
+// Note the storage folder must be locked to use this function
+func (sf *storageFolder) setUsedSectorSlot(index uint64) (err error) {
+	usageIndex := index / bitVectorGranularity
+	bitIndex := index % bitVectorGranularity
+	if !sf.usage[usageIndex].isFree(bitIndex) {
+		err = fmt.Errorf("sector slot %d already occupied", index)
+		return
+	}
+	sf.usage[usageIndex].setUsage(bitIndex)
+	sf.storedSectors++
+	return
+}
+
+// sizeToNumSectors convert the size to number of sectors
+func sizeToNumSectors(size uint64) (numSectors uint64) {
+	numSectors = size / storage.SectorSize
+	return
+}
+
+// numSectorsToSize convert the numSectors to size.
+func numSectorsToSize(numSectors uint64) (size uint64) {
+	size = numSectors * storage.SectorSize
+	return
+}
+
+// randomUint64 create a random uint64
+func randomUint64() (num uint64) {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return binary.LittleEndian.Uint64(b)
 }

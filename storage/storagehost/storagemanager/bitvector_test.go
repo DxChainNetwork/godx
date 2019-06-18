@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagemanager
 
 import (
@@ -5,6 +9,7 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // TestIsFree test if the bits is actually free
@@ -13,11 +18,11 @@ func TestIsFree(t *testing.T) {
 	// generate 10 random number and convert to binary
 	for i := 0; i < 10; i++ {
 		// step to avoid overflow
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		bit := getReversedBinary(int64(vec), t)
 		// because there is 64 bit in binary format
 		for i := 0; i < 64; i++ {
-			free := vec.isFree(uint16(i))
+			free := vec.isFree(uint64(i))
 			// the bit is actually filled
 			if bit[i] == 1 && free {
 				t.Error("the bit should be used")
@@ -31,37 +36,37 @@ func TestIsFree(t *testing.T) {
 }
 
 // TestSetUsage check if the function could clear
-// the usage and update the input vector
+// the Usage and update the input vector
 func TestSetUsage(t *testing.T) {
 	// take 10 turns and generate 10 random number
 	for i := 0; i < 10; i++ {
 		// step to avoid overflow
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
-			// set every usage
-			vec.setUsage(uint16(i))
+			// set every Usage
+			vec.setUsage(uint64(i))
 		}
-		// after all usage been set, the result should be the maximum uin64
+		// after all Usage been set, the result should be the maximum uin64
 		if vec != math.MaxUint64 {
-			t.Error("some usage may not be set")
+			t.Error("some Usage may not be set")
 		}
 	}
 }
 
 // TestClearUsage check if the function could clear
-// a usage and update the number
+// a Usage and update the number
 func TestClearUsage(t *testing.T) {
 	// take 10 turns and generate random number
 	for i := 0; i < 10; i++ {
-		var vec = BitVector(rand.Uint64() >> 1)
+		var vec = bitVector(rand.Uint64() >> 1)
 		for i := 0; i < 64; i++ {
-			// clear the usage on each bit
-			vec.clearUsage(uint16(i))
+			// clear the Usage on each bit
+			vec.clearUsage(uint64(i))
 		}
 
-		// after all usage been cleared, vec should be 0
+		// after all Usage been cleared, vec should be 0
 		if vec != 0 {
-			t.Error("some usage may not be set")
+			t.Error("some Usage may not be set")
 		}
 	}
 }
@@ -89,4 +94,34 @@ func getReversedBinary(num int64, t *testing.T) []int {
 		b[i], b[j] = b[j], b[i]
 	}
 	return b
+}
+
+// TestBitVector test the operations for bitVector
+func TestBitVector(t *testing.T) {
+	rand.Seed(time.Now().UnixNano())
+	testTimes := 10000
+	if testing.Short() {
+		testTimes = 100
+	}
+	vec := bitVector(0)
+	usage := make([]bool, bitVectorGranularity)
+	for i := 0; i != testTimes; i++ {
+		n := rand.Intn(64)
+		addOrDelete := rand.Int()%2 == 0
+		if addOrDelete {
+			vec.setUsage(uint64(n))
+			usage[n] = true
+		} else {
+			vec.clearUsage(uint64(n))
+			usage[n] = false
+		}
+		if i%10 == 0 {
+			// Check consistency every 10 updates
+			for idx := 0; idx != bitVectorGranularity; idx++ {
+				if vec.isFree(uint64(idx)) == usage[idx] {
+					t.Errorf("isFree not expected at index [%d] at %d update", idx, i)
+				}
+			}
+		}
+	}
 }
