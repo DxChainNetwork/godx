@@ -4,7 +4,7 @@
 
 /*
 
-Package storageclient implements the storage client methods used for file uploading
+Package storage client implements the storage client methods used for file uploading
 and file downloading
 
 */

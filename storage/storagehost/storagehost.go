@@ -446,11 +446,14 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 	s.SetDeadLine(storage.HostSettingTime)
 
 	settings := h.externalConfig()
-	return s.SendHostExtSettingsResponse(settings)
+	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+		return errors.New("host setting request done")
+	} else {
+		return err
+	}
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-
 	// this RPC call contains two request/response exchanges.
 	s.SetDeadLine(storage.FormContractTime)
 
@@ -589,7 +592,11 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		return ExtendErr("finalize storage obligation error", err)
 	}
 
-	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
+	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
+		return errors.New("storage contract new process done")
+	} else {
+		return err
+	}
 }
 
 // renewBasePrice returns the base cost of the storage in the  contract,
@@ -677,7 +684,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
+	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -886,10 +893,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
 	for _, sec := range req.Sections {
-
-		// use the worst-case proof size of 2*tree depth.
-		// this occurs when proving across the two leaves in the center of the tree.
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
+		// use the worst-case proof size of 2*tree depth (this occurs when
+		// proving across the two leaves in the center of the tree)
+		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
@@ -942,8 +948,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// construct the Merkle proof, if requested.
 		var proof []common.Hash
 		if req.MerkleProof {
-			proofStart := int(sec.Offset) / storage.SegmentSize
-			proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
+			proofStart := int(sec.Offset) / merkle.LeafSize
+			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
 				return err

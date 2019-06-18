@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -28,22 +27,22 @@ type worker struct {
 	// the time that last failure
 	ownedDownloadRecentFailure time.Time
 
-	// Notifications of new work. Takes priority over uploads.
+	// Notifications of new download work. Takes priority over uploads.
 	downloadChan chan struct{}
 
-	// Yet unprocessed work items.
 	downloadSegments []*unfinishedDownloadSegment
 	downloadMu       sync.Mutex
 
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	// TODO: Upload variables.
-	//unprocessedSegments         []*unfinishedUploadSegment // Yet unprocessed work items.
-	//uploadChan                chan struct{}            // Notifications of new work.
-	//uploadConsecutiveFailures int                      // How many times in a row uploading has failed.
-	//uploadRecentFailure       time.Time                // How recent was the last failure?
-	//uploadTerminated          bool                     // Have we stopped uploading?
+	// pending upload segment in heap
+	pendingSegments []*unfinishedUploadSegment
+
+	uploadChan                chan struct{} // Notifications of new segment
+	uploadConsecutiveFailures int           // How many times in a row uploading has failed.
+	uploadRecentFailure       time.Time     // How recent was the last failure?
+	uploadTerminated          bool          // Have we stopped uploading?
 
 	// Worker will shut down if a signal is sent down this channel.
 	killChan chan struct{}
@@ -52,104 +51,76 @@ type worker struct {
 
 // ActivateWorkerPool will grab the set of contracts from the contract manager and
 // update the worker pool to match.
-func (c *StorageClient) activateWorkerPool() {
-
+func (sc *StorageClient) activateWorkerPool() {
 	// get all contracts in client
-	contractMap := c.contractManager.GetStorageContractSet().Contracts()
+	contractMap := sc.contractManager.GetStorageContractSet().Contracts()
 
 	// new a worker for a contract that haven't a worker
 	for id, contract := range contractMap {
-		c.lock.Lock()
-		_, exists := c.workerPool[id]
+		sc.lock.Lock()
+		_, exists := sc.workerPool[id]
 		if !exists {
-			h := contract.Header()
-			clientContract := storage.ContractMetaData{
-				ID:                     id,
-				EnodeID:                h.EnodeID,
-				StartHeight:            h.StartHeight,
-				EndHeight:              h.LatestContractRevision.NewWindowStart,
-				LatestContractRevision: h.LatestContractRevision,
-				UploadCost:             h.UploadCost,
-				DownloadCost:           h.DownloadCost,
-				StorageCost:            h.StorageCost,
-				TotalCost:              contract.Header().TotalCost,
-				GasCost:                h.GasFee,
-				ContractFee:            h.ContractFee,
-				Status:                 h.Status,
-
-				// the amount remaining in the contract that the client can spend.
-				ContractBalance: common.PtrBigInt(h.LatestContractRevision.NewValidProofOutputs[0].Value),
-			}
-
 			worker := &worker{
-				contract:     clientContract,
+				contract:     contract.Metadata(),
 				hostID:       contract.Header().EnodeID,
 				downloadChan: make(chan struct{}, 1),
+				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-
-				// TODO: 初始化upload变量
-				//uploadChan:   make(chan struct{}, 1),
-
-				client: c,
+				client:       sc,
 			}
-			c.workerPool[id] = worker
-			if err := c.tm.Add(); err != nil {
-				log.Error("storage client thread manager failed to add in activateWorkerPool", "error", err)
+			sc.workerPool[id] = worker
+
+			// start worker goroutine
+			if err := sc.tm.Add(); err != nil {
+				log.Error("storage client failed to add in worker progress", "error", err)
 				break
 			}
 			go func() {
-				defer c.tm.Done()
+				defer sc.tm.Done()
 				worker.workLoop()
 			}()
+
 		}
-		c.lock.Unlock()
+		sc.lock.Unlock()
 	}
 
 	// Remove a worker for any worker that is not in the set of new contracts.
-	c.lock.Lock()
-	for id, worker := range c.workerPool {
+	sc.lock.Lock()
+	for id, worker := range sc.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(c.workerPool, id)
+			delete(sc.sessionSet, id)
+			delete(sc.workerPool, id)
 			close(worker.killChan)
 		}
 	}
-	c.lock.Unlock()
+	sc.lock.Unlock()
 }
 
 // WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
-
-	// TODO: kill上传任务
-	//defer w.managedKillUploading()
-
+	defer w.killUploading()
 	defer w.killDownloading()
 
 	for {
-
-		// Perform one step of processing download task.
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
 			w.download(downloadSegment)
 			continue
 		}
 
-		// TODO: 执行上传任务
-		// Perform one step of processing upload task.
-		//segment, sectorIndex := w.managedNextUploadSegment()
-		//if segment != nil {
-		//	w.managedUpload(segment, sectorIndex)
-		//	continue
-		//}
+		segment, sectorIndex := w.nextUploadSegment()
+		if segment != nil {
+			w.upload(segment, sectorIndex)
+			continue
+		}
 
 		// keep listening for a new upload/download task, or a stop signal
 		select {
 		case <-w.downloadChan:
 			continue
-
-		// TODO: 监听上传任务
-		//case <-w.uploadChan:
-		//	continue
+		case <-w.uploadChan:
+			continue
 		case <-w.killChan:
 			return
 		case <-w.client.tm.StopChan():

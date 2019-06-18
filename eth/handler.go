@@ -83,8 +83,6 @@ type ProtocolManager struct {
 	fetcher                 *fetcher.Fetcher
 	peers                   *peerSet
 	storageContractSessions *storage.SessionSet
-	storageContractContext  *ethdb.MemDatabase
-	storageContractContext2 Context
 	SubProtocols            []p2p.Protocol
 
 	eventMux      *event.TypeMux
@@ -118,7 +116,6 @@ func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode download
 		chainconfig:             config,
 		peers:                   newPeerSet(),
 		storageContractSessions: storage.NewSessionSet(),
-		storageContractContext:  ethdb.NewMemDatabase(),
 		whitelist:               whitelist,
 		newPeerCh:               make(chan *peer),
 		noMorePeers:             make(chan struct{}),
@@ -219,9 +216,9 @@ func (pm *ProtocolManager) removeStorageContactSession(id string) {
 	if peer == nil {
 		return
 	}
-	log.Debug("Removing Ethereum peer", "peer", id)
+	log.Debug("Removing StorageContract peer", "peer", id)
 
-	// Unregister the peer from Ethereum peer set
+	// Unregister the peer from StorageContract peer set
 	if err := pm.storageContractSessions.Unregister(id); err != nil {
 		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
@@ -351,24 +348,31 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	} else {
-		p.Log().Debug("Ethereum peer connected", "name", p.Name())
+		p.Log().Debug("DX session connected", "name", p.Name())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
 		}
 		session := p.Peer2Session()
 		if err := pm.storageContractSessions.Register(session); err != nil {
-			p.Log().Error("Ethereum peer registration failed", "err", err)
+			p.Log().Error("DX session registration failed", "err", err)
 			return err
 		}
 		defer pm.removeStorageContactSession(p.id)
 
 		if session.Inbound() {
-			return pm.eth.storageHost.HandleSession(session)
+			for {
+				if err := pm.eth.storageHost.HandleSession(session); err != nil {
+					p.Log().Debug("Storage host handle session message failed", "err", err)
+					return err
+				}
+			}
 		} else {
 			select {
 			case err := <-session.ClientDiscChan():
 				return err
+			case <-session.Peer.ClosedChan():
+				return errors.New("DX session is closed")
 			}
 		}
 	}
@@ -864,8 +868,4 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 
 func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
 	return pm.storageContractSessions
-}
-
-func (pm *ProtocolManager) SaveStorageContract(peerID string, key string, data interface{}) {
-	pm.storageContractContext2.Store(peerID, key, data)
 }

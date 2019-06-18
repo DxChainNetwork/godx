@@ -13,7 +13,7 @@ import (
 )
 
 var settingsMetadata = common.Metadata{
-	Header:  "Storage Client Settings",
+	Header:  "storage client Settings",
 	Version: PersistStorageClientVersion,
 }
 

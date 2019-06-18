@@ -5650,6 +5650,12 @@ module.exports = Net;
               params: 2,
             });
 
+            var upload = new Method({
+                name: 'upload',
+                call: 'storageclient_upload',
+                params: 2,
+            });
+
             var setClientSetting = new Method({
                 name: 'setClientSetting',
                 call: 'storageclient_setClientSetting',
@@ -5692,6 +5698,7 @@ module.exports = Net;
                 memorylimit,
                 setMemoryLimit,
                 download,
+                upload,
                 setClientSetting,
                 clientSetting,
                 setPaymentAddress,

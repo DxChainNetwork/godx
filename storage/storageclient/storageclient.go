@@ -16,17 +16,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/core/vm"
-	"github.com/DxChainNetwork/godx/rlp"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
@@ -55,6 +54,9 @@ type StorageClient struct {
 	downloadHeap   *downloadSegmentHeap
 	newDownloads   chan struct{}
 
+	// Upload management
+	uploadHeap uploadHeap
+
 	// List of workers that can be used for uploading and/or downloading.
 	workerPool map[storage.ContractID]*worker
 
@@ -77,7 +79,9 @@ type StorageClient struct {
 	apiBackend ethapi.Backend
 
 	// get the P2P server for adding peer
-	p2pServer *p2p.Server
+	p2pServer   *p2p.Server
+	sessionLock sync.Mutex
+	sessionSet  map[storage.ContractID]*storage.Session
 }
 
 // New initializes StorageClient object
@@ -90,7 +94,12 @@ func New(persistDir string) (*StorageClient, error) {
 		log:            log.New(),
 		newDownloads:   make(chan struct{}, 1),
 		downloadHeap:   new(downloadSegmentHeap),
-		workerPool:     make(map[storage.ContractID]*worker),
+		uploadHeap: uploadHeap{
+			pendingSegments:     make(map[uploadSegmentID]struct{}),
+			segmentComing:       make(chan struct{}, 1),
+			stuckSegmentSuccess: make(chan storage.DxPath, 1),
+		},
+		workerPool: make(map[storage.ContractID]*worker),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -136,11 +145,19 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 		return err
 	}
 
+	if err = sc.fileSystem.Start(); err != nil {
+		return err
+	}
+
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
-	// loop to download
+	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
+	go sc.uploadLoop()
+	go sc.stuckLoop()
+	go sc.uploadOrRepair()
+	go sc.healthCheckLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {
@@ -156,8 +173,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 		return err
 	}
 
-	// TODO (Jacky): Starting Worker, Checking file healthy, etc.
-
 	sc.log.Info("Storage Client Started")
 
 	return nil
@@ -170,12 +185,12 @@ func (sc *StorageClient) Close() error {
 	var fullErr error
 
 	// Closing the host manager
-	sc.log.Info("Closing The Renter Host Manager")
+	sc.log.Info("Closing the storage client host manager")
 	err := sc.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the file system
-	sc.log.Info("Closing the renter file system")
+	sc.log.Info("Closing the storage client file system")
 	err = sc.fileSystem.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
@@ -184,6 +199,30 @@ func (sc *StorageClient) Close() error {
 	err = sc.tm.Stop()
 	fullErr = common.ErrCompose(fullErr, err)
 	return fullErr
+}
+
+func (sc *StorageClient) DeleteFile(path storage.DxPath) error {
+	if err := sc.tm.Add(); err != nil {
+		return err
+	}
+	defer sc.tm.Done()
+	return sc.fileSystem.FileSet().Delete(path)
+}
+
+// Check whether the contract session is uploading or downloading
+func (sc *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) bool {
+	sc.sessionLock.Lock()
+	defer sc.sessionLock.Unlock()
+	if s, ok := sc.sessionSet[contractID]; ok && s.IsBusy() {
+		revisionDoneTime := time.After(RevisionDoneTime)
+		select {
+		case <-revisionDoneTime:
+			return false
+		case <-s.RevisionDone():
+			return true
+		}
+	}
+	return true
 }
 
 // ContractDetail will return the detailed contract information
@@ -286,27 +325,27 @@ func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit
 	return nil
 }
 
-func (sc *StorageClient) Append(session *storage.Session, data []byte) error {
-	return sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
+	err := sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+	return merkle.Root(data), err
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
 
-	// retrieve the last contract revision
-	contractRevision := types.StorageContractRevision{}
+	// Retrieve the last contract revision
 	scs := sc.contractManager.GetStorageContractSet()
 
-	// find the contractID formed by this host
+	// Find the contractID formed by this host
 	hostInfo := session.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
 	contractHeader := contract.Header()
-	contractRevision = contractHeader.LatestContractRevision
+	contractRevision := contractHeader.LatestContractRevision
 
 	// calculate price per sector
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
@@ -384,8 +423,11 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		session.SetDeadLine(time.Hour)
 	}()
 
-	// 1. send storage upload request
-	session.SetDeadLine(storage.ContractRevisionTime)
+	// 1. Send storage upload request
+	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
+		return err
+	}
+
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
 		return err
 	}
@@ -395,13 +437,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	msg, err := session.ReadMsg()
 	if err != nil {
 		return err
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
 	}
 
 	if err := msg.Decode(&merkleResp); err != nil {
@@ -414,6 +449,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	proofHashes := merkleResp.OldSubtreeHashes
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
+
 	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
 	if err != nil {
 		sc.log.Error("something wrong for verifying diff proof", "error", err)
@@ -463,14 +499,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return err
 	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return negotiationErr
-	}
-
 	if err := msg.Decode(&hostRevisionSig); err != nil {
 		return err
 	}
@@ -486,13 +514,9 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	return nil
 }
 
-// download
-
-// calls the Read RPC, writing the requested data to w.
-//
+// Download calls the Read RPC, writing the requested data to w
 // NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
-
 	// reset deadline when finished.
 	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
 	// the conn should be disconnected after 1 hour.
@@ -504,7 +528,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return errors.New("download out boundary of sector")
 		}
 		if req.MerkleProof {
-			if sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0 {
+			if sec.Offset%merkle.LeafSize != 0 || sec.Length%merkle.LeafSize != 0 {
 				return errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 			}
 		}
@@ -540,7 +564,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return errors.New(fmt.Sprintf("not exist this contract: %s", contractID.String()))
+		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
@@ -654,13 +678,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 				return errors.New("host did not send enough sector data")
 			}
 			if req.MerkleProof {
-				proofStart := int(sec.Offset) / storage.SegmentSize
-				proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
+				proofStart := int(sec.Offset) / merkle.LeafSize
+				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 				verified, err := merkle.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
-				if err != nil {
-					client.log.Error("something wrong for verifying range proof", "error", err)
-				}
-				if !verified {
+				if !verified || err != nil {
 					return errors.New("host provided incorrect sector data or Merkle proof")
 				}
 			}

@@ -16,11 +16,6 @@ import (
 
 type (
 
-	// where to write the downloaded data
-	writeDestination interface {
-		WriteAt(data []byte, offset int64) (int, error)
-	}
-
 	// a file download that has been queued by the client.
 	download struct {
 
