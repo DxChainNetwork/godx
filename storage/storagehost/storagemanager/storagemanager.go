@@ -220,6 +220,7 @@ func (sm *storageManager) DeleteFolder(folderPath string) (err error) {
 	if err = sm.db.deleteStorageFolder(sf); err != nil {
 		return err
 	}
+	sm.folders.delete(folderPath)
 	if err = sf.dataFile.Close(); err != nil {
 		return err
 	}
