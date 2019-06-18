@@ -347,7 +347,7 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	return
 }
 
-//A renew transaction initiated by the storage client
+//ContractRenew renew transaction initiated by the storage client
 func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params storage.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
@@ -538,7 +538,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	return contractMetaData, nil
 }
 
-// calculate Enode.ContractID, reference:
+// PubkeyToEnodeID calculate Enode.ContractID, reference:
 // p2p/discover/node.go:41
 // p2p/discover/node.go:59
 func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
@@ -548,7 +548,7 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
-// calculate client and host collateral
+// ClientPayoutsPreTax calculate client and host collateral
 func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {

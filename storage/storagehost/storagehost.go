@@ -57,26 +57,27 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		account := accounts.Account{Address: paymentAddress}
 		wallet, err := h.ethBackend.AccountManager().Find(account)
 		if err != nil {
-			h.log.Error("Failed to find the wallet", err)
+			h.log.Warn("Failed to find the wallet", "err", err)
 			acceptingContracts = false
 		}
 		//If the wallet is locked, you will not be able to enter the signing phase.
 		status, err := wallet.Status()
 		if status == "Locked" || err != nil {
-			h.log.Error("Wallet is not unlocked", err)
+			h.log.Warn("Wallet is not unlocked", "err", err)
 			acceptingContracts = false
 		}
 
 		stateDB, err := h.ethBackend.GetBlockChain().State()
 		if err != nil {
-			h.log.Error("Failed to find the stateDB", err)
+			h.log.Warn("Failed to find the stateDB", "err", err)
+		} else {
+			balance := stateDB.GetBalance(paymentAddress)
+			//If the maximum deposit amount exceeds the account balance, set it as the account balance
+			if balance.Cmp(&MaxDeposit) < 0 {
+				MaxDeposit = *balance
+			}
 		}
-		balance := stateDB.GetBalance(paymentAddress)
 
-		//If the maximum deposit amount exceeds the account balance, set it as the account balance
-		if balance.Cmp(&MaxDeposit) < 0 {
-			MaxDeposit = *balance
-		}
 	} else {
 		h.log.Error("paymentAddress must be explicitly specified")
 	}
@@ -442,7 +443,7 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// this RPC call contains two request/response exchanges.
-	s.SetDeadLine(storage.FormContractTime)
+	s.SetDeadLine(storage.ContractCreateTime)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
