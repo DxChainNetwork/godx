@@ -40,6 +40,12 @@ func TestCheckMultiSignatures(t *testing.T) {
 		t.Errorf("failed to check host announce signature: %v", err)
 	}
 
+	uc := types.UnlockConditions{
+		Timelock:           currentHeight,
+		PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(prvKeyClient.PublicKey), crypto.PubkeyToAddress(prvKeyHost.PublicKey)},
+		SignaturesRequired: 2,
+	}
+
 	// test storage contract signature(two signatures)
 	sc := types.StorageContract{
 		FileSize:       2048,
@@ -66,7 +72,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 			{Address: common.HexToAddress("0xcf1FA0d741F155Bd2cF69A5a791C81BB8222118D"),
 				Value: new(big.Int).SetInt64(10000)},
 		},
-		UnlockHash:     common.HexToHash("0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"),
+		UnlockHash:     uc.UnlockHash(),
 		RevisionNumber: 111,
 	}
 

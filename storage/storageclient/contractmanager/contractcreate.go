@@ -5,18 +5,15 @@
 package contractmanager
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -108,9 +105,32 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		return
 	}
 
-	// TODO (mzhang): waiting form params modification
 	// 2. form the contract create parameters
-	params := proto.ContractParams{}
+	// The reason to get the newest blockHeight here is that during the checking time period
+	// many blocks may be generated already, which is unfair to the storage client.
+	cm.lock.RLock()
+	startHeight := cm.blockHeight
+	cm.lock.RUnlock()
+
+	// try to get the clientPaymentAddress. If failed, return error directly and set the contract creation cost
+	// to be zero
+	var clientPaymentAddress common.Address
+	if clientPaymentAddress, err = cm.b.GetPaymentAddress(); err != nil {
+		formCost = common.BigInt0
+		err = fmt.Errorf("failed to create the contract with host: %v, failed to get the clientPayment address: %s", host.EnodeID, err.Error())
+		return
+	}
+
+	// form the contract create parameters
+	params := storage.ContractParams{
+		Allowance:            rentPayment,
+		HostEnodeUrl:         host.EnodeURL,
+		Funding:              contractFund,
+		StartHeight:          startHeight,
+		EndHeight:            contractEndHeight,
+		ClientPaymentAddress: clientPaymentAddress,
+		Host:                 host,
+	}
 
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
@@ -163,28 +183,24 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
-func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md storage.ContractMetaData, err error) {
-	// Extract vars from params, for convenience
-	allowance, funding, clientPublicKey, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPublicKey, params.StartHeight, params.EndHeight, params.Host
+func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
+	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, zeroValue, zeroValue, period, expectedStorage)
+	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
+	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
 
 	uc := types.UnlockConditions{
-		PublicKeys: []ecdsa.PublicKey{
-			clientPublicKey,
-			host.PublicKey,
+		PaymentAddresses: []common.Address{
+			clientPaymentAddress,
+			host.PaymentAddress,
 		},
 		SignaturesRequired: 2,
 	}
-
-	clientAddr := crypto.PubkeyToAddress(clientPublicKey)
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
 
 	// Create storage contract
 	storageContract := types.StorageContract{
@@ -192,26 +208,26 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientPaymentAddress},
 			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
+			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostPayout, Address: hostAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientPaymentAddress},
+			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 	}
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
 
-		hostID := PubkeyToEnodeID(&host.PublicKey)
+		hostID := PubkeyToEnodeID(&host.NodePubKey)
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(hostID)
 			err = common.ErrExtend(err, ErrHostFault)
@@ -220,18 +236,20 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		}
 	}()
 
-	account := accounts.Account{Address: clientAddr}
+	//Find the wallet based on the account address
+	account := accounts.Account{Address: clientPaymentAddress}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
 	}
 
-	session, err := cm.b.SetupConnection(host.NetAddress)
+	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.NetAddress)
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
+	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("contract sign by client failed", err)
@@ -314,17 +332,17 @@ func (cm *ContractManager) ContractCreate(params proto.ContractParams) (md stora
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
+	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		TotalCost:              funding,
+		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,
 		Status: storage.ContractStatus{
 			UploadAbility: true,

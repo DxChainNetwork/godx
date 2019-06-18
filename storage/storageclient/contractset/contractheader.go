@@ -47,7 +47,7 @@ type ContractHeader struct {
 func (ch *ContractHeader) validation() (err error) {
 	if ch.LatestContractRevision.NewRevisionNumber > 0 &&
 		len(ch.LatestContractRevision.NewValidProofOutputs) > 0 &&
-		len(ch.LatestContractRevision.UnlockConditions.PublicKeys) == 2 {
+		len(ch.LatestContractRevision.UnlockConditions.PaymentAddresses) == 2 {
 		return
 	}
 

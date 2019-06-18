@@ -5,7 +5,6 @@
 package types
 
 import (
-	"crypto/ecdsa"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -22,9 +21,9 @@ type HostAnnouncement struct {
 }
 
 type UnlockConditions struct {
-	Timelock           uint64            `json:"timelock"`
-	PublicKeys         []ecdsa.PublicKey `json:"publickeys"`
-	SignaturesRequired uint64            `json:"signaturesrequired"`
+	Timelock           uint64           `json:"timelock"`
+	PaymentAddresses   []common.Address `json:"paymentaddress"`
+	SignaturesRequired uint64           `json:"signaturesrequired"`
 }
 
 type DxcoinCharge struct {
@@ -110,7 +109,7 @@ func (sc StorageContract) ID() common.Hash {
 func (uc UnlockConditions) UnlockHash() common.Hash {
 	return rlpHash([]interface{}{
 		uc.Timelock,
-		uc.PublicKeys,
+		uc.PaymentAddresses,
 		uc.SignaturesRequired,
 	})
 }

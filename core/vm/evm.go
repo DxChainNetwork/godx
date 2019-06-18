@@ -477,6 +477,7 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
+// ApplyStorageContractTransaction distinguish and execute transactions
 func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	switch txType {
 	case HostAnnounceTransaction:
@@ -492,6 +493,7 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	}
 }
 
+// HostAnnounceTx host declares its own information on the chain
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter host announce tx executing ... ")
 	var (
@@ -675,6 +677,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	return nil, gasRemainCheck, nil
 }
 
+// CommitRevisionTx host sends a revision transaction
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter file contract reversion tx executing ... ")
 	var (
@@ -776,6 +779,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	return nil, gasRemainCheck, nil
 }
 
+// StorageProofTx host send storage certificate transaction
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter storage proof tx executing ... ")
 	var (

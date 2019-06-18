@@ -5,6 +5,9 @@
 package storage
 
 import (
+	"io"
+	"math/big"
+	"sort"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -13,9 +16,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/merkletree"
-	"io"
-	"math/big"
-	"sort"
 )
 
 const (
@@ -36,8 +36,8 @@ const (
 	// ContractRevisionTime is the minimum amount of time that the client and host have to negotiate a storage contract revision.
 	ContractRevisionTime = 600 * time.Second
 
-	// FormContractTime is the amount of time that the client and host have to negotiate a new storage contract.
-	FormContractTime = 360 * time.Second
+	// the amount of time that the client and host have to negotiate a new storage contract.
+	ContractCreateTime = 360 * time.Second
 )
 
 type (

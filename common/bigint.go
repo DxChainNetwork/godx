@@ -177,6 +177,16 @@ func (x BigInt) CmpUint64(y uint64) (result int) {
 	return
 }
 
+func (x BigInt) Sign() int {
+	return x.b.Sign()
+}
+
+func (x BigInt) SetInt64(y int64) BigInt {
+	z := new(big.Int).SetInt64(y)
+	x.b = *z
+	return x
+}
+
 // float64 will convert the BigInt data type into float64 data type
 func (x BigInt) Float64() (result float64) {
 	f := new(big.Float).SetInt(&x.b)

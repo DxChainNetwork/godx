@@ -34,12 +34,17 @@ import (
 // contract.
 
 const (
-	HostAnnounceTransaction   = "HostAnnounce"
+	//HostAnnounceTransaction host announce transaction tag
+	HostAnnounceTransaction = "HostAnnounce"
+	//ContractCreateTransaction client contract create transaction tag
 	ContractCreateTransaction = "ContractCreate"
+	//CommitRevisionTransaction host commit revision transaction tag
 	CommitRevisionTransaction = "CommitRevision"
-	StorageProofTransaction   = "StorageProof"
+	//StorageProofTransaction host storage proof  transaction tag
+	StorageProofTransaction = "StorageProof"
 )
 
+//PrecompiledEVMFileContracts currently contains the transaction types required for four storage contracts
 var PrecompiledEVMFileContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
 	common.BytesToAddress([]byte{10}): ContractCreateTransaction,

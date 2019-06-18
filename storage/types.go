@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/big"
@@ -113,8 +114,9 @@ type (
 		IPNetwork           string    `json:"ipnetwork"`
 		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		EnodeID  enode.ID `json:"enodeid"`
-		EnodeURL string   `json:"enodeurl"`
+		EnodeID    enode.ID        `json:"enodeid"`
+		EnodeURL   string          `json:"enodeurl"`
+		NodePubKey ecdsa.PublicKey `json:"nodepubkey"`
 
 		Filtered bool `json:"filtered"`
 	}
@@ -129,6 +131,15 @@ type (
 		Success   bool      `json:"success"`
 	}
 )
+type ContractParams struct {
+	Allowance            RentPayment
+	HostEnodeUrl         string
+	Funding              common.BigInt
+	StartHeight          uint64
+	EndHeight            uint64
+	ClientPaymentAddress common.Address
+	Host                 HostInfo
+}
 
 // RentPayment stores the StorageClient payment settings for renting the storage space from the host
 type RentPayment struct {

@@ -189,3 +189,11 @@ func (st *storageClientBackendTestData) SendStorageContractCreateTx(clientAddr c
 func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	return
 }
+
+func (st *storageClientBackendTestData) GetPaymentAddress() (address common.Address, err error) {
+	return
+}
+
+func (st *storageClientBackendTestData) IsRevisionSessionDone(contractID storage.ContractID) bool {
+	return false
+}

@@ -35,8 +35,14 @@ func (cm *ContractManager) CancelStorageContract() (err error) {
 		cm.lock.Unlock()
 	}()
 
-	// TODO (mzhang): making sure when canceling contract, the contract is not able to perform
-	//  contract revision, waiting methods from HZ
+	// if storage contract is currently revising, return error to user asking them to
+	// try again later
+	for _, id := range contractIDs {
+		if !cm.b.IsRevisionSessionDone(id) {
+			err = fmt.Errorf("contract revising, please try again later")
+			return
+		}
+	}
 
 	// update storage client settings
 	// clear the client rentPayment and current period

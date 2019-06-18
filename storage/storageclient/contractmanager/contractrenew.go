@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -19,12 +18,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
-)
-
-var (
-	zeroValue = new(big.Int).SetInt64(0)
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -120,7 +114,6 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 
 	// get the data needed
 	cm.lock.RLock()
-	blockHeight := cm.blockHeight
 	currentPeriod := cm.currentPeriod
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
@@ -134,7 +127,7 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 		}
 
 		// renew the contract, get the spending for the renew
-		renewCost, err := cm.contractRenewStart(record, currentPeriod, rentPayment, blockHeight, contractEndHeight)
+		renewCost, err := cm.contractRenewStart(record, currentPeriod, rentPayment, contractEndHeight)
 		if err != nil {
 			cm.log.Error("contract renew failed", "contractID", record.id, "err", err.Error())
 		}
@@ -156,7 +149,7 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 // 		2. renew the contract
 // 		3. if the renew failed, handle the failed situation
 //   	4. otherwise, update the contract manager
-func (cm *ContractManager) contractRenewStart(record contractRenewRecord, currentPeriod uint64, rentPayment storage.RentPayment, blockHeight uint64, contractEndHeight uint64) (renewCost common.BigInt, err error) {
+func (cm *ContractManager) contractRenewStart(record contractRenewRecord, currentPeriod uint64, rentPayment storage.RentPayment, contractEndHeight uint64) (renewCost common.BigInt, err error) {
 	// get the information needed
 	renewContractID := record.id
 	renewContractCost := record.cost
@@ -172,7 +165,12 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.lock.Unlock()
 	}()
 
-	// TODO (mzhang): making sure that the oldContract will not be revised while renewing it, waiting for HZ
+	// if the contract is revising, return error directly
+	if !cm.b.IsRevisionSessionDone(renewContractID) {
+		renewCost = common.BigInt0
+		err = fmt.Errorf("the contract is revising, cannot be renewed")
+		return
+	}
 
 	// acquire the oldContract (contract that is about to be renewed)
 	oldContract, exists := cm.activeContracts.Acquire(renewContractID)
@@ -194,7 +192,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	}
 
 	// 2. oldContract renew
-	renewedContract, renewErr := cm.renew(oldContract, rentPayment)
+	renewedContract, renewErr := cm.renew(oldContract, rentPayment, renewContractCost, contractEndHeight)
 
 	// 3. handle the failed renews
 	if renewErr != nil {
@@ -202,7 +200,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 			cm.log.Warn("during the handle oldContract renew failed process, the oldContract cannot be returned because it has been deleted already")
 		}
 		renewCost = common.BigInt0
-		err = cm.handleRenewFailed(oldContract, renewErr, rentPayment, blockHeight, stats)
+		err = cm.handleRenewFailed(oldContract, renewErr, rentPayment, stats)
 		return
 	}
 
@@ -265,7 +263,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 // 		3. form the contract renew needed params
 // 		4. perform the contract renew operation
 // 		5. update the storage host to contract id mapping
-func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPayment storage.RentPayment) (renewedContract storage.ContractMetaData, err error) {
+func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPayment storage.RentPayment, contractFund common.BigInt, contractEndHeight uint64) (renewedContract storage.ContractMetaData, err error) {
 	// 1. contract renewAbility validation
 	contractMeta := renewContract.Metadata()
 	status, exists := cm.retrieveContractStatus(contractMeta.ID)
@@ -296,9 +294,31 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 		host.MaxDeposit = maxHostDeposit
 	}
 
-	// TODO (mzhang): wait for HZ to modify the params
 	// 3. form the contract renew needed params
-	params := proto.ContractParams{}
+	// The reason to get the newest blockHeight here is that during the checking time period
+	// many blocks may be generated already, which is unfair to the storage client.
+	cm.lock.RLock()
+	startHeight := cm.blockHeight
+	cm.lock.RUnlock()
+
+	// try to get the clientPaymentAddress. If failed, return error directly and set the contract creation cost
+	// to be zero
+	var clientPaymentAddress common.Address
+	if clientPaymentAddress, err = cm.b.GetPaymentAddress(); err != nil {
+		err = fmt.Errorf("failed to create the contract with host: %v, failed to get the clientPayment address: %s", host.EnodeID, err.Error())
+		return
+	}
+
+	// form the contract parameters
+	params := storage.ContractParams{
+		Allowance:            rentPayment,
+		HostEnodeUrl:         host.EnodeURL,
+		Funding:              contractFund,
+		StartHeight:          startHeight,
+		EndHeight:            contractEndHeight,
+		ClientPaymentAddress: clientPaymentAddress,
+		Host:                 host,
+	}
 
 	// 4. contract renew
 	if renewedContract, err = cm.ContractRenew(renewContract, params); err != nil {
@@ -318,7 +338,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 // 		2. if the amount of renew fails exceed a limit or it is already passed the second half of renew window,
 // 		meaning the contract needs to be replaced, mark the contract as canceled
 // 		3. return the error message
-func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, blockHeight uint64, contractStatus storage.ContractStatus) (err error) {
+func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, contractStatus storage.ContractStatus) (err error) {
 	// if renew failed is caused by the storage host, update the the failedRenewsCount
 	if common.ErrContains(renewError, ErrHostFault) {
 		cm.lock.Lock()
@@ -327,8 +347,10 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	}
 
 	// get the number of failed renews, to check if the contract needs to be replaced
+	// get the newest block height as well
 	cm.lock.RLock()
 	numFailed, _ := cm.failedRenewCount[failedContract.Metadata().ID]
+	blockHeight := cm.blockHeight
 	cm.lock.RUnlock()
 
 	secondHalfRenewWindow := blockHeight+rentPayment.RenewWindow/2 >= failedContract.Metadata().EndHeight
@@ -353,30 +375,25 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	return
 }
 
-// ContractRenew will perform the renew operation to the contract provided by the caller
-func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params proto.ContractParams) (md storage.ContractMetaData, err error) {
+//ContractRenew renew transaction initiated by the storage client
+func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params storage.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
-
 	lastRev := contract.LatestContractRevision
 
 	// Extract vars from params, for convenience
 	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
-	var basePrice, baseCollateral *big.Int
+	var basePrice, baseCollateral common.BigInt
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
-		timeExtension := uint64((endHeight + host.WindowSize) - lastRev.NewWindowEnd)
-		basePrice = new(big.Int).Mul(host.StoragePrice, new(big.Int).SetUint64(lastRev.NewFileSize))
-		basePrice = new(big.Int).Mul(basePrice, new(big.Int).SetUint64(timeExtension))
-		// cost of already uploaded data that needs to be covered by the renewed contract.
-		baseCollateral = new(big.Int).Mul(host.Collateral, new(big.Int).SetUint64(lastRev.NewFileSize))
-		baseCollateral = new(big.Int).Mul(baseCollateral, new(big.Int).SetUint64(timeExtension))
-		// same as basePrice.
+		timeExtension := uint64(endHeight+host.WindowSize) - lastRev.NewWindowEnd
+		basePrice = host.StoragePrice.Mult(common.NewBigIntUint64(lastRev.NewFileSize)).Mult(common.NewBigIntUint64(timeExtension))
+		baseCollateral = host.Deposit.Mult(common.NewBigIntUint64(lastRev.NewFileSize)).Mult(common.NewBigIntUint64(timeExtension))
 	}
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.Hosts
+	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
 	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
@@ -387,30 +404,29 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		baseCollateral = hostCollateral
 	}
 
+	//Calculate the account address of the client
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
-	hostAddr := crypto.PubkeyToAddress(host.PublicKey)
-	var hostMiss *big.Int
-	hostMiss = new(big.Int).Sub(hostCollateral, baseCollateral)
-	hostMiss = new(big.Int).Add(hostMiss, host.ContractPrice)
+	//Calculate the account address of the host
+	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         lastRev.NewFileSize,
 		FileMerkleRoot:   lastRev.NewFileMerkleRoot, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
 		UnlockHash:       lastRev.NewUnlockHash,
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
 			// Deposit is returned to client
-			{Value: clientPayout, Address: clientAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
 			// Deposit is returned to host
-			{Value: hostPayout, Address: hostAddr},
+			{Value: hostPayout.BigIntPtr(), Address: hostAddr},
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
-			{Value: clientPayout, Address: clientAddr},
-			{Value: hostMiss, Address: hostAddr},
+			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
+			{Value: hostPayout.Sub(baseCollateral).Add(host.ContractPrice).BigIntPtr(), Address: hostAddr},
 		},
 	}
 
@@ -431,11 +447,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// Setup connection with storage host
-	session, err := cm.b.SetupConnection(host.NetAddress)
+	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.NetAddress)
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -527,10 +543,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.PublicKey),
+		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
-		TotalCost:              common.NewBigInt(funding.Int64()),
-		ContractFee:            common.NewBigInt(host.ContractPrice.Int64()),
+		TotalCost:              funding,
+		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,
 		Status: storage.ContractStatus{
 			UploadAbility: true,
@@ -551,7 +567,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	return contractMetaData, nil
 }
 
-// calculate Enode.ContractID, reference:
+// PubkeyToEnodeID calculate Enode.ContractID, reference:
 // p2p/discover/node.go:41
 // p2p/discover/node.go:59
 func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
@@ -561,12 +577,11 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
-// calculate client and host collateral
-func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCollateral *big.Int, period, expectedStorage uint64) (clientPayout, hostPayout, hostCollateral *big.Int, err error) {
-
+// ClientPayoutsPreTax calculate client and host collateral
+func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
-		host.StoragePrice.SetInt64(1)
+		host.StoragePrice = common.NewBigIntUint64(1)
 	}
 
 	// Underflow check.
@@ -576,28 +591,23 @@ func ClientPayoutsPreTax(host proto.StorageHostEntry, funding, basePrice, baseCo
 	}
 
 	// Calculate clientPayout.
-	clientPayout = new(big.Int).Sub(funding, host.ContractPrice)
-	clientPayout = clientPayout.Sub(clientPayout, basePrice)
+	clientPayout = funding.Sub(host.ContractPrice).Sub(basePrice)
 
 	// Calculate hostCollateral
-	maxStorageSizeTime := new(big.Int).Div(clientPayout, host.StoragePrice)
-	maxStorageSizeTime = maxStorageSizeTime.Mul(maxStorageSizeTime, host.Collateral)
-	hostCollateral = maxStorageSizeTime.Add(maxStorageSizeTime, baseCollateral)
-	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(period))
-	host.Collateral = host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(expectedStorage))
-	maxClientCollateral := host.Collateral.Mul(host.Collateral, new(big.Int).SetUint64(5))
+	maxStorageSizeTime := clientPayout.Div(host.StoragePrice)
+	hostCollateral = maxStorageSizeTime.Mult(host.Deposit).Add(baseCollateral)
+	maxClientCollateral := host.Deposit.Mult(common.NewBigIntUint64(period)).Mult(common.NewBigIntUint64(expectedStorage)).Mult(common.NewBigIntUint64(5))
 	if hostCollateral.Cmp(maxClientCollateral) > 0 {
 		hostCollateral = maxClientCollateral
 	}
 
 	// Don't add more collateral than the host is willing to put into a single
 	// contract.
-	if hostCollateral.Cmp(host.MaxCollateral) > 0 {
-		hostCollateral = host.MaxCollateral
+	if hostCollateral.Cmp(host.MaxDeposit) > 0 {
+		hostCollateral = host.MaxDeposit
 	}
 
 	// Calculate hostPayout.
-	hostCollateral.Add(hostCollateral, host.ContractPrice)
-	hostPayout = hostCollateral.Add(hostCollateral, basePrice)
+	hostPayout = hostCollateral.Add(host.ContractPrice).Add(basePrice)
 	return
 }
