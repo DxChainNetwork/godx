@@ -69,10 +69,10 @@ func New(persistDir string) *StorageHostManager {
 
 	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
 	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
-	shm.filteredTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
-	shm.log.Info("Storage host manager initialized")
+	shm.log.Info("Storage Host Manager Initialized")
 
 	return shm
 }
@@ -110,7 +110,7 @@ func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	return nil
 }
 
-// Close will send stop signal to threadmanager, terminate all the
+// Close will send stop signal to routine manager, terminate all the
 // running go routines
 func (shm *StorageHostManager) Close() error {
 	return shm.tm.Stop()
@@ -169,9 +169,31 @@ func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) 
 	return shm.rent
 }
 
-// RetrieveHostInfo will acquire the storage host information based on the enode ID provided
+// RetrieveHostInfo will acquire the storage host information based on the enode ID provided.
+// Before returning the storage host information, the settings will be validated first
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
-	return shm.storageHostTree.RetrieveHostInfo(id)
+	shm.lock.RLock()
+	whitelist := shm.filterMode == WhitelistFilter
+	filteredHosts := shm.filteredHosts
+	shm.lock.RUnlock()
+
+	// get the storage host information
+	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
+		return
+	}
+
+	// check if the storage host should be filtered
+	// if WhitelistFilter and the host is stored inside the filtered host, meaning not filtered
+	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
+	// cannot sign contract with it
+	_, exist := filteredHosts[hi.EnodeID]
+	hi.Filtered = whitelist != exist
+
+	// update host historical interaction record before returning
+	shm.lock.RLock()
+	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
+	shm.lock.RUnlock()
+	return
 }
 
 // SetIPViolationCheck will set the ipViolationCheck to be true. For storage hosts
@@ -283,9 +305,15 @@ func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail s
 
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
+	// insert the host information into the storage host tree
 	err := shm.storageHostTree.Insert(hi)
-	_, exists := shm.filteredHosts[hi.EnodeID]
 
+	// check if the host information contained in the filtered host
+	shm.lock.RLock()
+	_, exists := shm.filteredHosts[hi.EnodeID]
+	shm.lock.RUnlock()
+
+	// if the filter mode is the whitelist, add the one into filtered host tree
 	if exists && shm.filterMode == WhitelistFilter {
 		errF := shm.filteredTree.Insert(hi)
 		if errF != nil && errF != storagehosttree.ErrHostExists {

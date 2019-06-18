@@ -174,14 +174,18 @@ func (st *storageClientBackendTestData) AccountManager() *accounts.Manager {
 	return nil
 }
 
-func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeURL string) error {
 	return nil
 }
 
-func (st *storageClientBackendTestData) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
 	return nil, nil
 }
 
 func (st *storageClientBackendTestData) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
 	return common.Hash{}, nil
+}
+
+func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	return
 }

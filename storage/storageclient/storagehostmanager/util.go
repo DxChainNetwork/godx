@@ -72,6 +72,8 @@ func activeHostInfoGenerator() storage.HostInfo {
 	}
 }
 
+// hostInfoGeneratorIPID will generate random host information with provided IP address,
+// enode ID, and the time that IP address changed
 func hostInfoGeneratorIPID(ip string, id enode.ID, ipChanged time.Time) storage.HostInfo {
 	return storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
@@ -97,6 +99,8 @@ func hostInfoGeneratorIPID(ip string, id enode.ID, ipChanged time.Time) storage.
 	}
 }
 
+// hostInfoGeneratorHighEvaluation will be used to generate
+// storage host with high evaluation, which are used for test cases
 func hostInfoGeneratorHighEvaluation(id enode.ID) storage.HostInfo {
 	ip := randomdata.IpV4Address()
 	return storage.HostInfo{
@@ -126,28 +130,8 @@ func hostInfoGeneratorHighEvaluation(id enode.ID) storage.HostInfo {
 	}
 }
 
-func hostInfoGeneratorHighEvaluationOffline(id enode.ID) storage.HostInfo {
-	ip := randomdata.IpV4Address()
-	return storage.HostInfo{
-		HostExtConfig: storage.HostExtConfig{
-			AcceptingContracts:     true,
-			Deposit:                common.NewBigInt(1000 * 20003e10),
-			ContractPrice:          common.BigInt1,
-			DownloadBandwidthPrice: common.BigInt1,
-			StoragePrice:           common.BigInt1,
-			UploadBandwidthPrice:   common.BigInt1,
-			SectorAccessPrice:      common.BigInt1,
-			RemainingStorage:       200 * 20e10,
-		},
-		IP:                             ip,
-		EnodeID:                        id,
-		EnodeURL:                       fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
-		HistoricSuccessfulInteractions: 500,
-		HistoricFailedInteractions:     0,
-		FirstSeen:                      0,
-	}
-}
-
+// hostInfoGeneratorLowEvaluation will be used to generate storage host
+// with low evaluation by changing its' external settings
 func hostInfoGeneratorLowEvaluation(id enode.ID) storage.HostInfo {
 	ip := randomdata.IpV4Address()
 	return storage.HostInfo{
@@ -172,6 +156,6 @@ func hostInfoGeneratorLowEvaluation(id enode.ID) storage.HostInfo {
 
 // enodeIDGenerator will randomly generate enode ID
 func enodeIDGenerator() (id enode.ID) {
-	rand.Read(id[:])
+	_, _ = rand.Read(id[:])
 	return
 }

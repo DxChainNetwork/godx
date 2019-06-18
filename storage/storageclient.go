@@ -54,6 +54,7 @@ type ClientBackend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
+	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 }
 
 // DownloadParameters is the parameters to download from outer request

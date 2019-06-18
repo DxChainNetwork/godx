@@ -175,3 +175,7 @@ func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl stri
 func (st *storageClientBackendContractManager) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
 	return common.Hash{}, nil
 }
+
+func (st *storageClientBackendContractManager) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+	return
+}

@@ -39,7 +39,7 @@ func (shm *StorageHostManager) saveSettings() error {
 }
 
 // persistUpdate contains the information that needs to be written into the
-// jso nfile
+// json file
 func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 	return persistence{
 		StorageHostsInfo: shm.storageHostTree.All(),
@@ -51,7 +51,7 @@ func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 }
 
 // autoSaveSettings will automatically save the configurations of the storage host manager
-// every 2 mins. It will be triggered at the time when the storage host manager got executed
+// every 2 minutes. It will be triggered at the time when the storage host manager got executed
 func (shm *StorageHostManager) autoSaveSettings() {
 	if err := shm.tm.Add(); err != nil {
 		log.Warn("failed to start auto save settings when initializing storage")
@@ -103,7 +103,8 @@ func (shm *StorageHostManager) loadSettings() error {
 		// insert the storage host
 		err := shm.insert(info)
 		if err != nil {
-			shm.log.Error("could not insert storage host information while loading persistent:", info.IP)
+			shm.log.Error("could not insert storage host information while loading persistent", "Storage Host IP", info.IP,
+				"err", err.Error())
 		}
 
 		// start storage host scanning based on the scan records
