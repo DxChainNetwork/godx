@@ -209,14 +209,14 @@ func New(persistDir string) (*StorageHost, error) {
 	// try to make the dir for storing host files.
 	// Because MkdirAll does nothing is the folder already exist, no worry to the existing folder
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
-		host.log.Crit("Making directory hit unexpected error: " + err.Error())
+		host.log.Warn("Making directory hit unexpected error", "err", err)
 		return nil, err
 	}
 
 	// initialize the storage manager
 	host.StorageManager, err = sm.New(filepath.Join(persistDir, StorageManager))
 	if err != nil {
-		host.log.Crit("Error caused by Creating StorageManager: " + err.Error())
+		host.log.Warn("Error caused by Creating StorageManager", "err", err)
 		return nil, err
 	}
 
@@ -251,7 +251,7 @@ func New(persistDir string) (*StorageHost, error) {
 	}
 	//Delete residual storage responsibility
 	if err = host.PruneStaleStorageResponsibilities(); err != nil {
-		host.log.Info("Could not prune stale storage responsibilities:", err)
+		host.log.Error("Could not prune stale storage responsibilities", "err", err)
 	}
 
 	// TODO: Init the networking
@@ -270,7 +270,7 @@ func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Call to HostExtConfig fail")
+		h.log.Warn("Call to HostExtConfig fail")
 	}
 
 	defer h.tm.Done()
@@ -284,7 +284,7 @@ func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")
+		h.log.Warn("Fail to add FinancialMetrics Getter to thread manager")
 	}
 	defer h.tm.Done()
 
@@ -302,7 +302,7 @@ func (h *StorageHost) SetIntConfig(config storage.HostIntConfig, debug ...bool) 
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add HostIntConfig Getter to thread manager")
+		h.log.Warn("Fail to add HostIntConfig Getter to thread manager")
 		return err
 	}
 	defer h.tm.Done()
@@ -358,7 +358,7 @@ func (h *StorageHost) load() error {
 
 	// Initialize the database
 	if err = h.initDB(); err != nil {
-		h.log.Crit("Unable to initialize the database: " + err.Error())
+		h.log.Warn("Unable to initialize the database", "err", err)
 		return err
 	}
 
@@ -388,7 +388,7 @@ func (h *StorageHost) load() error {
 
 	// assert the error is nil, close the file
 	if err := file.Close(); err != nil {
-		h.log.Info("Unable to close the config file")
+		h.log.Warn("Unable to close the config file")
 	}
 
 	// load the default config
