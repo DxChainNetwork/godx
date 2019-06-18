@@ -11,14 +11,13 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"math"
 	"os"
 )
 
 // Upload instructs the storage client to start tracking a file. The storage client will
 // automatically upload and repair tracked files using a background loop.
-func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
+func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	if err := sc.tm.Add(); err != nil {
 		return err
 	}
@@ -42,7 +41,7 @@ func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
 	}
 
 	// Delete existing file if Override mode
-	if up.Mode == proto.Override {
+	if up.Mode == storage.Override {
 		if err := sc.DeleteFile(up.DxPath); err != nil && err != dxdir.ErrUnknownPath {
 			return fmt.Errorf("cannot to delete existing file, error: %v", err)
 		}
@@ -50,12 +49,12 @@ func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
 
 	// Setup ECTypeStandard's ErasureCode with default params
 	if up.ErasureCode == nil {
-		up.ErasureCode, _ = erasurecode.New(erasurecode.ECTypeStandard, proto.DefaultMinSectors, proto.DefaultNumSectors)
+		up.ErasureCode, _ = erasurecode.New(erasurecode.ECTypeStandard, storage.DefaultMinSectors, storage.DefaultNumSectors)
 	}
 
 	numContracts := uint64(len(sc.contractManager.GetStorageContractSet().Contracts()))
 	// requiredContracts = ceil(min + redundant/2)
-	requiredContracts := math.Ceil(float64(up.ErasureCode.NumSectors() + up.ErasureCode.MinSectors()) / 2)
+	requiredContracts := math.Ceil(float64(up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors()) / 2)
 	if numContracts < uint64(requiredContracts) {
 		return fmt.Errorf("not enough contracts to upload file: got %v, needed %v", numContracts, (up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors())/2)
 	}
@@ -78,7 +77,7 @@ func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
 	}
 
 	// Create the DxFile and add to client
-	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == proto.Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == storage.Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}

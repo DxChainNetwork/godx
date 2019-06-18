@@ -11,7 +11,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/pborman/uuid"
 	"io"
 	"io/ioutil"
@@ -24,7 +23,6 @@ import (
 	"testing"
 	"time"
 )
-
 
 // Upload test case has many dependencies modules. Now we test each critical function
 func testUploadDirectory(t *testing.T) {
@@ -55,7 +53,7 @@ func testUploadDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	params := proto.FileUploadParams{
+	params := storage.FileUploadParams{
 		Source:      testUploadFile.Name(),
 		DxPath:      storage.DxPath{Path: uuid.New()},
 		ErasureCode: ec,
@@ -163,7 +161,7 @@ func TestPushFileToSegmentHeap(t *testing.T) {
 func TestRequiredContract(t *testing.T) {
 	a := 9
 	b := 10
-	requiredContracts := math.Ceil(float64(a + b) / 2)
+	requiredContracts := math.Ceil(float64(a+b) / 2)
 	if uint64(requiredContracts) != 10 {
 		t.Fatal("not equal ceil value")
 	}
@@ -235,13 +233,13 @@ func TestReadFromLocalFile(t *testing.T) {
 			t.Fatal("write and read content is not the same")
 		}
 
-		index := mb/4
+		index := mb / 4
 		sector := buf.buf[index]
 		if len(sector) != int(storage.SectorSize) {
 			t.Fatal("completion data length not equal sector size")
 		}
 
-		for start := remainder << 20;start < len(sector); start++ {
+		for start := remainder << 20; start < len(sector); start++ {
 			if sector[start] != 0 {
 				t.Fatal("completion data not equal zero")
 			}
@@ -251,7 +249,6 @@ func TestReadFromLocalFile(t *testing.T) {
 			t.Fatal("write and read content is not the same")
 		}
 	}
-
 
 	if err := osFile.Close(); err != nil {
 		t.Fatal(err)

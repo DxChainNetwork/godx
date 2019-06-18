@@ -103,7 +103,7 @@ func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	go shm.subscribeChainChangEvent()
 
 	// started scan and update storage host information
-	//go shm.scan()
+	go shm.scan()
 
 	shm.log.Info("Storage Host Manager Started")
 

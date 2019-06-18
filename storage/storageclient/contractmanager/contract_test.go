@@ -10,6 +10,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/Pallinder/go-randomdata"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 )
@@ -26,6 +27,8 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -80,6 +83,8 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -161,6 +166,8 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -297,6 +304,8 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -357,12 +366,13 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
 	// generate earlier IP changed contract and hosts
 	var ipList []string
-	var contracts []contractset.ContractHeader
+	var contracts = make(map[storage.ContractID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		enodeID := randomEnodeIDGenerator()
 		ip := randomdata.IpV4Address()
@@ -380,11 +390,11 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 
 		// append the ip and contract to the list
 		ipList = append(ipList, ip)
-		contracts = append(contracts, contract)
+		contracts[contract.ID] = contract
 	}
 
 	// generate filtered contracts
-	var filteredContracts []contractset.ContractHeader
+	var filteredContracts = make(map[storage.ContractID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		enodeID := randomEnodeIDGenerator()
 
@@ -393,13 +403,17 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 			t.Fatalf("failed to insert filtered storage host: %s", err.Error())
 		}
 
-		// insert the storage contract for the storage hsot
+		// insert the storage contract for the storage host
 		contract := randomContractWithEnodeID(enodeID)
+		if _, exists := contracts[contract.ID]; exists {
+			delete(contracts, contract.ID)
+		}
+
 		if _, err := cm.activeContracts.InsertContract(contract, randomRootsGenerator(10)); err != nil {
 			t.Fatalf("failed to insert filtered contract: %s", err.Error())
 		}
 
-		filteredContracts = append(filteredContracts, contract)
+		filteredContracts[contract.ID] = contract
 	}
 
 	// before enable ip violation check, no contract should be canceled
@@ -436,6 +450,7 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -486,6 +501,7 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 	if testing.Short() {
 		amount = 1
 	}
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -549,6 +565,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 	if testing.Short() {
 		amount = 1
 	}
+	defer os.RemoveAll("test")
 	defer cm.activeContracts.Close()
 	defer cm.activeContracts.EmptyDB()
 
@@ -573,7 +590,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 
 	// maintain contract status
 	if err := cm.maintainContractStatus(int(cm.rentPayment.StorageHosts)); err != nil {
-		t.Fatalf("failed to maintain the contract status")
+		t.Fatalf("failed to maintain the contract status: %s", err.Error())
 	}
 
 	// validation for hostNotExistsContract, lowEvalContracts, highEvalContracts
@@ -683,7 +700,7 @@ func insertLowEvalContract(cm *ContractManager, amount int) (lowEvalContracts []
 	return
 }
 
-func checkCanceled(cm *ContractManager, contracts []contractset.ContractHeader) (canceled bool) {
+func checkCanceled(cm *ContractManager, contracts map[storage.ContractID]contractset.ContractHeader) (canceled bool) {
 	for _, contract := range contracts {
 		meta, _ := cm.activeContracts.RetrieveContractMetaData(contract.ID)
 		if meta.Status.Canceled && !meta.Status.RenewAbility && !meta.Status.UploadAbility {

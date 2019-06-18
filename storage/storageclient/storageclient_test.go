@@ -80,12 +80,12 @@ func mockAddWorkers(n int, client *StorageClient) {
 	for i := 0; i < n; i++ {
 		contractID := storage.ContractID(common.HexToHash(hashes[i]))
 		worker := &worker{
-			contract:       storage.ClientContract{ContractID: contractID},
-			hostID:         enode.RandomID(enode.ID{}, i),
-			downloadChan:   make(chan struct{}, 1),
-			uploadChan:     make(chan struct{}, 1),
-			killChan:       make(chan struct{}),
-			client:         client,
+			contract:     storage.ContractMetaData{ID: contractID},
+			hostID:       enode.RandomID(enode.ID{}, i),
+			downloadChan: make(chan struct{}, 1),
+			uploadChan:   make(chan struct{}, 1),
+			killChan:     make(chan struct{}),
+			client:       client,
 		}
 		client.workerPool[storage.ContractID(contractID)] = worker
 	}
@@ -250,6 +250,9 @@ func (b *BackendTest) CurrentBlock() *types.Block {
 	return nil
 }
 
+func (b *BackendTest) GetBlockByNumber(number uint64) (*types.Block, error) {
+	return &types.Block{}, nil
+}
 
 /*
 _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _

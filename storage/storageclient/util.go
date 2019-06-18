@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"math/big"
 	"reflect"
 	"sort"
@@ -127,17 +126,17 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 }
 
 // DirInfo returns the Directory Information of the dxdir
-func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (proto.DirectoryInfo, error) {
+func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
 	entry, err := sc.fileSystem.DirSet().Open(dxPath)
 	if err != nil {
-		return proto.DirectoryInfo{}, err
+		return storage.DirectoryInfo{}, err
 	}
 	defer entry.Close()
 	// Grab the health information and return the Directory Info, the worst
 	// health will be returned. Depending on the directory and its contents that
 	// could either be health or stuckHealth
 	metadata := entry.Metadata()
-	return proto.DirectoryInfo{
+	return storage.DirectoryInfo{
 		NumFiles:         metadata.NumFiles,
 		NumStuckSegments: metadata.NumStuckSegments,
 		TotalSize:        metadata.TotalSize,
@@ -152,14 +151,14 @@ func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (proto.DirectoryInfo, er
 }
 
 // DirList get directories and files in the dxdir
-func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]proto.DirectoryInfo, []proto.FileInfo, error) {
+func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo, []storage.UploadFileInfo, error) {
 	if err := sc.tm.Add(); err != nil {
 		return nil, nil, err
 	}
 	defer sc.tm.Done()
 
-	var dirs []proto.DirectoryInfo
-	var files []proto.FileInfo
+	var dirs []storage.DirectoryInfo
+	var files []storage.UploadFileInfo
 	// Get DirectoryInfo
 	di, err := sc.DirInfo(dxPath)
 	if err != nil {
@@ -189,7 +188,7 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]proto.DirectoryInfo, 
 		if ext != storage.DxFileExt {
 			continue
 		}
-		files = append(files, proto.FileInfo{})
+		files = append(files, storage.UploadFileInfo{})
 	}
 	return dirs, files, nil
 }

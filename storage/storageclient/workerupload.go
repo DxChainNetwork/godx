@@ -29,7 +29,7 @@ func (w *worker) dropUploadSegments() {
 
 	for i := 0; i < len(segmentsToDrop); i++ {
 		w.dropSegment(segmentsToDrop[i])
-		w.client.log.Debug("dropping segment because the worker is dropping all segments", w.contract.HostID.String())
+		w.client.log.Debug("dropping segment because the worker is dropping all segments", w.contract.EnodeID.String())
 	}
 }
 
@@ -40,11 +40,11 @@ func (w *worker) killUploading() {
 	w.uploadTerminated = true
 	w.mu.Unlock()
 
-	contractID := storage.ContractID(w.contract.ContractID)
+	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
 		delete(w.client.sessionSet, contractID)
-		if err := w.client.ethBackend.Disconnect(session, w.contract.HostID.String()); err != nil {
+		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
 			w.client.log.Debug("can't close connection after uploading, error: ", err)
 		}
 	}
@@ -56,7 +56,7 @@ func (w *worker) killUploading() {
 // AppendUploadSegment - Append a segment to the heap to the pendingSegments of worker and the signal the uploadChan
 func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
 	uploadAbility := false
-	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
 	}
 
@@ -66,7 +66,7 @@ func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		w.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.EnodeID.String())
 		return
 	}
 	w.pendingSegments = append(w.pendingSegments, uc)
@@ -112,7 +112,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	if storage.ENV == storage.Env_Test {
 		uploadAbility = true
 	}
-	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
 	}
 
@@ -122,7 +122,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.EnodeID.String())
 		return false
 	}
 	return true
@@ -138,7 +138,7 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
-	contractID := w.contract.ContractID
+	contractID := w.contract.ID
 
 	// we must make sure that renew and revision consistency
 	w.client.sessionLock.Lock()
@@ -153,13 +153,12 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Setup an active connection to the host and we will reuse previous connection
 	session, ok := w.client.sessionSet[contractID]
 	if !ok || session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupConnection(w.contract.HostID.String())
+		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
 		if err != nil {
 			w.client.log.Error("Worker failed to setup an connection:", err)
 			w.uploadFailed(uc, sectorIndex)
 			return
 		}
-
 
 		w.client.sessionSet[contractID] = s
 		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
@@ -170,7 +169,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 
 	// Set flag true while uploading
 	session.SetBusy()
-	defer func(){
+	defer func() {
 		session.ResetBusy()
 		session.RevisionDone() <- struct{}{}
 	}()
@@ -188,7 +187,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	w.mu.Unlock()
 
 	// Add sector to storage clientFile
-	err = uc.fileEntry.AddSector(w.contract.HostID, root, int(uc.index), int(sectorIndex))
+	err = uc.fileEntry.AddSector(w.contract.EnodeID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
 		w.client.log.Debug("Worker failed to add new piece to SiaFile:", err)
 		w.uploadFailed(uc, sectorIndex)
@@ -221,7 +220,7 @@ func (w *worker) onUploadCoolDown() bool {
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
 	uploadAbility := false
-	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ContractID); ok {
+	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
 	}
 
@@ -232,7 +231,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	// Determine what sort of help this segment needs
 	// uc.mu condition race, low performance
 	uc.mu.Lock()
-	_, candidateHost := uc.unusedHosts[w.contract.HostID.String()]
+	_, candidateHost := uc.unusedHosts[w.contract.EnodeID.String()]
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
 	// If the segment does not need help from this worker, release the segment
@@ -240,7 +239,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Worker dropping a segment while processing", isComplete, !candidateHost, !uploadAbility, onCoolDown, w.contract.HostID.String())
+		w.client.log.Debug("Worker dropping a segment while processing", isComplete, !candidateHost, !uploadAbility, onCoolDown, w.contract.EnodeID.String())
 		return nil, 0
 	}
 
@@ -269,8 +268,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 		return nil, 0
 	}
 
-
-	delete(uc.unusedHosts, w.contract.HostID.String())
+	delete(uc.unusedHosts, w.contract.EnodeID.String())
 	uc.sectorsUploadingNum++
 	uc.workersRemain--
 	uc.mu.Unlock()

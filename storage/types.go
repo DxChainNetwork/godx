@@ -6,6 +6,7 @@ package storage
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/big"
 	"time"
 
@@ -18,24 +19,33 @@ import (
 var (
 	// define the program running environment: test, prod
 	ENV = Env_Prod
+
+	// TODO 为了测试方便，调小参数默认值
+	DefaultMinSectors uint32 = 1
+	DefaultNumSectors uint32 = 2
 )
 
 const (
+	Override = iota
+	Append
+
 	Env_Prod = "prod"
 	Env_Test = "test"
 
 	// DxFileExt is the extension of DxFile
-	DxFileExt = ".dxfile"
+	DxFileExt     = ".dxfile"
+	ConfigVersion = "1.0.1"
 )
 
 type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
-		AcceptingContracts   bool   `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64 `json:"maxdownloadbatchsize"`
-		MaxDuration          uint64 `json:"maxduration"`
-		MaxReviseBatchSize   uint64 `json:"maxrevisebatchSize"`
-		WindowSize           uint64 `json:"windowsize"`
+		AcceptingContracts   bool           `json:"acceptingcontracts"`
+		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchsize"`
+		MaxDuration          uint64         `json:"maxduration"`
+		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
+		WindowSize           uint64         `json:"windowsize"`
+		PaymentAddress       common.Address `json:"paymentaddress"`
 
 		Deposit       big.Int `json:"deposit"`
 		DepositBudget big.Int `json:"depositbudget"`
@@ -51,14 +61,14 @@ type (
 
 	// HostExtConfig make group of host setting to broadcast as object
 	HostExtConfig struct {
-		AcceptingContracts   bool   `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64 `json:"maxdownloadbatchSize"`
-		MaxDuration          uint64 `json:"maxduration"`
-		MaxReviseBatchSize   uint64 `json:"maxrevisebatchSize"`
-
-		RemainingStorage uint64 `json:"remainingstorage"`
-		SectorSize       uint64 `json:"sectorsize"`
-		TotalStorage     uint64 `json:"totalstorage"`
+		AcceptingContracts   bool           `json:"acceptingcontracts"`
+		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchSize"`
+		MaxDuration          uint64         `json:"maxduration"`
+		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
+		PaymentAddress       common.Address `json:"paymentaddress"`
+		RemainingStorage     uint64         `json:"remainingstorage"`
+		SectorSize           uint64         `json:"sectorsize"`
+		TotalStorage         uint64         `json:"totalstorage"`
 
 		WindowSize uint64 `json:"windowsize"`
 
@@ -241,6 +251,61 @@ func StringToContractID(s string) (id ContractID, err error) {
 }
 
 type (
+	// UploadParams contains the information used by the Client to upload a file
+	FileUploadParams struct {
+		Source      string
+		DxPath      DxPath
+		ErasureCode erasurecode.ErasureCoder
+		Mode        int
+	}
+
+	// FileInfo provides information about a file
+	UploadFileInfo struct {
+		AccessTime       time.Time `json:"accesstime"`
+		Available        bool      `json:"available"`
+		ChangeTime       time.Time `json:"changetime"`
+		CipherType       string    `json:"ciphertype"`
+		CreateTime       time.Time `json:"createtime"`
+		Expiration       uint64    `json:"expiration"`
+		Filesize         uint64    `json:"filesize"`
+		Health           float64   `json:"health"`
+		LocalPath        string    `json:"localpath"`
+		MaxHealth        float64   `json:"maxhealth"`
+		MaxHealthPercent float64   `json:"maxhealthpercent"`
+		ModTime          time.Time `json:"modtime"`
+		NumStuckChunks   uint64    `json:"numstuckchunks"`
+		OnDisk           bool      `json:"ondisk"`
+		Recoverable      bool      `json:"recoverable"`
+		Redundancy       float64   `json:"redundancy"`
+		Renewing         bool      `json:"renewing"`
+		SiaPath          string    `json:"siapath"`
+		Stuck            bool      `json:"stuck"`
+		StuckHealth      float64   `json:"stuckhealth"`
+		UploadedBytes    uint64    `json:"uploadedbytes"`
+		UploadProgress   float64   `json:"uploadprogress"`
+	}
+
+	// DirectoryInfo provides information about a dxdir
+	DirectoryInfo struct {
+		NumFiles uint64 `json:"num_files"`
+
+		TotalSize uint64 `json:"total_size"`
+
+		Health uint32 `json:"health"`
+
+		StuckHealth uint32 `json:"stuck_health"`
+
+		MinRedundancy uint32 `json:"min_redundancy"`
+
+		TimeLastHealthCheck time.Time `json:"time_last_health_check"`
+
+		TimeModify time.Time `json:"time_modify"`
+
+		NumStuckSegments uint32 `json:"num_stuck_segments"`
+
+		DxPath DxPath `json:"dx_path"`
+	}
+
 	// HostHealthInfo is the file structure used for DxFile health update.
 	// It has two fields, one indicating whether the host if offline or not,
 	// One indicating whether the contract with the host is good for renew.

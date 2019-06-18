@@ -22,7 +22,7 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract storage.ClientContract
+	contract storage.ContractMetaData
 	hostID   enode.ID
 	client   *StorageClient
 
@@ -64,35 +64,13 @@ func (sc *StorageClient) activateWorkerPool() {
 	for id, contract := range contractMap {
 		sc.lock.Lock()
 		if _, exist := sc.workerPool[id]; exist {
-			clientContract := storage.ClientContract{
-				ContractID:  id,
-				HostID:      contract.Header().EnodeID,
-				StartHeight: contract.Header().StartHeight,
-				EndHeight:   contract.Header().EndHeight,
-
-				// TODO: 计算、填充下这些变量
-				// the amount remaining in the contract that the client can spend.
-				//ClientFunds: common.NewBigInt(1),
-
-				// track the various costs manually.
-				//DownloadSpending: common.NewBigInt(1),
-				//StorageSpending:  common.NewBigInt(1),
-				//UploadSpending:   common.NewBigInt(1),
-
-				// record utility information about the contract.
-				Status:contract.Status(),
-
-				// the amount of money that the client spent or locked while forming a contract.
-				TotalCost: contract.Header().TotalCost,
-			}
-
 			worker := &worker{
-				contract:       clientContract,
-				hostID:         contract.Header().EnodeID,
-				downloadChan:   make(chan struct{}, 1),
-				uploadChan:     make(chan struct{}, 1),
-				killChan:       make(chan struct{}),
-				client:         sc,
+				contract:     contract.Metadata(),
+				hostID:       contract.Header().EnodeID,
+				downloadChan: make(chan struct{}, 1),
+				uploadChan:   make(chan struct{}, 1),
+				killChan:     make(chan struct{}),
+				client:       sc,
 			}
 			sc.workerPool[id] = worker
 

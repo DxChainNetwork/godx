@@ -69,6 +69,9 @@ type StorageClient struct {
 	persistDir     string
 	staticFilesDir string
 
+	//storage client is used as the address to sign the storage contract and pays for the money
+	PaymentAddress common.Address
+
 	// Utilities
 	log  log.Logger
 	lock sync.Mutex
@@ -95,7 +98,7 @@ func New(persistDir string) (*StorageClient, error) {
 		downloadHeap:   new(downloadSegmentHeap),
 		uploadHeap: uploadHeap{
 			pendingSegments:     make(map[uploadSegmentID]struct{}),
-			segmentComing:          make(chan struct{}, 1),
+			segmentComing:       make(chan struct{}, 1),
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
@@ -147,7 +150,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
-
 
 	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
@@ -209,10 +211,10 @@ func (sc *StorageClient) DeleteFile(path storage.DxPath) error {
 }
 
 // Check whether the contract session is uploading or downloading
-func  (sc *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) bool {
+func (sc *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) bool {
 	sc.sessionLock.Lock()
 	defer sc.sessionLock.Unlock()
-	if s, ok := sc.sessionSet[contractID]; ok && s.IsBusy(){
+	if s, ok := sc.sessionSet[contractID]; ok && s.IsBusy() {
 		revisionDoneTime := time.After(RevisionDoneTime)
 		select {
 		case <-revisionDoneTime:
@@ -223,7 +225,6 @@ func  (sc *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) b
 	}
 	return true
 }
-
 
 // ContractDetail will return the detailed contract information
 func (sc *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {

@@ -67,7 +67,7 @@ type Config struct {
 	// in memory.
 	DataDir string
 
-	StorageHostDir	string
+	StorageHostDir string
 
 	// Configuration of peer-to-peer networking.
 	P2P p2p.Config
@@ -158,7 +158,6 @@ type Config struct {
 	staticNodesWarning     bool
 	trustedNodesWarning    bool
 	oldGethResourceWarning bool
-
 }
 
 // IPCEndpoint resolves an IPC endpoint based on a configured value, taking into

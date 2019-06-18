@@ -6,8 +6,11 @@ package storageclient
 
 import (
 	"fmt"
+
+	"github.com/DxChainNetwork/godx/accounts"
+
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 )
 
 // ActiveContractAPI is used to re-format the contract information that is going to
@@ -49,15 +52,41 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 
 // Upload their local files to hosts made contract with
 func (api *PublicStorageClientAPI) Upload(source string, dxPath string) string {
-	param := proto.FileUploadParams{
+	param := storage.FileUploadParams{
 		Source: source,
 		DxPath: storage.DxPath{Path: dxPath},
-		Mode:   proto.Override,
+		Mode:   storage.Override,
 	}
 	if err := api.sc.Upload(param); err != nil {
 		return err.Error()
 	}
 	return "success"
+}
+
+//GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+func (api *PublicStorageClientAPI) GetPaymentAddress() (common.Address, error) {
+	api.sc.lock.Lock()
+	paymentAddress := api.sc.PaymentAddress
+	api.sc.lock.Unlock()
+
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+
+	//Local node does not contain wallet
+	if wallets := api.sc.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			paymentAddress := accounts[0].Address
+			api.sc.lock.Lock()
+			//the first address in the local wallet will be used as the paymentAddress by default.
+			api.sc.PaymentAddress = paymentAddress
+			api.sc.lock.Unlock()
+			api.sc.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			return paymentAddress, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs
@@ -99,6 +128,22 @@ func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string)
 	resp = fmt.Sprintf("Successfully set the storage client setting, you can use storageclient.setting() to verify")
 
 	return
+}
+
+//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+func (api *PrivateStorageClientAPI) SetPaymentAddress(paymentAddress common.Address) bool {
+	account := accounts.Account{Address: paymentAddress}
+	_, err := api.sc.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		api.sc.log.Error("You must set up an account owned by your local wallet!")
+		return false
+	}
+
+	api.sc.lock.Lock()
+	api.sc.PaymentAddress = paymentAddress
+	api.sc.lock.Unlock()
+
+	return true
 }
 
 // CancelAllContracts will cancel all contracts signed with storage client by
