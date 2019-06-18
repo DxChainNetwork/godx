@@ -185,3 +185,7 @@ func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*s
 func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	return
 }
+
+func (st *storageClientBackendTestData) GetPaymentAddress() (address common.Address, err error) {
+	return
+}

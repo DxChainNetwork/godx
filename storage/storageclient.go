@@ -57,6 +57,7 @@ type ClientBackend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
+	GetPaymentAddress() (common.Address, error)
 }
 
 // a metadata about a storage contract.

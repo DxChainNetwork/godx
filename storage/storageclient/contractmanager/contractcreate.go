@@ -105,9 +105,32 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		return
 	}
 
-	// TODO (mzhang): waiting form params modification
 	// 2. form the contract create parameters
-	params := storage.ContractParams{}
+	// The reason to get the newest blockHeight here is that during the checking time period
+	// many blocks may be generated already, which is unfair to the storage client.
+	cm.lock.RLock()
+	startHeight := cm.blockHeight
+	cm.lock.RUnlock()
+
+	// try to get the clientPaymentAddress. If failed, return error directly and set the contract creation cost
+	// to be zero
+	var clientPaymentAddress common.Address
+	if clientPaymentAddress, err = cm.b.GetPaymentAddress(); err != nil {
+		formCost = common.BigInt0
+		err = fmt.Errorf("failed to create the contract with host: %v, failed to get the clientPayment address: %s", host.EnodeID, err.Error())
+		return
+	}
+
+	// form the contract create parameters
+	params := storage.ContractParams{
+		Allowance:            rentPayment,
+		HostEnodeUrl:         host.EnodeURL,
+		Funding:              contractFund,
+		StartHeight:          startHeight,
+		EndHeight:            contractEndHeight,
+		ClientPaymentAddress: clientPaymentAddress,
+		Host:                 host,
+	}
 
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {

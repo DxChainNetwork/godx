@@ -114,7 +114,6 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 
 	// get the data needed
 	cm.lock.RLock()
-	blockHeight := cm.blockHeight
 	currentPeriod := cm.currentPeriod
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
@@ -128,7 +127,7 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 		}
 
 		// renew the contract, get the spending for the renew
-		renewCost, err := cm.contractRenewStart(record, currentPeriod, rentPayment, blockHeight, contractEndHeight)
+		renewCost, err := cm.contractRenewStart(record, currentPeriod, rentPayment, contractEndHeight)
 		if err != nil {
 			cm.log.Error("contract renew failed", "contractID", record.id, "err", err.Error())
 		}
@@ -150,7 +149,7 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 // 		2. renew the contract
 // 		3. if the renew failed, handle the failed situation
 //   	4. otherwise, update the contract manager
-func (cm *ContractManager) contractRenewStart(record contractRenewRecord, currentPeriod uint64, rentPayment storage.RentPayment, blockHeight uint64, contractEndHeight uint64) (renewCost common.BigInt, err error) {
+func (cm *ContractManager) contractRenewStart(record contractRenewRecord, currentPeriod uint64, rentPayment storage.RentPayment, contractEndHeight uint64) (renewCost common.BigInt, err error) {
 	// get the information needed
 	renewContractID := record.id
 	renewContractCost := record.cost
@@ -188,7 +187,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	}
 
 	// 2. oldContract renew
-	renewedContract, renewErr := cm.renew(oldContract, rentPayment)
+	renewedContract, renewErr := cm.renew(oldContract, rentPayment, renewContractCost, contractEndHeight)
 
 	// 3. handle the failed renews
 	if renewErr != nil {
@@ -196,7 +195,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 			cm.log.Warn("during the handle oldContract renew failed process, the oldContract cannot be returned because it has been deleted already")
 		}
 		renewCost = common.BigInt0
-		err = cm.handleRenewFailed(oldContract, renewErr, rentPayment, blockHeight, stats)
+		err = cm.handleRenewFailed(oldContract, renewErr, rentPayment, stats)
 		return
 	}
 
@@ -259,7 +258,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 // 		3. form the contract renew needed params
 // 		4. perform the contract renew operation
 // 		5. update the storage host to contract id mapping
-func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPayment storage.RentPayment) (renewedContract storage.ContractMetaData, err error) {
+func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPayment storage.RentPayment, contractFund common.BigInt, contractEndHeight uint64) (renewedContract storage.ContractMetaData, err error) {
 	// 1. contract renewAbility validation
 	contractMeta := renewContract.Metadata()
 	status, exists := cm.retrieveContractStatus(contractMeta.ID)
@@ -290,9 +289,31 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 		host.MaxDeposit = maxHostDeposit
 	}
 
-	// TODO (mzhang): wait for HZ to modify the params
 	// 3. form the contract renew needed params
-	params := storage.ContractParams{}
+	// The reason to get the newest blockHeight here is that during the checking time period
+	// many blocks may be generated already, which is unfair to the storage client.
+	cm.lock.RLock()
+	startHeight := cm.blockHeight
+	cm.lock.RUnlock()
+
+	// try to get the clientPaymentAddress. If failed, return error directly and set the contract creation cost
+	// to be zero
+	var clientPaymentAddress common.Address
+	if clientPaymentAddress, err = cm.b.GetPaymentAddress(); err != nil {
+		err = fmt.Errorf("failed to create the contract with host: %v, failed to get the clientPayment address: %s", host.EnodeID, err.Error())
+		return
+	}
+
+	// form the contract parameters
+	params := storage.ContractParams{
+		Allowance:            rentPayment,
+		HostEnodeUrl:         host.EnodeURL,
+		Funding:              contractFund,
+		StartHeight:          startHeight,
+		EndHeight:            contractEndHeight,
+		ClientPaymentAddress: clientPaymentAddress,
+		Host:                 host,
+	}
 
 	// 4. contract renew
 	if renewedContract, err = cm.ContractRenew(renewContract, params); err != nil {
@@ -312,7 +333,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 // 		2. if the amount of renew fails exceed a limit or it is already passed the second half of renew window,
 // 		meaning the contract needs to be replaced, mark the contract as canceled
 // 		3. return the error message
-func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, blockHeight uint64, contractStatus storage.ContractStatus) (err error) {
+func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contract, renewError error, rentPayment storage.RentPayment, contractStatus storage.ContractStatus) (err error) {
 	// if renew failed is caused by the storage host, update the the failedRenewsCount
 	if common.ErrContains(renewError, ErrHostFault) {
 		cm.lock.Lock()
@@ -321,8 +342,10 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	}
 
 	// get the number of failed renews, to check if the contract needs to be replaced
+	// get the newest block height as well
 	cm.lock.RLock()
 	numFailed, _ := cm.failedRenewCount[failedContract.Metadata().ID]
+	blockHeight := cm.blockHeight
 	cm.lock.RUnlock()
 
 	secondHalfRenewWindow := blockHeight+rentPayment.RenewWindow/2 >= failedContract.Metadata().EndHeight

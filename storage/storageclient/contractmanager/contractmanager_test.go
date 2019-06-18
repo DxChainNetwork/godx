@@ -174,3 +174,7 @@ func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl stri
 func (st *storageClientBackendContractManager) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	return
 }
+
+func (st *storageClientBackendContractManager) GetPaymentAddress() (address common.Address, err error) {
+	return
+}

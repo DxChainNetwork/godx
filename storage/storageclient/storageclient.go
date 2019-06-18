@@ -1035,3 +1035,30 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 	}
 	return
 }
+
+//GetPaymentAddress get the account address used to sign the storage contract.
+// If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+func (sc *StorageClient) GetPaymentAddress() (common.Address, error) {
+	sc.lock.Lock()
+	paymentAddress := sc.PaymentAddress
+	sc.lock.Unlock()
+
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+
+	//Local node does not contain wallet
+	if wallets := sc.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
+		if accountList := wallets[0].Accounts(); len(accountList) > 0 {
+			paymentAddress := accountList[0].Address
+			sc.lock.Lock()
+			//the first address in the local wallet will be used as the paymentAddress by default.
+			sc.PaymentAddress = paymentAddress
+			sc.lock.Unlock()
+			sc.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			return paymentAddress, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
+}
