@@ -379,7 +379,9 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, params storage.ContractParams) (md storage.ContractMetaData, err error) {
 
 	contract := oldContract.Header()
-	lastRev := contract.GetLatestContractRevision()
+	lastRev := contract.LatestContractRevision
+
+	// Extract vars from params, for convenience
 	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral common.BigInt
@@ -534,8 +536,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	if _, err := storage.SendFormContractTX(cm.b, clientAddr, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract transaction error", err)
+	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
 	// wrap some information about this contract
@@ -543,7 +545,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
 		StartHeight:            startHeight,
-		EndHeight:              endHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,
 		LatestContractRevision: storageContractRevision,

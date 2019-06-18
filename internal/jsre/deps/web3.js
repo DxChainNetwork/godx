@@ -5646,11 +5646,18 @@ module.exports = Net;
                 params: 1,
             });
 
+            var download = new Method({
+              name: 'download',
+              call: 'storageclient_downloadSync',
+              params: 2,
+            });
+
             var upload = new Method({
                 name: 'upload',
                 call: 'storageclient_upload',
                 params: 2,
             });
+
             var setClientSetting = new Method({
                 name: 'setClientSetting',
                 call: 'storageclient_setClientSetting',
@@ -5688,11 +5695,11 @@ module.exports = Net;
                 params: 1,
             });
 
-
             return [
                 memory,
                 memorylimit,
                 setMemoryLimit,
+                download,
                 upload,
                 setClientSetting,
                 clientSetting,

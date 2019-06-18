@@ -14,7 +14,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
@@ -29,15 +28,16 @@ type downloadSectorInfo struct {
 type unfinishedDownloadSegment struct {
 
 	// where to write the recovered logical data
-	destination downloadDestination
+	destination writeDestination
 	erasureCode erasurecode.ErasureCoder
-	masterKey   crypto.CipherKey
 
-	// required for deriving the encryption keys for each sector
+	// used to generate twofishgcm key seed
 	segmentIndex uint64
 
 	// maps from host id to the downloadSectorInfo
-	segmentMap  map[string]downloadSectorInfo
+	segmentMap map[string]downloadSectorInfo
+
+	// the length of the original data decoded
 	segmentSize uint64
 
 	// the length of segment to fetch
@@ -45,7 +45,9 @@ type unfinishedDownloadSegment struct {
 
 	// where is the logical segment being downloaded at
 	fetchOffset uint64
-	sectorSize  uint64
+
+	// the number of bytes every sector of remote file
+	sectorSize uint64
 
 	// where to write the completed data for the writer
 	writeOffset int64
@@ -61,7 +63,7 @@ type unfinishedDownloadSegment struct {
 	// whether or not the segment successfully downloaded
 	failed bool
 
-	// th data used to recover the logical data
+	// the data used to recover the logical data
 	physicalSegmentData [][]byte
 
 	// which sectors in the segment are fetching
@@ -161,7 +163,7 @@ func (uds *unfinishedDownloadSegment) returnMemory() {
 	// the maximum amount of memory is the sectors completed plus the number of workers remaining.
 	maxMemory := uint64(uds.workersRemaining+uds.sectorsCompleted) * uds.sectorSize
 
-	// If enough sectors have completed, max memory is the number of registered
+	// if enough sectors have completed, max memory is the number of registered
 	// sectors plus the number of completed sectors.
 	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
 		maxMemory = uint64(uds.sectorsCompleted+uds.sectorsRegistered) * uds.sectorSize
@@ -202,12 +204,10 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	// ensure cleanup occurs after the data is recovered, whether recovery succeeds or fails.
 	defer uds.cleanUp()
 
-	// calculate the number of bytes we need to recover
-	btr := bytesToRecover(uds.fetchOffset, uds.fetchLength, uds.segmentSize, uds.erasureCode)
-
+	// NOTE: for not supporting partial encoding, we directly recover the whole sector
 	// recover the sectors into the logical segment data.
 	recoverWriter := new(bytes.Buffer)
-	err := uds.erasureCode.Recover(uds.physicalSegmentData, int(btr), recoverWriter)
+	err := uds.erasureCode.Recover(uds.physicalSegmentData, int(uds.segmentSize), recoverWriter)
 	if err != nil {
 		uds.mu.Lock()
 		uds.fail(err)
@@ -224,7 +224,7 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	recoveredData := recoverWriter.Bytes()
 
 	// write the bytes to the requested output.
-	start := recoveredDataOffset(uds.fetchOffset, uds.erasureCode)
+	start := uds.fetchOffset
 	end := start + uds.fetchLength
 	_, err = uds.destination.WriteAt(recoveredData[start:end], uds.writeOffset)
 	if err != nil {
@@ -248,19 +248,4 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 		return err
 	}
 	return nil
-}
-
-// returns the number of bytes we need to recover from the erasure coded segments.
-func bytesToRecover(segmentFetchOffset, segmentFetchLength, segmentSize uint64, rs erasurecode.ErasureCoder) uint64 {
-
-	// not support partial encoding
-	return segmentSize
-
-}
-
-// convert the fetch offset of the segment into the offset of the recovered data.
-func recoveredDataOffset(segmentFetchOffset uint64, rs erasurecode.ErasureCoder) uint64 {
-
-	// not support partial encoding
-	return segmentFetchOffset
 }

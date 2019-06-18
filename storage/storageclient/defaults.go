@@ -40,6 +40,13 @@ const (
 	DefaultMaxMemory = uint64(3 * 1 << 28)
 )
 
+// default download parameter
+const (
+	DefaultDownloadLength     = uint64(250)
+	DefaultDownloadOffset     = uint64(0)
+	DefaultDownloadDxFilePath = ""
+)
+
 // Backup Header
 const (
 	encryptionPlaintext = "plaintext"
