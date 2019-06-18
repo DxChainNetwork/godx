@@ -94,9 +94,9 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 		w.mu.Unlock()
 
 		// Process the segment and return it if valid
-		nextSegment, pieceIndex := w.preProcessUploadSegment(segment)
+		nextSegment, sectorIndex := w.preProcessUploadSegment(segment)
 		if nextSegment != nil {
-			return nextSegment, pieceIndex
+			return nextSegment, sectorIndex
 		}
 	}
 	return nil, 0

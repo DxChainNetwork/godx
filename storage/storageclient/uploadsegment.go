@@ -190,6 +190,12 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 // retrieveDataAndDispatchSegment will fetch the logical data for a segment, encode
 // the physical data for the segment, and then distribute them.
 func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploadSegment) {
+	select {
+	case <-sc.tm.StopChan():
+		return
+	default:
+	}
+
 	err := sc.tm.Add()
 	if err != nil {
 		return

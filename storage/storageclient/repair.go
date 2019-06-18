@@ -40,7 +40,7 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 
 // dirMetadata retrieve the directory metadata and returns the dir metadata after bubble
 func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
-	sysPath := dxPath.SysPath(storage.SysPath(sc.staticFilesDir))
+	sysPath := dxPath.SysPath(storage.SysPath(sc.fileSystem.FileRootDir()))
 	fi, err := os.Stat(string(sysPath))
 	if err != nil {
 		return dxdir.Metadata{}, err
@@ -127,7 +127,7 @@ func (sc *StorageClient) stuckLoop() {
 		// push stuck segment to upload heap
 		sc.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
 
-		sc.uploadOrRepair(hosts)
+		sc.uploadOrRepair()
 
 		// Call bubble once all segments have been popped off heap
 		if err := sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {

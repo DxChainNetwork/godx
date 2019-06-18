@@ -95,7 +95,7 @@ func New(persistDir string) (*StorageClient, error) {
 		downloadHeap:   new(downloadSegmentHeap),
 		uploadHeap: uploadHeap{
 			pendingSegments:     make(map[uploadSegmentID]struct{}),
-			newUploads:          make(chan struct{}, 1),
+			segmentComing:          make(chan struct{}, 1),
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
@@ -148,10 +148,12 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 	// active the work pool to get a worker for a upload/download task.
 	sc.activateWorkerPool()
 
+
 	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
 	go sc.uploadLoop()
 	go sc.stuckLoop()
+	go sc.uploadOrRepair()
 	go sc.healthCheckLoop()
 
 	// kill workers on shutdown.

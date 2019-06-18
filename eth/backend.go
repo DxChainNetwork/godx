@@ -104,6 +104,8 @@ type Ethereum struct {
 	networkID     uint64
 	netRPCService *ethapi.PublicNetAPI
 
+	server *p2p.Server
+
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 
 	// maintenance
@@ -577,6 +579,7 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 
 	// Start the RPC service
 	s.netRPCService = ethapi.NewPublicNetAPI(srvr, s.NetVersion())
+	s.server = srvr
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := srvr.MaxPeers
@@ -658,6 +661,21 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		return conn,  nil
 	}
 
+	// First we disconnect the ethereum connection
+	s.server.RemovePeer(hostNode)
+	for {
+		found := false
+		peers := s.server.PeersInfo()
+		for _, p := range peers {
+			if p.ID == nodeId {
+				found = true
+			}
+		}
+		if !found {
+			break
+		}
+	}
+
 	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
 	}
@@ -696,6 +714,21 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 
 	if session != nil {
 		session.StopConnection()
+
+		// wait for connection stop
+		<-session.ClosedChan()
+
+		isStatic := false
+		staticNodeList := s.server.StaticNodes
+		for _, n := range staticNodeList {
+			if hostNode.ID() == n.ID() {
+				isStatic = true
+				break
+			}
+		}
+		if isStatic {
+			s.server.AddPeer(hostNode)
+		}
 	}
 
 	return nil

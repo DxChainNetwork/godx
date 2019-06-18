@@ -10,16 +10,19 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
 	"github.com/pborman/uuid"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -68,6 +71,64 @@ func testUploadDirectory(t *testing.T) {
 }
 
 /***************** Upload Business Logic Test Case For Each Critical Function ***********************/
+func TestDirMetadata(t *testing.T) {
+	sct := newStorageClientTester(t)
+	sc := sct.Client
+	if dir, err := sc.dirMetadata(storage.RootDxPath()); err != nil {
+		t.Fatal(err)
+	} else if dir.Health != dxfile.CompleteHealthThreshold {
+		t.Fatal("root meta health is not 200")
+	}
+}
+
+func TestDoUpload(t *testing.T) {
+	sct := newStorageClientTester(t)
+	sc := sct.Client
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		sc.uploadOrRepair()
+		wg.Done()
+	}()
+
+	entry := newFileEntry(t, sct.Client)
+	if err := entry.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	dxPath := entry.DxPath()
+	defer sc.DeleteFile(dxPath)
+
+	table := sc.contractManager.HostHealthMapByID(entry.HostIDs())
+	if err := entry.MarkAllUnhealthySegmentsAsStuck(table); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+		t.Fatal("update root metadata failed: ", err)
+	}
+	<-time.After(1 * time.Second)
+
+	select {
+	case sc.uploadHeap.segmentComing <- struct{}{}:
+	default:
+	}
+
+	var heapLen = -1
+	for heapLen != 0 {
+		sc.uploadHeap.mu.Lock()
+		heapLen = sc.uploadHeap.heap.Len()
+		sc.uploadHeap.mu.Unlock()
+	}
+
+	if heapLen == 0 {
+		sc.tm.Stop()
+	}
+	wg.Wait()
+
+}
+
 func TestPushFileToSegmentHeap(t *testing.T) {
 	sct := newStorageClientTester(t)
 
@@ -92,6 +153,16 @@ func TestPushFileToSegmentHeap(t *testing.T) {
 	}
 }
 
+func TestRequiredContract(t *testing.T) {
+	a := 9
+	b := 10
+	requiredContracts := math.Ceil(float64(a + b) / 2)
+	if uint64(requiredContracts) != 10 {
+		t.Fatal("not equal ceil value")
+	}
+
+}
+
 func TestCreatAndAssignToWorkers(t *testing.T) {
 	sct := newStorageClientTester(t)
 	entry := newFileEntry(t, sct.Client)
@@ -113,7 +184,7 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 
 	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
 
-	unfinishedSegments := sct.Client.createUnfinishedSegments(entry, hosts, targetUnstuckSegments, nilHostHealthInfoTable)
+	unfinishedSegments, _ := sct.Client.createUnfinishedSegments(entry, hosts, targetUnstuckSegments, nilHostHealthInfoTable)
 	if len(unfinishedSegments) <= 0 {
 		t.Fatal("push heap failed")
 	}

@@ -53,6 +53,7 @@ func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithI
 	if err != nil {
 		t.Fatal(err)
 	}
+	entry.HostIDs()
 	if err := entry.SetLocalPath(storage.SysPath(entry.FilePath())); err != nil {
 		t.Fatal(err)
 	}

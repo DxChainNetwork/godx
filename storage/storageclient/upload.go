@@ -12,6 +12,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/proto"
+	"math"
 	"os"
 )
 
@@ -52,9 +53,10 @@ func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
 		up.ErasureCode, _ = erasurecode.New(erasurecode.ECTypeStandard, proto.DefaultMinSectors, proto.DefaultNumSectors)
 	}
 
-	numContracts := uint32(len(sc.contractManager.GetStorageContractSet().Contracts()))
-	requiredContracts := (up.ErasureCode.NumSectors() + up.ErasureCode.MinSectors()) / 2
-	if numContracts < requiredContracts {
+	numContracts := uint64(len(sc.contractManager.GetStorageContractSet().Contracts()))
+	// requiredContracts = ceil(min + redundant/2)
+	requiredContracts := math.Ceil(float64(up.ErasureCode.NumSectors() + up.ErasureCode.MinSectors()) / 2)
+	if numContracts < uint64(requiredContracts) {
 		return fmt.Errorf("not enough contracts to upload file: got %v, needed %v", numContracts, (up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors())/2)
 	}
 
@@ -95,9 +97,13 @@ func (sc *StorageClient) Upload(up proto.FileUploadParams) error {
 
 	// Send the upload to the repair loop
 	hosts := sc.refreshHostsAndWorkers()
-	sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable)
+
+	if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
+		return err
+	}
+
 	select {
-	case sc.uploadHeap.newUploads <- struct{}{}:
+	case sc.uploadHeap.segmentComing <- struct{}{}:
 	default:
 	}
 	return nil

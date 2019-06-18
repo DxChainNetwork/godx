@@ -19,8 +19,9 @@ const (
 )
 
 var (
-	DefaultMinSectors uint32 = 10
-	DefaultNumSectors uint32 = 20
+	// TODO 为了测试方便，调小参数默认值
+	DefaultMinSectors uint32 = 1
+	DefaultNumSectors uint32 = 2
 )
 
 type (
