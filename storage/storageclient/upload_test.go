@@ -25,9 +25,6 @@ import (
 	"time"
 )
 
-func init() {
-	storage.ENV = storage.Env_Test
-}
 
 // Upload test case has many dependencies modules. Now we test each critical function
 func testUploadDirectory(t *testing.T) {
@@ -72,8 +69,12 @@ func testUploadDirectory(t *testing.T) {
 
 /***************** Upload Business Logic Test Case For Each Critical Function ***********************/
 func TestDirMetadata(t *testing.T) {
+	storage.ENV = storage.Env_Test
+
 	sct := newStorageClientTester(t)
 	sc := sct.Client
+	defer sc.Close()
+
 	if dir, err := sc.dirMetadata(storage.RootDxPath()); err != nil {
 		t.Fatal(err)
 	} else if dir.Health != dxfile.CompleteHealthThreshold {
@@ -82,8 +83,11 @@ func TestDirMetadata(t *testing.T) {
 }
 
 func TestDoUpload(t *testing.T) {
+	storage.ENV = storage.Env_Test
+
 	sct := newStorageClientTester(t)
 	sc := sct.Client
+	defer sc.Close()
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -130,7 +134,10 @@ func TestDoUpload(t *testing.T) {
 }
 
 func TestPushFileToSegmentHeap(t *testing.T) {
+	storage.ENV = storage.Env_Test
+
 	sct := newStorageClientTester(t)
+	defer sct.Client.Close()
 
 	entry := newFileEntry(t, sct.Client)
 	dxPath := entry.DxPath()
@@ -164,7 +171,11 @@ func TestRequiredContract(t *testing.T) {
 }
 
 func TestCreatAndAssignToWorkers(t *testing.T) {
+	storage.ENV = storage.Env_Test
+
 	sct := newStorageClientTester(t)
+	defer sct.Client.Close()
+
 	entry := newFileEntry(t, sct.Client)
 	defer func() {
 		if err := entry.Close(); err != nil {
