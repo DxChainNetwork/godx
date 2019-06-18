@@ -1,7 +1,6 @@
 package contractmanager
 
 import (
-	"crypto/ecdsa"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -590,7 +589,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 
 	// maintain contract status
 	if err := cm.maintainContractStatus(int(cm.rentPayment.StorageHosts)); err != nil {
-		t.Fatalf("failed to maintain the contract status")
+		t.Fatalf("failed to maintain the contract status: %s", err.Error())
 	}
 
 	// validation for hostNotExistsContract, lowEvalContracts, highEvalContracts
@@ -728,9 +727,9 @@ func randomDuplicateContractGenerator(contractStartHeight uint64, id enode.ID) (
 				{randomAddressGenerator(), big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
+				PaymentAddresses: []common.Address{
+					randomAddressGenerator(),
+					randomAddressGenerator(),
 				},
 			},
 		},
@@ -774,9 +773,9 @@ func randomCanceledContractGenerator() (ch contractset.ContractHeader) {
 				{randomAddressGenerator(), big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
+				PaymentAddresses: []common.Address{
+					randomAddressGenerator(),
+					randomAddressGenerator(),
 				},
 			},
 		},

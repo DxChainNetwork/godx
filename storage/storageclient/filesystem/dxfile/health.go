@@ -16,10 +16,13 @@ import (
 const (
 	// RepairHealthThreshold is the threshold that file with smaller health is marked as Stuck and
 	// to be repaired
-	RepairHealthThreshold = 175
+	RepairHealthThreshold   = 175
 
 	// StuckThreshold is the threshold that defines the threshold between the stuck and unstuck segments
 	StuckThreshold = 100
+
+	// CompleteHealthThreshold is that segment upload all sectors
+	CompleteHealthThreshold = 200
 )
 
 // Health return check for dxFile's segments and return the health, stuckHealth, and numStuckSegments

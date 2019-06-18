@@ -110,7 +110,6 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 	go cm.subscribeChainChangeEvent()
 
 	// save contract information
-	// TODO: save immediately after the load
 	if err = cm.saveSettings(); err != nil {
 		return
 	}

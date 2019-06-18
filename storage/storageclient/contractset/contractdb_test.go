@@ -5,7 +5,6 @@
 package contractset
 
 import (
-	"crypto/ecdsa"
 	"crypto/rand"
 	"fmt"
 	"math/big"
@@ -363,9 +362,9 @@ func contractHeaderGenerator() (ch ContractHeader) {
 				{randomAddressGenerator(), big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
-				PublicKeys: []ecdsa.PublicKey{
-					{nil, nil, nil},
-					{nil, nil, nil},
+				PaymentAddresses: []common.Address{
+					randomAddressGenerator(),
+					randomAddressGenerator(),
 				},
 			},
 		},

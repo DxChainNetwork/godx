@@ -50,30 +50,22 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
 }
 
+// Upload their local files to hosts made contract with
+func (api *PublicStorageClientAPI) Upload(source string, dxPath string) string {
+	param := storage.FileUploadParams{
+		Source: source,
+		DxPath: storage.DxPath{Path: dxPath},
+		Mode:   storage.Override,
+	}
+	if err := api.sc.Upload(param); err != nil {
+		return err.Error()
+	}
+	return "success"
+}
+
 //GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (api *PublicStorageClientAPI) GetPaymentAddress() (common.Address, error) {
-	api.sc.lock.Lock()
-	paymentAddress := api.sc.PaymentAddress
-	api.sc.lock.Unlock()
-
-	if paymentAddress != (common.Address{}) {
-		return paymentAddress, nil
-	}
-
-	//Local node does not contain wallet
-	if wallets := api.sc.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
-		//The local node does not have any wallet address yet
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			paymentAddress := accounts[0].Address
-			api.sc.lock.Lock()
-			//the first address in the local wallet will be used as the paymentAddress by default.
-			api.sc.PaymentAddress = paymentAddress
-			api.sc.lock.Unlock()
-			api.sc.log.Info("host automatically sets your wallet's first account as paymentAddress")
-			return paymentAddress, nil
-		}
-	}
-	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
+	return api.sc.GetPaymentAddress()
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs

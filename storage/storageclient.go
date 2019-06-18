@@ -57,11 +57,13 @@ type ClientBackend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
+	GetPaymentAddress() (common.Address, error)
+	IsRevisionSessionDone(contractID ContractID) bool
 }
 
 // a metadata about a storage contract.
 type ClientContract struct {
-	ContractID  common.Hash
+	ContractID  ContractID
 	HostID      enode.ID
 	Transaction types.Transaction
 
@@ -76,20 +78,11 @@ type ClientContract struct {
 	StorageSpending  common.BigInt
 	UploadSpending   common.BigInt
 
-	// record utility information about the contract.
-	Utility ContractUtility
+	// record status information about the contract.
+	Status ContractStatus
 
 	// the amount of money that the client spent or locked while forming a contract.
 	TotalCost common.BigInt
-}
-
-// record utility of a given contract.
-type ContractUtility struct {
-	GoodForUpload bool
-	GoodForRenew  bool
-
-	// only be set to false.
-	Locked bool
 }
 
 // the parameters to download from outer request

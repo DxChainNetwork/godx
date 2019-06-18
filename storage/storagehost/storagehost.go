@@ -5,7 +5,6 @@
 package storagehost
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"math/bits"
@@ -58,26 +57,27 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		account := accounts.Account{Address: paymentAddress}
 		wallet, err := h.ethBackend.AccountManager().Find(account)
 		if err != nil {
-			h.log.Error("Failed to find the wallet", err)
+			h.log.Warn("Failed to find the wallet", "err", err)
 			acceptingContracts = false
 		}
 		//If the wallet is locked, you will not be able to enter the signing phase.
 		status, err := wallet.Status()
 		if status == "Locked" || err != nil {
-			h.log.Error("Wallet is not unlocked", err)
+			h.log.Warn("Wallet is not unlocked", "err", err)
 			acceptingContracts = false
 		}
 
 		stateDB, err := h.ethBackend.GetBlockChain().State()
 		if err != nil {
-			h.log.Error("Failed to find the stateDB", err)
+			h.log.Warn("Failed to find the stateDB", "err", err)
+		} else {
+			balance := stateDB.GetBalance(paymentAddress)
+			//If the maximum deposit amount exceeds the account balance, set it as the account balance
+			if balance.Cmp(&MaxDeposit) < 0 {
+				MaxDeposit = *balance
+			}
 		}
-		balance := stateDB.GetBalance(paymentAddress)
 
-		//If the maximum deposit amount exceeds the account balance, set it as the account balance
-		if balance.Cmp(&MaxDeposit) < 0 {
-			MaxDeposit = *balance
-		}
 	} else {
 		h.log.Error("paymentAddress must be explicitly specified")
 	}
@@ -437,13 +437,16 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 	s.SetDeadLine(storage.HostSettingTime)
 
 	settings := h.externalConfig()
-	return s.SendHostExtSettingsResponse(settings)
+	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+		return errors.New("host setting request done")
+	} else {
+		return err
+	}
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-
 	// this RPC call contains two request/response exchanges.
-	s.SetDeadLine(storage.FormContractTime)
+	s.SetDeadLine(storage.ContractCreateTime)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
@@ -527,9 +530,9 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	storageContractRevision := types.StorageContractRevision{
 		ParentID: sc.RLPHash(),
 		UnlockConditions: types.UnlockConditions{
-			PublicKeys: []ecdsa.PublicKey{
-				*clientPK,
-				*hostPK,
+			PaymentAddresses: []common.Address{
+				crypto.PubkeyToAddress(*clientPK),
+				crypto.PubkeyToAddress(*hostPK),
 			},
 			SignaturesRequired: 2,
 		},
@@ -581,7 +584,11 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		return ExtendErr("finalize storage obligation error", err)
 	}
 
-	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
+	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
+		return errors.New("storage contract new process done")
+	} else {
+		return err
+	}
 }
 
 // renewBasePrice returns the base cost of the storage in the  contract,
@@ -610,14 +617,12 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Read upload request
 	var uploadRequest storage.UploadRequest
 	if err := beginMsg.Decode(&uploadRequest); err != nil {
-		s.SendErrorMsg(err)
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
 	// Get revision from storage obligation
 	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
 	}
 
@@ -649,7 +654,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 
 		default:
-			s.SendErrorMsg(err)
 			return errors.New("unknown action type " + action.Type)
 		}
 	}
@@ -672,7 +676,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
+	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -705,7 +709,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -734,7 +737,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Construct the merkle proof
 	oldHashSet, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 	merkleResp = storage.UploadMerkleProof{
@@ -751,19 +753,16 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
-		s.SendErrorMsg(err)
 		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
 	}
 
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 	newRevision.Signatures[0] = clientRevisionSign
@@ -780,7 +779,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -788,18 +786,15 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	sign, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	if err := s.SendStorageContractUploadHostRevisionSign(sign); err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -858,7 +853,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("download request has invalid sector bounds")
 		case sec.Length == 0:
 			err = errors.New("length cannot be zero")
-		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
+		case req.MerkleProof && (sec.Offset%merkle.LeafSize != 0 || sec.Length%merkle.LeafSize != 0):
 			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
 			err = errors.New("wrong number of valid proof values")
@@ -893,10 +888,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
 	for _, sec := range req.Sections {
-
-		// use the worst-case proof size of 2*tree depth.
-		// this occurs when proving across the two leaves in the center of the tree.
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
+		// use the worst-case proof size of 2*tree depth (this occurs when
+		// proving across the two leaves in the center of the tree)
+		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
@@ -957,11 +951,10 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// construct the Merkle proof, if requested.
 		var proof []common.Hash
 		if req.MerkleProof {
-			proofStart := int(sec.Offset) / storage.SegmentSize
-			proofEnd := int(sec.Offset+sec.Length) / storage.SegmentSize
+			proofStart := int(sec.Offset) / merkle.LeafSize
+			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
-				s.SendErrorMsg(err)
 				return err
 			}
 		}

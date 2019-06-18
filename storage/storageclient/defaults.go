@@ -4,7 +4,9 @@
 
 package storageclient
 
-import "time"
+import (
+	"time"
+)
 
 // Files and directories related constant
 const (
@@ -45,9 +47,41 @@ const (
 	encryptionVersion   = "1.0"
 )
 
-// DxFile Related
-const (
-	DxFileExtension = ".dx"
+// Default params about upload/download process
+var (
+	// healthCheckInterval defines the maximum amount of time that should pass
+	// in between checking the health of a file or directory.
+	HealthCheckInterval = 30 * time.Minute
+
+	// MaxConsecutiveSegmentUploads is the maximum number of segment before rebuilding the heap.
+	MaxConsecutiveSegmentUploads = 100
+
+	// rebuildChunkHeapInterval defines how long the storage client sleeps between
+	// checking on the filesystem health.
+	RebuildSegmentHeapInterval = 15 * time.Minute
+
+	// repairStuckChunkInterval defines how long the storage client sleeps between
+	// trying to repair a stuck chunk. The uploadHeap prioritizes stuck chunks
+	// so this interval is to allow time for unstuck chunks to be repaired.
+	// Ideally the uploadHeap is spending 95% of its time repairing unstuck
+	// chunks.
+	RepairStuckSegmentInterval = 10 * time.Minute
+
+	// uploadAndRepairErrorSleepDuration indicates how long a upload process
+	// should sleep before retrying if there is an error fetching the metadata
+	// of the root directory of the storage client's filesystem.
+	UploadAndRepairErrorSleepDuration = 15 * time.Minute
+
+	// RemoteRepairDownloadThreshold indicates the threshold in percent under
+	// which the storage client starts repairing a file that is not available on disk
+	RemoteRepairDownloadThreshold = 0.125
+
+	// UploadFailureCoolDown is the initial time of punishment while upload consecutive fails
+	// the punishment time shows exponential growth
+	UploadFailureCoolDown = 1 * time.Minute
+
+	// when uploading or downloading, the renew goroutine wait for the longest time
+	RevisionDoneTime = 1 * time.Minute
 )
 
 var currencyIndexMap = map[string]uint64{

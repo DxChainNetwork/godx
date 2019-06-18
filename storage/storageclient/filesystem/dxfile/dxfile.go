@@ -150,6 +150,28 @@ func (df *DxFile) Rename(newDxFile storage.DxPath, newDxFilename storage.SysPath
 	return df.rename(newDxFile, newDxFilename)
 }
 
+func (df *DxFile) Sectors(segmentIndex int) ([][]*Sector, error) {
+	df.lock.RLock()
+	defer df.lock.RUnlock()
+	if segmentIndex >= len(df.segments) {
+		err := fmt.Errorf("index %v out of bounds (%v)", segmentIndex, len(df.segments))
+		return nil, err
+	}
+
+	// Return a deep-copy to avoid race conditions
+	sectors := make([][]*Sector, len(df.segments[segmentIndex].Sectors))
+	for sectorIndex := range sectors {
+		sectors[sectorIndex] = make([]*Sector, len(df.segments[segmentIndex].Sectors[sectorIndex]))
+		for i, sector := range df.segments[segmentIndex].Sectors[sectorIndex] {
+			sectors[sectorIndex][i] = &Sector{
+				HostID:     sector.HostID,
+				MerkleRoot: sector.MerkleRoot,
+			}
+		}
+	}
+	return sectors, nil
+}
+
 // AddSector add a Sector to DxFile to the location specified by segmentIndex and sectorIndex.
 // The sector content is filled by address and merkleRoot.
 func (df *DxFile) AddSector(address enode.ID, merkleRoot common.Hash, segmentIndex, sectorIndex int) error {
@@ -286,6 +308,20 @@ func (df *DxFile) NumSegments() int {
 	defer df.lock.Unlock()
 
 	return len(df.segments)
+}
+
+// NumStuckChunks returns the Number of Stuck Chunks recorded in the file's
+// metadata
+func (df *DxFile) NumStuckSegments() int {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+	return int(df.metadata.NumStuckSegments)
+}
+
+func (df *DxFile) TimeRecentRepair() time.Time {
+	df.lock.Lock()
+	defer df.lock.Unlock()
+	return time.Unix(int64(df.metadata.TimeRecentRepair), 0)
 }
 
 // SectorsOfSegmentIndex returns Sectors of a specific Segment with Index.

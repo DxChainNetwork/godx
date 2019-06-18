@@ -6,11 +6,11 @@ package storageclient
 
 import (
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -18,11 +18,11 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
-// A worker listens for work on a certain host.
+// A worker is responsible for uploading and downloading file segments
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract storage.ClientContract
+	contract storage.ContractMetaData
 	hostID   enode.ID
 	client   *StorageClient
 
@@ -32,22 +32,22 @@ type worker struct {
 	// the time that last failure
 	ownedDownloadRecentFailure time.Time
 
-	// Notifications of new work. Takes priority over uploads.
+	// Notifications of new download work. Takes priority over uploads.
 	downloadChan chan struct{}
 
-	// Yet unprocessed work items.
 	downloadSegments []*unfinishedDownloadSegment
 	downloadMu       sync.Mutex
 
 	// Has downloading been terminated for this worker?
 	downloadTerminated bool
 
-	// TODO: Upload variables.
-	//unprocessedSegments         []*unfinishedUploadSegment // Yet unprocessed work items.
-	//uploadChan                chan struct{}            // Notifications of new work.
-	//uploadConsecutiveFailures int                      // How many times in a row uploading has failed.
-	//uploadRecentFailure       time.Time                // How recent was the last failure?
-	//uploadTerminated          bool                     // Have we stopped uploading?
+	// pending upload segment in heap
+	pendingSegments []*unfinishedUploadSegment
+
+	uploadChan                chan struct{} // Notifications of new segment
+	uploadConsecutiveFailures int           // How many times in a row uploading has failed.
+	uploadRecentFailure       time.Time     // How recent was the last failure?
+	uploadTerminated          bool          // Have we stopped uploading?
 
 	// Worker will shut down if a signal is sent down this channel.
 	killChan chan struct{}
@@ -56,108 +56,76 @@ type worker struct {
 
 // activateWorkerPool will grab the set of contracts from the contractManager and
 // update the worker pool to match.
-func (c *StorageClient) activateWorkerPool() {
-
+func (sc *StorageClient) activateWorkerPool() {
 	// get all contracts in client
-	contractMap := c.contractManager.GetStorageContractSet().Contracts()
+	contractMap := sc.contractManager.GetStorageContractSet().Contracts()
 
 	// Add a worker for any contract that does not already have a worker.
 	for id, contract := range contractMap {
-		c.lock.Lock()
-		_, exists := c.workerPool[id]
-		if !exists {
-
-			clientContract := storage.ClientContract{
-				ContractID:  common.Hash(id),
-				HostID:      contract.Header().EnodeID,
-				StartHeight: contract.Header().StartHeight,
-				EndHeight:   contract.Header().EndHeight,
-
-				// TODO: 计算、填充下这些变量
-				// the amount remaining in the contract that the client can spend.
-				//ClientFunds: common.NewBigInt(1),
-
-				// track the various costs manually.
-				//DownloadSpending: common.NewBigInt(1),
-				//StorageSpending:  common.NewBigInt(1),
-				//UploadSpending:   common.NewBigInt(1),
-
-				// record utility information about the contract.
-				//Utility ContractUtility
-
-				// the amount of money that the client spent or locked while forming a contract.
-				TotalCost: contract.Header().TotalCost,
-			}
-
+		sc.lock.Lock()
+		if _, exist := sc.workerPool[id]; exist {
 			worker := &worker{
-				contract:     clientContract,
+				contract:     contract.Metadata(),
 				hostID:       contract.Header().EnodeID,
 				downloadChan: make(chan struct{}, 1),
+				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-
-				// TODO: 初始化upload变量
-				//uploadChan:   make(chan struct{}, 1),
-
-				client: c,
+				client:       sc,
 			}
-			c.workerPool[id] = worker
-			if err := c.tm.Add(); err != nil {
-				log.Error("storage client thread manager failed to add in activateWorkerPool", "error", err)
+			sc.workerPool[id] = worker
+
+			// start worker goroutine
+			if err := sc.tm.Add(); err != nil {
+				log.Error("storage client failed to add in worker progress", "error", err)
 				break
 			}
 			go func() {
-				defer c.tm.Done()
+				defer sc.tm.Done()
 				worker.workLoop()
 			}()
+
 		}
-		c.lock.Unlock()
+		sc.lock.Unlock()
 	}
 
 	// Remove a worker for any worker that is not in the set of new contracts.
-	c.lock.Lock()
-	for id, worker := range c.workerPool {
+	sc.lock.Lock()
+	for id, worker := range sc.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(c.workerPool, id)
+			delete(sc.sessionSet, id)
+			delete(sc.workerPool, id)
 			close(worker.killChan)
 		}
 	}
-	c.lock.Unlock()
+	sc.lock.Unlock()
 }
 
 // workLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
+// this model ensure that we can only do upload or download at the same time, not both
 func (w *worker) workLoop() {
-
-	// TODO: kill上传任务
-	//defer w.managedKillUploading()
-
+	defer w.killUploading()
 	defer w.killDownloading()
 
 	for {
-
-		// Perform one step of processing download task.
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
 			w.download(downloadSegment)
 			continue
 		}
 
-		// TODO: 执行上传任务
-		// Perform one step of processing upload task.
-		//segment, sectorIndex := w.managedNextUploadSegment()
-		//if segment != nil {
-		//	w.managedUpload(segment, sectorIndex)
-		//	continue
-		//}
+		segment, sectorIndex := w.nextUploadSegment()
+		if segment != nil {
+			w.upload(segment, sectorIndex)
+			continue
+		}
 
 		// keep listening for a new upload/download task, or a stop signal
 		select {
 		case <-w.downloadChan:
 			continue
-
-		// TODO: 监听上传任务
-		//case <-w.uploadChan:
-		//	continue
+		case <-w.uploadChan:
+			continue
 		case <-w.killChan:
 			return
 		case <-w.client.tm.StopChan():
@@ -269,7 +237,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 		return
 	}
 
-	if uint64(fetchOffset/storage.SegmentSize) == 0 {
+	if uint64(fetchOffset/merkle.LeafSize) == 0 {
 		w.client.log.Error("twofish doesn't support a blockIndex != 0")
 		return
 	}
@@ -359,15 +327,14 @@ func (w *worker) onDownloadCooldown() bool {
 // calculate the offset and length of the sector we need to download for a successful recovery of the requested data.
 func sectorOffsetAndLength(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
 	segmentIndex, numSegments := segmentsForRecovery(segmentFetchOffset, segmentFetchLength, rs)
-	return uint64(segmentIndex * storage.SegmentSize), uint64(numSegments * storage.SegmentSize)
+	return uint64(segmentIndex * merkle.LeafSize), uint64(numSegments * merkle.LeafSize)
 }
 
 // calculates how many segments we need in total to recover the requested data,
 // and the first segment.
 func segmentsForRecovery(segmentFetchOffset, segmentFetchLength uint64, rs erasurecode.ErasureCoder) (uint64, uint64) {
-
 	// not support partial encoding
-	return 0, uint64(storage.SectorSize) / storage.SegmentSize
+	return 0, uint64(storage.SectorSize) / merkle.LeafSize
 }
 
 // remove the worker from an unfinished download segment,
