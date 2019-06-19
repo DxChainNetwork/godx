@@ -11,7 +11,7 @@ const (
 	PersistHostDir = "storagehost"
 	// HostSettingFile is the file name for saving the setting of host
 	HostSettingFile = "host.json"
-	// HostDB is the database dir for storing host obligation
+	// HostDB is the database dir for storing host responsibility
 	HostDB = "hostdb"
 	// StorageManager is a dir for storagemanager related topic
 	StorageManager = "storagemanager"

@@ -538,7 +538,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		return
 	}
 
-	//Skip if the storage obligation has been completed
+	//Skip if the storage responsibility has been completed
 	if so.ResponsibilityStatus != unresolved {
 		return
 	}

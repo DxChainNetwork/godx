@@ -1024,9 +1024,7 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 			var hac types.HostAnnouncement
 			err := rlp.DecodeBytes(tx.Data(), &hac)
 			if err != nil {
-
-				sc.log.Crit("Rlp decoding error as hostAnnouncements:", err)
-
+				sc.log.Warn("Rlp decoding error as hostAnnouncements", "err", err)
 				continue
 			}
 			hostAnnouncements = append(hostAnnouncements, hac)

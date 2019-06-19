@@ -227,3 +227,11 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 		go session.Multiplex(bloomRetrievalBatch, bloomRetrievalWait, b.eth.bloomRequests)
 	}
 }
+
+func (b *EthAPIBackend) SignByNode(hash []byte) ([]byte, error) {
+	return b.eth.SignWithNodeSk(hash)
+}
+
+func (b *EthAPIBackend) GetHostEnodeURL()  string {
+	return b.eth.GetHostEnodeURL()
+}
