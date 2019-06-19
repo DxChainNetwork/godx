@@ -44,7 +44,7 @@ func (wp *WPLock) Unlock() {
 	wp.lock.Unlock()
 }
 
-// Rlock locks for read
+// RLock locks for read
 func (wp *WPLock) RLock() {
 	wp.writeLock.Lock()
 	wp.writeLock.Unlock()
