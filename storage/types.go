@@ -360,6 +360,13 @@ type (
 		TotalSectors uint64 `json:"totalSectors"`
 		UsedSectors  uint64 `json:"usedSectors"`
 	}
+
+	// HostSpace is the
+	HostSpace struct {
+		TotalSectors uint64 `json:"totalSectors"`
+		UsedSectors  uint64 `json:"usedSectors"`
+		FreeSectors  uint64 `json:"freeSectors"`
+	}
 )
 
 const (

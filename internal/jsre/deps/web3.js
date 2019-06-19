@@ -14220,6 +14220,12 @@ module.exports = Web3;
         params: 1,
       })
 
+      var availableSpace = new Method({
+        name: 'availableSpace',
+        call: 'storagehost_availableSpace',
+        params: 0,
+      })
+
       return [
         folders,
         addFolder,
@@ -14230,6 +14236,11 @@ module.exports = Web3;
 
     var properties = function() {
       return [
+        new Property({
+          name: 'space',
+          getter: 'storagehost_availableSpace',
+        }),
+
         new Property({
           name: 'folders',
           getter: 'storagehost_folders',

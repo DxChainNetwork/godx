@@ -24,7 +24,7 @@ type HostDeBugAPI struct {
 
 // HostPublicAPI is the api for private usage
 type HostPrivateAPI struct {
-	storagehost *StorageHost
+	storageHost *StorageHost
 }
 
 // NewHostDebugAPI generate a HostDeBugAPI reference for caller
@@ -144,20 +144,20 @@ func (h *HostDeBugAPI) LoadFinancialMetrics(metric HostFinancialMetrics) {
 }
 
 // NewHostPrivateAPI is the api to create the host private api
-func NewHostPrivateAPI(storagehost *StorageHost) *HostPrivateAPI {
+func NewHostPrivateAPI(storageHost *StorageHost) *HostPrivateAPI {
 	return &HostPrivateAPI{
-		storagehost: storagehost,
+		storageHost: storageHost,
 	}
 }
 
 // Folders return all the folders
 func (h *HostPrivateAPI) Folders() []storage.HostFolder {
-	return h.storagehost.StorageManager.Folders()
+	return h.storageHost.StorageManager.Folders()
 }
 
 // AddStorageFolder add a storage folder with a specified size
 func (h *HostPrivateAPI) AddStorageFolder(path string, size uint64) string {
-	err := h.storagehost.StorageManager.AddStorageFolder(path, size)
+	err := h.storageHost.StorageManager.AddStorageFolder(path, size)
 	if err != nil {
 		return err.Error()
 	}
@@ -166,7 +166,7 @@ func (h *HostPrivateAPI) AddStorageFolder(path string, size uint64) string {
 
 // ResizeFolder resize the folder to specified size
 func (h *HostPrivateAPI) ResizeFolder(folderPath string, size uint64) string {
-	err := h.storagehost.StorageManager.ResizeFolder(folderPath, size)
+	err := h.storageHost.StorageManager.ResizeFolder(folderPath, size)
 	if err != nil {
 		return err.Error()
 	}
@@ -175,9 +175,13 @@ func (h *HostPrivateAPI) ResizeFolder(folderPath string, size uint64) string {
 
 // DeleteFolder delete the folder
 func (h *HostPrivateAPI) DeleteFolder(folderPath string) string {
-	err := h.storagehost.StorageManager.DeleteFolder(folderPath)
+	err := h.storageHost.StorageManager.DeleteFolder(folderPath)
 	if err != nil {
 		return err.Error()
 	}
 	return "successfully delete the storage folder"
+}
+
+func (h *HostPrivateAPI) AvailableSpace() storage.HostSpace {
+	return h.storageHost.StorageManager.AvailableSpace()
 }
