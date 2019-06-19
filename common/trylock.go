@@ -10,26 +10,24 @@ import (
 	"unsafe"
 )
 
-// TryLock provides synchronization mechanism
+// TryLock provides TryLock method in addition to sync.Mutex
 type TryLock struct {
 	lock sync.Mutex
 }
 
 const mutexLocked = 1 << iota
 
-// Lock will empty the lock channel
+// Lock lock the TryLock
 func (tl *TryLock) Lock() {
 	tl.lock.Lock()
 }
 
-// Unlock will occupy the lock channel if the unlock
-//  is called while the process is not locked, do nothing
+// Unlock unlock the TryLock
 func (tl *TryLock) Unlock() {
 	tl.lock.Unlock()
 }
 
-// TryLock will try to perform lock operation if succeed, true will be returned
-// otherwise, false will be returned
+// TryLock try to lock the lock. if succeed, return true. Else return false immediately
 func (tl *TryLock) TryLock() bool {
 	return atomic.CompareAndSwapInt32((*int32)(unsafe.Pointer(&tl.lock)), 0, mutexLocked)
 }
