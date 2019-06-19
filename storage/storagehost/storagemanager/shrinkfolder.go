@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

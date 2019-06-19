@@ -7,10 +7,12 @@ package storagemanager
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 

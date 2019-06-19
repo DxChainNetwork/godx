@@ -6,16 +6,17 @@ package storagemanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 type (

@@ -5,13 +5,14 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 func TestShrinkFolderNormal(t *testing.T) {

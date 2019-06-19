@@ -7,15 +7,18 @@ package storagemanager
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/errors"
-	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"strconv"
 	"strings"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/rlp"
+
+	"github.com/syndtr/goleveldb/leveldb"
+	dbError "github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type database struct {
@@ -37,7 +40,7 @@ func newPersistentDB(path string) (db *database, err error) {
 	lvl, err := leveldb.OpenFile(path, &opt.Options{})
 
 	// if the db file already existed, check if the file is corrupted
-	if _, isCorrupted := err.(*errors.ErrCorrupted); isCorrupted {
+	if _, isCorrupted := err.(*dbError.ErrCorrupted); isCorrupted {
 		lvl, err = leveldb.RecoverFile(path, nil)
 	}
 	if err != nil {

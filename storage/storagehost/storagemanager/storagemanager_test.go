@@ -7,12 +7,13 @@ package storagemanager
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 func init() {

@@ -8,17 +8,19 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
+
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func TestAddSector(t *testing.T) {

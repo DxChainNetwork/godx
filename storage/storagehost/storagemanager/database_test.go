@@ -7,9 +7,10 @@ package storagemanager
 import (
 	"bytes"
 	"crypto/rand"
-	"github.com/DxChainNetwork/godx/common"
 	"strconv"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 // TestDatabase_getSectorSalt test database.getOrCreateSectorSalt

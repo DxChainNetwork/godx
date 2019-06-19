@@ -5,14 +5,15 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // TestAddBatchConcurrent test adding batch normally as concurrent

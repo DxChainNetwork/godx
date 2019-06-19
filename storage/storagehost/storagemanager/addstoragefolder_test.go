@@ -5,8 +5,6 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -14,6 +12,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // TestAddStorageFolderNormal test the process of adding a storagefolder
