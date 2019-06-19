@@ -14042,7 +14042,7 @@ module.exports = Web3;
       var announce = new Method({
         name: 'announce',
         call: 'hostdebug_announce',
-        params: 1,
+        params: 0,
       });
 
 

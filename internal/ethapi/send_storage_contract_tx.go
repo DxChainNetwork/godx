@@ -7,37 +7,13 @@ package ethapi
 import (
 	"context"
 	"errors"
-	"github.com/DxChainNetwork/godx/rlp"
-	"math/big"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/rlp"
+	"math/big"
 )
-
-// PublicStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
-type PublicStorageContractTxAPI struct {
-	b         Backend
-	nonceLock *AddrLocker
-}
-
-// NewPublicStorageContractTxAPI creates a public RPC service with methods specific for storage contract tx.
-func NewPublicStorageContractTxAPI(b Backend, nonceLock *AddrLocker) *PublicStorageContractTxAPI {
-	return &PublicStorageContractTxAPI{b, nonceLock}
-}
-
-// send host announce tx, only for outer request, need to open cmd and RPC API
-func (psc *PublicStorageContractTxAPI) SendHostAnnounceTX(from common.Address, input []byte) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{9})
-	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, input)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
 
 // PrivateStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
 type PrivateStorageContractTxAPI struct {
@@ -48,6 +24,36 @@ type PrivateStorageContractTxAPI struct {
 // NewPrivateStorageContractTxAPI creates a private RPC service with methods specific for storage contract tx.
 func NewPrivateStorageContractTxAPI(b Backend, nonceLock *AddrLocker) *PrivateStorageContractTxAPI {
 	return &PrivateStorageContractTxAPI{b, nonceLock}
+}
+
+// send host announce tx, only for outer request, need to open cmd and RPC API
+func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) (common.Hash, error) {
+	hostEnodeURL := psc.b.GetHostEnodeURL()
+	hostAnnouncement := types.HostAnnouncement{
+		NetAddress: hostEnodeURL,
+	}
+
+	hash := hostAnnouncement.RLPHash()
+	sign, err := psc.b.SignByNode(hash.Bytes())
+	if err != nil {
+		return common.Hash{}, err
+	}
+	hostAnnouncement.Signature = sign
+
+	payload, err := rlp.EncodeToBytes(hostAnnouncement)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	to := common.Address{}
+	to.SetBytes([]byte{9})
+
+	ctx := context.Background()
+	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, payload)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
 }
 
 // send form contract tx, generally triggered in ContractCreate, not for outer request
@@ -84,43 +90,6 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 		return common.Hash{}, err
 	}
 	return txHash, nil
-}
-
-
-func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) (common.Hash, error){
-	var e error
-	hostEnodeURL := psc.b.GetHostEnodeURL()
-	hostAnnouncement := types.HostAnnouncement{
-		NetAddress: hostEnodeURL,
-	}
-
-	hash := hostAnnouncement.RLPHash()
-	sign, err := psc.b.SignByNode(hash.Bytes())
-	if err != nil {
-		return common.Hash{}, err
-	}
-	hostAnnouncement.Signature = sign
-
-	payload, err := rlp.EncodeToBytes(hostAnnouncement)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	ctx := context.Background()
-	to := common.Address{}
-	to.SetBytes([]byte{9})
-
-	if tx, err := buildTx(ctx, psc.b, psc.nonceLock, from, to, payload); err == nil {
-		if err := psc.b.SendTx(ctx, tx); err == nil {
-			return tx.Hash(), nil
-		} else {
-			e = err
-		}
-	} else {
-		e = err
-	}
-
-	return common.Hash{}, e
 }
 
 // send storage contract tx，only need from、to、input（rlp encoded）
@@ -204,42 +173,4 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Back
 	}
 
 	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
-}
-
-func buildTx(ctx context.Context, b Backend, nonceLock *AddrLocker, from, to common.Address, input []byte) (*types.Transaction, error){
-	args := &SendTxArgs{
-		From:from,
-		To:  &to,
-	}
-
-	args.Input = (*hexutil.Bytes)(&input)
-
-	// find the account of the address from
-	account := accounts.Account{Address: args.From}
-	wallet, err := b.AccountManager().Find(account)
-	if err != nil {
-		return nil, err
-	}
-
-	nonceLock.LockAddr(args.From)
-	defer nonceLock.UnlockAddr(args.From)
-
-	// construct tx
-	if err := args.setDefaults(ctx, b); err != nil {
-		return nil, err
-	}
-
-	// get chain ID
-	var chainID *big.Int
-	if config := b.ChainConfig(); config.IsEIP155(b.CurrentBlock().Number()) {
-		chainID = config.ChainID
-	}
-
-	// sign the tx by using from's wallet
-	signed, err := wallet.SignTx(account, args.toTransaction(), chainID)
-	if err != nil {
-		return nil, err
-	}
-
-	return signed, nil
 }
