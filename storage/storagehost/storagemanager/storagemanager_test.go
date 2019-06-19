@@ -50,7 +50,7 @@ func newTestDatabase(t *testing.T, extra string) (db *database) {
 }
 
 // newTestStorageManager creates a new storageManager for testing
-func newTestStorageManager(t *testing.T, extra string, d *disrupter) (sm *storageManager) {
+func newTestStorageManager(t *testing.T, extra string, d *disruptor) (sm *storageManager) {
 	sm, err := newStorageManager(tempDir(t.Name(), extra), d)
 	if err != nil {
 		t.Fatal(err)

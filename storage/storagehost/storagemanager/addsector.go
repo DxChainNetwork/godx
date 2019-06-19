@@ -154,16 +154,16 @@ func (update *addSectorUpdate) prepare(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
-		if !update.physical && manager.disrupter.disrupt("virtual prepare normal") {
+		if !update.physical && manager.disruptor.disrupt("virtual prepare normal") {
 			return errDisrupted
 		}
-		if update.physical && manager.disrupter.disrupt("physical prepare normal") {
+		if update.physical && manager.disruptor.disrupt("physical prepare normal") {
 			return errDisrupted
 		}
-		if !update.physical && manager.disrupter.disrupt("virtual prepare normal stop") {
+		if !update.physical && manager.disruptor.disrupt("virtual prepare normal stop") {
 			return errStopped
 		}
-		if update.physical && manager.disrupter.disrupt("physical prepare normal stop") {
+		if update.physical && manager.disruptor.disrupt("physical prepare normal stop") {
 			return errStopped
 		}
 	case targetRecoverCommitted:
@@ -179,16 +179,16 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
-		if !update.physical && manager.disrupter.disrupt("virtual process normal") {
+		if !update.physical && manager.disruptor.disrupt("virtual process normal") {
 			return errDisrupted
 		}
-		if update.physical && manager.disrupter.disrupt("physical process normal") {
+		if update.physical && manager.disruptor.disrupt("physical process normal") {
 			return errDisrupted
 		}
-		if !update.physical && manager.disrupter.disrupt("virtual process normal stop") {
+		if !update.physical && manager.disruptor.disrupt("virtual process normal stop") {
 			return errStopped
 		}
-		if update.physical && manager.disrupter.disrupt("physical process normal stop") {
+		if update.physical && manager.disruptor.disrupt("physical process normal stop") {
 			return errStopped
 		}
 	case targetRecoverCommitted:

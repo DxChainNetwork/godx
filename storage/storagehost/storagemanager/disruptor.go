@@ -5,13 +5,13 @@
 package storagemanager
 
 type (
-	// disrupter is the disrupter
-	disrupter map[string]disruptFunc
+	// disruptor is the disruptor
+	disruptor map[string]disruptFunc
 
 	disruptFunc func() bool
 )
 
-func (d *disrupter) disrupt(key string) bool {
+func (d *disruptor) disrupt(key string) bool {
 	f, exist := (*d)[key]
 	if !exist {
 		return false
@@ -19,12 +19,12 @@ func (d *disrupter) disrupt(key string) bool {
 	return f()
 }
 
-func newDisrupter() *disrupter {
-	d := make(disrupter)
+func newDisrupter() *disruptor {
+	d := make(disruptor)
 	return &d
 }
 
-func (d *disrupter) register(key string, f disruptFunc) *disrupter {
+func (d *disruptor) register(key string, f disruptFunc) *disruptor {
 	(*d)[key] = f
 	return d
 }
