@@ -38,6 +38,10 @@ type (
 
 // AddStorageFolder add a storageFolder. The function could be called with a goroutine
 func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error) {
+	// Change the folderPath to absolute path
+	if path, err = absolutePath(path); err != nil {
+		return
+	}
 	// Register in the thread manager
 	if err = sm.tm.Add(); err != nil {
 		return errStopped

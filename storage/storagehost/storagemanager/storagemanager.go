@@ -12,7 +12,9 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -164,6 +166,10 @@ func (sm *storageManager) Close() (fullErr error) {
 
 // ResizeFolder resize the folder to specified size
 func (sm *storageManager) ResizeFolder(folderPath string, size uint64) (err error) {
+	// Change the folderPath to absolute path
+	if folderPath, err = absolutePath(folderPath); err != nil {
+		return
+	}
 	// Read the folder numSectors
 	if sizeToNumSectors(size) > maxSectorsPerFolder {
 		return fmt.Errorf("folder size too large")
@@ -193,6 +199,11 @@ func (sm *storageManager) ResizeFolder(folderPath string, size uint64) (err erro
 
 // DeleteFolder delete the folder
 func (sm *storageManager) DeleteFolder(folderPath string) (err error) {
+	// Change the folderPath to absolute path
+	if folderPath, err = absolutePath(folderPath); err != nil {
+		return
+	}
+
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
@@ -254,4 +265,25 @@ func (sm *storageManager) stopped() bool {
 	default:
 	}
 	return false
+}
+
+// absolutePath convert the path to abs path
+func absolutePath(path string) (absPath string, err error) {
+	usr, _ := user.Current()
+	dir := usr.HomeDir
+
+	if path == "~" {
+		// Apply user home directory
+		absPath = dir
+	} else if strings.HasPrefix(path, "~/") {
+		// Join user home directory with path
+		absPath = filepath.Join(dir, path[2:])
+	} else {
+		// use the absolute path
+		absPath, err = filepath.Abs(path)
+		if err != nil {
+			return
+		}
+	}
+	return
 }

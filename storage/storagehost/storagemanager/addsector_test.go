@@ -400,7 +400,7 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 		return fmt.Errorf("folder id to sector id not exist")
 	}
 	// memoryFolder
-	mmFolder, err := sm.folders.get(folderPath)
+	mmFolder, err := sm.folders.getWithoutLock(folderPath)
 	if err != nil {
 		return err
 	}
@@ -416,7 +416,6 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 	if err != nil {
 		return err
 	}
-	mmFolder.lock.Unlock()
 	if uint64(n) != storage.SectorSize {
 		return fmt.Errorf("read size not equal to sectorSize. Got %v, Expect %v", n, storage.SectorSize)
 	}
