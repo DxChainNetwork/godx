@@ -55,9 +55,9 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	}
 
 	// assert that the persistence file save the default setting
-	if !reflect.DeepEqual(persist.Config, loadDefaultConfig()) {
+	if !reflect.DeepEqual(persist.Config, defaultConfig()) {
 		spew.Dump(persist.Config)
-		spew.Dump(loadDefaultConfig())
+		spew.Dump(defaultConfig())
 		t.Errorf("the persistence file does not save the default setting as expected")
 	}
 }
@@ -166,7 +166,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		// // This field just hard code the comparison, if more complex data structure is added
 		// // to field, simple use this may correct some error
 		// check if the host internal setting is set
-		//extracted := host.InternalConfig()
+		//extracted := host.internalConfig()
 		//
 		//if  extracted.AcceptingContracts != internalSetting.AcceptingContracts ||
 		//	extracted.MaxDownloadBatchSize != internalSetting.MaxDownloadBatchSize ||
@@ -182,9 +182,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		//  filed would be init as an empty structure, in order to keep them consistence, more
 		//  handling may needed
 
-		if !reflect.DeepEqual(host.InternalConfig(), internalSetting) {
+		if !reflect.DeepEqual(host.internalConfig(), internalSetting) {
 			spew.Dump(internalSetting)
-			spew.Dump(host.InternalConfig())
+			spew.Dump(host.internalConfig())
 			t.Errorf("the host setting does not match the previously setted")
 		}
 	}

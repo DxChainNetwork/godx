@@ -1,6 +1,7 @@
 package storagehost
 
 import (
+	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
@@ -14,8 +15,32 @@ var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p
 	storage.StorageContractDownloadRequestMsg: handleDownload,
 }
 
+// HandleSession is the function to be called from Ethereum handle method.
+func (h *StorageHost) HandleSession(s *storage.Session) error {
+	msg, err := s.ReadMsg()
+	if err != nil {
+		return err
+	}
+	if handler, ok := handlerMap[msg.Code]; ok {
+		return handler(h, s, msg)
+	}
+	return nil
+}
+
+// handleHostSettingRequest is the function to be called when calling HostSettingMsg
+func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetDeadLine(storage.HostSettingTime)
+
+	settings := h.externalConfig()
+	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+		return errors.New("host setting request done")
+	} else {
+		return err
+	}
+}
+
 //return the externalConfig for host
-func (h *StorageHost) externalConfig() storage.HostExtConfig {
+func (h *StorageHost) externalConfig() (storage.HostExtConfig, error) {
 	//Each time you update the configuration, number plus one
 	h.revisionNumber++
 
@@ -29,33 +54,34 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	acceptingContracts := h.config.AcceptingContracts
 	MaxDeposit := h.config.MaxDeposit
 	paymentAddress := h.config.PaymentAddress
-	if paymentAddress != (common.Address{}) {
-		account := accounts.Account{Address: paymentAddress}
-		wallet, err := h.ethBackend.AccountManager().Find(account)
-		if err != nil {
-			h.log.Warn("Failed to find the wallet", "err", err)
-			acceptingContracts = false
-		}
-		//If the wallet is locked, you will not be able to enter the signing phase.
-		status, err := wallet.Status()
-		if status == "Locked" || err != nil {
-			h.log.Warn("Wallet is not unlocked", "err", err)
-			acceptingContracts = false
-		}
 
-		stateDB, err := h.ethBackend.GetBlockChain().State()
-		if err != nil {
-			h.log.Warn("Failed to find the stateDB", "err", err)
-		} else {
-			balance := stateDB.GetBalance(paymentAddress)
-			//If the maximum deposit amount exceeds the account balance, set it as the account balance
-			if balance.Cmp(&MaxDeposit) < 0 {
-				MaxDeposit = *balance
-			}
-		}
+	if paymentAddress == (common.Address{}) {
+		return storage.HostExtConfig{}, errors.New("paymentAddress must be explicitly specified")
+	}
 
+	// TODO: refactor the following code, make this command in eth api or in account manager api
+	account := accounts.Account{Address: paymentAddress}
+	wallet, err := h.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		h.log.Warn("Failed to find the wallet", "err", err)
+		acceptingContracts = false
+	}
+	//If the wallet is locked, you will not be able to enter the signing phase.
+	status, err := wallet.Status()
+	if status == "Locked" || err != nil {
+		h.log.Warn("Wallet is not unlocked", "err", err)
+		acceptingContracts = false
+	}
+
+	stateDB, err := h.ethBackend.GetBlockChain().State()
+	if err != nil {
+		h.log.Warn("Failed to find the stateDB", "err", err)
 	} else {
-		h.log.Error("paymentAddress must be explicitly specified")
+		balance := stateDB.GetBalance(paymentAddress)
+		//If the maximum deposit amount exceeds the account balance, set it as the account balance
+		if balance.Cmp(&MaxDeposit) < 0 {
+			MaxDeposit = *balance
+		}
 	}
 
 	return storage.HostExtConfig{
@@ -78,5 +104,5 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
 		RevisionNumber:         h.revisionNumber,
 		Version:                storage.ConfigVersion,
-	}
+	}, nil
 }

@@ -16,7 +16,7 @@ const (
 	// HostSettingFile is the file name for saving the setting of host
 	HostSettingFile = "host.json"
 	// HostDB is the database dir for storing host obligation
-	HostDB = "hostdb"
+	databaseFile = "hostdb"
 	// StorageManager is a dir for storagemanager related topic
 	StorageManager = "storagemanager"
 )
@@ -87,9 +87,9 @@ func calculateSectorHeight() uint64 {
 	return height
 }
 
-// loadDefaultConfig loads the default setting when
+// defaultConfig loads the default setting when
 // it is the first time use the host service, or cannot find the setting file
-func loadDefaultConfig() storage.HostIntConfig {
+func defaultConfig() storage.HostIntConfig {
 	return storage.HostIntConfig{
 		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
 		MaxDuration:          uint64(defaultMaxDuration),

@@ -141,6 +141,10 @@ var (
 	// per file contract.
 	errMaxCollateralReached = errors.New("file contract proposal expects the host to pay more than the maximum allowed collateral")
 
+	// errStopped is the error that happens during the execution of a file, the storage
+	// host has been stopped
+	errStopped = errors.New("storage host has been stopped")
+
 	errEmptyOriginStorageContract = errors.New("storage contract has no storage responsibility")
 	errEmptyRevisionSet           = errors.New("take the last revision ")
 	errInsaneRevision             = errors.New("revision is not necessary")

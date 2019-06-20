@@ -4,7 +4,16 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
+
+// openDB opens the db specified by path. If the db file not exist, create a new one
+func openDB(path string) (*ethdb.LDBDatabase, error) {
+	// open / create a new db
+	// TODO: What is the params here? Is using an ethdb necessary?
+	return ethdb.NewLDBDatabase(path, 0, 0)
+}
 
 func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageResponsibility, error) {
 	so, errGet := GetStorageResponsibility(db, sc)
