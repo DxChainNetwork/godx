@@ -46,9 +46,12 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	//Each time you update the configuration, number plus one
 	h.revisionNumber++
 
+	// Get the total and remaining disk space
 	var totalStorageSpace uint64
 	var remainingStorageSpace uint64
-	//TODO 从磁盘中获取总的存储和剩余存储
+	hs := h.StorageManager.AvailableSpace()
+	totalStorageSpace = storage.SectorSize * hs.TotalSectors
+	remainingStorageSpace = storage.SectorSize * hs.FreeSectors
 
 	acceptingContracts := h.config.AcceptingContracts
 	MaxDeposit := h.config.MaxDeposit
