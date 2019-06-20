@@ -105,7 +105,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	}
 }
 
-// TODO: mock the database for storing storage obligation, currently use the
+// TODO: mock the database for storing storage responsibility, currently use the
 //  	 LDBDatabase, not sure which tables should be init here, modify the database
 //  	 for developer's convenience
 func (h *StorageHost) initDB() error {
@@ -123,7 +123,7 @@ func (h *StorageHost) initDB() error {
 	return nil
 }
 
-// TODO: load the database, storage obligation, currently mock loads the config from the database,
+// TODO: load the database, storage responsibility, currently mock loads the config from the database,
 //  	 if the config file load sucess
 func (h *StorageHost) loadFromDB() error {
 	return nil
@@ -196,7 +196,6 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		// TODO: init the storageHostObligation
 	}
 
 	var err error   // error potentially affect the system
@@ -214,14 +213,14 @@ func New(persistDir string) (*StorageHost, error) {
 	// try to make the dir for storing host files.
 	// Because MkdirAll does nothing is the folder already exist, no worry to the existing folder
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
-		host.log.Crit("Making directory hit unexpected error: " + err.Error())
+		host.log.Warn("Making directory hit unexpected error", "err", err)
 		return nil, err
 	}
 
 	// initialize the storage manager
 	host.StorageManager, err = sm.New(filepath.Join(persistDir, StorageManager))
 	if err != nil {
-		host.log.Crit("Error caused by Creating StorageManager: " + err.Error())
+		host.log.Warn("Error caused by Creating StorageManager", "err", err)
 		return nil, err
 	}
 
@@ -256,7 +255,7 @@ func New(persistDir string) (*StorageHost, error) {
 	}
 	//Delete residual storage responsibility
 	if err = host.PruneStaleStorageResponsibilities(); err != nil {
-		host.log.Info("Could not prune stale storage responsibilities:", err)
+		host.log.Error("Could not prune stale storage responsibilities", "err", err)
 	}
 
 	// TODO: Init the networking
@@ -278,7 +277,7 @@ func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Call to HostExtConfig fail")
+		h.log.Warn("Call to HostExtConfig fail")
 	}
 
 	defer h.tm.Done()
@@ -292,7 +291,7 @@ func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")
+		h.log.Warn("Fail to add FinancialMetrics Getter to thread manager")
 	}
 	defer h.tm.Done()
 
@@ -310,7 +309,7 @@ func (h *StorageHost) SetIntConfig(config storage.HostIntConfig, debug ...bool) 
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add HostIntConfig Getter to thread manager")
+		h.log.Warn("Fail to add HostIntConfig Getter to thread manager")
 		return err
 	}
 	defer h.tm.Done()
@@ -366,7 +365,7 @@ func (h *StorageHost) load() error {
 
 	// Initialize the database
 	if err = h.initDB(); err != nil {
-		h.log.Crit("Unable to initialize the database: " + err.Error())
+		h.log.Warn("Unable to initialize the database", "err", err)
 		return err
 	}
 
@@ -396,7 +395,7 @@ func (h *StorageHost) load() error {
 
 	// assert the error is nil, close the file
 	if err := file.Close(); err != nil {
-		h.log.Info("Unable to close the config file")
+		h.log.Warn("Unable to close the config file")
 	}
 
 	// load the default config
@@ -595,7 +594,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
-		return ExtendErr("finalize storage obligation error", err)
+		return ExtendErr("finalize storage responsibility error", err)
 	}
 
 	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
@@ -634,10 +633,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
-	// Get revision from storage obligation
+	// Get revision from storage responsibility
 	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	settings := h.externalConfig()
@@ -781,7 +780,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 	newRevision.Signatures[0] = clientRevisionSign
 
-	// Update the storage obligation
+	// Update the storage responsibility
 	so.SectorRoots = newRoots
 	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
 	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
@@ -838,10 +837,10 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}()
 
-	// get storage obligation
+	// get storage responsibility
 	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	// check whether the contract is empty
@@ -927,7 +926,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	// update the storage obligation.
+	// update the storage responsibility.
 	//paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
 	//so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)

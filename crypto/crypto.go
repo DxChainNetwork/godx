@@ -210,3 +210,13 @@ func zeroBytes(bytes []byte) {
 		bytes[i] = 0
 	}
 }
+
+func IsEqualPublicKey(one *ecdsa.PublicKey, two *ecdsa.PublicKey) bool {
+	if one == nil || two == nil {
+		return false
+	}
+	if one.X.Cmp(two.X) != 0 || one.Y.Cmp(two.Y) != 0 {
+		return false
+	}
+	return true
+}

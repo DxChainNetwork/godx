@@ -7,36 +7,13 @@ package ethapi
 import (
 	"context"
 	"errors"
-	"math/big"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/rlp"
+	"math/big"
 )
-
-// PublicStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
-type PublicStorageContractTxAPI struct {
-	b         Backend
-	nonceLock *AddrLocker
-}
-
-// NewPublicStorageContractTxAPI creates a public RPC service with methods specific for storage contract tx.
-func NewPublicStorageContractTxAPI(b Backend, nonceLock *AddrLocker) *PublicStorageContractTxAPI {
-	return &PublicStorageContractTxAPI{b, nonceLock}
-}
-
-// send host announce tx, only for outer request, need to open cmd and RPC API
-func (psc *PublicStorageContractTxAPI) SendHostAnnounceTX(from common.Address, input []byte) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{9})
-	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, input)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
 
 // PrivateStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
 type PrivateStorageContractTxAPI struct {
@@ -47,6 +24,36 @@ type PrivateStorageContractTxAPI struct {
 // NewPrivateStorageContractTxAPI creates a private RPC service with methods specific for storage contract tx.
 func NewPrivateStorageContractTxAPI(b Backend, nonceLock *AddrLocker) *PrivateStorageContractTxAPI {
 	return &PrivateStorageContractTxAPI{b, nonceLock}
+}
+
+// send host announce tx, only for outer request, need to open cmd and RPC API
+func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) (common.Hash, error) {
+	hostEnodeURL := psc.b.GetHostEnodeURL()
+	hostAnnouncement := types.HostAnnouncement{
+		NetAddress: hostEnodeURL,
+	}
+
+	hash := hostAnnouncement.RLPHash()
+	sign, err := psc.b.SignByNode(hash.Bytes())
+	if err != nil {
+		return common.Hash{}, err
+	}
+	hostAnnouncement.Signature = sign
+
+	payload, err := rlp.EncodeToBytes(hostAnnouncement)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	to := common.Address{}
+	to.SetBytes([]byte{9})
+
+	ctx := context.Background()
+	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, payload)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
 }
 
 // send form contract tx, generally triggered in ContractCreate, not for outer request

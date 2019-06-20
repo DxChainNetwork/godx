@@ -1,7 +1,9 @@
 package vm
 
 import (
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
+	"net"
 	"testing"
 
 	"github.com/magiconair/properties/assert"
@@ -17,6 +19,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to generate public/private key pairs for storage host: %v", err)
 	}
+	hostNode := enode.NewV4(&prvKeyHost.PublicKey, net.IP{127, 0, 0, 1}, int(8888), int(8888))
 
 	prvKeyClient, err := crypto.GenerateKey()
 	if err != nil {
@@ -25,7 +28,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 
 	// test host announce signature(only one signature)
 	ha := types.HostAnnouncement{
-		NetAddress: "127.0.0.1:8888",
+		NetAddress: hostNode.String(),
 	}
 
 	sigHa, err := crypto.Sign(ha.RLPHash().Bytes(), prvKeyHost)

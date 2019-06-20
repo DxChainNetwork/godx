@@ -81,6 +81,14 @@ func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
+func (h *HostDeBugAPI) Announce() (common.Hash, error) {
+	address, err := h.GetPaymentAddress()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return h.storagehost.parseAPI.StorageTx.SendHostAnnounceTX(address)
+}
+
 // Version gives a mock version of the debugapi
 func (h *HostDeBugAPI) Version() string {
 	return "mock host version"
