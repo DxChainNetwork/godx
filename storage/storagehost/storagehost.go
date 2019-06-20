@@ -437,6 +437,7 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	if handler, ok := handlerMap[msg.Code]; ok {
 		return handler(h, s, msg)
 	}
+	h.log.Info("can't find storage code handler function", "msg code", msg.Code)
 	return nil
 }
 

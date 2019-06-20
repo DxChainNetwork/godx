@@ -242,7 +242,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	// call rpc request the data from host, if get error, unregister the worker.
 	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
 	if err != nil {
-		w.client.log.Debug("worker failed to download sector", "error", err)
+		w.client.log.Error("worker failed to download sector", "error", err)
 		uds.unregisterWorker(w)
 		return
 	}
@@ -251,7 +251,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	key := uds.clientFile.CipherKey()
 	decryptedSector, err := key.DecryptInPlace(sectorData)
 	if err != nil {
-		w.client.log.Debug("worker failed to decrypt sector", "error", err)
+		w.client.log.Error("worker failed to decrypt sector", "error", err)
 		uds.unregisterWorker(w)
 		return
 	}

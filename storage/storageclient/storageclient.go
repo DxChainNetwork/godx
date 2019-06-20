@@ -169,10 +169,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 		return nil
 	})
 
-	if err = sc.fileSystem.Start(); err != nil {
-		return err
-	}
-
 	sc.log.Info("Storage Client Started")
 
 	return nil
