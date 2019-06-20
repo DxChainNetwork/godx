@@ -176,7 +176,7 @@ func ApplyUpdates(wal *writeaheadlog.Wal, updates []FileUpdate) error {
 	}
 	<-txn.InitComplete
 	if txn.InitErr != nil {
-		return fmt.Errorf("failed to create transaction: %v", err)
+		return fmt.Errorf("failed to create transaction: %v", txn.InitErr)
 	}
 	if err = <-txn.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)
