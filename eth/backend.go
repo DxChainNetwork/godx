@@ -689,7 +689,7 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		return nil, err
 	}
 
-	timer := time.NewTimer(time.Second * 3)
+	timer := time.NewTimer(time.Second * 10)
 
 	var conn *storage.Session
 	for {
@@ -765,7 +765,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	}
 
 	if msg.Code != storage.HostSettingResponseMsg {
-		return errors.New("invalid host settings response")
+		return fmt.Errorf("invalid host settings response, msgCode: %v", msg.Code)
 	}
 
 	if err := msg.Decode(config); err != nil {

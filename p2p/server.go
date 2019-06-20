@@ -831,7 +831,7 @@ running:
 		case n := <-srv.addtrusted:
 			// This channel is used by AddTrustedPeer to add an enode
 			// to the trusted node set.
-			srv.log.Trace("Adding trusted node", "node", n)
+			srv.log.Warn("Adding trusted node", "node", n)
 			trusted[n.ID()] = true
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID()]; ok {
@@ -843,7 +843,7 @@ running:
 		case n := <-srv.removetrusted:
 			// This channel is used by RemoveTrustedPeer to remove an enode
 			// from the trusted node set.
-			srv.log.Trace("Removing trusted node", "node", n)
+			srv.log.Warn("Removing trusted node", "node", n)
 			if _, ok := trusted[n.ID()]; ok {
 				delete(trusted, n.ID())
 			}
@@ -853,7 +853,7 @@ running:
 			}
 
 		case n := <-srv.addStorageContract:
-			srv.log.Trace("Adding storage contract node", "node", n)
+			srv.log.Warn("Adding storage contract node", "node", n)
 			storageContract[n.ID()] = true
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID()]; ok {
