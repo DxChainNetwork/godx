@@ -942,12 +942,11 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	// enter response loop
 	for i, sec := range req.Sections {
 
-		// TODO: Fetch the requested data.
-		//sectorData, err := h.ReadSector(sec.MerkleRoot)
-		//if err != nil {
-		//	return err
-		//}
-		sectorData := []byte{}
+		// fetch the requested data from host local storage
+		sectorData, err := h.ReadSector(sec.MerkleRoot)
+		if err != nil {
+			return err
+		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
 		// construct the Merkle proof, if requested.
