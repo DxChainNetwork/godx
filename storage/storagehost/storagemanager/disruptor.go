@@ -19,7 +19,7 @@ func (d *disruptor) disrupt(key string) bool {
 	return f()
 }
 
-func newDisrupter() *disruptor {
+func newDisruptor() *disruptor {
 	d := make(disruptor)
 	return &d
 }

@@ -17,7 +17,7 @@ import (
 // TestDeleteSectorBatchNormal test the scenario of deleting an physical sector and deleting
 // a virtual sector.
 func TestDeleteSectorBatchNormal(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	// Create one folder
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
@@ -69,7 +69,7 @@ func TestDeleteSectorBatchStop(t *testing.T) {
 		{"delete batch process stop", 1},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")
@@ -135,7 +135,7 @@ func TestDeleteSectorDisrupt(t *testing.T) {
 		{"delete batch process normal"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")

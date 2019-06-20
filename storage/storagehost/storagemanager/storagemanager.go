@@ -69,7 +69,7 @@ type (
 
 // New creates a new storage manager with no disruptor
 func New(persistDir string) (sm StorageManager, err error) {
-	return newStorageManager(persistDir, newDisrupter())
+	return newStorageManager(persistDir, newDisruptor())
 }
 
 // new create a new storage manager with the disruptor

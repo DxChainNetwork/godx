@@ -18,7 +18,7 @@ import (
 
 // TestAddBatchConcurrent test adding batch normally as concurrent
 func TestAddBatchConcurrent(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	// Create one folder
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
@@ -102,7 +102,7 @@ func TestAddBatchConcurrent(t *testing.T) {
 
 // TestAddBatchError test AddBatch with error input
 func TestAddBatchError(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	// Create one folder
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
@@ -175,7 +175,7 @@ func TestAddBatchRecover(t *testing.T) {
 		{"add batch prepare stop", 0},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")
@@ -261,7 +261,7 @@ func TestAddBatchProcessDisrupt(t *testing.T) {
 		{"add batch prepare"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")

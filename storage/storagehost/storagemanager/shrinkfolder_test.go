@@ -16,7 +16,7 @@ import (
 )
 
 func TestShrinkFolderNormal(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	// create 3 random folders, each with size 65 sectors
 	numSectorPerFolder := uint64(16)
 	var path string
@@ -88,7 +88,7 @@ func TestShrinkFolderDisrupted(t *testing.T) {
 		{"shrink folder process normal"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// create 3 random folders, each with size 16 sectors
 		numSectorPerFolder := uint64(16)
@@ -170,7 +170,7 @@ func TestShrinkStorageFolderStopped(t *testing.T) {
 		{"shrink folder process normal stop"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// create 3 random folders, each with size 16 sectors
 		numSectorPerFolder := uint64(16)

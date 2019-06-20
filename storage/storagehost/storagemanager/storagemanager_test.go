@@ -83,7 +83,7 @@ func (sm *storageManager) shutdown(t *testing.T, timeout time.Duration) {
 
 // TestEmptyStorageManager test the open-close process of an empty storageManager
 func TestEmptyStorageManager(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	prevSalt := sm.sectorSalt
 	if sm.sectorSalt == [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
 		t.Fatalf("salt shall not be empty")
