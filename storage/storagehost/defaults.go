@@ -1,9 +1,13 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
+	"strconv"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (
@@ -17,7 +21,21 @@ const (
 	StorageManager = "storagemanager"
 )
 
+const (
+	// storage responsibility related constants
+	postponedExecution    = 3  //Total length of time to start a test task
+	confirmedBufferHeight = 40 //signing transaction not confirmed maximum time
+
+	//prefixStorageResponsibility db prefix for StorageResponsibility
+	prefixStorageResponsibility = "StorageResponsibility-"
+	//prefixHeight db prefix for task
+	prefixHeight = "height-"
+)
+
 var (
+	// sectorHeight is the parameter used in caching merkle roots
+	sectorHeight uint64
+
 	// TODO: ALL values are mock, need to compute reasonable values
 
 	storageHostMeta = common.Metadata{
@@ -47,7 +65,27 @@ var (
 	defaultSectorAccessPrice      = 5000
 	defaultStoragePrice           = 6000
 	defaultUploadBandwidthPrice   = 7000
+
+	//Storage contract should not be empty
+	emptyStorageContract = types.StorageContract{}
+
+	//Total time to sign the contract
+	postponedExecutionBuffer = storage.BlocksPerDay
 )
+
+// init set the initial value for sector height
+func init() {
+	sectorHeight = calculateSectorHeight()
+}
+
+// calculateSectorHeight calculate the sector height for specified sector size and leaf size
+func calculateSectorHeight() uint64 {
+	height := uint64(0)
+	for 1<<height < (storage.SectorSize / merkle.LeafSize) {
+		height++
+	}
+	return height
+}
 
 // loadDefaultConfig loads the default setting when
 // it is the first time use the host service, or cannot find the setting file
@@ -68,5 +106,30 @@ func loadDefaultConfig() storage.HostIntConfig {
 		MinSectorAccessPrice:      *big.NewInt(int64(defaultSectorAccessPrice)),
 		MinStoragePrice:           *big.NewInt(int64(defaultStoragePrice)),
 		MinUploadBandwidthPrice:   *big.NewInt(int64(defaultUploadBandwidthPrice)),
+	}
+}
+
+const (
+	// responsibility status
+	responsibilityUnresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning
+	responsibilityRejected                                      //Storage responsibility never begins
+	responsibilitySucceeded                                     // Successful storage responsibility
+	responsibilityFailed                                        //Failed storage responsibility
+)
+
+type storageResponsibilityStatus uint64
+
+func (i storageResponsibilityStatus) String() string {
+	switch i {
+	case 0:
+		return "responsibilityUnresolved"
+	case 1:
+		return "responsibilityRejected"
+	case 2:
+		return "responsibilitySucceeded"
+	case 3:
+		return "responsibilityFailed"
+	default:
+		return "storageResponsibilityStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 }
