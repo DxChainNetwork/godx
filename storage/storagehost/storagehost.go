@@ -167,14 +167,17 @@ type StorageHost struct {
 
 // Start loads all APIs and make them mapping, also introduce the account
 // manager as a member variable in side the StorageHost
-func (h *StorageHost) Start(eth storage.EthBackend) {
+func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 	// TODO: Start Load all APIs and make them mapping
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
 
+	if err = h.StorageManager.Start(); err != nil {
+		return err
+	}
 	// parse storage contract tx API
-	err := storage.FilterAPIs(h.ethBackend.APIs(), &h.parseAPI)
+	err = storage.FilterAPIs(h.ethBackend.APIs(), &h.parseAPI)
 	if err != nil {
 		h.log.Error("failed to parse storage contract tx API for host", "error", err)
 		return
@@ -182,6 +185,7 @@ func (h *StorageHost) Start(eth storage.EthBackend) {
 
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
+	return nil
 }
 
 // New Initialize the Host, including init the structure
@@ -261,7 +265,10 @@ func New(persistDir string) (*StorageHost, error) {
 
 // Close the storage host and persist the data
 func (h *StorageHost) Close() error {
-	return h.tm.Stop()
+	err := h.tm.Stop()
+	newErr := h.StorageManager.Close()
+	err = common.ErrCompose(err, newErr)
+	return err
 }
 
 // HostExtConfig return the host external config, which configure host through,
@@ -936,12 +943,11 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	// enter response loop
 	for i, sec := range req.Sections {
 
-		// TODO: Fetch the requested data.
-		//sectorData, err := h.ReadSector(sec.MerkleRoot)
-		//if err != nil {
-		//	return err
-		//}
-		sectorData := []byte{}
+		// fetch the requested data from host local storage
+		sectorData, err := h.ReadSector(sec.MerkleRoot)
+		if err != nil {
+			return err
+		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
 		// construct the Merkle proof, if requested.

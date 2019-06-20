@@ -353,6 +353,15 @@ type (
 	}
 )
 
+type (
+	// HostFolder is the host folder structure
+	HostFolder struct {
+		Path         string `json:"path"`
+		TotalSectors uint64 `json:"totalSectors"`
+		UsedSectors  uint64 `json:"usedSectors"`
+	}
+)
+
 const (
 	// SectorSize is 4 MB
 	SectorSize = uint64(1 << 22)
