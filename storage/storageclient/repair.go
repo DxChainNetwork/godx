@@ -153,7 +153,7 @@ func (sc *StorageClient) stuckLoop() {
 			// to the heap
 			err := sc.addStuckSegmentsToHeap(dxPath)
 			if err != nil {
-				sc.log.Error("unable to add stuck segments from file", dxPath, "to heap. error", err)
+				sc.log.Error("unable to add stuck segments from file", "dxpath", dxPath, "error", err)
 			}
 		}
 	}
@@ -178,7 +178,9 @@ func (sc *StorageClient) healthCheckLoop() {
 		// get path of oldest time, return directory and timestamp
 		dxPath, lastHealthCheckTime, err := sc.fileSystem.OldestLastTimeHealthCheck()
 		if err != nil {
-			sc.log.Error("Could not find oldest health check time", "error", err)
+			sc.log.Error("could not find oldest health check time", "error", err)
+			// sleep 3 seconds. Avoid consuming cpu
+			<-time.After(3 * time.Second)
 			continue
 		}
 

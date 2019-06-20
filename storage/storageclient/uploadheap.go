@@ -266,7 +266,7 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 
 	// Sanity check that there are stuck segments
 	if len(unfinishedUploadSegments) == 0 {
-		sc.log.Info("[createAndPushRandomSegment]no stuck unfinishedUploadSegments returned from buildUnfinishedSegments, so no stuck segments will be added to the heap")
+		sc.log.Info("[createAndPushRandomSegment]no stuck unfinishedUploadSegments returned")
 		return
 	}
 
@@ -303,7 +303,7 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 		sc.lock.Unlock()
 
 		if len(unfinishedUploadSegments) == 0 {
-			sc.log.Info("[createAndPushSegments]no unfinishedUploadSegments returned from buildUnfinishedSegments, so no segments will be added to the heap")
+			sc.log.Info("[createAndPushSegments]no unfinishedUploadSegments returned from buildUnfinishedSegments")
 			continue
 		}
 
