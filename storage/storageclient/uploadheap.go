@@ -507,11 +507,11 @@ func (sc *StorageClient) uploadOrRepair() {
 		}
 
 		sc.uploadHeap.mu.Lock()
-		if sc.uploadHeap.len() == 0 {
-			sc.uploadHeap.mu.Unlock()
-			continue
-		}
+		heapLen := sc.uploadHeap.heap.Len()
 		sc.uploadHeap.mu.Unlock()
+		if heapLen != 0 {
+			goto LOOP
+		}
 
 	}
 }

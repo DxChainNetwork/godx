@@ -6,7 +6,9 @@ package merkle
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/DxChainNetwork/merkletree"
+	"math/bits"
 	"math/rand"
 	"testing"
 	"time"
@@ -242,4 +244,9 @@ func randomDataGenerator(length uint64) (data []byte) {
 	rand.Seed(time.Now().UnixNano())
 	rand.Read(data)
 	return
+}
+
+func TestBitL(t *testing.T) {
+	a := 10
+	fmt.Println(bits.Len64(uint64(a)))
 }
