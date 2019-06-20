@@ -42,10 +42,6 @@ func (h *StorageHost) extractPersistence() *persistence {
 func (h *StorageHost) loadPersistence(persist *persistence) {
 	h.blockHeight = persist.BlockHeight
 	h.broadcast = persist.BroadCast
-
-	// TODO: address checking if NetAddress need to be store to the Setting file
-	// TODO: unlock hash checking if unlock hash need to be store to the Setting file
-
 	h.financialMetrics = persist.FinalcialMetrics
 	h.revisionNumber = persist.RevisionNumber
 	h.config = persist.Config

@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/rpc"
 )
 
 var (
@@ -164,13 +162,6 @@ func ExtendErr(s string, err error) error {
 }
 
 type (
-
-	// Backend is an interface for full node and light node
-	Backend interface {
-		AccountManager() *accounts.Manager
-		APIs() []rpc.API
-	}
-
 	// HostFinancialMetrics record the financial element for host
 	HostFinancialMetrics struct {
 		ContractCount                     uint64        `json:"contractcount"`
