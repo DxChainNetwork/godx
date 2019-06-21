@@ -916,7 +916,6 @@ running:
 		// another go routine, add to peer list, and increase the inboundCount if it is
 		// inbound connection
 		case c := <-srv.addpeer:
-			srv.log.Warn("connection is setup", "info", c.String())
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
 			err := srv.protoHandshakeChecks(peers, inboundCount, c)
