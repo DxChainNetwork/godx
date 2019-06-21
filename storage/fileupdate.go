@@ -2,11 +2,12 @@ package storage
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
-	"os"
-	"path/filepath"
 )
 
 const (
@@ -96,7 +97,7 @@ func (du *DeleteUpdate) EncodeToWalOp() (writeaheadlog.Operation, error) {
 	}, nil
 }
 
-// decodeFromWalOp will decode the wal.Operation to a specified type of dxfileUpdate based on the op.Name field
+// OpToUpdate decodeFromWalOp will decode the wal.Operation to a specified type of dxfileUpdate based on the op.Name field
 func OpToUpdate(op writeaheadlog.Operation) (FileUpdate, error) {
 	switch op.Name {
 	case OpInsertFile:
@@ -175,7 +176,7 @@ func ApplyUpdates(wal *writeaheadlog.Wal, updates []FileUpdate) error {
 	}
 	<-txn.InitComplete
 	if txn.InitErr != nil {
-		return fmt.Errorf("failed to create transaction: %v", err)
+		return fmt.Errorf("failed to create transaction: %v", txn.InitErr)
 	}
 	if err = <-txn.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %v", err)

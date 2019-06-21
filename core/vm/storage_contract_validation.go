@@ -8,8 +8,12 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"hash"
 	"math/big"
+	"reflect"
+	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -17,6 +21,7 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -36,8 +41,6 @@ var (
 	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
 	errRevisionMissedPayouts = errors.New("storage contract revision has altered missed payout")
 	errWrongUnlockCondition  = errors.New("the unlockhash of storage contract not match unlockcondition")
-	errInvalidClientSig      = errors.New("invalid client signatures")
-	errInvalidHostSig        = errors.New("invalid host signatures")
 	errNoStorageContractType = errors.New("no this storage contract type")
 
 	errInvalidStorageProof = errors.New("invalid storage proof")
@@ -49,16 +52,8 @@ const (
 	SegmentSize = 64
 )
 
-func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64) error {
-
-	// check if this file contract exist
-	scID := sc.ID()
-	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	_, err := GetStorageContract(db, scID)
-	if err == nil {
-		return errors.New("this file contract exist")
-	}
-
+// check whether a new StorageContract is valid
+func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
@@ -66,7 +61,7 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 		return errZeroCollateral
 	}
 
-	// Check that start and expiration are reasonable values.
+	// check that start and expiration are reasonable values.
 	if sc.WindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
@@ -74,7 +69,7 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 		return errStorageContractWindowEndViolation
 	}
 
-	// Check that the proof outputs sum to the payout
+	// check that the proof outputs sum to the payout
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range sc.ValidProofOutputs {
@@ -104,17 +99,17 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 	hostAddr := sc.HostCollateral.Address
 	hostCollateralAmount := sc.HostCollateral.Value
 
-	clientBalance := evm.StateDB.GetBalance(clientAddr)
+	clientBalance := state.GetBalance(clientAddr)
 	if clientBalance.Cmp(clientCollateralAmount) == -1 {
 		return errors.New("client has not enough balance for file contract collateral")
 	}
 
-	hostBalance := evm.StateDB.GetBalance(hostAddr)
+	hostBalance := state.GetBalance(hostAddr)
 	if hostBalance.Cmp(hostCollateralAmount) == -1 {
 		return errors.New("host has not enough balance for file contract collateral")
 	}
 
-	err = CheckMultiSignatures(sc, currentHeight, sc.Signatures)
+	err := CheckMultiSignatures(sc, currentHeight, sc.Signatures)
 	if err != nil {
 		log.Error("failed to check signature for form contract", "err", err)
 		return err
@@ -123,13 +118,26 @@ func CheckFormContract(evm *EVM, sc types.StorageContract, currentHeight uint64)
 	return nil
 }
 
-func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, currentHeight uint64) error {
+// check whether a new StorageContractRevision is valid
+func CheckReversionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
+
+	// check whether it has proofed
+	windowEnStr := strconv.FormatUint(scr.NewWindowEnd, 10)
+	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEnStr))
+	statusTrie := state.StorageTrie(statusAddr)
+	flag, err := statusTrie.TryGet(scr.ParentID.Bytes())
+	if err != nil {
+		return errors.New("failed to retrieve contract status")
+	}
+	if bytes.Equal(flag, ProofedStatus) {
+		return errors.New("can not revision after storage proof")
+	}
 
 	if scr.UnlockConditions.Timelock > currentHeight {
 		return errTimelockNotSatisfied
 	}
 
-	// Check that start and expiration are reasonable values.
+	// check that start and expiration are reasonable values.
 	if scr.NewWindowStart <= currentHeight {
 		return errStorageContractWindowStartViolation
 	}
@@ -137,8 +145,7 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 		return errStorageContractWindowEndViolation
 	}
 
-	// Check that the valid outputs and missed outputs sum to the same
-	// value.
+	// check that the valid outputs and missed outputs sum whether are the same
 	validProofOutputSum := new(big.Int).SetInt64(0)
 	missedProofOutputSum := new(big.Int).SetInt64(0)
 	for _, output := range scr.NewValidProofOutputs {
@@ -161,8 +168,38 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 		return err
 	}
 
-	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	sc, err := GetStorageContract(db, scr.ParentID)
+	// retrieve origin storage contract
+	trie := state.StorageTrie(contractAddr)
+	wStartBytes, err := trie.TryGet(BytesWindowStart)
+	if err != nil {
+		return err
+	}
+	wStart, err := strconv.ParseUint(string(wStartBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	reNumBytes, err := trie.TryGet(BytesRevisionNumber)
+	if err != nil {
+		return err
+	}
+	reNum, err := strconv.ParseUint(string(reNumBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	unHashBytes, err := trie.TryGet(BytesUnlockHash)
+	if err != nil {
+		return err
+	}
+	unHash := common.BytesToHash(unHashBytes)
+
+	vpoBytes, err := trie.TryGet(BytesValidProofOutputs)
+	if err != nil {
+		return err
+	}
+	originVpo := []types.DxcoinCharge{}
+	err = rlp.DecodeBytes(vpoBytes, originVpo)
 	if err != nil {
 		return err
 	}
@@ -170,18 +207,18 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
 	// opened.  This reduces complexity for unconfirmed transactions.
-	if currentHeight > sc.WindowStart {
+	if currentHeight > wStart {
 		return errLateRevision
 	}
 
 	// Check that the revision number of the revision is greater than the
 	// revision number of the existing file contract.
-	if sc.RevisionNumber >= scr.NewRevisionNumber {
+	if reNum >= scr.NewRevisionNumber {
 		return errLowRevisionNumber
 	}
 
 	// Check that the unlock conditions match the unlock hash.
-	if scr.UnlockConditions.UnlockHash() != common.Hash(sc.UnlockHash) {
+	if scr.UnlockConditions.UnlockHash() != unHash {
 		return errWrongUnlockCondition
 	}
 
@@ -196,7 +233,7 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 	for _, output := range scr.NewMissedProofOutputs {
 		missedPayout = missedPayout.Add(missedPayout, output.Value)
 	}
-	for _, output := range sc.ValidProofOutputs {
+	for _, output := range originVpo {
 		oldPayout = oldPayout.Add(oldPayout, output.Value)
 	}
 	if validPayout.Cmp(oldPayout) != 0 {
@@ -209,45 +246,56 @@ func CheckReversionContract(evm *EVM, scr types.StorageContractRevision, current
 	return nil
 }
 
+// check whether a new StorageContractRevision is valid
 func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeight uint64, signatures [][]byte) error {
 	if len(signatures) == 0 {
 		return errors.New("no signatures for verification")
 	}
 
 	var (
-		singleSig, clientSig, hostSig          []byte
-		singlePubkey, clientPubkey, hostPubkey ecdsa.PublicKey
-		err                                    error
-		uc                                     types.UnlockConditions
+		singleSig, clientSig, hostSig []byte
+		clientPubkey, hostPubkey      *ecdsa.PublicKey
+		err                           error
+		uc                            types.UnlockConditions
 	)
 
 	dataHash := originalData.RLPHash()
 
+	// this is a host announce transaction. we must check the node public key is equal to the recover key
 	if len(signatures) == 1 {
 		singleSig = signatures[0]
-		singlePubkey, err = RecoverPubkeyFromSignature(dataHash, singleSig)
+		recoverKey, err := crypto.SigToPub(dataHash.Bytes(), singleSig)
 		if err != nil {
 			return err
 		}
+		if ha, ok := originalData.(types.HostAnnouncement); ok {
+			hostNode, err := enode.ParseV4(ha.NetAddress)
+			if err != nil {
+				return fmt.Errorf("invalid host announce address: %v", err)
+			}
 
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&singlePubkey), dataHash[:], singleSig) {
-			return errInvalidHostSig
+			urlKey := hostNode.Pubkey()
+			if !crypto.IsEqualPublicKey(recoverKey, urlKey) {
+				return fmt.Errorf("announced host net address is not generated by self hostnode")
+			}
+		} else {
+			return fmt.Errorf("convert to host announcement data struct failed")
 		}
 	} else if len(signatures) == 2 {
 		clientSig = signatures[0]
 		hostSig = signatures[1]
-		clientPubkey, err = RecoverPubkeyFromSignature(dataHash, clientSig)
+		clientPubkey, err = crypto.SigToPub(dataHash.Bytes(), clientSig)
 		if err != nil {
 			return err
 		}
-		hostPubkey, err = RecoverPubkeyFromSignature(dataHash, hostSig)
+		hostPubkey, err = crypto.SigToPub(dataHash.Bytes(), hostSig)
 		if err != nil {
 			return err
 		}
 
 		uc = types.UnlockConditions{
 			Timelock:           currentHeight,
-			PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(clientPubkey), crypto.PubkeyToAddress(hostPubkey)},
+			PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(*clientPubkey), crypto.PubkeyToAddress(*hostPubkey)},
 			SignaturesRequired: 2,
 		}
 
@@ -264,29 +312,66 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 		if uc.UnlockHash() != common.Hash(originUnlockHash) {
 			return errWrongUnlockCondition
 		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&clientPubkey), dataHash[:], clientSig) {
-			return errInvalidClientSig
-		}
-		if !VerifyStorageContractSignatures(crypto.FromECDSAPub(&hostPubkey), dataHash[:], hostSig) {
-			return errInvalidHostSig
-		}
 	}
 
 	return nil
 }
 
-func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight uint64) error {
-	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	sc, err := GetStorageContract(db, sp.ParentID)
+// check whether a new StorageProof is valid
+func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
+
+	// check whether it proofed repeatedly
+	statusTrie := state.StorageTrie(statusAddr)
+	flag, err := statusTrie.TryGet(sp.ParentID.Bytes())
+	if err != nil {
+		return errors.New("failed to retrieve contract status")
+	}
+	if bytes.Equal(flag, ProofedStatus) {
+		return errors.New("can not submit storage proof repeatedly")
+	}
+
+	// retrieve the storage contract info
+	contractTrie := state.StorageTrie(contractAddr)
+	windowStartBytes, err := contractTrie.TryGet(BytesWindowStart)
 	if err != nil {
 		return err
 	}
 
-	if sc.WindowStart > currentHeight {
+	windowStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	windowEndBytes, err := contractTrie.TryGet(BytesWindowEnd)
+	if err != nil {
+		return err
+	}
+
+	windowEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	fileMerkleRootBytes, err := contractTrie.TryGet(BytesFileMerkleRoot)
+	if err != nil {
+		return err
+	}
+
+	fileSizeBytes, err := contractTrie.TryGet(BytesFileSize)
+	if err != nil {
+		return err
+	}
+
+	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
+	if err != nil {
+		return err
+	}
+
+	if windowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
 	}
 
-	if sc.WindowEnd < currentHeight {
+	if windowEnd < currentHeight {
 		return errors.New("too late to submit storage proof")
 	}
 
@@ -297,20 +382,21 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight uint64) er
 		return err
 	}
 
-	// Check that the storage proof itself is valid.
-	segmentIndex, err := storageProofSegment(db, sp.ParentID, currentHeight)
+	// check that the storage proof itself is valid.
+
+	segmentIndex, err := storageProofSegment(state, windowStart, fileSize, sp.ParentID, currentHeight)
 	if err != nil {
 		return err
 	}
 
-	leaves := CalculateLeaves(sc.FileSize)
+	leaves := CalculateLeaves(fileSize)
 
 	segmentLen := uint64(SegmentSize)
 
-	// If this segment chosen is the final segment, it should only be as
-	// long as necessary to complete the filesize.
+	// if this segment chosen is the final segment, it should only be as
+	// long as necessary to complete the file size.
 	if segmentIndex == leaves-1 {
-		segmentLen = sc.FileSize % SegmentSize
+		segmentLen = fileSize % SegmentSize
 	}
 
 	if segmentLen == 0 {
@@ -322,17 +408,18 @@ func CheckStorageProof(evm *EVM, sp types.StorageProof, currentHeight uint64) er
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		sc.FileMerkleRoot,
+		common.BytesToHash(fileMerkleRootBytes),
 	)
-	if !verified && sc.FileSize > 0 {
+	if !verified && fileSize > 0 {
 		return errInvalidStorageProof
 	}
 
 	return nil
 }
 
-// check whether host store the file
+// check whether host has really stored the file
 func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex uint64, merkleRoot common.Hash) bool {
+
 	// convert base and hashSet to proofSet
 	proofSet := make([][]byte, len(hashSet)+1)
 	proofSet[0] = segment
@@ -342,24 +429,23 @@ func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex u
 	return VerifyProof(merkleRoot[:], proofSet, segmentIndex, leaves)
 }
 
-func storageProofSegment(db ethdb.Database, ParentID common.Hash, currentHeight uint64) (uint64, error) {
-
-	// Check that the parent storage contract exists.
-	sc, err := GetStorageContract(db, ParentID)
-	if err != nil {
-		return 0, err
-	}
+// get segment index by random
+func storageProofSegment(state StateDB, windowStart, fileSize uint64, scID common.Hash, currentHeight uint64) (uint64, error) {
 
 	// Get the trigger block id that parent of windowStart.
-	triggerHeight := sc.WindowStart - 1
+	triggerHeight := windowStart - 1
 	if triggerHeight > currentHeight {
 		return 0, errUnfinishedStorageContract
 	}
 
+	db := state.Database().TrieDB().DiskDB().(ethdb.Database)
 	blockHash := rawdb.ReadCanonicalHash(db, uint64(triggerHeight))
-	scID := sc.ID()
+	if reflect.DeepEqual(blockHash, common.Hash{}) {
+		return 0, errors.New("can not read block hash of the trigger height for storage proof seed")
+	}
+
 	seed := crypto.Keccak256Hash(blockHash[:], scID[:])
-	numSegments := int64(CalculateLeaves(sc.FileSize))
+	numSegments := int64(CalculateLeaves(fileSize))
 
 	// index = seedInt % numSegments，index in [0，numSegments]
 	seedInt := new(big.Int).SetBytes(seed[:])
@@ -367,6 +453,7 @@ func storageProofSegment(db ethdb.Database, ParentID common.Hash, currentHeight 
 	return index, nil
 }
 
+// calculate the num of leaves formed by the given file
 func CalculateLeaves(fileSize uint64) uint64 {
 	numSegments := fileSize / SegmentSize
 	if fileSize == 0 || fileSize%SegmentSize != 0 {
@@ -375,6 +462,7 @@ func CalculateLeaves(fileSize uint64) uint64 {
 	return numSegments
 }
 
+// verify merkle root of given segment
 func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
 	hasher := sha3.NewLegacyKeccak256()
 

@@ -2525,10 +2525,11 @@ var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
 var HostDebug = require('./web3/methods/hostdebug');
+var StorageHost = require('./web3/methods/storagehost')
 
 var storageclient = require('./web3/methods/storageclient');
 var hostmanager = require('./web3/methods/hostmanager');
-var hostmanagerdebug = require('./web3/methods/hostmanagerdebug')
+var hostmanagerdebug = require('./web3/methods/hostmanagerdebug');
 var clientdebug = require('./web3/methods/clientdebug');
 var clientfilesdebug = require('./web3/methods/clientfilesdebug');
 var clientfiles = require('./web3/methods/clientfiles');
@@ -2552,6 +2553,7 @@ function Web3 (provider) {
     this.clientfilesdebug = new clientfilesdebug(this);
     this.clientfiles = new clientfiles(this);
     this.hostdebug = new HostDebug(this);
+    this.storagehost = new StorageHost(this);
 
     this.bzz = new Swarm(this);
     this.settings = new Settings();
@@ -2651,7 +2653,7 @@ module.exports = Web3;
 
 
 
-},{ "./web3/methods/hostmanagerdebug": 203, "./web3/methods/clientdebug": 202, "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/hostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./web3/methods/storagehost": 213,"./web3/methods/hostmanagerdebug": 203, "./web3/methods/clientdebug": 202, "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/hostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 
 
 /*
@@ -5644,11 +5646,18 @@ module.exports = Net;
                 params: 1,
             });
 
+            var download = new Method({
+              name: 'download',
+              call: 'storageclient_downloadSync',
+              params: 2,
+            });
+
             var upload = new Method({
                 name: 'upload',
                 call: 'storageclient_upload',
                 params: 2,
             });
+
             var setClientSetting = new Method({
                 name: 'setClientSetting',
                 call: 'storageclient_setClientSetting',
@@ -5686,11 +5695,11 @@ module.exports = Net;
                 params: 1,
             });
 
-
             return [
                 memory,
                 memorylimit,
                 setMemoryLimit,
+                download,
                 upload,
                 setClientSetting,
                 clientSetting,
@@ -14032,6 +14041,12 @@ module.exports = Web3;
         params: 1,
       });
 
+      var announce = new Method({
+        name: 'announce',
+        call: 'hostdebug_announce',
+        params: 0,
+      });
+
 
       return [
         helloWorld,
@@ -14048,6 +14063,7 @@ module.exports = Web3;
 
         loadInternalSetting,
         loadFinancialMetrics,
+        announce,
       ];
     };
 
@@ -14178,5 +14194,74 @@ module.exports = Web3;
     module.exports = ClientFiles
   }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20},],
 
+  213: [function(require,module,exports) {
+    "use strict";
+
+    var Method = require('../method');
+    var Property = require('../property');
+    var formatters = require('../formatters');
+    var utils = require('../../utils/utils');
+
+    var methods = function () {
+      var folders = new Method({
+        name: 'folders',
+        call: 'storagehost_folders',
+        params: 0,
+      })
+
+      var addFolder = new Method({
+        name: 'addFolder',
+        call: 'storagehost_addStorageFolder',
+        params: 2,
+      })
+
+      var resizeFolder = new Method({
+        name: 'resizeFolder',
+        call: 'storagehost_resizeFolder',
+        params: 2,
+      })
+
+      var deleteFolder = new Method({
+        name: 'deleteFolder',
+        call: 'storagehost_deleteFolder',
+        params: 1,
+      })
+
+      return [
+        folders,
+        addFolder,
+        resizeFolder,
+        deleteFolder
+      ];
+    };
+
+    var properties = function() {
+      return [
+        new Property({
+          name: 'folders',
+          getter: 'storagehost_folders',
+        }),
+      ];
+    }
+
+    function StorageHost(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(p) {
+        p.attachToObject(self);
+        p.setRequestManager(self._requestManager);
+      });
+    }
+
+    module.exports = StorageHost
+
+  }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20},],
 },{},["web3"])
 //# sourceMappingURL=web3-light.js.map

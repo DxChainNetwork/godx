@@ -24,9 +24,8 @@ import (
 )
 
 const (
-	postponedExecutionBuffer    = uint64(144) //Total time to sign the contract
-	postponedExecution          = 3           //Total length of time to start a test task
-	confirmedBufferHeight       = 40          //signing transaction not confirmed maximum time
+	postponedExecution          = 3  //Total length of time to start a test task
+	confirmedBufferHeight       = 40 //signing transaction not confirmed maximum time
 	errGetStorageResponsibility = "failed to get data from DB as I wished "
 	errPutStorageResponsibility = "failed to put data from DB as I wished "
 	//PrefixStorageResponsibility db prefix for StorageResponsibility
@@ -36,7 +35,12 @@ const (
 )
 
 //Storage contract should not be empty
-var emptyStorageContract = types.StorageContract{}
+var (
+	emptyStorageContract = types.StorageContract{}
+
+	//Total time to sign the contract
+	postponedExecutionBuffer = storage.BlocksPerDay
+)
 
 const (
 	unresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning
@@ -333,7 +337,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	if err != nil {
 		for j := 0; j < i; j++ {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.RemoveSector(sectorsGained[j])
+			h.DeleteSector(sectorsGained[j])
 		}
 		return err
 	}
@@ -354,14 +358,14 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 		//This operation is wrong, you need to restore the sector
 		for i := range sectorsGained {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.RemoveSector(sectorsGained[i])
+			h.DeleteSector(sectorsGained[i])
 		}
 		return errDBso
 	}
 	//Delete the deleted sector
 	for k := range sectorsRemoved {
 		//The error of restoring a sector doesn't make any sense to us.
-		h.RemoveSector(sectorsRemoved[k])
+		h.DeleteSector(sectorsRemoved[k])
 	}
 
 	// Update the financial information for the storage responsibility - apply the
@@ -413,7 +417,7 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos storageResponsibilityStatus) error {
 
 	//Unchecked error, even if there is an error, we want to delete
-	h.RemoveSectorBatch(so.SectorRoots)
+	h.DeleteSectorBatch(so.SectorRoots)
 
 	switch sos {
 	case unresolved:
@@ -534,7 +538,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		return
 	}
 
-	//Skip if the storage obligation has been completed
+	//Skip if the storage responsibility has been completed
 	if so.ResponsibilityStatus != unresolved {
 		return
 	}
@@ -590,7 +594,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a revision transaction to the transaction pool.
-		if _, err := storage.SendContractHostRevisionTX(h.ethBackend, scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+		if _, err := h.SendStorageContractRevisionTx(scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
 			h.log.Warn("Error sending a revision transaction", "err", err)
 			return
 		}
@@ -676,14 +680,14 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 		sp.Signature = spSign
 
-		scBytes, err := rlp.EncodeToBytes(sp)
+		spBytes, err := rlp.EncodeToBytes(sp)
 		if err != nil {
 			h.log.Warn("Error when serializing proof", "err", err)
 			return
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
-		if _, err := storage.SendStorageHostProofTX(h.ethBackend, fromAddress, scBytes); err != nil {
+		if _, err := h.SendStorageProofTx(fromAddress, spBytes); err != nil {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
@@ -1030,6 +1034,16 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	}
 
 	return sos
+}
+
+// SendStorageContractRevisionTx send revision contract tx
+func (h *StorageHost) SendStorageContractRevisionTx(from common.Address, input []byte) (common.Hash, error) {
+	return h.parseAPI.StorageTx.SendContractRevisionTX(from, input)
+}
+
+// SendStorageProofTx send storage proof tx
+func (h *StorageHost) SendStorageProofTx(from common.Address, input []byte) (common.Hash, error) {
+	return h.parseAPI.StorageTx.SendStorageProofTX(from, input)
 }
 
 //StoreStorageResponsibility storage storageResponsibility from DB

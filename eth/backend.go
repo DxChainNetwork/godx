@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto"
 	"math/big"
 	"runtime"
 	"sync"
@@ -107,9 +108,6 @@ type Ethereum struct {
 	server *p2p.Server
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
-
-	// maintenance
-	maintenance *core.MaintenanceSystem
 }
 
 func (s *Ethereum) AddLesServer(ls LesServer) {
@@ -222,14 +220,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		//  make sure what the expected handling case of these failure
 		return nil, err
 	}
-
-	// new maintenance system
-	state, err := eth.blockchain.State()
-	if err != nil {
-		log.Error("failed to get statedb for maintenance", "error", err)
-		return nil, err
-	}
-	eth.maintenance = core.NewMaintenanceSystem(eth.APIBackend, state)
 
 	return eth, nil
 }
@@ -394,6 +384,11 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   filesystem.NewPublicFileSystemAPI(s.storageClient.GetFileSystem()),
 				Public:    true,
+			}, {
+				Namespace: "storagehost",
+				Version:   "1.0",
+				Service:   storagehost.NewHostPrivateAPI(s.storageHost),
+				Public:    false,
 			},
 		}...)
 	}
@@ -568,6 +563,16 @@ func (s *Ethereum) Downloader() *downloader.Downloader { return s.protocolManage
 func (s *Ethereum) GetCurrentBlockHeight() uint64      { return s.blockchain.CurrentHeader().Number.Uint64() }
 func (s *Ethereum) GetBlockChain() *core.BlockChain    { return s.blockchain }
 
+// Sign data with node private key. Now it is used to imply host identity
+func (s *Ethereum) SignWithNodeSk(hash []byte) ([]byte, error) {
+	return crypto.Sign(hash, s.server.Config.PrivateKey)
+}
+
+// Get host enode url from enode object
+func (s *Ethereum) GetHostEnodeURL() string {
+	return s.server.Self().String()
+}
+
 // Protocols implements node.Service, returning all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
@@ -645,8 +650,6 @@ func (s *Ethereum) Stop() error {
 
 	close(s.shutdownChan)
 
-	// stop maintenance
-	s.maintenance.Stop()
 	return nil
 }
 

@@ -5,24 +5,25 @@
 package storageclient
 
 import (
-	"github.com/DxChainNetwork/godx/storage"
 	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 )
 
-// a file download that has been queued by the client.
 type (
+
+	// a file download that has been queued by the client.
 	download struct {
 
 		// incremented as data completes, will stop at 100% file progress.
-		atomicDataReceived uint64
+		dataReceived uint64
 
 		// incremented as data arrives, include everything from connection.
-		atomicTotalDataTransferred uint64
+		totalDataTransferred uint64
 
 		// the number of incomplete segments for this download
 		segmentsRemaining uint64
@@ -39,7 +40,7 @@ type (
 		startTime time.Time
 
 		// where to write the downloaded data
-		destination downloadDestination
+		destination writeDestination
 
 		// the destination need to report to user
 		destinationString string
@@ -77,7 +78,7 @@ type (
 	downloadParams struct {
 
 		// where to write the downloaded data
-		destination downloadDestination
+		destination writeDestination
 
 		// how to write the downloaded data,
 		// like that "file", "buffer", "http stream" ...

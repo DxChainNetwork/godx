@@ -6,26 +6,18 @@ package storageclient
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"errors"
-	"github.com/DxChainNetwork/godx/params"
 	"math/big"
-	"reflect"
 	"sort"
 	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/event"
-	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
@@ -44,52 +36,14 @@ type ActiveContractsAPI struct {
 	Canceled     bool
 }
 
-// ParsedAPI will parse the APIs saved in the Ethereum
-// and get the ones needed
-type ParsedAPI struct {
-	netInfo *ethapi.PublicNetAPI
-	account *ethapi.PrivateAccountAPI
-	ethInfo *ethapi.PublicEthereumAPI
-}
-
-// filterAPIs will filter the APIs saved in the Ethereum and
-// save them into ParsedAPI data structure
-func (sc *StorageClient) filterAPIs(apis []rpc.API) error {
-	for _, api := range apis {
-		switch typ := reflect.TypeOf(api.Service); typ {
-		case reflect.TypeOf(&ethapi.PublicNetAPI{}):
-			netAPI := api.Service.(*ethapi.PublicNetAPI)
-			if netAPI == nil {
-				return errors.New("failed to acquire netInfo information")
-			}
-			sc.info.netInfo = netAPI
-		case reflect.TypeOf(&ethapi.PrivateAccountAPI{}):
-			accountAPI := api.Service.(*ethapi.PrivateAccountAPI)
-			if accountAPI == nil {
-				return errors.New("failed to acquire account information")
-			}
-			sc.info.account = accountAPI
-		case reflect.TypeOf(&ethapi.PublicEthereumAPI{}):
-			ethAPI := api.Service.(*ethapi.PublicEthereumAPI)
-			if ethAPI == nil {
-				return errors.New("failed to acquire eth information")
-			}
-			sc.info.ethInfo = ethAPI
-		default:
-			continue
-		}
-	}
-	return nil
-}
-
 // Online will be used to indicate if the local node is connected to the internet
 func (sc *StorageClient) Online() bool {
-	return sc.info.netInfo.PeerCount() > 0
+	return sc.info.NetInfo.PeerCount() > 0
 }
 
 // Syncing will be used to indicate if the local node is syncing with the blockchain
 func (sc *StorageClient) Syncing() bool {
-	sync, _ := sc.info.ethInfo.Syncing()
+	sync, _ := sc.info.EthInfo.Syncing()
 	syncing, ok := sync.(bool)
 	if ok && !syncing {
 		return false
@@ -227,17 +181,11 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 // GetFileSystem will get the file system
 func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return sc.fileSystem
-
 }
 
-// calculate Enode.ID, reference:
-// p2p/discover/node.go:41
-// p2p/discover/node.go:59
-func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
-	var pubBytes [64]byte
-	math.ReadBits(pubkey.X, pubBytes[:len(pubBytes)/2])
-	math.ReadBits(pubkey.Y, pubBytes[len(pubBytes)/2:])
-	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
+// send contract create tx
+func (sc *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return sc.info.StorageTx.SendContractCreateTX(clientAddr, input)
 }
 
 // calculate the proof ranges that should be used to verify a
@@ -254,11 +202,11 @@ func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) 
 	}
 
 	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
-	for index := range sectorsChanged {
-		if index < oldNumSectors {
+	for sectorNum := range sectorsChanged {
+		if sectorNum < oldNumSectors {
 			oldRanges = append(oldRanges, merkletree.LeafRange{
-				Start: index,
-				End:   index + 1,
+				Start: sectorNum,
+				End:   sectorNum + 1,
 			})
 		}
 	}
@@ -288,26 +236,6 @@ func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []storage.Upl
 // modify the leaf hashes of a Merkle diff proof to verify a
 // post-modification Merkle diff proof for the specified actions.
 func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
-	// determine which sector index corresponds to each leaf hash
-	var indices []uint64
-	for _, action := range actions {
-		switch action.Type {
-		case storage.UploadActionAppend:
-			indices = append(indices, numSectors)
-			numSectors++
-		}
-	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
-	indexMap := make(map[uint64]int, len(leafHashes))
-	for i, index := range indices {
-		if i > 0 && index == indices[i-1] {
-			continue // remove duplicates
-		}
-		indexMap[index] = i
-	}
-
 	for _, action := range actions {
 		switch action.Type {
 		case storage.UploadActionAppend:

@@ -22,6 +22,11 @@ type HostDeBugAPI struct {
 	storagehost *StorageHost
 }
 
+// HostPublicAPI is the api for private usage
+type HostPrivateAPI struct {
+	storagehost *StorageHost
+}
+
 // NewHostDebugAPI generate a HostDeBugAPI reference for caller
 func NewHostDebugAPI(storagehost *StorageHost) *HostDeBugAPI {
 	return &HostDeBugAPI{
@@ -74,6 +79,14 @@ func (h *HostDeBugAPI) GetPaymentAddress() (common.Address, error) {
 		}
 	}
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
+}
+
+func (h *HostDeBugAPI) Announce() (common.Hash, error) {
+	address, err := h.GetPaymentAddress()
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return h.storagehost.parseAPI.StorageTx.SendHostAnnounceTX(address)
 }
 
 // Version gives a mock version of the debugapi
@@ -136,4 +149,43 @@ func (h *HostDeBugAPI) LoadIntConfig(intConfig storage.HostIntConfig) {
 // It will rewrite the setting file
 func (h *HostDeBugAPI) LoadFinancialMetrics(metric HostFinancialMetrics) {
 	h.storagehost.setFinancialMetrics(metric)
+}
+
+// NewHostPrivateAPI is the api to create the host private api
+func NewHostPrivateAPI(storagehost *StorageHost) *HostPrivateAPI {
+	return &HostPrivateAPI{
+		storagehost: storagehost,
+	}
+}
+
+// Folders return all the folders
+func (h *HostPrivateAPI) Folders() []storage.HostFolder {
+	return h.storagehost.StorageManager.Folders()
+}
+
+// AddStorageFolder add a storage folder with a specified size
+func (h *HostPrivateAPI) AddStorageFolder(path string, size uint64) string {
+	err := h.storagehost.StorageManager.AddStorageFolder(path, size)
+	if err != nil {
+		return err.Error()
+	}
+	return "successfully added the storage folder"
+}
+
+// ResizeFolder resize the folder to specified size
+func (h *HostPrivateAPI) ResizeFolder(folderPath string, size uint64) string {
+	err := h.storagehost.StorageManager.ResizeFolder(folderPath, size)
+	if err != nil {
+		return err.Error()
+	}
+	return "successfully resize the storage folder"
+}
+
+// DeleteFolder delete the folder
+func (h *HostPrivateAPI) DeleteFolder(folderPath string) string {
+	err := h.storagehost.StorageManager.DeleteFolder(folderPath)
+	if err != nil {
+		return err.Error()
+	}
+	return "successfully delete the storage folder"
 }

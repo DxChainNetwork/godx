@@ -6,13 +6,14 @@ package contractmanager
 
 import (
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"os"
-	"sync"
 )
 
 type ContractManager struct {

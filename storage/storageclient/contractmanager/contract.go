@@ -6,11 +6,12 @@ package contractmanager
 
 import (
 	"fmt"
+	"sort"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"sort"
 )
 
 // CancelStorageContract will cancel all currently active contracts. Once the contracts are
@@ -97,7 +98,7 @@ func (cm *ContractManager) resumeContracts() (err error) {
 		err = contract.UpdateStatus(status)
 
 		if returnErr := cm.activeContracts.Return(contract); returnErr != nil {
-			cm.log.Crit("error return contract after resuming: %s", returnErr.Error())
+			cm.log.Warn("error return contract after resuming", "err", returnErr)
 		}
 
 		if err != nil {

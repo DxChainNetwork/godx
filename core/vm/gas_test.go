@@ -5,6 +5,9 @@
 package vm
 
 import (
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"net"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/core/types"
@@ -24,13 +27,40 @@ func TestRemainGas(t *testing.T) {
 
 	HostInfo := types.HostAnnouncement{}
 
-	gasRemain, resultDecode := RemainGas(uint64(20000), rlp.DecodeBytes, data, &HostInfo)
+	_, resultDecode := RemainGas(uint64(20000), rlp.DecodeBytes, data, &HostInfo)
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
-		t.Log("errDec:", errDec)
-	} else {
-		t.Log("gasRemain:", gasRemain)
-		t.Log("HostInfo:", HostInfo)
+		t.Error("errDec:", errDec)
 	}
 
+}
+
+
+func TestHostAnnounceRemainGas(t *testing.T) {
+	prvKeyHost, err := crypto.GenerateKey()
+	if err != nil {
+		t.Errorf("failed to generate public/private key pairs for storage host: %v", err)
+	}
+	hostNode := enode.NewV4(&prvKeyHost.PublicKey, net.IP{127, 0, 0, 1}, int(8888), int(8888))
+
+	if err != nil {
+		t.Errorf("failed to generate public/private key pairs for storage client: %v", err)
+	}
+
+	// test host announce signature(only one signature)
+	ha := types.HostAnnouncement{
+		NetAddress: hostNode.String(),
+	}
+
+	sigHa, err := crypto.Sign(ha.RLPHash().Bytes(), prvKeyHost)
+	if err != nil {
+		t.Errorf("failed to sign host announce: %v", err)
+	}
+	ha.Signature = sigHa
+
+	_, resultDecode := RemainGas(uint64(20000), CheckMultiSignatures, ha, uint64(0), [][]byte{ha.Signature})
+	errDec, _ := resultDecode[0].(error)
+	if errDec != nil {
+		t.Error("errDec:", errDec)
+	}
 }

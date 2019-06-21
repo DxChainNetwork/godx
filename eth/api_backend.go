@@ -228,7 +228,10 @@ func (b *EthAPIBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 	}
 }
 
-// subscribe canonical chain head event for file contract maintenance
-func (b *EthAPIBackend) SubscribeCanonicalChainEvent(ch chan<- core.CanonicalChainHeadEvent) event.Subscription {
-	return b.eth.BlockChain().SubscribeCanonicalChainEvent(ch)
+func (b *EthAPIBackend) SignByNode(hash []byte) ([]byte, error) {
+	return b.eth.SignWithNodeSk(hash)
+}
+
+func (b *EthAPIBackend) GetHostEnodeURL()  string {
+	return b.eth.GetHostEnodeURL()
 }

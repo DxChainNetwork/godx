@@ -8,7 +8,6 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/rlp"
 )
 
 type StorageContractRLPHash interface {
@@ -79,14 +78,14 @@ type StorageProof struct {
 	Signature []byte
 }
 
-// calculate the hash of HostAnnouncement
+// RLPHash calculate the hash of HostAnnouncement
 func (ha HostAnnouncement) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		ha.NetAddress,
 	})
 }
 
-// calculate the hash of StorageContract
+// RLPHash calculate the hash of StorageContract
 func (sc StorageContract) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		sc.FileSize,
@@ -101,12 +100,12 @@ func (sc StorageContract) RLPHash() common.Hash {
 	})
 }
 
-// calculate the ID of StorageContract
+// ID calculate the ID of StorageContract
 func (sc StorageContract) ID() common.Hash {
 	return common.Hash(sc.RLPHash())
 }
 
-// calculate the hash of UnlockCondition
+// UnlockHash calculate the hash of UnlockCondition
 func (uc UnlockConditions) UnlockHash() common.Hash {
 	return rlpHash([]interface{}{
 		uc.Timelock,
@@ -115,7 +114,7 @@ func (uc UnlockConditions) UnlockHash() common.Hash {
 	})
 }
 
-// calculate the hash of StorageContractRevision
+// RLPHash calculate the hash of StorageContractRevision
 func (scr StorageContractRevision) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		scr.ParentID,
@@ -130,30 +129,11 @@ func (scr StorageContractRevision) RLPHash() common.Hash {
 	})
 }
 
-// calculate the hash of StorageProof
+// RLPHash calculate the hash of StorageProof
 func (sp StorageProof) RLPHash() common.Hash {
 	return rlpHash([]interface{}{
 		sp.ParentID,
 		sp.Segment,
 		sp.HashSet,
 	})
-}
-
-// the real payload data that put into transaction is StorageContractSet
-type StorageContractSet struct {
-	HostAnnounce            HostAnnouncement
-	StorageContract         StorageContract
-	StorageContractRevision StorageContractRevision
-	StorageProof            StorageProof
-}
-
-// resolve StorageContractSet from a transaction
-func ResolveStorageContractSet(tx *Transaction) (*StorageContractSet, error) {
-	payload := tx.Data()
-	sc := StorageContractSet{}
-	err := rlp.DecodeBytes(payload, &sc)
-	if err != nil {
-		return nil, err
-	}
-	return &sc, nil
 }

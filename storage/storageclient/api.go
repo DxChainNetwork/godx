@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -48,6 +47,24 @@ func (api *PublicStorageClientAPI) MemoryAvailable() uint64 {
 // MemoryLimit returns max memory allowed
 func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 	return api.sc.memoryManager.MemoryLimit()
+}
+
+// download remote file by sync mode
+//
+// NOTE: RPC not support async download, because it is stateless, should block until download task done.
+func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string) error {
+	p := storage.DownloadParameters{
+		// where to write the downloaded files
+		WriteToLocalPath: localPath,
+
+		// where to download the remote file
+		RemoteFilePath: remoteFilePath,
+	}
+	err := api.sc.DownloadSync(p)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Upload their local files to hosts made contract with

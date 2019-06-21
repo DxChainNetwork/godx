@@ -6,18 +6,18 @@ package storagehostmanager
 
 import (
 	"context"
-	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/params"
 	"math/big"
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
@@ -180,6 +180,10 @@ func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hos
 
 func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
 	return nil, nil
+}
+
+func (st *storageClientBackendTestData) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return common.Hash{}, nil
 }
 
 func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {

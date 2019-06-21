@@ -105,7 +105,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	}
 }
 
-// TODO: mock the database for storing storage obligation, currently use the
+// TODO: mock the database for storing storage responsibility, currently use the
 //  	 LDBDatabase, not sure which tables should be init here, modify the database
 //  	 for developer's convenience
 func (h *StorageHost) initDB() error {
@@ -123,7 +123,7 @@ func (h *StorageHost) initDB() error {
 	return nil
 }
 
-// TODO: load the database, storage obligation, currently mock loads the config from the database,
+// TODO: load the database, storage responsibility, currently mock loads the config from the database,
 //  	 if the config file load sucess
 func (h *StorageHost) loadFromDB() error {
 	return nil
@@ -152,7 +152,6 @@ type StorageHost struct {
 	lockedStorageResponsibility map[common.Hash]*TryMutex
 
 	// things for log and persistence
-	// TODO: database to store the info of storage obligation, here just a mock
 	db         *ethdb.LDBDatabase
 	persistDir string
 	log        log.Logger
@@ -162,18 +161,31 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 
 	ethBackend storage.EthBackend
+
+	parseAPI storage.ParsedAPI
 }
 
 // Start loads all APIs and make them mapping, also introduce the account
 // manager as a member variable in side the StorageHost
-func (h *StorageHost) Start(eth storage.EthBackend) {
+func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 	// TODO: Start Load all APIs and make them mapping
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
 
+	if err = h.StorageManager.Start(); err != nil {
+		return err
+	}
+	// parse storage contract tx API
+	err = storage.FilterAPIs(h.ethBackend.APIs(), &h.parseAPI)
+	if err != nil {
+		h.log.Error("failed to parse storage contract tx API for host", "error", err)
+		return
+	}
+
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
+	return nil
 }
 
 // New Initialize the Host, including init the structure
@@ -184,7 +196,6 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		// TODO: init the storageHostObligation
 	}
 
 	var err error   // error potentially affect the system
@@ -202,14 +213,14 @@ func New(persistDir string) (*StorageHost, error) {
 	// try to make the dir for storing host files.
 	// Because MkdirAll does nothing is the folder already exist, no worry to the existing folder
 	if err = os.MkdirAll(persistDir, 0700); err != nil {
-		host.log.Crit("Making directory hit unexpected error: " + err.Error())
+		host.log.Warn("Making directory hit unexpected error", "err", err)
 		return nil, err
 	}
 
 	// initialize the storage manager
 	host.StorageManager, err = sm.New(filepath.Join(persistDir, StorageManager))
 	if err != nil {
-		host.log.Crit("Error caused by Creating StorageManager: " + err.Error())
+		host.log.Warn("Error caused by Creating StorageManager", "err", err)
 		return nil, err
 	}
 
@@ -244,7 +255,7 @@ func New(persistDir string) (*StorageHost, error) {
 	}
 	//Delete residual storage responsibility
 	if err = host.PruneStaleStorageResponsibilities(); err != nil {
-		host.log.Info("Could not prune stale storage responsibilities:", err)
+		host.log.Error("Could not prune stale storage responsibilities", "err", err)
 	}
 
 	// TODO: Init the networking
@@ -254,7 +265,10 @@ func New(persistDir string) (*StorageHost, error) {
 
 // Close the storage host and persist the data
 func (h *StorageHost) Close() error {
-	return h.tm.Stop()
+	err := h.tm.Stop()
+	newErr := h.StorageManager.Close()
+	err = common.ErrCompose(err, newErr)
+	return err
 }
 
 // HostExtConfig return the host external config, which configure host through,
@@ -263,7 +277,7 @@ func (h *StorageHost) HostExtConfig() storage.HostExtConfig {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Call to HostExtConfig fail")
+		h.log.Warn("Call to HostExtConfig fail")
 	}
 
 	defer h.tm.Done()
@@ -277,7 +291,7 @@ func (h *StorageHost) FinancialMetrics() HostFinancialMetrics {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add FinancialMetrics Getter to thread manager")
+		h.log.Warn("Fail to add FinancialMetrics Getter to thread manager")
 	}
 	defer h.tm.Done()
 
@@ -295,7 +309,7 @@ func (h *StorageHost) SetIntConfig(config storage.HostIntConfig, debug ...bool) 
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	if err := h.tm.Add(); err != nil {
-		h.log.Crit("Fail to add HostIntConfig Getter to thread manager")
+		h.log.Warn("Fail to add HostIntConfig Getter to thread manager")
 		return err
 	}
 	defer h.tm.Done()
@@ -351,7 +365,7 @@ func (h *StorageHost) load() error {
 
 	// Initialize the database
 	if err = h.initDB(); err != nil {
-		h.log.Crit("Unable to initialize the database: " + err.Error())
+		h.log.Warn("Unable to initialize the database", "err", err)
 		return err
 	}
 
@@ -381,7 +395,7 @@ func (h *StorageHost) load() error {
 
 	// assert the error is nil, close the file
 	if err := file.Close(); err != nil {
-		h.log.Info("Unable to close the config file")
+		h.log.Warn("Unable to close the config file")
 	}
 
 	// load the default config
@@ -450,14 +464,14 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
@@ -472,11 +486,11 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("get state db error", err)
 	}
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host balance insufficient", err)
 	}
 
@@ -484,32 +498,32 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("find host account error", err)
 	}
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host account sign storage contract error", err)
 	}
 
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := VerifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host verify storage contract failed", err)
 	}
 
 	// 2. After check, send host contract sign to client
 	sc.Signatures[1] = hostContractSign
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("send storage contract create sign by host", err)
 	}
 
@@ -517,12 +531,12 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		s.SendErrorMsg(err)
+
 		return err
 	}
 
@@ -549,7 +563,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
+
 		return ExtendErr("host sign revison error", err)
 	}
 
@@ -580,8 +594,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err := FinalizeStorageResponsibility(h, so); err != nil {
-		s.SendErrorMsg(err)
-		return ExtendErr("finalize storage obligation error", err)
+		return ExtendErr("finalize storage responsibility error", err)
 	}
 
 	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
@@ -620,10 +633,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
-	// Get revision from storage obligation
+	// Get revision from storage responsibility
 	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	settings := h.externalConfig()
@@ -767,7 +780,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 	newRevision.Signatures[0] = clientRevisionSign
 
-	// Update the storage obligation
+	// Update the storage responsibility
 	so.SectorRoots = newRoots
 	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
 	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
@@ -808,7 +821,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var req storage.DownloadRequest
 	err := beginMsg.Decode(req)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -825,16 +837,15 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}()
 
-	// get storage obligation
+	// get storage responsibility
 	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
-	// Check the contract is empty
+	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		err := errors.New("no contract locked")
-		s.SendErrorMsg(err)
 		<-stopSignal
 		return err
 	}
@@ -850,18 +861,17 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		var err error
 		switch {
 		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
-			err = errors.New("download request has invalid sector bounds")
+			err = errors.New("download out boundary of sector")
 		case sec.Length == 0:
-			err = errors.New("length cannot be zero")
-		case req.MerkleProof && (sec.Offset%merkle.LeafSize != 0 || sec.Length%merkle.LeafSize != 0):
+			err = errors.New("length cannot be 0")
+		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
 			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
-			err = errors.New("wrong number of valid proof values")
+			err = errors.New("the number of valid proof values not match the old")
 		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
-			err = errors.New("wrong number of missed proof values")
+			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
-			s.SendErrorMsg(err)
 			return err
 		}
 	}
@@ -894,9 +904,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
 		sectorAccesses[sec.MerkleRoot] = struct{}{}
 	}
-	if estBandwidth < storage.RPCMinLen {
-		estBandwidth = storage.RPCMinLen
-	}
 
 	// calculate total cost
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
@@ -904,7 +911,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = VerifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
@@ -912,17 +918,15 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
-	// update the storage obligation.
+	// update the storage responsibility.
 	//paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
 	//so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
@@ -932,20 +936,17 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
-		s.SendErrorMsg(err)
 		return err
 	}
 
 	// enter response loop
 	for i, sec := range req.Sections {
 
-		// TODO: Fetch the requested data.
-		//sectorData, err := h.ReadSector(sec.MerkleRoot)
-		//if err != nil {
-		//	s.SendErrorMsg(err)
-		//	return err
-		//}
-		sectorData := []byte{}
+		// fetch the requested data from host local storage
+		sectorData, err := h.ReadSector(sec.MerkleRoot)
+		if err != nil {
+			return err
+		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
 		// construct the Merkle proof, if requested.
@@ -983,7 +984,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 
 		if err := s.SendStorageContractDownloadData(resp); err != nil {
-			s.SendErrorMsg(err)
 			return err
 		}
 	}
