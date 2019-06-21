@@ -277,6 +277,7 @@ func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *p
 // handle is the callback invoked to manage the life cycle of an eth peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
+	p.Log().Warn("handle peer function", "peerInfo", p.Peer.Info())
 	if !p.Peer.Info().Network.StorageContract {
 		// Ignore maxPeers if this is a trusted peer
 		if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
