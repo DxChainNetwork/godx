@@ -655,6 +655,7 @@ func (s *Ethereum) Stop() error {
 
 // SetupConnection will setup connection with host if they are never connected with each other
 func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
+	log.Warn("SetupConnection", "enode url", hostEnodeURL)
 	if s.netRPCService == nil {
 		return nil, fmt.Errorf("network API is not ready")
 	}
@@ -684,6 +685,8 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 			break
 		}
 	}
+
+	log.Warn("Remove peer", "removed peer", hostNode.String(), "remain", s.server.PeersInfo())
 
 	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
@@ -745,6 +748,7 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
+	log.Warn("GetStorageHostSetting", "from", s.server.Self().String(), "to", hostEnodeURL)
 	session, err := s.SetupConnection(hostEnodeURL)
 	if err != nil {
 		return err
@@ -763,6 +767,8 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	if err != nil {
 		return err
 	}
+
+	log.Warn("host setting response msg", "msgCode", msg.Code)
 
 	if msg.Code != storage.HostSettingResponseMsg {
 		return fmt.Errorf("invalid host settings response, msgCode: %v", msg.Code)

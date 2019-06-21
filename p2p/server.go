@@ -806,7 +806,7 @@ running:
 			// This channel is used by AddPeer to add to the
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
-			srv.log.Trace("Adding static node", "node", n)
+			srv.log.Warn("Adding static node", "node", n)
 			// add node to dialstate static field, which contains a list of static fields
 			// waiting for the connection
 			dialstate.addStatic(n)
@@ -819,7 +819,7 @@ running:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected.
-			srv.log.Trace("Removing static node", "node", n)
+			srv.log.Warn("Removing static node", "node", n)
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
@@ -916,6 +916,7 @@ running:
 		// another go routine, add to peer list, and increase the inboundCount if it is
 		// inbound connection
 		case c := <-srv.addpeer:
+			srv.log.Warn("connection is setup", "info", c.String())
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
 			err := srv.protoHandshakeChecks(peers, inboundCount, c)

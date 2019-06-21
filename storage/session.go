@@ -195,7 +195,7 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 }
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
-	s.Log().Warn("Sending host settings request from client", "msg", data)
+	s.Log().Warn("Sending host settings request from client", "msgCode", HostSettingMsg)
 	return p2p.Send(s.rw, HostSettingMsg, data)
 }
 
