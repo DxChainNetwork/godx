@@ -166,7 +166,7 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		// // This field just hard code the comparison, if more complex data structure is added
 		// // to field, simple use this may correct some error
 		// check if the host internal setting is set
-		//extracted := host.internalConfig()
+		//extracted := host.getInternalConfig()
 		//
 		//if  extracted.AcceptingContracts != internalSetting.AcceptingContracts ||
 		//	extracted.MaxDownloadBatchSize != internalSetting.MaxDownloadBatchSize ||
@@ -182,9 +182,9 @@ func TestStorageHost_SetIntSetting(t *testing.T) {
 		//  filed would be init as an empty structure, in order to keep them consistence, more
 		//  handling may needed
 
-		if !reflect.DeepEqual(host.internalConfig(), internalSetting) {
+		if !reflect.DeepEqual(host.getInternalConfig(), internalSetting) {
 			spew.Dump(internalSetting)
-			spew.Dump(host.internalConfig())
+			spew.Dump(host.getInternalConfig())
 			t.Errorf("the host setting does not match the previously setted")
 		}
 	}

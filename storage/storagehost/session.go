@@ -8,6 +8,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// handlerMap is the map for p2p handler
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
 	storage.HostSettingMsg:                    handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
@@ -40,7 +41,10 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 }
 
 //return the externalConfig for host
-func (h *StorageHost) externalConfig() (storage.HostExtConfig, error) {
+func (h *StorageHost) externalConfig() storage.HostExtConfig {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	//Each time you update the configuration, number plus one
 	h.revisionNumber++
 
@@ -56,7 +60,8 @@ func (h *StorageHost) externalConfig() (storage.HostExtConfig, error) {
 	paymentAddress := h.config.PaymentAddress
 
 	if paymentAddress == (common.Address{}) {
-		return storage.HostExtConfig{}, errors.New("paymentAddress must be explicitly specified")
+		acceptingContracts = false
+		return storage.HostExtConfig{AcceptingContracts: false}
 	}
 
 	// TODO: refactor the following code, make this command in eth api or in account manager api
@@ -104,5 +109,5 @@ func (h *StorageHost) externalConfig() (storage.HostExtConfig, error) {
 		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
 		RevisionNumber:         h.revisionNumber,
 		Version:                storage.ConfigVersion,
-	}, nil
+	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// handleDownload is the function to be called for download negotiation
 func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	s.SetDeadLine(storage.DownloadTime)
 

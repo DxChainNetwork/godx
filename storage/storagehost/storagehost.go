@@ -31,13 +31,9 @@ type StorageHost struct {
 	am *accounts.Manager
 
 	// storageHost basic config
-	broadcast          bool
-	broadcastConfirmed bool
-	blockHeight        uint64
-
-	financialMetrics HostFinancialMetrics
+	blockHeight      uint64
 	config           storage.HostIntConfig
-	revisionNumber   uint64
+	financialMetrics HostFinancialMetrics
 
 	// storage host manager for manipulating the file storage system
 	sm.StorageManager
@@ -125,9 +121,9 @@ func (h *StorageHost) Close() error {
 	return err
 }
 
-// hostExtConfig return the host external config, which configure host through,
+// getExternalConfig return the host external config, which configure host through,
 // user should not able to modify the config
-func (h *StorageHost) hostExtConfig() (storage.HostExtConfig, error) {
+func (h *StorageHost) getExternalConfig() storage.HostExtConfig {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
@@ -135,32 +131,35 @@ func (h *StorageHost) hostExtConfig() (storage.HostExtConfig, error) {
 	return h.externalConfig()
 }
 
-// financialStats contains the information about the activities,
-// commitments, rewards of host
-func (h *StorageHost) financialStats() HostFinancialMetrics {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
-	return h.financialMetrics
-}
-
-// internalConfig Return the internal config of host
-func (h *StorageHost) internalConfig() storage.HostIntConfig {
+// getInternalConfig Return the internal config of host
+func (h *StorageHost) getInternalConfig() storage.HostIntConfig {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
 	return h.config
 }
 
+// getFinancialMetrics contains the information about the activities,
+// commitments, rewards of host
+func (h *StorageHost) getFinancialMetrics() HostFinancialMetrics {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.financialMetrics
+}
+
+// print the persist directory of the host
+func (h *StorageHost) getPersistDir() string {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.persistDir
+}
+
 // SetIntConfig set the input hostconfig to the current host if check all things are good
 func (h *StorageHost) setIntConfig(config storage.HostIntConfig) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-
-	if err := h.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer h.tm.Done()
 
 	h.config = config
 
@@ -172,11 +171,9 @@ func (h *StorageHost) setIntConfig(config storage.HostIntConfig) error {
 }
 
 // load do the following things:
-// 1. init the database
-// 2. load the config from file
-// 3. load from database
-// 4. if the config file not found, create the config file, and use the default config
-// 5. finally synchronize the data to config file
+// 1. load the config from file
+// 2. if the config file not found, create the config file, and use the default config
+// 3.  synchronize the data to config file
 func (h *StorageHost) load() error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -219,10 +216,12 @@ func (h *StorageHost) load() error {
 // StorageResponsibilities fetches the set of storage Responsibility in the host and
 // returns metadata on them.
 func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	if len(h.lockedStorageResponsibility) < 1 {
 		return nil
 	}
-
 	for i := range h.lockedStorageResponsibility {
 		so, err := GetStorageResponsibility(h.db, i)
 		if err != nil {
@@ -232,4 +231,27 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 		sos = append(sos, so)
 	}
 	return sos
+}
+
+// getPaymentAddress get the current payment address. If no address is set, assign the first
+// accoutn address as the payment address
+func (h *StorageHost) getPaymentAddress() (common.Address, error) {
+	h.lock.Lock()
+	h.lock.Unlock()
+
+	paymentAddress := h.config.PaymentAddress
+	if paymentAddress != (common.Address{}) {
+		return paymentAddress, nil
+	}
+	//Local node does not contain wallet
+	if wallets := h.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+		//The local node does not have any wallet address yet
+		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
+			paymentAddress := accounts[0].Address
+			//the first address in the local wallet will be used as the paymentAddress by default.
+			h.config.PaymentAddress = paymentAddress
+			h.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			return paymentAddress, nil
+		}
+	}
 }

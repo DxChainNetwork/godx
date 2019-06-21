@@ -13,6 +13,8 @@ import (
 const (
 	// PersistHostDir is dir path for storing the host log, json, and ect.
 	PersistHostDir = "storageHost"
+	// Version is the version of the storage host
+	Version = "1.0"
 	// HostSettingFile is the file name for saving the setting of host
 	HostSettingFile = "host.json"
 	// HostDB is the database dir for storing host obligation

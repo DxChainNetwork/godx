@@ -4,8 +4,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
-
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // openDB opens the db specified by path. If the db file not exist, create a new one

@@ -8,7 +8,6 @@ import (
 
 // the fields that need to write into the jason file
 type persistence struct {
-	// TODO: whether this block height is used in storage obligation?
 	BlockHeight      uint64                `json:"blockHeight"`
 	BroadCast        bool                  `json:"broadcast"`
 	FinancialMetrics HostFinancialMetrics  `json:"financialmetrics"`

@@ -13968,11 +13968,6 @@ module.exports = Web3;
     }
 
     var methods = function () {
-      var helloWorld = new Method({
-        name: 'helloWorld',
-        call: 'hostdebug_helloWorld',
-        params: 0,
-      });
 
       var setPaymentAddress = new Method({
         name: 'setPaymentAddress',
@@ -14119,69 +14114,17 @@ module.exports = Web3;
     var utils = require('../../utils/utils');
 
     var methods = function () {
-      var fileInfo = new Method({
-        name: 'fileInfo',
-        call: 'clientfiles_detailedFileInfo',
-        params: 1,
-      })
-
-      var rename = new Method({
-        name: 'rename',
-        call: 'clientfiles_rename',
-        params: 2,
-      })
-
-      var deletion = new Method({
-        name: 'delete',
-        call: 'clientfiles_delete',
-        params: 1,
-      })
-
-      var uploads = new Method({
-        name: 'uploads',
-        call: 'clientfiles_uploads',
-        params: 0,
-      })
 
       return [
-        fileInfo,
-        rename,
-        deletion,
-          uploads
       ];
     };
 
     var properties = function() {
       return [
-        new Property({
-          name: 'persistDir',
-          getter: 'clientfiles_persistDir',
-        }),
-        new Property({
-          name: 'rootDir',
-          getter: 'clientfiles_rootDir',
-        }),
-        new Property({
-          name: 'fileList',
-          getter: 'clientfiles_fileList'
-        })
       ];
     }
 
     function ClientFiles(web3){
-      this._requestManager = web3._requestManager;
-
-      var self = this;
-
-      methods().forEach(function(method) {
-        method.attachToObject(self);
-        method.setRequestManager(self._requestManager);
-      });
-
-      properties().forEach(function(p) {
-        p.attachToObject(self);
-        p.setRequestManager(self._requestManager);
-      });
     }
 
     module.exports = ClientFiles
@@ -14237,6 +14180,11 @@ module.exports = Web3;
     var properties = function() {
       return [
         new Property({
+          name: 'version',
+          getter: 'storagehost_version',
+        }),
+
+        new Property({
           name: 'space',
           getter: 'storagehost_availableSpace',
         }),
@@ -14245,6 +14193,22 @@ module.exports = Web3;
           name: 'folders',
           getter: 'storagehost_folders',
         }),
+
+        new Property({
+          name: 'sectorSize',
+          getter: 'storagehost_sectorsize',
+        }),
+
+        new Property({
+          name: 'config',
+          getter: 'storagehost_getHostConfig',
+        }),
+
+        new Property({
+          name: 'financialStats',
+          getter: 'storagehost_getFinancialMetrics',
+        }),
+
       ];
     }
 

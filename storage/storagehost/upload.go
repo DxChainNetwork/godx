@@ -14,6 +14,7 @@ import (
 	"github.com/DxChainNetwork/merkletree"
 )
 
+// handleUpload is the upload function to handle upload negotiation
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	s.SetDeadLine(storage.ContractRevisionTime)
 
@@ -30,6 +31,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	settings := h.externalConfig()
+	if err != nil {
+		return fmt.Errorf("cannot get host external config: %v", err)
+	}
 	currentBlockHeight := h.blockHeight
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 

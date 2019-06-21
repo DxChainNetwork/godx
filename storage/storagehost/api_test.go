@@ -80,10 +80,10 @@ func TestHostDeBugAPI_LoadSetting(t *testing.T) {
 	api.LoadFinancialMetrics(financial)
 
 	// extract the internal setting from the host
-	hostintSetting := host.internalConfig()
+	hostintSetting := host.getInternalConfig()
 
 	// extract the financial metrics from host
-	hostfinancial := host.financialStats()
+	hostfinancial := host.getFinancialMetrics()
 
 	if !reflect.DeepEqual(internalSetting, hostintSetting) {
 		t.Errorf("the input string of internal setting fail loaded to host")
