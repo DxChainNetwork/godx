@@ -373,6 +373,7 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	select {
 	case srv.addStorageContract <- node:
+		srv.log.Warn("AddStorageContractPeer", "chanContent", node.ID().String())
 	case <-srv.quit:
 	}
 }
@@ -902,12 +903,11 @@ running:
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			srv.log.Warn("before storage contractID flag set", "c.flags", c.flags)
-			srv.log.Warn("before storage contractID flag set", "storageContractLength", len(storageContract), "isExistThisNode", storageContract[c.node.ID()])
+			srv.log.Warn("before storage contractID flag set", "c.flags", int32(c.flags), "storageContractLength", len(storageContract), "nodeID", c.node.ID().String(), "isExistThisNode", storageContract[c.node.ID()])
 			if storageContract[c.node.ID()] {
 				c.flags |= storageContractConn
 			}
-			srv.log.Warn("after storage contractID flag set", "c.flags", c.flags)
+			srv.log.Warn("after storage contractID flag set", "c.flags", int32(c.flags))
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
 			select {
 			case c.cont <- srv.encHandshakeChecks(peers, inboundCount, c):
@@ -1190,7 +1190,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	// changed field: node, fd (fd changed through function handshakeDone)
 	// if error occurred, return the error directly before protocol handshake
 	err = srv.checkpoint(c, srv.posthandshake)
-	srv.log.Warn("function after connection flags", "flags", c.flags)
+	srv.log.Warn("function after connection flags", "flags", int32(c.flags))
 	if err != nil {
 		clog.Trace("Rejected peer before protocol handshake", "err", err)
 		return err
@@ -1203,7 +1203,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		srv.log.Warn("CONNECTION IS storage connection")
 		srv.ourHandshake.flags |= storageContractConn
 	}
-	srv.log.Warn("ourhandshake flag", "handshake", srv.ourHandshake.flags)
+	srv.log.Warn("ourhandshake flag", "handshake", int32(srv.ourHandshake.flags))
 
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
@@ -1212,7 +1212,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return err
 	}
 
-	srv.log.Warn("doProtoHandshake function read client handshake", "flags", phs.flags)
+	srv.log.Warn("doProtoHandshake function read client handshake", "flags", int32(phs.flags))
 
 	// check the node ID against the ID contained in the protoHandshake ID
 	// both should be derived from the public key
@@ -1223,9 +1223,9 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 
 	// destination node supported protocol
 	if phs.flags&storageContractConn != 0 {
-		srv.log.Warn("client connection flag", "flagsInfo", phs.flags)
+		srv.log.Warn("client connection flag", "flagsInfo", int32(phs.flags))
 		c.set(storageContractConn, true)
-		srv.log.Warn("host set connection flag", "flag", c.flags)
+		srv.log.Warn("host set connection flag", "flag", int32(c.flags))
 	}
 	c.caps, c.name = phs.Caps, phs.Name
 
