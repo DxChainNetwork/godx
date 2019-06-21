@@ -77,8 +77,8 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 
 	// initialize log
 	cm.log = log.New("module", "contract manager")
-	logHandler := log.CallerStackHandler("%v", log.StreamHandler(os.Stdout, log.TerminalFormat(true)))
-	cm.log.SetHandler(logHandler)
+	//logHandler := log.CallerStackHandler("%v", log.StreamHandler(os.Stdout, log.TerminalFormat(true)))
+	//cm.log.SetHandler(logHandler)
 
 	// initialize contract set
 	cs, err := contractset.New(persistDir)
