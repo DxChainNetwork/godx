@@ -685,11 +685,13 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		}
 	}
 
+	log.Error("PEER REMOVED")
+
 	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
 	}
 
-	timer := time.NewTimer(time.Second * 3)
+	timer := time.NewTimer(time.Second * 10)
 
 	var conn *storage.Session
 	for {
@@ -722,6 +724,7 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 	}
 
 	if session != nil {
+		log.Error("sending disconnect signal")
 		session.StopConnection()
 
 		// wait for connection stop
@@ -753,22 +756,30 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
 		return err
 	}
-	defer s.Disconnect(session, hostEnodeURL)
+
+	defer func() {
+		log.Error("getStorageHostSetting Disconnect")
+		s.Disconnect(session, hostEnodeURL)
+	}()
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
+		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())
 		return err
 	}
 
 	msg, err := session.ReadMsg()
 	if err != nil {
+		log.Error("GetStorageHostSetting readMSG", "err", err.Error())
 		return err
 	}
 
 	if msg.Code != storage.HostSettingResponseMsg {
+		log.Error("invalid host setting response")
 		return errors.New("invalid host settings response")
 	}
 
 	if err := msg.Decode(config); err != nil {
+		log.Error("failed to decode", "err", err.Error())
 		return err
 	}
 

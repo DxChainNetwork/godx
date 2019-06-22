@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"sort"
 	"sync"
@@ -201,7 +202,7 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int32
+type connFlag uint32
 
 const (
 	dynDialedConn connFlag = 1 << iota
@@ -256,7 +257,7 @@ func (c *conn) String() string {
 
 // returns connection flag in string format
 func (f connFlag) String() string {
-	s := ""
+	s := "-somethingelse"
 	if f&trustedConn != 0 {
 		s += "-trusted"
 	}
@@ -269,29 +270,32 @@ func (f connFlag) String() string {
 	if f&inboundConn != 0 {
 		s += "-inbound"
 	}
+	if f&storageContractConn != 0 {
+		s += "-storageContractConn"
+	}
 	if s != "" {
 		s = s[1:]
 	}
 	return s
 }
 
-// check if the connection flags are equivalent
+// check if the connection Flags are equivalent
 func (c *conn) is(f connFlag) bool {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	flags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 	return flags&f != 0
 }
 
 // mark/unmark the connection flag
 func (c *conn) set(f connFlag, val bool) {
 	for {
-		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		oldFlags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 		flags := oldFlags
 		if val {
 			flags |= f
 		} else {
 			flags &= ^f
 		}
-		if atomic.CompareAndSwapInt32((*int32)(&c.flags), int32(oldFlags), int32(flags)) {
+		if atomic.CompareAndSwapUint32((*uint32)(&c.flags), uint32(oldFlags), uint32(flags)) {
 			return
 		}
 	}
@@ -853,10 +857,12 @@ running:
 			}
 
 		case n := <-srv.addStorageContract:
-			srv.log.Trace("Adding storage contract node", "node", n)
+			srv.log.Error("Adding storage contract node", "node", n)
 			storageContract[n.ID()] = true
-			// Mark any already-connected peer as trusted
+
+			// Mark any already-connected peer as storageContractConn
 			if p, ok := peers[n.ID()]; ok {
+				srv.log.Error("Marking the node as storageContractConn", "node", n.ID())
 				p.rw.set(storageContractConn, true)
 			}
 
@@ -1195,7 +1201,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	// Run the protocol handshake with passed in ourHandshake object (protoHandshake)
 	// a list of protocols supported by the destination node will be returned
 	if c.is(storageContractConn) {
-		srv.ourHandshake.flags |= storageContractConn
+		srv.ourHandshake.Flags |= storageContractConn
 	}
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
@@ -1211,7 +1217,10 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// destination node supported protocol
-	if phs.flags&storageContractConn != 0 {
+	errMsg := fmt.Sprintf("after protoHandshake, checking the storageContractConn: %s, ip: %v", phs.Flags.String(), c.fd.RemoteAddr())
+	srv.log.Error(errMsg)
+	if phs.Flags&storageContractConn != 0 {
+		srv.log.Error("CHANGING!!!!!!!!!!!!!!!!!!!!!!!!!!YEAH!!!!!!!!!!!!!!")
 		c.set(storageContractConn, true)
 	}
 	c.caps, c.name = phs.Caps, phs.Name

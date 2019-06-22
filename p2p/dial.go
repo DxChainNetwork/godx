@@ -452,7 +452,7 @@ func (t *dialTask) dial(srv *Server, dest *enode.Node) error {
 	return srv.SetupConn(mfd, t.flags, dest)
 }
 
-// returns connection flags, first 7 bytes of connection id, IP address and TCP port
+// returns connection Flags, first 7 bytes of connection id, IP address and TCP port
 // on the node trying to establish the connection
 func (t *dialTask) String() string {
 	id := t.dest.ID()

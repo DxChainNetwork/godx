@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"io"
 	"io/ioutil"
 	"sync/atomic"
@@ -91,6 +92,11 @@ type MsgReadWriter interface {
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func Send(w MsgWriter, msgcode uint64, data interface{}) error {
+	if cn, ok := w.(conn); ok {
+		dest := cn.fd.RemoteAddr()
+		log.Error("send p2p message", "msgcode", msgcode, "dest", dest, "data", data)
+	}
+
 	// size of the data encoded and io.Reader contains the RLP encoded data
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {

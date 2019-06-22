@@ -101,7 +101,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		StoragePrice:           common.NewBigInt(h.config.MinStoragePrice.Int64()),
 		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
 		RevisionNumber:         h.revisionNumber,
-		Version:                storage.ConfigVersion,
+		Version:                "Mzhang Testing",
 	}
 }
 
@@ -439,23 +439,30 @@ func (h *StorageHost) loadDefaults() {
 func (h *StorageHost) HandleSession(s *storage.Session) error {
 	msg, err := s.ReadMsg()
 	if err != nil {
+		log.Error("read message error", "err", err.Error())
 		return err
 	}
 	if handler, ok := handlerMap[msg.Code]; ok {
+		log.Error("handle session", "message code", msg.Code)
 		return handler(h, s, msg)
+	} else {
+		log.Error("failed to get handler", "message", msg.Code)
+		return errors.New("failed to get handler")
 	}
-	return nil
 }
 
 func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	s.SetDeadLine(storage.HostSettingTime)
 
 	settings := h.externalConfig()
-	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+	if err := s.SendHostExtSettingsResponse(settings); err != nil {
+		log.Error("SendHostExtSettingResponse Error", "err", err)
 		return errors.New("host setting request done")
-	} else {
-		return err
 	}
+
+	log.Error("successfully sent the host external setting response")
+
+	return nil
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {

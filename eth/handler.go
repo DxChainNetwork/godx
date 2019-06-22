@@ -17,11 +17,14 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -348,7 +351,11 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	} else {
-		p.Log().Debug("DX session connected", "name", p.Name())
+		if p.Peer.Info().Network.StorageContract {
+			p.Log().Error("Network Storage Contract")
+		}
+
+		p.Log().Error("DX session connected", "name", p.Name())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
@@ -358,24 +365,44 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			p.Log().Error("DX session registration failed", "err", err)
 			return err
 		}
-		defer pm.removeStorageContactSession(p.id)
+
+		defer func() {
+			pm.removeStorageContactSession(p.id)
+			p.Log().Error("REMOVE STORAGE CONTRACT SESSION", "inbound", session.Inbound())
+		}()
 
 		if session.Inbound() {
+			// host
 			for {
+
+				p.Log().Warn("inbound connection for loop", "id", getGID())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
 					p.Log().Debug("Storage host handle session message failed", "err", err)
 					return err
 				}
 			}
 		} else {
+			p.Log().Warn("not inbound client connection else")
+			// client
 			select {
 			case err := <-session.ClientDiscChan():
+				p.Log().Warn("error close the connection", "err", err.Error())
 				return err
 			case <-session.Peer.ClosedChan():
+				p.Log().Warn("error close connection ClosedChan DX SESSION CLOSED")
 				return errors.New("DX session is closed")
 			}
 		}
 	}
+}
+
+func getGID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote

@@ -154,15 +154,15 @@ func (s *Session) HostInfo() *HostInfo {
 	return s.host
 }
 
-func (s * Session) SetBusy() bool {
+func (s *Session) SetBusy() bool {
 	return atomic.CompareAndSwapInt32(&s.busy, IDLE, BUSY)
 }
 
-func (s * Session) ResetBusy() bool {
+func (s *Session) ResetBusy() bool {
 	return atomic.CompareAndSwapInt32(&s.busy, BUSY, IDLE)
 }
 
-func (s * Session) IsBusy() bool {
+func (s *Session) IsBusy() bool {
 	return atomic.LoadInt32(&s.busy) == BUSY
 }
 
@@ -185,7 +185,6 @@ func (s *Session) SetDeadLine(d time.Duration) error {
 	return nil
 }
 
-
 // RW() and SetRW() for only test
 func (s *Session) RW() p2p.MsgReadWriter {
 	return s.rw
@@ -196,7 +195,7 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 }
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
-	s.Log().Debug("Sending host settings request from client", data)
+	s.Log().Error("Sending host settings request from client")
 	return p2p.Send(s.rw, HostSettingMsg, data)
 }
 

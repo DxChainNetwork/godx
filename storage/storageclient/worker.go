@@ -99,6 +99,7 @@ func (sc *StorageClient) activateWorkerPool() {
 
 // WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
+	log.Error("Get into the worker loop")
 	defer w.killUploading()
 	defer w.killDownloading()
 
@@ -144,6 +145,7 @@ func (w *worker) killDownloading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
+		log.Error("kill downloading, disconnected")
 		delete(w.client.sessionSet, contractID)
 		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
 			w.client.log.Debug("can't close connection after downloading", "error", err)
