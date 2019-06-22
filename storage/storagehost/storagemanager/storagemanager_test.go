@@ -7,12 +7,13 @@ package storagemanager
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 func init() {
@@ -50,7 +51,7 @@ func newTestDatabase(t *testing.T, extra string) (db *database) {
 }
 
 // newTestStorageManager creates a new storageManager for testing
-func newTestStorageManager(t *testing.T, extra string, d *disrupter) (sm *storageManager) {
+func newTestStorageManager(t *testing.T, extra string, d *disruptor) (sm *storageManager) {
 	sm, err := newStorageManager(tempDir(t.Name(), extra), d)
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +83,7 @@ func (sm *storageManager) shutdown(t *testing.T, timeout time.Duration) {
 
 // TestEmptyStorageManager test the open-close process of an empty storageManager
 func TestEmptyStorageManager(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	prevSalt := sm.sectorSalt
 	if sm.sectorSalt == [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} {
 		t.Fatalf("salt shall not be empty")

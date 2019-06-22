@@ -5,8 +5,6 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -14,11 +12,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // TestAddStorageFolderNormal test the process of adding a storagefolder
 func TestAddStorageFolderNormal(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
 	err := sm.AddStorageFolder(path, size)
@@ -74,7 +75,7 @@ func TestAddStorageFolderNormal(t *testing.T) {
 
 // TestAddStorageFolderRecover test the recover scenario of add storage folder
 func TestAddStorageFolderRecover(t *testing.T) {
-	d := newDisrupter().register("mock process disrupted", func() bool {
+	d := newDisruptor().register("mock process disrupted", func() bool {
 		return true
 	})
 	sm := newTestStorageManager(t, "", d)
@@ -112,7 +113,7 @@ func TestAddStorageFolderRecover(t *testing.T) {
 
 // TestAddStorageFolderExhaustive exhaustively test the add storage folder
 func TestAddStorageFolderExhaustive(t *testing.T) {
-	d := newDisrupter()
+	d := newDisruptor()
 	sm := newTestStorageManager(t, "", d)
 	numFolders := 100
 	if testing.Short() {

@@ -14036,6 +14036,12 @@ module.exports = Web3;
         params: 1,
       });
 
+      var announce = new Method({
+        name: 'announce',
+        call: 'hostdebug_announce',
+        params: 0,
+      });
+
 
       return [
         helloWorld,
@@ -14052,6 +14058,7 @@ module.exports = Web3;
 
         loadInternalSetting,
         loadFinancialMetrics,
+        announce,
       ];
     };
 

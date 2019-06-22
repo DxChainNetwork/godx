@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -135,10 +136,10 @@ func (update *addSectorBatchUpdate) prepare(manager *storageManager, target uint
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
-		if manager.disrupter.disrupt("add batch prepare") {
+		if manager.disruptor.disrupt("add batch prepare") {
 			return errDisrupted
 		}
-		if manager.disrupter.disrupt("add batch prepare stop") {
+		if manager.disruptor.disrupt("add batch prepare stop") {
 			return errStopped
 		}
 	case targetRecoverCommitted:
@@ -154,10 +155,10 @@ func (update *addSectorBatchUpdate) process(manager *storageManager, target uint
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
-		if manager.disrupter.disrupt("add batch process stop") {
+		if manager.disruptor.disrupt("add batch process stop") {
 			return errStopped
 		}
-		if manager.disrupter.disrupt("add batch process") {
+		if manager.disruptor.disrupt("add batch process") {
 			return errDisrupted
 		}
 	case targetRecoverCommitted:

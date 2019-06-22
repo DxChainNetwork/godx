@@ -167,7 +167,7 @@ func (fm *folderManager) selectFolderToAddWithRetry(retryTimes int) (sf *storage
 	return nil, 0, err
 }
 
-// validateShink validates the shrinkFolderrUpdate for whether all the stored sectors
+// validateShrink validates the shrinkFolderUpdate for whether all the stored sectors
 // could be stored in the folders.
 // The function does not contain any lock operations
 func (fm *folderManager) validateShrink(folderPath string, targetNumSector uint64) (err error) {

@@ -6,16 +6,17 @@ package storagemanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/threadmanager"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/threadmanager"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 type (
@@ -63,20 +64,20 @@ type (
 		// sector and then folder
 		lock common.WPLock
 
-		// disrupter is used only for test
-		disrupter *disrupter
+		// disruptor is used only for test
+		disruptor *disruptor
 	}
 
 	sectorSalt [32]byte
 )
 
-// New creates a new storage manager with no disrupter
+// New creates a new storage manager with no disruptor
 func New(persistDir string) (sm StorageManager, err error) {
-	return newStorageManager(persistDir, newDisrupter())
+	return newStorageManager(persistDir, newDisruptor())
 }
 
-// new create a new storage manager with the disrupter
-func newStorageManager(persistDir string, d *disrupter) (sm *storageManager, err error) {
+// new create a new storage manager with the disruptor
+func newStorageManager(persistDir string, d *disruptor) (sm *storageManager, err error) {
 	sm = &storageManager{}
 	sm.db, err = openDB(filepath.Join(persistDir, databaseFileName))
 	if err != nil {
@@ -87,7 +88,7 @@ func newStorageManager(persistDir string, d *disrupter) (sm *storageManager, err
 	sm.persistDir = persistDir
 	// Only initialize the WAL in start
 	sm.tm = &threadmanager.ThreadManager{}
-	sm.disrupter = d
+	sm.disruptor = d
 	return
 }
 

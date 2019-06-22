@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -240,10 +241,10 @@ func (update *shrinkFolderUpdate) prepareNormal(manager *storageManager) (err er
 	if err != nil {
 		return err
 	}
-	if manager.disrupter.disrupt("shrink folder prepare normal") {
+	if manager.disruptor.disrupt("shrink folder prepare normal") {
 		return errDisrupted
 	}
-	if manager.disrupter.disrupt("shrink folder prepare normal stop") {
+	if manager.disruptor.disrupt("shrink folder prepare normal stop") {
 		return errStopped
 	}
 	return
@@ -342,10 +343,10 @@ func (update *shrinkFolderUpdate) processNormal(manager *storageManager) (err er
 	if err = manager.db.writeBatch(update.batch); err != nil {
 		return err
 	}
-	if manager.disrupter.disrupt("shrink folder process normal") {
+	if manager.disruptor.disrupt("shrink folder process normal") {
 		return errDisrupted
 	}
-	if manager.disrupter.disrupt("shrink folder process normal stop") {
+	if manager.disruptor.disrupt("shrink folder process normal stop") {
 		return errStopped
 	}
 	if err = update.targetFolder.dataFile.Truncate(int64(numSectorsToSize(update.targetNumSectors))); err != nil {

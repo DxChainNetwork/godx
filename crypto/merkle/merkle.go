@@ -77,7 +77,7 @@ func (ct *CachedTree) Root() (h common.Hash) {
 }
 
 // Prove will be used to generate a storage proof hash set, which is used in storage
-// obligation to submit the storageProof. The data field gives user more freedom to
+// responsibility to submit the storageProof. The data field gives user more freedom to
 // choose which data they want to do merkle proof with
 func (ct *CachedTree) Prove(proofData []byte, cachedHashProofSet []common.Hash) (hashProofSet []common.Hash) {
 	// combine base and cachedHashSet, which will be used to generate proof set

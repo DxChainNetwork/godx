@@ -8,21 +8,23 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/syndtr/goleveldb/leveldb/util"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/storage"
+
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func TestAddSector(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
 	if err := sm.AddStorageFolder(path, size); err != nil {
@@ -69,7 +71,7 @@ func TestDisruptedPhysicalAddSector(t *testing.T) {
 		{"physical prepare normal"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
@@ -105,7 +107,7 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 		{"virtual prepare normal"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
@@ -144,7 +146,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		{"physical process normal stop", 1},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
@@ -195,7 +197,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		{"virtual prepare normal stop", 0},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, test.keyWord, d)
 		path := randomFolderPath(t, test.keyWord)
 		size := uint64(1 << 25)
@@ -240,7 +242,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 
 // TestAddSectorConcurrent test the scenario of multiple goroutines add sector at the same time
 func TestAddSectorConcurrent(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	size := uint64(1 << 25)
 	// add three storage folders, each have 8 sectors
 	for i := 0; i != 3; i++ {

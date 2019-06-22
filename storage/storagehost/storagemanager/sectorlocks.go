@@ -5,9 +5,10 @@
 package storagemanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
 	"sync"
 	"sync/atomic"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 type (

@@ -22,7 +22,7 @@ type update interface {
 
 	// prepare prepare the data and then commit. target is defined at defaults.go
 	// which defines three scenarios this function is called. normal execution /
-	// recover commmitted txn / recover uncommitted txn
+	// recover committed txn
 	prepare(manager *storageManager, target uint8) error
 
 	// process do the actual updates. If any error happened, return
@@ -79,7 +79,7 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 		upErr = upErr.setProcessError(err)
 		return
 	}
-	if sm.stopped() || sm.disrupter.disrupt("mock process disrupted") {
+	if sm.stopped() || sm.disruptor.disrupt("mock process disrupted") {
 		upErr = upErr.setProcessError(errStopped)
 		return
 	}

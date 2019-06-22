@@ -69,6 +69,10 @@ type Backend interface {
 
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
+
+	// host announce
+	SignByNode(hash []byte) ([]byte, error)
+	GetHostEnodeURL() string
 }
 
 func GetAPIs(apiBackend Backend) []rpc.API {
@@ -114,14 +118,6 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Service:   NewPrivateAccountAPI(apiBackend, nonceLock),
 			Public:    false,
 		}, {
-
-			// open rpc to out
-			Namespace: "storagetx",
-			Version:   "1.0",
-			Service:   NewPublicStorageContractTxAPI(apiBackend, nonceLock),
-			Public:    true,
-		}, {
-
 			// only use in system, not for out rpc
 			Namespace: "storagetx",
 			Version:   "1.0",

@@ -7,10 +7,12 @@ package storagemanager
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -116,10 +118,10 @@ func (update *expandFolderUpdate) prepare(manager *storageManager, target uint8)
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
-		if manager.disrupter.disrupt("expand folder prepare normal") {
+		if manager.disruptor.disrupt("expand folder prepare normal") {
 			return errDisrupted
 		}
-		if manager.disrupter.disrupt("expand folder prepare normal stop") {
+		if manager.disruptor.disrupt("expand folder prepare normal stop") {
 			return errStopped
 		}
 	case targetRecoverCommitted:
@@ -154,10 +156,10 @@ func (update *expandFolderUpdate) process(manager *storageManager, target uint8)
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
-		if manager.disrupter.disrupt("expand folder process normal") {
+		if manager.disruptor.disrupt("expand folder process normal") {
 			return errDisrupted
 		}
-		if manager.disrupter.disrupt("expand folder process normal stop") {
+		if manager.disruptor.disrupt("expand folder process normal stop") {
 			return errStopped
 		}
 	case targetRecoverCommitted:

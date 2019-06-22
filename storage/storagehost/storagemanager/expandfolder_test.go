@@ -17,7 +17,7 @@ import (
 )
 
 func TestExpandFolderNormal(t *testing.T) {
-	sm := newTestStorageManager(t, "", newDisrupter())
+	sm := newTestStorageManager(t, "", newDisruptor())
 	// Create one folder
 	path := randomFolderPath(t, "")
 	size := uint64(1 << 25)
@@ -81,7 +81,7 @@ func TestExpandFolderDisrupt(t *testing.T) {
 		{"expand folder process normal"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")
@@ -148,7 +148,7 @@ func TestExpandFolderStop(t *testing.T) {
 		{"expand folder process normal stop"},
 	}
 	for _, test := range tests {
-		d := newDisrupter().register(test.keyWord, func() bool { return true })
+		d := newDisruptor().register(test.keyWord, func() bool { return true })
 		sm := newTestStorageManager(t, "", d)
 		// Create one folder
 		path := randomFolderPath(t, "")

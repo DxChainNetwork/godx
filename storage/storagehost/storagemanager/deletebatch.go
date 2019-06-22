@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -149,7 +150,7 @@ func (update *deleteSectorBatchUpdate) prepare(manager *storageManager, target u
 	switch target {
 	case targetNormal:
 		err = update.prepareNormal(manager)
-		if manager.disrupter.disrupt("delete batch prepare normal") {
+		if manager.disruptor.disrupt("delete batch prepare normal") {
 			return errDisrupted
 		}
 	case targetRecoverCommitted:
@@ -157,7 +158,7 @@ func (update *deleteSectorBatchUpdate) prepare(manager *storageManager, target u
 	default:
 		err = errors.New("invalid target")
 	}
-	if manager.disrupter.disrupt("delete batch prepare stop") {
+	if manager.disruptor.disrupt("delete batch prepare stop") {
 		return errStopped
 	}
 	return
@@ -168,7 +169,7 @@ func (update *deleteSectorBatchUpdate) process(manager *storageManager, target u
 	switch target {
 	case targetNormal:
 		err = update.processNormal(manager)
-		if manager.disrupter.disrupt("delete batch process normal") {
+		if manager.disruptor.disrupt("delete batch process normal") {
 			return errDisrupted
 		}
 	case targetRecoverCommitted:
@@ -176,7 +177,7 @@ func (update *deleteSectorBatchUpdate) process(manager *storageManager, target u
 	default:
 		err = errors.New("invalid target")
 	}
-	if manager.disrupter.disrupt("delete batch process stop") {
+	if manager.disruptor.disrupt("delete batch process stop") {
 		return errStopped
 	}
 	return

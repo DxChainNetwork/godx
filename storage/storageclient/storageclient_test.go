@@ -254,6 +254,14 @@ func (b *BackendTest) GetBlockByNumber(number uint64) (*types.Block, error) {
 	return &types.Block{}, nil
 }
 
+func (b *BackendTest) SignByNode(hash []byte) ([]byte, error) {
+	return []byte{}, nil
+}
+
+func (b *BackendTest) GetHostEnodeURL() string {
+	return ""
+}
+
 /*
 _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _
 |  __ \|  __ \|_   _\ \    / /\|__   __|  ____|      |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |

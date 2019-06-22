@@ -26,7 +26,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
@@ -81,7 +80,6 @@ type StorageClient struct {
 	apiBackend ethapi.Backend
 
 	// get the P2P server for adding peer
-	p2pServer   *p2p.Server
 	sessionLock sync.Mutex
 	sessionSet  map[storage.ContractID]*storage.Session
 }
@@ -1024,9 +1022,7 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 			var hac types.HostAnnouncement
 			err := rlp.DecodeBytes(tx.Data(), &hac)
 			if err != nil {
-
-				sc.log.Crit("Rlp decoding error as hostAnnouncements:", err)
-
+				sc.log.Warn("Rlp decoding error as hostAnnouncements", "err", err)
 				continue
 			}
 			hostAnnouncements = append(hostAnnouncements, hac)
