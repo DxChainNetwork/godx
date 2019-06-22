@@ -1203,7 +1203,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		srv.log.Warn("CONNECTION IS storage connection")
 		srv.ourHandshake.flags |= storageContractConn
 	}
-	srv.log.Warn("ourhandshake flag", "handshake", int32(srv.ourHandshake.flags))
+	srv.log.Error("[doProtoHandshake] send host ourhandshake info", "ID", hex.EncodeToString(srv.ourHandshake.ID), "flags", int32(srv.ourHandshake.flags), "name", srv.ourHandshake.Name, "version", srv.ourHandshake.Version)
 
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
@@ -1212,7 +1212,10 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		return err
 	}
 
-	srv.log.Warn("doProtoHandshake function read client handshake", "flags", int32(phs.flags))
+	srv.log.Error("[doProtoHandshake] read client handshake", "ID", hex.EncodeToString(phs.ID), "flags", int32(phs.flags), "name", phs.Name, "version", phs.Version)
+	for _, cap := range phs.Caps {
+		srv.log.Warn("protocol", "name", cap.Name, "version", cap.Version)
+	}
 
 	// check the node ID against the ID contained in the protoHandshake ID
 	// both should be derived from the public key

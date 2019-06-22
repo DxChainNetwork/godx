@@ -4,16 +4,29 @@
 
 package p2p
 
-import "testing"
+import (
+	"github.com/DxChainNetwork/godx/rlp"
+	"testing"
+)
 
-
-func TestSetConnFlag(t *testing.T) {
-	var flag connFlag
-
-	flag |= storageContractConn
-
-	if (flag & storageContractConn) == 0 {
-		t.Fatal("flag set error")
+func TestRlpHandshake(t *testing.T) {
+	hs := &protoHandshake{
+		Version:64,
+		Name:"eth",
+		flags:staticDialedConn,
 	}
-	t.Log(int32(flag))
+	size, r, err := rlp.EncodeToReader(hs)
+	if err != nil {
+		t.Fatal("rlp encode reader err", err)
+	}
+
+	res := &protoHandshake{}
+	s := rlp.NewStream(r, uint64(size))
+	if err := s.Decode(res); err != nil {
+		t.Fatal("decode handshake", err)
+	}
+
+	if res.flags == hs.flags {
+		t.Fatal("this is result we want")
+	}
 }

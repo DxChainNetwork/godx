@@ -383,8 +383,13 @@ func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[stri
 	offset := baseProtocolLength // 16
 	result := make(map[string]*protoRW)
 
+	for _, proto := range protocols {
+		log.Warn("match protocol[Self]", "name", proto.Name, "version", proto.Version, "length", proto.Length)
+	}
+
 outer:
 	for _, cap := range caps {
+		log.Warn("match protocol[Conn]", "name", cap.Name, "version", cap.Version)
 		for _, proto := range protocols {
 			if proto.Name == cap.Name && proto.Version == cap.Version {
 				// If an old protocol version matched, revert it
@@ -398,6 +403,9 @@ outer:
 				continue outer
 			}
 		}
+	}
+	for k, v := range result {
+		log.Warn("match protocol result", "name", k, "version", v.Version, "offset", v.offset, "length", v.Length)
 	}
 	return result
 }
@@ -467,6 +475,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
+	log.Warn("protoRW write msg", "msg origin code", msg.Code, "rw offset", rw.offset)
 	msg.Code += rw.offset
 	select {
 	case <-rw.wstart:
@@ -485,7 +494,9 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 func (rw *protoRW) ReadMsg() (Msg, error) {
 	select {
 	case msg := <-rw.in:
+		log.Warn("read msg", "read msgCode", msg.Code)
 		msg.Code -= rw.offset
+		log.Warn("minus rw.offset", "msgCode", msg.Code, "rw offset", rw.offset)
 		return msg, nil
 	case <-rw.closed:
 		return Msg{}, io.EOF
