@@ -9,6 +9,35 @@ import (
 	"testing"
 )
 
+type poc uint32
+type Teste struct {
+	M    uint64 // 5 by default
+	Flags poc
+}
+
+
+func TestRlpAnyDataStructure(t *testing.T){
+	var a poc = 16
+	hs := &Teste{
+		M:18,
+		Flags:a,
+	}
+
+	size, r, err := rlp.EncodeToReader(hs)
+	if err != nil {
+		t.Fatal("rlp encode reader err", err)
+	}
+
+	res := &Teste{}
+	s := rlp.NewStream(r, uint64(size))
+	if err := s.Decode(res); err != nil {
+		t.Fatal("decode handshake", err)
+	}
+
+	t.Log(res.Flags)
+	t.Log(res.M)
+}
+
 func TestRlpHandshake(t *testing.T) {
 	hs := &protoHandshake{
 		Version:64,
