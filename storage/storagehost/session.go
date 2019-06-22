@@ -45,9 +45,6 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	//Each time you update the configuration, number plus one
-	h.revisionNumber++
-
 	// Get the total and remaining disk space
 	var totalStorageSpace uint64
 	var remainingStorageSpace uint64
@@ -107,7 +104,6 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		SectorAccessPrice:      common.NewBigInt(h.config.MinSectorAccessPrice.Int64()),
 		StoragePrice:           common.NewBigInt(h.config.MinStoragePrice.Int64()),
 		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
-		RevisionNumber:         h.revisionNumber,
 		Version:                storage.ConfigVersion,
 	}
 }

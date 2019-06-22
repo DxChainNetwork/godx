@@ -9,7 +9,6 @@ import (
 // the fields that need to write into the jason file
 type persistence struct {
 	BlockHeight      uint64                `json:"blockHeight"`
-	BroadCast        bool                  `json:"broadcast"`
 	FinancialMetrics HostFinancialMetrics  `json:"financialmetrics"`
 	Config           storage.HostIntConfig `json:"config"`
 }
@@ -42,7 +41,6 @@ func (h *StorageHost) loadConfig() error {
 func (h *StorageHost) extractPersistence() *persistence {
 	return &persistence{
 		BlockHeight:      h.blockHeight,
-		BroadCast:        h.broadcast,
 		FinancialMetrics: h.financialMetrics,
 		Config:           h.config,
 	}
@@ -52,7 +50,6 @@ func (h *StorageHost) extractPersistence() *persistence {
 // load the persistence data to the host
 func (h *StorageHost) loadPersistence(persist *persistence) {
 	h.blockHeight = persist.BlockHeight
-	h.broadcast = persist.BroadCast
 	h.financialMetrics = persist.FinancialMetrics
 	h.config = persist.Config
 }

@@ -87,8 +87,7 @@ type (
 		StoragePrice           common.BigInt `json:"storageprice"`
 		UploadBandwidthPrice   common.BigInt `json:"uploadbandwidthprice"`
 
-		RevisionNumber uint64 `json:"revisionnumber"`
-		Version        string `json:"version"`
+		Version string `json:"version"`
 	}
 
 	// HostInfo storage storage host information

@@ -234,7 +234,7 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 }
 
 // getPaymentAddress get the current payment address. If no address is set, assign the first
-// accoutn address as the payment address
+// account address as the payment address
 func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 	h.lock.Lock()
 	h.lock.Unlock()
@@ -246,12 +246,13 @@ func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 	//Local node does not contain wallet
 	if wallets := h.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
 		//The local node does not have any wallet address yet
-		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
-			paymentAddress := accounts[0].Address
+		if accs := wallets[0].Accounts(); len(accs) > 0 {
+			paymentAddress := accs[0].Address
 			//the first address in the local wallet will be used as the paymentAddress by default.
 			h.config.PaymentAddress = paymentAddress
 			h.log.Info("host automatically sets your wallet's first account as paymentAddress")
 			return paymentAddress, nil
 		}
 	}
+	return common.Address{}, errors.New("no wallet accounts available")
 }
