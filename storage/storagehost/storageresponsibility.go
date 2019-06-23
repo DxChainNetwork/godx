@@ -6,6 +6,7 @@ package storagehost
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -307,7 +308,9 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 //pruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) pruneStaleStorageResponsibilities() error {
+	h.lock.Lock()
 	sos := h.StorageResponsibilities()
+	h.lock.Unlock()
 	var scids []common.Hash
 	for _, so := range sos {
 		if h.blockHeight > so.NegotiationBlockNumber+confirmedBufferHeight {
@@ -317,6 +320,7 @@ func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 			return errTransactionNotConfirmed
 		}
 	}
+	fmt.Println(2)
 
 	// Delete storage responsibility from the database.
 	err := h.deleteStorageResponsibilities(scids)
@@ -324,6 +328,7 @@ func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 		h.log.Warn("unable to delete responsibility", "err", err)
 		return err
 	}
+	fmt.Println(3)
 
 	// Update the financial metrics of the host.
 	return h.resetFinancialMetrics()
@@ -396,7 +401,9 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
+	fmt.Println("locking")
 	h.lock.Lock()
+	fmt.Println("locked")
 	defer h.lock.Unlock()
 
 	fm := HostFinancialMetrics{}

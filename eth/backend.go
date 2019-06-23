@@ -354,11 +354,6 @@ func (s *Ethereum) APIs() []rpc.API {
 				Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
 				Public:    true,
 			}, {
-				Namespace: "hostdebug",
-				Version:   "1.0",
-				Service:   storagehost.NewHostDebugAPI(s.storageHost),
-				Public:    true,
-			}, {
 				Namespace: "hostmanagerdebug",
 				Version:   "1.0",
 				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
@@ -613,7 +608,10 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Host
-	s.storageHost.Start(s)
+	err = s.storageHost.Start(s)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

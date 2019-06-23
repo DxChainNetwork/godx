@@ -223,11 +223,6 @@ func (s *LightEthereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   s.netRPCService,
 				Public:    true,
-			}, {
-				Namespace: "hostdebug",
-				Version:   "1.0",
-				Service:   storagehost.NewHostDebugAPI(s.storageHost),
-				Public:    true,
 			},
 		}...)
 	}

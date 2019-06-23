@@ -6,6 +6,7 @@ package storagehost
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -104,6 +105,7 @@ func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 	if err = h.pruneStaleStorageResponsibilities(); err != nil {
 		return err
 	}
+	fmt.Println("after prune")
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
 	return nil
@@ -216,9 +218,6 @@ func (h *StorageHost) load() error {
 // StorageResponsibilities fetches the set of storage Responsibility in the host and
 // returns metadata on them.
 func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	if len(h.lockedStorageResponsibility) < 1 {
 		return nil
 	}

@@ -7,22 +7,10 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// HostDeBugAPI give developer a way for access and modify the setting file
-//type HostDeBugAPI struct {
-//	storagehost *StorageHost
-//}
-
 // HostPublicAPI is the api for private usage
 type HostPrivateAPI struct {
 	storageHost *StorageHost
 }
-
-// NewHostDebugAPI generate a HostDeBugAPI reference for caller
-//func NewHostDebugAPI(storagehost *StorageHost) *HostDeBugAPI {
-//	return &HostDeBugAPI{
-//		storagehost: storagehost,
-//	}
-//}
 
 // NewHostPrivateAPI is the api to create the host private api
 func NewHostPrivateAPI(storageHost *StorageHost) *HostPrivateAPI {
