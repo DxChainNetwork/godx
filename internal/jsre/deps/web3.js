@@ -14038,11 +14038,29 @@ module.exports = Web3;
         params: 0,
       })
 
+      var paymentAddress = new Method({
+        name: 'getPaymentAddress',
+        call: 'storagehost_getPaymentAddress',
+        params: 0,
+      })
+
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddress',
+        call: 'storagehost_setPaymentAddress',
+        params: 0,
+      })
+
+
       return [
         folders,
         addFolder,
         resizeFolder,
-        deleteFolder
+        deleteFolder,
+        availableSpace,
+        getConfig,
+        financialStats,
+        paymentAddress,
+        setPaymentAddress
       ];
     };
 
@@ -14065,7 +14083,7 @@ module.exports = Web3;
 
         new Property({
           name: 'sectorSize',
-          getter: 'storagehost_sectorsize',
+          getter: 'storagehost_sectorSize',
         }),
 
         new Property({

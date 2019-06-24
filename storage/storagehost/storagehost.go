@@ -135,8 +135,8 @@ func (h *StorageHost) getExternalConfig() storage.HostExtConfig {
 
 // getInternalConfig Return the internal config of host
 func (h *StorageHost) getInternalConfig() storage.HostIntConfig {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	return h.config
 }
