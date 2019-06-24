@@ -695,12 +695,11 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		}
 	}
 
-
 	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
 	}
 
-	timer := time.NewTimer(time.Second * 10)
+	timer := time.NewTimer(time.Minute * 1)
 
 	var conn *storage.Session
 	for {
@@ -740,17 +739,8 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 		// wait for connection stop
 		<-session.ClosedChan()
 
-		isStatic := false
-		staticNodeList := s.server.StaticNodes
-		for _, n := range staticNodeList {
-			if hostNode.ID() == n.ID() {
-				isStatic = true
-				break
-			}
-		}
-		if isStatic {
-			s.server.AddPeer(hostNode)
-		}
+		// retry add origin static node peer
+		s.server.AddPeer(hostNode)
 	}
 
 	return nil
@@ -760,6 +750,11 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
 	log.Warn("GetStorageHostSetting", "from", s.server.Self().String(), "to", hostEnodeURL)
 	session, err := s.SetupConnection(hostEnodeURL)
+	defer func() {
+		log.Error("getStorageHostSetting Disconnect")
+		s.Disconnect(session, hostEnodeURL)
+	}()
+
 	if err != nil {
 		return err
 	}
@@ -767,11 +762,6 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
 		return err
 	}
-
-	defer func() {
-		log.Error("getStorageHostSetting Disconnect")
-		s.Disconnect(session, hostEnodeURL)
-	}()
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
 		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())

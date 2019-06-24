@@ -364,7 +364,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 		defer pm.removeStorageContactSession(p.id)
 
-		if session.Inbound() {
+		if !p.Peer.Info().Network.StorageClient {
 			// host
 			for {
 				p.Log().Warn("inbound connection for loop", "id", getGID())

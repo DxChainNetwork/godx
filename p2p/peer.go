@@ -475,7 +475,6 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	if msg.Code >= rw.Length {
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
-	log.Warn("protoRW write msg", "msg origin code", msg.Code, "rw offset", rw.offset)
 	msg.Code += rw.offset
 	select {
 	case <-rw.wstart:
@@ -494,9 +493,7 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 func (rw *protoRW) ReadMsg() (Msg, error) {
 	select {
 	case msg := <-rw.in:
-		log.Warn("read msg", "read msgCode", msg.Code)
 		msg.Code -= rw.offset
-		log.Warn("minus rw.offset", "msgCode", msg.Code, "rw offset", rw.offset)
 		return msg, nil
 	case <-rw.closed:
 		return Msg{}, io.EOF
@@ -518,6 +515,8 @@ type PeerInfo struct {
 		Trusted         bool   `json:"trusted"`
 		Static          bool   `json:"static"`
 		StorageContract bool   `json:"storageContract"`
+		StorageClient   bool   `json:"storageClient"`
+		StorageHost     bool   `json:"storageHost"`
 	} `json:"network"`
 	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
 }
@@ -543,6 +542,7 @@ func (p *Peer) Info() *PeerInfo {
 	info.Network.Trusted = p.rw.is(trustedConn)
 	info.Network.Static = p.rw.is(staticDialedConn)
 	info.Network.StorageContract = p.rw.is(storageContractConn)
+	info.Network.StorageClient = p.rw.is(storageClientConn)
 
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
