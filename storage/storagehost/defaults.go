@@ -1,7 +1,6 @@
 package storagehost
 
 import (
-	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -98,16 +97,16 @@ func defaultConfig() storage.HostIntConfig {
 		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
 		WindowSize:           uint64(defaultWindowSize),
 
-		Deposit:       *big.NewInt(int64(defaultDeposit)),
-		DepositBudget: *big.NewInt(int64(defaultDepositBudget)),
-		MaxDeposit:    *big.NewInt(int64(defaultMaxDeposit)),
+		Deposit:       common.NewBigInt(int64(defaultDeposit)),
+		DepositBudget: common.NewBigInt(int64(defaultDepositBudget)),
+		MaxDeposit:    common.NewBigInt(int64(defaultMaxDeposit)),
 
-		MinBaseRPCPrice:           *big.NewInt(int64(defaultBaseRPCPrice)),
-		MinContractPrice:          *big.NewInt(int64(defaultContractPrice)),
-		MinDownloadBandwidthPrice: *big.NewInt(int64(defaultDownloadBandwidthPrice)),
-		MinSectorAccessPrice:      *big.NewInt(int64(defaultSectorAccessPrice)),
-		MinStoragePrice:           *big.NewInt(int64(defaultStoragePrice)),
-		MinUploadBandwidthPrice:   *big.NewInt(int64(defaultUploadBandwidthPrice)),
+		MinBaseRPCPrice:           common.NewBigInt(int64(defaultBaseRPCPrice)),
+		MinContractPrice:          common.NewBigInt(int64(defaultContractPrice)),
+		MinDownloadBandwidthPrice: common.NewBigInt(int64(defaultDownloadBandwidthPrice)),
+		MinSectorAccessPrice:      common.NewBigInt(int64(defaultSectorAccessPrice)),
+		MinStoragePrice:           common.NewBigInt(int64(defaultStoragePrice)),
+		MinUploadBandwidthPrice:   common.NewBigInt(int64(defaultUploadBandwidthPrice)),
 	}
 }
 

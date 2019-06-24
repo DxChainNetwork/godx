@@ -6,7 +6,6 @@ package storagehost
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -17,8 +16,6 @@ import (
 	"math/big"
 	"reflect"
 )
-
-var ()
 
 type (
 	//StorageResponsibility storage contract management and maintenance on the storage host side
@@ -122,6 +119,23 @@ func (so *StorageResponsibility) proofDeadline() uint64 {
 //Amount that can be obtained after fulfilling the responsibility
 func (so StorageResponsibility) value() common.BigInt {
 	return so.ContractCost.Add(so.PotentialDownloadRevenue).Add(so.PotentialStorageRevenue).Add(so.PotentialUploadRevenue).Add(so.RiskedStorageDeposit)
+}
+
+// storageResponsibilities fetches the set of storage Responsibility in the host and
+// returns metadata on them.
+func (h *StorageHost) storageResponsibilities() (sos []StorageResponsibility) {
+	if len(h.lockedStorageResponsibility) < 1 {
+		return nil
+	}
+	for i := range h.lockedStorageResponsibility {
+		so, err := GetStorageResponsibility(h.db, i)
+		if err != nil {
+			h.log.Warn("Failed to get storage responsibility", "err", err)
+			continue
+		}
+		sos = append(sos, so)
+	}
+	return sos
 }
 
 //Schedule a task to execute at the specified block number
@@ -309,7 +323,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 //pruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 	h.lock.Lock()
-	sos := h.StorageResponsibilities()
+	sos := h.storageResponsibilities()
 	h.lock.Unlock()
 	var scids []common.Hash
 	for _, so := range sos {
@@ -320,7 +334,6 @@ func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 			return errTransactionNotConfirmed
 		}
 	}
-	fmt.Println(2)
 
 	// Delete storage responsibility from the database.
 	err := h.deleteStorageResponsibilities(scids)
@@ -328,8 +341,6 @@ func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 		h.log.Warn("unable to delete responsibility", "err", err)
 		return err
 	}
-	fmt.Println(3)
-
 	// Update the financial metrics of the host.
 	return h.resetFinancialMetrics()
 }
@@ -401,13 +412,11 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
-	fmt.Println("locking")
 	h.lock.Lock()
-	fmt.Println("locked")
 	defer h.lock.Unlock()
 
 	fm := HostFinancialMetrics{}
-	sos := h.StorageResponsibilities()
+	sos := h.storageResponsibilities()
 	for _, so := range sos {
 		// Submit transaction fee first
 		fm.TransactionFeeExpenses = fm.TransactionFeeExpenses.Add(so.TransactionFeeExpenses)

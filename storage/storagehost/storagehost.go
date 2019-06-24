@@ -123,55 +123,6 @@ func (h *StorageHost) Close() error {
 	return err
 }
 
-// getExternalConfig return the host external config, which configure host through,
-// user should not able to modify the config
-func (h *StorageHost) getExternalConfig() storage.HostExtConfig {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	// mock the return of host external config
-	return h.externalConfig()
-}
-
-// getInternalConfig Return the internal config of host
-func (h *StorageHost) getInternalConfig() storage.HostIntConfig {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	return h.config
-}
-
-// getFinancialMetrics contains the information about the activities,
-// commitments, rewards of host
-func (h *StorageHost) getFinancialMetrics() HostFinancialMetrics {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
-	return h.financialMetrics
-}
-
-// print the persist directory of the host
-func (h *StorageHost) getPersistDir() string {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-
-	return h.persistDir
-}
-
-// SetIntConfig set the input hostconfig to the current host if check all things are good
-func (h *StorageHost) setIntConfig(config storage.HostIntConfig) error {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	h.config = config
-
-	// synchronize the config to file
-	if err := h.syncConfig(); err != nil {
-		return errors.New("internal config update fail: " + err.Error())
-	}
-	return nil
-}
-
 // load do the following things:
 // 1. load the config from file
 // 2. if the config file not found, create the config file, and use the default config
@@ -215,23 +166,6 @@ func (h *StorageHost) load() error {
 	return nil
 }
 
-// StorageResponsibilities fetches the set of storage Responsibility in the host and
-// returns metadata on them.
-func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
-	if len(h.lockedStorageResponsibility) < 1 {
-		return nil
-	}
-	for i := range h.lockedStorageResponsibility {
-		so, err := GetStorageResponsibility(h.db, i)
-		if err != nil {
-			h.log.Warn("Failed to get storage responsibility", "err", err)
-			continue
-		}
-		sos = append(sos, so)
-	}
-	return sos
-}
-
 // getPaymentAddress get the current payment address. If no address is set, assign the first
 // account address as the payment address
 func (h *StorageHost) getPaymentAddress() (common.Address, error) {
@@ -249,9 +183,186 @@ func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 			paymentAddress := accs[0].Address
 			//the first address in the local wallet will be used as the paymentAddress by default.
 			h.config.PaymentAddress = paymentAddress
-			h.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			if err := h.syncConfig(); err != nil {
+				return common.Address{}, fmt.Errorf("cannot save host config: %v", err)
+			}
 			return paymentAddress, nil
 		}
 	}
 	return common.Address{}, errors.New("no wallet accounts available")
+}
+
+// getExternalConfig return the host external config, which configure host through,
+// user should not able to modify the config
+func (h *StorageHost) getExternalConfig() storage.HostExtConfig {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	// mock the return of host external config
+	return h.externalConfig()
+}
+
+// getInternalConfig Return the internal config of host
+func (h *StorageHost) getInternalConfig() storage.HostIntConfig {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	return h.config
+}
+
+// getFinancialMetrics contains the information about the activities,
+// commitments, rewards of host
+func (h *StorageHost) getFinancialMetrics() HostFinancialMetrics {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.financialMetrics
+}
+
+// print the persist directory of the host
+func (h *StorageHost) getPersistDir() string {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	return h.persistDir
+}
+
+// setAcceptContracts set the HostIntConfig.AcceptingContracts to value
+func (h *StorageHost) setAcceptContracts(val bool) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.AcceptingContracts = val
+	return h.syncConfig()
+}
+
+// setMaxDownloadBatch set the MaxDownloadBatchSize
+func (h *StorageHost) setMaxDownloadBatchSize(val uint64) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MaxDownloadBatchSize = val
+	return h.syncConfig()
+}
+
+// setMaxDuration set the MaxDuration
+func (h *StorageHost) setMaxDuration(val uint64) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MaxDuration = val
+	return h.syncConfig()
+}
+
+// setMaxReviseBatchSize set the MaxReviseBatchSize
+func (h *StorageHost) setMaxReviseBatchSize(val uint64) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MaxReviseBatchSize = val
+	return h.syncConfig()
+}
+
+// setWindowSize set the WindowSize
+func (h *StorageHost) setWindowSize(val uint64) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.WindowSize = val
+	return h.syncConfig()
+}
+
+// setPaymentAddress set the account to the address
+func (h *StorageHost) setPaymentAddress(addr common.Address) error {
+	account := accounts.Account{Address: addr}
+	_, err := h.ethBackend.AccountManager().Find(account)
+	if err != nil {
+		return errors.New("unknown account")
+	}
+	h.lock.Lock()
+	defer h.lock.Unlock()
+	h.config.PaymentAddress = addr
+
+	return h.syncConfig()
+}
+
+// setDeposit set the deposit to val
+func (h *StorageHost) setDeposit(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.Deposit = val
+	return h.syncConfig()
+}
+
+// setDepositBudget set the DepositBudget to val
+func (h *StorageHost) setDepositBudget(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.DepositBudget = val
+	return h.syncConfig()
+}
+
+// setMaxDeposit set the MaxDeposit to val
+func (h *StorageHost) setMaxDeposit(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MaxDeposit = val
+	return h.syncConfig()
+}
+
+// setMinBaseRPCPrice set the MinBaseRPCPrice to val
+func (h *StorageHost) setMinBaseRPCPrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinBaseRPCPrice = val
+	return h.syncConfig()
+}
+
+// setMinContractPrice set the MinContractPrice to val
+func (h *StorageHost) setMinContractPrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinContractPrice = val
+	return h.syncConfig()
+}
+
+// setMinDownloadBandwidthPrice set the MinDownloadBandwidthPrice to val
+func (h *StorageHost) setMinDownloadBandwidthPrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinDownloadBandwidthPrice = val
+	return h.syncConfig()
+}
+
+// setMinSectorAccessPrice set the MinSectorAccessPrice to val
+func (h *StorageHost) setMinSectorAccessPrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinSectorAccessPrice = val
+	return h.syncConfig()
+}
+
+// setMinStoragePrice set the MinStoragePrice to val
+func (h *StorageHost) setMinStoragePrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinStoragePrice = val
+	return h.syncConfig()
+}
+
+// setMinUploadBandwidthPrice set the MinUploadBandwidthPrice to val
+func (h *StorageHost) setMinUploadBandwidthPrice(val common.BigInt) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	h.config.MinUploadBandwidthPrice = val
+	return h.syncConfig()
 }

@@ -61,7 +61,6 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		return storage.HostExtConfig{AcceptingContracts: false}
 	}
 
-	// TODO: refactor the following code, make this command in eth api or in account manager api
 	account := accounts.Account{Address: paymentAddress}
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
@@ -81,8 +80,8 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	} else {
 		balance := stateDB.GetBalance(paymentAddress)
 		//If the maximum deposit amount exceeds the account balance, set it as the account balance
-		if balance.Cmp(&MaxDeposit) < 0 {
-			MaxDeposit = *balance
+		if balance.Cmp(MaxDeposit.BigIntPtr()) < 0 {
+			MaxDeposit = common.PtrBigInt(balance)
 		}
 	}
 
@@ -96,14 +95,14 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		PaymentAddress:         paymentAddress,
 		TotalStorage:           totalStorageSpace,
 		RemainingStorage:       remainingStorageSpace,
-		Deposit:                common.NewBigInt(h.config.Deposit.Int64()),
-		MaxDeposit:             common.NewBigInt(MaxDeposit.Int64()),
-		BaseRPCPrice:           common.NewBigInt(h.config.MinBaseRPCPrice.Int64()),
-		ContractPrice:          common.NewBigInt(h.config.MinContractPrice.Int64()),
-		DownloadBandwidthPrice: common.NewBigInt(h.config.MinDownloadBandwidthPrice.Int64()),
-		SectorAccessPrice:      common.NewBigInt(h.config.MinSectorAccessPrice.Int64()),
-		StoragePrice:           common.NewBigInt(h.config.MinStoragePrice.Int64()),
-		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
+		Deposit:                h.config.Deposit,
+		MaxDeposit:             MaxDeposit,
+		BaseRPCPrice:           h.config.MinBaseRPCPrice,
+		ContractPrice:          h.config.MinContractPrice,
+		DownloadBandwidthPrice: h.config.MinDownloadBandwidthPrice,
+		SectorAccessPrice:      h.config.MinSectorAccessPrice,
+		StoragePrice:           h.config.MinStoragePrice,
+		UploadBandwidthPrice:   h.config.MinUploadBandwidthPrice,
 		Version:                storage.ConfigVersion,
 	}
 }

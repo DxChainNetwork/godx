@@ -218,12 +218,12 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	// Check that the collateral does not exceed the maximum amount of
 	// collateral allowed.
 	depositMinusContractPrice := common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(externalConfig.ContractPrice)
-	if depositMinusContractPrice.Cmp(common.NewBigInt(config.MaxDeposit.Int64())) > 0 {
+	if depositMinusContractPrice.Cmp(config.MaxDeposit) > 0 {
 		return errMaxCollateralReached
 	}
 	// Check that the host has enough room in the collateral budget to add this
 	// collateral.
-	if lockedStorageDeposit.Add(depositMinusContractPrice).Cmp(common.NewBigInt(config.DepositBudget.Int64())) > 0 {
+	if lockedStorageDeposit.Add(depositMinusContractPrice).Cmp(config.DepositBudget) > 0 {
 		return errCollateralBudgetExceeded
 	}
 

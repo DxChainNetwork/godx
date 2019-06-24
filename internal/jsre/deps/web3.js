@@ -14038,18 +14038,107 @@ module.exports = Web3;
         params: 0,
       })
 
+      var announce = new Method({
+        name: 'announce',
+        call: 'storagehost_announce',
+        params: 0,
+      })
+
       var paymentAddress = new Method({
         name: 'getPaymentAddress',
         call: 'storagehost_getPaymentAddress',
         params: 0,
       })
 
+      var setAcceptingContracts = new Method({
+        name: 'setAcceptingContracts',
+        call: 'storagehost_setAcceptingContracts',
+        params: 1,
+      })
+
+      var setMaxDownloadBatch = new Method({
+        name: 'setMaxDownloadBatchSize',
+        call: 'storagehost_setMaxDownloadBatchSize',
+        params: 1,
+      })
+
+      var setMaxDuration = new Method({
+        name: 'setMaxDuration',
+        call: 'storagehost_setMaxDuration',
+        params: 1,
+      })
+
+      var setMaxReviseBatchSize = new Method({
+        name: 'setMaxReviseBatchSize',
+        call: 'storagehost_setMaxReviseBatchSize',
+        params: 1,
+      })
+
+      var setWindowsSize = new Method({
+        name: 'setWindowSize',
+        call: 'storagehost_setWindowSize',
+        params: 1,
+      })
+
       var setPaymentAddress = new Method({
         name: 'setPaymentAddress',
         call: 'storagehost_setPaymentAddress',
-        params: 0,
+        params: 1,
       })
 
+      var setDeposit = new Method({
+        name: 'setDeposit',
+        call: 'storagehost_setDeposit',
+        params: 1,
+      })
+
+      var setDepositBudget = new Method({
+        name: 'setDepositBudget',
+        call: 'storagehost_setDepositBudget',
+        params: 1,
+      })
+
+      var setMaxDeposit = new Method({
+        name: 'setMaxDeposit',
+        call: 'storagehost_setMaxDeposit',
+        params: 1,
+      })
+
+      var setMinBaseRPCPrice = new Method({
+        name: 'setMinBaseRPCPrice',
+        call: 'storagehost_setMinBaseRPCPrice',
+        params: 1,
+      })
+
+      var setMinContractPrice = new Method({
+        name: 'setMinContractPrice',
+        call: 'storagehost_setMinContractPrice',
+        params: 1,
+      })
+
+      var setMinDownloadBandwidthPrice = new Method({
+        name: 'setMinDownloadBandwidthPrice',
+        call: 'storagehost_setMinDownloadBandwidthPrice',
+        params: 1,
+      })
+
+      var setMinSectorAccessPrice = new Method({
+        name: 'setMinSectorAccessPrice',
+        call: 'storagehost_setMinSectorAccessPrice',
+        params: 1,
+      })
+
+      var setMinStoragePrice = new Method({
+        name: 'setMinStoragePrice',
+        call: 'storagehost_setMinStoragePrice',
+        params: 1,
+      })
+
+      var setMinUploadBandwidthPrice = new Method({
+        name: 'setMinUploadBandwidthPrice',
+        call: 'storagehost_setMinUploadBandwidthPrice',
+        params: 1,
+      })
 
       return [
         folders,
@@ -14057,10 +14146,23 @@ module.exports = Web3;
         resizeFolder,
         deleteFolder,
         availableSpace,
-        getConfig,
-        financialStats,
+        announce,
         paymentAddress,
-        setPaymentAddress
+        setAcceptingContracts,
+        setMaxDownloadBatch,
+        setMaxDuration,
+        setMaxReviseBatchSize,
+        setWindowsSize,
+        setPaymentAddress,
+        setDeposit,
+        setDepositBudget,
+        setMaxDeposit,
+        setMinBaseRPCPrice,
+        setMinContractPrice,
+        setMinDownloadBandwidthPrice,
+        setMinSectorAccessPrice,
+        setMinStoragePrice,
+        setMinUploadBandwidthPrice,
       ];
     };
 
