@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -442,6 +443,8 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	}
 
 	if s.IsBusy() {
+		// wait for 3 seconds and retry
+		<-time.After(3 * time.Second)
 		log.Warn("session is busy, we will retry later")
 		return nil
 	}

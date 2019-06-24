@@ -126,6 +126,8 @@ type Session struct {
 
 	// upload and download tash is done, signal the renew goroutine
 	revisionDone chan struct{}
+
+	maxUploadDownloadSectorNum uint32
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
@@ -169,6 +171,14 @@ func (s *Session) IsBusy() bool {
 // when we renew but upload or download now, we wait for the revision done
 func (s *Session) RevisionDone() chan struct{} {
 	return s.revisionDone
+}
+
+func (s *Session) AddMaxUploadDownloadSectorNum(n uint32) {
+	atomic.AddUint32(&s.maxUploadDownloadSectorNum, n)
+}
+
+func (s *Session) LoadMaxUploadDownloadSectorNum() uint32{
+	return atomic.LoadUint32(&s.maxUploadDownloadSectorNum)
 }
 
 func (s *Session) getConn() net.Conn {

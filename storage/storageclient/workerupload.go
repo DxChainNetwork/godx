@@ -114,42 +114,24 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
-	contractID := w.contract.ID
-
-	// we must make sure that renew and revision consistency
-	w.client.sessionLock.Lock()
-
-	// Renew is doing, refuse upload/download
-	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Info("renew contract is doing, can't upload", "contractID", contractID.String())
-		w.uploadFailed(uc, sectorIndex)
-		return
-	}
-
-	// Setup an active connection to the host and we will reuse previous connection
-	session, ok := w.client.sessionSet[contractID]
-	if !ok || session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
-		if err != nil {
-			w.client.log.Error("Worker failed to setup an connection", "err", err)
-			w.uploadFailed(uc, sectorIndex)
-			return
-		}
-
-		w.client.sessionSet[contractID] = s
-		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
-			s.SetHostInfo(&hostInfo)
-		}
-		session = s
-	}
-
-	// Set flag true while uploading
-	session.SetBusy()
+	session, err := w.checkSession()
 	defer func() {
 		session.ResetBusy()
 		session.RevisionDone() <- struct{}{}
+
+		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
+			delete(w.client.sessionSet, w.contract.ID)
+			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+				w.client.log.Error("close session failed", "err", err)
+			}
+		}
 	}()
-	w.client.sessionLock.Unlock()
+
+	if err != nil {
+		w.client.log.Error("check session failed", "err", err)
+		w.uploadFailed(uc, sectorIndex)
+		return
+	}
 
 	// upload segment to host
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])

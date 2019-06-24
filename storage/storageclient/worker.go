@@ -5,6 +5,7 @@
 package storageclient
 
 import (
+	"github.com/pkg/errors"
 	"sync"
 	"time"
 
@@ -191,26 +192,37 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	return nextSegment
 }
 
-// Actually perform a download task
-func (w *worker) download(uds *unfinishedDownloadSegment) {
-
+// check the session isRew, busy, exceed the max upload/download sector limit
+func (w *worker) checkSession() (*storage.Session, error) {
 	// we must make sure that renew and revision consistency
 	w.client.sessionLock.Lock()
+	defer w.client.sessionLock.Unlock()
 
 	// check this contract whether is renewing
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Debug("renew contract is doing, can't download")
-		return
+		w.client.log.Debug("renew contract is doing, can't upload/download")
+		return nil, errors.New("contract is renewing")
 	}
 
 	// Setup an active connection to the host and we will reuse previous connection
-	session, ok := w.client.sessionSet[contractID]
-	if !ok || session == nil || session.IsClosed() {
+	session, _ := w.client.sessionSet[contractID]
+	if session != nil {
+		if session.IsBusy() {
+			w.client.log.Error("session is busy[hostsetting, uploading/downloading, contractcreate]")
+			return nil, errors.New("session is busy")
+		}
+
+		if session.IsClosed(){
+			delete(w.client.sessionSet, contractID)
+		}
+	}
+
+	if session == nil || session.IsClosed() {
 		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
 		if err != nil {
-			w.client.log.Error("failed to connect host for file downloading", "host_url", w.contract.EnodeID.String())
-			return
+			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String())
+			return nil, errors.New("failed to create connection")
 		}
 
 		w.client.sessionSet[contractID] = s
@@ -221,12 +233,30 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	// Set flag true while uploading
-	session.SetBusy()
+	session.AddMaxUploadDownloadSectorNum(1)
+
+	return session, nil
+}
+
+// Actually perform a download task
+func (w *worker) download(uds *unfinishedDownloadSegment) {
+	session, err := w.checkSession()
 	defer func() {
 		session.ResetBusy()
 		session.RevisionDone() <- struct{}{}
+
+		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
+			delete(w.client.sessionSet, w.contract.ID)
+			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+				w.client.log.Error("close session failed", "err", err)
+			}
+		}
 	}()
-	w.client.sessionLock.Unlock()
+
+	if err != nil {
+		w.client.log.Error("check session failed", "err", err)
+		return
+	}
 
 	// check the uds whether can be the worker performed
 	uds = w.processDownloadSegment(uds)

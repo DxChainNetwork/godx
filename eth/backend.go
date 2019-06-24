@@ -706,6 +706,7 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 	for {
 		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
 		if conn != nil {
+			conn.SetBusy()
 			return conn, nil
 		}
 
