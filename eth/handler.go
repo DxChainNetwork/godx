@@ -17,11 +17,14 @@
 package eth
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/big"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -362,21 +365,35 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		defer pm.removeStorageContactSession(p.id)
 
 		if session.Inbound() {
+			// host
 			for {
+				p.Log().Warn("inbound connection for loop", "id", getGID())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
 					p.Log().Error("Storage host handle session message failed", "err", err)
 					return err
 				}
 			}
 		} else {
+			// client
 			select {
 			case err := <-session.ClientDiscChan():
+				p.Log().Warn("client close the connection", "err", err.Error())
 				return err
 			case <-session.Peer.ClosedChan():
+				p.Log().Warn("host close connection and then ClosedChan DX SESSION CLOSED")
 				return errors.New("DX session is closed")
 			}
 		}
 	}
+}
+
+func getGID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote

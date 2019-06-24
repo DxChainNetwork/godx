@@ -4,6 +4,7 @@
 package storageclient
 
 import (
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
 )
@@ -43,6 +44,7 @@ func (w *worker) killUploading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
+		log.Error("killUploading: disconnect")
 		delete(w.client.sessionSet, contractID)
 		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
 			w.client.log.Error("can't close connection after uploading", "error", err)

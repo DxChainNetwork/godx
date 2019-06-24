@@ -18,10 +18,8 @@ package p2p
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"io"
 	"io/ioutil"
 	"sync/atomic"
@@ -97,9 +95,6 @@ func Send(w MsgWriter, msgcode uint64, data interface{}) error {
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {
 		return err
-	}
-	if d, ok := data.(*protoHandshake); ok {
-		log.Warn("rlpxRW send handshake", "msgCode", msgcode, "ID", hex.EncodeToString(d.ID), "name", d.Name, "version", d.Version, "flags", int32(d.flags), "encodeMsgSize", size)
 	}
 	return w.WriteMsg(Msg{Code: msgcode, Size: uint32(size), Payload: r})
 }

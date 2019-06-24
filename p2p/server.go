@@ -201,7 +201,7 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int32
+type connFlag uint32
 
 const (
 	dynDialedConn connFlag = 1 << iota
@@ -256,7 +256,7 @@ func (c *conn) String() string {
 
 // returns connection flag in string format
 func (f connFlag) String() string {
-	s := ""
+	s := "-somethingelse"
 	if f&trustedConn != 0 {
 		s += "-trusted"
 	}
@@ -269,29 +269,32 @@ func (f connFlag) String() string {
 	if f&inboundConn != 0 {
 		s += "-inbound"
 	}
+	if f&storageContractConn != 0 {
+		s += "-storageContractConn"
+	}
 	if s != "" {
 		s = s[1:]
 	}
 	return s
 }
 
-// check if the connection flags are equivalent
+// check if the connection Flags are equivalent
 func (c *conn) is(f connFlag) bool {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	flags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 	return flags&f != 0
 }
 
 // mark/unmark the connection flag
 func (c *conn) set(f connFlag, val bool) {
 	for {
-		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		oldFlags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 		flags := oldFlags
 		if val {
 			flags |= f
 		} else {
 			flags &= ^f
 		}
-		if atomic.CompareAndSwapInt32((*int32)(&c.flags), int32(oldFlags), int32(flags)) {
+		if atomic.CompareAndSwapUint32((*uint32)(&c.flags), uint32(oldFlags), uint32(flags)) {
 			return
 		}
 	}
@@ -807,7 +810,6 @@ running:
 			// This channel is used by AddPeer to add to the
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
-			srv.log.Warn("Adding static node", "node", n)
 			// add node to dialstate static field, which contains a list of static fields
 			// waiting for the connection
 			dialstate.addStatic(n)
@@ -820,7 +822,6 @@ running:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected.
-			srv.log.Warn("Removing static node", "node", n)
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
@@ -832,7 +833,6 @@ running:
 		case n := <-srv.addtrusted:
 			// This channel is used by AddTrustedPeer to add an enode
 			// to the trusted node set.
-			srv.log.Warn("Adding trusted node", "node", n)
 			trusted[n.ID()] = true
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID()]; ok {
@@ -844,7 +844,6 @@ running:
 		case n := <-srv.removetrusted:
 			// This channel is used by RemoveTrustedPeer to remove an enode
 			// from the trusted node set.
-			srv.log.Warn("Removing trusted node", "node", n)
 			if _, ok := trusted[n.ID()]; ok {
 				delete(trusted, n.ID())
 			}
@@ -854,19 +853,18 @@ running:
 			}
 
 		case n := <-srv.addStorageContract:
-			srv.log.Warn("Adding storage contract node", "node", n)
 			storageContract[n.ID()] = true
-			// Mark any already-connected peer as trusted
+			// Mark any already-connected peer as storageContractConn
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageContractConn, true)
 			}
 
 		case n := <-srv.removeStorageContract:
-			srv.log.Trace("Removing storage contract node", "node", n)
+			srv.log.Debug("Removing storage contract node", "node", n)
 			if _, ok := storageContract[n.ID()]; ok {
 				delete(storageContract, n.ID())
 			}
-			// Unmark any already-connected peer as trusted
+			// Unmark any already-connected peer as storageContractConn
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageContractConn, false)
 			}
@@ -903,11 +901,9 @@ running:
 				// Ensure that the trusted flag is set before checking against MaxPeers.
 				c.flags |= trustedConn
 			}
-			srv.log.Warn("before storage contractID flag set", "c.flags", int32(c.flags), "storageContractLength", len(storageContract), "nodeID", c.node.ID().String(), "isExistThisNode", storageContract[c.node.ID()])
 			if storageContract[c.node.ID()] {
 				c.flags |= storageContractConn
 			}
-			srv.log.Warn("after storage contractID flag set", "c.flags", int32(c.flags))
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
 			select {
 			case c.cont <- srv.encHandshakeChecks(peers, inboundCount, c):
@@ -1190,7 +1186,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	// changed field: node, fd (fd changed through function handshakeDone)
 	// if error occurred, return the error directly before protocol handshake
 	err = srv.checkpoint(c, srv.posthandshake)
-	srv.log.Warn("function after connection flags", "flags", int32(c.flags))
 	if err != nil {
 		clog.Trace("Rejected peer before protocol handshake", "err", err)
 		return err
@@ -1198,23 +1193,13 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 
 	// Run the protocol handshake with passed in ourHandshake object (protoHandshake)
 	// a list of protocols supported by the destination node will be returned
-
-	if c.is(storageContractConn) {
-		srv.log.Warn("CONNECTION IS storage connection")
-		srv.ourHandshake.flags |= storageContractConn
-	}
-	srv.log.Error("[doProtoHandshake] send host ourhandshake info", "ID", hex.EncodeToString(srv.ourHandshake.ID), "flags", int32(srv.ourHandshake.flags), "name", srv.ourHandshake.Name, "version", srv.ourHandshake.Version)
+	srv.ourHandshake.Flags = c.flags
 
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
 		return err
-	}
-
-	srv.log.Error("[doProtoHandshake] read client handshake", "ID", hex.EncodeToString(phs.ID), "flags", int32(phs.flags), "name", phs.Name, "version", phs.Version)
-	for _, cap := range phs.Caps {
-		srv.log.Warn("protocol", "name", cap.Name, "version", cap.Version)
 	}
 
 	// check the node ID against the ID contained in the protoHandshake ID
@@ -1225,10 +1210,8 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// destination node supported protocol
-	if phs.flags&storageContractConn != 0 {
-		srv.log.Warn("client connection flag", "flagsInfo", int32(phs.flags))
+	if phs.Flags&storageContractConn != 0 {
 		c.set(storageContractConn, true)
-		srv.log.Warn("host set connection flag", "flag", int32(c.flags))
 	}
 	c.caps, c.name = phs.Caps, phs.Name
 

@@ -667,13 +667,22 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 
 	// First we check storage contract session set have already connection with this node
 	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
-	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil {
+	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil && !conn.IsBusy() {
 		return conn, nil
+	} else if conn != nil && conn.IsBusy() {
+		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
 	}
 
 	// First we disconnect the ethereum connection
 	s.server.RemovePeer(hostNode)
+	timeout := time.After(10 * time.Second)
 	for {
+		select {
+		case <-timeout:
+			return nil, errors.New("remove original peer timeout")
+		default:
+		}
+
 		found := false
 		peers := s.server.PeersInfo()
 		for _, p := range peers {
@@ -686,7 +695,6 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		}
 	}
 
-	log.Warn("Remove peer", "removed peer", hostNode.String(), "remain", s.server.PeersInfo())
 
 	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
 		return nil, err
@@ -725,6 +733,7 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 	}
 
 	if session != nil {
+		log.Error("sending disconnect signal")
 		session.StopConnection()
 
 		// wait for connection stop
@@ -757,14 +766,20 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
 		return err
 	}
-	defer s.Disconnect(session, hostEnodeURL)
+
+	defer func() {
+		log.Error("getStorageHostSetting Disconnect")
+		s.Disconnect(session, hostEnodeURL)
+	}()
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
+		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())
 		return err
 	}
 
 	msg, err := session.ReadMsg()
 	if err != nil {
+		log.Error("GetStorageHostSetting readMSG", "err", err.Error())
 		return err
 	}
 
@@ -775,6 +790,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	}
 
 	if err := msg.Decode(config); err != nil {
+		log.Error("failed to decode", "err", err.Error())
 		return err
 	}
 
