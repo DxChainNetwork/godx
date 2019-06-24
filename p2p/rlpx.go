@@ -27,7 +27,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -155,7 +154,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 	if err != nil {
 		return nil, err
 	}
-	log.Warn("readProtocolHandshake", "msgCode", msg.Code, "msgSize", msg.Size, "msgString", msg.String())
+
 	if msg.Size > baseProtocolMaxMsgSize {
 		return nil, fmt.Errorf("message too big")
 	}
