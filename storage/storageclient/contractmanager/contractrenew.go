@@ -118,6 +118,9 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
+	// initialize remaining fund first
+	remainingFund = clientRemainingFund
+
 	// loop through all contracts that need to be renewed, and prepare to renew the contract
 	for _, record := range renewRecords {
 		// verify that the cost needed for contract renew does not exceed the clientRemainingFund
