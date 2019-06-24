@@ -549,7 +549,7 @@ func (cm *ContractManager) updateContractStatus(id storage.ContractID, status st
 	// return the contract after the function return
 	defer func() {
 		if err := cm.activeContracts.Return(contract); err != nil {
-			cm.log.Warn("failed to return the contract, it has been deleted already")
+			cm.log.Warn("failed to return the contract, it has been deleted already", "err", err.Error())
 		}
 	}()
 
