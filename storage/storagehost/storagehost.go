@@ -113,6 +113,8 @@ func (h *StorageHost) Close() error {
 	newErr := h.StorageManager.Close()
 	err = common.ErrCompose(err, newErr)
 
+	h.db.Close()
+
 	newErr = h.syncConfig()
 	err = common.ErrCompose(err, newErr)
 	return err

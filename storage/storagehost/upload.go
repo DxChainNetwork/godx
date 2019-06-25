@@ -103,7 +103,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
-	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
+	if err := verifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
