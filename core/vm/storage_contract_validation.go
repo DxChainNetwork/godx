@@ -35,7 +35,6 @@ var (
 	errStorageContractWindowEndViolation   = errors.New("storage contract window must end at least one block after it starts")
 	errStorageContractWindowStartViolation = errors.New("storage contract window must start in the future")
 
-	errTimelockNotSatisfied  = errors.New("timelock has not been met")
 	errLateRevision          = errors.New("storage contract revision submitted after deadline")
 	errLowRevisionNumber     = errors.New("transaction has a storage contract with an outdated revision number")
 	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
@@ -85,7 +84,8 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 		missedProofOutputSum = missedProofOutputSum.Add(missedProofOutputSum, output.Value)
 	}
 
-	payout := sc.ClientCollateral.Value.Add(sc.ClientCollateral.Value, sc.HostCollateral.Value)
+	payout := new(big.Int).SetInt64(0)
+	payout.Add(sc.ClientCollateral.Value, sc.HostCollateral.Value)
 	if validProofOutputSum.Cmp(payout) != 0 {
 		return errStorageContractValidOutputSumViolation
 	}
