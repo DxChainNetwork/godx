@@ -536,7 +536,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := VerifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		return ExtendErr("host verify storage contract failed", err)
+		return ExtendErr("host verify storage contract failed ", err)
 	}
 
 	// 2. After check, send host contract sign to client

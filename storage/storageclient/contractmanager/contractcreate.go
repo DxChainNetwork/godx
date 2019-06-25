@@ -328,6 +328,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err := msg.Decode(&hostRevisionSign); err != nil {
 		return storage.ContractMetaData{}, err
 	}
+	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {

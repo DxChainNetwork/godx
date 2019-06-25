@@ -151,7 +151,7 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo
 }
 
 func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
-	return sc.ethBackend.SetupConnection(hostEnodeUrl)
+	return sc.ethBackend.SetupStorageConnection(hostEnodeUrl)
 }
 func (sc *StorageClient) AccountManager() *accounts.Manager {
 	return sc.ethBackend.AccountManager()

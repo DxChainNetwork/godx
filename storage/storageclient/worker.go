@@ -219,7 +219,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	}
 
 	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
+		s, err := w.client.ethBackend.SetupStorageConnection(w.contract.EnodeID.String())
 		if err != nil {
 			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String())
 			return nil, errors.New("failed to create connection")
