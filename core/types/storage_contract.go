@@ -21,7 +21,6 @@ type HostAnnouncement struct {
 }
 
 type UnlockConditions struct {
-	Timelock           uint64           `json:"timelock"`
 	PaymentAddresses   []common.Address `json:"paymentaddress"`
 	SignaturesRequired uint64           `json:"signaturesrequired"`
 }
@@ -108,7 +107,6 @@ func (sc StorageContract) ID() common.Hash {
 // UnlockHash calculate the hash of UnlockCondition
 func (uc UnlockConditions) UnlockHash() common.Hash {
 	return rlpHash([]interface{}{
-		uc.Timelock,
 		uc.PaymentAddresses,
 		uc.SignaturesRequired,
 	})

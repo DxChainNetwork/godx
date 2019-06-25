@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"hash"
 	"math/big"
 	"reflect"
@@ -21,6 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -131,10 +131,6 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	}
 	if bytes.Equal(flag, ProofedStatus) {
 		return errors.New("can not revision after storage proof")
-	}
-
-	if scr.UnlockConditions.Timelock > currentHeight {
-		return errTimelockNotSatisfied
 	}
 
 	// check that start and expiration are reasonable values.
@@ -294,7 +290,6 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 		}
 
 		uc = types.UnlockConditions{
-			Timelock:           currentHeight,
 			PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(*clientPubkey), crypto.PubkeyToAddress(*hostPubkey)},
 			SignaturesRequired: 2,
 		}
