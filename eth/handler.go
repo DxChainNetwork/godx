@@ -277,6 +277,7 @@ func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *p
 // handle is the callback invoked to manage the life cycle of an eth peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
+	p.Log().Warn("handle peer function", "peerInfo", p.Peer.Info())
 	if !p.Peer.Info().Network.StorageContract {
 		// Ignore maxPeers if this is a trusted peer
 		if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
@@ -348,7 +349,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	} else {
-		p.Log().Debug("DX session connected", "name", p.Name())
+		p.Log().Warn("DX session connected", "info", p.Peer.Info())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
@@ -360,18 +361,23 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 		defer pm.removeStorageContactSession(p.id)
 
-		if session.Inbound() {
+		if !p.Peer.Info().Network.StorageClient {
+			// host
 			for {
+				p.Log().Warn("inbound connection for loop", "remote client", p.Peer.Node().String())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
-					p.Log().Debug("Storage host handle session message failed", "err", err)
+					p.Log().Error("Storage host handle session message failed", "err", err)
 					return err
 				}
 			}
 		} else {
+			// client
 			select {
 			case err := <-session.ClientDiscChan():
+				p.Log().Warn("client close the connection", "err", err.Error())
 				return err
 			case <-session.Peer.ClosedChan():
+				p.Log().Warn("host close connection and then ClosedChan DX SESSION CLOSED")
 				return errors.New("DX session is closed")
 			}
 		}

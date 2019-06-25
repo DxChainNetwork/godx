@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -101,7 +102,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		StoragePrice:           common.NewBigInt(h.config.MinStoragePrice.Int64()),
 		UploadBandwidthPrice:   common.NewBigInt(h.config.MinUploadBandwidthPrice.Int64()),
 		RevisionNumber:         h.revisionNumber,
-		Version:                storage.ConfigVersion,
+		Version:                "Mzhang Testing",
 	}
 }
 
@@ -437,28 +438,52 @@ func (h *StorageHost) loadDefaults() {
 }
 
 func (h *StorageHost) HandleSession(s *storage.Session) error {
+	if s == nil {
+		return errors.New("host session is nil")
+	}
+
+	if s.IsBusy() {
+		// wait for 3 seconds and retry
+		<-time.After(3 * time.Second)
+		log.Warn("session is busy, we will retry later")
+		return nil
+	}
+
 	msg, err := s.ReadMsg()
 	if err != nil {
+		log.Error("read message error", "err", err.Error())
 		return err
 	}
+
 	if handler, ok := handlerMap[msg.Code]; ok {
 		return handler(h, s, msg)
+	} else {
+		log.Error("failed to get handler", "message", msg.Code)
+		return errors.New("failed to get handler")
 	}
-	return nil
 }
 
 func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	s.SetDeadLine(storage.HostSettingTime)
 
 	settings := h.externalConfig()
-	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+	if err := s.SendHostExtSettingsResponse(settings); err != nil {
+		log.Error("SendHostExtSettingResponse Error", "err", err)
 		return errors.New("host setting request done")
-	} else {
-		return err
 	}
+
+	log.Error("successfully sent the host external setting response")
+
+	return nil
 }
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	// this RPC call contains two request/response exchanges.
 	s.SetDeadLine(storage.ContractCreateTime)
 
@@ -511,7 +536,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := VerifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		return ExtendErr("host verify storage contract failed", err)
+		return ExtendErr("host verify storage contract failed ", err)
 	}
 
 	// 2. After check, send host contract sign to client
@@ -614,6 +639,9 @@ func renewBaseDeposit(so StorageResponsibility, settings storage.HostExtConfig, 
 }
 
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	s.SetDeadLine(storage.ContractRevisionTime)
 
 	// Read upload request
@@ -789,6 +817,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 }
 
 func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	s.SetDeadLine(storage.DownloadTime)
 
 	// read the download request.

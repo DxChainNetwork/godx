@@ -141,7 +141,7 @@ func (b *BackendTest) GetBlockChain() *core.BlockChain {
 	return &core.BlockChain{}
 }
 
-func (b *BackendTest) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+func (b *BackendTest) SetupStorageConnection(hostEnodeUrl string) (*storage.Session, error) {
 	return &storage.Session{}, nil
 }
 

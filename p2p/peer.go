@@ -62,7 +62,7 @@ type protoHandshake struct {
 	Caps       []Cap  // list of protocols supported
 	ListenPort uint64
 	ID         []byte // secp256k1 public key
-	flags      connFlag
+	Flags      connFlag
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
@@ -383,8 +383,13 @@ func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[stri
 	offset := baseProtocolLength // 16
 	result := make(map[string]*protoRW)
 
+	for _, proto := range protocols {
+		log.Warn("match protocol[Self]", "name", proto.Name, "version", proto.Version, "length", proto.Length)
+	}
+
 outer:
 	for _, cap := range caps {
+		log.Warn("match protocol[Conn]", "name", cap.Name, "version", cap.Version)
 		for _, proto := range protocols {
 			if proto.Name == cap.Name && proto.Version == cap.Version {
 				// If an old protocol version matched, revert it
@@ -398,6 +403,9 @@ outer:
 				continue outer
 			}
 		}
+	}
+	for k, v := range result {
+		log.Warn("match protocol result", "name", k, "version", v.Version, "offset", v.offset, "length", v.Length)
 	}
 	return result
 }
@@ -507,6 +515,8 @@ type PeerInfo struct {
 		Trusted         bool   `json:"trusted"`
 		Static          bool   `json:"static"`
 		StorageContract bool   `json:"storageContract"`
+		StorageClient   bool   `json:"storageClient"`
+		StorageHost     bool   `json:"storageHost"`
 	} `json:"network"`
 	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
 }
@@ -532,6 +542,7 @@ func (p *Peer) Info() *PeerInfo {
 	info.Network.Trusted = p.rw.is(trustedConn)
 	info.Network.Static = p.rw.is(staticDialedConn)
 	info.Network.StorageContract = p.rw.is(storageContractConn)
+	info.Network.StorageClient = p.rw.is(storageClientConn)
 
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
