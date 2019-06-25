@@ -39,10 +39,10 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}()
 
-	// get storage obligation
+	// get storage responsibility
 	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	// check whether the contract is empty
@@ -111,7 +111,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessCost := settings.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
-	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
+	err = VerifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
 		return err
 	}
@@ -128,10 +128,10 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	// update the storage obligation.
-	//paymentTransfer := currentRevision.NewValidProofOutputs[0].Value.Sub(currentRevision.NewValidProofOutputs[0].Value, newRevision.NewValidProofOutputs[0].Value)
+	newRevision.Signatures = [][]byte{req.Signature, hostSig}
+
+	// update the storage responsibility.
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
-	//so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(so.PotentialDownloadRevenue, paymentTransfer)
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	h.lock.Lock()
@@ -143,6 +143,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 
 	// enter response loop
 	for i, sec := range req.Sections {
+
+		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {
 			return err

@@ -1,6 +1,7 @@
 package storagehost
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"os"
@@ -13,23 +14,42 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
-// constant range for generating the number randomly
-// this is only used by test case
-const RANDRANGE = 100000000
+var dumper = spew.ConfigState{DisableMethods: true, Indent: "    "}
 
-// Test if the persist Folder could be generate as expected
-// Test if the persist file could be fill using the default value
-// 		when the host is the first time initialized
-func TestStorageHost_DefaultFolderStatus(t *testing.T) {
-	// clear the saved data for testing
-	removeFolders("./testdata/", t)
-	defer removeFolders("./testdata/", t)
-
-	// do a new host, check if the folder are all generated
-	host, err := New("./testdata/")
+// tempDir removes and creates the folder named dxfile under the temp directory.
+func tempDir(dirs ...string) string {
+	path := filepath.Join(os.TempDir(), "storagehost", filepath.Join(dirs...))
+	err := os.RemoveAll(path)
 	if err != nil {
-		t.Errorf(err.Error())
+		panic(fmt.Sprintf("cannot remove all files under %v: %v", path, err))
 	}
+	err = os.MkdirAll(path, 0777)
+	if err != nil {
+		panic(fmt.Sprintf("cannot create directory %v", path))
+	}
+	return path
+}
+
+func newTestStorageHost(t *testing.T) *StorageHost {
+	dir := tempDir(t.Name())
+	h, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// load the default settings
+	if err = h.load(); err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func TestStorageHost_Load(t *testing.T) {
+	h := newTestStorageHost(t)
+	// Check whether the file has default settings
+	if err := checkHostConfigFile(filepath.Join(h.persistDir, HostSettingFile), defaultConfig()); err != nil {
+		t.Fatal(err)
+	}
+	//
 
 	// check if the database folder is initialized
 	if f, err := os.Stat("./testdata/hostdb"); err != nil {
@@ -44,7 +64,7 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 	}
 
 	// close the host, the file should be synchronize
-	if err := host.Close(); err != nil {
+	if err := h.Close(); err != nil {
 		t.Errorf("Unable to close the host")
 	}
 
@@ -59,6 +79,19 @@ func TestStorageHost_DefaultFolderStatus(t *testing.T) {
 		spew.Dump(persist.Config)
 		spew.Dump(defaultConfig())
 		t.Errorf("the persistence file does not save the default setting as expected")
+	}
+}
+
+func checkHostConfigFile(path string, expect storage.HostIntConfig) error {
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("file stat: %v", err)
+	}
+	var config storage.HostIntConfig
+	if err := common.LoadDxJSON(storageHostMeta, path, &config); err != nil {
+		return fmt.Errorf("cannot load DxJSON: %v", err)
+	}
+	if !reflect.DeepEqual(config, expect) {
+		return fmt.Errorf("config not expected. \n\tExpect %vGot%v", dumper.Sdump(expect), dumper.Sdump(config))
 	}
 }
 

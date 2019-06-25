@@ -18,66 +18,58 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
-
 		return err
 	}
 
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
-
 		return err
 	}
 
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
-		return ExtendErr("recover publicKey from signature responsibilityFailed", err)
+		return ExtendErr("recover publicKey from signature failed", err)
 	}
-	sc.Signatures[0] = req.Sign
 
 	// Check host balance >= storage contract cost
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
-
 		return ExtendErr("get state db error", err)
 	}
-	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
 
+	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
 		return ExtendErr("host balance insufficient", err)
 	}
 
 	account := accounts.Account{Address: hostAddress}
-	wallet, err := h.ethBackend.AccountManager().Find(account)
-
+	wallet, err := h.am.Find(account)
 	if err != nil {
-
 		return ExtendErr("find host account error", err)
 	}
+
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
-
 		return ExtendErr("host account sign storage contract error", err)
 	}
 
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
-
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
 
+	sc.Signatures = [][]byte{req.Sign, hostContractSign}
+
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := verifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-
-		return ExtendErr("host verify storage contract responsibilityFailed", err)
+		return ExtendErr("host verify storage contract failed", err)
 	}
 
 	// 2. After check, send host contract sign to client
-	sc.Signatures[1] = hostContractSign
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
-
 		return ExtendErr("send storage contract create sign by host", err)
 	}
 
@@ -85,12 +77,10 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
-
 		return err
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-
 		return err
 	}
 
@@ -117,7 +107,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-
 		return ExtendErr("host sign revison error", err)
 	}
 
@@ -148,7 +137,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err := finalizeStorageResponsibility(h, so); err != nil {
-		return ExtendErr("finalize storage obligation error", err)
+		return ExtendErr("finalize storage responsibility error", err)
 	}
 
 	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {

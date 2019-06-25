@@ -24,23 +24,20 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
-	// Get revision from storage obligation
+	// Get revision from storage responsibility
 	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Obligation] Error: %v", err)
+		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
 	settings := h.externalConfig()
-	if err != nil {
-		return fmt.Errorf("cannot get host external config: %v", err)
-	}
 	currentBlockHeight := h.blockHeight
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Process each action
 	newRoots := append([]common.Hash(nil), so.SectorRoots...)
 	sectorsChanged := make(map[uint64]struct{})
-	//var bandwidthRevenue *big.Int
+
 	var bandwidthRevenue common.BigInt
 	var sectorsRemoved []common.Hash
 	var sectorsGained []common.Hash
@@ -57,7 +54,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 			sectorsChanged[uint64(len(newRoots))-1] = struct{}{}
 
 			// Update finances
-			//bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.UploadBandwidthPrice.MultUint64(storage.sectorSize).BigIntPtr())
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 
 		default:
@@ -70,14 +66,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	if len(newRoots) > len(so.SectorRoots) {
 		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
 		blocksRemaining := so.proofDeadline() - currentBlockHeight
-		//blockBytesCurrency := new(big.Int).Mul(big.NewInt(int64(blocksRemaining)), big.NewInt(int64(bytesAdded)))
-
 		blockBytesCurrency := common.NewBigIntUint64(blocksRemaining).Mult(common.NewBigIntUint64(bytesAdded))
-
-		//storageRevenue = new(big.Int).Mul(blockBytesCurrency, settings.StoragePrice.BigIntPtr())
 		storageRevenue = blockBytesCurrency.Mult(settings.StoragePrice)
-
-		//newDeposit = newDeposit.Add(newDeposit, new(big.Int).Mul(blockBytesCurrency, settings.Deposit.BigIntPtr()))
 		newDeposit = newDeposit.Add(blockBytesCurrency.Mult(settings.Deposit))
 
 	}
@@ -110,12 +100,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Verify the new revision
-	//newRevenue := new(big.Int).Add(storageRevenue.Add(storageRevenue, bandwidthRevenue), settings.BaseRPCPrice.BigIntPtr())
-
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
-	if err := verifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
+	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -154,9 +142,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// Calculate bandwidth cost of proof
 	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
-
-	//bandwidthRevenue = bandwidthRevenue.Add(bandwidthRevenue, settings.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
-
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
@@ -172,14 +157,23 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		return err
 	}
-	newRevision.Signatures[0] = clientRevisionSign
 
-	// Update the storage obligation
+	// Sign host's revision and send it to client
+	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
+	wallet, err := h.am.Find(account)
+	if err != nil {
+		return err
+	}
+
+	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
+	if err != nil {
+		return err
+	}
+
+	newRevision.Signatures = [][]byte{clientRevisionSign, hostSig}
+
+	// Update the storage responsibility
 	so.SectorRoots = newRoots
-	//so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(so.PotentialStorageRevenue, storageRevenue)
-	//so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(so.RiskedStorageDeposit, newDeposit)
-	//so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(so.PotentialUploadRevenue, bandwidthRevenue)
-
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(storageRevenue)
 	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
@@ -189,19 +183,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return err
 	}
 
-	// Sign host's revision and send it to client
-	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
-	wallet, err := h.am.Find(account)
-	if err != nil {
-		return err
-	}
-
-	sign, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
-	if err != nil {
-		return err
-	}
-
-	if err := s.SendStorageContractUploadHostRevisionSign(sign); err != nil {
+	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
 		return err
 	}
 

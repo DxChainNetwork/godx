@@ -25,11 +25,9 @@ import (
 // It aims at communicate by protocal with client and lent its own storage to the client
 type StorageHost struct {
 	// backend support
-	ethBackend storage.EthBackend
+	ethBackend storage.HostBackend
 	parseAPI   storage.ParsedAPI
-
-	// Account manager for wallet/account related operation
-	am *accounts.Manager
+	am         storage.AccountManager
 
 	// storageHost basic config
 	blockHeight      uint64
@@ -66,8 +64,6 @@ func New(persistDir string) (*StorageHost, error) {
 	if err = os.MkdirAll(h.persistDir, 0700); err != nil {
 		return nil, err
 	}
-	// Create the database
-
 	// initialize the storage manager
 	if h.StorageManager, err = sm.New(persistDir); err != nil {
 		return nil, err
@@ -82,7 +78,7 @@ func New(persistDir string) (*StorageHost, error) {
 
 // Start loads all APIs and make them mapping, also introduce the account
 // manager as a member variable in side the StorageHost
-func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
+func (h *StorageHost) Start(eth storage.HostBackend) (err error) {
 	// init the account manager
 	h.am = eth.AccountManager()
 	h.ethBackend = eth
@@ -176,7 +172,7 @@ func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 		return paymentAddress, nil
 	}
 	//Local node does not contain wallet
-	if wallets := h.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+	if wallets := h.am.Wallets(); len(wallets) > 0 {
 		//The local node does not have any wallet address yet
 		if accs := wallets[0].Accounts(); len(accs) > 0 {
 			paymentAddress := accs[0].Address
@@ -274,7 +270,7 @@ func (h *StorageHost) setWindowSize(val uint64) error {
 // setPaymentAddress set the account to the address
 func (h *StorageHost) setPaymentAddress(addr common.Address) error {
 	account := accounts.Account{Address: addr}
-	_, err := h.ethBackend.AccountManager().Find(account)
+	_, err := h.am.Find(account)
 	if err != nil {
 		return errors.New("unknown account")
 	}

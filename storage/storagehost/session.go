@@ -62,7 +62,7 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	}
 
 	account := accounts.Account{Address: paymentAddress}
-	wallet, err := h.ethBackend.AccountManager().Find(account)
+	wallet, err := h.am.Find(account)
 	if err != nil {
 		h.log.Warn("Failed to find the wallet", "err", err)
 		acceptingContracts = false

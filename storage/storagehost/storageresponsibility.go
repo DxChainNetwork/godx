@@ -465,6 +465,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	// Fetch the storage Responsibility associated with the storage responsibility id.
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
+	h.lock.RUnlock()
 	if err != nil {
 		h.log.Warn("Could not get storage Responsibility", "err", err)
 		return
@@ -600,7 +601,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 		//Here take the address of the storage host in the storage contract book
 		fromAddress := so.OriginStorageContract.ValidProofOutputs[1].Address
 		account := accounts.Account{Address: fromAddress}
-		wallet, err := h.ethBackend.AccountManager().Find(account)
+		wallet, err := h.am.Find(account)
 		if err != nil {
 			h.log.Warn("There was an error opening the wallet", "err", err)
 			return
