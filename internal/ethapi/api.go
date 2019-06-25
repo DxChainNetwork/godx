@@ -1578,9 +1578,8 @@ func (s *PublicNetAPI) AddStorageContractPeer(node *enode.Node) (bool, error) {
 		return false, fmt.Errorf("server stopped")
 	}
 
-	server.AddPeer(node)
 	server.AddStorageContractPeer(node)
-
+	server.AddPeer(node)
 	return true, nil
 }
 

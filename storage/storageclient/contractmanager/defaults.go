@@ -45,6 +45,7 @@ var (
 	maxHostDeposit             = common.PtrBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(24), nil)).MultUint64(1e3)
 )
 
+// ErrHostFault indicates if the error is caused by the storage host
 var (
 	ErrHostFault = errors.New("host has returned an error")
 )

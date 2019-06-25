@@ -155,9 +155,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
 	go sc.uploadLoop()
-	go sc.stuckLoop()
-	go sc.uploadOrRepair()
-	go sc.healthCheckLoop()
+	//go sc.stuckLoop()
+	//go sc.uploadOrRepair()
+	//go sc.healthCheckLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {
@@ -168,10 +168,6 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 		sc.lock.Unlock()
 		return nil
 	})
-
-	if err = sc.fileSystem.Start(); err != nil {
-		return err
-	}
 
 	sc.log.Info("Storage Client Started")
 
@@ -486,7 +482,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return err
 	}
-	rev.Signatures[0] = clientRevisionSign
 
 	// send client sig to host
 	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
@@ -503,7 +498,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
-	rev.Signatures[1] = hostRevisionSig
+	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
 	// commit upload revision
 	err = contract.CommitUpload(walTxn, rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
@@ -599,7 +594,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	newRevision.Signatures[0] = clientSig
 	req.Signature = clientSig[:]
 	req.StorageContractID = newRevision.ParentID
 	req.NewRevisionNumber = newRevision.NewRevisionNumber
@@ -721,7 +715,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 		hostSig = resp.Signature
 	}
-	newRevision.Signatures[1] = hostSig
+	newRevision.Signatures = [][]byte{clientSig, hostSig}
 
 	// commit this revision
 	err = contract.CommitDownload(walTxn, newRevision, price)

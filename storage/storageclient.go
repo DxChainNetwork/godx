@@ -24,7 +24,7 @@ type EthBackend interface {
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
-	SetupConnection(hostEnodeURL string) (*Session, error)
+	SetupStorageConnection(hostEnodeURL string) (*Session, error)
 	Disconnect(session *Session, hostEnodeURL string) error
 	GetBlockByNumber(number uint64) (*types.Block, error)
 

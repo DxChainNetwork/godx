@@ -89,6 +89,9 @@ var (
 
 	// when uploading or downloading, the renew goroutine wait for the longest time
 	RevisionDoneTime = 1 * time.Minute
+
+	// Max sector num in one connection preventing from client and host occupied connection
+	MaxUploadDownloadSectorsNum uint32 =  5
 )
 
 var currencyIndexMap = map[string]uint64{

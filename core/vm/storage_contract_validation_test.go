@@ -1,17 +1,16 @@
 package vm
 
 import (
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 	"net"
 	"testing"
 
-	"github.com/magiconair/properties/assert"
-	"golang.org/x/crypto/sha3"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/magiconair/properties/assert"
+	"golang.org/x/crypto/sha3"
 )
 
 func TestCheckMultiSignatures(t *testing.T) {
@@ -44,7 +43,6 @@ func TestCheckMultiSignatures(t *testing.T) {
 	}
 
 	uc := types.UnlockConditions{
-		Timelock:           currentHeight,
 		PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(prvKeyClient.PublicKey), crypto.PubkeyToAddress(prvKeyHost.PublicKey)},
 		SignaturesRequired: 2,
 	}

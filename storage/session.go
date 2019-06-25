@@ -126,6 +126,8 @@ type Session struct {
 
 	// upload and download tash is done, signal the renew goroutine
 	revisionDone chan struct{}
+
+	maxUploadDownloadSectorNum uint32
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
@@ -154,21 +156,29 @@ func (s *Session) HostInfo() *HostInfo {
 	return s.host
 }
 
-func (s * Session) SetBusy() bool {
+func (s *Session) SetBusy() bool {
 	return atomic.CompareAndSwapInt32(&s.busy, IDLE, BUSY)
 }
 
-func (s * Session) ResetBusy() bool {
+func (s *Session) ResetBusy() bool {
 	return atomic.CompareAndSwapInt32(&s.busy, BUSY, IDLE)
 }
 
-func (s * Session) IsBusy() bool {
+func (s *Session) IsBusy() bool {
 	return atomic.LoadInt32(&s.busy) == BUSY
 }
 
 // when we renew but upload or download now, we wait for the revision done
 func (s *Session) RevisionDone() chan struct{} {
 	return s.revisionDone
+}
+
+func (s *Session) AddMaxUploadDownloadSectorNum(n uint32) {
+	atomic.AddUint32(&s.maxUploadDownloadSectorNum, n)
+}
+
+func (s *Session) LoadMaxUploadDownloadSectorNum() uint32{
+	return atomic.LoadUint32(&s.maxUploadDownloadSectorNum)
 }
 
 func (s *Session) getConn() net.Conn {
@@ -185,7 +195,6 @@ func (s *Session) SetDeadLine(d time.Duration) error {
 	return nil
 }
 
-
 // RW() and SetRW() for only test
 func (s *Session) RW() p2p.MsgReadWriter {
 	return s.rw
@@ -196,12 +205,11 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 }
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
-	s.Log().Debug("Sending host settings request from client", data)
 	return p2p.Send(s.rw, HostSettingMsg, data)
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Debug("Sending host settings response from host", data)
+	s.Log().Warn("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 

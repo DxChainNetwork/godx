@@ -118,6 +118,9 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
+	// initialize remaining fund first
+	remainingFund = clientRemainingFund
+
 	// loop through all contracts that need to be renewed, and prepare to renew the contract
 	for _, record := range renewRecords {
 		// verify that the cost needed for contract renew does not exceed the clientRemainingFund
@@ -407,15 +410,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	//Calculate the account address of the client
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
 	//Calculate the account address of the host
-	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
+	hostAddr := lastRev.NewValidProofOutputs[1].Address
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         lastRev.NewFileSize,
 		FileMerkleRoot:   lastRev.NewFileMerkleRoot, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr(), Address: clientAddr}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr(), Address: hostAddr}},
 		UnlockHash:       lastRev.NewUnlockHash,
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
@@ -451,7 +454,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.EnodeURL)
+	defer func() {
+		cm.log.Error("contract renew: disconnect session")
+		cm.b.Disconnect(session, host.EnodeURL)
+	}()
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -487,8 +493,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
+	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
