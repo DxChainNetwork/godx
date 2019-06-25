@@ -208,8 +208,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		FileMerkleRoot:   common.Hash{}, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr(), Address: clientPaymentAddress}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress}},
 		UnlockHash:       uc.UnlockHash(),
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
@@ -283,8 +283,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, err
 	}
 
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
+	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{

@@ -410,15 +410,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	//Calculate the account address of the client
 	clientAddr := lastRev.NewValidProofOutputs[0].Address
 	//Calculate the account address of the host
-	hostAddr := crypto.PubkeyToAddress(host.NodePubKey)
+	hostAddr := lastRev.NewValidProofOutputs[1].Address
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         lastRev.NewFileSize,
 		FileMerkleRoot:   lastRev.NewFileMerkleRoot, // no proof possible without data
 		WindowStart:      endHeight,
 		WindowEnd:        endHeight + host.WindowSize,
-		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr()}},
-		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr()}},
+		ClientCollateral: types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: clientPayout.BigIntPtr(), Address: clientAddr}},
+		HostCollateral:   types.DxcoinCollateral{DxcoinCharge: types.DxcoinCharge{Value: hostPayout.BigIntPtr(), Address: hostAddr}},
 		UnlockHash:       lastRev.NewUnlockHash,
 		RevisionNumber:   0,
 		ValidProofOutputs: []types.DxcoinCharge{
@@ -490,8 +490,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
+	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
