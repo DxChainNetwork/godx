@@ -50,8 +50,9 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		}
 
 		// start to form contract
+		log.Error("Start Create Contract")
 		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight, rentPayment)
-
+		log.Error("End Create Contract")
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
@@ -93,6 +94,8 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64, rentPayment storage.RentPayment) (formCost common.BigInt, newlyCreatedContract storage.ContractMetaData, err error) {
 	// 1. storage host validation
 	// validate the storage price
+	a, _ := json.Marshal(host)
+	log.Error("createContract", "host", string(a))
 	if host.StoragePrice.Cmp(maxHostStoragePrice) > 0 {
 		formCost = common.BigInt0
 		err = fmt.Errorf("failed to create the contract with host: %v, the storage price is too high", host.EnodeID)
@@ -138,6 +141,7 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		Host:                 host,
 	}
 
+	log.Error("ContractParams", "clientPaymentAddress", clientPaymentAddress)
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
 		formCost = common.BigInt0
@@ -190,6 +194,7 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
+	log.Error("Contract Create Starting")
 	a, _ := json.Marshal(params)
 	log.Error("Contract Create Starting", "param", string(a))
 	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host

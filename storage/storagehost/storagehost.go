@@ -84,8 +84,12 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		h.log.Error("paymentAddress must be explicitly specified")
 	}
 
+	if !acceptingContracts {
+		acceptingContracts = true
+	}
+
 	return storage.HostExtConfig{
-		AcceptingContracts:     true,
+		AcceptingContracts:     acceptingContracts,
 		MaxDownloadBatchSize:   h.config.MaxDownloadBatchSize,
 		MaxDuration:            h.config.MaxDuration,
 		MaxReviseBatchSize:     h.config.MaxReviseBatchSize,
