@@ -490,8 +490,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	storageContract.Signatures[0] = clientContractSign
-	storageContract.Signatures[1] = hostSign
+	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
 	// Assemble init revision and sign it
 	storageContractRevision := types.StorageContractRevision{
