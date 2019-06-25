@@ -54,7 +54,7 @@ func (cm *ContractManager) analyzeChainEventChange(change core.ChainChangeEvent)
 
 	// save the newest settings (blockHeight) persistently
 	if err := cm.saveSettings(); err != nil {
-		cm.log.Warn("failed to save the current contract manager settings while analyzing the chain change event")
+		cm.log.Warn("failed to save the current contract manager settings while analyzing the chain change event", "err", err.Error())
 	}
 
 	// if the block chain finished syncing, start the contract maintenance routine

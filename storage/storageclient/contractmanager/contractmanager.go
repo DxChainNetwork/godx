@@ -16,6 +16,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
+// ContractManager is a data structure that is used to keep track of all contracts, including
+// both signed contracts and expired contracts
 type ContractManager struct {
 	// storage client backend
 	b storage.ClientBackend
@@ -123,7 +125,7 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 	return
 }
 
-// Close will send stop signal to threadManager, terminate all
+// Stop will send stop signal to threadManager, terminate all
 // running go routines
 func (cm *ContractManager) Stop() {
 	// close the activeContracts related operations first

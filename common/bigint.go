@@ -8,7 +8,10 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 // Common used BigInt numbers
@@ -224,5 +227,27 @@ func (x *BigInt) UnmarshalJSON(val []byte) error {
 		return fmt.Errorf("invalid big integer: %v", y)
 	}
 	x.b = y
+	return nil
+}
+
+// EncodeRLP encode a BigInt to rlp bytes
+func (x BigInt) EncodeRLP(w io.Writer) error {
+	return rlp.Encode(w, x.b.String())
+}
+
+// DecodeRLP decode rlp bytes to a BigInt
+func (x *BigInt) DecodeRLP(st *rlp.Stream) error {
+	var stringFormat string
+
+	if err := st.Decode(&stringFormat); err != nil {
+		return err
+	}
+
+	var y big.Int
+	if _, ok := y.SetString(stringFormat, 10); !ok {
+		return fmt.Errorf("invalid big integer: %v", y)
+	}
+	x.b = y
+
 	return nil
 }

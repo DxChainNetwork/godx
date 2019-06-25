@@ -140,6 +140,7 @@ func parseHostAnnouncement(announcement types.HostAnnouncement) (hostInfo storag
 	}
 	hostInfo.EnodeID = node.ID()
 	hostInfo.IP = node.IP().String()
+	hostInfo.NodePubKey = *node.Pubkey()
 
 	return
 }
