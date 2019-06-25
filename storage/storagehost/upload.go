@@ -16,6 +16,9 @@ import (
 
 // handleUpload is the upload function to handle upload negotiation
 func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	s.SetDeadLine(storage.ContractRevisionTime)
 
 	// Read upload request

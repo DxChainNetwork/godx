@@ -6,6 +6,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
+	"time"
 )
 
 // handlerMap is the map for p2p handler
@@ -18,26 +19,47 @@ var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p
 
 // HandleSession is the function to be called from Ethereum handle method.
 func (h *StorageHost) HandleSession(s *storage.Session) error {
+	if s == nil {
+		return errors.New("host session is nil")
+	}
+
+	if s.IsBusy() {
+		// wait for 3 seconds and retry
+		<-time.After(3 * time.Second)
+		h.log.Warn("session is busy, we will retry later")
+		return nil
+	}
+
 	msg, err := s.ReadMsg()
 	if err != nil {
+		h.log.Error("read message error", "err", err.Error())
 		return err
 	}
+
 	if handler, ok := handlerMap[msg.Code]; ok {
 		return handler(h, s, msg)
+	} else {
+		h.log.Error("failed to get handler", "message", msg.Code)
+		return errors.New("failed to get handler")
 	}
-	return nil
 }
 
 // handleHostSettingRequest is the function to be called when calling HostSettingMsg
 func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	s.SetDeadLine(storage.HostSettingTime)
 
 	settings := h.externalConfig()
-	if err := s.SendHostExtSettingsResponse(settings); err == nil {
+	if err := s.SendHostExtSettingsResponse(settings); err != nil {
+		h.log.Error("SendHostExtSettingResponse Error", "err", err)
 		return errors.New("host setting request done")
-	} else {
-		return err
 	}
+
+	h.log.Error("successfully sent the host external setting response")
+
+	return nil
 }
 
 //return the externalConfig for host

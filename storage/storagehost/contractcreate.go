@@ -13,6 +13,9 @@ import (
 )
 
 func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
+	s.SetBusy()
+	defer s.ResetBusy()
+
 	// this RPC call contains two request/response exchanges.
 	s.SetDeadLine(storage.ContractCreateTime)
 
@@ -45,7 +48,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	account := accounts.Account{Address: hostAddress}
-	wallet, err := h.am.Find(account)
+	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
 		return ExtendErr("find host account error", err)
 	}
@@ -65,7 +68,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if err := verifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		return ExtendErr("host verify storage contract failed", err)
+		return ExtendErr("host verify storage contract failed ", err)
 	}
 
 	// 2. After check, send host contract sign to client
