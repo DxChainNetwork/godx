@@ -4,6 +4,7 @@
 package storageclient
 
 import (
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
 )
@@ -29,7 +30,7 @@ func (w *worker) dropUploadSegments() {
 
 	for i := 0; i < len(segmentsToDrop); i++ {
 		w.dropSegment(segmentsToDrop[i])
-		w.client.log.Debug("dropping segment because the worker is dropping all segments", w.contract.EnodeID.String())
+		w.client.log.Info("dropping segment because the worker is dropping all segments", "contractID", w.contract.ID.String())
 	}
 }
 
@@ -43,40 +44,15 @@ func (w *worker) killUploading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
+		log.Error("killUploading: disconnect")
 		delete(w.client.sessionSet, contractID)
 		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
-			w.client.log.Debug("can't close connection after uploading, error: ", err)
+			w.client.log.Error("can't close connection after uploading", "error", err)
 		}
 	}
 
 	// After the worker is marked as disabled, clear out all of the segments
 	w.dropUploadSegments()
-}
-
-// AppendUploadSegment - Append a segment to the heap to the pendingSegments of worker and the signal the uploadChan
-func (w *worker) AppendUploadSegment(uc *unfinishedUploadSegment) {
-	uploadAbility := false
-	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
-		uploadAbility = meta.Status.UploadAbility
-	}
-
-	w.mu.Lock()
-	onCoolDown := w.onUploadCoolDown()
-	uploadTerminated := w.uploadTerminated
-	if !uploadAbility || uploadTerminated || onCoolDown {
-		w.mu.Unlock()
-		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.EnodeID.String())
-		return
-	}
-	w.pendingSegments = append(w.pendingSegments, uc)
-	w.mu.Unlock()
-
-	// signal worker
-	select {
-	case w.uploadChan <- struct{}{}:
-	default:
-	}
 }
 
 // nextUploadSegment pull the next segment task from the worker's upload task list
@@ -122,7 +98,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
-		w.client.log.Debug("Dropping segment before putting into queue", !uploadAbility, uploadTerminated, onCoolDown, w.contract.EnodeID.String())
+		w.client.log.Info("Append worker unfinished segments failed due to it is not ready", "uploadAbility", !uploadAbility, "uploadTerminated", uploadTerminated, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
 		return false
 	}
 	return true
@@ -138,47 +114,29 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
-	contractID := w.contract.ID
+	session, err := w.checkSession()
+	defer func() {
+		session.ResetBusy()
+		session.RevisionDone() <- struct{}{}
 
-	// we must make sure that renew and revision consistency
-	w.client.sessionLock.Lock()
+		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
+			delete(w.client.sessionSet, w.contract.ID)
+			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+				w.client.log.Error("close session failed", "err", err)
+			}
+		}
+	}()
 
-	// Renew is doing, refuse upload/download
-	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Debug("renew contract is doing, can't upload")
+	if err != nil {
+		w.client.log.Error("check session failed", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
 
-	// Setup an active connection to the host and we will reuse previous connection
-	session, ok := w.client.sessionSet[contractID]
-	if !ok || session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupConnection(w.contract.EnodeID.String())
-		if err != nil {
-			w.client.log.Error("Worker failed to setup an connection:", err)
-			w.uploadFailed(uc, sectorIndex)
-			return
-		}
-
-		w.client.sessionSet[contractID] = s
-		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
-			s.SetHostInfo(&hostInfo)
-		}
-		session = s
-	}
-
-	// Set flag true while uploading
-	session.SetBusy()
-	defer func() {
-		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
-	}()
-	w.client.sessionLock.Unlock()
-
 	// upload segment to host
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
-		w.client.log.Error("Worker failed to upload via the editor:", err)
+		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
@@ -189,7 +147,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Add sector to storage clientFile
 	err = uc.fileEntry.AddSector(w.contract.EnodeID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
-		w.client.log.Debug("Worker failed to add new piece to SiaFile:", err)
+		w.client.log.Info("Worker failed to add new sector in dxfile", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
@@ -239,7 +197,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Debug("Worker dropping a segment while processing", isComplete, !candidateHost, !uploadAbility, onCoolDown, w.contract.EnodeID.String())
+		w.client.log.Info("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
 		return nil, 0
 	}
 

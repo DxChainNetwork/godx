@@ -5,20 +5,14 @@
 package storageclient
 
 import (
-	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
 	"os"
 	"time"
-)
-
-var (
-	ErrNoStuckFiles = errors.New("No stuck files")
-	ErrNoDirectory  = errors.New("No directories returned from dirList")
-	ErrMarkStuck    = errors.New("unable to mark healthy segments as unstuck")
 )
 
 // addStuckSegmentsToHeap adds all the stuck segments in a file to the repair heap
@@ -92,17 +86,19 @@ func (sc *StorageClient) stuckLoop() {
 		// Wait until the storage client is online to proceed.
 		if !sc.blockUntilOnline() {
 			// The storage client shut down before the internet connection was restored.
-			sc.log.Debug("storage client shutdown before internet connection")
+			sc.log.Info("storage client shutdown before internet connection")
 			return
 		}
 
 		// Randomly get directory with stuck files
 		dir, err := sc.fileSystem.RandomStuckDirectory()
-		if err != nil && err != ErrNoStuckFiles {
-			sc.log.Debug("getting random stuck directory, error: ", err)
+		if err != nil && err != filesystem.ErrNoRepairNeeded {
+			sc.log.Error("getting random stuck directory", "error", err)
+			// sleep 5 seconds. wait for the filesystem
+			<-time.After(5 * time.Second)
 			continue
 		}
-		if err == ErrNoStuckFiles {
+		if err == filesystem.ErrNoRepairNeeded {
 			// Block until new work is required
 			select {
 			case <-sc.tm.StopChan():
@@ -114,7 +110,7 @@ func (sc *StorageClient) stuckLoop() {
 				// Stuck segment was successfully repaired. Add the rest of the file to the heap
 				err := sc.addStuckSegmentsToHeap(dxPath)
 				if err != nil {
-					sc.log.Debug("unable to add stuck segments from file", dxPath, "to heap:", err)
+					sc.log.Error("unable to add stuck segments from file", dxPath, "to heap:", err)
 				}
 			}
 			continue
@@ -127,11 +123,21 @@ func (sc *StorageClient) stuckLoop() {
 		// push stuck segment to upload heap
 		sc.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
 
-		sc.uploadOrRepair()
+		sc.uploadHeap.mu.Lock()
+		heapLen := sc.uploadHeap.heap.Len()
+		sc.uploadHeap.mu.Unlock()
+		if heapLen == 0 {
+			continue
+		}
+
+		select {
+		case sc.uploadHeap.segmentComing <- struct{}{}:
+		default:
+		}
 
 		// Call bubble once all segments have been popped off heap
 		if err := sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {
-			sc.log.Error("update dir meta data failed: ", err)
+			sc.log.Error("[stuck loop]update dir meta data failed", "error", err)
 		}
 
 		// Sleep until it is time to try and repair another stuck Segment
@@ -147,7 +153,7 @@ func (sc *StorageClient) stuckLoop() {
 			// to the heap
 			err := sc.addStuckSegmentsToHeap(dxPath)
 			if err != nil {
-				sc.log.Debug("unable to add stuck segments from file", dxPath, "to heap:", err)
+				sc.log.Error("unable to add stuck segments from file", "dxpath", dxPath, "error", err)
 			}
 		}
 	}
@@ -172,7 +178,9 @@ func (sc *StorageClient) healthCheckLoop() {
 		// get path of oldest time, return directory and timestamp
 		dxPath, lastHealthCheckTime, err := sc.fileSystem.OldestLastTimeHealthCheck()
 		if err != nil {
-			sc.log.Debug("Could not find oldest health check time:", err)
+			sc.log.Error("could not find oldest health check time", "error", err)
+			// sleep 3 seconds. Avoid consuming cpu
+			<-time.After(3 * time.Second)
 			continue
 		}
 
@@ -189,7 +197,7 @@ func (sc *StorageClient) healthCheckLoop() {
 			return
 		case <-healthCheckSignal:
 			if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
-				sc.log.Error("")
+				sc.log.Error("[health check loop]update dir meta data failed", "error", err)
 			}
 		}
 	}

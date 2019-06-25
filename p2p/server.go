@@ -184,6 +184,9 @@ type Server struct {
 	removetrusted         chan *enode.Node // used to remove a node from trusted peer
 	addStorageContract    chan *enode.Node // used to add storage contract peer
 	removeStorageContract chan *enode.Node // used to remove storage contract peer
+	addStorageClient      chan *enode.Node // used to add storage contract client peer
+	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
+	storagePeerDoneMap 	  map[enode.ID]*sync.WaitGroup
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
@@ -201,7 +204,7 @@ type peerDrop struct {
 	requested bool // true if signaled by the peer
 }
 
-type connFlag int32
+type connFlag uint32
 
 const (
 	dynDialedConn connFlag = 1 << iota
@@ -209,6 +212,7 @@ const (
 	inboundConn
 	trustedConn
 	storageContractConn
+	storageClientConn
 )
 
 // conn wraps a network connection with information gathered
@@ -269,29 +273,35 @@ func (f connFlag) String() string {
 	if f&inboundConn != 0 {
 		s += "-inbound"
 	}
+	if f&storageContractConn != 0 {
+		s += "-storageContractConn"
+	}
+	if f&storageClientConn != 0 {
+		s += "-storageClientConn"
+	}
 	if s != "" {
 		s = s[1:]
 	}
 	return s
 }
 
-// check if the connection flags are equivalent
+// check if the connection Flags are equivalent
 func (c *conn) is(f connFlag) bool {
-	flags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+	flags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 	return flags&f != 0
 }
 
 // mark/unmark the connection flag
 func (c *conn) set(f connFlag, val bool) {
 	for {
-		oldFlags := connFlag(atomic.LoadInt32((*int32)(&c.flags)))
+		oldFlags := connFlag(atomic.LoadUint32((*uint32)(&c.flags)))
 		flags := oldFlags
 		if val {
 			flags |= f
 		} else {
 			flags &= ^f
 		}
-		if atomic.CompareAndSwapInt32((*int32)(&c.flags), int32(oldFlags), int32(flags)) {
+		if atomic.CompareAndSwapUint32((*uint32)(&c.flags), uint32(oldFlags), uint32(flags)) {
 			return
 		}
 	}
@@ -370,17 +380,44 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 	}
 }
 
+// add storage contract and client flag
 func (srv *Server) AddStorageContractPeer(node *enode.Node) {
+	nodeID := node.ID()
+
+	wg, ok := srv.storagePeerDoneMap[nodeID]
+	if !ok {
+		_wg := &sync.WaitGroup{}
+		_wg.Add(2)
+		srv.storagePeerDoneMap[nodeID] = _wg
+		wg = _wg
+	}
+
 	select {
 	case srv.addStorageContract <- node:
+		srv.log.Warn("AddStorageContractPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
+
+	select {
+	case srv.addStorageClient <- node:
+		srv.log.Warn("AddStorageClientPeer", "chanContent", node.String())
+	case <-srv.quit:
+	}
+
+	// wait for add done
+	wg.Wait()
+	delete(srv.storagePeerDoneMap, nodeID)
 }
 
 // RemoveTrustedPeer removes the given node from the trusted peer set.
 func (srv *Server) RemoveStorageContractPeer(node *enode.Node) {
 	select {
 	case srv.removeStorageContract <- node:
+	case <-srv.quit:
+	}
+
+	select {
+	case srv.removeStorageClient <- node:
 	case <-srv.quit:
 	}
 }
@@ -503,6 +540,9 @@ func (srv *Server) Start() (err error) {
 	srv.removetrusted = make(chan *enode.Node)
 	srv.addStorageContract = make(chan *enode.Node)
 	srv.removeStorageContract = make(chan *enode.Node)
+	srv.addStorageClient = make(chan *enode.Node)
+	srv.removeStorageClient = make(chan *enode.Node)
+	srv.storagePeerDoneMap = make(map[enode.ID]*sync.WaitGroup)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 
@@ -732,7 +772,8 @@ func (srv *Server) run(dialstate dialer) {
 		peers           = make(map[enode.ID]*Peer)
 		inboundCount    = 0 // number of inbound connections
 		trusted         = make(map[enode.ID]bool, len(srv.TrustedNodes))
-		storageContract = make(map[enode.ID]bool, 100)
+		storageContract = make(map[enode.ID]bool, 10)
+		storageClient   = make(map[enode.ID]bool, 10)
 		taskdone        = make(chan task, maxActiveDialTasks)
 		runningTasks    []task
 		queuedTasks     []task // tasks that can't run yet
@@ -806,7 +847,6 @@ running:
 			// This channel is used by AddPeer to add to the
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
-			srv.log.Trace("Adding static node", "node", n)
 			// add node to dialstate static field, which contains a list of static fields
 			// waiting for the connection
 			dialstate.addStatic(n)
@@ -819,7 +859,6 @@ running:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected.
-			srv.log.Trace("Removing static node", "node", n)
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
@@ -831,7 +870,6 @@ running:
 		case n := <-srv.addtrusted:
 			// This channel is used by AddTrustedPeer to add an enode
 			// to the trusted node set.
-			srv.log.Trace("Adding trusted node", "node", n)
 			trusted[n.ID()] = true
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID()]; ok {
@@ -843,7 +881,6 @@ running:
 		case n := <-srv.removetrusted:
 			// This channel is used by RemoveTrustedPeer to remove an enode
 			// from the trusted node set.
-			srv.log.Trace("Removing trusted node", "node", n)
 			if _, ok := trusted[n.ID()]; ok {
 				delete(trusted, n.ID())
 			}
@@ -853,21 +890,36 @@ running:
 			}
 
 		case n := <-srv.addStorageContract:
-			srv.log.Trace("Adding storage contract node", "node", n)
 			storageContract[n.ID()] = true
-			// Mark any already-connected peer as trusted
+			// Mark any already-connected peer as storageContractConn
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageContractConn, true)
 			}
-
+			srv.storagePeerDoneMap[n.ID()].Done()
 		case n := <-srv.removeStorageContract:
-			srv.log.Trace("Removing storage contract node", "node", n)
 			if _, ok := storageContract[n.ID()]; ok {
 				delete(storageContract, n.ID())
 			}
-			// Unmark any already-connected peer as trusted
+			// Unmark any already-connected peer as storageContractConn
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageContractConn, false)
+			}
+
+		case n := <-srv.addStorageClient:
+			storageClient[n.ID()] = true
+			// Mark any already-connected peer as storageClientConn
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(storageClientConn, true)
+			}
+			srv.storagePeerDoneMap[n.ID()].Done()
+
+		case n := <-srv.removeStorageClient:
+			if _, ok := storageContract[n.ID()]; ok {
+				delete(storageContract, n.ID())
+			}
+			// Unmark any already-connected peer as storageClientConn
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(storageClientConn, false)
 			}
 
 		// it will either get peer count or peers
@@ -904,6 +956,9 @@ running:
 			}
 			if storageContract[c.node.ID()] {
 				c.flags |= storageContractConn
+			}
+			if storageClient[c.node.ID()] {
+				c.flags |= storageClientConn
 			}
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
 			select {
@@ -954,6 +1009,7 @@ running:
 		// which will only return if error or disconnect request was received
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
+			pd.log.Warn("removed peer")
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			pd.log.Debug("Removing p2p peer", "duration", d, "peers", len(peers)-1, "req", pd.requested, "err", pd.err)
 			delete(peers, pd.ID())
@@ -1194,10 +1250,10 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 
 	// Run the protocol handshake with passed in ourHandshake object (protoHandshake)
 	// a list of protocols supported by the destination node will be returned
-	if c.is(storageContractConn) {
-		srv.ourHandshake.flags |= storageContractConn
-	}
+	srv.ourHandshake.Flags = c.flags
+
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
+
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
 		return err
@@ -1211,7 +1267,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	}
 
 	// destination node supported protocol
-	if phs.flags&storageContractConn != 0 {
+	if phs.Flags&storageContractConn != 0 {
 		c.set(storageContractConn, true)
 	}
 	c.caps, c.name = phs.Caps, phs.Name

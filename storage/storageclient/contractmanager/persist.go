@@ -5,7 +5,6 @@
 package contractmanager
 
 import (
-	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
@@ -56,8 +55,9 @@ func (cm *ContractManager) persistUpdate() (persist persistence) {
 // saveSettings will store all the persistence data into the JSON file
 func (cm *ContractManager) saveSettings() (err error) {
 	cm.lock.Lock()
+	defer cm.lock.Unlock()
+
 	data := cm.persistUpdate()
-	cm.lock.Unlock()
 	return common.SaveDxJSON(settingsMetadata, filepath.Join(cm.persistDir, PersistFileName), data)
 }
 
@@ -87,7 +87,7 @@ func (cm *ContractManager) loadSettings() (err error) {
 		// convert the string to contract id
 		id, err := storage.StringToContractID(key)
 		if err != nil {
-			cm.log.Warn(fmt.Sprintf("contractmanager loadsettings renewedFrom: %s", err.Error()))
+			cm.log.Warn("contractmanager loadsettings renewedFrom", "err", err.Error())
 			continue
 		}
 
@@ -100,7 +100,7 @@ func (cm *ContractManager) loadSettings() (err error) {
 		// convert the string to contract id
 		id, err := storage.StringToContractID(key)
 		if err != nil {
-			cm.log.Warn(fmt.Sprintf("contractmanager loadsettings renewedTo: %s", err.Error()))
+			cm.log.Warn("contractmanager loadsettings renewedTo", "err", err.Error())
 			continue
 		}
 

@@ -654,7 +654,8 @@ func (s *Ethereum) Stop() error {
 }
 
 // SetupConnection will setup connection with host if they are never connected with each other
-func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
+func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
+	log.Warn("Setup Storage Connection", "Enode URL", hostEnodeURL)
 	if s.netRPCService == nil {
 		return nil, fmt.Errorf("network API is not ready")
 	}
@@ -666,13 +667,23 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 
 	// First we check storage contract session set have already connection with this node
 	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
-	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil {
+	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil && !conn.IsBusy() {
 		return conn, nil
+	} else if conn != nil && conn.IsBusy() {
+		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
 	}
 
 	// First we disconnect the ethereum connection
 	s.server.RemovePeer(hostNode)
+	timeout := time.After(10 * time.Second)
 	for {
+		select {
+		case <-timeout:
+			return nil, errors.New("remove original peer timeout")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+
 		found := false
 		peers := s.server.PeersInfo()
 		for _, p := range peers {
@@ -689,12 +700,12 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		return nil, err
 	}
 
-	timer := time.NewTimer(time.Second * 3)
-
+	timer := time.NewTimer(time.Minute * 1)
 	var conn *storage.Session
 	for {
 		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
 		if conn != nil {
+			conn.SetBusy()
 			return conn, nil
 		}
 
@@ -702,6 +713,7 @@ func (s *Ethereum) SetupConnection(hostEnodeURL string) (*storage.Session, error
 		case <-timer.C:
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
@@ -727,17 +739,8 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 		// wait for connection stop
 		<-session.ClosedChan()
 
-		isStatic := false
-		staticNodeList := s.server.StaticNodes
-		for _, n := range staticNodeList {
-			if hostNode.ID() == n.ID() {
-				isStatic = true
-				break
-			}
-		}
-		if isStatic {
-			s.server.AddPeer(hostNode)
-		}
+		// retry add origin static node peer
+		s.server.AddPeer(hostNode)
 	}
 
 	return nil
@@ -745,7 +748,11 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
-	session, err := s.SetupConnection(hostEnodeURL)
+	session, err := s.SetupStorageConnection(hostEnodeURL)
+	defer func() {
+		s.Disconnect(session, hostEnodeURL)
+	}()
+
 	if err != nil {
 		return err
 	}
@@ -753,22 +760,24 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
 		return err
 	}
-	defer s.Disconnect(session, hostEnodeURL)
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
+		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())
 		return err
 	}
 
 	msg, err := session.ReadMsg()
 	if err != nil {
+		log.Error("GetStorageHostSetting readMSG", "err", err.Error())
 		return err
 	}
 
 	if msg.Code != storage.HostSettingResponseMsg {
-		return errors.New("invalid host settings response")
+		return fmt.Errorf("invalid host settings response, msgCode: %v", msg.Code)
 	}
 
 	if err := msg.Decode(config); err != nil {
+		log.Error("failed to decode", "err", err.Error())
 		return err
 	}
 
