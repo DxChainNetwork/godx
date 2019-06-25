@@ -51,17 +51,17 @@ var (
 	defaultWindowSize           = 240                       // 1 hour
 
 	// deposit defaults value
-	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 9))  // 173 dx per TB per month
-	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 28)) // 10000 DX
-	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 26)) // 100 DX
+	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
+	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
+	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
 
 	// prices
-	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 17))                                   // 100 nDX
-	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 21), big.NewInt(50))) // 50mDX
-	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 14))                                   // 100 DX per TB
-	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 19))                                   // 10 uDX
-	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 9))                                    // Same as deposit
-	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 DX per TB
+	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
+	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
+	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
+	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
+	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
+	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
 
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
