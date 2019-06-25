@@ -105,7 +105,6 @@ func (h *StorageHost) Start(eth storage.EthBackend) (err error) {
 	if err = h.pruneStaleStorageResponsibilities(); err != nil {
 		return err
 	}
-	fmt.Println("after prune")
 	// subscribe block chain change event
 	go h.subscribeChainChangEvent()
 	return nil

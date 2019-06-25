@@ -1,6 +1,8 @@
 package storagehost
 
 import (
+	"github.com/DxChainNetwork/godx/common/math"
+	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -37,35 +39,29 @@ var (
 	// sectorHeight is the parameter used in caching merkle roots
 	sectorHeight uint64
 
-	// TODO: ALL values are mock, need to compute reasonable values
-
 	storageHostMeta = common.Metadata{
 		Header:  "DxChain StorageHost JSON",
-		Version: "DxChain host mock version",
+		Version: "V1.0",
 	}
 
 	// persistence default value
-	//defaultBroadcast      = false
-	//defaultRevisionNumber = 0
-
-	// host internal config default value
-	defaultMaxDuration          = 144 * 30 * 6
-	defaultMaxDownloadBatchSize = 17 * (1 << 20)
-	defaultMaxReviseBatchSize   = 17 * (1 << 20)
-	defaultWindowSize           = 144
+	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
+	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
+	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
+	defaultWindowSize           = 240                       // 1 hour
 
 	// deposit defaults value
-	defaultDeposit       = 0
-	defaultDepositBudget = 1000000
-	defaultMaxDeposit    = 10000000000000000
+	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 9))  // 173 dx per TB per month
+	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 28)) // 10000 DX
+	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 26)) // 100 DX
 
 	// prices
-	defaultBaseRPCPrice           = 2000
-	defaultContractPrice          = 3000
-	defaultDownloadBandwidthPrice = 4000
-	defaultSectorAccessPrice      = 5000
-	defaultStoragePrice           = 6000
-	defaultUploadBandwidthPrice   = 7000
+	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 17))                                   // 100 nDX
+	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 21), big.NewInt(50))) // 50mDX
+	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 14))                                   // 100 DX per TB
+	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 19))                                   // 10 uDX
+	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 9))                                    // Same as deposit
+	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 DX per TB
 
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
@@ -97,16 +93,16 @@ func defaultConfig() storage.HostIntConfig {
 		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
 		WindowSize:           uint64(defaultWindowSize),
 
-		Deposit:       common.NewBigInt(int64(defaultDeposit)),
-		DepositBudget: common.NewBigInt(int64(defaultDepositBudget)),
-		MaxDeposit:    common.NewBigInt(int64(defaultMaxDeposit)),
+		Deposit:       defaultDeposit,
+		DepositBudget: defaultDepositBudget,
+		MaxDeposit:    defaultMaxDeposit,
 
-		MinBaseRPCPrice:           common.NewBigInt(int64(defaultBaseRPCPrice)),
-		MinContractPrice:          common.NewBigInt(int64(defaultContractPrice)),
-		MinDownloadBandwidthPrice: common.NewBigInt(int64(defaultDownloadBandwidthPrice)),
-		MinSectorAccessPrice:      common.NewBigInt(int64(defaultSectorAccessPrice)),
-		MinStoragePrice:           common.NewBigInt(int64(defaultStoragePrice)),
-		MinUploadBandwidthPrice:   common.NewBigInt(int64(defaultUploadBandwidthPrice)),
+		MinBaseRPCPrice:           defaultBaseRPCPrice,
+		MinContractPrice:          defaultContractPrice,
+		MinDownloadBandwidthPrice: defaultDownloadBandwidthPrice,
+		MinSectorAccessPrice:      defaultSectorAccessPrice,
+		MinStoragePrice:           defaultStoragePrice,
+		MinUploadBandwidthPrice:   defaultUploadBandwidthPrice,
 	}
 }
 
