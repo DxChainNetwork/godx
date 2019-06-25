@@ -94,6 +94,7 @@ type dialstate struct {
 	// filled from Table
 	randomNodes []*enode.Node
 	static      map[enode.ID]*dialTask
+	storage     map[enode.ID]*dialTask
 	hist        *dialHistory
 
 	// time when the dialer was first used
@@ -154,6 +155,7 @@ func newDialState(self enode.ID, static []*enode.Node, bootnodes []*enode.Node, 
 		self:        self,
 		netrestrict: netrestrict,
 		static:      make(map[enode.ID]*dialTask),
+		storage:     make(map[enode.ID]*dialTask),
 		dialing:     make(map[enode.ID]connFlag),
 		bootnodes:   make([]*enode.Node, len(bootnodes)),
 		randomNodes: make([]*enode.Node, maxdyn/2),
@@ -183,13 +185,26 @@ func (s *dialstate) removeStatic(n *enode.Node) {
 	s.hist.remove(n.ID())
 }
 
+// Add storage dialTask
+// The storage independent peer with eth peer(connection)
+// This is the method that avoids the single peer between two enode restriction
+func (s *dialstate) addStorage(n *enode.Node) {
+	s.storage[n.ID()] = &dialTask{flags: storageContractConn | storageClientConn, dest: n}
+}
+
+// remove the storage dial task
+func (s *dialstate) removeStorage(n *enode.Node) {
+	delete(s.storage, n.ID())
+	s.hist.remove(n.ID())
+}
+
 // there are three type of tasks:
 // 1. dial task
 // 2. discover task
 // 3. waitExpireTask
 //
 // Create and add the type of tasks mentioned above to the newtasks list and return
-func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Time) []task {
+func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, storagePeers map[enode.ID]*Peer, now time.Time) []task {
 	// if the dialer has not been used, assign the current time to it
 	if s.start.IsZero() {
 		s.start = now
@@ -202,7 +217,8 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	// returns if a node is successfully added to the dialing list
 	addDial := func(flag connFlag, n *enode.Node) bool {
 		// check if dial to the node is allowed
-		if err := s.checkDial(n, peers); err != nil {
+		t := &dialTask{flags: flag, dest: n}
+		if err := s.checkDial(t, peers, storagePeers); err != nil {
 			log.Trace("Skipping dial candidate", "id", n.ID(), "addr", &net.TCPAddr{IP: n.IP(), Port: n.TCP()}, "err", err)
 			return false
 		}
@@ -242,7 +258,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 	// adding the qualified node from static to the dialing list and adding
 	// the dialtask to newtasks
 	for id, t := range s.static {
-		err := s.checkDial(t.dest, peers)
+		err := s.checkDial(t, peers, storagePeers)
 		switch err {
 		case errNotWhitelisted, errSelf:
 			log.Warn("Removing static dial candidate", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()}, "err", err)
@@ -252,6 +268,21 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 			newtasks = append(newtasks, t)
 		}
 	}
+
+	for id, t := range s.storage {
+		log.Info("[STORAGE] peer task", "enodeURL", t.dest.String(), "flag", t.flags.String())
+		err := s.checkDial(t, peers, storagePeers)
+		switch err {
+		case errNotWhitelisted, errSelf:
+			log.Error("Removing storage dial candidate", "id", t.dest.ID, "addr", &net.TCPAddr{IP: t.dest.IP(), Port: t.dest.TCP()}, "err", err)
+			delete(s.storage, t.dest.ID())
+		case nil:
+			s.dialing[id] = t.flags
+			newtasks = append(newtasks, t)
+			delete(s.storage, t.dest.ID())
+		}
+	}
+
 	// If we don't have any peers whatsoever, try to dial a random bootnode. This
 	// scenario is useful for the testnet (and private networks) where the discovery
 	// table might be full of mostly bad peers, making it hard to find good ones.
@@ -321,16 +352,19 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, now time.Ti
 
 // defined a bunch of checkDial errors
 var (
-	errSelf             = errors.New("is self")
-	errAlreadyDialing   = errors.New("already dialing")
-	errAlreadyConnected = errors.New("already connected")
-	errRecentlyDialed   = errors.New("recently dialed")
-	errNotWhitelisted   = errors.New("not contained in netrestrict whitelist")
+	errSelf                    = errors.New("is self")
+	errAlreadyDialing          = errors.New("already dialing")
+	errEthAlreadyConnected     = errors.New("already eth connected")
+	errStorageAlreadyConnected = errors.New("already storage connected")
+	errRecentlyDialed          = errors.New("recently dialed")
+	errNotWhitelisted          = errors.New("not contained in netrestrict whitelist")
 )
 
 // Error Checking before adding a node to the dial list
 // Check if a node is dial-able
-func (s *dialstate) checkDial(n *enode.Node, peers map[enode.ID]*Peer) error {
+func (s *dialstate) checkDial(t *dialTask, peers map[enode.ID]*Peer, storagePeers map[enode.ID]*Peer) error {
+	n := t.dest
+	flag := t.flags
 	// check if the node existed in the dialing list
 	_, dialing := s.dialing[n.ID()]
 	switch {
@@ -338,8 +372,11 @@ func (s *dialstate) checkDial(n *enode.Node, peers map[enode.ID]*Peer) error {
 	case dialing:
 		return errAlreadyDialing
 	// if the node can be found within peers, return error
-	case peers[n.ID()] != nil:
-		return errAlreadyConnected
+	case flag&storageContractConn == 0 && peers[n.ID()] != nil:
+		return errEthAlreadyConnected
+	// if the node is about storage, we check previous the log
+	case flag&storageContractConn != 0 && storagePeers[n.ID()] != nil:
+		return errStorageAlreadyConnected
 	// if the node id is same as my node id, return error
 	case n.ID() == s.self:
 		return errSelf
@@ -347,7 +384,7 @@ func (s *dialstate) checkDial(n *enode.Node, peers map[enode.ID]*Peer) error {
 	case s.netrestrict != nil && !s.netrestrict.Contains(n.IP()):
 		return errNotWhitelisted
 	// if the node is contained in dial history, return error
-	case s.hist.contains(n.ID()):
+	case flag&storageContractConn == 0 && s.hist.contains(n.ID()):
 		return errRecentlyDialed
 	}
 	return nil

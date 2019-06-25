@@ -154,6 +154,16 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'addStoragePeer',
+			call: 'admin_addStoragePeer',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'removeStoragePeer',
+			call: 'admin_removeStoragePeer',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'addTrustedPeer',
 			call: 'admin_addTrustedPeer',
 			params: 1
@@ -208,6 +218,10 @@ web3._extend({
 		new web3._extend.Property({
 			name: 'peers',
 			getter: 'admin_peers'
+		}),
+		new web3._extend.Property({
+			name: 'storagePeers',
+			getter: 'admin_storagePeers'
 		}),
 		new web3._extend.Property({
 			name: 'datadir',

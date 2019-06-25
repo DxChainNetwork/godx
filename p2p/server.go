@@ -176,10 +176,16 @@ type Server struct {
 	peerOp     chan peerOpFunc
 	peerOpDone chan struct{}
 
+	// These are for StoragePeers, StoragePeerCount (and nothing else).
+	storagePeerOp     chan peerOpFunc
+	storagePeerOpDone chan struct{}
+
 	// bunch of channels used for communication among different go routines
 	quit                  chan struct{}
 	addstatic             chan *enode.Node // used for adding static peers
 	removestatic          chan *enode.Node // used for static peer disconnection
+	addStorage            chan *enode.Node // used for adding static peers
+	removeStorage         chan *enode.Node // used for static peer disconnection
 	addtrusted            chan *enode.Node // used to add a node to trusted peer
 	removetrusted         chan *enode.Node // used to remove a node from trusted peer
 	addStorageContract    chan *enode.Node // used to add storage contract peer
@@ -260,7 +266,7 @@ func (c *conn) String() string {
 
 // returns connection flag in string format
 func (f connFlag) String() string {
-	s := "-somethingelse"
+	s := ""
 	if f&trustedConn != 0 {
 		s += "-trusted"
 	}
@@ -343,6 +349,34 @@ func (srv *Server) PeerCount() int {
 	return count
 }
 
+func (srv *Server) StoragePeers() []*Peer {
+	var ps []*Peer
+	select {
+	// Note: We'd love to put this function into a variable but
+	// that seems to cause a weird compiler error in some
+	// environments.
+	case srv.storagePeerOp <- func(peers map[enode.ID]*Peer) {
+		for _, p := range peers {
+			ps = append(ps, p)
+		}
+	}:
+		<-srv.storagePeerOpDone
+	case <-srv.quit:
+	}
+	return ps
+}
+
+// PeerCount returns the number of connected peers.
+func (srv *Server) StoragePeerCount() int {
+	var count int
+	select {
+	case srv.storagePeerOp <- func(ps map[enode.ID]*Peer) { count = len(ps) }:
+		<-srv.storagePeerOpDone
+	case <-srv.quit:
+	}
+	return count
+}
+
 // AddPeer connects to the given node and maintains the connection until the
 // server is shut down. If the connection fails for any reason, the server will
 // attempt to reconnect the peer.
@@ -359,6 +393,21 @@ func (srv *Server) AddPeer(node *enode.Node) {
 func (srv *Server) RemovePeer(node *enode.Node) {
 	select {
 	case srv.removestatic <- node:
+	case <-srv.quit:
+	}
+}
+
+func (srv *Server) AddStoragePeer(node *enode.Node) {
+	select {
+	case srv.addStorage <- node:
+	case <-srv.quit:
+	}
+}
+
+// RemovePeer disconnects from the given node
+func (srv *Server) RemoveStoragePeer(node *enode.Node) {
+	select {
+	case srv.removeStorage <- node:
 	case <-srv.quit:
 	}
 }
@@ -407,7 +456,7 @@ func (srv *Server) RemoveStorageContractPeer(node *enode.Node) {
 	}
 
 	select {
-	case srv.removeStorageContract <- node:
+	case srv.removeStorageClient <- node:
 	case <-srv.quit:
 	}
 }
@@ -526,6 +575,8 @@ func (srv *Server) Start() (err error) {
 	srv.posthandshake = make(chan *conn)
 	srv.addstatic = make(chan *enode.Node)
 	srv.removestatic = make(chan *enode.Node)
+	srv.addStorage = make(chan *enode.Node)
+	srv.removeStorage = make(chan *enode.Node)
 	srv.addtrusted = make(chan *enode.Node)
 	srv.removetrusted = make(chan *enode.Node)
 	srv.addStorageContract = make(chan *enode.Node)
@@ -535,6 +586,8 @@ func (srv *Server) Start() (err error) {
 	srv.storageAddDone = make(chan struct{})
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.storagePeerOp = make(chan peerOpFunc)
+	srv.storagePeerOpDone = make(chan struct{})
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -747,10 +800,12 @@ func (srv *Server) setupListening() error {
 }
 
 type dialer interface {
-	newTasks(running int, peers map[enode.ID]*Peer, now time.Time) []task
+	newTasks(running int, peers map[enode.ID]*Peer, storagePeers map[enode.ID]*Peer, now time.Time) []task
 	taskDone(task, time.Time)
 	addStatic(*enode.Node)
 	removeStatic(*enode.Node)
+	addStorage(n *enode.Node)
+	removeStorage(n *enode.Node)
 }
 
 func (srv *Server) run(dialstate dialer) {
@@ -760,6 +815,7 @@ func (srv *Server) run(dialstate dialer) {
 
 	var (
 		peers           = make(map[enode.ID]*Peer)
+		storagePeers    = make(map[enode.ID]*Peer)
 		inboundCount    = 0 // number of inbound connections
 		trusted         = make(map[enode.ID]bool, len(srv.TrustedNodes))
 		storageContract = make(map[enode.ID]bool, 10)
@@ -815,7 +871,7 @@ func (srv *Server) run(dialstate dialer) {
 		// new tasks (as many as possible, reach to the max active dial tasks)
 		// append those tasks to qeuedtask as well
 		if len(runningTasks) < maxActiveDialTasks {
-			nt := dialstate.newTasks(len(runningTasks)+len(queuedTasks), peers, time.Now())
+			nt := dialstate.newTasks(len(runningTasks)+len(queuedTasks), peers, storagePeers, time.Now())
 			queuedTasks = append(queuedTasks, startTasks(nt)...)
 		}
 	}
@@ -853,6 +909,19 @@ running:
 			log.Warn("remove static peer", "enode", n.String())
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
+				p.Disconnect(DiscRequested)
+			}
+
+		// add storage peer dial task which will be added to the dialstate storage field
+		case n := <-srv.addStorage:
+			log.Warn("add storage peer", "enodeURL", n.String())
+			dialstate.addStorage(n)
+
+		// remove the object from dialstate storage field and then disconnect the real connection
+		case n := <-srv.removeStorage:
+			log.Warn("remove storage peer", "enodeURL", n.String())
+			dialstate.removeStorage(n)
+			if p, ok := storagePeers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
 			}
 
@@ -906,8 +975,8 @@ running:
 			srv.storageAddDone <- struct{}{}
 
 		case n := <-srv.removeStorageClient:
-			if _, ok := storageContract[n.ID()]; ok {
-				delete(storageContract, n.ID())
+			if _, ok := storageClient[n.ID()]; ok {
+				delete(storageClient, n.ID())
 			}
 			// Unmark any already-connected peer as storageClientConn
 			if p, ok := peers[n.ID()]; ok {
@@ -921,6 +990,11 @@ running:
 			// This channel is used by Peers and PeerCount.
 			op(peers)
 			srv.peerOpDone <- struct{}{}
+
+		case op := <-srv.storagePeerOp:
+			// This channel is used by Peers and PeerCount.
+			op(storagePeers)
+			srv.storagePeerOpDone <- struct{}{}
 
 		// signal will be received from the startTask function
 		// where another go routine is used to do the task and
@@ -980,7 +1054,13 @@ running:
 				name := truncateName(c.name)
 				srv.log.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				go srv.runPeer(p)
-				peers[c.node.ID()] = p
+
+				if c.is(storageContractConn) {
+					srv.log.Info("storage p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "flag", c.flags.String(), "enodeURL", p.Node().String())
+					storagePeers[c.node.ID()] = p
+				} else {
+					peers[c.node.ID()] = p
+				}
 				if p.Inbound() {
 					inboundCount++
 				}
@@ -1004,7 +1084,11 @@ running:
 			pd.log.Warn("removed peer")
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			pd.log.Debug("Removing p2p peer", "duration", d, "peers", len(peers)-1, "req", pd.requested, "err", pd.err)
-			delete(peers, pd.ID())
+			if pd.rw.is(storageContractConn) {
+				delete(storagePeers, pd.ID())
+			} else {
+				delete(peers, pd.ID())
+			}
 			if pd.Inbound() {
 				inboundCount--
 			}
@@ -1243,7 +1327,6 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	// Run the protocol handshake with passed in ourHandshake object (protoHandshake)
 	// a list of protocols supported by the destination node will be returned
 	srv.ourHandshake.Flags = c.flags
-
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
 	if err != nil {
@@ -1400,6 +1483,25 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 	// Gather all the generic and sub-protocol specific infos
 	infos := make([]*PeerInfo, 0, srv.PeerCount())
 	for _, peer := range srv.Peers() {
+		if peer != nil {
+			infos = append(infos, peer.Info())
+		}
+	}
+	// Sort the result array alphabetically by node identifier
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			if infos[i].ID > infos[j].ID {
+				infos[i], infos[j] = infos[j], infos[i]
+			}
+		}
+	}
+	return infos
+}
+
+func (srv *Server) StoragePeersInfo() []*PeerInfo {
+	// Gather all the generic and sub-protocol specific infos
+	infos := make([]*PeerInfo, 0, srv.PeerCount())
+	for _, peer := range srv.StoragePeers() {
 		if peer != nil {
 			infos = append(infos, peer.Info())
 		}

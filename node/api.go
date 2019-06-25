@@ -75,6 +75,37 @@ func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 	return true, nil
 }
 
+func (api *PrivateAdminAPI) AddStoragePeer(url string) (bool, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return false, ErrNodeStopped
+	}
+	// Try to add the url as a static peer and return
+	node, err := enode.ParseV4(url)
+	if err != nil {
+		return false, fmt.Errorf("invalid enode: %v", err)
+	}
+	server.AddStoragePeer(node)
+	return true, nil
+}
+
+// RemovePeer disconnects from a remote node if the connection exists
+func (api *PrivateAdminAPI) RemoveStoragePeer(url string) (bool, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return false, ErrNodeStopped
+	}
+	// Try to remove the url as a static peer and return
+	node, err := enode.ParseV4(url)
+	if err != nil {
+		return false, fmt.Errorf("invalid enode: %v", err)
+	}
+	server.RemoveStoragePeer(node)
+	return true, nil
+}
+
 // AddTrustedPeer allows a remote node to always connect, even if slots are full
 func (api *PrivateAdminAPI) AddTrustedPeer(url string) (bool, error) {
 	// Make sure the server is running, fail otherwise
@@ -280,6 +311,16 @@ func (api *PublicAdminAPI) Peers() ([]*p2p.PeerInfo, error) {
 		return nil, ErrNodeStopped
 	}
 	return server.PeersInfo(), nil
+}
+
+// StoragePeers retrieves all the information we know about each individual storage peer at the
+// protocol granularity.
+func (api *PublicAdminAPI) StoragePeers() ([]*p2p.PeerInfo, error) {
+	server := api.node.Server()
+	if server == nil {
+		return nil, ErrNodeStopped
+	}
+	return server.StoragePeersInfo(), nil
 }
 
 // NodeInfo retrieves all the information we know about the host node at the
