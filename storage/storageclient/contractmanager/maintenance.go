@@ -46,7 +46,7 @@ func (cm *ContractManager) contractMaintenance() {
 		cm.maintenanceWg.Done()
 	}()
 
-	cm.log.Info("Contract Maintenance Started")
+	cm.log.Warn("Contract Maintenance Started")
 
 	// start maintenance
 	cm.maintainExpiration()
@@ -63,6 +63,7 @@ func (cm *ContractManager) contractMaintenance() {
 	// when RentPayment is empty, meaning that the storage client does
 	// not want to sign contract with anyone
 	if reflect.DeepEqual(rentPayment, storage.RentPayment{}) {
+		log.Error("rentPayment is empty")
 		return
 	}
 
@@ -93,12 +94,14 @@ func (cm *ContractManager) contractMaintenance() {
 	// start to renew the contracts in the closeToExpireRenews list, which has higher priority
 	clientRemainingFund, terminate := cm.prepareContractRenew(closeToExpireRenews, clientRemainingFund, rentPayment)
 	if terminate {
+		log.Error("[closeToExpireRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
 		return
 	}
 
 	// start to renew contract in the insufficientFundingRenews list, lower priority
 	clientRemainingFund, terminate = cm.prepareContractRenew(insufficientFundingRenews, clientRemainingFund, rentPayment)
 	if terminate {
+		log.Error("[insufficientFundingRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
 		return
 	}
 
@@ -110,6 +113,8 @@ func (cm *ContractManager) contractMaintenance() {
 			uploadableContracts++
 		}
 	}
+
+	log.Error("need contracts", "rentPayment.StorageHosts", rentPayment.StorageHosts, "uploadableContracts", uploadableContracts)
 
 	// get the number of contracts that needed to be formed
 	neededContracts := int(rentPayment.StorageHosts - uploadableContracts)
