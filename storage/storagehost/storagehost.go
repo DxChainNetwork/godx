@@ -623,11 +623,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		return ExtendErr("finalize storage responsibility error", err)
 	}
 
-	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err == nil {
-		return errors.New("storage contract new process done")
-	} else {
-		return err
-	}
+	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
 }
 
 // renewBasePrice returns the base cost of the storage in the  contract,

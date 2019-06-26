@@ -734,10 +734,12 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 	}
 
 	if session != nil {
-		session.StopConnection()
-
-		// wait for connection stop
-		<-session.ClosedChan()
+		if session.StopConnection() {
+			// wait for connection stop
+			<-session.ClosedChan()
+		} else {
+			return errors.New("session stop time out")
+		}
 
 		// retry add origin static node peer
 		s.server.AddPeer(hostNode)
