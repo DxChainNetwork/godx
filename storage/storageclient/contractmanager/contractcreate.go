@@ -21,27 +21,19 @@ import (
 )
 
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
-	a, _ := json.Marshal(rentPayment)
-	log.Warn("prepareCreateContract params", "neededContracts", neededContracts, "clientRemainingFund", clientRemainingFund, "rentPayment", string(a))
-	cm.log.Warn("Prepare to create the contract")
-
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
 	if err != nil {
 		return
 	}
 
-	cm.log.Error("randomly acquired hosts from the storage host manager", "amount of storage hosts", len(randomHosts))
-
 	cm.lock.RLock()
 	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
-	log.Warn("[PARAMS]", "rentPayment.Fund", rentPayment.Fund, "rentPayment.StorageHosts", rentPayment.StorageHosts, "cm.currentPeriod", cm.currentPeriod, "contractFund", contractFund)
 	// loop through each host and try to form contract with them
 	for _, host := range randomHosts {
-		log.Error("randomHost", "enodeURL", host.EnodeID.String())
 		// check if the client has enough fund for forming contract
 		if contractFund.Cmp(clientRemainingFund) > 0 {
 			err = fmt.Errorf("the contract fund %v is larger than client remaining fund %v. Impossible to create contract",
@@ -50,9 +42,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		}
 
 		// start to form contract
-		log.Error("Start Create Contract")
 		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight, rentPayment)
-		log.Error("End Create Contract")
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
@@ -141,7 +131,6 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		Host:                 host,
 	}
 
-	log.Error("ContractParams", "clientPaymentAddress", clientPaymentAddress)
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
 		formCost = common.BigInt0
@@ -194,9 +183,6 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
-	log.Error("Contract Create Starting")
-	a, _ := json.Marshal(params)
-	log.Error("Contract Create Starting", "param", string(a))
 	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract

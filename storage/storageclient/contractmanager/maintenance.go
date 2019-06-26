@@ -46,8 +46,6 @@ func (cm *ContractManager) contractMaintenance() {
 		cm.maintenanceWg.Done()
 	}()
 
-	cm.log.Warn("Contract Maintenance Started")
-
 	// start maintenance
 	cm.maintainExpiration()
 	cm.removeDuplications()
@@ -63,7 +61,6 @@ func (cm *ContractManager) contractMaintenance() {
 	// when RentPayment is empty, meaning that the storage client does
 	// not want to sign contract with anyone
 	if reflect.DeepEqual(rentPayment, storage.RentPayment{}) {
-		log.Error("rentPayment is empty")
 		return
 	}
 
@@ -113,8 +110,6 @@ func (cm *ContractManager) contractMaintenance() {
 			uploadableContracts++
 		}
 	}
-
-	log.Error("need contracts", "rentPayment.StorageHosts", rentPayment.StorageHosts, "uploadableContracts", uploadableContracts)
 
 	// get the number of contracts that needed to be formed
 	neededContracts := int(rentPayment.StorageHosts - uploadableContracts)

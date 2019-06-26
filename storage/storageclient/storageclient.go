@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -327,7 +328,6 @@ func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.H
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
-
 	// Retrieve the last contract revision
 	scs := sc.contractManager.GetStorageContractSet()
 
@@ -366,6 +366,9 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		deposit = sectorDeposit.MultUint64(addedSectors).BigIntPtr()
 	}
 
+	log.Error("*******UPLOAD Fields*******", "blockBytes", blockBytes, "sectorBandwidthPrice", sectorBandwidthPrice,
+		"sectorStoragePrice", sectorStoragePrice, "sectorDeposit", sectorDeposit, "newFileSize", newFileSize, "storagePrice", storagePrice, "deposit", deposit)
+
 	// estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
 	bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
@@ -385,6 +388,9 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
 	rev.NewFileSize = newFileSize
 
+	a, _ := json.Marshal(rev)
+	log.Error("Upload revision", "rev", string(a))
+
 	// create the request
 	req := storage.UploadRequest{
 		StorageContractID: contractRevision.ParentID,
@@ -400,6 +406,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
+	log.Error("Upload Request", "contractID", req.StorageContractID.String())
+
 	// record the change to this contract, that can allow us to continue this incomplete upload at last time
 	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
 	if err != nil {
@@ -407,7 +415,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	defer func() {
-
 		// record the successful or failed interactions
 		if err != nil {
 			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
@@ -439,6 +446,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 
+	log.Error("-----merkle proof------", "newRoot", merkleResp.NewMerkleRoot.String())
 	// verify merkle proof
 	numSectors := contractRevision.NewFileSize / storage.SectorSize
 	proofRanges := CalculateProofRanges(actions, numSectors)
@@ -448,7 +456,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
 	if err != nil {
-		sc.log.Error("something wrong for verifying diff proof", "error", err)
+		sc.log.Error("[oldRoot]something wrong for verifying diff proof", "oldRoot", oldRoot.String(), "error", err)
 	}
 	if !verified {
 		return errors.New("invalid Merkle proof for old root")
@@ -459,7 +467,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
 	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
 	if err != nil {
-		sc.log.Error("something wrong for verifying diff proof", "error", err)
+		sc.log.Error("[newRoot]something wrong for verifying diff proof", "newRoot", newRoot.String(), "error", err)
 	}
 	if !verified {
 		return errors.New("invalid Merkle proof for new root")
@@ -500,12 +508,15 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
+	log.Error("Upload revision sign done", "contractID", rev.ParentID.String(), "revisionNum", rev.NewRevisionNumber, "clientSign", string(clientRevisionSign), "hostSign", string(hostRevisionSig))
+
 	// commit upload revision
 	err = contract.CommitUpload(walTxn, rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
 	if err != nil {
+		log.Error("CommitUpload failed", "err", err)
 		return err
 	}
-
+	log.Error("-------------------Upload Sector Negotiate Done[Client]-------------------")
 	return nil
 }
 

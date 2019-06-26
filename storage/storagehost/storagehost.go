@@ -661,12 +661,17 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
+	log.Error("*********Receive UploadRequest", "contractID", uploadRequest.StorageContractID.String())
+
 	// Get revision from storage responsibility
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
+		log.Error("getStorageResponsibility failed", "err", err)
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
+	a, _ := json.Marshal(so.StorageContractRevisions[len(so.StorageContractRevisions)-1])
+	log.Error("StorageResponsibility", "ContractID", so.id(), "last storageContract revision", string(a))
 	settings := h.externalConfig()
 	currentBlockHeight := h.blockHeight
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
@@ -706,7 +711,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		blockBytesCurrency := common.NewBigIntUint64(blocksRemaining).Mult(common.NewBigIntUint64(bytesAdded))
 		storageRevenue = blockBytesCurrency.Mult(settings.StoragePrice)
 		newDeposit = newDeposit.Add(blockBytesCurrency.Mult(settings.Deposit))
-
 	}
 
 	// If a Merkle proof was requested, construct it
@@ -785,6 +789,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
 	}
 
+	log.Error("---------Upload Proof Host Done---------")
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
@@ -809,6 +814,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	newRevision.Signatures = [][]byte{clientRevisionSign, hostSig}
 
+	log.Error("Host Receive two side sign", "contractID", newRevision.ParentID.String(), "revisionNum", newRevision.NewRevisionNumber, "client", string(clientRevisionSign), "host", string(hostSig))
+
 	// Update the storage responsibility
 	so.SectorRoots = newRoots
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(storageRevenue)
@@ -817,12 +824,16 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
 	if err != nil {
+		log.Error("modifyStorageResponsibility", "err", err)
 		return err
 	}
 
 	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
+		log.Error("SendStorageContractUploadHostRevisionSign", "err", err)
 		return err
 	}
+
+	log.Error("-------------------Upload Sector Negotiate Done[Host]-------------------")
 
 	return nil
 }

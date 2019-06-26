@@ -98,7 +98,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 
-	log.Error("isReady", "contractID", w.contract.ID.String(), "uploadAbility",  uploadAbility, "onCoolDown",  onCoolDown, "uploadTerminated", w.uploadTerminated)
+	log.Error("isReady", "contractID", w.contract.ID.String(), "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "uploadTerminated", w.uploadTerminated)
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
@@ -120,13 +120,15 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	session, err := w.checkSession()
 	defer func() {
-		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
+		if session != nil {
+			session.ResetBusy()
+			session.RevisionDone() <- struct{}{}
 
-		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
-			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
-				w.client.log.Error("close session failed", "err", err)
+			if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
+				delete(w.client.sessionSet, w.contract.ID)
+				if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+					w.client.log.Error("close session failed", "err", err)
+				}
 			}
 		}
 	}()
@@ -138,6 +140,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	}
 
 	// upload segment to host
+	log.Error("------append sector------", "sectorIndex", sectorIndex, "segmentIndex", uc.index, "contractID(worker)", w.contract.ID.String())
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
 		w.client.log.Error("Worker failed to upload", "err", err)
@@ -151,7 +154,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Add sector to storage clientFile
 	err = uc.fileEntry.AddSector(w.contract.EnodeID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
-		w.client.log.Info("Worker failed to add new sector in dxfile", "err", err)
+		w.client.log.Error("Worker failed to add new sector in dxfile", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
@@ -250,6 +253,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 func (w *worker) uploadFailed(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Mark the failure in the worker if the gateway says we are online. It's
 	// not the worker's fault if we are offline
+	log.Error("uploadFailed", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "sectorIndex", sectorIndex)
 	if w.client.Online() {
 		w.mu.Lock()
 		w.uploadRecentFailure = time.Now()

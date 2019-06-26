@@ -419,7 +419,7 @@ func (sc *StorageClient) doProcessNextSegment(uuc *unfinishedUploadSegment) erro
 	if !sc.memoryManager.Request(uuc.memoryNeeded, false) {
 		return errors.New("can't obtain enough memory")
 	}
-	log.Error("doProcessNextSegment", "memory needed", uuc.memoryNeeded)
+	log.Error("doProcessNextSegment", "memory needed", uuc.memoryNeeded, "segmentIndex", uuc.index)
 
 	// Don't block the outer loop
 	go sc.retrieveDataAndDispatchSegment(uuc)
@@ -432,7 +432,7 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	currentContracts := sc.contractManager.GetStorageContractSet().Contracts()
 
 	log.Error("client have contracts", "num", len(currentContracts))
-	for k,_ := range currentContracts {
+	for k, _ := range currentContracts {
 		log.Error("[CONTRACT]", "ContractID", k.String())
 	}
 
@@ -444,7 +444,7 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	// Refresh the worker pool
 	sc.activateWorkerPool()
 
-	for k,_ := range hosts {
+	for k, _ := range hosts {
 		log.Error("Client connnected Hosts", "EnodeID", k)
 	}
 	return hosts

@@ -7,6 +7,7 @@ package dxfile
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"time"
@@ -129,6 +130,7 @@ func (df *DxFile) saveSegments(indexes []int) error {
 	}
 	// Write the Segment with the segmentIndex
 	for _, index := range indexes {
+		log.Error("saveSegments", "segmentIndex", index)
 		df.pruneSegment(index)
 		seg := df.segments[index]
 		if seg.Index != uint64(index) {
