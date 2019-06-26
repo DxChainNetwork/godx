@@ -5,7 +5,6 @@
 package storage
 
 import (
-	"io"
 	"math/big"
 	"sort"
 	"time"
@@ -13,8 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/merkletree"
 )
 
@@ -102,19 +99,6 @@ type (
 		MerkleProof []common.Hash
 	}
 )
-
-func (ccr *ContractCreateRequest) DecodeRLP(s *rlp.Stream) error {
-	_, size, _ := s.Kind()
-	if err := s.Decode(&ccr); err != nil {
-		return err
-	}
-	log.Debug("rlp decode form contract request", "encode_size", rlp.ListSize(size))
-	return nil
-}
-
-func (ccr *ContractCreateRequest) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, ccr)
-}
 
 // newRevision creates a copy of current with its revision number incremented,
 // and with cost transferred from the storage client to the host.

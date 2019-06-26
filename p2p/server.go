@@ -192,7 +192,7 @@ type Server struct {
 	removeStorageContract chan *enode.Node // used to remove storage contract peer
 	addStorageClient      chan *enode.Node // used to add storage contract client peer
 	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
-	storageAddDone        chan struct{}
+	storagePeerDoneMap 	  map[enode.ID]*sync.WaitGroup
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
@@ -431,6 +431,16 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 
 // add storage contract and client flag
 func (srv *Server) AddStorageContractPeer(node *enode.Node) {
+	nodeID := node.ID()
+
+	wg, ok := srv.storagePeerDoneMap[nodeID]
+	if !ok {
+		_wg := &sync.WaitGroup{}
+		_wg.Add(2)
+		srv.storagePeerDoneMap[nodeID] = _wg
+		wg = _wg
+	}
+
 	select {
 	case srv.addStorageContract <- node:
 		srv.log.Warn("AddStorageContractPeer", "chanContent", node.String())
@@ -444,8 +454,8 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	}
 
 	// wait for add done
-	<-srv.storageAddDone
-	log.Warn("add storage client done")
+	wg.Wait()
+	delete(srv.storagePeerDoneMap, nodeID)
 }
 
 // RemoveTrustedPeer removes the given node from the trusted peer set.
@@ -583,7 +593,7 @@ func (srv *Server) Start() (err error) {
 	srv.removeStorageContract = make(chan *enode.Node)
 	srv.addStorageClient = make(chan *enode.Node)
 	srv.removeStorageClient = make(chan *enode.Node)
-	srv.storageAddDone = make(chan struct{})
+	srv.storagePeerDoneMap = make(map[enode.ID]*sync.WaitGroup)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 	srv.storagePeerOp = make(chan peerOpFunc)
@@ -895,7 +905,6 @@ running:
 			// it will keep the node connected.
 			// add node to dialstate static field, which contains a list of static fields
 			// waiting for the connection
-			log.Warn("add static peer", "enode", n.String())
 			dialstate.addStatic(n)
 
 		// node information was passed in through RemovePeer function
@@ -906,7 +915,6 @@ running:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected.
-			log.Warn("remove static peer", "enode", n.String())
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
@@ -956,7 +964,7 @@ running:
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageContractConn, true)
 			}
-
+			srv.storagePeerDoneMap[n.ID()].Done()
 		case n := <-srv.removeStorageContract:
 			if _, ok := storageContract[n.ID()]; ok {
 				delete(storageContract, n.ID())
@@ -972,7 +980,7 @@ running:
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(storageClientConn, true)
 			}
-			srv.storageAddDone <- struct{}{}
+			srv.storagePeerDoneMap[n.ID()].Done()
 
 		case n := <-srv.removeStorageClient:
 			if _, ok := storageClient[n.ID()]; ok {

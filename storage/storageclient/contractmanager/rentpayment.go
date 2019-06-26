@@ -10,6 +10,8 @@ import (
 	"reflect"
 )
 
+// SetRentPayment will set the rentpayment to the value passed in by the user
+// through the command line interface
 func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) {
 	if cm.b.Syncing() {
 		return errors.New("setrentpayment can only be done once the blockchain finished syncing")

@@ -391,7 +391,9 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 //PruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) PruneStaleStorageResponsibilities() error {
+	h.lock.RLock()
 	sos := h.StorageResponsibilities()
+	h.lock.RUnlock()
 	var scids []common.Hash
 	for _, so := range sos {
 		if h.blockHeight > so.NegotiationBlockNumber+confirmedBufferHeight {
@@ -533,6 +535,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	// Fetch the storage Responsibility associated with the storage responsibility id.
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
+	h.lock.RUnlock()
 	if err != nil {
 		h.log.Warn("Could not get storage Responsibility", "err", err)
 		return
