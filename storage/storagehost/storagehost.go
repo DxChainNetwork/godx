@@ -607,7 +607,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if req.Renew {
-		oldso, err := GetStorageResponsibility(h.db, req.OldContractID)
+		oldso, err := getStorageResponsibility(h.db, req.OldContractID)
 		if err != nil {
 			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
 		} else {
@@ -663,7 +663,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage responsibility
-	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
@@ -855,7 +855,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}()
 
 	// get storage responsibility
-	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
+	so, err := getStorageResponsibility(h.db, req.StorageContractID)
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
