@@ -6,8 +6,10 @@ package contractmanager
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -32,6 +34,7 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
+	log.Error("[ContractManager]currentBlockHeight", "height", cm.blockHeight)
 	cm.lock.RUnlock()
 
 	// loop through all active contracts, get the closeToExpireRenews and insufficientFundingRenews
@@ -42,6 +45,9 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 			continue
 		}
 
+		a, _ := json.Marshal(contract)
+		log.Error("CONTRACT InfoXXXXXX", "contract", string(a))
+
 		// verify if the contract is good for renew
 		if !contract.Status.RenewAbility {
 			continue
@@ -50,6 +56,9 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		// for contract that is about to expire, it will be added to the priorityRenews
 		// calculate the renewCostEstimation and update the priorityRenews
 		if currentBlockHeight+rentPayment.RenewWindow >= contract.EndHeight {
+			b, _ := json.Marshal(rentPayment)
+			log.Error("RentpamentOOOOOO", "info", string(b))
+
 			estimateContractRenewCost := cm.renewCostEstimation(host, contract, currentBlockHeight, rentPayment)
 			closeToExpireRenews = append(closeToExpireRenews, contractRenewRecord{
 				id:   contract.ID,
@@ -68,6 +77,7 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
 
 		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
+			log.Error("insufficientFundingRenewsXXXXXXXX", "ContractBalance", contract.ContractBalance, "totalSectorCost", totalSectorCost, "remainingBalancePercentage", remainingBalancePercentage)
 			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
 				id:   contract.ID,
 				cost: contract.TotalCost.MultUint64(2),

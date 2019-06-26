@@ -5,7 +5,9 @@
 package storageclient
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -111,9 +113,13 @@ func (api *PrivateStorageClientAPI) SetClientSetting(settings map[string]string)
 		err = fmt.Errorf("form contract failed, failed to parse the client settings: %s", err.Error())
 		return
 	}
+	a, _ := json.Marshal(currentSetting)
+	log.Error("AFTER parseClientSetting", "setting", string(a))
 
 	// if user entered any 0s for the rent payment, set them to the default rentPayment settings
 	currentSetting = clientSettingGetDefault(currentSetting)
+	b, _ := json.Marshal(currentSetting)
+	log.Error("AFTER clientSettingGetDefault", "setting", string(b))
 
 	// call set client setting methods
 	if err = api.sc.SetClientSetting(currentSetting); err != nil {

@@ -7,6 +7,7 @@ package storageclient
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"strconv"
@@ -64,6 +65,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 		case key == "renew":
 			var renew uint64
 			renew, err = parsePeriodAndRenew(value)
+			log.Error("parsePeriodAndRenewXXXXX", "periodRenew", renew)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the renew value: %s", err.Error())
 				break
