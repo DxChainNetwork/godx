@@ -53,6 +53,9 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 	//TODO 从磁盘中获取总的存储和剩余存储
 
 	acceptingContracts := h.config.AcceptingContracts
+	if !acceptingContracts {
+		acceptingContracts = true
+	}
 	MaxDeposit := h.config.MaxDeposit
 	paymentAddress := h.config.PaymentAddress
 	if paymentAddress != (common.Address{}) {

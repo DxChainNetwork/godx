@@ -36,9 +36,9 @@ var (
 	defaultWindowSize           = 144
 
 	// deposit defaults value
-	defaultDeposit       = 0
-	defaultDepositBudget = 1000000
-	defaultMaxDeposit    = 10000000000000000
+	defaultDeposit       = 10
+	defaultDepositBudget = 995185185185180
+	defaultMaxDeposit    = 100000000000000000
 
 	// prices
 	defaultBaseRPCPrice           = 2000
