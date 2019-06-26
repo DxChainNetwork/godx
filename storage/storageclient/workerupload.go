@@ -65,6 +65,9 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 			w.mu.Unlock()
 			break
 		}
+
+		log.Error("WORKER Pending Segments", "contractID", w.contract.ID.String(), "len", len(w.pendingSegments))
+
 		segment := w.pendingSegments[0]
 		w.pendingSegments = w.pendingSegments[1:]
 		w.mu.Unlock()
@@ -95,6 +98,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 
+	log.Error("isReady", "contractID", w.contract.ID.String(), "uploadAbility",  uploadAbility, "onCoolDown",  onCoolDown, "uploadTerminated", w.uploadTerminated)
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
@@ -177,6 +181,12 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
+	log.Error("PreProcessUploadSegment", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "offset", uc.offset, "length", uc.length)
+	log.Error("unfinishedUploadSegment", "sectorsAllNeedNum", uc.sectorsAllNeedNum, "sectorsCompletedNum", uc.sectorsCompletedNum, "sectorsUploadingNum", uc.sectorsUploadingNum)
+	for k, _ := range uc.unusedHosts {
+		log.Error("UnusedHost", "host", k)
+	}
+
 	uploadAbility := false
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
@@ -192,12 +202,14 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	_, candidateHost := uc.unusedHosts[w.contract.EnodeID.String()]
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
+
+	log.Error("PreProcessUploadSegment flags", "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "candidateHost", candidateHost, "isComplete", isComplete, "isNeedUpload", isNeedUpload)
 	// If the segment does not need help from this worker, release the segment
 	if isComplete || !candidateHost || !uploadAbility || onCoolDown {
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Info("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
+		w.client.log.Warn("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
 		return nil, 0
 	}
 
@@ -230,6 +242,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	uc.sectorsUploadingNum++
 	uc.workersRemain--
 	uc.mu.Unlock()
+	log.Error("This select sector", "index", index, "contractID", w.contract.ID.String(), "segmentIndex", uc.id.index, "total", len(uc.sectorSlotsStatus))
 	return uc, uint64(index)
 }
 

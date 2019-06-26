@@ -155,9 +155,9 @@ func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) 
 	// loop to download, upload, stuck and health check
 	go sc.downloadLoop()
 	go sc.uploadLoop()
-	//go sc.stuckLoop()
-	//go sc.uploadOrRepair()
-	//go sc.healthCheckLoop()
+	go sc.stuckLoop()
+	go sc.uploadOrRepair()
+	go sc.healthCheckLoop()
 
 	// kill workers on shutdown.
 	sc.tm.OnStop(func() error {

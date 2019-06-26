@@ -7,6 +7,7 @@ package storageclient
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
@@ -203,6 +204,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	defer sc.tm.Done()
 
 	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(segment.fileEntry.ErasureCode().MinSectors())
+	log.Error("---[RetrieveDataAndDispatchSegment]---", "erasureCodingMemory", erasureCodingMemory, "SectorSize", segment.fileEntry.SectorSize(), "minsectors", segment.fileEntry.ErasureCode().MinSectors())
 	var sectorCompletedMemory uint64
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
@@ -247,7 +249,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 
 	// Sanity check that at least as many physical data sectors as sector slots
 	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
-		sc.log.Info("not enough physical sectors to match the upload sector slots of the file")
+		sc.log.Error("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
 
@@ -272,7 +274,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		sc.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 	}
-
+	log.Error("Start Dispatch Segment-----------")
 	sc.dispatchSegment(segment)
 }
 
@@ -317,6 +319,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
 func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
+	log.Error("EntryInto cleanupUploadSegment", "segment index", uc.index)
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64

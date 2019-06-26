@@ -7,6 +7,7 @@ package storageclient
 import (
 	"container/heap"
 	"errors"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
@@ -295,9 +296,12 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 // createAndPushSegments creates the unfinished segments and push them to the upload heap
 func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithID, hosts map[string]struct{}, target uploadTarget, hostHealthInfoTable storage.HostHealthInfoTable) error {
 	for _, file := range files {
+		log.Error("CreateAndPushSegments", "dxpath", file.DxPath(), "local path", file.LocalPath())
 		sc.lock.Lock()
 		unfinishedUploadSegments, err := sc.createUnfinishedSegments(file, hosts, target, hostHealthInfoTable)
+		log.Error("createUnfinishedSegments", "segmentNum", len(unfinishedUploadSegments), "err", err)
 		if err != nil {
+			sc.lock.Lock()
 			return err
 		}
 		sc.lock.Unlock()
@@ -415,6 +419,7 @@ func (sc *StorageClient) doProcessNextSegment(uuc *unfinishedUploadSegment) erro
 	if !sc.memoryManager.Request(uuc.memoryNeeded, false) {
 		return errors.New("can't obtain enough memory")
 	}
+	log.Error("doProcessNextSegment", "memory needed", uuc.memoryNeeded)
 
 	// Don't block the outer loop
 	go sc.retrieveDataAndDispatchSegment(uuc)
@@ -425,6 +430,12 @@ func (sc *StorageClient) doProcessNextSegment(uuc *unfinishedUploadSegment) erro
 // workers for the storage client
 func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	currentContracts := sc.contractManager.GetStorageContractSet().Contracts()
+
+	log.Error("client have contracts", "num", len(currentContracts))
+	for k,_ := range currentContracts {
+		log.Error("[CONTRACT]", "ContractID", k.String())
+	}
+
 	hosts := make(map[string]struct{})
 	for _, contract := range currentContracts {
 		hosts[contract.Header().EnodeID.String()] = struct{}{}
@@ -432,6 +443,10 @@ func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 
 	// Refresh the worker pool
 	sc.activateWorkerPool()
+
+	for k,_ := range hosts {
+		log.Error("Client connnected Hosts", "EnodeID", k)
+	}
 	return hosts
 }
 
@@ -445,6 +460,7 @@ func (sc *StorageClient) uploadOrRepair() {
 		case <-sc.tm.StopChan():
 			return
 		case <-sc.uploadHeap.segmentComing:
+			log.Error("-------receive segmentComing----------")
 		}
 
 	LOOP:
@@ -453,8 +469,10 @@ func (sc *StorageClient) uploadOrRepair() {
 			if !sc.blockUntilOnline() {
 				return
 			}
+			log.Error("client is online")
 		}
 
+		log.Error("upload heap", "len", sc.uploadHeap.len())
 		// Pop the next segment and check whether is empty
 		nextSegment := sc.uploadHeap.pop()
 		if nextSegment == nil {
@@ -462,13 +480,15 @@ func (sc *StorageClient) uploadOrRepair() {
 		}
 
 		sc.log.Info("Sending next segment to the workers", "segmentID", nextSegment.id)
+		sc.log.Error("Sending next segment to the workers", "segmentID", nextSegment.id)
 		// If the num of workers in worker pool is not enough to cover the tasks, we will
 		// mark the segment as stuck
 		sc.lock.Lock()
 		availableWorkers := len(sc.workerPool)
 		sc.lock.Unlock()
+		log.Error("AvailableWorkers", "num", availableWorkers, "sectorsMinNeedNum", nextSegment.sectorsMinNeedNum)
 		if availableWorkers < nextSegment.sectorsMinNeedNum {
-			sc.log.Info("Setting segment as stuck because there are not enough good workers", "segmentID", nextSegment.id)
+			sc.log.Error("Setting segment as stuck because there are not enough good workers", "segmentID", nextSegment.id)
 			err := sc.setStuckAndClose(nextSegment, true)
 			if err != nil {
 				sc.log.Error("Unable to mark segment as stuck and close", "err", err)

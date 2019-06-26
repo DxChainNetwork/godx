@@ -74,6 +74,7 @@ func (sc *StorageClient) activateWorkerPool() {
 			// start worker goroutine
 			if err := sc.tm.Add(); err != nil {
 				log.Error("storage client failed to add in worker progress", "error", err)
+				sc.lock.Unlock()
 				break
 			}
 			go func() {
@@ -122,6 +123,7 @@ func (w *worker) workLoop() {
 		case <-w.downloadChan:
 			continue
 		case <-w.uploadChan:
+			log.Error("--------------Receive uploadchan-------------")
 			continue
 		case <-w.killChan:
 			return
