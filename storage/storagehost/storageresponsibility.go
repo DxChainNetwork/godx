@@ -834,7 +834,6 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for _, id := range ContractCreateIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			so.CreateContractConfirmed = true
@@ -849,7 +848,6 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			if len(so.StorageContractRevisions) < 1 {
@@ -871,7 +869,6 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			so.StorageProofConfirmed = true
@@ -922,7 +919,6 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for _, id := range ContractCreateIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			so.CreateContractConfirmed = false
@@ -937,7 +933,6 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			so.StorageRevisionConfirmed = false
@@ -952,7 +947,6 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
 			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
 				continue
 			}
 			so.StorageProofConfirmed = false
