@@ -107,21 +107,13 @@ func (i storageResponsibilityStatus) String() string {
 	}
 }
 
-func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageResponsibility, error) {
-	so, errGet := GetStorageResponsibility(db, sc)
-	if errGet != nil {
-		return StorageResponsibility{}, errGet
-	}
-	return so, nil
-}
+//func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
+//	return putStorageResponsibility(db, so.id(), so)
+//}
 
-func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
-	return StoreStorageResponsibility(db, so.id(), so)
-}
-
-func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
-	return DeleteStorageResponsibility(db, sc)
-}
+//func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
+//	return deleteStorageResponsibility(db, sc)
+//}
 
 //Returns expired block number
 func (so *StorageResponsibility) expiration() uint64 {
@@ -246,7 +238,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 					return err
 				}
 			}
-			errPut := StoreStorageResponsibility(h.db, so.id(), so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				return errPut
 			}
@@ -351,7 +343,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 			return errOld
 		}
 
-		return putStorageResponsibility(h.db, so)
+		return putStorageResponsibility(h.db, so.id(), so)
 	}()
 
 	if errDBso != nil {
@@ -478,7 +470,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 	h.financialMetrics.ContractCount--
 	so.ResponsibilityStatus = sos
 	so.SectorRoots = []common.Hash{}
-	return StoreStorageResponsibility(h.db, so.id(), so)
+	return putStorageResponsibility(h.db, so.id(), so)
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
@@ -705,7 +697,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	}
 
 	// Save the storage Responsibility.
-	errDB := StoreStorageResponsibility(h.db, soid, so)
+	errDB := putStorageResponsibility(h.db, soid, so)
 	if errDB != nil {
 		h.log.Warn("Error updating the storage Responsibility", errDB)
 	}
@@ -833,11 +825,15 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all contract transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
 			so.CreateContractConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -847,6 +843,10 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all revision transactions and modify storage responsibility status
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
@@ -858,7 +858,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 			if value == so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewRevisionNumber {
 				so.StorageRevisionConfirmed = true
 			}
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -868,11 +868,15 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
 			so.StorageProofConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -918,11 +922,15 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all ContractCreate transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
 			so.CreateContractConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -932,11 +940,15 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all revision transactions and modify storage responsibility status
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
 			so.StorageRevisionConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -946,11 +958,15 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//Because the signing is not the local node,
+			// all the cases will not be found,
+			// it is a bit inappropriate to print this error here,
+			// here I should ignore this error
 			if errGet != nil {
 				continue
 			}
 			so.StorageProofConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn(errPutStorageResponsibility, "err", errPut)
 				continue
@@ -1021,7 +1037,7 @@ func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
 	}
 
 	for i := range h.lockedStorageResponsibility {
-		so, err := GetStorageResponsibility(h.db, i)
+		so, err := getStorageResponsibility(h.db, i)
 		if err != nil {
 			h.log.Warn(errGetStorageResponsibility, "err", err)
 			continue
@@ -1043,8 +1059,8 @@ func (h *StorageHost) SendStorageProofTx(from common.Address, input []byte) (com
 	return h.parseAPI.StorageTx.SendStorageProofTX(from, input)
 }
 
-//StoreStorageResponsibility storage storageResponsibility from DB
-func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
+//putStorageResponsibility storage storageResponsibility from DB
+func putStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
 	scdb := ethdb.StorageContractDB{db}
 	data, err := rlp.EncodeToBytes(so)
 	if err != nil {
@@ -1053,14 +1069,14 @@ func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash
 	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageResponsibility)
 }
 
-//DeleteStorageResponsibility delete storageResponsibility from DB
-func DeleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
+//deleteStorageResponsibility delete storageResponsibility from DB
+func deleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
 	scdb := ethdb.StorageContractDB{db}
 	return scdb.DeleteWithPrefix(storageContractID, PrefixStorageResponsibility)
 }
 
-//GetStorageResponsibility get storageResponsibility from DB
-func GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
+//getStorageResponsibility get storageResponsibility from DB
+func getStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
 	scdb := ethdb.StorageContractDB{db}
 	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixStorageResponsibility)
 	if err != nil {

@@ -20,7 +20,7 @@ func TestStoreStorageResponsibility(t *testing.T) {
 		},
 	}
 
-	err := StoreStorageResponsibility(db, so.OriginStorageContract.RLPHash(), so)
+	err := putStorageResponsibility(db, so.OriginStorageContract.RLPHash(), so)
 	if err != nil {
 		t.Error(err)
 	}
