@@ -107,14 +107,6 @@ func (i storageResponsibilityStatus) String() string {
 	}
 }
 
-//func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
-//	return putStorageResponsibility(db, so.id(), so)
-//}
-
-//func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
-//	return deleteStorageResponsibility(db, sc)
-//}
-
 //Returns expired block number
 func (so *StorageResponsibility) expiration() uint64 {
 	//If there is revision, return NewWindowStart
@@ -825,10 +817,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all contract transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
@@ -843,10 +832,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all revision transactions and modify storage responsibility status
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
@@ -868,10 +854,7 @@ func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
@@ -922,10 +905,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all ContractCreate transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
@@ -940,10 +920,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all revision transactions and modify storage responsibility status
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
@@ -958,10 +935,7 @@ func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
-			//Because the signing is not the local node,
-			// all the cases will not be found,
-			// it is a bit inappropriate to print this error here,
-			// here I should ignore this error
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
 				continue
 			}
