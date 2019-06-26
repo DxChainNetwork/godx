@@ -5,7 +5,10 @@
 package contractmanager
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -18,8 +21,9 @@ import (
 )
 
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
-
-	cm.log.Debug("Prepare to create the contract")
+	a, _ := json.Marshal(rentPayment)
+	log.Warn("prepareCreateContract params", "neededContracts", neededContracts, "clientRemainingFund", clientRemainingFund, "rentPayment", string(a))
+	cm.log.Warn("Prepare to create the contract")
 
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
@@ -27,15 +31,17 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		return
 	}
 
-	cm.log.Debug("randomly acquired hosts from the storage host manager", "amount of storage hosts", len(randomHosts))
+	cm.log.Error("randomly acquired hosts from the storage host manager", "amount of storage hosts", len(randomHosts))
 
 	cm.lock.RLock()
 	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)
 	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
 	cm.lock.RUnlock()
 
+	log.Warn("[PARAMS]", "rentPayment.Fund", rentPayment.Fund, "rentPayment.StorageHosts", rentPayment.StorageHosts, "cm.currentPeriod", cm.currentPeriod, "contractFund", contractFund)
 	// loop through each host and try to form contract with them
 	for _, host := range randomHosts {
+		log.Error("randomHost", "enodeURL", host.EnodeID.String())
 		// check if the client has enough fund for forming contract
 		if contractFund.Cmp(clientRemainingFund) > 0 {
 			err = fmt.Errorf("the contract fund %v is larger than client remaining fund %v. Impossible to create contract",
@@ -44,12 +50,13 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		}
 
 		// start to form contract
+		log.Error("Start Create Contract")
 		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight, rentPayment)
-
+		log.Error("End Create Contract")
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
-			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, err.Error())
+			cm.log.Error("trying to form contract failed", "host", host.EnodeID.String(), "err", errFormContract)
 			continue
 		}
 
@@ -87,6 +94,8 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 func (cm *ContractManager) createContract(host storage.HostInfo, contractFund common.BigInt, contractEndHeight uint64, rentPayment storage.RentPayment) (formCost common.BigInt, newlyCreatedContract storage.ContractMetaData, err error) {
 	// 1. storage host validation
 	// validate the storage price
+	a, _ := json.Marshal(host)
+	log.Error("createContract", "host", string(a))
 	if host.StoragePrice.Cmp(maxHostStoragePrice) > 0 {
 		formCost = common.BigInt0
 		err = fmt.Errorf("failed to create the contract with host: %v, the storage price is too high", host.EnodeID)
@@ -132,6 +141,7 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 		Host:                 host,
 	}
 
+	log.Error("ContractParams", "clientPaymentAddress", clientPaymentAddress)
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
 		formCost = common.BigInt0
@@ -184,13 +194,18 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
+	log.Error("Contract Create Starting")
+	a, _ := json.Marshal(params)
+	log.Error("Contract Create Starting", "param", string(a))
 	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
 	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
+	log.Error("payout", "clientPayout", clientPayout, "hostpayout", hostPayout)
 	if err != nil {
+		log.Error("ClientPayoutsPreTax Failed", "err", err)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -224,9 +239,11 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		},
 	}
 
+	b, _ := json.Marshal(storageContract)
+	log.Error("create contract", "info", string(b))
+
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-
 		hostID := PubkeyToEnodeID(&host.NodePubKey)
 		if err != nil {
 			cm.hostManager.IncrementFailedInteractions(hostID)
@@ -245,10 +262,11 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
+		log.Error("setupconnection", "err", err)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
 	defer func() {
-		cm.log.Error("Contract Create: disconnecte")
+		cm.log.Error("Contract Create: disconnect")
 		cm.b.Disconnect(session, host.EnodeURL)
 	}()
 
@@ -265,6 +283,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		Renew:           false,
 	}
 
+	log.Error("ContractCreateRequest", "req.sign[clientContract]", hexutil.Encode(req.Sign))
 	if err := session.SendStorageContractCreation(req); err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -301,6 +320,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		NewMissedProofOutputs: storageContract.MissedProofOutputs,
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
+
+	c, _ := json.Marshal(storageContractRevision)
+	log.Error("storageContractRevision", "info", string(c))
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
