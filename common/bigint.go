@@ -152,6 +152,7 @@ func (x BigInt) DivUint64(y uint64) (quotient BigInt) {
 	return
 }
 
+// DivNoRemaining will check if the division will give any remainders
 func (x BigInt) DivNoRemaining(y uint64) (noRemaining bool) {
 	// get the x % y
 	var module BigInt
@@ -163,6 +164,18 @@ func (x BigInt) DivNoRemaining(y uint64) (noRemaining bool) {
 		return true
 	}
 	return false
+}
+
+// Division between two BigInt values and return with float64 result
+func (x BigInt) DivWithFloatResult(y BigInt) (quotient float64) {
+	// making sure that denominator is not 0
+	if y.IsEqual(BigInt0) {
+		return
+	}
+
+	// division
+	quotient, _ = big.NewRat(0, 1).SetFrac(&x.b, &y.b).Float64()
+	return
 }
 
 // Cmp will compare two BigInt Data
