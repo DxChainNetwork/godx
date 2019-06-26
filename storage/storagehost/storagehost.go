@@ -167,7 +167,7 @@ func (h *StorageHost) load() error {
 // account address as the payment address
 func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 	h.lock.Lock()
-	h.lock.Unlock()
+	defer h.lock.Unlock()
 
 	paymentAddress := h.config.PaymentAddress
 	if paymentAddress != (common.Address{}) {
@@ -189,20 +189,10 @@ func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 	return common.Address{}, errors.New("no wallet accounts available")
 }
 
-// getExternalConfig return the host external config, which configure host through,
-// user should not able to modify the config
-func (h *StorageHost) getExternalConfig() storage.HostExtConfig {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	// mock the return of host external config
-	return h.externalConfig()
-}
-
 // getInternalConfig Return the internal config of host
 func (h *StorageHost) getInternalConfig() storage.HostIntConfig {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 
 	return h.config
 }
