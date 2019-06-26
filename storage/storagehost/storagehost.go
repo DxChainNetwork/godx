@@ -166,10 +166,10 @@ func (h *StorageHost) load() error {
 // getPaymentAddress get the current payment address. If no address is set, assign the first
 // account address as the payment address
 func (h *StorageHost) getPaymentAddress() (common.Address, error) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
+	h.lock.RLock()
 	paymentAddress := h.config.PaymentAddress
+	h.lock.RUnlock()
+
 	if paymentAddress != (common.Address{}) {
 		return paymentAddress, nil
 	}
@@ -179,11 +179,17 @@ func (h *StorageHost) getPaymentAddress() (common.Address, error) {
 		if accs := wallets[0].Accounts(); len(accs) > 0 {
 			paymentAddress := accs[0].Address
 			//the first address in the local wallet will be used as the paymentAddress by default.
-			h.config.PaymentAddress = paymentAddress
-			if err := h.syncConfig(); err != nil {
-				return common.Address{}, fmt.Errorf("cannot save host config: %v", err)
+			h.lock.Lock()
+			defer h.lock.Unlock()
+			// Check again
+			if h.config.PaymentAddress == (common.Address{}) {
+				h.config.PaymentAddress = paymentAddress
+				if err := h.syncConfig(); err != nil {
+					return common.Address{}, fmt.Errorf("cannot save host config: %v", err)
+				}
+				return paymentAddress, nil
 			}
-			return paymentAddress, nil
+			return h.config.PaymentAddress, nil
 		}
 	}
 	return common.Address{}, errors.New("no wallet accounts available")
