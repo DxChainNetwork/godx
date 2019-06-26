@@ -7,6 +7,7 @@ package storagehosttree
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
+	"math/big"
 )
 
 // HostEvaluation defines an interface that include methods that used to calculate
@@ -92,5 +93,7 @@ func conversionRate(eval, evalAll common.BigInt) float64 {
 	eval = eval.MultInt(50)
 
 	// return ratio
-	return eval.Div(evalAll).Float64()
+	//return eval.Div(evalAll).Float64()
+	rate, _ := big.NewRat(0, 1).SetFrac(eval.BigIntPtr(), evalAll.BigIntPtr()).Float64()
+	return rate
 }

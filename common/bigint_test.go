@@ -234,3 +234,23 @@ func TestCmp(t *testing.T) {
 		}
 	}
 }
+
+func TestDiv(t *testing.T) {
+	// contract balance
+	a := int64(166666666666663666)
+	balance := NewBigInt(a)
+
+	// total cost
+	b := int64(166666666666666656)
+	cost := NewBigInt(b)
+
+	res1 := balance.Float64() / cost.Float64()
+	if res1 == 0 {
+		t.Fatal("float div is zero")
+	}
+
+	res2 := balance.Div(cost).Float64()
+	if res2 != 0 {
+		t.Fatal("bigInt div is not zero")
+	}
+}

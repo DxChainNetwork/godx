@@ -6,6 +6,7 @@ package contractmanager
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -514,7 +515,12 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// total cost for store / upload / download a sector
 	totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-	remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+	// bigInt div is integer div method(will be 0)
+	// recommend style
+	//    -- big.NewRat(0, 1).SetFrac(contract.RenterFunds.Big(), contract.TotalCost.Big()).Float64()
+
+	// remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+	remainingBalancePercentage, _ := big.NewRat(0, 1).SetFrac(contract.ContractBalance.BigIntPtr(), contract.TotalCost.BigIntPtr()).Float64()
 
 	// if the remaining contract balance is not enough to pay for the 3X total sector cost
 	// or the remainingBalancePercentage is smaller than 5%, we consider this contract is not good

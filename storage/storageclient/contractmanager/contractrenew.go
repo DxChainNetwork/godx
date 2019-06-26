@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/log"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -74,7 +75,8 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-		remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+		// remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+		remainingBalancePercentage, _ := big.NewRat(0, 1).SetFrac(contract.ContractBalance.BigIntPtr(), contract.TotalCost.BigIntPtr()).Float64()
 
 		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
 			log.Error("insufficientFundingRenewsXXXXXXXX", "ContractBalance", contract.ContractBalance, "totalSectorCost", totalSectorCost, "remainingBalancePercentage", remainingBalancePercentage)
