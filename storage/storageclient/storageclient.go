@@ -323,7 +323,7 @@ func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit
 
 func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
 	err := sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
-	return merkle.Root(data), err
+	return merkle.Sha256MerkleTreeRoot(data), err
 }
 
 func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
@@ -446,7 +446,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
 
-	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
+	verified, err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
 	if err != nil {
 		sc.log.Error("something wrong for verifying diff proof", "error", err)
 	}
@@ -457,7 +457,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
-	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
+	verified, err = merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
 	if err != nil {
 		sc.log.Error("something wrong for verifying diff proof", "error", err)
 	}
@@ -674,7 +674,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			if req.MerkleProof {
 				proofStart := int(sec.Offset) / merkle.LeafSize
 				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
-				verified, err := merkle.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
+				verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
 				if !verified || err != nil {
 					return errors.New("host provided incorrect sector data or Merkle proof")
 				}

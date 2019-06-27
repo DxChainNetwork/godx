@@ -566,7 +566,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 		for 1<<log2SectorSize < (storage.SectorSize / merkle.LeafSize) {
 			log2SectorSize++
 		}
-		ct := merkle.NewCachedTree(log2SectorSize)
+		ct := merkle.NewSha256CachedTree(log2SectorSize)
 		err = ct.SetIndex(segmentIndex)
 		if err != nil {
 			h.log.Warn("cannot call SetIndex on Tree ", "err", err)
@@ -634,7 +634,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 
 //merkleProof get the storage proof
 func merkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
-	t := merkle.NewTree()
+	t := merkle.NewSha256MerkleTree()
 	//This error doesn't mean anything to us.
 	t.SetIndex(proofIndex)
 

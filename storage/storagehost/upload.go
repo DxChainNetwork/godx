@@ -51,7 +51,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		switch action.Type {
 		case storage.UploadActionAppend:
 			// Update sector roots.
-			newRoot := merkle.Root(action.Data)
+			newRoot := merkle.Sha256MerkleTreeRoot(action.Data)
 			newRoots = append(newRoots, newRoot)
 			sectorsGained = append(sectorsGained, newRoot)
 			gainedSectorData = append(gainedSectorData, action.Data)
@@ -78,7 +78,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
+	newMerkleRoot := merkle.Sha256CachedTreeRoot2(newRoots)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -135,7 +135,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Construct the merkle proof
-	oldHashSet, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
+	oldHashSet, err := merkle.Sha256DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
-		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
+		return fmt.Errorf("[Error Send Storage Sha256MerkleTreeProof] Error: %v", err)
 	}
 
 	var clientRevisionSign []byte
@@ -291,7 +291,7 @@ func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	}
 
 	// The Merkle root is checked last because it is the most expensive check.
-	if revision.NewFileMerkleRoot != merkle.CachedTreeRoot(so.SectorRoots, sectorHeight) {
+	if revision.NewFileMerkleRoot != merkle.Sha256CachedTreeRoot(so.SectorRoots, sectorHeight) {
 		return errBadFileMerkleRoot
 	}
 

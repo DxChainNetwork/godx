@@ -37,7 +37,7 @@ func TestShrinkFolderNormal(t *testing.T) {
 	expects := make([]expect, 0, numSectors)
 	for i := 0; i != int(numSectors); i++ {
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +110,7 @@ func TestShrinkFolderDisrupted(t *testing.T) {
 		expects := make([]expect, 0, numSectors)
 		for i := 0; i != int(numSectors); i++ {
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}
@@ -192,7 +192,7 @@ func TestShrinkStorageFolderStopped(t *testing.T) {
 		expects := make([]expect, 0, numSectors)
 		for i := 0; i != int(numSectors); i++ {
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}

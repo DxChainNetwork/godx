@@ -202,7 +202,7 @@ func ModifyLeaves(leafHashes []common.Hash, actions []UploadAction, numSectors u
 	for _, action := range actions {
 		switch action.Type {
 		case UploadActionAppend:
-			leafHashes = append(leafHashes, merkle.Root(action.Data))
+			leafHashes = append(leafHashes, merkle.Sha256MerkleTreeRoot(action.Data))
 		}
 	}
 	return leafHashes

@@ -161,7 +161,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		if req.MerkleProof {
 			proofStart := int(sec.Offset) / merkle.LeafSize
 			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
-			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
+			proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
 				return err
 			}

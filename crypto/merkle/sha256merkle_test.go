@@ -6,10 +6,11 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/merkletree"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/merkletree"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -64,30 +65,30 @@ func TestMerkleRootProofVerification(t *testing.T) {
 	data := []byte("Good Morning")
 
 	// create merkle root
-	mr := Root(data)
+	mr := Sha256MerkleTreeRoot(data)
 
 	// create merkle proof
-	proofDataPiece, proofSet, numLeaves, err := Proof(data, proofIndex)
+	proofDataPiece, proofSet, numLeaves, err := Sha256MerkleTreeProof(data, proofIndex)
 	if err != nil {
 		t.Fatalf("failed to get the merkle proof: %s", err.Error())
 	}
 
 	// verification
-	verified := VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
+	verified := Sha256VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
 	if !verified {
 		t.Errorf("expected merkle verification to be succeed, instead, got failed")
 	}
 
 	// randomly generate a merkle root, and do a test
 	randmr := randomMerkleRoot()
-	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, randmr)
+	verified = Sha256VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, randmr)
 	if verified {
 		t.Error("expected merkle verification to be failed, instead, got succeed")
 	}
 
 	// change the proofDataPiece
 	proofDataPiece[0] = 'd'
-	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
+	verified = Sha256VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
 	if verified {
 		t.Error("expected merkle verification to be failed, instead, got succeed")
 	}
@@ -96,15 +97,15 @@ func TestMerkleRootProofVerification(t *testing.T) {
 func TestMerkleRangeProofVerification(t *testing.T) {
 	for piece := 0; piece < 50; piece++ {
 		data := randomDataGenerator(uint64(piece * LeafSize))
-		mr := Root(data)
+		mr := Sha256MerkleTreeRoot(data)
 		for startProof := 0; startProof < piece; startProof++ {
 			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := RangeProof(data, startProof, endProof)
+				proofSet, err := Sha256RangeProof(data, startProof, endProof)
 				if err != nil {
 					t.Fatalf("failed to get merkle range proof set")
 				}
 
-				verified, err := VerifyRangeProof(data[startProof*LeafSize:endProof*LeafSize], proofSet, startProof, endProof, mr)
+				verified, err := Sha256VerifyRangeProof(data[startProof*LeafSize:endProof*LeafSize], proofSet, startProof, endProof, mr)
 				if err != nil {
 					t.Errorf("failed to obtain the range proof: %s", err.Error())
 				}
@@ -121,16 +122,16 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 	for piece := 0; piece < 50; piece++ {
 		roots := randomHashSliceGenerator(piece)
 
-		mr := CachedTreeRoot(roots, sectorHeight)
+		mr := Sha256CachedTreeRoot(roots, sectorHeight)
 
 		for startProof := 0; startProof < piece; startProof++ {
 			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := SectorRangeProof(roots, startProof, endProof)
+				proofSet, err := Sha256SectorRangeProof(roots, startProof, endProof)
 				if err != nil {
 					t.Fatalf("failed to get the merkle sector range proof set")
 				}
 
-				verified, err := VerifySectorRangeProof(roots[startProof:endProof], proofSet, startProof, endProof, mr)
+				verified, err := Sha256VerifySectorRangeProof(roots[startProof:endProof], proofSet, startProof, endProof, mr)
 				if err != nil {
 					t.Fatalf("failed to verify the sector range proof: %s", err.Error())
 				}
@@ -144,7 +145,7 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 
 func TestMerkleDiffProofVerification(t *testing.T) {
 	roots := randomHashSliceGenerator(50)
-	mr := CachedTreeRoot(roots, sectorHeight)
+	mr := Sha256CachedTreeRoot(roots, sectorHeight)
 	rangeSet := []merkletree.LeafRange{
 		merkletree.LeafRange{Start: 1, End: 2},
 		merkletree.LeafRange{Start: 10, End: 20},
@@ -152,7 +153,7 @@ func TestMerkleDiffProofVerification(t *testing.T) {
 	}
 
 	// create proofSet
-	proofSet, err := DiffProof(roots, rangeSet, uint64(50))
+	proofSet, err := Sha256DiffProof(roots, rangeSet, uint64(50))
 	if err != nil {
 		t.Fatalf("failed to create merkleDiffProof: %s", err.Error())
 	}
@@ -170,7 +171,7 @@ func TestMerkleDiffProofVerification(t *testing.T) {
 	}
 
 	// verification
-	verified, err := VerifyDiffProof(rangeSet, uint64(50), proofSet, rootVerify, mr)
+	verified, err := Sha256VerifyDiffProof(rangeSet, uint64(50), proofSet, rootVerify, mr)
 	if err != nil {
 		t.Fatalf("failed to verify the diff proof: %s", err.Error())
 	}

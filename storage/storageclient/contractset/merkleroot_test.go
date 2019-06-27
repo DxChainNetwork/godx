@@ -5,10 +5,11 @@
 package contractset
 
 import (
+	"testing"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
-	"testing"
 )
 
 func TestMerkleRoot_Push(t *testing.T) {
@@ -135,7 +136,7 @@ func TestMerkleRoot_newMerkleRootPreview(t *testing.T) {
 		}
 
 		// calculate the expected value
-		ct := merkle.NewCachedTree(sectorHeight)
+		ct := merkle.NewSha256CachedTree(sectorHeight)
 		for _, r := range originalRoots {
 			ct.Push(r)
 		}

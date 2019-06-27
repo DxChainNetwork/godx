@@ -10,6 +10,9 @@ import (
 	"sort"
 	"time"
 
+	"io/ioutil"
+	"path/filepath"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -22,8 +25,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/merkletree"
-	"io/ioutil"
-	"path/filepath"
 )
 
 // ActiveContractAPI is used to re-format the contract information that is going to
@@ -242,7 +243,7 @@ func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numS
 	for _, action := range actions {
 		switch action.Type {
 		case storage.UploadActionAppend:
-			leafHashes = append(leafHashes, merkle.Root(action.Data))
+			leafHashes = append(leafHashes, merkle.Sha256MerkleTreeRoot(action.Data))
 		}
 	}
 	return leafHashes
