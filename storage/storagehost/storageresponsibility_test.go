@@ -60,11 +60,11 @@ func TestStoreHeight(t *testing.T) {
 		RevisionNumber: 1,
 		WindowEnd:      144,
 	}
-	err := StoreHeight(db, sc1.RLPHash(), height)
+	err := storeHeight(db, sc1.RLPHash(), height)
 	if err != nil {
 		t.Error(err)
 	}
-	data, err := GetHeight(db, height)
+	data, err := getHeight(db, height)
 	if err != nil {
 		t.Error(err)
 	} else {
@@ -78,12 +78,12 @@ func TestStoreHeight(t *testing.T) {
 		}
 	}
 
-	err = StoreHeight(db, sc2.RLPHash(), height)
+	err = storeHeight(db, sc2.RLPHash(), height)
 	if err != nil {
 		t.Error(err)
 	}
 
-	data, err = GetHeight(db, height)
+	data, err = getHeight(db, height)
 	if err != nil {
 		t.Error(err)
 	} else {
@@ -97,12 +97,12 @@ func TestStoreHeight(t *testing.T) {
 		}
 	}
 
-	err = StoreHeight(db, sc3.RLPHash(), height)
+	err = storeHeight(db, sc3.RLPHash(), height)
 	if err != nil {
 		t.Error(err)
 	}
 
-	data, err = GetHeight(db, height)
+	data, err = getHeight(db, height)
 	if err != nil {
 		t.Error(err)
 	} else {

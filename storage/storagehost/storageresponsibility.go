@@ -146,14 +146,14 @@ func (h *StorageHost) queueTaskItem(height uint64, id common.Hash) error {
 		h.log.Info("It is not appropriate to arrange such a task")
 	}
 
-	return StoreHeight(h.db, id, height)
+	return storeHeight(h.db, id, height)
 }
 
 //insertStorageResponsibility insert a storage Responsibility to the storage host.
 func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	err := func() error {
-		h.lock.Lock()
-		defer h.lock.Unlock()
 		//Submit revision time exceeds storage responsibility expiration time
 		//if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
 		//	h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
@@ -202,9 +202,6 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 	if err != nil {
 		return err
 	}
-
-	h.lock.Lock()
-	defer h.lock.Unlock()
 	//insert the check  contract create task in the task queue.
 	errContractCreate := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
 	errContractCreateDoubleTime := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
@@ -319,9 +316,9 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 //pruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) pruneStaleStorageResponsibilities() error {
-	h.lock.Lock()
+	h.lock.RLock()
 	sos := h.storageResponsibilities()
-	h.lock.Unlock()
+	h.lock.RUnlock()
 	var scids []common.Hash
 	for _, so := range sos {
 		if h.blockHeight > so.NegotiationBlockNumber+confirmedBufferHeight {
@@ -459,10 +456,11 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 		h.checkAndUnlockStorageResponsibility(soid)
 	}()
 
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	// Fetch the storage Responsibility associated with the storage responsibility id.
-	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
-	h.lock.RUnlock()
 	if err != nil {
 		h.log.Warn("Could not get storage Responsibility", "err", err)
 		return
@@ -476,19 +474,15 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	if !so.CreateContractConfirmed {
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the contract transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, responsibilityRejected)
 			if err != nil {
 				h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 			}
-			h.lock.Unlock()
 			return
 		}
 
 		//It is possible that the signing of the storage contract transaction has not yet been executed, and it is waiting in the task queue.
-		h.lock.Lock()
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing task item", "err", err)
 		}
@@ -499,19 +493,15 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	if !so.StorageRevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-postponedExecutionBuffer {
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the revision transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, responsibilityRejected)
 			if err != nil {
 				h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 			}
-			h.lock.Unlock()
 			return
 		}
 
 		//It is possible that the signing of the storage contract transaction has not yet been executed, and it is waiting in the task queue.
-		h.lock.Lock()
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing action item", "err", err)
 		}
@@ -536,9 +526,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 
 		if len(so.SectorRoots) == 0 {
 			h.log.Warn("The sector is empty and no storage operation appears", "id", so.id())
-			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, responsibilitySucceeded)
-			h.lock.Unlock()
 			if err != nil {
 				h.log.Warn("Error removing storage Responsibility", "err", err)
 			}
@@ -547,9 +535,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 
 		if so.proofDeadline() < h.blockHeight {
 			h.log.Info("If the storage contract has expired and the proof transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
 			err := h.removeStorageResponsibility(so, responsibilityFailed)
-			h.lock.Unlock()
 			if err != nil {
 				h.log.Warn("Error removing storage Responsibility", "err", err)
 			}
@@ -622,10 +608,8 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 			return
 		}
 
-		h.lock.Lock()
 		//Insert the check proof task in the task queue.
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing task item", err)
 		}
@@ -640,12 +624,10 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	//If the submission of the storage certificate is successful during the non-expiration period, this deletes the storage responsibility
 	if so.StorageProofConfirmed && h.blockHeight >= so.proofDeadline() {
 		h.log.Info("This storage responsibility is responsible for the completion of the storage contract", "id", so.id())
-		h.lock.Lock()
 		err := h.removeStorageResponsibility(so, responsibilitySucceeded)
 		if err != nil {
 			h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 		}
-		h.lock.Unlock()
 	}
 
 }

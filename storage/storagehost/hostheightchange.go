@@ -115,7 +115,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 		if number != 0 {
 			h.blockHeight++
 		}
-		existingItems, err := GetHeight(h.db, h.blockHeight)
+		existingItems, err := getHeight(h.db, h.blockHeight)
 		if err != nil {
 			continue
 		}
