@@ -57,8 +57,6 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 		return errors.New("host setting request done")
 	}
 
-	h.log.Error("successfully sent the host external setting response")
-
 	return nil
 }
 
