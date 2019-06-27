@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
@@ -99,6 +100,7 @@ func (sc *StorageClient) stuckLoop() {
 			continue
 		}
 		if err == filesystem.ErrNoRepairNeeded {
+			log.Error("^^^^^^^^^^^RandomStuckDirectory^^^^^^^^^^", "dir", dir.DxPath().Path)
 			// Block until new work is required
 			select {
 			case <-sc.tm.StopChan():
@@ -132,6 +134,7 @@ func (sc *StorageClient) stuckLoop() {
 
 		select {
 		case sc.uploadHeap.segmentComing <- struct{}{}:
+			log.Error("Repair Loop is Active")
 		default:
 		}
 

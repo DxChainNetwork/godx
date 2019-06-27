@@ -124,6 +124,13 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		}
 	}
 
+	s := ""
+	for _, k := range segmentIndexes {
+		s += string(k)
+		s += ">>"
+	}
+	log.Warn("Create UnfinishedSegments Select index", "index", s)
+
 	// Sanity check that we have segment indices to go through
 	if len(segmentIndexes) == 0 {
 		sc.log.Info("no segment indices gathered, can't add segments to heap")
@@ -167,6 +174,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		for host := range hosts {
 			newUnfinishedSegments[i].unusedHosts[host] = struct{}{}
 		}
+		log.Error("UnfinishedSegment unused hosts", "segmentIndex", newUnfinishedSegments[i].index, "len", len(hosts))
 	}
 
 	// Iterate through the sectors of all segments of the file and mark which

@@ -740,11 +740,15 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		}
 	}
 
+	b, _ := json.Marshal(newRevision)
+	log.Error("Upload new revision", "contractID", newRevision.ParentID.String(), "info", string(b))
+
 	// Verify the new revision
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
+		log.Error("VerifyRevision Failed", "contractID", newRevision.ParentID.String(), "err", err)
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -780,6 +784,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		OldLeafHashes:    leafHashes,
 		NewMerkleRoot:    newMerkleRoot,
 	}
+
+	log.Error("UploadMerkleProof", "contractID", newRevision.ParentID.String(), "NewMerkleRoot", newMerkleRoot.String())
 
 	// Calculate bandwidth cost of proof
 	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)

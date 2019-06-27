@@ -203,7 +203,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	// check this contract whether is renewing
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Debug("renew contract is doing, can't upload/download")
+		w.client.log.Warn("renew contract is doing, can't upload/download")
 		return nil, errors.New("contract is renewing")
 	}
 
@@ -215,7 +215,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 			return nil, errors.New("session is busy")
 		}
 
-		if session.IsClosed(){
+		if session.IsClosed() {
 			delete(w.client.sessionSet, contractID)
 		}
 	}
@@ -229,6 +229,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 
 		w.client.sessionSet[contractID] = s
 		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
+			log.Error("client setup connection", "host", hostInfo.EnodeURL, "contractID", contractID.String())
 			s.SetHostInfo(&hostInfo)
 		}
 		session = s

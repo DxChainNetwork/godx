@@ -98,7 +98,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	onCoolDown := w.onUploadCoolDown()
 	uploadTerminated := w.uploadTerminated
 
-	log.Error("isReady", "contractID", w.contract.ID.String(), "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "uploadTerminated", w.uploadTerminated)
+	log.Error("Worker isReady", "contractID", w.contract.ID.String(), "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "uploadTerminated", w.uploadTerminated)
 	if !uploadAbility || uploadTerminated || onCoolDown {
 		// drop segment when work is not ready
 		w.dropSegment(uc)
@@ -186,9 +186,12 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	// Determine the usability value of this worker
 	log.Error("PreProcessUploadSegment", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "offset", uc.offset, "length", uc.length)
 	log.Error("unfinishedUploadSegment", "sectorsAllNeedNum", uc.sectorsAllNeedNum, "sectorsCompletedNum", uc.sectorsCompletedNum, "sectorsUploadingNum", uc.sectorsUploadingNum)
+
+	h := ""
 	for k, _ := range uc.unusedHosts {
-		log.Error("UnusedHost", "host", k)
+		h += k + " | "
 	}
+	log.Error("UnusedHosts", "segmentIndex", uc.index, "host", h)
 
 	uploadAbility := false
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {

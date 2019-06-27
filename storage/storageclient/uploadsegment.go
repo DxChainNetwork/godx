@@ -128,6 +128,7 @@ func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 func (sc *StorageClient) assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
 	for _, w := range workers {
 		if w.isReady(uc) {
+			log.Error("------AssignSectorTaskToWorker[Work is ready]---------", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index)
 			w.pendingSegments = append(w.pendingSegments, uc)
 			select {
 			case w.uploadChan <- struct{}{}:
@@ -274,7 +275,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		sc.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 	}
-	log.Error("Start Dispatch Segment-----------")
+	log.Error("--------Start Dispatch Segment-----------")
 	sc.dispatchSegment(segment)
 }
 
