@@ -206,9 +206,6 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 	err := func() error {
 		h.lock.Lock()
 		defer h.lock.Unlock()
-		if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-			h.log.Warn("insertStorageResponsibility called with an responsibility that is not locked")
-		}
 
 		//Submit revision time exceeds storage responsibility expiration time
 		if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
