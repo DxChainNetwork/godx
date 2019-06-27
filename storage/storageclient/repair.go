@@ -100,7 +100,6 @@ func (sc *StorageClient) stuckLoop() {
 			continue
 		}
 		if err == filesystem.ErrNoRepairNeeded {
-			log.Error("^^^^^^^^^^^RandomStuckDirectory^^^^^^^^^^", "dir", dir.DxPath().Path)
 			// Block until new work is required
 			select {
 			case <-sc.tm.StopChan():
@@ -117,6 +116,8 @@ func (sc *StorageClient) stuckLoop() {
 			}
 			continue
 		}
+
+		log.Error("^^^^^^^^^^^RandomStuckDirectory^^^^^^^^^^", "dir", dir.DxPath().Path)
 
 		// Refresh the worker pool and get the set of hosts that are currently
 		// useful for uploading.
