@@ -9,9 +9,7 @@ import (
 // the fields that need to write into the jason file
 type persistence struct {
 	BlockHeight      uint64                `json:"blockHeight"`
-	BroadCast        bool                  `json:"broadcast"`
-	RevisionNumber   uint64                `json:"revisionnumber"`
-	FinalcialMetrics HostFinancialMetrics  `json:"finalcialmetrics"`
+	FinancialMetrics HostFinancialMetrics  `json:"financialmetrics"`
 	Config           storage.HostIntConfig `json:"config"`
 }
 
@@ -25,14 +23,25 @@ func (h *StorageHost) syncConfig() error {
 		filepath.Join(h.persistDir, HostSettingFile), persist)
 }
 
+// loadConfig load host config from the file.
+func (h *StorageHost) loadConfig() error {
+	// load and create a persist from JSON file
+	persist := new(persistence)
+	// if it is loaded the file causing the error, directly return the error info
+	// and not do any modification to the host
+	if err := common.LoadDxJSON(storageHostMeta, filepath.Join(h.persistDir, HostSettingFile), persist); err != nil {
+		return err
+	}
+	h.loadPersistence(persist)
+	return nil
+}
+
 // Require: lock the storageHost by caller
 // extract the persistence data from the host
 func (h *StorageHost) extractPersistence() *persistence {
 	return &persistence{
 		BlockHeight:      h.blockHeight,
-		BroadCast:        h.broadcast,
-		FinalcialMetrics: h.financialMetrics,
-		RevisionNumber:   h.revisionNumber,
+		FinancialMetrics: h.financialMetrics,
 		Config:           h.config,
 	}
 }
@@ -41,12 +50,6 @@ func (h *StorageHost) extractPersistence() *persistence {
 // load the persistence data to the host
 func (h *StorageHost) loadPersistence(persist *persistence) {
 	h.blockHeight = persist.BlockHeight
-	h.broadcast = persist.BroadCast
-
-	// TODO: address checking if NetAddress need to be store to the Setting file
-	// TODO: unlock hash checking if unlock hash need to be store to the Setting file
-
-	h.financialMetrics = persist.FinalcialMetrics
-	h.revisionNumber = persist.RevisionNumber
+	h.financialMetrics = persist.FinancialMetrics
 	h.config = persist.Config
 }

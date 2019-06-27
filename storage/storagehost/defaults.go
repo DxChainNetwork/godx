@@ -1,72 +1,143 @@
 package storagehost
 
 import (
+	"strconv"
+
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
-	"math/big"
 )
 
 const (
 	// PersistHostDir is dir path for storing the host log, json, and ect.
-	PersistHostDir = "storagehost"
+	PersistHostDir = "storageHost"
+	// Version is the version of the storage host
+	Version = "1.0"
 	// HostSettingFile is the file name for saving the setting of host
 	HostSettingFile = "host.json"
-	// HostDB is the database dir for storing host responsibility
-	HostDB = "hostdb"
+	// HostDB is the database dir for storing host obligation
+	databaseFile = "hostdb"
 	// StorageManager is a dir for storagemanager related topic
 	StorageManager = "storagemanager"
 )
 
+const (
+	// storage responsibility related constants
+	postponedExecution    = 3  //Total length of time to start a test task
+	confirmedBufferHeight = 40 //signing transaction not confirmed maximum time
+
+	//prefixStorageResponsibility db prefix for StorageResponsibility
+	prefixStorageResponsibility = "StorageResponsibility-"
+	//prefixHeight db prefix for task
+	prefixHeight = "height-"
+)
+
 var (
-	// TODO: ALL values are mock, need to compute reasonable values
+	// sectorHeight is the parameter used in caching merkle roots
+	sectorHeight uint64
 
 	storageHostMeta = common.Metadata{
 		Header:  "DxChain StorageHost JSON",
-		Version: "DxChain host mock version",
+		Version: "V1.0",
 	}
 
 	// persistence default value
-	//defaultBroadcast      = false
-	//defaultRevisionNumber = 0
+	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
+	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
+	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
+	defaultWindowSize           = 240                       // 1 hour
 
-	// host internal config default value
-	defaultMaxDuration          = 144 * 30 * 6
-	defaultMaxDownloadBatchSize = 17 * (1 << 20)
-	defaultMaxReviseBatchSize   = 17 * (1 << 20)
-	defaultWindowSize           = 144
+	//// deposit defaults value
+	//defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
+	//defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
+	//defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
+	//
+	//// prices
+	//defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
+	//defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
+	//defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
+	//defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
+	//defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
+	//defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
 
 	// deposit defaults value
-	defaultDeposit       = 0
-	defaultDepositBudget = 1000000
-	defaultMaxDeposit    = 10000000000000000
+	defaultDeposit       = common.NewBigInt(10)
+	defaultDepositBudget = common.NewBigInt(995185185185180)
+	defaultMaxDeposit    = common.NewBigInt(100000000000000000)
 
 	// prices
-	defaultBaseRPCPrice           = 2000
-	defaultContractPrice          = 3000
-	defaultDownloadBandwidthPrice = 4000
-	defaultSectorAccessPrice      = 5000
-	defaultStoragePrice           = 6000
-	defaultUploadBandwidthPrice   = 7000
+	defaultBaseRPCPrice           = common.NewBigInt(2000)
+	defaultContractPrice          = common.NewBigInt(3000)
+	defaultDownloadBandwidthPrice = common.NewBigInt(4000)
+	defaultSectorAccessPrice      = common.NewBigInt(5000)
+	defaultStoragePrice           = common.NewBigInt(6000)
+	defaultUploadBandwidthPrice   = common.NewBigInt(7000)
+
+	//Storage contract should not be empty
+	emptyStorageContract = types.StorageContract{}
+
+	//Total time to sign the contract
+	postponedExecutionBuffer = storage.BlocksPerDay
 )
 
-// loadDefaultConfig loads the default setting when
+// init set the initial value for sector height
+func init() {
+	sectorHeight = calculateSectorHeight()
+}
+
+// calculateSectorHeight calculate the sector height for specified sector size and leaf size
+func calculateSectorHeight() uint64 {
+	height := uint64(0)
+	for 1<<height < (storage.SectorSize / merkle.LeafSize) {
+		height++
+	}
+	return height
+}
+
+// defaultConfig loads the default setting when
 // it is the first time use the host service, or cannot find the setting file
-func loadDefaultConfig() storage.HostIntConfig {
+func defaultConfig() storage.HostIntConfig {
 	return storage.HostIntConfig{
 		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
 		MaxDuration:          uint64(defaultMaxDuration),
 		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
 		WindowSize:           uint64(defaultWindowSize),
 
-		Deposit:       *big.NewInt(int64(defaultDeposit)),
-		DepositBudget: *big.NewInt(int64(defaultDepositBudget)),
-		MaxDeposit:    *big.NewInt(int64(defaultMaxDeposit)),
+		Deposit:       defaultDeposit,
+		DepositBudget: defaultDepositBudget,
+		MaxDeposit:    defaultMaxDeposit,
 
-		MinBaseRPCPrice:           *big.NewInt(int64(defaultBaseRPCPrice)),
-		MinContractPrice:          *big.NewInt(int64(defaultContractPrice)),
-		MinDownloadBandwidthPrice: *big.NewInt(int64(defaultDownloadBandwidthPrice)),
-		MinSectorAccessPrice:      *big.NewInt(int64(defaultSectorAccessPrice)),
-		MinStoragePrice:           *big.NewInt(int64(defaultStoragePrice)),
-		MinUploadBandwidthPrice:   *big.NewInt(int64(defaultUploadBandwidthPrice)),
+		MinBaseRPCPrice:           defaultBaseRPCPrice,
+		MinContractPrice:          defaultContractPrice,
+		MinDownloadBandwidthPrice: defaultDownloadBandwidthPrice,
+		MinSectorAccessPrice:      defaultSectorAccessPrice,
+		MinStoragePrice:           defaultStoragePrice,
+		MinUploadBandwidthPrice:   defaultUploadBandwidthPrice,
+	}
+}
+
+const (
+	// responsibility status
+	responsibilityUnresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning
+	responsibilityRejected                                      //Storage responsibility never begins
+	responsibilitySucceeded                                     // Successful storage responsibility
+	responsibilityFailed                                        //Failed storage responsibility
+)
+
+type storageResponsibilityStatus uint64
+
+func (i storageResponsibilityStatus) String() string {
+	switch i {
+	case 0:
+		return "responsibilityUnresolved"
+	case 1:
+		return "responsibilityRejected"
+	case 2:
+		return "responsibilitySucceeded"
+	case 3:
+		return "responsibilityFailed"
+	default:
+		return "storageResponsibilityStatus(" + strconv.FormatInt(int64(i), 10) + ")"
 	}
 }

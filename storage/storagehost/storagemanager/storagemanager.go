@@ -24,15 +24,19 @@ type (
 	StorageManager interface {
 		Start() error
 		Close() error
+		// Functions for download and storage responsibilities
 		AddSectorBatch(sectorRoots []common.Hash) error
 		AddSector(sectorRoot common.Hash, sectorData []byte) error
 		DeleteSector(sectorRoot common.Hash) error
 		DeleteSectorBatch(sectorRoots []common.Hash) error
 		ReadSector(sectorRoot common.Hash) ([]byte, error)
+		// Functions from user calls
 		AddStorageFolder(path string, size uint64) error
 		DeleteFolder(folderPath string) error
 		ResizeFolder(folderPath string, size uint64) error
+		// Status check
 		Folders() []storage.HostFolder
+		AvailableSpace() storage.HostSpace
 	}
 
 	storageManager struct {
@@ -256,6 +260,24 @@ func (sm *storageManager) Folders() []storage.HostFolder {
 		})
 	}
 	return folders
+}
+
+// AvailableSpace return the host storage space infos
+func (sm *storageManager) AvailableSpace() storage.HostSpace {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+
+	var totalSectors, usedSectors, freeSectors uint64
+	for _, sf := range sm.folders.sfs {
+		totalSectors += sf.numSectors
+		usedSectors += sf.storedSectors
+		freeSectors += sf.numSectors - sf.storedSectors
+	}
+	return storage.HostSpace{
+		TotalSectors: totalSectors,
+		UsedSectors:  usedSectors,
+		FreeSectors:  freeSectors,
+	}
 }
 
 // stopped return whether the current storage manager is stopped

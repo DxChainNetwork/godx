@@ -513,7 +513,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// total cost for store / upload / download a sector
 	totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-	remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+	remainingBalancePercentage := contract.ContractBalance.DivWithFloatResult(contract.TotalCost)
 
 	// if the remaining contract balance is not enough to pay for the 3X total sector cost
 	// or the remainingBalancePercentage is smaller than 5%, we consider this contract is not good

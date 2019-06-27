@@ -2524,7 +2524,6 @@ var Property = require('./web3/property');
 var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
-var HostDebug = require('./web3/methods/hostdebug');
 var StorageHost = require('./web3/methods/storagehost')
 
 var storageclient = require('./web3/methods/storageclient');
@@ -2552,7 +2551,6 @@ function Web3 (provider) {
     this.clientdebug = new clientdebug(this);
     this.clientfilesdebug = new clientfilesdebug(this);
     this.clientfiles = new clientfiles(this);
-    this.hostdebug = new HostDebug(this);
     this.storagehost = new StorageHost(this);
 
     this.bzz = new Swarm(this);
@@ -2653,7 +2651,7 @@ module.exports = Web3;
 
 
 
-},{"./web3/methods/storagehost": 213,"./web3/methods/hostmanagerdebug": 203, "./web3/methods/clientdebug": 202, "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/hostmanager": 201, "./web3/methods/hostdebug": 89, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./web3/methods/storagehost": 213,"./web3/methods/hostmanagerdebug": 203, "./web3/methods/clientdebug": 202, "./web3/methods/clientfiles": 212, "./web3/methods/clientfilesdebug": 211, "./web3/methods/hostmanager": 201, "./web3/methods/storageclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 
 
 /*
@@ -13942,147 +13940,6 @@ if (typeof window !== 'undefined' && typeof window.Web3 === 'undefined') {
 module.exports = Web3;
 
 },{"./lib/web3":22}],
-  89: [function(require,module,exports){
-
-    "use strict";
-
-    var Method = require('../method');
-    var Property = require('../property');
-    var formatters = require('../formatters');
-    var utils = require('../../utils/utils');
-
-    function HostDebug(web3){
-      this._requestManager = web3._requestManager;
-
-      var self = this;
-
-      methods().forEach(function(method) {
-        method.attachToObject(self);
-        method.setRequestManager(self._requestManager);
-      });
-
-      properties().forEach(function(p) {
-        p.attachToObject(self);
-        p.setRequestManager(self._requestManager);
-      });
-    }
-
-    var methods = function () {
-      var helloWorld = new Method({
-        name: 'helloWorld',
-        call: 'hostdebug_helloWorld',
-        params: 0,
-      });
-
-      var setPaymentAddress = new Method({
-        name: 'setPaymentAddress',
-        call: 'hostdebug_setPaymentAddress',
-        params: 1,
-      });
-
-      var getPaymentAddress = new Method({
-        name: 'getPaymentAddress',
-        call: 'hostdebug_getPaymentAddress',
-        params: 0,
-      });
-
-      var persistdir = new Method({
-        name: 'persistdir',
-        call: 'hostdebug_persistdir',
-        params: 0,
-      });
-
-      var printStorageHost = new Method({
-        name: 'printHostPersist',
-        call: 'hostdebug_printHostPersist',
-        params: 0,
-      });
-
-      var printInternalSetting = new Method({
-        name: 'printIntConfig',
-        call: 'hostdebug_printIntConfig',
-        params: 0,
-      });
-
-      var printFinancialMetrics = new Method({
-        name: 'printFinancialMetrics',
-        call: 'hostdebug_printFinancialMetrics',
-        params: 0,
-      });
-
-      var setDefault = new Method({
-        name: 'setDefault',
-        call: 'hostdebug_setDefault',
-        params: 0,
-      });
-
-      var setBroadCast = new Method({
-        name: 'setBroadCast',
-        call: 'hostdebug_setBroadCast',
-        params: 1,
-      });
-
-      var setRevisionNumber = new Method({
-        name: 'setRevisionNumber',
-        call: 'hostdebug_setRevisionNumber',
-        params: 1,
-      });
-
-
-      var loadInternalSetting = new Method({
-        name: 'loadIntConfig',
-        call: 'hostdebug_loadIntConfig',
-        params: 1,
-      });
-
-      var loadFinancialMetrics = new Method({
-        name: 'loadFinancialMetrics',
-        call: 'hostdebug_loadFinancialMetrics',
-        params: 1,
-      });
-
-      var announce = new Method({
-        name: 'announce',
-        call: 'hostdebug_announce',
-        params: 0,
-      });
-
-
-      return [
-        helloWorld,
-        getPaymentAddress,
-        setPaymentAddress,
-        persistdir,
-        printStorageHost,
-        printInternalSetting,
-        printFinancialMetrics,
-
-        setDefault,
-        setBroadCast,
-        setRevisionNumber,
-
-        loadInternalSetting,
-        loadFinancialMetrics,
-        announce,
-      ];
-    };
-
-    var properties = function () {
-      return [
-        new Property({
-          name: 'version',
-          getter: 'hostdebug_version'
-        }),
-        new Property({
-          name: 'persistdir',
-          getter: 'hostdebug_persistdir'
-        }),
-      ];
-    };
-
-    module.exports = HostDebug;
-
-  }, {"../formatters":30,"../method":36,"../property":45, "../../utils/utils":20}],
 
   211: [function(require,module,exports) {
     "use strict";
@@ -14126,69 +13983,17 @@ module.exports = Web3;
     var utils = require('../../utils/utils');
 
     var methods = function () {
-      var fileInfo = new Method({
-        name: 'fileInfo',
-        call: 'clientfiles_detailedFileInfo',
-        params: 1,
-      })
-
-      var rename = new Method({
-        name: 'rename',
-        call: 'clientfiles_rename',
-        params: 2,
-      })
-
-      var deletion = new Method({
-        name: 'delete',
-        call: 'clientfiles_delete',
-        params: 1,
-      })
-
-      var uploads = new Method({
-        name: 'uploads',
-        call: 'clientfiles_uploads',
-        params: 0,
-      })
 
       return [
-        fileInfo,
-        rename,
-        deletion,
-          uploads
       ];
     };
 
     var properties = function() {
       return [
-        new Property({
-          name: 'persistDir',
-          getter: 'clientfiles_persistDir',
-        }),
-        new Property({
-          name: 'rootDir',
-          getter: 'clientfiles_rootDir',
-        }),
-        new Property({
-          name: 'fileList',
-          getter: 'clientfiles_fileList'
-        })
       ];
     }
 
     function ClientFiles(web3){
-      this._requestManager = web3._requestManager;
-
-      var self = this;
-
-      methods().forEach(function(method) {
-        method.attachToObject(self);
-        method.setRequestManager(self._requestManager);
-      });
-
-      properties().forEach(function(p) {
-        p.attachToObject(self);
-        p.setRequestManager(self._requestManager);
-      });
     }
 
     module.exports = ClientFiles
@@ -14227,20 +14032,172 @@ module.exports = Web3;
         params: 1,
       })
 
+      var availableSpace = new Method({
+        name: 'availableSpace',
+        call: 'storagehost_availableSpace',
+        params: 0,
+      })
+
+      var announce = new Method({
+        name: 'announce',
+        call: 'storagehost_announce',
+        params: 0,
+      })
+
+      var paymentAddress = new Method({
+        name: 'getPaymentAddress',
+        call: 'storagehost_getPaymentAddress',
+        params: 0,
+      })
+
+      var setAcceptingContracts = new Method({
+        name: 'setAcceptingContracts',
+        call: 'storagehost_setAcceptingContracts',
+        params: 1,
+      })
+
+      var setMaxDownloadBatch = new Method({
+        name: 'setMaxDownloadBatchSize',
+        call: 'storagehost_setMaxDownloadBatchSize',
+        params: 1,
+      })
+
+      var setMaxDuration = new Method({
+        name: 'setMaxDuration',
+        call: 'storagehost_setMaxDuration',
+        params: 1,
+      })
+
+      var setMaxReviseBatchSize = new Method({
+        name: 'setMaxReviseBatchSize',
+        call: 'storagehost_setMaxReviseBatchSize',
+        params: 1,
+      })
+
+      var setWindowsSize = new Method({
+        name: 'setWindowSize',
+        call: 'storagehost_setWindowSize',
+        params: 1,
+      })
+
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddress',
+        call: 'storagehost_setPaymentAddress',
+        params: 1,
+      })
+
+      var setDeposit = new Method({
+        name: 'setDeposit',
+        call: 'storagehost_setDeposit',
+        params: 1,
+      })
+
+      var setDepositBudget = new Method({
+        name: 'setDepositBudget',
+        call: 'storagehost_setDepositBudget',
+        params: 1,
+      })
+
+      var setMaxDeposit = new Method({
+        name: 'setMaxDeposit',
+        call: 'storagehost_setMaxDeposit',
+        params: 1,
+      })
+
+      var setMinBaseRPCPrice = new Method({
+        name: 'setMinBaseRPCPrice',
+        call: 'storagehost_setMinBaseRPCPrice',
+        params: 1,
+      })
+
+      var setMinContractPrice = new Method({
+        name: 'setMinContractPrice',
+        call: 'storagehost_setMinContractPrice',
+        params: 1,
+      })
+
+      var setMinDownloadBandwidthPrice = new Method({
+        name: 'setMinDownloadBandwidthPrice',
+        call: 'storagehost_setMinDownloadBandwidthPrice',
+        params: 1,
+      })
+
+      var setMinSectorAccessPrice = new Method({
+        name: 'setMinSectorAccessPrice',
+        call: 'storagehost_setMinSectorAccessPrice',
+        params: 1,
+      })
+
+      var setMinStoragePrice = new Method({
+        name: 'setMinStoragePrice',
+        call: 'storagehost_setMinStoragePrice',
+        params: 1,
+      })
+
+      var setMinUploadBandwidthPrice = new Method({
+        name: 'setMinUploadBandwidthPrice',
+        call: 'storagehost_setMinUploadBandwidthPrice',
+        params: 1,
+      })
+
       return [
         folders,
         addFolder,
         resizeFolder,
-        deleteFolder
+        deleteFolder,
+        availableSpace,
+        announce,
+        paymentAddress,
+        setAcceptingContracts,
+        setMaxDownloadBatch,
+        setMaxDuration,
+        setMaxReviseBatchSize,
+        setWindowsSize,
+        setPaymentAddress,
+        setDeposit,
+        setDepositBudget,
+        setMaxDeposit,
+        setMinBaseRPCPrice,
+        setMinContractPrice,
+        setMinDownloadBandwidthPrice,
+        setMinSectorAccessPrice,
+        setMinStoragePrice,
+        setMinUploadBandwidthPrice,
       ];
     };
 
     var properties = function() {
       return [
         new Property({
+          name: 'version',
+          getter: 'storagehost_version',
+        }),
+
+        new Property({
+          name: 'space',
+          getter: 'storagehost_availableSpace',
+        }),
+
+        new Property({
           name: 'folders',
           getter: 'storagehost_folders',
         }),
+
+        new Property({
+          name: 'sectorSize',
+          getter: 'storagehost_sectorSize',
+        }),
+
+        new Property({
+          name: 'config',
+          getter: 'storagehost_getHostConfig',
+        }),
+
+        new Property({
+          name: 'financialStats',
+          getter: 'storagehost_getFinancialMetrics',
+        }),
+
       ];
     }
 

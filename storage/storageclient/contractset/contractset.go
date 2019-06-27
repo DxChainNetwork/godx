@@ -15,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 // StorageContractSet is used to record all contract signed by the storage client
@@ -249,7 +250,7 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		}
 
 		// get the merkle roots based on the contract id
-		if roots, err = scs.db.FetchMerkleRoots(id); err != nil {
+		if roots, err = scs.db.FetchMerkleRoots(id); err != nil && err != dberrors.ErrNotFound {
 			return
 		}
 
@@ -274,6 +275,7 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 
 	}
 
+	err = nil
 	return
 }
 
