@@ -69,11 +69,8 @@ func (c *Contract) RecordUploadPreRev(rev types.StorageContractRevision, root co
 	// get the contract header from the memory
 	c.headerLock.Lock()
 	contractHeader := c.header
-	c.headerLock.Unlock()
-
-	c.lock.Lock()
 	rootCount := c.merkleRoots.len()
-	c.lock.Unlock()
+	c.headerLock.Unlock()
 
 	// update header information
 	contractHeader.LatestContractRevision = rev
@@ -276,8 +273,9 @@ func (c *Contract) LatestRevisionValidation(rev types.StorageContractRevision) (
 
 // Metadata will generate contract meta data based on the contract information
 func (c *Contract) Metadata() (meta storage.ContractMetaData) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	c.headerLock.Lock()
+	defer c.headerLock.Unlock()
+
 	meta = storage.ContractMetaData{
 		ID:                     c.header.ID,
 		EnodeID:                c.header.EnodeID,

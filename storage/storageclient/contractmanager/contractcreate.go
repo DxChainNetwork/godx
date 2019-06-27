@@ -49,7 +49,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
-			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, err.Error())
+			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, errFormContract.Error())
 			continue
 		}
 
