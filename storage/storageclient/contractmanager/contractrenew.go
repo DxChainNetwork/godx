@@ -65,7 +65,7 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 
-		remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+		remainingBalancePercentage := contract.ContractBalance.DivWithFloatResult(contract.TotalCost)
 
 		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
 			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
