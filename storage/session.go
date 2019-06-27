@@ -140,8 +140,14 @@ func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	}
 }
 
-func (s *Session) StopConnection() {
-	s.clientDisc <- ErrClientDisconnect
+func (s *Session) StopConnection() bool {
+	select {
+	case s.clientDisc <- ErrClientDisconnect:
+	case <-s.ClosedChan():
+	default:
+		return false
+	}
+	return true
 }
 
 func (s *Session) ClientDiscChan() chan error {
@@ -177,7 +183,7 @@ func (s *Session) AddMaxUploadDownloadSectorNum(n uint32) {
 	atomic.AddUint32(&s.maxUploadDownloadSectorNum, n)
 }
 
-func (s *Session) LoadMaxUploadDownloadSectorNum() uint32{
+func (s *Session) LoadMaxUploadDownloadSectorNum() uint32 {
 	return atomic.LoadUint32(&s.maxUploadDownloadSectorNum)
 }
 

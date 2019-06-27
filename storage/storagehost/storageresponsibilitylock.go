@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	errResponsibilityLocked = errors.New("storage responsibility has been locked")
+	errObligationLocked = errors.New("storage responsibility has been locked")
 )
 
 //If not locked, create a new one
@@ -28,7 +28,7 @@ func (h *StorageHost) checkAndLockStorageResponsibility(soid common.Hash) {
 	tl.Lock()
 }
 
-//Try to lock this storage responsibility
+//Try to lock this storage obligation
 func (h *StorageHost) checkAndTryLockStorageResponsibility(soid common.Hash, timeout time.Duration) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -41,7 +41,7 @@ func (h *StorageHost) checkAndTryLockStorageResponsibility(soid common.Hash, tim
 	if tl.TryLockTimed(timeout) {
 		return nil
 	}
-	return errResponsibilityLocked
+	return errObligationLocked
 }
 
 //If it exists, unlock it
