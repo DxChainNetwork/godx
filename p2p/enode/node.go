@@ -108,6 +108,9 @@ func httpGetIP() (ip net.IP) {
 		return
 	}
 	ip = net.ParseIP(string(ipByte))
+	if ip == nil {
+		return net.IP{127, 0, 0, 1}
+	}
 	return
 }
 
