@@ -11,16 +11,15 @@ import (
 
 type poc uint32
 type Teste struct {
-	M    uint64 // 5 by default
+	M     uint64 // 5 by default
 	Flags poc
 }
 
-
-func TestRlpAnyDataStructure(t *testing.T){
+func TestRlpAnyDataStructure(t *testing.T) {
 	var a poc = 16
 	hs := &Teste{
-		M:18,
-		Flags:a,
+		M:     18,
+		Flags: a,
 	}
 
 	size, r, err := rlp.EncodeToReader(hs)
@@ -40,9 +39,9 @@ func TestRlpAnyDataStructure(t *testing.T){
 
 func TestRlpHandshake(t *testing.T) {
 	hs := &protoHandshake{
-		Version:64,
-		Name:"eth",
-		flags:staticDialedConn,
+		Version: 64,
+		Name:    "eth",
+		Flags:   staticDialedConn,
 	}
 	size, r, err := rlp.EncodeToReader(hs)
 	if err != nil {
@@ -55,7 +54,7 @@ func TestRlpHandshake(t *testing.T) {
 		t.Fatal("decode handshake", err)
 	}
 
-	if res.flags == hs.flags {
-		t.Fatal("this is result we want")
+	if res.Flags != hs.Flags {
+		t.Fatal("this is not result we want")
 	}
 }

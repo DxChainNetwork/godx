@@ -24,10 +24,10 @@ func TestConversionRate(t *testing.T) {
 		evalAll int64
 		result  float64
 	}{
-		{50, 10000, 50 * 50 / 10000},
-		{7, 1001, 7 * 50 / 1001},
-		{5, 0, 5 * 50 / 1},
-		{0, 10000, 0},
+		{50, 10000, float64(50) * float64(50) / float64(10000)},
+		{7, 1001, float64(7) * float64(50) / float64(1001)},
+		{5, 0, float64(5) * float64(50) / float64(1)},
+		{0, 10000, float64(0)},
 	}
 
 	for _, table := range tables {
