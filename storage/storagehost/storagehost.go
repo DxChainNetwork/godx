@@ -663,9 +663,17 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	a, _ := json.Marshal(so.StorageContractRevisions[len(so.StorageContractRevisions)-1])
 	log.Error("StorageResponsibility", "ContractID", so.id(), "last storageContract revision", string(a))
+
 	settings := h.externalConfig()
+	b,_ := json.Marshal(settings)
+	log.Error("Host externalConfig", "settings", string(b))
+
 	currentBlockHeight := h.blockHeight
+	log.Error("1...", "currentBlockHeight", currentBlockHeight)
+
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
+	c,_ := json.Marshal(currentRevision)
+	log.Error("Host Before Revision", "info", string(c))
 
 	// Process each action
 	newRoots := append([]common.Hash(nil), so.SectorRoots...)
@@ -696,6 +704,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	//var storageRevenue, newDeposit *big.Int
 	var storageRevenue, newDeposit common.BigInt
+	log.Error("new Roots", "new Len", len(newRoots), "old len", len(so.SectorRoots))
+
 	if len(newRoots) > len(so.SectorRoots) {
 		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
 		blocksRemaining := so.proofDeadline() - currentBlockHeight
@@ -705,7 +715,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
+	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -731,8 +741,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		}
 	}
 
-	b, _ := json.Marshal(newRevision)
-	log.Error("Upload new revision", "contractID", newRevision.ParentID.String(), "info", string(b))
+	d, _ := json.Marshal(newRevision)
+	log.Error("After Upload new revision", "contractID", newRevision.ParentID.String(), "info", string(d))
 
 	// Verify the new revision
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
@@ -747,8 +757,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var merkleResp storage.UploadMerkleProof
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
+	log.Error("--------merkleResp--------", "oldNumSectors", oldNumSectors)
 	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
 	for index := range sectorsChanged {
+		log.Error("sectorsChanged", "index", index)
 		if index < oldNumSectors {
 			proofRanges = append(proofRanges, merkletree.LeafRange{
 				Start: index,
@@ -762,6 +774,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Record old leaf hashes for all changed sectors
 	leafHashes := make([]common.Hash, len(proofRanges))
 	for i, r := range proofRanges {
+		log.Error("Proof chang", "index", i, "start", r.Start, "end", r.End)
 		leafHashes[i] = so.SectorRoots[r.Start]
 	}
 

@@ -87,13 +87,13 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
 		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
-	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
+	//toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
 
 	// Verify that enough money was transferred.
-	if toHost.Cmp(fromRenter) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
-		return ExtendErr(s, errLowHostValidOutput)
-	}
+	//if toHost.Cmp(fromRenter) != 0 {
+	//	s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+	//	return ExtendErr(s, errLowHostValidOutput)
+	//}
 
 	// If the renter's valid proof output is larger than the renter's missed
 	// proof output, the renter has incentive to see the host fail. Make sure

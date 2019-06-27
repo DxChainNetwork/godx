@@ -118,19 +118,6 @@ func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
 	return cmt.Root()
 }
 
-func CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
-	log2SectorSize := uint64(0)
-	for 1<<log2SectorSize < (SectorSize / LeafSize) {
-		log2SectorSize++
-	}
-	cmt := NewCachedTree(log2SectorSize)
-	for _, r := range roots {
-		cmt.Push(r)
-	}
-
-	return cmt.Root()
-}
-
 // Proof will return the hash proof set of the proof based on the data provided.
 // proofData represents the data that needs to be hashed and combined with the data hashes
 // in the proof set to check the integrity of the data

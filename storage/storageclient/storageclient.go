@@ -349,47 +349,61 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// calculate price per sector
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
+	log.Error("1) blockBytes", "WindowEnd", contractRevision.NewWindowEnd, "currentHeight", sc.ethBackend.GetCurrentBlockHeight(), "blockBytes", blockBytes)
+
 	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
+	log.Error("2)...", "sectorBandwidthPrice", sectorBandwidthPrice.String(), "hostInfo.UploadBandwidthPrice", hostInfo.UploadBandwidthPrice.String())
+
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
+	log.Error("3)....", "sectorStoragePrice", sectorStoragePrice.String(), "hostInfo.StoragePrice", hostInfo.StoragePrice.String())
+
 	sectorDeposit := hostInfo.Deposit.MultUint64(blockBytes)
+	log.Error("4)...", "sectorDeposit", sectorDeposit.String(), "hostInfo.Deposit", hostInfo.Deposit.String())
 
 	// calculate the new Merkle root set and total cost/collateral
-	var bandwidthPrice, storagePrice, deposit *big.Int
+	var bandwidthPrice, storagePrice, deposit common.BigInt
 	newFileSize := contractRevision.NewFileSize
 	for _, action := range actions {
 		switch action.Type {
 		case storage.UploadActionAppend:
-			bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, sectorBandwidthPrice.BigIntPtr())
+			bandwidthPrice = bandwidthPrice.Add(sectorBandwidthPrice)
+			log.Error("5)....","bandwidthPrice", bandwidthPrice.String())
+
 			newFileSize += storage.SectorSize
+			log.Error("6)....", "newFileSize", newFileSize)
 		}
 	}
 
 	if newFileSize > contractRevision.NewFileSize {
 		addedSectors := (newFileSize - contractRevision.NewFileSize) / storage.SectorSize
-		storagePrice = sectorStoragePrice.MultUint64(addedSectors).BigIntPtr()
-		deposit = sectorDeposit.MultUint64(addedSectors).BigIntPtr()
-	}
+		log.Error("7)....", "addedSectors", addedSectors)
 
-	log.Error("*******UPLOAD Fields*******", "blockBytes", blockBytes, "sectorBandwidthPrice", sectorBandwidthPrice,
-		"sectorStoragePrice", sectorStoragePrice, "sectorDeposit", sectorDeposit, "newFileSize", newFileSize, "storagePrice", storagePrice, "deposit", deposit)
+		storagePrice = sectorStoragePrice.MultUint64(addedSectors)
+		log.Error("8)...", "storagePrice", storagePrice.String())
+
+		deposit = sectorDeposit.MultUint64(addedSectors)
+		log.Error("9)...", "deposit", deposit.String())
+	}
 
 	// estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
-	bandwidthPrice = bandwidthPrice.Add(bandwidthPrice, hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)).BigIntPtr())
+	bandwidthPrice = bandwidthPrice.Add(hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)))
+	log.Error("10)....","bandwidthPrice", bandwidthPrice.String(), "hostInfo.DownloadBandwidthPrice", hostInfo.DownloadBandwidthPrice.String())
 
-	cost := new(big.Int).Add(bandwidthPrice.Add(bandwidthPrice, storagePrice), hostInfo.BaseRPCPrice.BigIntPtr())
+	cost := bandwidthPrice.Add(storagePrice).Add(hostInfo.BaseRPCPrice)
+	log.Error("11)....","cost", cost.String())
 
 	// check that enough funds are available
-	if contractRevision.NewValidProofOutputs[0].Value.Cmp(cost) < 0 {
+	if contractRevision.NewValidProofOutputs[0].Value.Cmp(cost.BigIntPtr()) < 0 {
 		return errors.New("contract has insufficient funds to support upload")
 	}
-	if contractRevision.NewMissedProofOutputs[1].Value.Cmp(deposit) < 0 {
+	if contractRevision.NewMissedProofOutputs[1].Value.Cmp(deposit.BigIntPtr()) < 0 {
 		return errors.New("contract has insufficient collateral to support upload")
 	}
 
 	// create the revision; we will update the Merkle root later
-	rev := NewRevision(contractRevision, cost)
-	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
+	rev := NewRevision(contractRevision, cost.BigIntPtr())
+	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit.BigIntPtr())
 	rev.NewFileSize = newFileSize
 
 	aa, _ := json.Marshal(rev)
@@ -410,11 +424,12 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		req.NewMissedProofValues[i] = o.Value
 	}
 
-	log.Error("Upload Request", "contractID", req.StorageContractID.String())
+	log.Error("Upload Request", "contractID", req.StorageContractID.String(), "action", req.Actions[0].Type)
 
 	// record the change to this contract, that can allow us to continue this incomplete upload at last time
-	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, storagePrice, bandwidthPrice)
 	if err != nil {
+		log.Error("RecordUploadPreRev Failed", "err", err)
 		return err
 	}
 
@@ -443,6 +458,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	var merkleResp storage.UploadMerkleProof
 	msg, err := session.ReadMsg()
 	if err != nil {
+		log.Error("Read UploadMerkleProof Failed", "err", err)
 		return err
 	}
 
@@ -451,6 +467,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	log.Error("-----merkle proof------", "newRoot", merkleResp.NewMerkleRoot.String())
+
 	// verify merkle proof
 	numSectors := contractRevision.NewFileSize / storage.SectorSize
 	proofRanges := CalculateProofRanges(actions, numSectors)
@@ -466,6 +483,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return errors.New("invalid Merkle proof for old root")
 	}
 
+	log.Error("----------Verify Old Success-------")
+
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
@@ -476,6 +495,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if !verified {
 		return errors.New("invalid Merkle proof for new root")
 	}
+
+	log.Error("----------Verify New Success-------")
 
 	// update the revision, sign it, and send it
 	rev.NewFileMerkleRoot = newRoot
@@ -497,6 +518,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	// send client sig to host
 	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		log.Error("SendStorageContractUploadClientRevisionSign", "err", err)
 		return err
 	}
 
@@ -515,7 +537,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	log.Error("Upload revision sign done", "contractID", rev.ParentID.String(), "revisionNum", rev.NewRevisionNumber, "clientSign", string(clientRevisionSign), "hostSign", string(hostRevisionSig))
 
 	// commit upload revision
-	err = contract.CommitUpload(walTxn, rev, common.Hash{}, common.NewBigInt(storagePrice.Int64()), common.NewBigInt(bandwidthPrice.Int64()))
+	err = contract.CommitUpload(walTxn, rev, common.Hash{}, storagePrice, bandwidthPrice)
 	if err != nil {
 		log.Error("CommitUpload failed", "err", err)
 		return err
