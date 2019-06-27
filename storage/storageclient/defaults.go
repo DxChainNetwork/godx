@@ -85,13 +85,13 @@ var (
 
 	// UploadFailureCoolDown is the initial time of punishment while upload consecutive fails
 	// the punishment time shows exponential growth
-	UploadFailureCoolDown = 1 * time.Minute
+	UploadFailureCoolDown = 3 * time.Second
 
 	// when uploading or downloading, the renew goroutine wait for the longest time
 	RevisionDoneTime = 1 * time.Minute
 
 	// Max sector num in one connection preventing from client and host occupied connection
-	MaxUploadDownloadSectorsNum uint32 =  5
+	MaxUploadDownloadSectorsNum uint32 = 5
 )
 
 var currencyIndexMap = map[string]uint64{

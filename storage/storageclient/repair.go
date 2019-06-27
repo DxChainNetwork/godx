@@ -117,7 +117,7 @@ func (sc *StorageClient) stuckLoop() {
 			continue
 		}
 
-		log.Error("^^^^^^^^^^^RandomStuckDirectory^^^^^^^^^^", "dir", dir.DxPath().Path)
+		log.Error("^^^^^^^^^^^RandomStuckDirectory^^^^^^^^^^", "dir", dir.DxPath().Path, "err", err)
 
 		// Refresh the worker pool and get the set of hosts that are currently
 		// useful for uploading.

@@ -18,9 +18,10 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract storage.ContractMetaData
-	hostID   enode.ID
-	client   *StorageClient
+	contract     storage.ContractMetaData
+	hostID       enode.ID
+	hostEnodeURL string
+	client       *StorageClient
 
 	// How many failures in a row?
 	ownedDownloadConsecutiveFailures int
@@ -64,6 +65,7 @@ func (sc *StorageClient) activateWorkerPool() {
 			worker := &worker{
 				contract:     contract.Metadata(),
 				hostID:       contract.Header().EnodeID,
+				hostEnodeURL: contract.Header().EnodeURL,
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
@@ -221,9 +223,9 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	}
 
 	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupStorageConnection(w.contract.EnodeID.String())
+		s, err := w.client.ethBackend.SetupStorageConnection(w.hostEnodeURL)
 		if err != nil {
-			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String())
+			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
 			return nil, errors.New("failed to create connection")
 		}
 

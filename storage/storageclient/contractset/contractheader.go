@@ -15,8 +15,9 @@ import (
 
 // ContractHeader specifies contract's general information
 type ContractHeader struct {
-	ID      storage.ContractID
-	EnodeID enode.ID
+	ID       storage.ContractID
+	EnodeID  enode.ID
+	EnodeURL string
 
 	// TODO (mzhang): latest contract revision information, sync with HZ Office
 	LatestContractRevision types.StorageContractRevision

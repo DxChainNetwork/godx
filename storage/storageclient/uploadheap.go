@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -126,8 +127,8 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 
 	s := ""
 	for _, k := range segmentIndexes {
-		s += string(k)
-		s += ">>"
+		s += strconv.Itoa(k)
+		s += " | "
 	}
 	log.Warn("Create UnfinishedSegments Select index", "index", s)
 

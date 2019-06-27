@@ -205,7 +205,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	defer sc.tm.Done()
 
 	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(segment.fileEntry.ErasureCode().MinSectors())
-	log.Error("---[RetrieveDataAndDispatchSegment]---", "erasureCodingMemory", erasureCodingMemory, "SectorSize", segment.fileEntry.SectorSize(), "minsectors", segment.fileEntry.ErasureCode().MinSectors())
+	log.Error("---[RetrieveDataAndDispatchSegment]---", "segmentIndex", segment.index, "erasureCodingMemory", erasureCodingMemory, "SectorSize", segment.fileEntry.SectorSize(), "minsectors", segment.fileEntry.ErasureCode().MinSectors())
 	var sectorCompletedMemory uint64
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
