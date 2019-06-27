@@ -215,7 +215,7 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Warn("Sending host settings response from host", "msg", data)
+	s.Log().Debug("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
@@ -242,22 +242,22 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 // upload protocol
 
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload request", "request", data)
+	s.Log().Warn("Sending storage contract upload request", "request", data)
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload proof", "proof", data)
+	s.Log().Warn("Sending storage contract upload proof", "proof", data)
 	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload client revision sign", "sign", data)
+	s.Log().Warn("Sending storage contract upload client revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage host revision sign", "sign", data)
+	s.Log().Warn("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
 }
 

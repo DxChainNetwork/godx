@@ -483,8 +483,6 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 		return errors.New("host setting request done")
 	}
 
-	log.Error("successfully sent the host external setting response")
-
 	return nil
 }
 
@@ -496,8 +494,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	s.SetDeadLine(storage.ContractCreateTime)
 
 	a, _ := json.Marshal(h.externalConfig())
-	log.Error("host.externalConfig", "config", string(a))
-	log.Error("contract create host start", "AcceptingContracts", h.externalConfig().AcceptingContracts)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
@@ -509,9 +505,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	if err := beginMsg.Decode(&req); err != nil {
 		return err
 	}
-
-	b, _ := json.Marshal(req)
-	log.Error("host receive contract create request", "info", string(b))
 
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)

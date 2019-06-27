@@ -101,6 +101,7 @@ func New(persistDir string) (*StorageClient, error) {
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
+		sessionSet: make(map[storage.ContractID]*storage.Session),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
