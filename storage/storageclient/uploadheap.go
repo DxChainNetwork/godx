@@ -375,10 +375,10 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 
 	switch target {
 	case targetStuckSegments:
-		sc.log.Info("Adding stuck segment to heap")
+		sc.log.Error("Adding stuck segment to heap")
 		sc.createAndPushRandomSegment(files, hosts, target, hostHealthInfoTable)
 	case targetUnstuckSegments:
-		sc.log.Info("Adding unstuck segments to heap")
+		sc.log.Error("Adding unstuck segments to heap")
 		sc.createAndPushSegments(files, hosts, target, hostHealthInfoTable)
 	default:
 		sc.log.Info("target not recognized", "target", target)
@@ -555,6 +555,8 @@ func (sc *StorageClient) doUpload() error {
 		return err
 	}
 
+	log.Error("SelectDxFileToFix", "LocalPath", dxFile.LocalPath(), "Health", dxFile.GetHealth(), "NumSegments", dxFile.NumSegments(), "Size", dxFile.FileSize())
+
 	// Refresh the worker pool and get the set of hosts that are currently
 	// useful for uploading
 	hosts := sc.refreshHostsAndWorkers()
@@ -607,6 +609,7 @@ func (sc *StorageClient) uploadLoop() {
 			continue
 		}
 
+		log.Error("RootMetadata", "Health", rootMetadata.Health, "Numfiles", rootMetadata.NumFiles, "StuckHealth", rootMetadata.StuckHealth, "NumStuckSegments", rootMetadata.NumStuckSegments)
 		// It is not necessary to upload or repair immediately because of enough health score
 		if rootMetadata.Health >= dxfile.RepairHealthThreshold {
 			// Block until a signal is received that there is more work to do.
