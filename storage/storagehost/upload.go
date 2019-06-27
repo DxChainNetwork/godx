@@ -28,7 +28,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage responsibility
-	so, err := GetStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	h.lock.RLock()
+	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	h.lock.RUnlock()
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
@@ -181,7 +183,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
+	h.lock.Lock()
 	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	h.lock.Unlock()
 	if err != nil {
 		return err
 	}

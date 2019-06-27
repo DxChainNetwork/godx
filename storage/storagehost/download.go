@@ -43,7 +43,9 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}()
 
 	// get storage responsibility
-	so, err := GetStorageResponsibility(h.db, req.StorageContractID)
+	h.lock.RLock()
+	so, err := getStorageResponsibility(h.db, req.StorageContractID)
+	h.lock.RUnlock()
 	if err != nil {
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
