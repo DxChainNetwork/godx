@@ -392,8 +392,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	rev.NewMissedProofOutputs[1].Value = rev.NewMissedProofOutputs[1].Value.Sub(rev.NewMissedProofOutputs[1].Value, deposit)
 	rev.NewFileSize = newFileSize
 
-	a, _ := json.Marshal(rev)
-	log.Error("Upload revision", "rev", string(a))
+	aa, _ := json.Marshal(rev)
+	log.Error("Upload revision", "rev", string(aa))
 
 	// create the request
 	req := storage.UploadRequest{
