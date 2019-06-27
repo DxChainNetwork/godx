@@ -7,7 +7,6 @@ package contractmanager
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -189,7 +188,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	period := endHeight - startHeight
 	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
 	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
-	log.Error("payout", "clientPayout", clientPayout, "hostpayout", hostPayout)
 	if err != nil {
 		log.Error("ClientPayoutsPreTax Failed", "err", err)
 		return storage.ContractMetaData{}, err
@@ -224,9 +222,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 	}
-
-	b, _ := json.Marshal(storageContract)
-	log.Error("create contract", "info", string(b))
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
@@ -269,7 +264,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		Renew:           false,
 	}
 
-	log.Error("ContractCreateRequest", "req.sign[clientContract]", hexutil.Encode(req.Sign))
 	if err := session.SendStorageContractCreation(req); err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -306,9 +300,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		NewMissedProofOutputs: storageContract.MissedProofOutputs,
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
-
-	c, _ := json.Marshal(storageContractRevision)
-	log.Error("storageContractRevision", "info", string(c))
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
@@ -351,7 +342,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
-		EnodeURL:               host.EnodeURL,
 		StartHeight:            startHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,

@@ -143,6 +143,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	log.Error("------append sector------", "sectorIndex", sectorIndex, "segmentIndex", uc.index, "contractID(worker)", w.contract.ID.String())
 	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
 	if err != nil {
+		log.Error("Worker failed to upload", "err", err)
 		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return

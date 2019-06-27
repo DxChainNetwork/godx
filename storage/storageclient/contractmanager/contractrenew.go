@@ -549,7 +549,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
-		EnodeURL:               host.EnodeURL,
 		StartHeight:            startHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,

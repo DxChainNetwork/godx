@@ -336,6 +336,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	hostInfo := session.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
+	log.Error("contract and host is exist ???", "contractID", contractID.String(), "contractIsExist", exist)
 	if !exist {
 		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
@@ -343,6 +344,8 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	defer scs.Return(contract)
 	contractHeader := contract.Header()
 	contractRevision := contractHeader.LatestContractRevision
+	a, _ := json.Marshal(contractRevision)
+	log.Error("Contract Latest Revision", "contractID", contractHeader.ID.String(), "revision", string(a))
 
 	// calculate price per sector
 	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())

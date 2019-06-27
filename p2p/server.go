@@ -186,7 +186,7 @@ type Server struct {
 	removeStorageContract chan *enode.Node // used to remove storage contract peer
 	addStorageClient      chan *enode.Node // used to add storage contract client peer
 	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
-	storagePeerDoneMap 	  map[enode.ID]*sync.WaitGroup
+	storagePeerDoneMap    map[enode.ID]*sync.WaitGroup
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
@@ -394,13 +394,13 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 
 	select {
 	case srv.addStorageContract <- node:
-		srv.log.Warn("AddStorageContractPeer", "chanContent", node.String())
+		srv.log.Info("AddStorageContractPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
 	select {
 	case srv.addStorageClient <- node:
-		srv.log.Warn("AddStorageClientPeer", "chanContent", node.String())
+		srv.log.Info("AddStorageClientPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 

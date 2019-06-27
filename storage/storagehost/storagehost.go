@@ -493,8 +493,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// this RPC call contains two request/response exchanges.
 	s.SetDeadLine(storage.ContractCreateTime)
 
-	a, _ := json.Marshal(h.externalConfig())
-
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
 		return err

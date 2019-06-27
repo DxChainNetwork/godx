@@ -18,10 +18,9 @@ import (
 type worker struct {
 
 	// The contract and host used by this worker.
-	contract     storage.ContractMetaData
-	hostID       enode.ID
-	hostEnodeURL string
-	client       *StorageClient
+	contract storage.ContractMetaData
+	hostID   enode.ID
+	client   *StorageClient
 
 	// How many failures in a row?
 	ownedDownloadConsecutiveFailures int
@@ -65,7 +64,6 @@ func (sc *StorageClient) activateWorkerPool() {
 			worker := &worker{
 				contract:     contract.Metadata(),
 				hostID:       contract.Header().EnodeID,
-				hostEnodeURL: contract.Header().EnodeURL,
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
@@ -223,17 +221,21 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	}
 
 	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupStorageConnection(w.hostEnodeURL)
+		hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+		if !ok {
+			return nil, errors.New("failed to retrieve host info")
+		}
+
+		s, err := w.client.ethBackend.SetupStorageConnection(hostInfo.EnodeURL)
 		if err != nil {
 			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
 			return nil, errors.New("failed to create connection")
 		}
 
+		log.Error("client setup connection", "host", hostInfo.EnodeURL, "contractID", contractID.String())
+		s.SetHostInfo(&hostInfo)
 		w.client.sessionSet[contractID] = s
-		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
-			log.Error("client setup connection", "host", hostInfo.EnodeURL, "contractID", contractID.String())
-			s.SetHostInfo(&hostInfo)
-		}
+
 		session = s
 	}
 
