@@ -63,12 +63,12 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all contract transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			so.CreateContractConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue
@@ -78,8 +78,8 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all revision transactions and modify storage responsibility status
 		for key, value := range revisionIDsApply {
 			so, errGet := getStorageResponsibility(h.db, key)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			if len(so.StorageContractRevisions) < 1 {
@@ -90,7 +90,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 			if value == so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewRevisionNumber {
 				so.StorageRevisionConfirmed = true
 			}
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue
@@ -100,12 +100,12 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDsApply {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			so.StorageProofConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue
@@ -151,12 +151,12 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all ContractCreate transactions and modify storage responsibility status
 		for _, id := range ContractCreateIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			so.CreateContractConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue
@@ -166,12 +166,12 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all revision transactions and modify storage responsibility status
 		for key := range revisionIDs {
 			so, errGet := getStorageResponsibility(h.db, key)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			so.StorageRevisionConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue
@@ -181,12 +181,12 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 		//Traverse all storageProof transactions and modify storage responsibility status
 		for _, id := range storageProofIDs {
 			so, errGet := getStorageResponsibility(h.db, id)
+			//This transaction is not involved by the local node, so it should be skipped
 			if errGet != nil {
-				h.log.Warn("Failed to get storage responsibility", "err", errGet)
 				continue
 			}
 			so.StorageProofConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				h.log.Warn("Failed to put storage responsibility", "err", errPut)
 				continue

@@ -6,6 +6,9 @@ package storagehost
 
 import (
 	"bytes"
+	"math/big"
+	"reflect"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -13,8 +16,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-	"math/big"
-	"reflect"
 )
 
 type (
@@ -128,7 +129,7 @@ func (h *StorageHost) storageResponsibilities() (sos []StorageResponsibility) {
 		return nil
 	}
 	for i := range h.lockedStorageResponsibility {
-		so, err := GetStorageResponsibility(h.db, i)
+		so, err := getStorageResponsibility(h.db, i)
 		if err != nil {
 			h.log.Warn("Failed to get storage responsibility", "err", err)
 			continue
@@ -153,10 +154,6 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 	err := func() error {
 		h.lock.Lock()
 		defer h.lock.Unlock()
-		if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-			h.log.Warn("insertStorageResponsibility called with an responsibility that is not locked")
-		}
-
 		//Submit revision time exceeds storage responsibility expiration time
 		//if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
 		//	h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
@@ -177,7 +174,7 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 					return err
 				}
 			}
-			errPut := StoreStorageResponsibility(h.db, so.id(), so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				return errPut
 			}
@@ -282,7 +279,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 			return errOld
 		}
 
-		return putStorageResponsibility(h.db, so)
+		return putStorageResponsibility(h.db, so.id(), so)
 	}()
 
 	if errDBso != nil {
@@ -408,7 +405,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 	h.financialMetrics.ContractCount--
 	so.ResponsibilityStatus = sos
 	so.SectorRoots = []common.Hash{}
-	return StoreStorageResponsibility(h.db, so.id(), so)
+	return putStorageResponsibility(h.db, so.id(), so)
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
@@ -635,7 +632,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	}
 
 	// Save the storage Responsibility.
-	errDB := StoreStorageResponsibility(h.db, soid, so)
+	errDB := putStorageResponsibility(h.db, soid, so)
 	if errDB != nil {
 		h.log.Warn("Error updating the storage Responsibility", errDB)
 	}

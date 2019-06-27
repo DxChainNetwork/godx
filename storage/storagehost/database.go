@@ -13,20 +13,8 @@ func openDB(path string) (*ethdb.LDBDatabase, error) {
 	return ethdb.NewLDBDatabase(path, 0, 0)
 }
 
-func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageResponsibility, error) {
-	so, errGet := GetStorageResponsibility(db, sc)
-	if errGet != nil {
-		return StorageResponsibility{}, errGet
-	}
-	return so, nil
-}
-
-func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
-	return StoreStorageResponsibility(db, so.id(), so)
-}
-
-//StoreStorageResponsibility storage storageResponsibility from DB
-func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
+//putStorageResponsibility storage storageResponsibility from DB
+func putStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
 	scdb := ethdb.StorageContractDB{db}
 	data, err := rlp.EncodeToBytes(so)
 	if err != nil {
@@ -47,14 +35,14 @@ func (h *StorageHost) deleteStorageResponsibilities(soids []common.Hash) error {
 	return nil
 }
 
-//DeleteStorageResponsibility delete storageResponsibility from DB
+//deleteStorageResponsibility delete storageResponsibility from DB
 func deleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
 	scdb := ethdb.StorageContractDB{db}
 	return scdb.DeleteWithPrefix(storageContractID, prefixStorageResponsibility)
 }
 
-//GetStorageResponsibility get storageResponsibility from DB
-func GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
+//getStorageResponsibility get storageResponsibility from DB
+func getStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
 	scdb := ethdb.StorageContractDB{db}
 	valueBytes, err := scdb.GetWithPrefix(storageContractID, prefixStorageResponsibility)
 	if err != nil {

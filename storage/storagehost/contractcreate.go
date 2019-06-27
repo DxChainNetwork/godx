@@ -127,7 +127,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if req.Renew {
-		oldso, err := GetStorageResponsibility(h.db, req.OldContractID)
+		oldso, err := getStorageResponsibility(h.db, req.OldContractID)
 		if err != nil {
 			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
 		} else {
