@@ -1,6 +1,7 @@
 package merkle
 
 import (
+	"bytes"
 	"hash"
 
 	"github.com/pkg/errors"
@@ -29,8 +30,8 @@ type Tree struct {
 	usedAsCached      bool
 }
 
-// New return a tree
-func New(h hash.Hash) *Tree {
+// NewTree return a tree
+func NewTree(h hash.Hash) *Tree {
 	return &Tree{
 		hash: h,
 	}
@@ -223,4 +224,61 @@ func sum(h hash.Hash, data ...[]byte) []byte {
 	}
 
 	return h.Sum(nil)
+}
+
+// VerifyProof
+func VerifyProof(h hash.Hash, merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
+
+	if merkleRoot == nil {
+		return false
+	}
+	if proofIndex >= numLeaves {
+		return false
+	}
+
+	height := 0
+	if len(proofSet) <= height {
+		return false
+	}
+	sum := leafTotal(h, proofSet[height])
+	height++
+
+	stableEnd := proofIndex
+	for {
+
+		subTreeStartIndex := (proofIndex / (1 << uint(height))) * (1 << uint(height))
+		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1
+		if subTreeEndIndex >= numLeaves {
+			break
+		}
+		stableEnd = subTreeEndIndex
+
+		if len(proofSet) <= height {
+			return false
+		}
+		if proofIndex-subTreeStartIndex < 1<<uint(height-1) {
+			sum = dataTotal(h, sum, proofSet[height])
+		} else {
+			sum = dataTotal(h, proofSet[height], sum)
+		}
+		height++
+	}
+
+	if stableEnd != numLeaves-1 {
+		if len(proofSet) <= height {
+			return false
+		}
+		sum = dataTotal(h, sum, proofSet[height])
+		height++
+	}
+
+	for height < len(proofSet) {
+		sum = dataTotal(h, proofSet[height], sum)
+		height++
+	}
+
+	if bytes.Equal(sum, merkleRoot) {
+		return true
+	}
+	return false
 }
