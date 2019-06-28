@@ -243,28 +243,36 @@ func (h *HostPrivateAPI) SetMinUploadBandwidthPrice(str string) string {
 }
 
 // AddStorageFolder add a storage folder with a specified size
-func (h *HostPrivateAPI) AddStorageFolder(path string, size uint64) string {
-	err := h.storageHost.StorageManager.AddStorageFolder(path, size)
+func (h *HostPrivateAPI) AddStorageFolder(path string, sizeStr string) (string, error) {
+	size, err := storage.ParseStorage(sizeStr)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
-	return "successfully added the storage folder"
+	err = h.storageHost.StorageManager.AddStorageFolder(path, size)
+	if err != nil {
+		return "", err
+	}
+	return "successfully added the storage folder", nil
 }
 
 // ResizeFolder resize the folder to specified size
-func (h *HostPrivateAPI) ResizeFolder(folderPath string, size uint64) string {
-	err := h.storageHost.StorageManager.ResizeFolder(folderPath, size)
+func (h *HostPrivateAPI) ResizeFolder(folderPath string, sizeStr string) (string, error) {
+	size, err := storage.ParseStorage(sizeStr)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
-	return "successfully resize the storage folder"
+	err = h.storageHost.StorageManager.ResizeFolder(folderPath, size)
+	if err != nil {
+		return "", err
+	}
+	return "successfully resize the storage folder", nil
 }
 
 // DeleteFolder delete the folder
-func (h *HostPrivateAPI) DeleteFolder(folderPath string) string {
+func (h *HostPrivateAPI) DeleteFolder(folderPath string) (string, error) {
 	err := h.storageHost.StorageManager.DeleteFolder(folderPath)
 	if err != nil {
-		return err.Error()
+		return "", err
 	}
-	return "successfully delete the storage folder"
+	return "successfully delete the storage folder", nil
 }
