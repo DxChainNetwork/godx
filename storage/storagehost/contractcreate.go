@@ -3,6 +3,7 @@ package storagehost
 import (
 	"crypto/ecdsa"
 	"errors"
+	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -67,8 +68,16 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	sc.Signatures = [][]byte{req.Sign, hostContractSign}
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
-	if err := verifyStorageContract(h, &sc, clientPK, hostPK); err != nil {
-		return ExtendErr("host verify storage contract failed ", err)
+	if req.Renew {
+		err = verifyRenewedContract(h, &sc, clientPK, hostPK)
+		if err != nil {
+			return ExtendErr("host verify renewed storage contract failed ", err)
+		}
+	} else {
+		err = verifyStorageContract(h, &sc, clientPK, hostPK)
+		if err != nil {
+			return ExtendErr("host verify storage contract failed ", err)
+		}
 	}
 
 	// 2. After check, send host contract sign to client
@@ -267,4 +276,95 @@ func renewBaseDeposit(so StorageResponsibility, settings storage.HostExtConfig, 
 	}
 	timeExtension := fc.WindowEnd - so.proofDeadline()
 	return settings.Deposit.Mult(common.NewBigIntUint64(fc.FileSize)).Mult(common.NewBigIntUint64(uint64(timeExtension)))
+}
+
+// verifyRenewedContract checks whether the renewed contract matches the previous and appropriate payments.
+func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *ecdsa.PublicKey, hostPK *ecdsa.PublicKey) error {
+	h.lock.RLock()
+	blockHeight := h.blockHeight
+	lockedStorageDeposit := h.financialMetrics.LockedStorageDeposit
+	hostAddress := crypto.PubkeyToAddress(*hostPK)
+	config := h.config
+	so, err := getStorageResponsibility(h.db, sc.ID())
+	if err != nil {
+		h.lock.RUnlock()
+		return fmt.Errorf("failed to get storage responsibility in verifyRenewedContract,error: %v", err)
+	}
+	h.lock.RUnlock()
+
+	externalConfig := h.externalConfig()
+
+	// check that the file size and merkle root whether match the previous.
+	if sc.FileSize != so.fileSize() {
+		return errBadFileSize
+	}
+	if sc.FileMerkleRoot != so.merkleRoot() {
+		return errBadFileMerkleRoot
+	}
+
+	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
+	//if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+	//	return errEarlyWindow
+	//}
+
+	// WindowEnd must be at least settings.WindowSize blocks after WindowStart
+	if sc.WindowEnd < sc.WindowStart+externalConfig.WindowSize {
+		return errSmallWindow
+	}
+
+	// WindowStart must not be more than settings.MaxDuration blocks into the future
+	if sc.WindowStart > blockHeight+externalConfig.MaxDuration {
+		return errLongDuration
+	}
+
+	// ValidProofOutputs shoud have 2 outputs (renter + host) and missed
+	// outputs should have 3 (renter + host)
+	if len(sc.ValidProofOutputs) != 2 || len(sc.MissedProofOutputs) != 2 {
+		return errBadContractOutputCounts
+	}
+
+	// The address of the valid and missed proof outputs must match the host's address
+	if sc.ValidProofOutputs[1].Address != hostAddress || sc.MissedProofOutputs[1].Address != hostAddress {
+		return errBadPayoutUnlockHashes
+	}
+
+	// Check that the collateral does not exceed the maximum amount of
+	// collateral allowed.
+	basePrice := renewBasePrice(so, externalConfig, *sc)
+	expectedCollateral := common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(externalConfig.ContractPrice).Sub(basePrice)
+	if expectedCollateral.Cmp(externalConfig.MaxDeposit) > 0 {
+		return errMaxCollateralReached
+	}
+
+	// Check that the host has enough room in the deposit budget to add this
+	// collateral.
+	if lockedStorageDeposit.Add(expectedCollateral).Cmp(config.DepositBudget) > 0 {
+		return errCollateralBudgetExceeded
+	}
+
+	// Check that the valid and missed proof outputs contain enough money
+	baseCollateral := renewBaseDeposit(so, externalConfig, *sc)
+	totalPayout := basePrice.Add(baseCollateral)
+	if sc.ValidProofOutputs[1].Value.Cmp(totalPayout.BigIntPtr()) < 0 {
+		return errLowHostValidOutput
+	}
+	expectedHostMissedOutput := common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(basePrice).Sub(baseCollateral)
+	if sc.MissedProofOutputs[1].Value.Cmp(expectedHostMissedOutput.BigIntPtr()) < 0 {
+		return errLowHostMissedOutput
+	}
+
+	// The unlock hash for the storage contract must match the unlock hash that
+	// the host knows how to spend.
+	expectedUH := types.UnlockConditions{
+		PaymentAddresses: []common.Address{
+			crypto.PubkeyToAddress(*clientPK),
+			hostAddress,
+		},
+		SignaturesRequired: 2,
+	}.UnlockHash()
+	if sc.UnlockHash != expectedUH {
+		return errBadUnlockHash
+	}
+
+	return nil
 }
