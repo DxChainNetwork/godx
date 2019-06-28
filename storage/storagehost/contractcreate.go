@@ -291,6 +291,7 @@ func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	config := h.config
 	so, err := getStorageResponsibility(h.db, sc.ID())
 	if err != nil {
+		h.lock.RUnlock()
 		return fmt.Errorf("failed to get storage responsibility in verifyRenewedContract,error: %v", err)
 	}
 	h.lock.RUnlock()
