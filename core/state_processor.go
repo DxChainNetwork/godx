@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"math/big"
+	"reflect"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -28,9 +29,9 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	trie2 "github.com/DxChainNetwork/godx/trie"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -88,27 +89,21 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
 	if statedb.Exist(statusAddr) {
 
-		// iterator all the storage contract status in this account
-		trie := statedb.StorageTrie(statusAddr)
-		trieNode := trie.NodeIterator(nil)
-		it := trie2.NewIterator(trieNode)
-		for it.Next() {
-			value := it.Value
-
-			// if this account has not proofed contract, effect the missed output
-			if bytes.Equal(value, []byte{'0'}) {
-				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes[12:])
-				contractTrie := statedb.StorageTrie(contractAddr)
-				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
-				if err != nil {
-					return nil, nil, 0, err
+		// iterator all the storage contract status in this account: StorageContractID --> status
+		statedb.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
+			if bytes.Equal(value.Bytes(), []byte{'0'}) {
+				contractAddr := common.BytesToAddress(key[12:])
+				mpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("MissedProofOutputs")))
+				if reflect.DeepEqual(mpoHash, common.Hash{}) {
+					log.Warn("can not retrieve missed proof outputs when processing a block maintenance", "contract_addr", contractAddr.String())
+					return false
 				}
 
 				mpos := []types.DxcoinCharge{}
-				err = rlp.DecodeBytes(mpoBytes, &mpos)
+				err := rlp.DecodeBytes(mpoHash.Bytes(), &mpos)
 				if err != nil {
-					return nil, nil, 0, err
+					log.Error("failed to decode missed proof output bytes", "error", err)
+					return false
 				}
 
 				totalValue := new(big.Int).SetInt64(0)
@@ -118,7 +113,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 				}
 				statedb.SubBalance(contractAddr, totalValue)
 			}
-		}
+			return true
+		})
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)

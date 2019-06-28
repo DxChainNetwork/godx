@@ -31,20 +31,16 @@ var (
 	errStorageContractValidOutputSumViolation  = errors.New("storage contract has invalid valid proof output sums")
 	errStorageContractMissedOutputSumViolation = errors.New("storage contract has invalid missed proof output sums")
 	errStorageContractOutputSumViolation       = errors.New("the missed proof ouput sum and valid proof output sum not equal")
-
-	errStorageContractWindowEndViolation   = errors.New("storage contract window must end at least one block after it starts")
-	errStorageContractWindowStartViolation = errors.New("storage contract window must start in the future")
-
-	errLateRevision          = errors.New("storage contract revision submitted after deadline")
-	errLowRevisionNumber     = errors.New("transaction has a storage contract with an outdated revision number")
-	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
-	errRevisionMissedPayouts = errors.New("storage contract revision has altered missed payout")
-	errWrongUnlockCondition  = errors.New("the unlockhash of storage contract not match unlockcondition")
-	errNoStorageContractType = errors.New("no this storage contract type")
-
-	errInvalidStorageProof = errors.New("invalid storage proof")
-
-	errUnfinishedStorageContract = errors.New("storage contract has not yet opened")
+	errStorageContractWindowEndViolation       = errors.New("storage contract window must end at least one block after it starts")
+	errStorageContractWindowStartViolation     = errors.New("storage contract window must start in the future")
+	errLateRevision                            = errors.New("storage contract revision submitted after deadline")
+	errLowRevisionNumber                       = errors.New("transaction has a storage contract with an outdated revision number")
+	errRevisionValidPayouts                    = errors.New("storage contract revision has altered valid payout")
+	errRevisionMissedPayouts                   = errors.New("storage contract revision has altered missed payout")
+	errWrongUnlockCondition                    = errors.New("the unlockhash of storage contract not match unlockcondition")
+	errNoStorageContractType                   = errors.New("no this storage contract type")
+	errInvalidStorageProof                     = errors.New("invalid storage proof")
+	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
 )
 
 const (
@@ -124,12 +120,13 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	// check whether it has proofed
 	windowEnStr := strconv.FormatUint(scr.NewWindowEnd, 10)
 	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEnStr))
-	statusTrie := state.StorageTrie(statusAddr)
-	flag, err := statusTrie.TryGet(scr.ParentID.Bytes())
-	if err != nil {
-		return errors.New("failed to retrieve contract status")
+
+	flag := state.GetState(statusAddr, scr.ParentID)
+	if reflect.DeepEqual(flag, common.Hash{}) {
+		return errors.New("get nil contract status from state in CheckReversionContract")
 	}
-	if bytes.Equal(flag, ProofedStatus) {
+
+	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not revision after storage proof")
 	}
 
@@ -165,37 +162,38 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	}
 
 	// retrieve origin storage contract
-	trie := state.StorageTrie(contractAddr)
-	wStartBytes, err := trie.TryGet(BytesWindowStart)
-	if err != nil {
-		return err
+	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
+	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
+		return errors.New("get nil window start from state in CheckReversionContract")
 	}
-	wStart, err := strconv.ParseUint(string(wStartBytes), 10, 64)
+
+	wStart, err := strconv.ParseUint(string(windowStartHash.Bytes()), 10, 64)
 	if err != nil {
 		return err
 	}
 
-	reNumBytes, err := trie.TryGet(BytesRevisionNumber)
-	if err != nil {
-		return err
+	revisionNumHash := state.GetState(contractAddr, KeyRevisionNumber)
+	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
+		return errors.New("get nil revision number from state in CheckReversionContract")
 	}
-	reNum, err := strconv.ParseUint(string(reNumBytes), 10, 64)
+
+	reNum, err := strconv.ParseUint(string(revisionNumHash.Bytes()), 10, 64)
 	if err != nil {
 		return err
 	}
 
-	unHashBytes, err := trie.TryGet(BytesUnlockHash)
-	if err != nil {
-		return err
+	unHash := state.GetState(contractAddr, KeyUnlockHash)
+	if reflect.DeepEqual(unHash, common.Hash{}) {
+		return errors.New("get nil unlock hash from state in CheckReversionContract")
 	}
-	unHash := common.BytesToHash(unHashBytes)
 
-	vpoBytes, err := trie.TryGet(BytesValidProofOutputs)
-	if err != nil {
-		return err
+	vopHash := state.GetState(contractAddr, KeyValidProofOutputs)
+	if reflect.DeepEqual(vopHash, common.Hash{}) {
+		return errors.New("get nil valid outputs from state in CheckReversionContract")
 	}
+
 	originVpo := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, originVpo)
+	err = rlp.DecodeBytes(vopHash.Bytes(), originVpo)
 	if err != nil {
 		return err
 	}
@@ -316,48 +314,47 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
-	statusTrie := state.StorageTrie(statusAddr)
-	flag, err := statusTrie.TryGet(sp.ParentID.Bytes())
-	if err != nil {
-		return errors.New("failed to retrieve contract status")
+	flag := state.GetState(statusAddr, sp.ParentID)
+	if reflect.DeepEqual(flag, common.Hash{}) {
+		return errors.New("get nil contract status from state in CheckStorageProof")
 	}
-	if bytes.Equal(flag, ProofedStatus) {
+
+	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
-	contractTrie := state.StorageTrie(contractAddr)
-	windowStartBytes, err := contractTrie.TryGet(BytesWindowStart)
+	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
+	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
+		return errors.New("get nil window start from state in CheckStorageProof")
+	}
+
+	windowStart, err := strconv.ParseUint(string(windowStartHash.Bytes()), 10, 64)
 	if err != nil {
 		return err
 	}
 
-	windowStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
+	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
+	if reflect.DeepEqual(windowEndHash, common.Hash{}) {
+		return errors.New("get nil window end from state in CheckStorageProof")
+	}
+
+	windowEnd, err := strconv.ParseUint(string(windowEndHash.Bytes()), 10, 64)
 	if err != nil {
 		return err
 	}
 
-	windowEndBytes, err := contractTrie.TryGet(BytesWindowEnd)
-	if err != nil {
-		return err
+	fileMerkleRoot := state.GetState(contractAddr, KeyFileMerkleRoot)
+	if reflect.DeepEqual(fileMerkleRoot, common.Hash{}) {
+		return errors.New("get nil file merkle root from state in CheckStorageProof")
 	}
 
-	windowEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
-	if err != nil {
-		return err
+	fileSizeHash := state.GetState(contractAddr, KeyFileSize)
+	if reflect.DeepEqual(fileSizeHash, common.Hash{}) {
+		return errors.New("get nil file size from state in CheckStorageProof")
 	}
 
-	fileMerkleRootBytes, err := contractTrie.TryGet(BytesFileMerkleRoot)
-	if err != nil {
-		return err
-	}
-
-	fileSizeBytes, err := contractTrie.TryGet(BytesFileSize)
-	if err != nil {
-		return err
-	}
-
-	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
+	fileSize, err := strconv.ParseUint(string(fileSizeHash.Bytes()), 10, 64)
 	if err != nil {
 		return err
 	}
@@ -403,7 +400,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		common.BytesToHash(fileMerkleRootBytes),
+		fileMerkleRoot,
 	)
 	if !verified && fileSize > 0 {
 		return errInvalidStorageProof

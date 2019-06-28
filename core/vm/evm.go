@@ -17,9 +17,10 @@
 package vm
 
 import (
-	"bytes"
+	"encoding/binary"
 	"errors"
 	"math/big"
+	"reflect"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -584,93 +585,40 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
-	statusTrie := state.StorageTrie(statusAddr)
-	err := statusTrie.TryUpdate(scIDBytes, NotProofedStatus)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	state.SetState(statusAddr, scID, NotProofedStatus)
 
 	// store storage contract in this contractAddr's state
-	trie := state.StorageTrie(contractAddr)
-	err = trie.TryUpdate(BytesClientCollateral, sc.ClientCollateral.Value.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	state.SetState(contractAddr, KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
+	state.SetState(contractAddr, KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
-	err = trie.TryUpdate(BytesHostCollateral, sc.HostCollateral.Value.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	uintBytes := Uint64ToBytes(sc.FileSize)
+	state.SetState(contractAddr, KeyFileSize, common.BytesToHash(uintBytes))
 
-	buffer := bytes.Buffer{}
-	buffer.WriteString(strconv.FormatUint(sc.FileSize, 10))
-	err = trie.TryUpdate(BytesFileSize, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	state.SetState(contractAddr, KeyUnlockHash, sc.UnlockHash)
+	state.SetState(contractAddr, KeyFileMerkleRoot, sc.FileMerkleRoot)
 
-	err = trie.TryUpdate(BytesUnlockHash, sc.UnlockHash.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	uintBytes = Uint64ToBytes(sc.RevisionNumber)
+	state.SetState(contractAddr, KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	err = trie.TryUpdate(BytesFileMerkleRoot, sc.FileMerkleRoot.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	uintBytes = Uint64ToBytes(sc.WindowStart)
+	state.SetState(contractAddr, KeyWindowStart, common.BytesToHash(uintBytes))
 
-	buffer.WriteString(strconv.FormatUint(sc.RevisionNumber, 10))
-	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-
-	buffer.WriteString(strconv.FormatUint(sc.WindowStart, 10))
-	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-
-	buffer.WriteString(strconv.FormatUint(sc.WindowEnd, 10))
-	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	uintBytes = Uint64ToBytes(sc.WindowEnd)
+	state.SetState(contractAddr, KeyWindowEnd, common.BytesToHash(uintBytes))
 
 	vpoBytes, err := rlp.EncodeToBytes(sc.ValidProofOutputs)
 	if err != nil {
 		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
-	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	state.SetState(contractAddr, KeyValidProofOutputs, common.BytesToHash(vpoBytes))
 
 	mpoBytes, err := rlp.EncodeToBytes(sc.MissedProofOutputs)
 	if err != nil {
 		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
-	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
+	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
 
 	// return remain gas if everything is ok
 	log.Info("form contract tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
@@ -708,72 +656,34 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 
 	// update revision info
-	trie := state.StorageTrie(contractAddr)
-	buffer := bytes.Buffer{}
-	buffer.WriteString(strconv.FormatUint(scr.NewFileSize, 10))
-	err := trie.TryUpdate(BytesFileSize, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	uintBytes := Uint64ToBytes(scr.NewFileSize)
+	state.SetState(contractAddr, KeyFileSize, common.BytesToHash(uintBytes))
 
-	err = trie.TryUpdate(BytesFileMerkleRoot, scr.NewFileMerkleRoot.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	state.SetState(contractAddr, KeyUnlockHash, scr.NewUnlockHash)
+	state.SetState(contractAddr, KeyFileMerkleRoot, scr.NewFileMerkleRoot)
 
-	buffer.WriteString(strconv.FormatUint(scr.NewRevisionNumber, 10))
-	err = trie.TryUpdate(BytesRevisionNumber, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	uintBytes = Uint64ToBytes(scr.NewRevisionNumber)
+	state.SetState(contractAddr, KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	buffer.WriteString(strconv.FormatUint(scr.NewWindowStart, 10))
-	err = trie.TryUpdate(BytesWindowStart, buffer.Bytes())
-	buffer.Reset()
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	uintBytes = Uint64ToBytes(scr.NewWindowStart)
+	state.SetState(contractAddr, KeyWindowStart, common.BytesToHash(uintBytes))
 
-	buffer.WriteString(strconv.FormatUint(scr.NewWindowEnd, 10))
-	err = trie.TryUpdate(BytesWindowEnd, buffer.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
-	buffer.Reset()
+	uintBytes = Uint64ToBytes(scr.NewWindowEnd)
+	state.SetState(contractAddr, KeyWindowEnd, common.BytesToHash(uintBytes))
 
 	vpoBytes, err := rlp.EncodeToBytes(scr.NewValidProofOutputs)
 	if err != nil {
+		state.RevertToSnapshot(snapshot)
 		return nil, gasRemainCheck, err
 	}
-	err = trie.TryUpdate(BytesValidProofOutputs, vpoBytes)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	state.SetState(contractAddr, KeyValidProofOutputs, common.BytesToHash(vpoBytes))
 
 	mpoBytes, err := rlp.EncodeToBytes(scr.NewMissedProofOutputs)
 	if err != nil {
 		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
+		return nil, gasRemainCheck, err
 	}
-	err = trie.TryUpdate(BytesMissedProofOutputs, mpoBytes)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
-
-	err = trie.TryUpdate(BytesUnlockHash, scr.NewUnlockHash.Bytes())
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
 
 	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -783,8 +693,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter storage proof tx executing ... ")
 	var (
-		state    = evm.StateDB
-		snapshot = state.Snapshot()
+		state = evm.StateDB
 	)
 
 	sp := types.StorageProof{}
@@ -802,24 +711,23 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// retrieve origin data in storage contract
-	trie := state.StorageTrie(contractAddr)
-	windowEndBytes, err := trie.TryGet(BytesWindowEnd)
-	if err != nil {
-		return nil, gasRemainDec, err
+	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
+	if reflect.DeepEqual(windowEndHash, common.Hash{}) {
+		return nil, gasRemainDec, errors.New("get nil window end from state for StorageProofTx")
 	}
 
-	validOutputsBytes, err := trie.TryGet(BytesValidProofOutputs)
-	if err != nil {
-		return nil, gasRemainDec, err
+	validOutputsHash := state.GetState(contractAddr, KeyValidProofOutputs)
+	if reflect.DeepEqual(validOutputsHash, common.Hash{}) {
+		return nil, gasRemainDec, errors.New("get nil valid outputs from state for StorageProofTx")
 	}
 
 	vpos := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(validOutputsBytes, &vpos)
+	err := rlp.DecodeBytes(validOutputsHash.Bytes(), &vpos)
 	if err != nil {
 		return nil, gasRemainDec, err
 	}
 
-	statusAddr := common.BytesToAddress(append([]byte(StrPrefixExpSC), windowEndBytes...))
+	statusAddr := common.BytesToAddress(append([]byte(StrPrefixExpSC), windowEndHash.Bytes()...))
 
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
@@ -836,13 +744,14 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract
-	statusTrie := state.StorageTrie(statusAddr)
-	err = statusTrie.TryUpdate(sp.ParentID.Bytes(), ProofedStatus)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, errCheck
-	}
+	state.SetState(statusAddr, sp.ParentID, ProofedStatus)
 
 	log.Info("storage proof tx execution done", "file_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
+}
+
+func Uint64ToBytes(i uint64) []byte {
+	var buf = make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, i)
+	return buf
 }
