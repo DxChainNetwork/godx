@@ -221,7 +221,6 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 		// Initialize StorageHost
 		hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
 		eth.storageHost, err = storagehost.New(hostPath)
-
 		if err != nil {
 			return nil, err
 		}
