@@ -349,6 +349,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 	} else {
 
+		p.Log().Info("DX session connected", "info", p.Peer.Info())
+
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
 		}

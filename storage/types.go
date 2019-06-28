@@ -5,7 +5,6 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"reflect"
@@ -112,9 +111,9 @@ type (
 		IPNetwork           string    `json:"ipnetwork"`
 		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		EnodeID    enode.ID        `json:"enodeid"`
-		EnodeURL   string          `json:"enodeurl"`
-		NodePubKey ecdsa.PublicKey `json:"nodepubkey"`
+		EnodeID    enode.ID `json:"enodeid"`
+		EnodeURL   string   `json:"enodeurl"`
+		NodePubKey []byte   `json:"nodepubkey"`
 
 		Filtered bool `json:"filtered"`
 	}
@@ -129,6 +128,7 @@ type (
 		Success   bool      `json:"success"`
 	}
 )
+
 type ContractParams struct {
 	Allowance            RentPayment
 	HostEnodeUrl         string

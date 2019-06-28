@@ -240,36 +240,28 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 }
 
 // upload protocol
-
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload request", "request", data)
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload proof", "proof", data)
 	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload client revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
 }
 
 // download protocol
-
 func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract download request", "request", data)
 	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractDownloadData(data interface{}) error {
-	s.Log().Debug("Sending storage contract download data", "data", data)
 	return p2p.Send(s.rw, StorageContractDownloadDataMsg, data)
 }
 
