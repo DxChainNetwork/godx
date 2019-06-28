@@ -215,7 +215,7 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Warn("Sending host settings response from host", "msg", data)
+	s.Log().Debug("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 

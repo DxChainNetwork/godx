@@ -247,10 +247,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer func() {
-		cm.log.Error("Contract Create: disconnecte")
-		cm.b.Disconnect(session, host.EnodeURL)
-	}()
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())

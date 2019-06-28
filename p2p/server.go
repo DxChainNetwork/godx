@@ -186,7 +186,7 @@ type Server struct {
 	removeStorageContract chan *enode.Node // used to remove storage contract peer
 	addStorageClient      chan *enode.Node // used to add storage contract client peer
 	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
-	storagePeerDoneMap 	  map[enode.ID]*sync.WaitGroup
+	storagePeerDoneMap    map[enode.ID]*sync.WaitGroup
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
@@ -394,13 +394,11 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 
 	select {
 	case srv.addStorageContract <- node:
-		srv.log.Warn("AddStorageContractPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
 	select {
 	case srv.addStorageClient <- node:
-		srv.log.Warn("AddStorageClientPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
@@ -1009,7 +1007,6 @@ running:
 		// which will only return if error or disconnect request was received
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
-			pd.log.Warn("removed peer")
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			pd.log.Debug("Removing p2p peer", "duration", d, "peers", len(peers)-1, "req", pd.requested, "err", pd.err)
 			delete(peers, pd.ID())
