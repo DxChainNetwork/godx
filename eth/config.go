@@ -61,6 +61,8 @@ var DefaultConfig = Config{
 		Percentile: 60,
 	},
 	StorageClientDir: storageclient.PersistDirectory,
+	StorageClient:    false,
+	StorageHost:      false,
 }
 
 func init() {
@@ -140,6 +142,10 @@ type Config struct {
 
 	// StorageClient Persist Directory
 	StorageClientDir string
+
+	// Role, can only be one of the two roles
+	StorageClient bool
+	StorageHost   bool
 }
 
 type configMarshaling struct {
