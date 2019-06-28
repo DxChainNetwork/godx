@@ -6,6 +6,7 @@ package contractmanager
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -226,13 +227,11 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-
-		hostID := PubkeyToEnodeID(&host.NodePubKey)
 		if err != nil {
-			cm.hostManager.IncrementFailedInteractions(hostID)
+			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else {
-			cm.hostManager.IncrementSuccessfulInteractions(hostID)
+			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
 		}
 	}()
 
@@ -339,10 +338,15 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
+	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+	}
+
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
+		EnodeID:                PubkeyToEnodeID(pubKey),
 		StartHeight:            startHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,
