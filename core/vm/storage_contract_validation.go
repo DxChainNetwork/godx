@@ -37,7 +37,7 @@ var (
 	errLowRevisionNumber                       = errors.New("transaction has a storage contract with an outdated revision number")
 	errRevisionValidPayouts                    = errors.New("storage contract revision has altered valid payout")
 	errRevisionMissedPayouts                   = errors.New("storage contract revision has altered missed payout")
-	errWrongUnlockCondition                    = errors.New("the unlockhash of storage contract not match unlockcondition")
+	errWrongUnlockCondition                    = errors.New("the unlock hash of storage contract not match unlock condition")
 	errNoStorageContractType                   = errors.New("no this storage contract type")
 	errInvalidStorageProof                     = errors.New("invalid storage proof")
 	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
@@ -48,7 +48,7 @@ const (
 )
 
 // check whether a new StorageContract is valid
-func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
+func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
@@ -97,12 +97,12 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 
 	clientBalance := state.GetBalance(clientAddr)
 	if clientBalance.Cmp(clientCollateralAmount) == -1 {
-		return errors.New("client has not enough balance for file contract collateral")
+		return errors.New("client has not enough balance for storage contract collateral")
 	}
 
 	hostBalance := state.GetBalance(hostAddr)
 	if hostBalance.Cmp(hostCollateralAmount) == -1 {
-		return errors.New("host has not enough balance for file contract collateral")
+		return errors.New("host has not enough balance for storage contract collateral")
 	}
 
 	err := CheckMultiSignatures(sc, currentHeight, sc.Signatures)
@@ -206,7 +206,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	}
 
 	// Check that the revision number of the revision is greater than the
-	// revision number of the existing file contract.
+	// revision number of the existing storage contract.
 	if reNum >= scr.NewRevisionNumber {
 		return errLowRevisionNumber
 	}

@@ -497,10 +497,6 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 // HostAnnounceTx host declares its own information on the chain
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter host announce tx executing ... ")
-	var (
-		snapshot = evm.StateDB.Snapshot()
-		err      error
-	)
 
 	ha := types.HostAnnouncement{}
 	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &ha)
@@ -516,20 +512,14 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasCheck, errCheck
 	}
 
-	// go back state DB if something is wrong above
-	if err != nil {
-		evm.StateDB.RevertToSnapshot(snapshot)
-		return nil, gasCheck, err
-	}
-
-	log.Info("host announce tx execution done", "remain_gas", gas, "host_address", ha.NetAddress)
+	log.Info("host announce tx execution done", "remain_gas", gasCheck, "host_address", ha.NetAddress)
 
 	// return remain gas if everything is ok
 	return nil, gasCheck, nil
 }
 
 func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("enter form contract tx executing ... ")
+	log.Info("enter create contract tx executing ... ")
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
@@ -565,11 +555,11 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckFormContract, state, sc, uint64(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckCreateContract, state, sc, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		state.RevertToSnapshot(snapshot)
-		log.Error("failed to check form contract", "err", errCheck)
+		log.Error("failed to check create contract", "err", errCheck)
 		return nil, gasRemainCheck, errCheck
 	}
 
@@ -621,13 +611,13 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
 
 	// return remain gas if everything is ok
-	log.Info("form contract tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scID.Hex())
+	log.Info("create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
 // CommitRevisionTx host sends a revision transaction
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("enter file contract reversion tx executing ... ")
+	log.Info("enter storage contract reversion tx executing ... ")
 	var (
 		state    = evm.StateDB
 		snapshot = state.Snapshot()
@@ -646,12 +636,12 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainDecode, errors.New("no this storage contract account")
 	}
 
-	// check file contract reversion and calculate gas used
+	// check storage contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, state, scr, uint64(currentHeight), contractAddr)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
-		log.Error("failed to check file contract reversion", "err", errCheck)
+		log.Error("failed to check storage contract reversion", "err", errCheck)
 		return nil, gasRemainCheck, errCheck
 	}
 
@@ -685,7 +675,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	}
 	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
 
-	log.Info("file contract reversion tx execution done", "remain_gas", gasRemainCheck, "file_contract_id", scr.ParentID.Hex())
+	log.Info("storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
@@ -746,7 +736,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	// set completed for this storage contract
 	state.SetState(statusAddr, sp.ParentID, ProofedStatus)
 
-	log.Info("storage proof tx execution done", "file_contract_id", sp.ParentID.Hex())
+	log.Info("storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
