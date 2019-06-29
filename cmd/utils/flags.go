@@ -713,6 +713,16 @@ var (
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
 	}
+
+	StorageHostFlag = cli.BoolFlag{
+		Name:  "storagehost",
+		Usage: "Used to enable the storage host module, the node will be act as storage host",
+	}
+
+	StorageClientFlag = cli.BoolFlag{
+		Name:  "storageclient",
+		Usage: "Used to enable the storage client module, the node will be act as storage client",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1308,6 +1318,14 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	if ctx.GlobalIsSet(EVMInterpreterFlag.Name) {
 		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(StorageClientFlag.Name) {
+		cfg.StorageClient = ctx.GlobalBool(StorageClientFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(StorageHostFlag.Name) {
+		cfg.StorageHost = ctx.GlobalBool(StorageHostFlag.Name)
 	}
 
 	// Override any default configs for hard coded networks.

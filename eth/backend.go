@@ -205,20 +205,26 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	// Initialize StorageClient
-	clientPath := ctx.ResolvePath(config.StorageClientDir)
-	eth.storageClient, err = storageclient.New(clientPath)
-	if err != nil {
-		return nil, err
+	// if both storageClient and storageHost are true, return error directly
+	if config.StorageClient && config.StorageHost {
+		return nil, errors.New("a node can only become storage client or storage host, not both")
 	}
 
-	hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
-	eth.storageHost, err = storagehost.New(hostPath)
+	// Initialize StorageClient
+	if config.StorageClient {
+		clientPath := ctx.ResolvePath(config.StorageClientDir)
+		eth.storageClient, err = storageclient.New(clientPath)
+		if err != nil {
+			return nil, err
+		}
+	} else if config.StorageHost {
+		// Initialize StorageHost
+		hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
+		eth.storageHost, err = storagehost.New(hostPath)
+		if err != nil {
+			return nil, err
+		}
 
-	if err != nil {
-		// TODO, error handling, currently: mkdir fail, create fail, load fail, sync fail,
-		//  make sure what the expected handling case of these failure
-		return nil, err
 	}
 
 	return eth, nil
@@ -338,54 +344,69 @@ func (s *Ethereum) APIs() []rpc.API {
 				Version:   "1.0",
 				Service:   s.netRPCService,
 				Public:    true,
-			}, {
-				Namespace: "storageclient",
-				Version:   "1.0",
-				Service:   storageclient.NewPublicStorageClientAPI(s.storageClient),
-				Public:    true,
-			}, {
-				Namespace: "storageclient",
-				Version:   "1.0",
-				Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
-				Public:    false,
-			}, {
-				Namespace: "clientdebug",
-				Version:   "1.0",
-				Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
-				Public:    true,
-			}, {
-				Namespace: "hostmanagerdebug",
-				Version:   "1.0",
-				Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
-				Public:    true,
-			}, {
-				Namespace: "hostmanager",
-				Version:   "1.0",
-				Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
-				Public:    true,
-			}, {
-				Namespace: "hostmanager",
-				Version:   "1.0",
-				Service:   storagehostmanager.NewPrivateStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
-				Public:    false,
-			},
-			{
-				Namespace: "clientfilesdebug",
-				Version:   "1.0",
-				Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
-				Public:    true,
-			}, {
-				Namespace: "clientfiles",
-				Version:   "1.0",
-				Service:   filesystem.NewPublicFileSystemAPI(s.storageClient.GetFileSystem()),
-				Public:    true,
-			}, {
-				Namespace: "storagehost",
-				Version:   "1.0",
-				Service:   storagehost.NewHostPrivateAPI(s.storageHost),
-				Public:    false,
 			},
 		}...)
+
+		// based on the user's option, choose to register storage client
+		// or storage host APIs
+		if s.config.StorageClient {
+			// StorageClient related APIs
+			storageClientAPIs := []rpc.API{
+				{
+					Namespace: "storageclient",
+					Version:   "1.0",
+					Service:   storageclient.NewPublicStorageClientAPI(s.storageClient),
+					Public:    true,
+				}, {
+					Namespace: "storageclient",
+					Version:   "1.0",
+					Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
+					Public:    false,
+				}, {
+					Namespace: "clientdebug",
+					Version:   "1.0",
+					Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
+					Public:    true,
+				}, {
+					Namespace: "hostmanagerdebug",
+					Version:   "1.0",
+					Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
+					Public:    true,
+				}, {
+					Namespace: "hostmanager",
+					Version:   "1.0",
+					Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
+					Public:    true,
+				}, {
+					Namespace: "hostmanager",
+					Version:   "1.0",
+					Service:   storagehostmanager.NewPrivateStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
+					Public:    false,
+				},
+				{
+					Namespace: "clientfilesdebug",
+					Version:   "1.0",
+					Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
+					Public:    true,
+				}, {
+					Namespace: "clientfiles",
+					Version:   "1.0",
+					Service:   filesystem.NewPublicFileSystemAPI(s.storageClient.GetFileSystem()),
+					Public:    true,
+				},
+			}
+			s.registeredAPIs = append(s.registeredAPIs, storageClientAPIs...)
+		} else if s.config.StorageHost {
+			storageHostAPIs := []rpc.API{
+				{
+					Namespace: "storagehost",
+					Version:   "1.0",
+					Service:   storagehost.NewHostPrivateAPI(s.storageHost),
+					Public:    false,
+				},
+			}
+			s.registeredAPIs = append(s.registeredAPIs, storageHostAPIs...)
+		}
 	}
 
 	s.apisOnce.Do(getAPI)
@@ -602,15 +623,19 @@ func (s *Ethereum) Start(srvr *p2p.Server) error {
 	}
 
 	// Start Storage Client
-	err := s.storageClient.Start(s, s.APIBackend)
-	if err != nil {
-		return err
+	if s.config.StorageClient {
+		err := s.storageClient.Start(s, s.APIBackend)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Start Storage Host
-	err = s.storageHost.Start(s)
-	if err != nil {
-		return err
+	if s.config.StorageHost {
+		err := s.storageHost.Start(s)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -640,15 +665,23 @@ func (s *Ethereum) Stop() error {
 
 	s.chainDb.Close()
 
-	err = s.storageClient.Close()
-	fullErr = common.ErrCompose(fullErr, err)
+	if s.config.StorageClient {
+		err = s.storageClient.Close()
+		fullErr = common.ErrCompose(fullErr, err)
+	}
 
-	err = s.storageHost.Close()
-	fullErr = common.ErrCompose(fullErr, err)
+	if s.config.StorageHost {
+		err = s.storageHost.Close()
+		fullErr = common.ErrCompose(fullErr, err)
+	}
 
 	close(s.shutdownChan)
 
 	return nil
+}
+
+func (s *Ethereum) RemoveStorageHost(ip string) {
+	s.server.RemoveStorageHost(ip)
 }
 
 // SetupConnection will setup connection with host if they are never connected with each other
@@ -672,10 +705,15 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 
 	// First we disconnect the ethereum connection
 	s.server.RemovePeer(hostNode)
+
+	// before disconnecting the connection, add the node to storageHosts map
+	s.server.AddStorageHost(hostNode)
+
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
 		case <-timeout:
+			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, errors.New("remove original peer timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -708,6 +746,7 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 
 		select {
 		case <-timer.C:
+			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -725,6 +764,9 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 	if err != nil {
 		return fmt.Errorf("invalid enode: %v", err)
 	}
+
+	// remove the storage host when the client is trying to disconnect the host
+	s.server.RemoveStorageHost(hostNode.IP().String())
 
 	if _, err := s.netRPCService.RemoveStorageContractPeer(hostNode); err != nil {
 		return err
@@ -761,13 +803,12 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	}
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
-		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())
 		return err
 	}
 
 	msg, err := session.ReadMsg()
 	if err != nil {
-		log.Error("GetStorageHostSetting readMSG", "err", err.Error())
+		log.Warn("GetStorageHostSetting readMSG", "err", err.Error())
 		return err
 	}
 
