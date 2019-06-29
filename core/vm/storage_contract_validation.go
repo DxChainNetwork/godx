@@ -7,6 +7,7 @@ package vm
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"hash"
@@ -122,10 +123,6 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEnStr))
 
 	flag := state.GetState(statusAddr, scr.ParentID)
-	if reflect.DeepEqual(flag, common.Hash{}) {
-		return errors.New("get nil contract status from state in CheckReversionContract")
-	}
-
 	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not revision after storage proof")
 	}
@@ -163,37 +160,16 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 
 	// retrieve origin storage contract
 	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
-	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
-		return errors.New("get nil window start from state in CheckReversionContract")
-	}
-
-	wStart, err := strconv.ParseUint(string(windowStartHash.Bytes()), 10, 64)
-	if err != nil {
-		return err
-	}
+	wStart := BytesToUint64(windowStartHash.Bytes())
 
 	revisionNumHash := state.GetState(contractAddr, KeyRevisionNumber)
-	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
-		return errors.New("get nil revision number from state in CheckReversionContract")
-	}
-
-	reNum, err := strconv.ParseUint(string(revisionNumHash.Bytes()), 10, 64)
-	if err != nil {
-		return err
-	}
+	reNum := BytesToUint64(revisionNumHash.Bytes())
 
 	unHash := state.GetState(contractAddr, KeyUnlockHash)
-	if reflect.DeepEqual(unHash, common.Hash{}) {
-		return errors.New("get nil unlock hash from state in CheckReversionContract")
-	}
 
 	vopHash := state.GetState(contractAddr, KeyValidProofOutputs)
-	if reflect.DeepEqual(vopHash, common.Hash{}) {
-		return errors.New("get nil valid outputs from state in CheckReversionContract")
-	}
-
 	originVpo := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vopHash.Bytes(), originVpo)
+	err := rlp.DecodeBytes(vopHash.Bytes(), originVpo)
 	if err != nil {
 		return err
 	}
@@ -315,49 +291,21 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 
 	// check whether it proofed repeatedly
 	flag := state.GetState(statusAddr, sp.ParentID)
-	if reflect.DeepEqual(flag, common.Hash{}) {
-		return errors.New("get nil contract status from state in CheckStorageProof")
-	}
-
 	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
 	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
-	if reflect.DeepEqual(windowStartHash, common.Hash{}) {
-		return errors.New("get nil window start from state in CheckStorageProof")
-	}
-
-	windowStart, err := strconv.ParseUint(string(windowStartHash.Bytes()), 10, 64)
-	if err != nil {
-		return err
-	}
+	windowStart := BytesToUint64(windowStartHash.Bytes())
 
 	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
-	if reflect.DeepEqual(windowEndHash, common.Hash{}) {
-		return errors.New("get nil window end from state in CheckStorageProof")
-	}
-
-	windowEnd, err := strconv.ParseUint(string(windowEndHash.Bytes()), 10, 64)
-	if err != nil {
-		return err
-	}
+	windowEnd := BytesToUint64(windowEndHash.Bytes())
 
 	fileMerkleRoot := state.GetState(contractAddr, KeyFileMerkleRoot)
-	if reflect.DeepEqual(fileMerkleRoot, common.Hash{}) {
-		return errors.New("get nil file merkle root from state in CheckStorageProof")
-	}
 
 	fileSizeHash := state.GetState(contractAddr, KeyFileSize)
-	if reflect.DeepEqual(fileSizeHash, common.Hash{}) {
-		return errors.New("get nil file size from state in CheckStorageProof")
-	}
-
-	fileSize, err := strconv.ParseUint(string(fileSizeHash.Bytes()), 10, 64)
-	if err != nil {
-		return err
-	}
+	fileSize := BytesToUint64(fileSizeHash.Bytes())
 
 	if windowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
@@ -368,7 +316,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 	}
 
 	// check signature
-	err = CheckMultiSignatures(sp, currentHeight, [][]byte{sp.Signature})
+	err := CheckMultiSignatures(sp, currentHeight, [][]byte{sp.Signature})
 	if err != nil {
 		log.Error("failed to check signature for storage proof", "err", err)
 		return err
@@ -542,4 +490,8 @@ func HashSum(h hash.Hash, data ...[]byte) []byte {
 		_, _ = h.Write(d)
 	}
 	return h.Sum(nil)
+}
+
+func BytesToUint64(bytes []byte) uint64 {
+	return binary.BigEndian.Uint64(bytes)
 }
