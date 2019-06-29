@@ -349,7 +349,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	} else {
-		p.Log().Warn("DX session connected", "info", p.Peer.Info())
+		p.Log().Info("DX session connected", "info", p.Peer.Info())
 
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
@@ -364,7 +364,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		if !p.Peer.Info().Network.StorageClient {
 			// host
 			for {
-				p.Log().Warn("inbound connection for loop", "remote client", p.Peer.Node().String())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
 					p.Log().Error("Storage host handle session message failed", "err", err)
 					return err
@@ -374,10 +373,8 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			// client
 			select {
 			case err := <-session.ClientDiscChan():
-				p.Log().Warn("client close the connection", "err", err.Error())
 				return err
 			case <-session.Peer.ClosedChan():
-				p.Log().Warn("host close connection and then ClosedChan DX SESSION CLOSED")
 				return errors.New("DX session is closed")
 			}
 		}

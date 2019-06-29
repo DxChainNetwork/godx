@@ -653,7 +653,6 @@ func (s *Ethereum) Stop() error {
 
 // SetupConnection will setup connection with host if they are never connected with each other
 func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
-	log.Warn("Setup Storage Connection", "Enode URL", hostEnodeURL)
 	if s.netRPCService == nil {
 		return nil, fmt.Errorf("network API is not ready")
 	}

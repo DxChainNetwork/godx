@@ -545,10 +545,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
+	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+	}
+
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
+		EnodeID:                PubkeyToEnodeID(pubKey),
 		StartHeight:            startHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,
