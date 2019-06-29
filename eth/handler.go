@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -210,7 +211,11 @@ func (pm *ProtocolManager) removePeer(id string) {
 	}
 }
 
-func (pm *ProtocolManager) removeStorageContactSession(id string) {
+func (pm *ProtocolManager) removeStorageContactSession(id string, ip string) {
+	// remove the storage host from the map
+	// in case the disconnection is caused by the storage host
+	pm.eth.RemoveStorageHost(ip)
+
 	// Short circuit if the peer was already removed
 	peer := pm.storageContractSessions.Session(id)
 	if peer == nil {
@@ -359,7 +364,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			p.Log().Error("DX session registration failed", "err", err)
 			return err
 		}
-		defer pm.removeStorageContactSession(p.id)
+
+		// get the host from the peer connection
+		host, _, err := net.SplitHostPort(p.Peer.RemoteAddr().String())
+		if err != nil {
+			host = ""
+		}
+		defer pm.removeStorageContactSession(p.id, host)
 
 		if !p.Peer.Info().Network.StorageClient {
 			// host

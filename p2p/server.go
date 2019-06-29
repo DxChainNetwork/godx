@@ -190,6 +190,7 @@ type Server struct {
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
+	storageHosts          map[string]struct{}
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -404,6 +405,7 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 
 	// wait for add done
 	wg.Wait()
+
 	delete(srv.storagePeerDoneMap, nodeID)
 }
 
@@ -417,6 +419,26 @@ func (srv *Server) RemoveStorageContractPeer(node *enode.Node) {
 	select {
 	case srv.removeStorageClient <- node:
 	case <-srv.quit:
+	}
+}
+
+func (srv *Server) AddStorageHost(node *enode.Node) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	srv.storageHosts[node.IP().String()] = struct{}{}
+}
+
+func (srv *Server) GetStorageHost() map[string]struct{} {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	return srv.storageHosts
+}
+
+func (srv *Server) RemoveStorageHost(ip string) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	if _, exists := srv.storageHosts[ip]; exists {
+		delete(srv.storageHosts, ip)
 	}
 }
 
@@ -543,6 +565,7 @@ func (srv *Server) Start() (err error) {
 	srv.storagePeerDoneMap = make(map[enode.ID]*sync.WaitGroup)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.storageHosts = make(map[string]struct{})
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -1133,6 +1156,26 @@ func (srv *Server) listenLoop() {
 			break
 		}
 
+		// check if the connection is the storageHost connection, if so, reject
+		srv.lock.Lock()
+		storageHosts := srv.storageHosts
+		srv.lock.Unlock()
+
+		// get the host from the remote address
+		host, _, err := net.SplitHostPort(fd.RemoteAddr().String())
+		if err != nil {
+			host = ""
+		}
+
+		// if exists, close the connection and waiting from the
+		// next connection
+		if _, exists := storageHosts[host]; exists {
+			srv.log.Debug("Rejected storageHost connection")
+			fd.Close()
+			slots <- struct{}{}
+			continue
+		}
+
 		// Reject connections that do not match NetRestrict.
 		// If the connection got rejected, send fill the handshake slot by one again
 		if srv.NetRestrict != nil {
@@ -1163,6 +1206,7 @@ func (srv *Server) listenLoop() {
 			slots <- struct{}{}
 		}()
 	}
+
 }
 
 // SetupConn runs the handshakes and attempts to add the connection
@@ -1178,8 +1222,16 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	// NOTE: fd are meteredConn
 	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	err := srv.setupConn(c, flags, dialDest)
+
 	if err != nil {
 		c.close(err)
+
+		// if the connection set up failed, check and remove the peer from the
+		// storage hosts list
+		if ip, _, splitError := net.SplitHostPort(fd.RemoteAddr().String()); splitError == nil {
+			srv.RemoveStorageHost(ip)
+		}
+
 		srv.log.Trace("Setting up connection failed", "addr", fd.RemoteAddr(), "err", err)
 	}
 	return err
