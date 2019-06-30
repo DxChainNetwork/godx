@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"math/big"
-	"reflect"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -505,7 +504,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasDecode, errDec
 	}
 
-	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, ha, uint64(0), [][]byte{ha.Signature})
+	gasCheck, resultCheck := RemainGas(gasDecode, CheckMultiSignatures, ha, [][]byte{ha.Signature})
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("failed to check signature for host announce", "err", errCheck)
@@ -539,8 +538,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// create storage contract address, directly use the contract ID
 	scID := sc.ID()
-	scIDBytes := scID.Bytes()
-	contractAddr := common.BytesToAddress(scIDBytes[12:])
+	contractAddr := common.BytesToAddress(scID[12:])
 
 	// if the account not exist, create it
 	if !state.Exist(statusAddr) {
@@ -571,13 +569,16 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.SubBalance(clientAddr, clientCollateralAmount)
 	state.SubBalance(hostAddr, hostCollateralAmount)
 
-	totalCollateral := clientCollateralAmount.Add(clientCollateralAmount, hostCollateralAmount)
+	totalCollateral := new(big.Int).Add(clientCollateralAmount, hostCollateralAmount)
 	state.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
 	state.SetState(statusAddr, scID, NotProofedStatus)
 
 	// store storage contract in this contractAddr's state
+	state.SetState(contractAddr, KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
+	state.SetState(contractAddr, KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
+
 	state.SetState(contractAddr, KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
 	state.SetState(contractAddr, KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
@@ -596,19 +597,11 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	uintBytes = Uint64ToBytes(sc.WindowEnd)
 	state.SetState(contractAddr, KeyWindowEnd, common.BytesToHash(uintBytes))
 
-	vpoBytes, err := rlp.EncodeToBytes(sc.ValidProofOutputs)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-	state.SetState(contractAddr, KeyValidProofOutputs, common.BytesToHash(vpoBytes))
+	state.SetState(contractAddr, KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
 
-	mpoBytes, err := rlp.EncodeToBytes(sc.MissedProofOutputs)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
+	state.SetState(contractAddr, KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
 	log.Info("create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
@@ -619,8 +612,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter storage contract reversion tx executing ... ")
 	var (
-		state    = evm.StateDB
-		snapshot = state.Snapshot()
+		state = evm.StateDB
 	)
 
 	scr := types.StorageContractRevision{}
@@ -649,31 +641,16 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	uintBytes := Uint64ToBytes(scr.NewFileSize)
 	state.SetState(contractAddr, KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, KeyUnlockHash, scr.NewUnlockHash)
 	state.SetState(contractAddr, KeyFileMerkleRoot, scr.NewFileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(scr.NewRevisionNumber)
 	state.SetState(contractAddr, KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	uintBytes = Uint64ToBytes(scr.NewWindowStart)
-	state.SetState(contractAddr, KeyWindowStart, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
 
-	uintBytes = Uint64ToBytes(scr.NewWindowEnd)
-	state.SetState(contractAddr, KeyWindowEnd, common.BytesToHash(uintBytes))
-
-	vpoBytes, err := rlp.EncodeToBytes(scr.NewValidProofOutputs)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-	state.SetState(contractAddr, KeyValidProofOutputs, common.BytesToHash(vpoBytes))
-
-	mpoBytes, err := rlp.EncodeToBytes(scr.NewMissedProofOutputs)
-	if err != nil {
-		state.RevertToSnapshot(snapshot)
-		return nil, gasRemainCheck, err
-	}
-	state.SetState(contractAddr, KeyMissedProofOutputs, common.BytesToHash(mpoBytes))
+	state.SetState(contractAddr, KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
 	log.Info("storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -702,22 +679,15 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 	// retrieve origin data in storage contract
 	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
-	if reflect.DeepEqual(windowEndHash, common.Hash{}) {
-		return nil, gasRemainDec, errors.New("get nil window end from state for StorageProofTx")
-	}
+	clientValidOutputHash := state.GetState(contractAddr, KeyClientValidProofOutput)
+	hostValidOutputHash := state.GetState(contractAddr, KeyHostValidProofOutput)
+	clientAddressHash := state.GetState(contractAddr, KeyClientAddress)
+	hostAddressHash := state.GetState(contractAddr, KeyHostAddress)
 
-	validOutputsHash := state.GetState(contractAddr, KeyValidProofOutputs)
-	if reflect.DeepEqual(validOutputsHash, common.Hash{}) {
-		return nil, gasRemainDec, errors.New("get nil valid outputs from state for StorageProofTx")
-	}
-
-	vpos := []types.DxcoinCharge{}
-	err := rlp.DecodeBytes(validOutputsHash.Bytes(), &vpos)
-	if err != nil {
-		return nil, gasRemainDec, err
-	}
-
-	statusAddr := common.BytesToAddress(append([]byte(StrPrefixExpSC), windowEndHash.Bytes()...))
+	// get status account address
+	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
+	windowEndStr := strconv.FormatUint(windowEnd, 10)
+	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
 
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
@@ -726,11 +696,16 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// effect valid proof outputs, first for client, second for host
+	clientValidOutput := new(big.Int).SetBytes(clientValidOutputHash.Bytes())
+	clientAddress := common.BytesToAddress(clientAddressHash.Bytes())
+	state.AddBalance(clientAddress, clientValidOutput)
+
+	hostValidOutput := new(big.Int).SetBytes(hostValidOutputHash.Bytes())
+	hostAddress := common.BytesToAddress(hostAddressHash.Bytes())
+	state.AddBalance(hostAddress, hostValidOutput)
+
 	totalVale := new(big.Int).SetInt64(0)
-	for _, vpo := range vpos {
-		state.AddBalance(vpo.Address, vpo.Value)
-		totalVale.Add(totalVale, vpo.Value)
-	}
+	totalVale.Add(clientValidOutput, hostValidOutput)
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract

@@ -5,12 +5,12 @@
 package vm
 
 import (
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"net"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -35,7 +35,6 @@ func TestRemainGas(t *testing.T) {
 
 }
 
-
 func TestHostAnnounceRemainGas(t *testing.T) {
 	prvKeyHost, err := crypto.GenerateKey()
 	if err != nil {
@@ -58,7 +57,7 @@ func TestHostAnnounceRemainGas(t *testing.T) {
 	}
 	ha.Signature = sigHa
 
-	_, resultDecode := RemainGas(uint64(20000), CheckMultiSignatures, ha, uint64(0), [][]byte{ha.Signature})
+	_, resultDecode := RemainGas(uint64(20000), CheckMultiSignatures, ha, [][]byte{ha.Signature})
 	errDec, _ := resultDecode[0].(error)
 	if errDec != nil {
 		t.Error("errDec:", errDec)
