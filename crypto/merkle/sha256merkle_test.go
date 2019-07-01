@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/merkletree"
-
 	"github.com/DxChainNetwork/godx/common"
 )
 
@@ -146,10 +144,10 @@ func TestMerkleSectorRangeProofVerification(t *testing.T) {
 func TestMerkleDiffProofVerification(t *testing.T) {
 	roots := randomHashSliceGenerator(50)
 	mr := Sha256CachedTreeRoot(roots, sectorHeight)
-	rangeSet := []merkletree.LeafRange{
-		merkletree.LeafRange{Start: 1, End: 2},
-		merkletree.LeafRange{Start: 10, End: 20},
-		merkletree.LeafRange{Start: 30, End: 50},
+	rangeSet := []SubTreeLimit{
+		{Left: 1, Right: 2},
+		{Left: 10, Right: 20},
+		{Left: 30, Right: 50},
 	}
 
 	// create proofSet

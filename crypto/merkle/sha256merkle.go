@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/merkletree"
 )
 
 // LeafSize is the data size stored in one merkle leaf.
@@ -175,7 +174,7 @@ func Sha256VerifyDataPiece(dataPiece []byte, hashProofSet []common.Hash, numLeav
 	}
 
 	// verify the data piece
-	return merkletree.VerifyProof(sha256.New(), merkleRoot[:], proofSet, proofIndex, numLeaves)
+	return CheckStorageProof(sha256.New(), merkleRoot[:], proofSet, proofIndex, numLeaves)
 }
 
 // Sha256RangeProof will create the hashProofSet for the range of data provided
@@ -189,7 +188,7 @@ func Sha256RangeProof(data []byte, proofStart, proofEnd int) (hashPoofSet []comm
 	}
 
 	// get the proof set
-	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, merkletree.NewReaderSubtreeHasher(bytes.NewReader(data), LeafSize, sha256.New()))
+	proofSet, err := GetLimitStorageProof(proofStart, proofEnd, NewSubtreeRootReader(bytes.NewReader(data), LeafSize, sha256.New()))
 	if err != nil {
 		return
 	}
@@ -215,7 +214,7 @@ func Sha256VerifyRangeProof(dataWithinRange []byte, hashProofSet []common.Hash, 
 	bytesProofSet := hashSliceToByteSlices(hashProofSet)
 
 	// verification
-	verified, err = merkletree.VerifyRangeProof(merkletree.NewReaderLeafHasher(bytes.NewReader(dataWithinRange),
+	verified, err = CheckLimitStorageProof(NewLeafRootReader(bytes.NewReader(dataWithinRange),
 		sha256.New(), LeafSize), sha256.New(), proofStart, proofEnd, bytesProofSet, merkleRoot[:])
 
 	return
@@ -236,8 +235,8 @@ func Sha256SectorRangeProof(roots []common.Hash, proofStart, proofEnd int) (hash
 	byteRoots := hashSliceToByteSlices(roots)
 
 	// make proofSet
-	sh := merkletree.NewCachedSubtreeHasher(byteRoots, sha256.New())
-	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, sh)
+	sh := NewCachedSubtreeRoot(byteRoots, sha256.New())
+	proofSet, err := GetLimitStorageProof(proofStart, proofEnd, sh)
 	if err != nil {
 		return
 	}
@@ -264,25 +263,25 @@ func Sha256VerifySectorRangeProof(rootsVerify []common.Hash, hashProofSet []comm
 
 	// conversion
 	byteRoots := hashSliceToByteSlices(rootsVerify)
-	lh := merkletree.NewCachedLeafHasher(byteRoots)
+	lh := NewLeafRootCached(byteRoots)
 	byteProofSet := hashSliceToByteSlices(hashProofSet)
 
-	verified, err = merkletree.VerifyRangeProof(lh, sha256.New(), proofStart, proofEnd, byteProofSet, merkleRoot[:])
+	verified, err = CheckLimitStorageProof(lh, sha256.New(), proofStart, proofEnd, byteProofSet, merkleRoot[:])
 
 	return
 }
 
 // Sha256DiffProof is similar to Sha256SectorRangeProof, the only difference is that this function
 // can provide multiple ranges
-func Sha256DiffProof(roots []common.Hash, rangeSet []merkletree.LeafRange, leavesCount uint64) (hashProofSet []common.Hash, err error) {
+func Sha256DiffProof(roots []common.Hash, rangeSet []SubTreeLimit, leavesCount uint64) (hashProofSet []common.Hash, err error) {
 	// range set validation
 	if err = rangeSetVerification(rangeSet); err != nil {
 		return
 	}
 
 	byteSectorRoots := hashSliceToByteSlices(roots)
-	hasher := merkletree.NewCachedSubtreeHasher(byteSectorRoots, sha256.New())
-	proofSet, err := merkletree.BuildDiffProof(rangeSet, hasher, leavesCount)
+	hasher := NewCachedSubtreeRoot(byteSectorRoots, sha256.New())
+	proofSet, err := GetDiffStorageProof(rangeSet, hasher, leavesCount)
 
 	// conversion
 	for _, proof := range proofSet {
@@ -294,7 +293,7 @@ func Sha256DiffProof(roots []common.Hash, rangeSet []merkletree.LeafRange, leave
 
 // Sha256VerifyDiffProof is similar to Sha256VerifySectorRangeProof, the only difference is that this function
 // can provide multiple ranges
-func Sha256VerifyDiffProof(rangeSet []merkletree.LeafRange, leavesCount uint64, hashProofSet, rootsVerify []common.Hash, merkleRoot common.Hash) (verified bool, err error) {
+func Sha256VerifyDiffProof(rangeSet []SubTreeLimit, leavesCount uint64, hashProofSet, rootsVerify []common.Hash, merkleRoot common.Hash) (verified bool, err error) {
 	// rangeSet verification
 	if err = rangeSetVerification(rangeSet); err != nil {
 		return
@@ -303,8 +302,8 @@ func Sha256VerifyDiffProof(rangeSet []merkletree.LeafRange, leavesCount uint64, 
 	byteProofSet := hashSliceToByteSlices(hashProofSet)
 	byteRootsVerify := hashSliceToByteSlices(rootsVerify)
 
-	hasher := merkletree.NewCachedLeafHasher(byteRootsVerify)
-	verified, err = merkletree.VerifyDiffProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, merkleRoot[:])
+	hasher := NewLeafRootCached(byteRootsVerify)
+	verified, err = CheckDiffStorageProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, merkleRoot[:])
 
 	return
 }
@@ -342,12 +341,12 @@ func hashSliceToByteSlices(hs []common.Hash) (bss [][]byte) {
 
 // rangeSetVerification validates a set of ranges provided, each range
 // contains a start position and end position
-func rangeSetVerification(rangeSet []merkletree.LeafRange) (err error) {
+func rangeSetVerification(rangeSet []SubTreeLimit) (err error) {
 	for i, r := range rangeSet {
-		if r.Start < 0 || r.Start >= r.End {
+		if r.Left < 0 || r.Left >= r.Right {
 			return errors.New("range set validation failed")
 		}
-		if i > 0 && rangeSet[i-1].End > r.Start {
+		if i > 0 && rangeSet[i-1].Right > r.Left {
 			return errors.New("range set validation failed")
 		}
 	}
