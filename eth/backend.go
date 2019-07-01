@@ -764,8 +764,10 @@ LOOP:
 	for {
 		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
 		if conn != nil {
-			conn.SetBusy()
-			return conn, nil
+			if !conn.IsBusy() {
+				conn.SetBusy()
+				return conn, nil
+			}
 		}
 
 		select {
