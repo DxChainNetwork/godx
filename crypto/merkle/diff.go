@@ -43,7 +43,7 @@ func GetDiffStorageProof(ranges []subTreeRange, h SubtreeRoot, numLeaves uint64)
 }
 
 // CheckDiffStorageProof verify that the merkle diff is stored from the specified leaf interval.
-func CheckDiffStorageProof(lh LeafHasher, leafNumber uint64, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
+func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
 
 	if !checkRangeList(ranges) {
 		panic("CheckDiffStorageProof: the parameter is invalid")
@@ -67,7 +67,7 @@ func CheckDiffStorageProof(lh LeafHasher, leafNumber uint64, h hash.Hash, ranges
 			return false, err
 		}
 		for i := r.Left; i < r.Right; i++ {
-			leafHash, err := lh.NextLeafHash()
+			leafHash, err := lh.GetLeafRoot()
 			if err != nil {
 				return false, err
 			}

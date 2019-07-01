@@ -99,44 +99,44 @@ func NewSubtreeRootReader(r io.Reader, leafNumber int, h hash.Hash) *SubtreeRoot
 
 // CachedSubtreeRoot implements SubtreeRoot.
 type CachedSubtreeRoot struct {
-	leafHashes [][]byte
-	h          hash.Hash
+	leafRoots [][]byte
+	h         hash.Hash
 }
 
 // GetSubtreeRoot implements SubtreeRoot.
 func (csh *CachedSubtreeRoot) GetSubtreeRoot(leafIndex int) ([]byte, error) {
-	if len(csh.leafHashes) == 0 {
+	if len(csh.leafRoots) == 0 {
 		return nil, io.EOF
 	}
 	tree := NewTree(csh.h)
-	for i := 0; i < leafIndex && len(csh.leafHashes) > 0; i++ {
-		if err := tree.PushSubTree(0, csh.leafHashes[0]); err != nil {
+	for i := 0; i < leafIndex && len(csh.leafRoots) > 0; i++ {
+		if err := tree.PushSubTree(0, csh.leafRoots[0]); err != nil {
 			return nil, err
 		}
-		csh.leafHashes = csh.leafHashes[1:]
+		csh.leafRoots = csh.leafRoots[1:]
 	}
 	return tree.Root(), nil
 }
 
 // Skip implements SubtreeRoot.
 func (csh *CachedSubtreeRoot) Skip(n int) error {
-	if n > len(csh.leafHashes) {
+	if n > len(csh.leafRoots) {
 		return io.ErrUnexpectedEOF
 	}
-	csh.leafHashes = csh.leafHashes[n:]
+	csh.leafRoots = csh.leafRoots[n:]
 	return nil
 }
 
-// NewCachedSubtreeRoot
-func NewCachedSubtreeRoot(leafHashes [][]byte, h hash.Hash) *CachedSubtreeRoot {
+// NewCachedSubtreeRoot return cachedSubtreeRoot
+func NewCachedSubtreeRoot(roots [][]byte, h hash.Hash) *CachedSubtreeRoot {
 	return &CachedSubtreeRoot{
-		leafHashes: leafHashes,
-		h:          h,
+		leafRoots: roots,
+		h:         h,
 	}
 }
 
 // getRangeStorageProof get a proof of storage for a range of subtrees
-func getRangeStorageProof(ranges []subTreeRange, h SubtreeRoot) (proof [][]byte, err error) {
+func getRangeStorageProof(ranges []subTreeRange, sr SubtreeRoot) (storageProofList [][]byte, err error) {
 	if len(ranges) == 0 {
 		return nil, nil
 	}
@@ -147,12 +147,14 @@ func getRangeStorageProof(ranges []subTreeRange, h SubtreeRoot) (proof [][]byte,
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
 		for leafIndex != end {
+			//get the size of the adjacent subtree
 			subtreeSize := adjacentSubtreeSize(leafIndex, end)
-			root, err := h.GetSubtreeRoot(subtreeSize)
+			//get the root hash of the subtree of n leaf node combinations
+			root, err := sr.GetSubtreeRoot(subtreeSize)
 			if err != nil {
 				return err
 			}
-			proof = append(proof, root)
+			storageProofList = append(storageProofList, root)
 			leafIndex += uint64(subtreeSize)
 		}
 		return nil
@@ -162,40 +164,45 @@ func getRangeStorageProof(ranges []subTreeRange, h SubtreeRoot) (proof [][]byte,
 		if err := consumeUntil(r.Left); err != nil {
 			return nil, err
 		}
-		if err := h.Skip(int(r.Right - r.Left)); err != nil {
+		//skip the subtree of n leaf node combinations
+		if err := sr.Skip(int(r.Right - r.Left)); err != nil {
 			return nil, err
 		}
 		leafIndex += r.Right - r.Left
 	}
+
+	//always check the leafIndex of the tree.
 	err = consumeUntil(math.MaxUint64)
+	//if it is exceeded, this is not an error to be solved.
 	if err == io.EOF {
-		err = nil // EOF is expected
+		err = nil
 	}
-	return proof, err
+	return storageProofList, err
 }
 
 // GetRangeStorageProof get a proof of storage for a range of subtrees
 func GetRangeStorageProof(proofStart, proofEnd int, h SubtreeRoot) (proof [][]byte, err error) {
 	if proofStart < 0 || proofStart > proofEnd || proofStart == proofEnd {
-		panic("GetRangeStorageProof: getRangeStorageProof")
+		panic("GetRangeStorageProof: the parameter is invalid")
 	}
 	return getRangeStorageProof([]subTreeRange{{uint64(proofStart), uint64(proofEnd)}}, h)
 }
 
-// A LeafHasher
-type LeafHasher interface {
-	NextLeafHash() ([]byte, error)
+// LeafRoot
+type LeafRoot interface {
+	//GetLeafRoot get the hash of the leaf node
+	GetLeafRoot() ([]byte, error)
 }
 
 // ReaderLeafHasher
-type ReaderLeafHasher struct {
+type LeafRootReader struct {
 	r    io.Reader
 	h    hash.Hash
 	leaf []byte
 }
 
-// NextLeafHash
-func (rlh *ReaderLeafHasher) NextLeafHash() ([]byte, error) {
+// GetLeafRoot implements LeafRoot.
+func (rlh *LeafRootReader) GetLeafRoot() ([]byte, error) {
 	n, err := io.ReadFull(rlh.r, rlh.leaf)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return nil, err
@@ -205,9 +212,9 @@ func (rlh *ReaderLeafHasher) NextLeafHash() ([]byte, error) {
 	return leafTotal(rlh.h, rlh.leaf[:n]), nil
 }
 
-// NewReaderLeafHasher
-func NewReaderLeafHasher(r io.Reader, h hash.Hash, leafSize int) *ReaderLeafHasher {
-	return &ReaderLeafHasher{
+// NewLeafRootReader return LeafRootReader
+func NewLeafRootReader(r io.Reader, h hash.Hash, leafSize int) *LeafRootReader {
+	return &LeafRootReader{
 		r:    r,
 		h:    h,
 		leaf: make([]byte, leafSize),
@@ -215,46 +222,48 @@ func NewReaderLeafHasher(r io.Reader, h hash.Hash, leafSize int) *ReaderLeafHash
 }
 
 // CachedLeafHasher
-type CachedLeafHasher struct {
-	leafHashes [][]byte
+type LeafRootCached struct {
+	leafRoots [][]byte
 }
 
-// NextLeafHash
-func (clh *CachedLeafHasher) NextLeafHash() ([]byte, error) {
-	if len(clh.leafHashes) == 0 {
+// GetLeafRoot implements LeafRoot.
+func (clh *LeafRootCached) GetLeafRoot() ([]byte, error) {
+	if len(clh.leafRoots) == 0 {
 		return nil, io.EOF
 	}
-	h := clh.leafHashes[0]
-	clh.leafHashes = clh.leafHashes[1:]
+	h := clh.leafRoots[0]
+	clh.leafRoots = clh.leafRoots[1:]
 	return h, nil
 }
 
-// NewCachedLeafHasher
-func NewCachedLeafHasher(leafHashes [][]byte) *CachedLeafHasher {
-	return &CachedLeafHasher{
-		leafHashes: leafHashes,
+// NewLeafRootCached return LeafRootCached
+func NewLeafRootCached(leafHashes [][]byte) *LeafRootCached {
+	return &LeafRootCached{
+		leafRoots: leafHashes,
 	}
 }
 
-// VerifyMultiRangeProof
-func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []subTreeRange, proof [][]byte, root []byte) (bool, error) {
+// checkRangeStorageProof
+func checkRangeStorageProof(lh LeafRoot, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
 	if len(ranges) == 0 {
 		return true, nil
 	}
 	if !checkRangeList(ranges) {
-		panic("BuildMultiRangeProof: illegal set of proof ranges")
+		panic("checkRangeStorageProof: the parameter is invalid")
 	}
 
 	tree := NewTree(h)
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
-		for leafIndex != end && len(proof) > 0 {
+		for leafIndex != end && len(storageProofList) > 0 {
+			//get the size of the adjacent subtree
 			subtreeSize := adjacentSubtreeSize(leafIndex, end)
-			i := bits.TrailingZeros64(uint64(subtreeSize)) // log2
-			if err := tree.PushSubTree(i, proof[0]); err != nil {
+			i := bits.TrailingZeros64(uint64(subtreeSize))
+			//insert a subtree of the specified height
+			if err := tree.PushSubTree(i, storageProofList[0]); err != nil {
 				return err
 			}
-			proof = proof[1:]
+			storageProofList = storageProofList[1:]
 			leafIndex += uint64(subtreeSize)
 		}
 		return nil
@@ -266,10 +275,12 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []subTreeRange, pr
 		}
 
 		for i := r.Left; i < r.Right; i++ {
-			leafHash, err := lh.NextLeafHash()
+			//get the hash of the leaf node
+			leafHash, err := lh.GetLeafRoot()
 			if err != nil {
 				return false, err
 			}
+			//insert a subtree of the specified height
 			if err := tree.PushSubTree(0, leafHash); err != nil {
 				panic(err)
 			}
@@ -277,6 +288,7 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []subTreeRange, pr
 		leafIndex += r.Right - r.Left
 	}
 
+	//always check the leafIndex of the tree.
 	if err := consumeUntil(math.MaxUint64); err != nil {
 		return false, err
 	}
@@ -284,10 +296,10 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []subTreeRange, pr
 	return bytes.Equal(tree.Root(), root), nil
 }
 
-// VerifyRangeProof
-func VerifyRangeProof(lh LeafHasher, h hash.Hash, proofStart, proofEnd int, proof [][]byte, root []byte) (bool, error) {
-	if proofStart < 0 || proofStart > proofEnd || proofStart == proofEnd {
-		panic("VerifyRangeProof: illegal proof range")
+// CheckRangeStorageProof
+func CheckRangeStorageProof(lh LeafRoot, h hash.Hash, left, right int, storageProofList [][]byte, root []byte) (bool, error) {
+	if left < 0 || left > right || left == right {
+		panic("CheckRangeStorageProof: the parameter is invalid")
 	}
-	return VerifyMultiRangeProof(lh, h, []subTreeRange{{uint64(proofStart), uint64(proofEnd)}}, proof, root)
+	return checkRangeStorageProof(lh, h, []subTreeRange{{uint64(left), uint64(right)}}, storageProofList, root)
 }
