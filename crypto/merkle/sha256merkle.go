@@ -36,7 +36,7 @@ func NewSha256MerkleTree() (mk *Sha256MerkleTree) {
 	return
 }
 
-// Sha256MerkleTreeRoot will calculate and return the merkle root of the merkle tree
+// Root will calculate and return the merkle root of the merkle tree
 func (mt *Sha256MerkleTree) Root() (h common.Hash) {
 	copy(h[:], mt.Tree.Root())
 	return
@@ -69,7 +69,7 @@ func (ct *Sha256CachedTree) PushSubTree(height int, h common.Hash) (err error) {
 	return ct.CachedTree.PushSubTree(height, h[:])
 }
 
-// Sha256MerkleTreeRoot will return the merkle root of the Sha256CachedTree
+// Root will return the merkle root of the Sha256CachedTree
 func (ct *Sha256CachedTree) Root() (h common.Hash) {
 	copy(h[:], ct.CachedTree.Root())
 	return
@@ -117,6 +117,7 @@ func Sha256CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash)
 	return cmt.Root()
 }
 
+//Sha256CachedTreeRoot2 will return the root of the cached tree
 func Sha256CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
 	log2SectorSize := uint64(0)
 	for 1<<log2SectorSize < (SectorSize / LeafSize) {

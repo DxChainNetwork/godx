@@ -9,6 +9,7 @@ import (
 	"math/bits"
 )
 
+//SubTreeLimit range of intervals
 type SubTreeLimit struct {
 	Left  uint64
 	Right uint64
@@ -37,7 +38,7 @@ func checkLimitList(limits []SubTreeLimit) bool {
 	return true
 }
 
-// SubtreeRoot
+// SubtreeRoot get the root hash
 type SubtreeRoot interface {
 
 	//GetSubtreeRoot get the root hash of the subtree of n leaf node combinations
@@ -88,7 +89,7 @@ func (rsh *SubtreeRootReader) Skip(n int) (err error) {
 	return err
 }
 
-// NewSubtreeRootReader
+// NewSubtreeRootReader return SubtreeRootReader
 func NewSubtreeRootReader(r io.Reader, leafNumber int, h hash.Hash) *SubtreeRootReader {
 	return &SubtreeRootReader{
 		r:    r,
@@ -188,13 +189,13 @@ func GetLimitStorageProof(left, right int, h SubtreeRoot) (storageProofList [][]
 	return getLimitStorageProof([]SubTreeLimit{{uint64(left), uint64(right)}}, h)
 }
 
-// LeafRoot
+// LeafRoot get root
 type LeafRoot interface {
 	//GetLeafRoot get the hash of the leaf node
 	GetLeafRoot() ([]byte, error)
 }
 
-// ReaderLeafHasher
+// LeafRootReader read
 type LeafRootReader struct {
 	r    io.Reader
 	h    hash.Hash
@@ -221,7 +222,7 @@ func NewLeafRootReader(r io.Reader, h hash.Hash, leafSize int) *LeafRootReader {
 	}
 }
 
-// CachedLeafHasher
+// LeafRootCached roots
 type LeafRootCached struct {
 	leafRoots [][]byte
 }
@@ -296,7 +297,7 @@ func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []SubTreeLimit, sto
 	return bytes.Equal(tree.Root(), root), nil
 }
 
-// CheckLimitStorageProof
+// CheckLimitStorageProof check the proof list
 func CheckLimitStorageProof(lh LeafRoot, h hash.Hash, left, right int, storageProofList [][]byte, root []byte) (bool, error) {
 	if left < 0 || left > right || left == right {
 		panic("CheckLimitStorageProof: the parameter is invalid")
