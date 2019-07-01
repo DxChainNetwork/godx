@@ -9,7 +9,7 @@ import (
 	"math/bits"
 )
 
-type subTreeRange struct {
+type subTreeLimit struct {
 	Left  uint64
 	Right uint64
 }
@@ -24,13 +24,13 @@ func adjacentSubtreeSize(left, right uint64) int {
 	return 1 << uint(leftInt)
 }
 
-// checkRangeList check parameter legality
-func checkRangeList(ranges []subTreeRange) bool {
-	for i, r := range ranges {
+// checkLimitList check parameter legality
+func checkLimitList(limits []subTreeLimit) bool {
+	for i, r := range limits {
 		if r.Left < 0 || r.Left >= r.Right {
 			return false
 		}
-		if i > 0 && ranges[i-1].Right > r.Left {
+		if i > 0 && limits[i-1].Right > r.Left {
 			return false
 		}
 	}
@@ -135,13 +135,13 @@ func NewCachedSubtreeRoot(roots [][]byte, h hash.Hash) *CachedSubtreeRoot {
 	}
 }
 
-// getRangeStorageProof get a proof of storage for a range of subtrees
-func getRangeStorageProof(ranges []subTreeRange, sr SubtreeRoot) (storageProofList [][]byte, err error) {
-	if len(ranges) == 0 {
+// getLimitStorageProof get a proof of storage for a limit of subtrees
+func getLimitStorageProof(limits []subTreeLimit, sr SubtreeRoot) (storageProofList [][]byte, err error) {
+	if len(limits) == 0 {
 		return nil, nil
 	}
-	if !checkRangeList(ranges) {
-		panic("getRangeStorageProof: the parameter is invalid")
+	if !checkLimitList(limits) {
+		panic("getLimitStorageProof: the parameter is invalid")
 	}
 
 	var leafIndex uint64
@@ -160,7 +160,7 @@ func getRangeStorageProof(ranges []subTreeRange, sr SubtreeRoot) (storageProofLi
 		return nil
 	}
 
-	for _, r := range ranges {
+	for _, r := range limits {
 		if err := consumeUntil(r.Left); err != nil {
 			return nil, err
 		}
@@ -180,12 +180,12 @@ func getRangeStorageProof(ranges []subTreeRange, sr SubtreeRoot) (storageProofLi
 	return storageProofList, err
 }
 
-// GetRangeStorageProof get a proof of storage for a range of subtrees
-func GetRangeStorageProof(proofStart, proofEnd int, h SubtreeRoot) (proof [][]byte, err error) {
-	if proofStart < 0 || proofStart > proofEnd || proofStart == proofEnd {
-		panic("GetRangeStorageProof: the parameter is invalid")
+// GetLimitStorageProof get a proof of storage for a limit of subtrees
+func GetLimitStorageProof(left, right int, h SubtreeRoot) (storageProofList [][]byte, err error) {
+	if left < 0 || left > right || left == right {
+		panic("GetLimitStorageProof: the parameter is invalid")
 	}
-	return getRangeStorageProof([]subTreeRange{{uint64(proofStart), uint64(proofEnd)}}, h)
+	return getLimitStorageProof([]subTreeLimit{{uint64(left), uint64(right)}}, h)
 }
 
 // LeafRoot
@@ -243,13 +243,13 @@ func NewLeafRootCached(leafHashes [][]byte) *LeafRootCached {
 	}
 }
 
-// checkRangeStorageProof
-func checkRangeStorageProof(lh LeafRoot, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
-	if len(ranges) == 0 {
+// checkLimitStorageProof
+func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []subTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
+	if len(limits) == 0 {
 		return true, nil
 	}
-	if !checkRangeList(ranges) {
-		panic("checkRangeStorageProof: the parameter is invalid")
+	if !checkLimitList(limits) {
+		panic("checkLimitStorageProof: the parameter is invalid")
 	}
 
 	tree := NewTree(h)
@@ -269,7 +269,7 @@ func checkRangeStorageProof(lh LeafRoot, h hash.Hash, ranges []subTreeRange, sto
 		return nil
 	}
 
-	for _, r := range ranges {
+	for _, r := range limits {
 		if err := consumeUntil(r.Left); err != nil {
 			return false, err
 		}
@@ -296,10 +296,10 @@ func checkRangeStorageProof(lh LeafRoot, h hash.Hash, ranges []subTreeRange, sto
 	return bytes.Equal(tree.Root(), root), nil
 }
 
-// CheckRangeStorageProof
-func CheckRangeStorageProof(lh LeafRoot, h hash.Hash, left, right int, storageProofList [][]byte, root []byte) (bool, error) {
+// CheckLimitStorageProof
+func CheckLimitStorageProof(lh LeafRoot, h hash.Hash, left, right int, storageProofList [][]byte, root []byte) (bool, error) {
 	if left < 0 || left > right || left == right {
-		panic("CheckRangeStorageProof: the parameter is invalid")
+		panic("CheckLimitStorageProof: the parameter is invalid")
 	}
-	return checkRangeStorageProof(lh, h, []subTreeRange{{uint64(left), uint64(right)}}, storageProofList, root)
+	return checkLimitStorageProof(lh, h, []subTreeLimit{{uint64(left), uint64(right)}}, storageProofList, root)
 }

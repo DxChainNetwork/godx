@@ -8,9 +8,9 @@ import (
 )
 
 // GetDiffStorageProof proof of storage of merkle diff from the specified leaf interval
-func GetDiffStorageProof(ranges []subTreeRange, h SubtreeRoot, numLeaves uint64) (proof [][]byte, err error) {
+func GetDiffStorageProof(limits []subTreeLimit, h SubtreeRoot, leafNumber uint64) (storageProofList [][]byte, err error) {
 
-	if !checkRangeList(ranges) {
+	if !checkLimitList(limits) {
 		panic("GetDiffStorageProof: the parameter is invalid")
 	}
 	var leafIndex uint64
@@ -21,12 +21,12 @@ func GetDiffStorageProof(ranges []subTreeRange, h SubtreeRoot, numLeaves uint64)
 			if err != nil {
 				return err
 			}
-			proof = append(proof, root)
+			storageProofList = append(storageProofList, root)
 			leafIndex += uint64(subtreeSize)
 		}
 		return nil
 	}
-	for _, r := range ranges {
+	for _, r := range limits {
 		if err := consumeUntil(r.Left); err != nil {
 			return nil, err
 		}
@@ -35,17 +35,17 @@ func GetDiffStorageProof(ranges []subTreeRange, h SubtreeRoot, numLeaves uint64)
 		}
 		leafIndex += r.Right - r.Left
 	}
-	err = consumeUntil(numLeaves)
+	err = consumeUntil(leafNumber)
 	if err == io.EOF {
 		err = nil
 	}
-	return proof, err
+	return storageProofList, err
 }
 
 // CheckDiffStorageProof verify that the merkle diff is stored from the specified leaf interval.
-func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
+func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []subTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
 
-	if !checkRangeList(ranges) {
+	if !checkLimitList(limits) {
 		panic("CheckDiffStorageProof: the parameter is invalid")
 	}
 	tree := NewTree(h)
@@ -62,7 +62,7 @@ func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, ranges [
 		}
 		return nil
 	}
-	for _, r := range ranges {
+	for _, r := range limits {
 		if err := consumeUntil(r.Left); err != nil {
 			return false, err
 		}
