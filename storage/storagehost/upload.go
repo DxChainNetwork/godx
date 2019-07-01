@@ -11,7 +11,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/merkletree"
 )
 
 // handleUpload is the upload function to handle upload negotiation
@@ -116,22 +115,22 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var merkleResp storage.UploadMerkleProof
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
-	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+	proofRanges := make([]merkle.SubTreeLimit, 0, len(sectorsChanged))
 	for index := range sectorsChanged {
 		if index < oldNumSectors {
-			proofRanges = append(proofRanges, merkletree.LeafRange{
-				Start: index,
-				End:   index + 1,
+			proofRanges = append(proofRanges, merkle.SubTreeLimit{
+				Left:  index,
+				Right: index + 1,
 			})
 		}
 	}
 	sort.Slice(proofRanges, func(i, j int) bool {
-		return proofRanges[i].Start < proofRanges[j].Start
+		return proofRanges[i].Left < proofRanges[j].Left
 	})
 	// Record old leaf hashes for all changed sectors
 	leafHashes := make([]common.Hash, len(proofRanges))
 	for i, r := range proofRanges {
-		leafHashes[i] = so.SectorRoots[r.Start]
+		leafHashes[i] = so.SectorRoots[r.Left]
 	}
 
 	// Construct the merkle proof

@@ -567,7 +567,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 			log2SectorSize++
 		}
 		ct := merkle.NewSha256CachedTree(log2SectorSize)
-		err = ct.SetIndex(segmentIndex)
+		err = ct.SetStorageProofIndex(segmentIndex)
 		if err != nil {
 			h.log.Warn("cannot call SetIndex on Tree ", "err", err)
 		}
@@ -636,15 +636,15 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 func merkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
 	t := merkle.NewSha256MerkleTree()
 	//This error doesn't mean anything to us.
-	t.SetIndex(proofIndex)
+	t.SetStorageProofIndex(proofIndex)
 
 	buf := bytes.NewBuffer(b)
 	for buf.Len() > 0 {
-		t.Push(buf.Next(merkle.LeafSize))
+		t.PushLeaf(buf.Next(merkle.LeafSize))
 	}
 
 	// Get the storage proof
-	_, proof, _, _ := t.Prove()
+	_, proof, _, _ := t.ProofList()
 	if len(proof) == 0 {
 		//If there is no data, it will return a blank value
 		return nil, nil

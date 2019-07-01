@@ -24,7 +24,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"github.com/DxChainNetwork/merkletree"
 )
 
 // ActiveContractAPI is used to re-format the contract information that is going to
@@ -194,7 +193,7 @@ func (sc *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, 
 
 // calculate the proof ranges that should be used to verify a
 // pre-modification Merkle diff proof for the specified actions.
-func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkletree.LeafRange {
+func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkle.SubTreeLimit {
 	newNumSectors := oldNumSectors
 	sectorsChanged := make(map[uint64]struct{})
 	for _, action := range actions {
@@ -205,17 +204,17 @@ func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) 
 		}
 	}
 
-	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+	oldRanges := make([]merkle.SubTreeLimit, 0, len(sectorsChanged))
 	for sectorNum := range sectorsChanged {
 		if sectorNum < oldNumSectors {
-			oldRanges = append(oldRanges, merkletree.LeafRange{
-				Start: sectorNum,
-				End:   sectorNum + 1,
+			oldRanges = append(oldRanges, merkle.SubTreeLimit{
+				Left:  sectorNum,
+				Right: sectorNum + 1,
 			})
 		}
 	}
 	sort.Slice(oldRanges, func(i, j int) bool {
-		return oldRanges[i].Start < oldRanges[j].Start
+		return oldRanges[i].Left < oldRanges[j].Left
 	})
 
 	return oldRanges
@@ -223,13 +222,13 @@ func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) 
 
 // modify the proof ranges produced by calculateProofRanges
 // to verify a post-modification Merkle diff proof for the specified actions.
-func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []storage.UploadAction, numSectors uint64) []merkletree.LeafRange {
+func ModifyProofRanges(proofRanges []merkle.SubTreeLimit, actions []storage.UploadAction, numSectors uint64) []merkle.SubTreeLimit {
 	for _, action := range actions {
 		switch action.Type {
 		case storage.UploadActionAppend:
-			proofRanges = append(proofRanges, merkletree.LeafRange{
-				Start: numSectors,
-				End:   numSectors + 1,
+			proofRanges = append(proofRanges, merkle.SubTreeLimit{
+				Left:  numSectors,
+				Right: numSectors + 1,
 			})
 			numSectors++
 		}
