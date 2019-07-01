@@ -132,9 +132,9 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 // contract set will be locked. Once acquired, the contract must be returned to unlock it.
 func (scs *StorageContractSet) Acquire(id storage.ContractID) (c *Contract, exists bool) {
 	scs.lock.Lock()
-	defer scs.lock.Unlock()
-
 	c, exists = scs.contracts[id]
+	scs.lock.Unlock()
+
 	if !exists {
 		return
 	}
