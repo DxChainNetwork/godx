@@ -1503,7 +1503,7 @@ func (srv *Server) AcquirePeerAddingChan(ip string) chan struct{} {
 
 	addingChan, ok := srv.peerAdding[ip]
 	if !ok {
-		srv.peerAdding[ip] = make(chan struct{})
+		srv.peerAdding[ip] = make(chan struct{}, 1)
 		addingChan = srv.peerAdding[ip]
 	}
 
