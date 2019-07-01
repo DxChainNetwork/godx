@@ -9,52 +9,55 @@ import (
 	"math/bits"
 )
 
-type LeafRange struct {
-	Start uint64
-	End   uint64
+type subTreeRange struct {
+	Left  uint64
+	Right uint64
 }
 
-// nextSubtreeSize
-func nextSubtreeSize(start, end uint64) int {
-	ideal := bits.TrailingZeros64(start)
-	max := bits.Len64(end-start) - 1
-	if ideal > max {
+// adjacentSubtreeSize get the size of the adjacent subtree
+func adjacentSubtreeSize(left, right uint64) int {
+	leftInt := bits.TrailingZeros64(left)
+	max := bits.Len64(right-left) - 1
+	if leftInt > max {
 		return 1 << uint(max)
 	}
-	return 1 << uint(ideal)
+	return 1 << uint(leftInt)
 }
 
-// validRangeSet
-func validRangeSet(ranges []LeafRange) bool {
+// checkRangeList check parameter legality
+func checkRangeList(ranges []subTreeRange) bool {
 	for i, r := range ranges {
-		if r.Start < 0 || r.Start >= r.End {
+		if r.Left < 0 || r.Left >= r.Right {
 			return false
 		}
-		if i > 0 && ranges[i-1].End > r.Start {
+		if i > 0 && ranges[i-1].Right > r.Left {
 			return false
 		}
 	}
 	return true
 }
 
-// A SubtreeHasher
-type SubtreeHasher interface {
-	NextSubtreeRoot(n int) ([]byte, error)
+// SubtreeRoot
+type SubtreeRoot interface {
 
+	//GetSubtreeRoot get the root hash of the subtree of n leaf node combinations
+	GetSubtreeRoot(n int) ([]byte, error)
+
+	//Skip skip the subtree of n leaf node combinations
 	Skip(n int) error
 }
 
-// ReaderSubtreeHasher
-type ReaderSubtreeHasher struct {
+// SubtreeRootReader implements SubtreeRoot.
+type SubtreeRootReader struct {
 	r    io.Reader
 	h    hash.Hash
 	leaf []byte
 }
 
-// NextSubtreeRoot
-func (rsh *ReaderSubtreeHasher) NextSubtreeRoot(subtreeSize int) ([]byte, error) {
+// GetSubtreeRoot implements SubtreeRoot.
+func (rsh *SubtreeRootReader) GetSubtreeRoot(leafIndex int) ([]byte, error) {
 	tree := NewTree(rsh.h)
-	for i := 0; i < subtreeSize; i++ {
+	for i := 0; i < leafIndex; i++ {
 		n, err := io.ReadFull(rsh.r, rsh.leaf)
 		if n > 0 {
 			tree.PushLeaf(rsh.leaf[:n])
@@ -72,8 +75,8 @@ func (rsh *ReaderSubtreeHasher) NextSubtreeRoot(subtreeSize int) ([]byte, error)
 	return root, nil
 }
 
-// Skip implements SubtreeHasher.
-func (rsh *ReaderSubtreeHasher) Skip(n int) (err error) {
+// Skip implements SubtreeRoot.
+func (rsh *SubtreeRootReader) Skip(n int) (err error) {
 	skipSize := int64(len(rsh.leaf) * n)
 	skipped, err := io.CopyN(ioutil.Discard, rsh.r, skipSize)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
@@ -85,28 +88,28 @@ func (rsh *ReaderSubtreeHasher) Skip(n int) (err error) {
 	return err
 }
 
-// NewReaderSubtreeHasher
-func NewReaderSubtreeHasher(r io.Reader, leafSize int, h hash.Hash) *ReaderSubtreeHasher {
-	return &ReaderSubtreeHasher{
+// NewSubtreeRootReader
+func NewSubtreeRootReader(r io.Reader, leafNumber int, h hash.Hash) *SubtreeRootReader {
+	return &SubtreeRootReader{
 		r:    r,
 		h:    h,
-		leaf: make([]byte, leafSize),
+		leaf: make([]byte, leafNumber),
 	}
 }
 
-// CachedSubtreeHasher
-type CachedSubtreeHasher struct {
+// CachedSubtreeRoot implements SubtreeRoot.
+type CachedSubtreeRoot struct {
 	leafHashes [][]byte
 	h          hash.Hash
 }
 
-// NextSubtreeRoot implements SubtreeHasher.
-func (csh *CachedSubtreeHasher) NextSubtreeRoot(subtreeSize int) ([]byte, error) {
+// GetSubtreeRoot implements SubtreeRoot.
+func (csh *CachedSubtreeRoot) GetSubtreeRoot(leafIndex int) ([]byte, error) {
 	if len(csh.leafHashes) == 0 {
 		return nil, io.EOF
 	}
 	tree := NewTree(csh.h)
-	for i := 0; i < subtreeSize && len(csh.leafHashes) > 0; i++ {
+	for i := 0; i < leafIndex && len(csh.leafHashes) > 0; i++ {
 		if err := tree.PushSubTree(0, csh.leafHashes[0]); err != nil {
 			return nil, err
 		}
@@ -115,8 +118,8 @@ func (csh *CachedSubtreeHasher) NextSubtreeRoot(subtreeSize int) ([]byte, error)
 	return tree.Root(), nil
 }
 
-// Skip
-func (csh *CachedSubtreeHasher) Skip(n int) error {
+// Skip implements SubtreeRoot.
+func (csh *CachedSubtreeRoot) Skip(n int) error {
 	if n > len(csh.leafHashes) {
 		return io.ErrUnexpectedEOF
 	}
@@ -124,28 +127,28 @@ func (csh *CachedSubtreeHasher) Skip(n int) error {
 	return nil
 }
 
-// NewCachedSubtreeHasher
-func NewCachedSubtreeHasher(leafHashes [][]byte, h hash.Hash) *CachedSubtreeHasher {
-	return &CachedSubtreeHasher{
+// NewCachedSubtreeRoot
+func NewCachedSubtreeRoot(leafHashes [][]byte, h hash.Hash) *CachedSubtreeRoot {
+	return &CachedSubtreeRoot{
 		leafHashes: leafHashes,
 		h:          h,
 	}
 }
 
-// BuildMultiRangeProof
-func BuildMultiRangeProof(ranges []LeafRange, h SubtreeHasher) (proof [][]byte, err error) {
+// getRangeStorageProof get a proof of storage for a range of subtrees
+func getRangeStorageProof(ranges []subTreeRange, h SubtreeRoot) (proof [][]byte, err error) {
 	if len(ranges) == 0 {
 		return nil, nil
 	}
-	if !validRangeSet(ranges) {
-		panic("BuildMultiRangeProof: illegal set of proof ranges")
+	if !checkRangeList(ranges) {
+		panic("getRangeStorageProof: the parameter is invalid")
 	}
 
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
 		for leafIndex != end {
-			subtreeSize := nextSubtreeSize(leafIndex, end)
-			root, err := h.NextSubtreeRoot(subtreeSize)
+			subtreeSize := adjacentSubtreeSize(leafIndex, end)
+			root, err := h.GetSubtreeRoot(subtreeSize)
 			if err != nil {
 				return err
 			}
@@ -156,13 +159,13 @@ func BuildMultiRangeProof(ranges []LeafRange, h SubtreeHasher) (proof [][]byte, 
 	}
 
 	for _, r := range ranges {
-		if err := consumeUntil(r.Start); err != nil {
+		if err := consumeUntil(r.Left); err != nil {
 			return nil, err
 		}
-		if err := h.Skip(int(r.End - r.Start)); err != nil {
+		if err := h.Skip(int(r.Right - r.Left)); err != nil {
 			return nil, err
 		}
-		leafIndex += r.End - r.Start
+		leafIndex += r.Right - r.Left
 	}
 	err = consumeUntil(math.MaxUint64)
 	if err == io.EOF {
@@ -171,12 +174,12 @@ func BuildMultiRangeProof(ranges []LeafRange, h SubtreeHasher) (proof [][]byte, 
 	return proof, err
 }
 
-// BuildRangeProof
-func BuildRangeProof(proofStart, proofEnd int, h SubtreeHasher) (proof [][]byte, err error) {
+// GetRangeStorageProof get a proof of storage for a range of subtrees
+func GetRangeStorageProof(proofStart, proofEnd int, h SubtreeRoot) (proof [][]byte, err error) {
 	if proofStart < 0 || proofStart > proofEnd || proofStart == proofEnd {
-		panic("BuildRangeProof: illegal proof range")
+		panic("GetRangeStorageProof: getRangeStorageProof")
 	}
-	return BuildMultiRangeProof([]LeafRange{{uint64(proofStart), uint64(proofEnd)}}, h)
+	return getRangeStorageProof([]subTreeRange{{uint64(proofStart), uint64(proofEnd)}}, h)
 }
 
 // A LeafHasher
@@ -234,11 +237,11 @@ func NewCachedLeafHasher(leafHashes [][]byte) *CachedLeafHasher {
 }
 
 // VerifyMultiRangeProof
-func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []LeafRange, proof [][]byte, root []byte) (bool, error) {
+func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []subTreeRange, proof [][]byte, root []byte) (bool, error) {
 	if len(ranges) == 0 {
 		return true, nil
 	}
-	if !validRangeSet(ranges) {
+	if !checkRangeList(ranges) {
 		panic("BuildMultiRangeProof: illegal set of proof ranges")
 	}
 
@@ -246,7 +249,7 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []LeafRange, proof
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
 		for leafIndex != end && len(proof) > 0 {
-			subtreeSize := nextSubtreeSize(leafIndex, end)
+			subtreeSize := adjacentSubtreeSize(leafIndex, end)
 			i := bits.TrailingZeros64(uint64(subtreeSize)) // log2
 			if err := tree.PushSubTree(i, proof[0]); err != nil {
 				return err
@@ -258,11 +261,11 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []LeafRange, proof
 	}
 
 	for _, r := range ranges {
-		if err := consumeUntil(r.Start); err != nil {
+		if err := consumeUntil(r.Left); err != nil {
 			return false, err
 		}
 
-		for i := r.Start; i < r.End; i++ {
+		for i := r.Left; i < r.Right; i++ {
 			leafHash, err := lh.NextLeafHash()
 			if err != nil {
 				return false, err
@@ -271,7 +274,7 @@ func VerifyMultiRangeProof(lh LeafHasher, h hash.Hash, ranges []LeafRange, proof
 				panic(err)
 			}
 		}
-		leafIndex += r.End - r.Start
+		leafIndex += r.Right - r.Left
 	}
 
 	if err := consumeUntil(math.MaxUint64); err != nil {
@@ -286,44 +289,5 @@ func VerifyRangeProof(lh LeafHasher, h hash.Hash, proofStart, proofEnd int, proo
 	if proofStart < 0 || proofStart > proofEnd || proofStart == proofEnd {
 		panic("VerifyRangeProof: illegal proof range")
 	}
-	return VerifyMultiRangeProof(lh, h, []LeafRange{{uint64(proofStart), uint64(proofEnd)}}, proof, root)
-}
-
-// proofMapping
-func proofMapping(proofSize, proofIndex int) (mapping []int) {
-	numRights := proofSize - bits.OnesCount(uint(proofIndex))
-	var left, right []int
-	for i := 0; len(left)+len(right) < proofSize; i++ {
-		subtreeSize := 1 << uint64(i)
-		if proofIndex&subtreeSize != 0 {
-			left = append(left, len(left)+len(right))
-		} else if len(right) < numRights {
-			right = append(right, len(left)+len(right))
-		}
-	}
-
-	for i := range left {
-		mapping = append(mapping, left[len(left)-i-1])
-	}
-	return append(mapping, right...)
-}
-
-// ConvertSingleProofToRangeProof
-func ConvertSingleProofToRangeProof(proof [][]byte, proofIndex int) [][]byte {
-	newproof := make([][]byte, len(proof))
-	mapping := proofMapping(len(proof), proofIndex)
-	for i, j := range mapping {
-		newproof[i] = proof[j]
-	}
-	return newproof
-}
-
-// ConvertRangeProofToSingleProof
-func ConvertRangeProofToSingleProof(proof [][]byte, proofIndex int) [][]byte {
-	oldproof := make([][]byte, len(proof))
-	mapping := proofMapping(len(proof), proofIndex)
-	for i, j := range mapping {
-		oldproof[j] = proof[i]
-	}
-	return oldproof
+	return VerifyMultiRangeProof(lh, h, []subTreeRange{{uint64(proofStart), uint64(proofEnd)}}, proof, root)
 }

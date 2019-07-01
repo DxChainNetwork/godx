@@ -7,17 +7,17 @@ import (
 	"math/bits"
 )
 
-// BuildDiffProof
-func BuildDiffProof(ranges []LeafRange, h SubtreeHasher, numLeaves uint64) (proof [][]byte, err error) {
+// GetDiffStorageProof proof of storage of merkle diff from the specified leaf interval
+func GetDiffStorageProof(ranges []subTreeRange, h SubtreeRoot, numLeaves uint64) (proof [][]byte, err error) {
 
-	if !validRangeSet(ranges) {
-		panic("BuildDiffProof: illegal set of proof ranges")
+	if !checkRangeList(ranges) {
+		panic("GetDiffStorageProof: the parameter is invalid")
 	}
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
 		for leafIndex != end {
-			subtreeSize := nextSubtreeSize(leafIndex, end)
-			root, err := h.NextSubtreeRoot(subtreeSize)
+			subtreeSize := adjacentSubtreeSize(leafIndex, end)
+			root, err := h.GetSubtreeRoot(subtreeSize)
 			if err != nil {
 				return err
 			}
@@ -27,13 +27,13 @@ func BuildDiffProof(ranges []LeafRange, h SubtreeHasher, numLeaves uint64) (proo
 		return nil
 	}
 	for _, r := range ranges {
-		if err := consumeUntil(r.Start); err != nil {
+		if err := consumeUntil(r.Left); err != nil {
 			return nil, err
 		}
-		if err := h.Skip(int(r.End - r.Start)); err != nil {
+		if err := h.Skip(int(r.Right - r.Left)); err != nil {
 			return nil, err
 		}
-		leafIndex += r.End - r.Start
+		leafIndex += r.Right - r.Left
 	}
 	err = consumeUntil(numLeaves)
 	if err == io.EOF {
@@ -42,31 +42,31 @@ func BuildDiffProof(ranges []LeafRange, h SubtreeHasher, numLeaves uint64) (proo
 	return proof, err
 }
 
-// VerifyDiffProof
-func VerifyDiffProof(lh LeafHasher, numLeaves uint64, h hash.Hash, ranges []LeafRange, proof [][]byte, root []byte) (bool, error) {
+// CheckDiffStorageProof verify that the merkle diff is stored from the specified leaf interval.
+func CheckDiffStorageProof(lh LeafHasher, leafNumber uint64, h hash.Hash, ranges []subTreeRange, storageProofList [][]byte, root []byte) (bool, error) {
 
-	if !validRangeSet(ranges) {
-		panic("VerifyDiffProof: illegal set of proof ranges")
+	if !checkRangeList(ranges) {
+		panic("CheckDiffStorageProof: the parameter is invalid")
 	}
 	tree := NewTree(h)
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
-		for leafIndex != end && len(proof) > 0 {
-			subtreeSize := nextSubtreeSize(leafIndex, end)
+		for leafIndex != end && len(storageProofList) > 0 {
+			subtreeSize := adjacentSubtreeSize(leafIndex, end)
 			i := bits.TrailingZeros64(uint64(subtreeSize))
-			if err := tree.PushSubTree(i, proof[0]); err != nil {
+			if err := tree.PushSubTree(i, storageProofList[0]); err != nil {
 				return err
 			}
-			proof = proof[1:]
+			storageProofList = storageProofList[1:]
 			leafIndex += uint64(subtreeSize)
 		}
 		return nil
 	}
 	for _, r := range ranges {
-		if err := consumeUntil(r.Start); err != nil {
+		if err := consumeUntil(r.Left); err != nil {
 			return false, err
 		}
-		for i := r.Start; i < r.End; i++ {
+		for i := r.Left; i < r.Right; i++ {
 			leafHash, err := lh.NextLeafHash()
 			if err != nil {
 				return false, err
@@ -75,8 +75,8 @@ func VerifyDiffProof(lh LeafHasher, numLeaves uint64, h hash.Hash, ranges []Leaf
 				panic(err)
 			}
 		}
-		leafIndex += r.End - r.Start
+		leafIndex += r.Right - r.Left
 	}
-	err := consumeUntil(numLeaves)
+	err := consumeUntil(leafNumber)
 	return bytes.Equal(tree.Root(), root), err
 }
