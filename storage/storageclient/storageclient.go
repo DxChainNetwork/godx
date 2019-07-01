@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"io"
 	"math/big"
 	"math/bits"
@@ -1052,4 +1053,13 @@ func (sc *StorageClient) GetPaymentAddress() (common.Address, error) {
 		}
 	}
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
+}
+
+// disconnect disconnect the node specified with id
+func (sc *StorageClient) disconnect(s *storage.Session, id enode.ID) error {
+	info, exist := sc.storageHostManager.RetrieveHostInfo(id)
+	if !exist {
+		return fmt.Errorf("enode id not exist: %x", id)
+	}
+	return sc.ethBackend.Disconnect(s, info.EnodeURL)
 }

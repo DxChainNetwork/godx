@@ -46,7 +46,7 @@ func (w *worker) killUploading() {
 	if session != nil && ok {
 		log.Error("killUploading: disconnect")
 		delete(w.client.sessionSet, contractID)
-		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+		if err := w.client.disconnect(session, w.contract.EnodeID.String()); err != nil {
 			w.client.log.Error("can't close connection after uploading", "error", err)
 		}
 	}
@@ -121,7 +121,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 
 		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
 			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+			if err := w.client.disconnect(session, w.contract.EnodeID.String()); err != nil {
 				w.client.log.Error("close session failed", "err", err)
 			}
 		}
