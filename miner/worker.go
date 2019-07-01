@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
+	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,7 +36,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	trie2 "github.com/DxChainNetwork/godx/trie"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -962,27 +962,21 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
 	if w.current.state.Exist(statusAddr) {
 
-		// iterator all the storage contract status in this account
-		trie := w.current.state.StorageTrie(statusAddr)
-		trieNode := trie.NodeIterator(nil)
-		it := trie2.NewIterator(trieNode)
-		for it.Next() {
-			value := it.Value
-
-			// if this account has not proofed contract, effect the missed output
-			if bytes.Equal(value, []byte{'0'}) {
-				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes[12:])
-				contractTrie := w.current.state.StorageTrie(contractAddr)
-				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
-				if err != nil {
-					return err
+		// iterator all the storage contract status in this account: StorageContractID --> status
+		w.current.state.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
+			if bytes.Equal(value.Bytes(), []byte{'0'}) {
+				contractAddr := common.BytesToAddress(key[12:])
+				mpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("MissedProofOutputs")))
+				if reflect.DeepEqual(mpoHash, common.Hash{}) {
+					log.Warn("can not retrieve missed proof outputs when processing a block maintenance", "contract_addr", contractAddr.String())
+					return false
 				}
 
 				mpos := []types.DxcoinCharge{}
-				err = rlp.DecodeBytes(mpoBytes, &mpos)
+				err := rlp.DecodeBytes(mpoHash.Bytes(), &mpos)
 				if err != nil {
-					return err
+					log.Error("failed to decode missed proof output bytes", "error", err)
+					return false
 				}
 
 				totalValue := new(big.Int).SetInt64(0)
@@ -992,7 +986,8 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 				}
 				w.current.state.SubBalance(contractAddr, totalValue)
 			}
-		}
+			return true
+		})
 	}
 
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)

@@ -21,30 +21,25 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rlp"
 	"golang.org/x/crypto/sha3"
 )
 
 var (
-	errZeroCollateral                          = errors.New("the payout of form contract is less 0")
-	errZeroOutput                              = errors.New("the output of form contract is less 0")
+	errZeroCollateral                          = errors.New("the payout of storage contract is less 0")
+	errZeroOutput                              = errors.New("the output of storage contract is less 0")
 	errStorageContractValidOutputSumViolation  = errors.New("storage contract has invalid valid proof output sums")
 	errStorageContractMissedOutputSumViolation = errors.New("storage contract has invalid missed proof output sums")
-	errStorageContractOutputSumViolation       = errors.New("the missed proof ouput sum and valid proof output sum not equal")
-
-	errStorageContractWindowEndViolation   = errors.New("storage contract window must end at least one block after it starts")
-	errStorageContractWindowStartViolation = errors.New("storage contract window must start in the future")
-
-	errLateRevision          = errors.New("storage contract revision submitted after deadline")
-	errLowRevisionNumber     = errors.New("transaction has a storage contract with an outdated revision number")
-	errRevisionValidPayouts  = errors.New("storage contract revision has altered valid payout")
-	errRevisionMissedPayouts = errors.New("storage contract revision has altered missed payout")
-	errWrongUnlockCondition  = errors.New("the unlockhash of storage contract not match unlockcondition")
-	errNoStorageContractType = errors.New("no this storage contract type")
-
-	errInvalidStorageProof = errors.New("invalid storage proof")
-
-	errUnfinishedStorageContract = errors.New("storage contract has not yet opened")
+	errRevisionOutputSumViolation              = errors.New("the missed proof ouput sum and valid proof output sum equal")
+	errStorageContractWindowEndViolation       = errors.New("storage contract window must end at least one block after it starts")
+	errStorageContractWindowStartViolation     = errors.New("storage contract window must start in the future")
+	errLateRevision                            = errors.New("storage contract revision submitted after deadline")
+	errLowRevisionNumber                       = errors.New("transaction has a storage contract with an outdated revision number")
+	errRevisionValidPayouts                    = errors.New("storage contract revision has altered valid payout")
+	errRevisionMissedPayouts                   = errors.New("storage contract revision has altered missed payout")
+	errWrongUnlockCondition                    = errors.New("the unlock hash of storage contract not match unlock condition")
+	errNoStorageContractType                   = errors.New("no this storage contract type")
+	errInvalidStorageProof                     = errors.New("invalid storage proof")
+	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
 )
 
 const (
@@ -52,7 +47,7 @@ const (
 )
 
 // check whether a new StorageContract is valid
-func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
+func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
 	}
@@ -101,17 +96,17 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 
 	clientBalance := state.GetBalance(clientAddr)
 	if clientBalance.Cmp(clientCollateralAmount) == -1 {
-		return errors.New("client has not enough balance for file contract collateral")
+		return errors.New("client has not enough balance for storage contract collateral")
 	}
 
 	hostBalance := state.GetBalance(hostAddr)
 	if hostBalance.Cmp(hostCollateralAmount) == -1 {
-		return errors.New("host has not enough balance for file contract collateral")
+		return errors.New("host has not enough balance for storage contract collateral")
 	}
 
-	err := CheckMultiSignatures(sc, currentHeight, sc.Signatures)
+	err := CheckMultiSignatures(sc, sc.Signatures)
 	if err != nil {
-		log.Error("failed to check signature for form contract", "err", err)
+		log.Error("failed to check signature for create contract", "err", err)
 		return err
 	}
 
@@ -122,14 +117,11 @@ func CheckFormContract(state StateDB, sc types.StorageContract, currentHeight ui
 func CheckReversionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
 
 	// check whether it has proofed
-	windowEnStr := strconv.FormatUint(scr.NewWindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEnStr))
-	statusTrie := state.StorageTrie(statusAddr)
-	flag, err := statusTrie.TryGet(scr.ParentID.Bytes())
-	if err != nil {
-		return errors.New("failed to retrieve contract status")
-	}
-	if bytes.Equal(flag, ProofedStatus) {
+	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
+	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
+
+	flag := state.GetState(statusAddr, scr.ParentID)
+	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not revision after storage proof")
 	}
 
@@ -156,59 +148,37 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		}
 		missedProofOutputSum = missedProofOutputSum.Add(missedProofOutputSum, output.Value)
 	}
-	if validProofOutputSum.Cmp(missedProofOutputSum) != 0 {
-		return errStorageContractOutputSumViolation
+
+	// For missed outputs only have 2 out: client and host, and client's deduction not add to host.
+	// So the sum of valid outputs is more than missed.
+	if validProofOutputSum.Cmp(missedProofOutputSum) != 1 {
+		return errRevisionOutputSumViolation
 	}
 
-	if err := CheckMultiSignatures(scr, 0, scr.Signatures); err != nil {
+	if err := CheckMultiSignatures(scr, scr.Signatures); err != nil {
 		return err
 	}
 
 	// retrieve origin storage contract
-	trie := state.StorageTrie(contractAddr)
-	wStartBytes, err := trie.TryGet(BytesWindowStart)
-	if err != nil {
-		return err
-	}
-	wStart, err := strconv.ParseUint(string(wStartBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	reNumBytes, err := trie.TryGet(BytesRevisionNumber)
-	if err != nil {
-		return err
-	}
-	reNum, err := strconv.ParseUint(string(reNumBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	unHashBytes, err := trie.TryGet(BytesUnlockHash)
-	if err != nil {
-		return err
-	}
-	unHash := common.BytesToHash(unHashBytes)
-
-	vpoBytes, err := trie.TryGet(BytesValidProofOutputs)
-	if err != nil {
-		return err
-	}
-	originVpo := []types.DxcoinCharge{}
-	err = rlp.DecodeBytes(vpoBytes, originVpo)
-	if err != nil {
-		return err
-	}
+	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
+	revisionNumHash := state.GetState(contractAddr, KeyRevisionNumber)
+	unHash := state.GetState(contractAddr, KeyUnlockHash)
+	clientVpoHash := state.GetState(contractAddr, KeyClientValidProofOutput)
+	hostVpoHash := state.GetState(contractAddr, KeyHostValidProofOutput)
+	clientMpoHash := state.GetState(contractAddr, KeyClientMissedProofOutput)
+	hostMpoHash := state.GetState(contractAddr, KeyHostMissedProofOutput)
 
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
 	// opened.  This reduces complexity for unconfirmed transactions.
+	wStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 	if currentHeight > wStart {
 		return errLateRevision
 	}
 
 	// Check that the revision number of the revision is greater than the
-	// revision number of the existing file contract.
+	// revision number of the existing storage contract.
+	reNum := new(big.Int).SetBytes(revisionNumHash.Bytes()).Uint64()
 	if reNum >= scr.NewRevisionNumber {
 		return errLowRevisionNumber
 	}
@@ -220,22 +190,24 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 
 	// Check that the payout of the revision matches the payout of the
 	// original, and that the payouts match each other.
-	validPayout := new(big.Int).SetInt64(0)
-	missedPayout := new(big.Int).SetInt64(0)
-	oldPayout := new(big.Int).SetInt64(0)
-	for _, output := range scr.NewValidProofOutputs {
-		validPayout = validPayout.Add(validPayout, output.Value)
-	}
-	for _, output := range scr.NewMissedProofOutputs {
-		missedPayout = missedPayout.Add(missedPayout, output.Value)
-	}
-	for _, output := range originVpo {
-		oldPayout = oldPayout.Add(oldPayout, output.Value)
-	}
-	if validPayout.Cmp(oldPayout) != 0 {
+	oldValidPayout := new(big.Int).SetInt64(0)
+	oldMissedPayout := new(big.Int).SetInt64(0)
+
+	clientVpo := new(big.Int).SetBytes(clientVpoHash.Bytes())
+	hostVpo := new(big.Int).SetBytes(hostVpoHash.Bytes())
+	oldValidPayout.Add(clientVpo, hostVpo)
+
+	clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
+	hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
+	oldMissedPayout.Add(clientMpo, hostMpo)
+
+	if validProofOutputSum.Cmp(oldValidPayout) != 0 {
 		return errRevisionValidPayouts
 	}
-	if missedPayout.Cmp(oldPayout) != 0 {
+
+	// For missed outputs only have 2 out: client and host, and client's deduction not add to host.
+	// So the sum of missed outputs is less than old payout.
+	if missedProofOutputSum.Cmp(oldMissedPayout) != -1 {
 		return errRevisionMissedPayouts
 	}
 
@@ -243,7 +215,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 }
 
 // check whether a new StorageContractRevision is valid
-func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeight uint64, signatures [][]byte) error {
+func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures [][]byte) error {
 	if len(signatures) == 0 {
 		return errors.New("no signatures for verification")
 	}
@@ -257,13 +229,16 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 
 	dataHash := originalData.RLPHash()
 
-	// this is a host announce transaction. we must check the node public key is equal to the recover key
 	if len(signatures) == 1 {
 		singleSig = signatures[0]
+
+		// if we can recover the public key, indicate that check sig is ok
 		recoverKey, err := crypto.SigToPub(dataHash.Bytes(), singleSig)
 		if err != nil {
 			return err
 		}
+
+		// if it's a host announce, we must check the node public key is equal to the recover key
 		if ha, ok := originalData.(types.HostAnnouncement); ok {
 			hostNode, err := enode.ParseV4(ha.NetAddress)
 			if err != nil {
@@ -274,8 +249,6 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 			if !crypto.IsEqualPublicKey(recoverKey, urlKey) {
 				return fmt.Errorf("announced host net address is not generated by self hostnode")
 			}
-		} else {
-			return fmt.Errorf("convert to host announcement data struct failed")
 		}
 	} else if len(signatures) == 2 {
 		clientSig = signatures[0]
@@ -304,7 +277,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 			return errNoStorageContractType
 		}
 
-		if uc.UnlockHash() != common.Hash(originUnlockHash) {
+		if uc.UnlockHash() != originUnlockHash {
 			return errWrongUnlockCondition
 		}
 	}
@@ -316,51 +289,22 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, currentHeig
 func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
-	statusTrie := state.StorageTrie(statusAddr)
-	flag, err := statusTrie.TryGet(sp.ParentID.Bytes())
-	if err != nil {
-		return errors.New("failed to retrieve contract status")
-	}
-	if bytes.Equal(flag, ProofedStatus) {
+	flag := state.GetState(statusAddr, sp.ParentID)
+	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
-	contractTrie := state.StorageTrie(contractAddr)
-	windowStartBytes, err := contractTrie.TryGet(BytesWindowStart)
-	if err != nil {
-		return err
-	}
+	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
+	windowStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 
-	windowStart, err := strconv.ParseUint(string(windowStartBytes), 10, 64)
-	if err != nil {
-		return err
-	}
+	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
+	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 
-	windowEndBytes, err := contractTrie.TryGet(BytesWindowEnd)
-	if err != nil {
-		return err
-	}
+	fileMerkleRoot := state.GetState(contractAddr, KeyFileMerkleRoot)
 
-	windowEnd, err := strconv.ParseUint(string(windowEndBytes), 10, 64)
-	if err != nil {
-		return err
-	}
-
-	fileMerkleRootBytes, err := contractTrie.TryGet(BytesFileMerkleRoot)
-	if err != nil {
-		return err
-	}
-
-	fileSizeBytes, err := contractTrie.TryGet(BytesFileSize)
-	if err != nil {
-		return err
-	}
-
-	fileSize, err := strconv.ParseUint(string(fileSizeBytes), 10, 64)
-	if err != nil {
-		return err
-	}
+	fileSizeHash := state.GetState(contractAddr, KeyFileSize)
+	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 
 	if windowStart > currentHeight {
 		return errors.New("too early to submit storage proof")
@@ -371,7 +315,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 	}
 
 	// check signature
-	err = CheckMultiSignatures(sp, currentHeight, [][]byte{sp.Signature})
+	err := CheckMultiSignatures(sp, [][]byte{sp.Signature})
 	if err != nil {
 		log.Error("failed to check signature for storage proof", "err", err)
 		return err
@@ -403,7 +347,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 		sp.HashSet,
 		leaves,
 		segmentIndex,
-		common.BytesToHash(fileMerkleRootBytes),
+		fileMerkleRoot,
 	)
 	if !verified && fileSize > 0 {
 		return errInvalidStorageProof

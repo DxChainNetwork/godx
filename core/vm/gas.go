@@ -172,20 +172,19 @@ func RemainGas(args ...interface{}) (uint64, []interface{}) {
 		return gas, result
 
 		//CheckMultiSignatures
-	case func(types.StorageContractRLPHash, uint64, [][]byte) error:
+	case func(types.StorageContractRLPHash, [][]byte) error:
 		if gas < params.CheckMultiSignaturesGas {
 			result = append(result, errGasCalculationInsufficient)
 			return gas, result
 		}
-		if len(args) != 5 {
+		if len(args) != 4 {
 			result = append(result, errGasCalculationParamsNumberWrong)
 			return gas, result
 		}
-		bl, _ := args[4].(uint64)
-		arrsig, _ := args[4].([][]byte)
-		hashs,_:= args[2].(types.StorageContractRLPHash)
+		hashs, _ := args[2].(types.StorageContractRLPHash)
+		arrsig, _ := args[3].([][]byte)
 		gas -= params.CheckMultiSignaturesGas
-		err := i(hashs, bl, arrsig)
+		err := i(hashs, arrsig)
 		if err != nil {
 			result = append(result, err)
 			return gas, result
