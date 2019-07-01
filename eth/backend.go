@@ -731,6 +731,12 @@ LOOP:
 	for {
 		select {
 		case <-timeout:
+			// if timeout, try to remove the peer channel as well
+			select {
+			case <-peerChan:
+			default:
+			}
+
 			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, errors.New("remove original peer timeout")
 		default:

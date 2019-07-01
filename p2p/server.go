@@ -1250,8 +1250,14 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		c.close(err)
 
 		// if the connection set up failed, check and remove the peer from the
-		// storage hosts list
+		// storage hosts list and empty the peerAdding channel
 		if ip, _, splitError := net.SplitHostPort(fd.RemoteAddr().String()); splitError == nil {
+			peerChan := srv.AcquirePeerAddingChan(ip)
+			select {
+			case <-peerChan:
+			default:
+			}
+
 			srv.RemoveStorageHost(ip)
 		}
 
