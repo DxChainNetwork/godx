@@ -65,9 +65,6 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
 func (sc *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
-	sc.log.Error("Retrieving Host Setting")
-	defer sc.log.Error("Got Host Setting", "setting", *config)
-
 	return sc.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
 }
 

@@ -383,13 +383,8 @@ func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[stri
 	offset := baseProtocolLength // 16
 	result := make(map[string]*protoRW)
 
-	for _, proto := range protocols {
-		log.Warn("match protocol[Self]", "name", proto.Name, "version", proto.Version, "length", proto.Length)
-	}
-
 outer:
 	for _, cap := range caps {
-		log.Warn("match protocol[Conn]", "name", cap.Name, "version", cap.Version)
 		for _, proto := range protocols {
 			if proto.Name == cap.Name && proto.Version == cap.Version {
 				// If an old protocol version matched, revert it
@@ -404,9 +399,7 @@ outer:
 			}
 		}
 	}
-	for k, v := range result {
-		log.Warn("match protocol result", "name", k, "version", v.Version, "offset", v.offset, "length", v.Length)
-	}
+
 	return result
 }
 
