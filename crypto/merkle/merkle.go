@@ -226,57 +226,65 @@ func sum(h hash.Hash, data ...[]byte) []byte {
 	return h.Sum(nil)
 }
 
-// VerifyProof
-func VerifyProof(h hash.Hash, merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
+// CheckStorageProof check the merkle tree
+func CheckStorageProof(h hash.Hash, merkleRoot []byte, storageProofList [][]byte, storageProofIndex uint64, number uint64) bool {
 
-	if merkleRoot == nil {
-		return false
-	}
-	if proofIndex >= numLeaves {
+	//invalid parameter
+	if merkleRoot == nil || storageProofIndex >= number || len(storageProofList) <= 0 {
 		return false
 	}
 
 	height := 0
-	if len(proofSet) <= height {
-		return false
-	}
-	sum := leafTotal(h, proofSet[height])
+	//It is possible to cache the data,
+	//first calculate the hash of the first element
+	sum := leafTotal(h, storageProofList[height])
 	height++
 
-	stableEnd := proofIndex
+	stableEnd := storageProofIndex
 	for {
 
-		subTreeStartIndex := (proofIndex / (1 << uint(height))) * (1 << uint(height))
+		//check if the merkle tree is complete
+		subTreeStartIndex := (storageProofIndex / (1 << uint(height))) * (1 << uint(height))
 		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1
-		if subTreeEndIndex >= numLeaves {
+
+		if subTreeEndIndex >= number {
+			//explain that the merkle tree is not in a balanced state.
 			break
 		}
 		stableEnd = subTreeEndIndex
 
-		if len(proofSet) <= height {
+		//the length of the storageProofList must be
+		// greater than the height of the merkle tree.
+		if len(storageProofList) <= height {
 			return false
 		}
-		if proofIndex-subTreeStartIndex < 1<<uint(height-1) {
-			sum = dataTotal(h, sum, proofSet[height])
+
+		//determine if the leaf is left or right
+		if storageProofIndex-subTreeStartIndex < 1<<uint(height-1) {
+			sum = dataTotal(h, sum, storageProofList[height])
 		} else {
-			sum = dataTotal(h, proofSet[height], sum)
+			sum = dataTotal(h, storageProofList[height], sum)
 		}
 		height++
 	}
 
-	if stableEnd != numLeaves-1 {
-		if len(proofSet) <= height {
+	//if there is an extra unbalanced leaf,
+	//calculate the sum of the hashes
+	if stableEnd != number-1 {
+		if len(storageProofList) <= height {
 			return false
 		}
-		sum = dataTotal(h, sum, proofSet[height])
+		sum = dataTotal(h, sum, storageProofList[height])
 		height++
 	}
 
-	for height < len(proofSet) {
-		sum = dataTotal(h, proofSet[height], sum)
+	//calculate the sum of the hashes of the remaining elements of the storageProofList
+	for height < len(storageProofList) {
+		sum = dataTotal(h, storageProofList[height], sum)
 		height++
 	}
 
+	//return true if the two elements are the same
 	if bytes.Equal(sum, merkleRoot) {
 		return true
 	}
