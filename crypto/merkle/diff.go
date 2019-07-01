@@ -8,7 +8,7 @@ import (
 )
 
 // GetDiffStorageProof proof of storage of merkle diff from the specified leaf interval
-func GetDiffStorageProof(limits []subTreeLimit, h SubtreeRoot, leafNumber uint64) (storageProofList [][]byte, err error) {
+func GetDiffStorageProof(limits []SubTreeLimit, h SubtreeRoot, leafNumber uint64) (storageProofList [][]byte, err error) {
 
 	if !checkLimitList(limits) {
 		panic("GetDiffStorageProof: the parameter is invalid")
@@ -43,7 +43,7 @@ func GetDiffStorageProof(limits []subTreeLimit, h SubtreeRoot, leafNumber uint64
 }
 
 // CheckDiffStorageProof verify that the merkle diff is stored from the specified leaf interval.
-func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []subTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
+func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []SubTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
 
 	if !checkLimitList(limits) {
 		panic("CheckDiffStorageProof: the parameter is invalid")

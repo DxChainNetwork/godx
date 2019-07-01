@@ -25,14 +25,14 @@ const (
 // Sha256MerkleTree serves as a wrapper of the merkle tree, provide a convenient way
 // to access methods associated with the merkle tree
 type Sha256MerkleTree struct {
-	merkletree.Tree
+	Tree
 }
 
 // NewSha256MerkleTree will initialize a Sha256MerkleTree object with sha256 as
 // the hashing method
 func NewSha256MerkleTree() (mk *Sha256MerkleTree) {
 	mk = &Sha256MerkleTree{
-		Tree: *merkletree.New(sha256.New()),
+		Tree: *NewTree(sha256.New()),
 	}
 	return
 }
@@ -47,21 +47,21 @@ func (mt *Sha256MerkleTree) Root() (h common.Hash) {
 // is that cached merkle tree will not hash the data before inserting them into
 // the tree
 type Sha256CachedTree struct {
-	merkletree.CachedTree
+	CachedTree
 }
 
 // NewSha256CachedTree will create a Sha256CachedTree object with
 // sha256 as hashing method.
 func NewSha256CachedTree(height uint64) (ct *Sha256CachedTree) {
 	ct = &Sha256CachedTree{
-		CachedTree: *merkletree.NewCachedTree(sha256.New(), height),
+		CachedTree: *NewCachedTree(sha256.New(), height),
 	}
 	return
 }
 
 // Push will push the data into the merkle tree
 func (ct *Sha256CachedTree) Push(h common.Hash) {
-	ct.CachedTree.Push(h[:])
+	ct.CachedTree.PushLeaf(h[:])
 }
 
 // PushSubTree will insert a sub merkle tree and trying to combine it with
@@ -88,7 +88,7 @@ func (ct *Sha256CachedTree) Prove(proofData []byte, cachedHashProofSet []common.
 	}
 
 	// get proofSet
-	_, proofSet, _, _ := ct.CachedTree.Prove(cachedProofSet)
+	_, proofSet, _, _ := ct.CachedTree.ProofList(cachedProofSet)
 
 	// convert the proof set to hashSet
 	for _, proof := range proofSet[1:] {
@@ -103,7 +103,7 @@ func Sha256MerkleTreeRoot(b []byte) (h common.Hash) {
 	mt := NewSha256MerkleTree()
 	buf := bytes.NewBuffer(b)
 	for buf.Len() > 0 {
-		mt.Push(buf.Next(LeafSize))
+		mt.PushLeaf(buf.Next(LeafSize))
 	}
 	return mt.Root()
 }
@@ -137,17 +137,17 @@ func Sha256CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
 func Sha256MerkleTreeProof(data []byte, proofIndex uint64) (proofData []byte, hashProofSet []common.Hash, leavesCount uint64, err error) {
 	// create a tree, and set the proofIndex
 	t := NewSha256MerkleTree()
-	if err = t.SetIndex(proofIndex); err != nil {
+	if err = t.SetStorageProofIndex(proofIndex); err != nil {
 		return
 	}
 
 	buf := bytes.NewBuffer(data)
 	for buf.Len() > 0 {
-		t.Push(buf.Next(LeafSize))
+		t.PushLeaf(buf.Next(LeafSize))
 	}
 
 	// get the proof set
-	_, proofSet, index, leavesCount := t.Prove()
+	_, proofSet, index, leavesCount := t.ProofList()
 
 	// verification, if proofSet is empty, return error
 	if proofSet == nil {

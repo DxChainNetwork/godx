@@ -9,7 +9,7 @@ import (
 	"math/bits"
 )
 
-type subTreeLimit struct {
+type SubTreeLimit struct {
 	Left  uint64
 	Right uint64
 }
@@ -25,7 +25,7 @@ func adjacentSubtreeSize(left, right uint64) int {
 }
 
 // checkLimitList check parameter legality
-func checkLimitList(limits []subTreeLimit) bool {
+func checkLimitList(limits []SubTreeLimit) bool {
 	for i, r := range limits {
 		if r.Left < 0 || r.Left >= r.Right {
 			return false
@@ -136,7 +136,7 @@ func NewCachedSubtreeRoot(roots [][]byte, h hash.Hash) *CachedSubtreeRoot {
 }
 
 // getLimitStorageProof get a proof of storage for a limit of subtrees
-func getLimitStorageProof(limits []subTreeLimit, sr SubtreeRoot) (storageProofList [][]byte, err error) {
+func getLimitStorageProof(limits []SubTreeLimit, sr SubtreeRoot) (storageProofList [][]byte, err error) {
 	if len(limits) == 0 {
 		return nil, nil
 	}
@@ -185,7 +185,7 @@ func GetLimitStorageProof(left, right int, h SubtreeRoot) (storageProofList [][]
 	if left < 0 || left > right || left == right {
 		panic("GetLimitStorageProof: the parameter is invalid")
 	}
-	return getLimitStorageProof([]subTreeLimit{{uint64(left), uint64(right)}}, h)
+	return getLimitStorageProof([]SubTreeLimit{{uint64(left), uint64(right)}}, h)
 }
 
 // LeafRoot
@@ -244,7 +244,7 @@ func NewLeafRootCached(leafHashes [][]byte) *LeafRootCached {
 }
 
 // checkLimitStorageProof
-func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []subTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
+func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []SubTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
 	if len(limits) == 0 {
 		return true, nil
 	}
@@ -301,5 +301,5 @@ func CheckLimitStorageProof(lh LeafRoot, h hash.Hash, left, right int, storagePr
 	if left < 0 || left > right || left == right {
 		panic("CheckLimitStorageProof: the parameter is invalid")
 	}
-	return checkLimitStorageProof(lh, h, []subTreeLimit{{uint64(left), uint64(right)}}, storageProofList, root)
+	return checkLimitStorageProof(lh, h, []SubTreeLimit{{uint64(left), uint64(right)}}, storageProofList, root)
 }
