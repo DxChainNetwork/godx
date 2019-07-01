@@ -191,6 +191,7 @@ type Server struct {
 	addpeer               chan *conn
 	delpeer               chan peerDrop
 	storageHosts          map[string]struct{}
+	peerAdding            map[string]chan struct{}
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -350,6 +351,16 @@ func (srv *Server) PeerCount() int {
 //
 // Peer added is a static peer because the connection will be maintained
 func (srv *Server) AddPeer(node *enode.Node) {
+	peerChan := srv.AcquirePeerAddingChan(node.IP().String())
+
+	// if the channel is not empty, meaning another routine is
+	// tyring to add the peer, return directly
+	select {
+	case peerChan <- struct{}{}:
+	default:
+		return
+	}
+
 	select {
 	case srv.addstatic <- node:
 	case <-srv.quit:
@@ -566,6 +577,7 @@ func (srv *Server) Start() (err error) {
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
 	srv.storageHosts = make(map[string]struct{})
+	srv.peerAdding = make(map[string]chan struct{})
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -1013,6 +1025,17 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+
+				// empty the channel
+				ip, _, err := net.SplitHostPort(c.fd.RemoteAddr().String())
+				if err == nil {
+					peerChan := srv.AcquirePeerAddingChan(ip)
+					select {
+					case <-peerChan:
+					default:
+					}
+				}
+
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -1470,4 +1493,19 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+// AcquirePeerAddingChan will get the peer adding channel to check if the
+// another process is adding the peer
+func (srv *Server) AcquirePeerAddingChan(ip string) chan struct{} {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+
+	addingChan, ok := srv.peerAdding[ip]
+	if !ok {
+		srv.peerAdding[ip] = make(chan struct{})
+		addingChan = srv.peerAdding[ip]
+	}
+
+	return addingChan
 }
