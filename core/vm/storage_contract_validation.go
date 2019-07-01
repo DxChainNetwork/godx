@@ -165,6 +165,8 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 	unHash := state.GetState(contractAddr, KeyUnlockHash)
 	clientVpoHash := state.GetState(contractAddr, KeyClientValidProofOutput)
 	hostVpoHash := state.GetState(contractAddr, KeyHostValidProofOutput)
+	clientMpoHash := state.GetState(contractAddr, KeyClientMissedProofOutput)
+	hostMpoHash := state.GetState(contractAddr, KeyHostMissedProofOutput)
 
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
@@ -188,27 +190,24 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 
 	// Check that the payout of the revision matches the payout of the
 	// original, and that the payouts match each other.
-	validPayout := new(big.Int).SetInt64(0)
-	missedPayout := new(big.Int).SetInt64(0)
-	oldPayout := new(big.Int).SetInt64(0)
-	for _, output := range scr.NewValidProofOutputs {
-		validPayout = validPayout.Add(validPayout, output.Value)
-	}
-	for _, output := range scr.NewMissedProofOutputs {
-		missedPayout = missedPayout.Add(missedPayout, output.Value)
-	}
+	oldValidPayout := new(big.Int).SetInt64(0)
+	oldMissedPayout := new(big.Int).SetInt64(0)
 
 	clientVpo := new(big.Int).SetBytes(clientVpoHash.Bytes())
 	hostVpo := new(big.Int).SetBytes(hostVpoHash.Bytes())
-	oldPayout.Add(clientVpo, hostVpo)
+	oldValidPayout.Add(clientVpo, hostVpo)
 
-	if validPayout.Cmp(oldPayout) != 0 {
+	clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
+	hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
+	oldMissedPayout.Add(clientMpo, hostMpo)
+
+	if validProofOutputSum.Cmp(oldValidPayout) != 0 {
 		return errRevisionValidPayouts
 	}
 
 	// For missed outputs only have 2 out: client and host, and client's deduction not add to host.
 	// So the sum of missed outputs is less than old payout.
-	if missedPayout.Cmp(oldPayout) != -1 {
+	if missedProofOutputSum.Cmp(oldMissedPayout) != -1 {
 		return errRevisionMissedPayouts
 	}
 
