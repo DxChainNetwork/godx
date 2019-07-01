@@ -26,8 +26,8 @@ func NewCachedTree(h hash.Hash, height uint64) *CachedTree {
 	}
 }
 
-// SetIndex must be called on an empty tree.
-func (ct *CachedTree) SetIndex(i uint64) error {
+// SetStorageProofIndex must be called on an empty tree.
+func (ct *CachedTree) SetStorageProofIndex(i uint64) error {
 	if ct.top != nil {
 		return errors.New("must be called on an empty tree")
 	}
@@ -35,9 +35,9 @@ func (ct *CachedTree) SetIndex(i uint64) error {
 	return ct.Tree.SetStorageProofIndex(i / (1 << ct.subTreeCachedHeight))
 }
 
-// Prove construct a storage proof result set for
+// ProofList construct a storage proof result set for
 // the cached tree that has established the storage proof index
-func (ct *CachedTree) Prove(cachedTreeProofList [][]byte) (merkleRoot []byte, proofList [][]byte, storageProofIndex uint64, numLeaves uint64) {
+func (ct *CachedTree) ProofList(cachedTreeProofList [][]byte) (merkleRoot []byte, proofList [][]byte, storageProofIndex uint64, numLeaves uint64) {
 
 	cachedSubtree := uint64(1) << ct.subTreeCachedHeight
 	numLeaves = cachedSubtree * ct.leafIndex
