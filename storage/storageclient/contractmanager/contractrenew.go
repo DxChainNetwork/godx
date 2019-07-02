@@ -455,10 +455,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer func() {
-		cm.log.Error("contract renew: disconnect session")
-		cm.b.Disconnect(session, host.EnodeURL)
-	}()
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
