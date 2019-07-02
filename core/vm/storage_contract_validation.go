@@ -209,8 +209,8 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	}
 
 	// For missed outputs only have 2 out: client and host, and client's deduction not add to host.
-	// So the sum of missed outputs is less than old payout.
-	if missedProofOutputSum.Cmp(oldMissedPayout) != -1 {
+	// So the sum of missed outputs is less than or equal to old payout.
+	if missedProofOutputSum.Cmp(oldMissedPayout) == 1 {
 		return errRevisionMissedPayouts
 	}
 
