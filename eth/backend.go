@@ -680,6 +680,10 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
+func (s *Ethereum) RemoveStorageHost(ip string) {
+	s.server.RemoveStorageHost(ip)
+}
+
 // SetupConnection will setup connection with host if they are never connected with each other
 func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
 	if s.netRPCService == nil {
@@ -701,10 +705,15 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 
 	// First we disconnect the ethereum connection
 	s.server.RemovePeer(hostNode)
+
+	// before disconnecting the connection, add the node to storageHosts map
+	s.server.AddStorageHost(hostNode)
+
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
 		case <-timeout:
+			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, errors.New("remove original peer timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -737,6 +746,7 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 
 		select {
 		case <-timer.C:
+			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)
@@ -754,6 +764,9 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 	if err != nil {
 		return fmt.Errorf("invalid enode: %v", err)
 	}
+
+	// remove the storage host when the client is trying to disconnect the host
+	s.server.RemoveStorageHost(hostNode.IP().String())
 
 	if _, err := s.netRPCService.RemoveStorageContractPeer(hostNode); err != nil {
 		return err
@@ -790,13 +803,12 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 	}
 
 	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
-		log.Error("GetStorageHostSetting, SendHostExtSettingsRequest", "err", err.Error())
 		return err
 	}
 
 	msg, err := session.ReadMsg()
 	if err != nil {
-		log.Error("GetStorageHostSetting readMSG", "err", err.Error())
+		log.Warn("GetStorageHostSetting readMSG", "err", err.Error())
 		return err
 	}
 
