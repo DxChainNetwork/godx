@@ -50,7 +50,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
-			cm.log.Info("trying to form contract with %v, failed: %s", host.EnodeID, errFormContract.Error())
+			cm.log.Warn("failed to create the contract", "hostID", host.EnodeID, "err", errFormContract.Error())
 			continue
 		}
 
@@ -62,7 +62,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 
 		// save persistently
 		if failedSave := cm.saveSettings(); failedSave != nil {
-			cm.log.Warn("after formed the contract, failed to save the contract manager settings")
+			cm.log.Warn("after created the contract, failed to save the contract manager settings")
 		}
 
 		// update the number of needed contracts
