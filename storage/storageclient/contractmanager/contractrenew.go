@@ -19,6 +19,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -565,8 +566,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	oldRoots, err := oldContract.MerkleRoots()
-	if err != nil {
+	if err != nil && err != dberrors.ErrNotFound {
 		return storage.ContractMetaData{}, err
+	} else if err == dberrors.ErrNotFound {
+		oldRoots = []common.Hash{}
 	}
 
 	// store this contract info to client local
