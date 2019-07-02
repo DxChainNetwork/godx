@@ -6,16 +6,20 @@ package merkle
 
 import (
 	"bytes"
+	"errors"
 	"hash"
 	"io"
 	"math/bits"
+
+	"github.com/DxChainNetwork/godx/log"
 )
 
 // GetDiffStorageProof proof of storage of merkle diff from the specified leaf interval
 func GetDiffStorageProof(limits []SubTreeLimit, h SubtreeRoot, leafNumber uint64) (storageProofList [][]byte, err error) {
 
 	if !checkLimitList(limits) {
-		panic("GetDiffStorageProof: the parameter is invalid")
+		log.Error("GetDiffStorageProof", "err", "the parameter is invalid")
+		return nil, errors.New("the parameter is invalid")
 	}
 	var leafIndex uint64
 	consumeUntil := func(end uint64) error {
@@ -50,7 +54,8 @@ func GetDiffStorageProof(limits []SubTreeLimit, h SubtreeRoot, leafNumber uint64
 func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []SubTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
 
 	if !checkLimitList(limits) {
-		panic("CheckDiffStorageProof: the parameter is invalid")
+		log.Error("CheckDiffStorageProof", "err", "the parameter is invalid")
+		return false, errors.New("the parameter is invalid")
 	}
 	tree := NewTree(h)
 	var leafIndex uint64
@@ -76,7 +81,8 @@ func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits [
 				return false, err
 			}
 			if err := tree.PushSubTree(0, leafHash); err != nil {
-				panic(err)
+				log.Error("PushSubTree", "err", err)
+				return false, err
 			}
 		}
 		leafIndex += r.Right - r.Left

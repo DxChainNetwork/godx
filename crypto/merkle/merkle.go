@@ -8,11 +8,12 @@ import (
 	"bytes"
 	"hash"
 
+	"github.com/DxChainNetwork/godx/log"
+
 	"github.com/pkg/errors"
 )
 
 var (
-	// prefixes used during hashing, as specified by RFC 6962
 	leafPrefix = []byte{0x00}
 	dataPrefix = []byte{0x01}
 )
@@ -77,7 +78,8 @@ func (t *Tree) Root() []byte {
 func (t *Tree) ProofList() (merkleRoot []byte, storageProofList [][]byte, storageProofIndex uint64, numLeaves uint64) {
 	//must be a merkle tree that needs to build a proof of storage
 	if !t.usedAsProof {
-		panic("must be a merkle tree that needs to build a proof of storage")
+		log.Error("must be a merkle tree that needs to build a proof of storage")
+		return t.Root(), nil, t.storageProofIndex, t.leafIndex
 	}
 
 	//have not yet reached the storage certificate index

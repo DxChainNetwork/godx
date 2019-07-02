@@ -6,11 +6,14 @@ package merkle
 
 import (
 	"bytes"
+	"errors"
 	"hash"
 	"io"
 	"io/ioutil"
 	"math"
 	"math/bits"
+
+	"github.com/DxChainNetwork/godx/log"
 )
 
 //SubTreeLimit range of intervals
@@ -146,7 +149,8 @@ func getLimitStorageProof(limits []SubTreeLimit, sr SubtreeRoot) (storageProofLi
 		return nil, nil
 	}
 	if !checkLimitList(limits) {
-		panic("getLimitStorageProof: the parameter is invalid")
+		log.Error("getLimitStorageProof", "err", "the parameter is invalid")
+		return nil, errors.New("the parameter is invalid")
 	}
 
 	var leafIndex uint64
@@ -188,7 +192,8 @@ func getLimitStorageProof(limits []SubTreeLimit, sr SubtreeRoot) (storageProofLi
 // GetLimitStorageProof get a proof of storage for a limit of subtrees
 func GetLimitStorageProof(left, right int, h SubtreeRoot) (storageProofList [][]byte, err error) {
 	if left < 0 || left > right || left == right {
-		panic("GetLimitStorageProof: the parameter is invalid")
+		log.Error("GetLimitStorageProof", "err", "the parameter is invalid")
+		return nil, errors.New("the parameter is invalid")
 	}
 	return getLimitStorageProof([]SubTreeLimit{{uint64(left), uint64(right)}}, h)
 }
@@ -254,7 +259,8 @@ func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []SubTreeLimit, sto
 		return true, nil
 	}
 	if !checkLimitList(limits) {
-		panic("checkLimitStorageProof: the parameter is invalid")
+		log.Error("checkLimitStorageProof", "err", "the parameter is invalid")
+		return false, errors.New("the parameter is invalid")
 	}
 
 	tree := NewTree(h)
@@ -304,7 +310,8 @@ func checkLimitStorageProof(lh LeafRoot, h hash.Hash, limits []SubTreeLimit, sto
 // CheckLimitStorageProof check the proof list
 func CheckLimitStorageProof(lh LeafRoot, h hash.Hash, left, right int, storageProofList [][]byte, root []byte) (bool, error) {
 	if left < 0 || left > right || left == right {
-		panic("CheckLimitStorageProof: the parameter is invalid")
+		log.Error("CheckLimitStorageProof", "err", "the parameter is invalid")
+		return false, errors.New("the parameter is invalid")
 	}
 	return checkLimitStorageProof(lh, h, []SubTreeLimit{{uint64(left), uint64(right)}}, storageProofList, root)
 }
