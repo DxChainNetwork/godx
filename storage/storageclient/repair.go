@@ -83,6 +83,7 @@ func (sc *StorageClient) stuckLoop() {
 
 	// Loop until the storage client has shutdown or until there are no stuck segments
 	for {
+		<-time.After(1 * time.Second)
 		// Wait until the storage client is online to proceed.
 		if !sc.blockUntilOnline() {
 			// The storage client shut down before the internet connection was restored.
@@ -93,7 +94,6 @@ func (sc *StorageClient) stuckLoop() {
 		// Randomly get directory with stuck files
 		dir, err := sc.fileSystem.RandomStuckDirectory()
 		if err != nil && err != filesystem.ErrNoRepairNeeded {
-			sc.log.Error("getting random stuck directory", "error", err)
 			// sleep 5 seconds. wait for the filesystem
 			<-time.After(5 * time.Second)
 			continue

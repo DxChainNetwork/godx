@@ -11,6 +11,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -24,7 +25,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 
 	// read the download request.
 	var req storage.DownloadRequest
-	err := beginMsg.Decode(req)
+	err := beginMsg.Decode(&req)
 	if err != nil {
 		return err
 	}
@@ -57,10 +58,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		return err
 	}
 
-	h.lock.RLock()
 	settings := h.externalConfig()
-	h.lock.RUnlock()
-
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
@@ -79,6 +77,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
+			log.Error("req.Sections", "err", err)
 			return err
 		}
 	}
@@ -118,6 +117,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
+		log.Error("verifyPaymentRevision", "err", err)
 		return err
 	}
 
@@ -143,6 +143,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
+		log.Error("modifyStorageResponsibility", "err", err)
 		return err
 	}
 
@@ -152,6 +153,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {
+			log.Error("Read Sector", "err", err)
 			return err
 		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
@@ -163,6 +165,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
+				log.Error("RangeProof", "err", err)
 				return err
 			}
 		}
@@ -204,15 +207,15 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 // host.
 func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContractRevision, blockHeight uint64, expectedTransfer *big.Int) error {
 	// Check that the revision is well-formed.
-	if len(paymentRevision.NewValidProofOutputs) != 2 || len(paymentRevision.NewMissedProofOutputs) != 3 {
+	if len(paymentRevision.NewValidProofOutputs) != 2 || len(paymentRevision.NewMissedProofOutputs) != 2 {
 		return errBadContractOutputCounts
 	}
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
-		return errLateRevision
-	}
+	//if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
+	//	return errLateRevision
+	//}
 
 	// Host payout addresses shouldn't change
 	if paymentRevision.NewValidProofOutputs[1].Address != existingRevision.NewValidProofOutputs[1].Address {
@@ -221,18 +224,15 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	if paymentRevision.NewMissedProofOutputs[1].Address != existingRevision.NewMissedProofOutputs[1].Address {
 		return errors.New("host payout address changed")
 	}
-	// Make sure the lost collateral still goes to the void
-	if paymentRevision.NewMissedProofOutputs[2].Address != existingRevision.NewMissedProofOutputs[2].Address {
-		return errors.New("lost collateral address was changed")
-	}
 
 	// Determine the amount that was transferred from the renter.
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
 		return ExtendErr("renter increased its valid proof output: ", errHighRenterValidOutput)
 	}
-	fromRenter := existingRevision.NewValidProofOutputs[0].Value.Sub(existingRevision.NewValidProofOutputs[0].Value, paymentRevision.NewValidProofOutputs[0].Value)
+
 	// Verify that enough money was transferred.
-	if fromRenter.Cmp(expectedTransfer) < 0 {
+	fromRenter := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
+	if fromRenter.BigIntPtr().Cmp(expectedTransfer) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedTransfer, fromRenter)
 		return ExtendErr(s, errHighRenterValidOutput)
 	}
@@ -241,8 +241,9 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
 		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
-	toHost := paymentRevision.NewValidProofOutputs[1].Value.Sub(paymentRevision.NewValidProofOutputs[1].Value, existingRevision.NewValidProofOutputs[1].Value)
+
 	// Verify that enough money was transferred.
+	toHost := common.NewBigInt(paymentRevision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(existingRevision.NewValidProofOutputs[1].Value.Int64()))
 	if toHost.Cmp(fromRenter) != 0 {
 		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
@@ -257,7 +258,7 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Check that the host is not going to be posting collateral.
 	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) < 0 {
-		collateral := existingRevision.NewMissedProofOutputs[1].Value.Sub(existingRevision.NewMissedProofOutputs[1].Value, paymentRevision.NewMissedProofOutputs[1].Value)
+		collateral := common.NewBigInt(existingRevision.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewMissedProofOutputs[1].Value.Int64()))
 		s := fmt.Sprintf("host not expecting to post any collateral, but contract has host posting %v collateral: ", collateral)
 		return ExtendErr(s, errLowHostMissedOutput)
 	}

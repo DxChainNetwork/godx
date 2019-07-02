@@ -13983,21 +13983,74 @@ module.exports = Web3;
     var utils = require('../../utils/utils');
 
     var methods = function () {
+      var fileInfo = new Method({
+        name: 'fileInfo',
+        call: 'clientfiles_detailedFileInfo',
+        params: 1,
+      })
+
+      var rename = new Method({
+        name: 'rename',
+        call: 'clientfiles_rename',
+        params: 2,
+      })
+
+      var deletion = new Method({
+        name: 'delete',
+        call: 'clientfiles_delete',
+        params: 1,
+      })
+
+      var uploads = new Method({
+        name: 'uploads',
+        call: 'clientfiles_uploads',
+        params: 0,
+      })
 
       return [
+        fileInfo,
+        rename,
+        deletion,
+        uploads
       ];
     };
 
     var properties = function() {
       return [
+        new Property({
+          name: 'persistDir',
+          getter: 'clientfiles_persistDir',
+        }),
+        new Property({
+          name: 'rootDir',
+          getter: 'clientfiles_rootDir',
+        }),
+        new Property({
+          name: 'fileList',
+          getter: 'clientfiles_fileList'
+        })
       ];
     }
 
     function ClientFiles(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(p) {
+        p.attachToObject(self);
+        p.setRequestManager(self._requestManager);
+      });
     }
 
     module.exports = ClientFiles
   }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20},],
+
 
   213: [function(require,module,exports) {
     "use strict";

@@ -95,9 +95,17 @@ func TestDoUpload(t *testing.T) {
 	}()
 
 	entry := newFileEntry(t, sct.Client)
-	if err := entry.Close(); err != nil {
-		t.Fatal(err)
-	}
+	defer func() {
+		if err := os.Remove(string(entry.LocalPath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(string(entry.FilePath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := entry.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	dxPath := entry.DxPath()
 	defer sc.DeleteFile(dxPath)
@@ -138,11 +146,19 @@ func TestPushFileToSegmentHeap(t *testing.T) {
 	defer sct.Client.Close()
 
 	entry := newFileEntry(t, sct.Client)
-	dxPath := entry.DxPath()
-	if err := entry.Close(); err != nil {
-		t.Fatal(err)
-	}
+	defer func() {
+		if err := os.Remove(string(entry.LocalPath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(string(entry.FilePath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := entry.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
 
+	dxPath := entry.DxPath()
 	hosts := map[string]struct{}{
 		"111111": {},
 		"222222": {},
@@ -176,6 +192,12 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 
 	entry := newFileEntry(t, sct.Client)
 	defer func() {
+		if err := os.Remove(string(entry.LocalPath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(string(entry.FilePath())); err != nil {
+			t.Fatal(err)
+		}
 		if err := entry.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -209,6 +231,90 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 
 	sct.Client.dispatchSegment(unfinishedSegments[0])
 	wg.Wait()
+}
+
+func TestRetrieveData(t *testing.T) {
+	storage.ENV = storage.Env_Test
+
+	sct := newStorageClientTester(t)
+	defer sct.Client.Close()
+
+	entry := newFileEntry(t, sct.Client)
+	defer func() {
+		if err := os.Remove(string(entry.LocalPath())); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(string(entry.FilePath())); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := entry.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	hosts := map[string]struct{}{
+		"111111": {},
+		"222222": {},
+		"333333": {},
+		"444444": {},
+		"555555": {},
+	}
+
+	mockAddWorkers(3, sct.Client)
+
+	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
+
+	unfinishedSegments, _ := sct.Client.createUnfinishedSegments(entry, hosts, targetUnstuckSegments, nilHostHealthInfoTable)
+	if len(unfinishedSegments) <= 0 {
+		t.Fatal("push heap failed")
+	}
+
+	segment := unfinishedSegments[0]
+
+	if err := sct.Client.retrieveLogicalSegmentData(segment); err != nil {
+		t.Fatal("retrieveLogicalSegmentData failed", err)
+	}
+
+	var segmentBytes []byte
+	num := 0
+	for _, b := range segment.logicalSegmentData {
+		num += len(b)
+		segmentBytes = append(segmentBytes, b...)
+	}
+
+	var err error
+	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
+	if err != nil {
+		t.Fatal("ErasureCode encode failed", err)
+	}
+
+	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
+		t.Fatal("not enough physical sectors to match the upload sector slots of the file")
+	}
+
+	// Loop through the sectorSlots and encrypt any that are needed
+	// If the sector has been used, set physicalSegmentData nil and gc routine will collect this memory
+	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
+		if segment.sectorSlotsStatus[i] {
+			segment.physicalSegmentData[i] = nil
+		} else {
+			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
+			if err != nil {
+				segment.physicalSegmentData[i] = nil
+				t.Fatal("encrypt segment after erasure encode failed", "err", err)
+			} else {
+				segment.physicalSegmentData[i] = cipherData
+			}
+		}
+	}
+
+	for _, data := range segment.physicalSegmentData {
+		if uint64(len(data)) != dxfile.SectorSize {
+			t.Fatal("Physical data length is not equal sector size")
+		}
+	}
+
 }
 
 func TestReadFromLocalFile(t *testing.T) {
@@ -265,7 +371,7 @@ func generateFile(t *testing.T, localFilePath string, mb int) (string, int, comm
 		os.Mkdir(localFilePath, os.ModePerm)
 	}
 
-	testUploadFile, err := ioutil.TempFile(localFilePath, "*"+storage.DxFileExt)
+	testUploadFile, err := ioutil.TempFile(localFilePath, "*.dat")
 
 	bytes := generateRandomBytes(mb)
 	if _, err := testUploadFile.Write(bytes); err != nil {

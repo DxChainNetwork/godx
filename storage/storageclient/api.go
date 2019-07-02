@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"fmt"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"

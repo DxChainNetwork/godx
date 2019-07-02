@@ -224,7 +224,7 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
+	if _, ok := h.lockedStorageResponsibility[so.id()]; !ok {
 		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
@@ -472,6 +472,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	}
 
 	if !so.CreateContractConfirmed {
+		h.log.Error("CreateContractConfirmed start ", "soid", soid.String(), "height", h.blockHeight)
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the contract transaction has not been confirmed, delete the storage responsibility", "id", so.id())
 			err := h.removeStorageResponsibility(so, responsibilityRejected)
@@ -486,11 +487,13 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 		if err != nil {
 			h.log.Warn("Error queuing task item", "err", err)
 		}
+		h.log.Error("CreateContractConfirmed item", "soid", soid.String(), "height", h.blockHeight+postponedExecution)
 		return
 	}
 
 	//If revision meets the condition, a revision transaction will be submitted.
 	if !so.StorageRevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-postponedExecutionBuffer {
+		h.log.Error("StorageRevisionConfirmed start", "soid", soid.String(), "height", h.blockHeight)
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the revision transaction has not been confirmed, delete the storage responsibility", "id", so.id())
 			err := h.removeStorageResponsibility(so, responsibilityRejected)
@@ -518,10 +521,12 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 			h.log.Warn("Error sending a revision transaction", "err", err)
 			return
 		}
+		h.log.Error("StorageRevisionConfirmed success", "soid", soid.String(), "height", h.blockHeight)
 	}
 
 	//If revision meets the condition, a proof transaction will be submitted.
 	if !so.StorageProofConfirmed && h.blockHeight >= so.expiration()+postponedExecution {
+		h.log.Error("StorageProofConfirmed start ", "soid", soid.String(), "height", h.blockHeight)
 		h.log.Warn("The host is ready to submit a proof of transaction", "id", so.id())
 
 		if len(so.SectorRoots) == 0 {
@@ -607,6 +612,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
+		h.log.Error("StorageProofConfirmed success ", "soid", soid.String(), "height", h.blockHeight)
 
 		//Insert the check proof task in the task queue.
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
@@ -623,7 +629,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 
 	//If the submission of the storage certificate is successful during the non-expiration period, this deletes the storage responsibility
 	if so.StorageProofConfirmed && h.blockHeight >= so.proofDeadline() {
-		h.log.Info("This storage responsibility is responsible for the completion of the storage contract", "id", so.id())
+		h.log.Error("This storage responsibility is responsible for the completion of the storage contract", "id", so.id())
 		err := h.removeStorageResponsibility(so, responsibilitySucceeded)
 		if err != nil {
 			h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)

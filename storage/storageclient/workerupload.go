@@ -44,9 +44,8 @@ func (w *worker) killUploading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
-		log.Error("killUploading: disconnect")
 		delete(w.client.sessionSet, contractID)
-		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
 			w.client.log.Error("can't close connection after uploading", "error", err)
 		}
 	}
@@ -65,6 +64,9 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 			w.mu.Unlock()
 			break
 		}
+
+		//log.Error("WORKER Pending Segments", "contractID", w.contract.ID.String(), "len", len(w.pendingSegments))
+
 		segment := w.pendingSegments[0]
 		w.pendingSegments = w.pendingSegments[1:]
 		w.mu.Unlock()
@@ -116,17 +118,15 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	session, err := w.checkSession()
 	defer func() {
-		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
+		if session != nil {
+			session.ResetBusy()
 
-		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
-			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
-				w.client.log.Error("close session failed", "err", err)
+			select {
+			case session.RevisionDone() <- struct{}{}:
+			default:
 			}
 		}
 	}()
-
 	if err != nil {
 		w.client.log.Error("check session failed", "err", err)
 		w.uploadFailed(uc, sectorIndex)
@@ -143,15 +143,13 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	w.mu.Lock()
 	w.uploadConsecutiveFailures = 0
 	w.mu.Unlock()
-
 	// Add sector to storage clientFile
 	err = uc.fileEntry.AddSector(w.contract.EnodeID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
-		w.client.log.Info("Worker failed to add new sector in dxfile", "err", err)
+		w.client.log.Error("Worker failed to add new sector in dxfile", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
-
 	// Upload is complete. Update the state of the Segment and the storage client's memory
 	// available to reflect the completed upload.
 	uc.mu.Lock()
@@ -177,6 +175,15 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
+	//log.Error("PreProcessUploadSegment", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "offset", uc.offset, "length", uc.length)
+	//log.Error("unfinishedUploadSegment", "sectorsAllNeedNum", uc.sectorsAllNeedNum, "sectorsCompletedNum", uc.sectorsCompletedNum, "sectorsUploadingNum", uc.sectorsUploadingNum)
+
+	h := ""
+	for k, _ := range uc.unusedHosts {
+		h += k + " | "
+	}
+	//log.Error("UnusedHosts", "segmentIndex", uc.index, "host", h)
+
 	uploadAbility := false
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
@@ -192,12 +199,14 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	_, candidateHost := uc.unusedHosts[w.contract.EnodeID.String()]
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
+
+	log.Error("PreProcessUploadSegment flags", "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "candidateHost", candidateHost, "isComplete", isComplete, "isNeedUpload", isNeedUpload)
 	// If the segment does not need help from this worker, release the segment
 	if isComplete || !candidateHost || !uploadAbility || onCoolDown {
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Info("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
+		w.client.log.Warn("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
 		return nil, 0
 	}
 
@@ -230,6 +239,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	uc.sectorsUploadingNum++
 	uc.workersRemain--
 	uc.mu.Unlock()
+	//log.Error("This select sector", "index", index, "contractID", w.contract.ID.String(), "segmentIndex", uc.id.index, "total", len(uc.sectorSlotsStatus))
 	return uc, uint64(index)
 }
 
@@ -237,6 +247,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 func (w *worker) uploadFailed(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Mark the failure in the worker if the gateway says we are online. It's
 	// not the worker's fault if we are offline
+	log.Error("uploadFailed", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "sectorIndex", sectorIndex)
 	if w.client.Online() {
 		w.mu.Lock()
 		w.uploadRecentFailure = time.Now()

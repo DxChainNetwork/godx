@@ -3,15 +3,15 @@ package storagehost
 import (
 	"errors"
 	"fmt"
-	"sort"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"
+	"sort"
 )
 
 // handleUpload is the upload function to handle upload negotiation
@@ -28,10 +28,10 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage responsibility
-	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
-	h.lock.RUnlock()
+
 	if err != nil {
+		//log.Error("getStorageResponsibility failed", "err", err)
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
@@ -68,17 +68,17 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	//var storageRevenue, newDeposit *big.Int
 	var storageRevenue, newDeposit common.BigInt
+
 	if len(newRoots) > len(so.SectorRoots) {
 		bytesAdded := storage.SectorSize * uint64(len(newRoots)-len(so.SectorRoots))
 		blocksRemaining := so.proofDeadline() - currentBlockHeight
 		blockBytesCurrency := common.NewBigIntUint64(blocksRemaining).Mult(common.NewBigIntUint64(bytesAdded))
 		storageRevenue = blockBytesCurrency.Mult(settings.StoragePrice)
 		newDeposit = newDeposit.Add(blockBytesCurrency.Mult(settings.Deposit))
-
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot2(newRoots)
+	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -109,6 +109,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := verifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
+		log.Error("VerifyRevision Failed", "contractID", newRevision.ParentID.String(), "err", err)
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -117,6 +118,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
 	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
+
 	for index := range sectorsChanged {
 		if index < oldNumSectors {
 			proofRanges = append(proofRanges, merkletree.LeafRange{
@@ -139,6 +141,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	if err != nil {
 		return err
 	}
+
 	merkleResp = storage.UploadMerkleProof{
 		OldSubtreeHashes: oldHashSet,
 		OldLeafHashes:    leafHashes,
@@ -183,14 +186,14 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-	h.lock.Lock()
 	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
-	h.lock.Unlock()
 	if err != nil {
+		log.Error("modifyStorageResponsibility", "err", err)
 		return err
 	}
 
 	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
+		log.Error("SendStorageContractUploadHostRevisionSign", "err", err)
 		return err
 	}
 
@@ -207,9 +210,9 @@ func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if so.expiration()-postponedExecutionBuffer <= blockHeight {
-		return errLateRevision
-	}
+	//if so.expiration()-postponedExecutionBuffer <= blockHeight {
+	//	return errLateRevision
+	//}
 
 	oldFCR := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
@@ -277,13 +280,13 @@ func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	// Check that the host is not going to be posting more collateral than is
 	// expected. If the new misesd output is greater than the old one, the host
 	// is actually posting negative collateral, which is fine.
-	if revision.NewMissedProofOutputs[1].Value.Cmp(oldFCR.NewMissedProofOutputs[1].Value) <= 0 {
-		collateral := common.NewBigInt(oldFCR.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(revision.NewMissedProofOutputs[1].Value.Int64()))
-		if collateral.Cmp(expectedCollateral) > 0 {
-			s := fmt.Sprintf("host expected to post at most %v collateral, but contract has host posting %v: ", expectedCollateral, collateral)
-			return ExtendErr(s, errLowHostMissedOutput)
-		}
-	}
+	//if revision.NewMissedProofOutputs[1].Value.Cmp(oldFCR.NewMissedProofOutputs[1].Value) <= 0 {
+	//	collateral := common.NewBigInt(oldFCR.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(revision.NewMissedProofOutputs[1].Value.Int64()))
+	//	if collateral.Cmp(expectedCollateral) > 0 {
+	//		s := fmt.Sprintf("host expected to post at most %v collateral, but contract has host posting %v: ", expectedCollateral, collateral)
+	//		return ExtendErr(s, errLowHostMissedOutput)
+	//	}
+	//}
 
 	// Check that the revision count has increased.
 	if revision.NewRevisionNumber <= oldFCR.NewRevisionNumber {

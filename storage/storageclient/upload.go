@@ -6,13 +6,13 @@ package storageclient
 
 import (
 	"fmt"
+	"math"
+	"os"
+
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"math"
-	"os"
 )
 
 // Upload instructs the storage client to start tracking a file. The storage client will
@@ -42,9 +42,11 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 
 	// Delete existing file if Override mode
 	if up.Mode == storage.Override {
-		if err := sc.DeleteFile(up.DxPath); err != nil && err != dxdir.ErrUnknownPath {
+		err := sc.DeleteFile(up.DxPath)
+		if err != nil && err != dxdir.ErrUnknownPath {
 			return fmt.Errorf("cannot to delete existing file, error: %v", err)
 		}
+		//sc.log.Error("test error for DeleteFile in upload", "error", err)
 	}
 
 	// Setup ECTypeStandard's ErasureCode with default params
@@ -70,6 +72,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 			return err
 		}
 	}
+	//sc.log.Error("test error for NewDxDir in upload", "error", err)
 
 	cipherKey, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -86,24 +89,25 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	}
 
 	if sourceInfo.Size() == 0 {
+		sc.log.Error("source file size is 0", "source", sourceInfo.Name())
 		return nil
 	}
 
 	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file
 	go sc.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
 
-	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
-
-	// Send the upload to the repair loop
-	hosts := sc.refreshHostsAndWorkers()
-
-	if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
-		return err
-	}
-
-	select {
-	case sc.uploadHeap.segmentComing <- struct{}{}:
-	default:
-	}
+	//nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
+	//
+	//// Send the upload to the repair loop
+	//hosts := sc.refreshHostsAndWorkers()
+	//
+	//if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
+	//	return err
+	//}
+	//
+	//select {
+	//case sc.uploadHeap.segmentComing <- struct{}{}:
+	//default:
+	//}
 	return nil
 }

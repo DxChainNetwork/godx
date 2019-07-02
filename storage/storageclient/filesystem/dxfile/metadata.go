@@ -17,6 +17,8 @@ import (
 type (
 	// Metadata is the Metadata of a user uploaded file.
 	Metadata struct {
+		ID FileID
+
 		// storage related
 		HostTableOffset uint64
 		SegmentOffset   uint64
@@ -67,7 +69,7 @@ type (
 		LastHealthCheck  time.Time
 		NumStuckSegments uint64
 		RecentRepairTime time.Time
-		Redundancy   	 uint32
+		Redundancy       uint32
 		Size             uint64
 		TimeModify       time.Time
 	}

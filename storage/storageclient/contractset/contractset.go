@@ -132,9 +132,9 @@ func (scs *StorageContractSet) InsertContract(ch ContractHeader, roots []common.
 // contract set will be locked. Once acquired, the contract must be returned to unlock it.
 func (scs *StorageContractSet) Acquire(id storage.ContractID) (c *Contract, exists bool) {
 	scs.lock.Lock()
-	defer scs.lock.Unlock()
-
 	c, exists = scs.contracts[id]
+	scs.lock.Unlock()
+
 	if !exists {
 		return
 	}
@@ -151,6 +151,7 @@ func (scs *StorageContractSet) Return(c *Contract) (err error) {
 	defer scs.lock.Unlock()
 
 	_, exists := scs.contracts[c.header.ID]
+
 	if !exists {
 		err = errors.New("the contract does not exist while returning the contract")
 	}
@@ -163,9 +164,9 @@ func (scs *StorageContractSet) Return(c *Contract) (err error) {
 func (scs *StorageContractSet) Delete(c *Contract) (err error) {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
-
 	// check if the contract existed in the contract set
 	_, exists := scs.contracts[c.header.ID]
+
 	if !exists {
 		err = errors.New("the contract does not exist while deleting the contract")
 		return

@@ -7,6 +7,7 @@ package storageclient
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
@@ -149,7 +150,7 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 	d, err := sc.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
-		file:            segment.fileEntry.DxFile.Snapshot(),
+		file:            segment.fileEntry.Snapshot(),
 
 		latencyTarget: 200e3, // No need to rush latency on repair downloads.
 		length:        downloadLength,
@@ -225,7 +226,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	}
 
 	// Encode the physical sectors from content bytes of file
-	segmentBytes := make([]byte, uint64(len(segment.logicalSegmentData))*storage.SectorSize)
+	var segmentBytes []byte
 	for _, b := range segment.logicalSegmentData {
 		segmentBytes = append(segmentBytes, b...)
 	}
@@ -247,7 +248,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 
 	// Sanity check that at least as many physical data sectors as sector slots
 	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
-		sc.log.Info("not enough physical sectors to match the upload sector slots of the file")
+		sc.log.Error("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
 
@@ -272,7 +273,6 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		sc.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 	}
-
 	sc.dispatchSegment(segment)
 }
 
@@ -317,6 +317,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
 func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
+	//log.Error("EntryInto cleanupUploadSegment", "segment index", uc.index)
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64
@@ -402,6 +403,7 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 
 	// Determine if repair was successful
 	successfulRepair := (1-RemoteRepairDownloadThreshold)*float64(sectorsNeedNum) <= float64(sectorsCompleteNum)
+	log.Error("updateUploadSegmentStuckStatus", "index", index, "stuck", stuck, "sectorsCompleteNum", sectorsCompleteNum, "sectorsNeedNum", sectorsNeedNum, "stuckRepair", stuckRepair, "successfulRepair", successfulRepair)
 
 	// Check if client shut down
 	var clientOffline bool
@@ -431,6 +433,7 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 		sc.log.Info("repair successful, marking segment as non-stuck", "unfinishedSegmentID", uc.id)
 	}
 
+	log.Error("UpdateUploadSegmentStuckStatus SetStuckByIndex")
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {
 		sc.log.Error("could not set segment stuck status for file", "unfinishedSegmentID", uc.id, "dxpath", uc.fileEntry.DxPath(), "err", err)
 	}

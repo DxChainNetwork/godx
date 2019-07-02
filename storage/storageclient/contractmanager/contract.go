@@ -495,6 +495,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 
 	// if the contract is expected to be renewed already
 	if blockHeight+renewWindow >= contract.EndHeight {
+		cm.log.Error("already to renew", "blockHeight", blockHeight, "renewWindow", renewWindow, "endHeight", contract.EndHeight)
 		stats.UploadAbility = false
 		return
 	}
@@ -519,6 +520,9 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// or the remainingBalancePercentage is smaller than 5%, we consider this contract is not good
 	// for data uploading
 	if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minClientBalanceUploadThreshold {
+		cm.log.Error("the remaining contract balance is not enough to pay for the 3X total sector cost", "contractBalance",
+			contract.ContractBalance.Float64(), "totalSectorCost", totalSectorCost.Float64(), "contractTotalCost", contract.TotalCost.Float64(),
+			"remainingBalancePercentage", remainingBalancePercentage)
 		stats.UploadAbility = false
 		return
 	}

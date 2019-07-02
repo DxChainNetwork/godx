@@ -13,7 +13,7 @@ import (
 
 const (
 	// PersistHostDir is dir path for storing the host log, json, and ect.
-	PersistHostDir = "storageHost"
+	PersistHostDir = "storagehost"
 	// Version is the version of the storage host
 	Version = "1.0"
 	// HostSettingFile is the file name for saving the setting of host
@@ -67,7 +67,7 @@ var (
 	emptyStorageContract = types.StorageContract{}
 
 	//Total time to sign the contract
-	postponedExecutionBuffer = storage.BlocksPerDay
+	postponedExecutionBuffer = storage.BlockPerHour
 )
 
 // init set the initial value for sector height

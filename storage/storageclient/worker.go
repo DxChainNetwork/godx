@@ -5,9 +5,10 @@
 package storageclient
 
 import (
-	"github.com/pkg/errors"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -74,6 +75,7 @@ func (sc *StorageClient) activateWorkerPool() {
 			// start worker goroutine
 			if err := sc.tm.Add(); err != nil {
 				log.Error("storage client failed to add in worker progress", "error", err)
+				sc.lock.Unlock()
 				break
 			}
 			go func() {
@@ -100,7 +102,6 @@ func (sc *StorageClient) activateWorkerPool() {
 
 // WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
 func (w *worker) workLoop() {
-	log.Error("Get into the worker loop")
 	defer w.killUploading()
 	defer w.killDownloading()
 
@@ -146,9 +147,8 @@ func (w *worker) killDownloading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
-		log.Error("kill downloading, disconnected")
 		delete(w.client.sessionSet, contractID)
-		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
 			w.client.log.Debug("can't close connection after downloading", "error", err)
 		}
 	}
@@ -201,7 +201,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	// check this contract whether is renewing
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Debug("renew contract is doing, can't upload/download")
+		w.client.log.Warn("renew contract is doing, can't upload/download")
 		return nil, errors.New("contract is renewing")
 	}
 
@@ -213,27 +213,28 @@ func (w *worker) checkSession() (*storage.Session, error) {
 			return nil, errors.New("session is busy")
 		}
 
-		if session.IsClosed(){
+		if session.IsClosed() {
 			delete(w.client.sessionSet, contractID)
 		}
 	}
 
 	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupStorageConnection(w.contract.EnodeID.String())
+		hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+		if !ok {
+			return nil, errors.New("failed to retrieve host info")
+		}
+
+		s, err := w.client.ethBackend.SetupStorageConnection(hostInfo.EnodeURL)
 		if err != nil {
-			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String())
+			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
 			return nil, errors.New("failed to create connection")
 		}
 
+		s.SetHostInfo(&hostInfo)
 		w.client.sessionSet[contractID] = s
-		if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
-			s.SetHostInfo(&hostInfo)
-		}
+
 		session = s
 	}
-
-	// Set flag true while uploading
-	session.AddMaxUploadDownloadSectorNum(1)
 
 	return session, nil
 }
@@ -243,13 +244,10 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	session, err := w.checkSession()
 	defer func() {
 		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
 
-		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
-			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
-				w.client.log.Error("close session failed", "err", err)
-			}
+		select {
+		case session.RevisionDone() <- struct{}{}:
+		default:
 		}
 	}()
 
@@ -296,17 +294,18 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need,
 	// we can recover the original data
-	if uds.sectorsCompleted >= uds.erasureCode.MinSectors() {
-
-		// recover the logical data
-		go uds.recoverLogicalData()
-		w.client.log.Debug("received enough sectors to recover", "sectors_completed", uds.sectorsCompleted)
-	} else {
-
+	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 		// this a accumulation processing, every time we receive a sector
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
 		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(sectorData), "sectors_completed", uds.sectorsCompleted)
 	}
+
+	if uds.sectorsCompleted == uds.erasureCode.MinSectors() {
+		// recover the logical data
+		go uds.recoverLogicalData()
+		w.client.log.Debug("received enough sectors to recover", "sectors_completed", uds.sectorsCompleted)
+	}
+
 	uds.mu.Unlock()
 }
 
