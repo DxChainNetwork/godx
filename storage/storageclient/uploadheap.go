@@ -602,6 +602,6 @@ func (sc *StorageClient) uploadLoop() {
 				return
 			}
 		}
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 	}
 }
