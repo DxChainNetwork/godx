@@ -4,9 +4,10 @@
 package storageclient
 
 import (
+	"time"
+
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
-	"time"
 )
 
 // dropSegment will remove a worker from the responsibility of tracking a segment
@@ -117,7 +118,11 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	session, err := w.checkSession()
 	defer func() {
 		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
+
+		select {
+		case session.RevisionDone() <- struct{}{}:
+		default:
+		}
 
 		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
 			delete(w.client.sessionSet, w.contract.ID)

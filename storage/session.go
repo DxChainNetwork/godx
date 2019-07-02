@@ -132,11 +132,12 @@ type Session struct {
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	return &Session{
-		id:         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		Peer:       p,
-		rw:         rw,
-		version:    version,
-		clientDisc: make(chan error),
+		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:         p,
+		rw:           rw,
+		version:      version,
+		clientDisc:   make(chan error),
+		revisionDone: make(chan struct{}),
 	}
 }
 

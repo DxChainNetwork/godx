@@ -5,13 +5,14 @@
 package storageclient
 
 import (
-	"github.com/pkg/errors"
 	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+
+	"github.com/pkg/errors"
 )
 
 // Listen for a work on a certain host.
@@ -213,7 +214,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 			return nil, errors.New("session is busy")
 		}
 
-		if session.IsClosed(){
+		if session.IsClosed() {
 			delete(w.client.sessionSet, contractID)
 		}
 	}
@@ -243,7 +244,11 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	session, err := w.checkSession()
 	defer func() {
 		session.ResetBusy()
-		session.RevisionDone() <- struct{}{}
+
+		select {
+		case session.RevisionDone() <- struct{}{}:
+		default:
+		}
 
 		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
 			delete(w.client.sessionSet, w.contract.ID)
