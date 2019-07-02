@@ -70,7 +70,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if req.Renew {
 		oldContractID := req.OldContractID
-		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oladContractID)
+		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oldContractID)
 		if err != nil {
 			return ExtendErr("host verify renewed storage contract failed ", err)
 		}
