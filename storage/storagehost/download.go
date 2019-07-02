@@ -24,7 +24,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 
 	// read the download request.
 	var req storage.DownloadRequest
-	err := beginMsg.Decode(req)
+	err := beginMsg.Decode(&req)
 	if err != nil {
 		return err
 	}

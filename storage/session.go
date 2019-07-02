@@ -277,7 +277,7 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
-	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
 }
 
 func (s *Session) IsClosed() bool {
