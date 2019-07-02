@@ -118,7 +118,7 @@ func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight 
 }
 
 // check whether a new StorageContractRevision is valid
-func CheckReversionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
+func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
 
 	// check whether it has proofed
 	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
@@ -126,7 +126,7 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 
 	flag := state.GetState(statusAddr, scr.ParentID)
 	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
-		return errors.New("can not revision after storage proof")
+		return errors.New("can not do contract revision after storage proof")
 	}
 
 	// check that start and expiration are reasonable values.
@@ -153,9 +153,8 @@ func CheckReversionContract(state StateDB, scr types.StorageContractRevision, cu
 		missedProofOutputSum = missedProofOutputSum.Add(missedProofOutputSum, output.Value)
 	}
 
-	// For missed outputs only have 2 out: client and host, and client's deduction not add to host.
-	// So the sum of valid outputs is more than missed.
-	if validProofOutputSum.Cmp(missedProofOutputSum) != 1 {
+	// validProofOutputSum must be greater or equal to missedProofOutputSum
+	if validProofOutputSum.Cmp(missedProofOutputSum) < 0 {
 		return errRevisionOutputSumViolation
 	}
 
