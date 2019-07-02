@@ -395,13 +395,11 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 
 	select {
 	case srv.addStorageContract <- node:
-		srv.log.Info("AddStorageContractPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
 	select {
 	case srv.addStorageClient <- node:
-		srv.log.Info("AddStorageClientPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
