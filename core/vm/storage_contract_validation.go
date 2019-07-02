@@ -84,7 +84,11 @@ func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight 
 	if validProofOutputSum.Cmp(payout) != 0 {
 		return errStorageContractValidOutputSumViolation
 	}
-	if missedProofOutputSum.Cmp(payout) != 0 {
+
+	// if the missedProofOutputSum is greater than the payout, error
+	// for contract renew, money will be burnt as punishment for
+	// not able to submit the storage proof
+	if missedProofOutputSum.Cmp(payout) > 0 {
 		return errStorageContractMissedOutputSumViolation
 	}
 

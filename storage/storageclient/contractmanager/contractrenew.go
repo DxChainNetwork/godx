@@ -430,7 +430,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
 			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
-			{Value: hostPayout.Sub(baseCollateral).Add(host.ContractPrice).BigIntPtr(), Address: hostAddr},
+			{Value: hostPayout.Sub(baseCollateral).BigIntPtr(), Address: hostAddr},
 		},
 	}
 
