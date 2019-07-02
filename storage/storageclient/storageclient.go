@@ -878,7 +878,10 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 // createDownload performs a file download and returns the download object
 func (client *StorageClient) createDownload(p storage.DownloadParameters) (*download, error) {
-	dxPath := storage.DxPath{p.RemoteFilePath}
+	dxPath, err := storage.NewDxPath(p.RemoteFilePath)
+	if err != nil {
+		return nil, err
+	}
 	entry, err := client.fileSystem.OpenFile(dxPath)
 	if err != nil {
 		return nil, err

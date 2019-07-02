@@ -27,6 +27,7 @@ var (
 type (
 	// DxPath is the file Path or directory Path relates to the root directory of the DxFiles.
 	// It is used in storage client and storage client's file system
+	// WARN: When creating a DxPath, please use NewDxPath method to create a new DxPath.
 	DxPath struct {
 		Path string
 	}
