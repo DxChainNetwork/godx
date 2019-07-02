@@ -5,7 +5,6 @@
 package dxfile
 
 import (
-	"crypto/rand"
 	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
 	"io"
@@ -18,13 +17,7 @@ import (
 // readDxFile create a new DxFile with a random ID, then open and read the dxfile from filepath
 // and load all params from the file.
 func readDxFile(filepath storage.SysPath, wal *writeaheadlog.Wal) (*DxFile, error) {
-	var ID FileID
-	_, err := rand.Read(ID[:])
-	if err != nil {
-		return nil, fmt.Errorf("cannot create random ID: %v", err)
-	}
 	df := &DxFile{
-		ID:       ID,
 		filePath: filepath,
 		wal:      wal,
 	}
