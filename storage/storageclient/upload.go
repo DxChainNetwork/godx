@@ -13,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 // Upload instructs the storage client to start tracking a file. The storage client will
@@ -84,10 +85,6 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
-	if err := entry.Close(); err != nil {
-		return err
-	}
-
 	if sourceInfo.Size() == 0 {
 		sc.log.Error("source file size is 0", "source", sourceInfo.Name())
 		return nil
@@ -96,18 +93,18 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file
 	go sc.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
 
-	//nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
-	//
-	//// Send the upload to the repair loop
-	//hosts := sc.refreshHostsAndWorkers()
-	//
-	//if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
-	//	return err
-	//}
-	//
-	//select {
-	//case sc.uploadHeap.segmentComing <- struct{}{}:
-	//default:
-	//}
+	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
+
+	// Send the upload to the repair loop
+	hosts := sc.refreshHostsAndWorkers()
+
+	if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
+		return err
+	}
+
+	select {
+	case sc.uploadHeap.segmentComing <- struct{}{}:
+	default:
+	}
 	return nil
 }

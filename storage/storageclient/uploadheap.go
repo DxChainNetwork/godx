@@ -7,7 +7,6 @@ package storageclient
 import (
 	"container/heap"
 	"errors"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
@@ -82,7 +81,6 @@ func (uh *uploadHeap) len() int {
 func (uh *uploadHeap) push(uuc *unfinishedUploadSegment) bool {
 	var added bool
 	uh.mu.Lock()
-
 	_, exists := uh.pendingSegments[uuc.id]
 	if !exists {
 		uh.pendingSegments[uuc.id] = struct{}{}
@@ -215,8 +213,6 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		// Check if segment seems stuck
 		stuck := !isIncomplete && segmentHealth != dxfile.CompleteHealthThreshold
 
-		log.Error("Create UnfinishedSegments", "sectorsCompletedNum", segment.sectorsCompletedNum, "segmentHealth", segmentHealth, "downloadable", downloadable, "stuck", stuck)
-
 		// Add segment to list of incompleteSegments if it is isIncomplete and
 		// downloadable or if we are targeting stuck segments
 		if isIncomplete && (downloadable || target == targetStuckSegments) {
@@ -315,11 +311,7 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 
 		for i := 0; i < len(unfinishedUploadSegments); i++ {
 			if !sc.uploadHeap.push(unfinishedUploadSegments[i]) {
-				err := unfinishedUploadSegments[i].fileEntry.Close()
-				if err != nil {
-					sc.log.Error("unable to close file", "err", err)
-					return err
-				}
+				return nil
 			}
 		}
 	}
@@ -379,12 +371,12 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 	}
 
 	// Close all files
-	for _, file := range files {
-		err := file.Close()
-		if err != nil {
-			sc.log.Error("Could not close file", "err", err)
-		}
-	}
+	//for _, file := range files {
+	//	err := file.Close()
+	//	if err != nil {
+	//		sc.log.Error("Could not close file", "err", err)
+	//	}
+	//}
 }
 
 func (sc *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
@@ -611,6 +603,6 @@ func (sc *StorageClient) uploadLoop() {
 				return
 			}
 		}
-		<-time.After(500 * time.Millisecond)
+		<-time.After(100 * time.Millisecond)
 	}
 }
