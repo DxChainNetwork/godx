@@ -65,8 +65,6 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 			break
 		}
 
-		//log.Error("WORKER Pending Segments", "contractID", w.contract.ID.String(), "len", len(w.pendingSegments))
-
 		segment := w.pendingSegments[0]
 		w.pendingSegments = w.pendingSegments[1:]
 		w.mu.Unlock()
@@ -175,13 +173,6 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
-
-	h := ""
-	for k, _ := range uc.unusedHosts {
-		h += k + " | "
-	}
-	//log.Error("UnusedHosts", "segmentIndex", uc.index, "host", h)
-
 	uploadAbility := false
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
@@ -236,7 +227,6 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	uc.sectorsUploadingNum++
 	uc.workersRemain--
 	uc.mu.Unlock()
-	//log.Error("This select sector", "index", index, "contractID", w.contract.ID.String(), "segmentIndex", uc.id.index, "total", len(uc.sectorSlotsStatus))
 	return uc, uint64(index)
 }
 

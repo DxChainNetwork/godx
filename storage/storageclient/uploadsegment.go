@@ -316,7 +316,6 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
 func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
-	//log.Error("EntryInto cleanupUploadSegment", "segment index", uc.index)
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64
