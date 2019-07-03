@@ -16,15 +16,27 @@ func NewRevision(current types.StorageContractRevision, cost *big.Int) types.Sto
 
 	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
 	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 2)
-	copy(rev.NewValidProofOutputs, current.NewValidProofOutputs)
-	copy(rev.NewMissedProofOutputs, current.NewMissedProofOutputs)
+
+	for i, v := range current.NewValidProofOutputs {
+		rev.NewValidProofOutputs[i] = types.DxcoinCharge{
+			Address: v.Address,
+			Value:   big.NewInt(v.Value.Int64()),
+		}
+	}
+
+	for i, v := range current.NewMissedProofOutputs {
+		rev.NewMissedProofOutputs[i] = types.DxcoinCharge{
+			Address: v.Address,
+			Value:   big.NewInt(v.Value.Int64()),
+		}
+	}
 
 	// move valid payout from client to host
-	rev.NewValidProofOutputs[0].Value = current.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
-	rev.NewValidProofOutputs[1].Value = current.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
+	rev.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
+	rev.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
 
 	// move missed payout from client to void, mean that will burn missed payout of client
-	rev.NewMissedProofOutputs[0].Value = current.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
+	rev.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
 
 	// increment revision number
 	rev.NewRevisionNumber++

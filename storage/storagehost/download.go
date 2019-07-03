@@ -24,7 +24,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 
 	// read the download request.
 	var req storage.DownloadRequest
-	err := beginMsg.Decode(req)
+	err := beginMsg.Decode(&req)
 	if err != nil {
 		return err
 	}
@@ -198,11 +198,11 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for
-// the data has transferred the expected amount of money from the renter to the
+// the data has transferred the expected amount of money from the client to the
 // host.
 func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContractRevision, blockHeight uint64, expectedTransfer *big.Int) error {
 	// Check that the revision is well-formed.
-	if len(paymentRevision.NewValidProofOutputs) != 2 || len(paymentRevision.NewMissedProofOutputs) != 3 {
+	if len(paymentRevision.NewValidProofOutputs) != 2 || len(paymentRevision.NewMissedProofOutputs) != 2 {
 		return errBadContractOutputCounts
 	}
 
@@ -214,50 +214,44 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Host payout addresses shouldn't change
 	if paymentRevision.NewValidProofOutputs[1].Address != existingRevision.NewValidProofOutputs[1].Address {
-		return errors.New("host payout address changed")
+		return errors.New("host payout address changed during downloading")
 	}
 	if paymentRevision.NewMissedProofOutputs[1].Address != existingRevision.NewMissedProofOutputs[1].Address {
-		return errors.New("host payout address changed")
-	}
-	// Make sure the lost collateral still goes to the void
-	if paymentRevision.NewMissedProofOutputs[2].Address != existingRevision.NewMissedProofOutputs[2].Address {
-		return errors.New("lost collateral address was changed")
+		return errors.New("host payout address changed during downloading")
 	}
 
-	// Determine the amount that was transferred from the renter.
-	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
-		return ExtendErr("renter increased its valid proof output: ", errHighRenterValidOutput)
+	// Host missed proof payout should not change
+	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) != 0 {
+		return errors.New("host missed proof payout changed during downloading")
 	}
-	fromRenter := existingRevision.NewValidProofOutputs[0].Value.Sub(existingRevision.NewValidProofOutputs[0].Value, paymentRevision.NewValidProofOutputs[0].Value)
+
+	// Determine the amount that was transferred from the client.
+	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
+		return ExtendErr("client increased its valid proof output during downloading: ", errHighRenterValidOutput)
+	}
+
 	// Verify that enough money was transferred.
-	if fromRenter.Cmp(expectedTransfer) < 0 {
-		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedTransfer, fromRenter)
+	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
+	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
 		return ExtendErr(s, errHighRenterValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
 	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
-		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
+		return ExtendErr("host valid proof output was decreased during downloading: ", errLowHostValidOutput)
 	}
-	toHost := paymentRevision.NewValidProofOutputs[1].Value.Sub(paymentRevision.NewValidProofOutputs[1].Value, existingRevision.NewValidProofOutputs[1].Value)
+
 	// Verify that enough money was transferred.
-	if toHost.Cmp(fromRenter) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+	toHost := common.NewBigInt(paymentRevision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(existingRevision.NewValidProofOutputs[1].Value.Int64()))
+	if toHost.Cmp(fromClient) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred during downloading: ", fromClient, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
 	}
 
-	// If the renter's valid proof output is larger than the renter's missed
-	// proof output, the renter has incentive to see the host fail. Make sure
-	// that this incentive is not present.
+	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("renter has incentive to see host fail: ", errHighRenterMissedOutput)
-	}
-
-	// Check that the host is not going to be posting collateral.
-	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) < 0 {
-		collateral := existingRevision.NewMissedProofOutputs[1].Value.Sub(existingRevision.NewMissedProofOutputs[1].Value, paymentRevision.NewMissedProofOutputs[1].Value)
-		s := fmt.Sprintf("host not expecting to post any collateral, but contract has host posting %v collateral: ", collateral)
-		return ExtendErr(s, errLowHostMissedOutput)
+		return ExtendErr("client has incentive to see host fail during downloading: ", errHighRenterMissedOutput)
 	}
 
 	// Check that the revision count has increased.
@@ -287,8 +281,6 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	if paymentRevision.NewUnlockHash != existingRevision.NewUnlockHash {
 		return errBadUnlockHash
 	}
-	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) != 0 {
-		return errLowHostMissedOutput
-	}
+
 	return nil
 }

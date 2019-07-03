@@ -132,11 +132,12 @@ type Session struct {
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	return &Session{
-		id:         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		Peer:       p,
-		rw:         rw,
-		version:    version,
-		clientDisc: make(chan error),
+		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:         p,
+		rw:           rw,
+		version:      version,
+		clientDisc:   make(chan error),
+		revisionDone: make(chan struct{}),
 	}
 }
 
@@ -276,7 +277,7 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
-	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
 }
 
 func (s *Session) IsClosed() bool {
