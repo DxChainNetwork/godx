@@ -219,7 +219,6 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 
 	for {
 		// store the value of redo as not needed
-		fmt.Println("cmaa1")
 		if fs.disrupt("cmaa1") {
 			err = errDisrupted
 			return
@@ -232,7 +231,6 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		default:
 		}
-		fmt.Println("cmaa2")
 		if fs.disrupt("cmaa2") {
 			err = errDisrupted
 			return
@@ -248,7 +246,6 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 		if err != nil {
 			return
 		}
-		fmt.Println("cmaa3")
 		if fs.disrupt("cmaa3") {
 			err = errDisrupted
 			return
