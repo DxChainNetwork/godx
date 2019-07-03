@@ -214,7 +214,6 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		{"cmaa3"},
 	}
 	for index, test := range tests {
-		fmt.Printf("----------------[%v]-----------------\n", test.disruptKeyword)
 		// make the disrupter
 		c := make(chan struct{})
 		var dr disrupter
