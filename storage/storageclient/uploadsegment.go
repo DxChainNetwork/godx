@@ -344,10 +344,10 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	if segmentComplete && !released {
 		uc.released = true
 		sc.updateUploadSegmentStuckStatus(uc)
-		err := uc.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("file not closed after segment upload complete", "dxpath", uc.fileEntry.DxPath(), "err", err)
-		}
+		//err := uc.fileEntry.Close()
+		//if err != nil {
+		//	sc.log.Error("file not closed after segment upload complete", "dxpath", uc.fileEntry.DxPath(), "err", err)
+		//}
 		sc.uploadHeap.mu.Lock()
 		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()

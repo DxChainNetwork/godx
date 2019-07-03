@@ -83,7 +83,7 @@ func (sc *StorageClient) stuckLoop() {
 
 	// Loop until the storage client has shutdown or until there are no stuck segments
 	for {
-		<-time.After(1 * time.Second)
+		<-time.After(100 * time.Millisecond)
 		// Wait until the storage client is online to proceed.
 		if !sc.blockUntilOnline() {
 			// The storage client shut down before the internet connection was restored.
