@@ -8,6 +8,7 @@ import (
 	"container/heap"
 	"errors"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
 	"math/rand"
@@ -275,10 +276,9 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 	randSegmentIndex := rand.Intn(len(unfinishedUploadSegments))
 	randSegment := unfinishedUploadSegments[randSegmentIndex]
 	randSegment.stuckRepair = true
-	if !sc.uploadHeap.push(randSegment) {
-		// Segment wasn't added to the heap. Close the file
-		sc.log.Warn("push random stuck upload segment to heap failed", "segmentID", randSegment.id)
-	}
+
+	// add segment to upload heap
+	sc.uploadHeap.push(randSegment)
 
 	//unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
 	//for _, segment := range unfinishedUploadSegments {
@@ -307,9 +307,7 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 		}
 
 		for i := 0; i < len(unfinishedUploadSegments); i++ {
-			if !sc.uploadHeap.push(unfinishedUploadSegments[i]) {
-				sc.log.Warn("push unfinished upload segment to heap failed", "segmentID", unfinishedUploadSegments[i].id)
-			}
+			sc.uploadHeap.push(unfinishedUploadSegments[i])
 		}
 	}
 	return nil
@@ -484,13 +482,11 @@ func (sc *StorageClient) uploadOrRepair() {
 				}
 			}
 			for _, ss := range stuckSegments {
-				if !sc.uploadHeap.push(ss) {
-					sc.log.Warn("unable push segment to heap", "segmentID", ss.id)
-					//err := ss.fileEntry.Close()
-					//if err != nil {
-					//	sc.log.Error("Unable to close file", "err", err)
-					//}
-				}
+				sc.uploadHeap.push(ss)
+				//err := ss.fileEntry.Close()
+				//if err != nil {
+				//	sc.log.Error("Unable to close file", "err", err)
+				//}
 			}
 		}
 
@@ -510,7 +506,7 @@ func (sc *StorageClient) uploadOrRepair() {
 func (sc *StorageClient) doUpload() error {
 	// Find the lowest health file to queue for repairs.
 	dxFile, err := sc.fileSystem.SelectDxFileToFix()
-	if err != nil {
+	if err != nil && err != filesystem.ErrNoRepairNeeded {
 		sc.log.Error("getting worst health dxfile failed", "error", err)
 		return err
 	}
