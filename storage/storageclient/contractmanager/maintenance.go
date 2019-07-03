@@ -91,14 +91,14 @@ func (cm *ContractManager) contractMaintenance() {
 	// start to renew the contracts in the closeToExpireRenews list, which has higher priority
 	clientRemainingFund, terminate := cm.prepareContractRenew(closeToExpireRenews, clientRemainingFund, rentPayment)
 	if terminate {
-		log.Error("[closeToExpireRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
+		log.Debug("[closeToExpireRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
 		return
 	}
 
 	// start to renew contract in the insufficientFundingRenews list, lower priority
 	clientRemainingFund, terminate = cm.prepareContractRenew(insufficientFundingRenews, clientRemainingFund, rentPayment)
 	if terminate {
-		log.Error("[insufficientFundingRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
+		log.Debug("[insufficientFundingRenews]prepareContractRenew terminate", "clientRemainingFund", clientRemainingFund)
 		return
 	}
 

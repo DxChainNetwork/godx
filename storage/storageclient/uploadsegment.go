@@ -247,7 +247,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 
 	// Sanity check that at least as many physical data sectors as sector slots
 	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
-		sc.log.Error("not enough physical sectors to match the upload sector slots of the file")
+		sc.log.Info("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
 
@@ -264,7 +264,6 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 			} else {
 				segment.physicalSegmentData[i] = cipherData
 			}
-
 		}
 	}
 
@@ -344,10 +343,6 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	if segmentComplete && !released {
 		uc.released = true
 		sc.updateUploadSegmentStuckStatus(uc)
-		//err := uc.fileEntry.Close()
-		//if err != nil {
-		//	sc.log.Error("file not closed after segment upload complete", "dxpath", uc.fileEntry.DxPath(), "err", err)
-		//}
 		sc.uploadHeap.mu.Lock()
 		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()
@@ -382,10 +377,10 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 
 	go sc.fileSystem.InitAndUpdateDirMetadata(uc.fileEntry.DxPath())
 
-	err = uc.fileEntry.Close()
-	if err != nil {
-		return fmt.Errorf("unable to close dx file %v", uc.fileEntry.DxPath())
-	}
+	//err = uc.fileEntry.Close()
+	//if err != nil {
+	//	return fmt.Errorf("unable to close dx file %v", uc.fileEntry.DxPath())
+	//}
 	return nil
 }
 

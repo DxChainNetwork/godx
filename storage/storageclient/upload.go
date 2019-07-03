@@ -85,8 +85,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
 	if sourceInfo.Size() == 0 {
-		sc.log.Error("source file size is 0", "source", sourceInfo.Name())
-		return nil
+		return fmt.Errorf("source file size is 0, fileName: %s", sourceInfo.Name())
 	}
 
 	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file

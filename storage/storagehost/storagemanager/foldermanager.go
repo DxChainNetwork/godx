@@ -131,34 +131,27 @@ func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, e
 	defer fm.lock.RUnlock()
 	// Loop over the folder manager to check availability
 	for _, sf = range fm.sfs {
-		//fmt.Printf("\n\n 进入到selectFolderToAdd的for循环 \n\n")
 		if locked := sf.lock.TryLock(); !locked {
 			// Some other goroutine is accessing the folder.
 			// Continue to the next folder
-			//fmt.Printf("\n\n storageFolder没锁住：(%s, %d, %d ) \n\n", sf.path, sf.status, sf.id)
 			continue
 		}
 		if sf.status == folderUnavailable {
-			//fmt.Printf("\n\n storageFolder状态是folderUnavailable（%s） \n\n", sf.path)
 			sf.lock.Unlock()
 			continue
 		}
 		index, err = sf.freeSectorIndex()
 		if err == errFolderAlreadyFull {
-			//fmt.Printf("\n\n storageFolder满了（%s） \n\n", sf.path)
 			sf.lock.Unlock()
 			continue
 		} else if err != nil {
-			//fmt.Printf("\n\n freeSectorIndex报错了（%s, error: %v） \n\n", sf.path, err)
 			sf.lock.Unlock()
 			return nil, 0, err
 		}
-		//fmt.Printf("\n\n 成功找到了storageFolder（%s, %d） \n\n", sf.path, index)
 		// return the locked storage folder, the index, and nil error
 		return
 	}
 
-	//fmt.Printf("\n\n 失败找到storageFolder \n\n")
 	// After loop over all folders, still no available slot found
 	return nil, 0, errAllFoldersFullOrUsed
 }

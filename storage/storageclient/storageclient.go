@@ -428,8 +428,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	var merkleResp storage.UploadMerkleProof
 	msg, err := session.ReadMsg()
 	if err != nil {
-		log.Error("Read UploadMerkleProof Failed", "err", err)
-		return err
+		return fmt.Errorf("read upload merkle proof response msg failed, err: %v", err)
 	}
 	if err := msg.Decode(&merkleResp); err != nil {
 		return err
@@ -443,22 +442,16 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
 
 	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
-	if err != nil {
-		sc.log.Error("[oldRoot]something wrong for verifying diff proof", "oldRoot", oldRoot.String(), "error", err)
-	}
 	if !verified {
-		return errors.New("invalid Merkle proof for old root")
+		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
 	}
 
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
 	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
-	if err != nil {
-		sc.log.Error("[newRoot]something wrong for verifying diff proof", "newRoot", newRoot.String(), "error", err)
-	}
 	if !verified {
-		return errors.New("invalid Merkle proof for new root")
+		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
 	}
 
 	// update the revision, sign it, and send it
@@ -479,8 +472,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 	// send client sig to host
 	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
-		log.Error("SendStorageContractUploadClientRevisionSign", "err", err)
-		return err
+		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
 	// read the host's signature
 	var hostRevisionSig []byte
@@ -496,8 +488,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	// commit upload revision
 	err = contract.CommitUpload(walTxn, rev, common.Hash{}, storagePrice, bandwidthPrice)
 	if err != nil {
-		log.Error("CommitUpload failed", "err", err)
-		return err
+		return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
 	}
 	return nil
 }
@@ -714,8 +705,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// commit this revision
 	err = contract.CommitDownload(walTxn, newRevision, price)
 	if err != nil {
-		log.Error("CommitDownload", "err", err)
-		return err
+		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
 	}
 
 	return nil

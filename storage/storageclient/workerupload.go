@@ -6,7 +6,6 @@ package storageclient
 import (
 	"time"
 
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -195,7 +194,7 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Warn("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
+		w.client.log.Info("Worker will drop a segment due to it's status: complete/notCandidate/uploadInAbility/onCoolDown")
 		return nil, 0
 	}
 
@@ -235,7 +234,6 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 func (w *worker) uploadFailed(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	// Mark the failure in the worker if the gateway says we are online. It's
 	// not the worker's fault if we are offline
-	log.Error("uploadFailed", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "sectorIndex", sectorIndex)
 	if w.client.Online() {
 		w.mu.Lock()
 		w.uploadRecentFailure = time.Now()

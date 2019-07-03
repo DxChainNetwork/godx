@@ -267,7 +267,7 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 
 	// Sanity check that there are stuck segments
 	if len(unfinishedUploadSegments) == 0 {
-		sc.log.Info("[createAndPushRandomSegment]no stuck unfinishedUploadSegments returned")
+		sc.log.Info("no stuck unfinished upload segments returned")
 		return
 	}
 
@@ -277,19 +277,16 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 	randSegment.stuckRepair = true
 	if !sc.uploadHeap.push(randSegment) {
 		// Segment wasn't added to the heap. Close the file
-		err := randSegment.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("unable to close file", "err", err)
-		}
+		sc.log.Warn("push random stuck upload segment to heap failed", "segmentID", randSegment.id)
 	}
-	// Close the unused unfinishedUploadSegments
-	unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
-	for _, segment := range unfinishedUploadSegments {
-		err := segment.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("unable to close file", "err", err)
-		}
-	}
+
+	//unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
+	//for _, segment := range unfinishedUploadSegments {
+	//	err := segment.fileEntry.Close()
+	//	if err != nil {
+	//		sc.log.Error("unable to close file", "err", err)
+	//	}
+	//}
 	return
 }
 
@@ -305,13 +302,13 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 		sc.lock.Unlock()
 
 		if len(unfinishedUploadSegments) == 0 {
-			sc.log.Info("[createAndPushSegments]no unfinishedUploadSegments returned from buildUnfinishedSegments")
+			sc.log.Info("no unfinished upload segments returned")
 			continue
 		}
 
 		for i := 0; i < len(unfinishedUploadSegments); i++ {
 			if !sc.uploadHeap.push(unfinishedUploadSegments[i]) {
-				return nil
+				sc.log.Warn("push unfinished upload segment to heap failed", "segmentID", unfinishedUploadSegments[i].id)
 			}
 		}
 	}
@@ -369,14 +366,6 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 	default:
 		sc.log.Info("target not recognized", "target", target)
 	}
-
-	// Close all files
-	//for _, file := range files {
-	//	err := file.Close()
-	//	if err != nil {
-	//		sc.log.Error("Could not close file", "err", err)
-	//	}
-	//}
 }
 
 func (sc *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
@@ -466,7 +455,7 @@ func (sc *StorageClient) uploadOrRepair() {
 		availableWorkers := len(sc.workerPool)
 		sc.lock.Unlock()
 		if availableWorkers < nextSegment.sectorsMinNeedNum {
-			sc.log.Error("Setting segment as stuck because there are not enough good workers", "segmentID", nextSegment.id)
+			sc.log.Info("Setting segment as stuck because there are not enough good workers", "segmentID", nextSegment.id)
 			err := sc.setStuckAndClose(nextSegment, true)
 			if err != nil {
 				sc.log.Error("Unable to mark segment as stuck and close", "err", err)
@@ -496,10 +485,11 @@ func (sc *StorageClient) uploadOrRepair() {
 			}
 			for _, ss := range stuckSegments {
 				if !sc.uploadHeap.push(ss) {
-					err := ss.fileEntry.Close()
-					if err != nil {
-						sc.log.Error("Unable to close file", "err", err)
-					}
+					sc.log.Warn("unable push segment to heap", "segmentID", ss.id)
+					//err := ss.fileEntry.Close()
+					//if err != nil {
+					//	sc.log.Error("Unable to close file", "err", err)
+					//}
 				}
 			}
 		}

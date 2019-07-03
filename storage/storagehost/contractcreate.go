@@ -112,22 +112,29 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
+	h.lock.RLock()
+	height := h.blockHeight
+	h.lock.RUnlock()
+
 	so := StorageResponsibility{
 		SectorRoots:              nil,
 		ContractCost:             h.externalConfig().ContractPrice,
 		LockedStorageDeposit:     common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
 		PotentialStorageRevenue:  common.BigInt0,
 		RiskedStorageDeposit:     common.BigInt0,
-		NegotiationBlockNumber:   h.blockHeight,
+		NegotiationBlockNumber:   height,
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
 	if req.Renew {
-		oldso, err := getStorageResponsibility(h.db, req.OldContractID)
+		h.lock.RLock()
+		oldSr, err := getStorageResponsibility(h.db, req.OldContractID)
+		h.lock.RUnlock()
+
 		if err != nil {
 			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
 		} else {
-			so.SectorRoots = oldso.SectorRoots
+			so.SectorRoots = oldSr.SectorRoots
 		}
 		renewRevenue := renewBasePrice(so, h.externalConfig(), req.StorageContract)
 		so.ContractCost = common.NewBigInt(req.StorageContract.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice).Sub(renewRevenue)
@@ -159,12 +166,12 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	if sc.FileMerkleRoot != (common.Hash{}) {
 		return errBadFileMerkleRoot
 	}
-	// TODO make sure postponedExecutionBuffer
+
 	// WindowStart must be at least postponedExecutionBuffer blocks into the future
-	//if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
-	//	h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
-	//	return errEarlyWindow
-	//}
+	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
+		return errEarlyWindow
+	}
 
 	// WindowEnd must be at least settings.WindowSize blocks after WindowStart
 	if sc.WindowEnd < sc.WindowStart+config.WindowSize {

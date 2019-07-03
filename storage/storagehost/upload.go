@@ -28,7 +28,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// Get revision from storage responsibility
+	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	h.lock.RUnlock()
 
 	if err != nil {
 		//log.Error("getStorageResponsibility failed", "err", err)
@@ -186,7 +188,11 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
+
+	h.lock.Lock()
 	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	h.lock.Unlock()
+
 	if err != nil {
 		log.Error("modifyStorageResponsibility", "err", err)
 		return err
@@ -210,9 +216,9 @@ func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	//if so.expiration()-postponedExecutionBuffer <= blockHeight {
-	//	return errLateRevision
-	//}
+	if so.expiration()-postponedExecutionBuffer <= blockHeight {
+		return errLateRevision
+	}
 
 	oldFCR := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
