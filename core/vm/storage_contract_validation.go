@@ -182,7 +182,7 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	// Check that the revision number of the revision is greater than the
 	// revision number of the existing storage contract.
 	reNum := new(big.Int).SetBytes(revisionNumHash.Bytes()).Uint64()
-	if reNum >= scr.NewRevisionNumber {
+	if reNum > scr.NewRevisionNumber {
 		return errLowRevisionNumber
 	}
 
