@@ -19,6 +19,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -429,7 +430,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
 			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
-			{Value: hostPayout.Sub(baseCollateral).Add(host.ContractPrice).BigIntPtr(), Address: hostAddr},
+			{Value: hostPayout.Sub(baseCollateral).BigIntPtr(), Address: hostAddr},
 		},
 	}
 
@@ -454,10 +455,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer func() {
-		cm.log.Error("contract renew: disconnect session")
-		cm.b.Disconnect(session, host.EnodeURL)
-	}()
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -565,8 +563,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	oldRoots, err := oldContract.MerkleRoots()
-	if err != nil {
+	if err != nil && err != dberrors.ErrNotFound {
 		return storage.ContractMetaData{}, err
+	} else if err == dberrors.ErrNotFound {
+		oldRoots = []common.Hash{}
 	}
 
 	// store this contract info to client local
