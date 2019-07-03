@@ -16,7 +16,7 @@ func (h *StorageHost) subscribeChainChangEvent() {
 	}
 	defer h.tm.Done()
 
-	chainChanges := make(chan core.ChainChangeEvent, 100)
+	chainChanges := make(chan core.ChainChangeEvent, 1)
 	h.ethBackend.SubscribeChainChangeEvent(chainChanges)
 
 	for {
