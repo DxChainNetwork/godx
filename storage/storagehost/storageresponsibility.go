@@ -605,7 +605,6 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
-		h.log.Error("StorageProofConfirmed success ", "soid", soid.String(), "height", h.blockHeight)
 
 		//Insert the check proof task in the task queue.
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
