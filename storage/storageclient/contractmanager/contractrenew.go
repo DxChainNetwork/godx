@@ -219,7 +219,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	}
 	if err = cm.updateContractStatus(renewedContract.ID, renewedContractStatus); err != nil {
 		// renew succeed, but status update failed
-		cm.log.Warn(fmt.Sprintf("failed to update the renewed oldContract status: %s", err.Error()))
+		cm.log.Warn("failed to update the renewed oldContract status", "err", err.Error())
 		if err = cm.activeContracts.Return(oldContract); err != nil {
 			cm.log.Warn("during the updating renewed oldContract failed process, the oldContract cannot be returned because it has been deleted already")
 			err = nil
@@ -367,7 +367,7 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 		contractStatus.RenewAbility = false
 		contractStatus.Canceled = true
 		if err := failedContract.UpdateStatus(contractStatus); err != nil {
-			cm.log.Warn(fmt.Sprintf("failed to update the contract status during renew failed handling: %s", err.Error()))
+			cm.log.Warn("failed to update the contract status during renew failed handling", "err", err.Error())
 		}
 
 		err = fmt.Errorf("marked the contract %v as canceled due to the large amount of renew fails: %s", failedContract.Metadata().ID, renewError.Error())
