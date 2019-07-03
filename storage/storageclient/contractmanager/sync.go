@@ -12,7 +12,7 @@ func (cm *ContractManager) subscribeChainChangeEvent() {
 	cm.wg.Add(1)
 	defer cm.wg.Done()
 
-	chainChanges := make(chan core.ChainChangeEvent, 100)
+	chainChanges := make(chan core.ChainChangeEvent, 1)
 	cm.b.SubscribeChainChangeEvent(chainChanges)
 
 	for {
