@@ -41,7 +41,7 @@ func (h *StorageHost) hostBlockHeightChange(cce core.ChainChangeEvent) {
 	//Block executing the main chain
 	taskItems := h.applyBlockHashesStorageResponsibility(cce.AppliedBlockHashes)
 	for i := range taskItems {
-		go h.handleTaskItem(taskItems[i])
+		h.handleTaskItem(taskItems[i])
 	}
 
 	err := h.syncConfig()

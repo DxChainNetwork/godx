@@ -445,19 +445,11 @@ func (h *StorageHost) resetFinancialMetrics() error {
 
 //Handling storage responsibilities in the task queue
 func (h *StorageHost) handleTaskItem(soid common.Hash) {
-	if err := h.tm.Add(); err != nil {
-		return
-	}
-	defer h.tm.Done()
-
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
 	defer func() {
 		h.checkAndUnlockStorageResponsibility(soid)
 	}()
-
-	h.lock.Lock()
-	defer h.lock.Unlock()
 
 	// Fetch the storage Responsibility associated with the storage responsibility id.
 	so, err := getStorageResponsibility(h.db, soid)
