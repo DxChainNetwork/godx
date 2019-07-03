@@ -264,6 +264,8 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Wait for the first update to reach cmaa3
+		<-time.After(200 * time.Millisecond)
 		// Create the second update. The second update should return right away since there is
 		// already a thread updating the metadata
 		err = fs.InitAndUpdateDirMetadata(storage.RootDxPath())
