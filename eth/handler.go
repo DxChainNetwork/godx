@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"net"
@@ -376,7 +377,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			for {
 				p.Log().Debug("inbound connection for loop", "remote client", p.Peer.Node().String())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
-					p.Log().Error("Storage host handle session message failed", "err", err)
+					if err != io.EOF {
+						p.Log().Error("Storage host handle session message failed", "err", err)
+					}
 					return err
 				}
 			}

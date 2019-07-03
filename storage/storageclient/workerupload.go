@@ -4,9 +4,10 @@
 package storageclient
 
 import (
+	"time"
+
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
-	"time"
 )
 
 // dropSegment will remove a worker from the responsibility of tracking a segment

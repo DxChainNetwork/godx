@@ -610,7 +610,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 
 // CommitRevisionTx host sends a revision transaction
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("enter storage contract reversion tx executing ... ")
+	log.Info("enter storage contract revision tx executing ... ")
 	var (
 		state = evm.StateDB
 	)
@@ -630,10 +630,10 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// check storage contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckReversionContract, state, scr, uint64(currentHeight), contractAddr)
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckRevisionContract, state, scr, uint64(currentHeight), contractAddr)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
-		log.Error("failed to check storage contract reversion", "err", errCheck)
+		log.Error("failed to check storage contract revision", "err", errCheck)
 		return nil, gasRemainCheck, errCheck
 	}
 

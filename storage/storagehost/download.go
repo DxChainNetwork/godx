@@ -11,7 +11,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -59,6 +58,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}
 
 	settings := h.externalConfig()
+
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
@@ -77,7 +77,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
-			log.Error("req.Sections", "err", err)
 			return err
 		}
 	}
@@ -117,7 +116,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		log.Error("verifyPaymentRevision", "err", err)
 		return err
 	}
 
@@ -143,7 +141,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
-		log.Error("modifyStorageResponsibility", "err", err)
 		return err
 	}
 
@@ -153,7 +150,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {
-			log.Error("Read Sector", "err", err)
 			return err
 		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
@@ -165,7 +161,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
-				log.Error("RangeProof", "err", err)
 				return err
 			}
 		}
@@ -203,7 +198,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for
-// the data has transferred the expected amount of money from the renter to the
+// the data has transferred the expected amount of money from the client to the
 // host.
 func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContractRevision, blockHeight uint64, expectedTransfer *big.Int) error {
 	// Check that the revision is well-formed.
@@ -213,54 +208,50 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	//if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
-	//	return errLateRevision
-	//}
+	if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
+		return errLateRevision
+	}
 
 	// Host payout addresses shouldn't change
 	if paymentRevision.NewValidProofOutputs[1].Address != existingRevision.NewValidProofOutputs[1].Address {
-		return errors.New("host payout address changed")
+		return errors.New("host payout address changed during downloading")
 	}
 	if paymentRevision.NewMissedProofOutputs[1].Address != existingRevision.NewMissedProofOutputs[1].Address {
-		return errors.New("host payout address changed")
+		return errors.New("host payout address changed during downloading")
 	}
 
-	// Determine the amount that was transferred from the renter.
+	// Host missed proof payout should not change
+	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) != 0 {
+		return errors.New("host missed proof payout changed during downloading")
+	}
+
+	// Determine the amount that was transferred from the client.
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
-		return ExtendErr("renter increased its valid proof output: ", errHighRenterValidOutput)
+		return ExtendErr("client increased its valid proof output during downloading: ", errHighRenterValidOutput)
 	}
 
 	// Verify that enough money was transferred.
-	fromRenter := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
-	if fromRenter.BigIntPtr().Cmp(expectedTransfer) < 0 {
-		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedTransfer, fromRenter)
+	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
+	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
 		return ExtendErr(s, errHighRenterValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
 	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
-		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
+		return ExtendErr("host valid proof output was decreased during downloading: ", errLowHostValidOutput)
 	}
 
 	// Verify that enough money was transferred.
 	toHost := common.NewBigInt(paymentRevision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(existingRevision.NewValidProofOutputs[1].Value.Int64()))
-	if toHost.Cmp(fromRenter) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+	if toHost.Cmp(fromClient) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred during downloading: ", fromClient, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
 	}
 
-	// If the renter's valid proof output is larger than the renter's missed
-	// proof output, the renter has incentive to see the host fail. Make sure
-	// that this incentive is not present.
+	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("renter has incentive to see host fail: ", errHighRenterMissedOutput)
-	}
-
-	// Check that the host is not going to be posting collateral.
-	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) < 0 {
-		collateral := common.NewBigInt(existingRevision.NewMissedProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewMissedProofOutputs[1].Value.Int64()))
-		s := fmt.Sprintf("host not expecting to post any collateral, but contract has host posting %v collateral: ", collateral)
-		return ExtendErr(s, errLowHostMissedOutput)
+		return ExtendErr("client has incentive to see host fail during downloading: ", errHighRenterMissedOutput)
 	}
 
 	// Check that the revision count has increased.
@@ -290,8 +281,6 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	if paymentRevision.NewUnlockHash != existingRevision.NewUnlockHash {
 		return errBadUnlockHash
 	}
-	if paymentRevision.NewMissedProofOutputs[1].Value.Cmp(existingRevision.NewMissedProofOutputs[1].Value) != 0 {
-		return errLowHostMissedOutput
-	}
+
 	return nil
 }

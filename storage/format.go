@@ -85,7 +85,7 @@ func FormatTime(time uint64) (formatted string) {
 		formatted = fmt.Sprintf("%v Day(s)", time/BlocksPerDay)
 		return
 	case time%BlockPerHour == 0:
-		formatted = fmt.Sprintf("%v Day(s)", time/BlockPerHour)
+		formatted = fmt.Sprintf("%v Hour(s)", time/BlockPerHour)
 		return
 	default:
 		formatted = fmt.Sprintf("%v Minute(s)", float64(time)/float64(BlockPerMin))

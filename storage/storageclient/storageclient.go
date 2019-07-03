@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"io"
 	"math/big"
@@ -414,7 +413,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		}
 
 		// reset deadline
-		session.SetDeadLine(3 * time.Minute)
+		session.SetDeadLine(5 * time.Minute)
 	}()
 	// 1. Send storage upload request
 	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
@@ -509,7 +508,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// reset deadline when finished.
 	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
 	// the conn should be disconnected after 1 hour.
-	defer s.SetDeadLine(3 * time.Minute)
+	defer s.SetDeadLine(5 * time.Minute)
 
 	// sanity check the request.
 	for _, sec := range req.Sections {
@@ -684,7 +683,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		// if host sent signature, indicate the download complete, should exit the loop
 		if len(resp.Signature) > 0 {
 			hostSig = resp.Signature
-			log.Error("Receive Host Sign", "sign", hexutil.Encode(hostSig))
 			break
 		}
 	}
@@ -915,7 +913,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	// instantiate the file to write the downloaded data
 	var dw writeDestination
 	var destinationType string
-	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return nil, err
 	}

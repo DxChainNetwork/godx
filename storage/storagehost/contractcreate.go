@@ -61,7 +61,8 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
 	if req.Renew {
-		err = verifyRenewedContract(h, &sc, clientPK, hostPK)
+		oldContractID := req.OldContractID
+		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oldContractID)
 		if err != nil {
 			return ExtendErr("host verify renewed storage contract failed ", err)
 		}
@@ -257,13 +258,13 @@ func renewBaseDeposit(so StorageResponsibility, settings storage.HostExtConfig, 
 }
 
 // verifyRenewedContract checks whether the renewed contract matches the previous and appropriate payments.
-func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *ecdsa.PublicKey, hostPK *ecdsa.PublicKey) error {
+func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *ecdsa.PublicKey, hostPK *ecdsa.PublicKey, oldContractID common.Hash) error {
 	h.lock.RLock()
 	blockHeight := h.blockHeight
 	lockedStorageDeposit := h.financialMetrics.LockedStorageDeposit
 	hostAddress := crypto.PubkeyToAddress(*hostPK)
 	config := h.config
-	so, err := getStorageResponsibility(h.db, sc.ID())
+	so, err := getStorageResponsibility(h.db, oldContractID)
 	if err != nil {
 		h.lock.RUnlock()
 		return fmt.Errorf("failed to get storage responsibility in verifyRenewedContract,error: %v", err)
