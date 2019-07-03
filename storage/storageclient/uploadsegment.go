@@ -7,7 +7,6 @@ package storageclient
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
@@ -317,7 +316,6 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
 func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
-	//log.Error("EntryInto cleanupUploadSegment", "segment index", uc.index)
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64
@@ -403,7 +401,6 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 
 	// Determine if repair was successful
 	successfulRepair := (1-RemoteRepairDownloadThreshold)*float64(sectorsNeedNum) <= float64(sectorsCompleteNum)
-	log.Error("updateUploadSegmentStuckStatus", "index", index, "stuck", stuck, "sectorsCompleteNum", sectorsCompleteNum, "sectorsNeedNum", sectorsNeedNum, "stuckRepair", stuckRepair, "successfulRepair", successfulRepair)
 
 	// Check if client shut down
 	var clientOffline bool
@@ -433,7 +430,6 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 		sc.log.Info("repair successful, marking segment as non-stuck", "unfinishedSegmentID", uc.id)
 	}
 
-	log.Error("UpdateUploadSegmentStuckStatus SetStuckByIndex")
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {
 		sc.log.Error("could not set segment stuck status for file", "unfinishedSegmentID", uc.id, "dxpath", uc.fileEntry.DxPath(), "err", err)
 	}

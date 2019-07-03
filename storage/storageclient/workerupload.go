@@ -65,8 +65,6 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 			break
 		}
 
-		//log.Error("WORKER Pending Segments", "contractID", w.contract.ID.String(), "len", len(w.pendingSegments))
-
 		segment := w.pendingSegments[0]
 		w.pendingSegments = w.pendingSegments[1:]
 		w.mu.Unlock()
@@ -175,15 +173,6 @@ func (w *worker) onUploadCoolDown() bool {
 // preProcessUploadSegment will pre-process a segment from the worker segment queue
 func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinishedUploadSegment, uint64) {
 	// Determine the usability value of this worker
-	//log.Error("PreProcessUploadSegment", "contractID(worker)", w.contract.ID.String(), "segmentIndex", uc.index, "offset", uc.offset, "length", uc.length)
-	//log.Error("unfinishedUploadSegment", "sectorsAllNeedNum", uc.sectorsAllNeedNum, "sectorsCompletedNum", uc.sectorsCompletedNum, "sectorsUploadingNum", uc.sectorsUploadingNum)
-
-	h := ""
-	for k, _ := range uc.unusedHosts {
-		h += k + " | "
-	}
-	//log.Error("UnusedHosts", "segmentIndex", uc.index, "host", h)
-
 	uploadAbility := false
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {
 		uploadAbility = meta.Status.UploadAbility
@@ -200,7 +189,6 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
 
-	log.Error("PreProcessUploadSegment flags", "uploadAbility", uploadAbility, "onCoolDown", onCoolDown, "candidateHost", candidateHost, "isComplete", isComplete, "isNeedUpload", isNeedUpload)
 	// If the segment does not need help from this worker, release the segment
 	if isComplete || !candidateHost || !uploadAbility || onCoolDown {
 		// This worker no longer needs to track this segment
@@ -239,7 +227,6 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	uc.sectorsUploadingNum++
 	uc.workersRemain--
 	uc.mu.Unlock()
-	//log.Error("This select sector", "index", index, "contractID", w.contract.ID.String(), "segmentIndex", uc.id.index, "total", len(uc.sectorSlotsStatus))
 	return uc, uint64(index)
 }
 

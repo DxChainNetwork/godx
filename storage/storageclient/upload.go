@@ -46,7 +46,6 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 		if err != nil && err != dxdir.ErrUnknownPath {
 			return fmt.Errorf("cannot to delete existing file, error: %v", err)
 		}
-		//sc.log.Error("test error for DeleteFile in upload", "error", err)
 	}
 
 	// Setup ECTypeStandard's ErasureCode with default params
