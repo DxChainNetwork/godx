@@ -903,7 +903,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	// instantiate the file to write the downloaded data
 	var dw writeDestination
 	var destinationType string
-	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_RDWR, 0666)
+	osFile, err := os.OpenFile(p.WriteToLocalPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
 	if err != nil {
 		return nil, err
 	}
