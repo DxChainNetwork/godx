@@ -24,47 +24,39 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		err := errors.New("host is not accepting new contracts")
 		return err
 	}
-
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
 		return err
 	}
-
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
 		return ExtendErr("recover publicKey from signature failed", err)
 	}
-
 	// Check host balance >= storage contract cost
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
 		return ExtendErr("get state db error", err)
 	}
-
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
 		return ExtendErr("host balance insufficient", err)
 	}
-
 	account := accounts.Account{Address: hostAddress}
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
 		return ExtendErr("find host account error", err)
 	}
-
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
 		return ExtendErr("host account sign storage contract error", err)
 	}
-
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
-
 	sc.Signatures = [][]byte{req.Sign, hostContractSign}
 
 	// Check an incoming storage contract matches the host's expectations for a valid contract
@@ -80,7 +72,6 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 			return ExtendErr("host verify storage contract failed ", err)
 		}
 	}
-
 	// 2. After check, send host contract sign to client
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
 		return ExtendErr("send storage contract create sign by host", err)
@@ -92,11 +83,9 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	if err != nil {
 		return err
 	}
-
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		return err
 	}
-
 	// Reconstruct revision locally by host
 	storageContractRevision := types.StorageContractRevision{
 		ParentID: sc.RLPHash(),
@@ -116,14 +105,16 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		NewMissedProofOutputs: sc.MissedProofOutputs,
 		NewUnlockHash:         sc.UnlockHash,
 	}
-
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
 		return ExtendErr("host sign revison error", err)
 	}
-
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
+
+	h.lock.RLock()
+	height := h.blockHeight
+	h.lock.RUnlock()
 
 	so := StorageResponsibility{
 		SectorRoots:              nil,
@@ -131,30 +122,28 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		LockedStorageDeposit:     common.NewBigInt(sc.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice),
 		PotentialStorageRevenue:  common.BigInt0,
 		RiskedStorageDeposit:     common.BigInt0,
-		NegotiationBlockNumber:   h.blockHeight,
+		NegotiationBlockNumber:   height,
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
-
 	if req.Renew {
 		h.lock.RLock()
-		oldso, err := getStorageResponsibility(h.db, req.OldContractID)
+		oldSr, err := getStorageResponsibility(h.db, req.OldContractID)
 		h.lock.RUnlock()
+
 		if err != nil {
 			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
 		} else {
-			so.SectorRoots = oldso.SectorRoots
+			so.SectorRoots = oldSr.SectorRoots
 		}
 		renewRevenue := renewBasePrice(so, h.externalConfig(), req.StorageContract)
 		so.ContractCost = common.NewBigInt(req.StorageContract.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice).Sub(renewRevenue)
 		so.PotentialStorageRevenue = renewRevenue
 		so.RiskedStorageDeposit = renewBaseDeposit(so, h.externalConfig(), req.StorageContract)
 	}
-
 	if err := finalizeStorageResponsibility(h, so); err != nil {
 		return ExtendErr("finalize storage responsibility error", err)
 	}
-
 	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
 }
 
@@ -179,21 +168,19 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	}
 
 	// WindowStart must be at least postponedExecutionBuffer blocks into the future
-	//if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
-	//	h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
-	//	return errEarlyWindow
-	//}
+	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
+		return errEarlyWindow
+	}
 
 	// WindowEnd must be at least settings.WindowSize blocks after WindowStart
 	if sc.WindowEnd < sc.WindowStart+config.WindowSize {
 		return errSmallWindow
 	}
-
 	// WindowStart must not be more than settings.MaxDuration blocks into the future
 	if sc.WindowStart > blockHeight+config.MaxDuration {
 		return errLongDuration
 	}
-
 	// ValidProofOutputs should have 2 outputs (client + host) and missed
 	// outputs should have 2 (client + host)
 	if len(sc.ValidProofOutputs) != 2 || len(sc.MissedProofOutputs) != 2 {
@@ -227,7 +214,6 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	if lockedStorageDeposit.Add(depositMinusContractPrice).Cmp(config.DepositBudget) > 0 {
 		return errCollateralBudgetExceeded
 	}
-
 	// The unlock hash for the file contract must match the unlock hash that
 	// the host knows how to spend.
 	expectedUH := types.UnlockConditions{
@@ -240,11 +226,10 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	if sc.UnlockHash != expectedUH {
 		return errBadUnlockHash
 	}
-
 	return nil
 }
 
-// finalizeStorageResponsibility
+// finalizeStorageResponsibility insert storage responsibility
 func finalizeStorageResponsibility(h *StorageHost, so StorageResponsibility) error {
 	// Get a lock on the storage responsibility
 	lockErr := h.checkAndTryLockStorageResponsibility(so.id(), storage.ResponsibilityLockTimeout)

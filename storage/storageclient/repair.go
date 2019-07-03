@@ -94,7 +94,6 @@ func (sc *StorageClient) stuckLoop() {
 		// Randomly get directory with stuck files
 		dir, err := sc.fileSystem.RandomStuckDirectory()
 		if err != nil && err != filesystem.ErrNoRepairNeeded {
-			sc.log.Error("getting random stuck directory", "error", err)
 			// sleep 5 seconds. wait for the filesystem
 			<-time.After(5 * time.Second)
 			continue

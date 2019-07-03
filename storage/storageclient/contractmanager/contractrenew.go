@@ -29,8 +29,6 @@ import (
 // 		   marked as not good for data uploading
 func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment) (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
 
-	cm.log.Debug("Contract renew check started")
-
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
 	cm.lock.RUnlock()
@@ -65,7 +63,6 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		sectorUploadBandwidthCost := host.UploadBandwidthPrice.MultUint64(contractset.SectorSize)
 		sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
-
 		remainingBalancePercentage := contract.ContractBalance.DivWithFloatResult(contract.TotalCost)
 
 		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {

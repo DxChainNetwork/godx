@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
-
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 )

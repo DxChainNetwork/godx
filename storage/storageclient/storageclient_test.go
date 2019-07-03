@@ -41,7 +41,7 @@ type StorageClientTester struct {
 }
 
 func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithID {
-	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 2, 3)
+	ec, err := erasurecode.New(erasurecode.ECTypeStandard, 1, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,12 +49,12 @@ func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithI
 	if err != nil {
 		t.Fatal(err)
 	}
-	entry, err := client.fileSystem.FileSet().NewDxFile(randomDxPath(), "", false, ec, ck, 1<<24, 0777)
+
+	mb := 9
+	filePath, fileSize, _ := generateFile(t, homeDir(), mb)
+
+	entry, err := client.fileSystem.FileSet().NewDxFile(randomDxPath(), storage.SysPath(filePath), false, ec, ck, uint64(fileSize), 777)
 	if err != nil {
-		t.Fatal(err)
-	}
-	entry.HostIDs()
-	if err := entry.SetLocalPath(storage.SysPath(entry.FilePath())); err != nil {
 		t.Fatal(err)
 	}
 	return entry

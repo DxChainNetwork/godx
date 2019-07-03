@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/merkletree"
@@ -111,19 +112,6 @@ func Root(b []byte) (h common.Hash) {
 // CachedTreeRoot will return the root of the cached tree
 func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
 	cmt := NewCachedTree(height)
-	for _, r := range roots {
-		cmt.Push(r)
-	}
-
-	return cmt.Root()
-}
-
-func CachedTreeRoot2(roots []common.Hash) (root common.Hash) {
-	log2SectorSize := uint64(0)
-	for 1<<log2SectorSize < (SectorSize / LeafSize) {
-		log2SectorSize++
-	}
-	cmt := NewCachedTree(log2SectorSize)
 	for _, r := range roots {
 		cmt.Push(r)
 	}
@@ -304,7 +292,14 @@ func VerifyDiffProof(rangeSet []merkletree.LeafRange, leavesCount uint64, hashPr
 	byteRootsVerify := hashSliceToByteSlices(rootsVerify)
 
 	hasher := merkletree.NewCachedLeafHasher(byteRootsVerify)
-	verified, err = merkletree.VerifyDiffProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, merkleRoot[:])
+
+	var m []byte
+	if reflect.DeepEqual(merkleRoot, common.Hash{}) {
+		m = nil
+	} else {
+		m = merkleRoot[:]
+	}
+	verified, err = merkletree.VerifyDiffProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, m)
 
 	return
 }

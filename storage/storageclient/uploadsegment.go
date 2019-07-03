@@ -149,7 +149,7 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 	d, err := sc.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
-		file:            segment.fileEntry.DxFile.Snapshot(),
+		file:            segment.fileEntry.Snapshot(),
 
 		latencyTarget: 200e3, // No need to rush latency on repair downloads.
 		length:        downloadLength,
@@ -225,7 +225,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	}
 
 	// Encode the physical sectors from content bytes of file
-	segmentBytes := make([]byte, uint64(len(segment.logicalSegmentData))*storage.SectorSize)
+	var segmentBytes []byte
 	for _, b := range segment.logicalSegmentData {
 		segmentBytes = append(segmentBytes, b...)
 	}
@@ -264,7 +264,6 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 			} else {
 				segment.physicalSegmentData[i] = cipherData
 			}
-
 		}
 	}
 
@@ -272,7 +271,6 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		sc.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 	}
-
 	sc.dispatchSegment(segment)
 }
 
@@ -345,10 +343,6 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	if segmentComplete && !released {
 		uc.released = true
 		sc.updateUploadSegmentStuckStatus(uc)
-		err := uc.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("file not closed after segment upload complete", "dxpath", uc.fileEntry.DxPath(), "err", err)
-		}
 		sc.uploadHeap.mu.Lock()
 		delete(sc.uploadHeap.pendingSegments, uc.id)
 		sc.uploadHeap.mu.Unlock()
@@ -383,10 +377,10 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 
 	go sc.fileSystem.InitAndUpdateDirMetadata(uc.fileEntry.DxPath())
 
-	err = uc.fileEntry.Close()
-	if err != nil {
-		return fmt.Errorf("unable to close dx file %v", uc.fileEntry.DxPath())
-	}
+	//err = uc.fileEntry.Close()
+	//if err != nil {
+	//	return fmt.Errorf("unable to close dx file %v", uc.fileEntry.DxPath())
+	//}
 	return nil
 }
 

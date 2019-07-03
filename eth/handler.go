@@ -356,7 +356,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	} else {
 
 		p.Log().Info("DX session connected", "info", p.Peer.Info())
-
 		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
 			rw.Init(p.version)
 		}
@@ -376,6 +375,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		if !p.Peer.Info().Network.StorageClient {
 			// host
 			for {
+				p.Log().Debug("inbound connection for loop", "remote client", p.Peer.Node().String())
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
 					if err != io.EOF {
 						p.Log().Error("Storage host handle session message failed", "err", err)

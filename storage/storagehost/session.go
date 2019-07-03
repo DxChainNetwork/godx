@@ -36,7 +36,8 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	}
 
 	if handler, ok := handlerMap[msg.Code]; ok {
-		return handler(h, s, msg)
+		err = handler(h, s, msg)
+		return err
 	} else {
 		h.log.Error("failed to get handler", "message", msg.Code)
 		return errors.New("failed to get handler")

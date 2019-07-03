@@ -6,7 +6,6 @@ package storageclient
 import (
 	"time"
 
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -45,7 +44,6 @@ func (w *worker) killUploading() {
 	contractID := storage.ContractID(w.contract.ID)
 	session, ok := w.client.sessionSet[contractID]
 	if session != nil && ok {
-		log.Error("killUploading: disconnect")
 		delete(w.client.sessionSet, contractID)
 		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
 			w.client.log.Error("can't close connection after uploading", "error", err)
@@ -66,6 +64,7 @@ func (w *worker) nextUploadSegment() (nextSegment *unfinishedUploadSegment, sect
 			w.mu.Unlock()
 			break
 		}
+
 		segment := w.pendingSegments[0]
 		w.pendingSegments = w.pendingSegments[1:]
 		w.mu.Unlock()
@@ -117,21 +116,15 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	session, err := w.checkSession()
 	defer func() {
-		session.ResetBusy()
+		if session != nil {
+			session.ResetBusy()
 
-		select {
-		case session.RevisionDone() <- struct{}{}:
-		default:
-		}
-
-		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
-			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
-				w.client.log.Error("close session failed", "err", err)
+			select {
+			case session.RevisionDone() <- struct{}{}:
+			default:
 			}
 		}
 	}()
-
 	if err != nil {
 		w.client.log.Error("check session failed", "err", err)
 		w.uploadFailed(uc, sectorIndex)
@@ -148,15 +141,13 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	w.mu.Lock()
 	w.uploadConsecutiveFailures = 0
 	w.mu.Unlock()
-
 	// Add sector to storage clientFile
 	err = uc.fileEntry.AddSector(w.contract.EnodeID, root, int(uc.index), int(sectorIndex))
 	if err != nil {
-		w.client.log.Info("Worker failed to add new sector in dxfile", "err", err)
+		w.client.log.Error("Worker failed to add new sector in dxfile", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return
 	}
-
 	// Upload is complete. Update the state of the Segment and the storage client's memory
 	// available to reflect the completed upload.
 	uc.mu.Lock()
@@ -197,12 +188,13 @@ func (w *worker) preProcessUploadSegment(uc *unfinishedUploadSegment) (*unfinish
 	_, candidateHost := uc.unusedHosts[w.contract.EnodeID.String()]
 	isComplete := uc.sectorsAllNeedNum <= uc.sectorsCompletedNum
 	isNeedUpload := uc.sectorsAllNeedNum > uc.sectorsCompletedNum+uc.sectorsUploadingNum
+
 	// If the segment does not need help from this worker, release the segment
 	if isComplete || !candidateHost || !uploadAbility || onCoolDown {
 		// This worker no longer needs to track this segment
 		uc.mu.Unlock()
 		w.dropSegment(uc)
-		w.client.log.Info("Worker dropping a segment while processing", "isComplete", isComplete, "candidateHost", !candidateHost, "uploadAbility", !uploadAbility, "onCoolDown", onCoolDown, "contractID", w.contract.ID.String())
+		w.client.log.Info("Worker will drop a segment due to it's status: complete/notCandidate/uploadInAbility/onCoolDown")
 		return nil, 0
 	}
 

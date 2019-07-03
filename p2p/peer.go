@@ -399,7 +399,6 @@ outer:
 			}
 		}
 	}
-
 	return result
 }
 

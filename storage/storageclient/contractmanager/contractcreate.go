@@ -6,11 +6,12 @@ package contractmanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/crypto"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
@@ -19,16 +20,11 @@ import (
 )
 
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
-
-	cm.log.Debug("Prepare to create the contract")
-
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
 	if err != nil {
 		return
 	}
-
-	cm.log.Debug("randomly acquired hosts from the storage host manager", "amount of storage hosts", len(randomHosts))
 
 	cm.lock.RLock()
 	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)
@@ -46,7 +42,6 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 
 		// start to form contract
 		formCost, contract, errFormContract := cm.createContract(host, contractFund, contractEndHeight, rentPayment)
-
 		// if contract formation failed, the error do not need to be returned, just try to form the
 		// contract with another storage host
 		if errFormContract != nil {
@@ -195,7 +190,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		err = fmt.Errorf("failed to calculate the client payouts: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	uc := types.UnlockConditions{
 		PaymentAddresses: []common.Address{
 			clientPaymentAddress,
@@ -203,7 +197,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		},
 		SignaturesRequired: 2,
 	}
-
 	// Create storage contract
 	storageContract := types.StorageContract{
 		FileSize:         0,
@@ -225,7 +218,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 	}
-
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
 		if err != nil {
@@ -242,9 +234,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
 	}
-
 	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
+		log.Error("setup connection", "err", err)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
 	defer cm.b.Disconnect(session, host.EnodeURL)
@@ -254,26 +246,22 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("contract sign by client failed", err)
 	}
-
 	// Send the ContractCreate request
 	req := storage.ContractCreateRequest{
 		StorageContract: storageContract,
 		Sign:            clientContractSign,
 		Renew:           false,
 	}
-
 	if err := session.SendStorageContractCreation(req); err != nil {
 		err = fmt.Errorf("sendStorageContractCreation failed: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	var hostSign []byte
 	msg, err := session.ReadMsg()
 	if err != nil {
 		err = fmt.Errorf("contract create read message error: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.NegotiationErrorMsg {
 		var negotiationErr error
@@ -285,7 +273,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		err = fmt.Errorf("failed to decode host signature: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
 	// Assemble init revision and sign it
@@ -301,52 +288,43 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		NewMissedProofOutputs: storageContract.MissedProofOutputs,
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
-
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
-
 	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
-
 	var hostRevisionSign []byte
 	msg, err = session.ReadMsg()
 	if err != nil {
 		err = fmt.Errorf("failed to read message after sned revision sign: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.NegotiationErrorMsg {
 		var negotiationErr error
 		msg.Decode(&negotiationErr)
 		return storage.ContractMetaData{}, negotiationErr
 	}
-
 	if err := msg.Decode(&hostRevisionSign); err != nil {
 		err = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
 	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
-
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
 		err = fmt.Errorf("failed to enocde storageContract: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
-
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
 	}
-
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
@@ -360,14 +338,12 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			RenewAbility:  true,
 		},
 	}
-
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
 		err = fmt.Errorf("failed to insert the contract after created: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-
 	return meta, nil
 
 }
