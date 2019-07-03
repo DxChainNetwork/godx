@@ -243,11 +243,13 @@ func (w *worker) checkSession() (*storage.Session, error) {
 func (w *worker) download(uds *unfinishedDownloadSegment) {
 	session, err := w.checkSession()
 	defer func() {
-		session.ResetBusy()
+		if session != nil {
+			session.ResetBusy()
 
-		select {
-		case session.RevisionDone() <- struct{}{}:
-		default:
+			select {
+			case session.RevisionDone() <- struct{}{}:
+			default:
+			}
 		}
 	}()
 
