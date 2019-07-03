@@ -703,6 +703,24 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
 	}
 
+	// check if there is another process is trying to add peer
+	peerChan := s.server.AcquirePeerAddingChan(hostNode.IP().String())
+	peerAddingTimeout := time.After(1 * time.Minute)
+
+LOOP:
+	for {
+		select {
+		// if the channel is not empty, meaning another routine is trying to add the peer
+		// wait util the peer adding is done
+		case peerChan <- struct{}{}:
+			break LOOP
+		case <-peerAddingTimeout:
+			return nil, errors.New("another process is trying to add the peer")
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
 	// First we disconnect the ethereum connection
 	s.server.RemovePeer(hostNode)
 
@@ -713,6 +731,12 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 	for {
 		select {
 		case <-timeout:
+			// if timeout, try to remove the peer channel as well
+			select {
+			case <-peerChan:
+			default:
+			}
+
 			s.server.RemoveStorageHost(hostNode.IP().String())
 			return nil, errors.New("remove original peer timeout")
 		default:
@@ -731,7 +755,7 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 		}
 	}
 
-	if _, err := s.netRPCService.AddStorageContractPeer(hostNode); err != nil {
+	if _, err := s.netRPCService.AddStorageContractPeer(hostNode, peerChan); err != nil {
 		return nil, err
 	}
 
@@ -740,8 +764,10 @@ func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session
 	for {
 		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
 		if conn != nil {
-			conn.SetBusy()
-			return conn, nil
+			if !conn.IsBusy() {
+				conn.SetBusy()
+				return conn, nil
+			}
 		}
 
 		select {
