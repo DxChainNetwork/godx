@@ -148,7 +148,7 @@ func (w *worker) killDownloading() {
 	if session != nil && ok {
 		log.Error("kill downloading, disconnected")
 		delete(w.client.sessionSet, contractID)
-		if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
 			w.client.log.Debug("can't close connection after downloading", "error", err)
 		}
 	}
@@ -213,7 +213,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 			return nil, errors.New("session is busy")
 		}
 
-		if session.IsClosed(){
+		if session.IsClosed() {
 			delete(w.client.sessionSet, contractID)
 		}
 	}
@@ -247,7 +247,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 		if session.LoadMaxUploadDownloadSectorNum() > MaxUploadDownloadSectorsNum {
 			delete(w.client.sessionSet, w.contract.ID)
-			if err := w.client.ethBackend.Disconnect(session, w.contract.EnodeID.String()); err != nil {
+			if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
 				w.client.log.Error("close session failed", "err", err)
 			}
 		}
