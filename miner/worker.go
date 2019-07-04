@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -35,7 +34,6 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/rlp"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -964,26 +962,23 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 		// iterator all the storage contract status in this account: StorageContractID --> status
 		w.current.state.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			if bytes.Equal(value.Bytes(), []byte{'0'}) {
+			if value == common.BytesToHash([]byte{'0'}) {
 				contractAddr := common.BytesToAddress(key[12:])
-				mpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("MissedProofOutputs")))
-				if reflect.DeepEqual(mpoHash, common.Hash{}) {
-					log.Warn("can not retrieve missed proof outputs when processing a block maintenance", "contract_addr", contractAddr.String())
-					return false
-				}
 
-				mpos := []types.DxcoinCharge{}
-				err := rlp.DecodeBytes(mpoHash.Bytes(), &mpos)
-				if err != nil {
-					log.Error("failed to decode missed proof output bytes", "error", err)
-					return false
-				}
+				// retrieve storage contract filed data
+				clientAddressHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
+				hostAddressHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
+				clientMpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
+				hostMpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
 
-				totalValue := new(big.Int).SetInt64(0)
-				for _, mpo := range mpos {
-					totalValue.Add(totalValue, mpo.Value)
-					w.current.state.AddBalance(mpo.Address, mpo.Value)
-				}
+				// return back the remain amount to client and host
+				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
+				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
+				w.current.state.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
+				w.current.state.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
+
+				// deduct the sum missed output from contract account
+				totalValue := new(big.Int).Add(clientMpo, hostMpo)
 				w.current.state.SubBalance(contractAddr, totalValue)
 			}
 			return true
