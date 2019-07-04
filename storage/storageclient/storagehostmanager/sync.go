@@ -22,7 +22,7 @@ func (shm *StorageHostManager) subscribeChainChangEvent() {
 	}
 	defer shm.tm.Done()
 
-	chainChanges := make(chan core.ChainChangeEvent, 1)
+	chainChanges := make(chan core.ChainChangeEvent, 100)
 	shm.b.SubscribeChainChangeEvent(chainChanges)
 
 	for {
