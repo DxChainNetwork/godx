@@ -445,11 +445,6 @@ func (h *StorageHost) resetFinancialMetrics() error {
 
 //Handling storage responsibilities in the task queue
 func (h *StorageHost) handleTaskItem(soid common.Hash) {
-	if err := h.tm.Add(); err != nil {
-		return
-	}
-	defer h.tm.Done()
-
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
 	defer func() {
@@ -541,7 +536,8 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 		}
 
 		//The storage host side gets the index of the data containing the segment
-		segmentIndex, err := h.storageProofSegment(so.OriginStorageContract)
+		scrv := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
+		segmentIndex, err := h.storageProofSegment(scrv)
 		if err != nil {
 			h.log.Warn("An error occurred while getting the storage certificate from the storage host", "err", err)
 			return
@@ -657,9 +653,9 @@ func merkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Has
 }
 
 //If it exists, return the index of the segment in the storage contract that needs to be proved
-func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, error) {
-	fcid := fc.RLPHash()
-	triggerHeight := fc.WindowStart - 1
+func (h *StorageHost) storageProofSegment(fc types.StorageContractRevision) (uint64, error) {
+	fcid := fc.ParentID
+	triggerHeight := fc.NewWindowStart - 1
 
 	block, errGetHeight := h.ethBackend.GetBlockByNumber(triggerHeight)
 	if errGetHeight != nil {
@@ -668,7 +664,7 @@ func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, err
 
 	triggerID := block.Hash()
 	seed := crypto.Keccak256Hash(triggerID[:], fcid[:])
-	numSegments := int64(calculateLeaves(fc.FileSize))
+	numSegments := int64(calculateLeaves(fc.NewFileSize))
 	seedInt := new(big.Int).SetBytes(seed[:])
 	index := seedInt.Mod(seedInt, big.NewInt(numSegments)).Uint64()
 
