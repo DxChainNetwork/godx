@@ -507,8 +507,10 @@ func (sc *StorageClient) doUpload() error {
 	// Find the lowest health file to queue for repairs.
 	dxFile, err := sc.fileSystem.SelectDxFileToFix()
 	if err != nil && err != filesystem.ErrNoRepairNeeded {
-		sc.log.Error("getting worst health dxfile failed", "error", err)
 		return err
+	}
+	if err == filesystem.ErrNoRepairNeeded {
+		return nil
 	}
 
 	// Refresh the worker pool and get the set of hosts that are currently
