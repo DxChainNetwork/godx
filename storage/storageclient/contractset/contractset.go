@@ -174,7 +174,6 @@ func (scs *StorageContractSet) Delete(c *Contract) (err error) {
 
 	// delete memory contract information
 	delete(scs.contracts, c.header.ID)
-	delete(scs.hostToContractID, c.header.EnodeID)
 
 	c.lock.Unlock()
 
@@ -282,10 +281,14 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 
 // get all contracts of client
 func (scs *StorageContractSet) Contracts() map[storage.ContractID]*Contract {
+	scs.lock.Lock()
+	defer scs.lock.Unlock()
 	return scs.contracts
 }
 
 // get the contractID by hostID
 func (scs *StorageContractSet) GetContractIDByHostID(hostID enode.ID) storage.ContractID {
+	scs.lock.Lock()
+	defer scs.lock.Unlock()
 	return scs.hostToContractID[hostID]
 }
