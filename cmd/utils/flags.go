@@ -1328,6 +1328,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.StorageHost = ctx.GlobalBool(StorageHostFlag.Name)
 	}
 
+	// If datadir is set, change ethash directory
+	if ctx.GlobalIsSet(DataDirFlag.Name) {
+		cfg.Ethash.DatasetDir = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "Ethash")
+	}
+
 	// Override any default configs for hard coded networks.
 	switch {
 	case ctx.GlobalBool(TestnetFlag.Name):
