@@ -163,26 +163,18 @@ var (
 	}
 
 	storageClientFlags = []cli.Flag{
-		utils.StorageClientMemoryFlag,
+		utils.StorageHostIDFlag,
+		utils.ContractIDFlag,
 		utils.PeriodFlag,
 		utils.HostsFlag,
 		utils.RenewFlag,
 		utils.FundFlag,
-		utils.ExpectedStorageFlag,
-		utils.ExpectedUploadFlag,
-		utils.ExpectedDownloadFlag,
-		utils.ExpectedRedundancyFlag,
-		utils.MaxUploadLimitFlag,
-		utils.MaxDownloadLimitFlag,
-		utils.IPViolationFlag,
-	}
-
-	storageHostManagerTestFlags = []cli.Flag{
-		utils.StorageHostManagerInsertFlag,
-	}
-
-	storageHostManagerFlags = []cli.Flag{
-		utils.StorageHostManagerEnodeFlag,
+		utils.PaymentAddressFlag,
+		utils.FileSourceFlag,
+		utils.FileDestinationFlag,
+		utils.FilePathFlag,
+		utils.PrevFilePathFlag,
+		utils.NewFilePathFlag,
 	}
 )
 
@@ -220,11 +212,6 @@ func init() {
 		dumpConfigCommand,
 		// See storageclientcmd.go
 		storageClientCommand,
-
-		// see shmtest.go
-		hostManagerTestCommand,
-		// see storagehostmanagercmd.go
-		hostManagerCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -234,8 +221,6 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 	app.Flags = append(app.Flags, storageClientFlags...)
-	app.Flags = append(app.Flags, storageHostManagerFlags...)
-	app.Flags = append(app.Flags, storageHostManagerTestFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""

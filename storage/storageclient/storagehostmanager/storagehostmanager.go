@@ -303,6 +303,30 @@ func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail s
 	return
 }
 
+// AllHosts will return all available storage hosts
+func (shm *StorageHostManager) AllHosts() []storage.HostInfo {
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+	return shm.storageHostTree.All()
+}
+
+// StorageHostRanks will return the storage host rankings based on their evaluations. The
+// higher the evaluation is, the higher order it will be placed
+func (shm *StorageHostManager) StorageHostRanks() (rankings []StorageHostRank) {
+	allHosts := shm.AllHosts()
+	// based on the host information, calculate the evaluation
+	for _, host := range allHosts {
+		eval := shm.evalFunc(host)
+
+		rankings = append(rankings, StorageHostRank{
+			EvaluationDetail: eval.EvaluationDetail(eval.Evaluation(), false, false),
+			EnodeID:          host.EnodeID.String(),
+		})
+	}
+
+	return
+}
+
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 	// insert the host information into the storage host tree
