@@ -373,3 +373,24 @@ func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
 }
+
+func (w *worker) updateWorkerContractID(contractID storage.ContractID) {
+	cm := w.client.contractManager
+	if _, exist := cm.RetrieveActiveContract(contractID); exist {
+		return
+	}
+
+	if contractID, ok := cm.RetrieveContractIDByHostID(w.hostID); ok {
+		if contract, exist := cm.RetrieveActiveContract(contractID); exist {
+			w.contract = contract
+		}
+
+		hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+
+	} else {
+		delete(w.client.sessionSet, contractID)
+		delete(w.client.workerPool, contractID)
+		close(w.killChan)
+	}
+
+}
