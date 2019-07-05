@@ -256,10 +256,6 @@ func TestStorageContractSet_Acquire(t *testing.T) {
 		t.Fatalf("delete failed, the contract should not be inside the contract list")
 	}
 
-	if _, exists := scs.hostToContractID[ch.EnodeID]; exists {
-		t.Fatalf("delete failed, the hostContract mapping should not exist")
-	}
-
 	if _, err := scs.db.FetchContractHeader(ch.ID); err == nil {
 		t.Fatalf("delete failed, the contract header should not be saved in the db")
 	}
