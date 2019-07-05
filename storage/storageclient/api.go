@@ -80,7 +80,7 @@ func (api *PublicStorageClientAPI) Contract(contractID string) (detail ContractM
 	// convert the string into contractID format
 	var convertContractID storage.ContractID
 	if convertContractID, err = storage.StringToContractID(contractID); err != nil {
-		err = fmt.Errorf("the contract id provided is not valid, it must be in type of string")
+		err = fmt.Errorf("the contract id provided is invalid: %s", err.Error())
 		return
 	}
 

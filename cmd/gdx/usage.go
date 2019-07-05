@@ -243,6 +243,30 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "STORAGE CLIENT",
+		Flags: []cli.Flag{
+			utils.StorageClientFlag,
+			utils.StorageHostIDFlag,
+			utils.ContractIDFlag,
+			utils.PeriodFlag,
+			utils.HostsFlag,
+			utils.RenewFlag,
+			utils.FundFlag,
+			utils.PaymentAddressFlag,
+			utils.FileSourceFlag,
+			utils.FileDestinationFlag,
+			utils.FilePathFlag,
+			utils.PrevFilePathFlag,
+			utils.NewFilePathFlag,
+		},
+	},
+	{
+		Name: "STORAGE HOST",
+		Flags: []cli.Flag{
+			utils.StorageHostFlag,
+		},
+	},
+	{
 		Name: "MISC",
 	},
 }

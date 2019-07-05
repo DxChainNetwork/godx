@@ -243,17 +243,24 @@ func getConfig(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the storage client configuration: %s", err.Error())
 	}
 
-	fmt.Println("Fund: ", config.RentPayment.Fund)
-	fmt.Println("Period: ", config.RentPayment.Period)
-	fmt.Println("StorageHosts: ", config.RentPayment.StorageHosts)
-	fmt.Println("Renew: ", config.RentPayment.RenewWindow)
-	fmt.Println("ExpectedStorage: ", config.RentPayment.ExpectedStorage)
-	fmt.Println("ExpectedUpload: ", config.RentPayment.ExpectedUpload)
-	fmt.Println("ExpectedDownload: ", config.RentPayment.ExpectedDownload)
-	fmt.Println("ExpectedRedundancy: ", config.RentPayment.ExpectedRedundancy)
-	fmt.Println("IP Violation Check Status: ", config.EnableIPViolation)
-	fmt.Println("MaxUploadSpeed: ", config.MaxUploadSpeed)
-	fmt.Println("MaxDownloadSpeed: ", config.MaxDownloadSpeed)
+	fmt.Printf(`
+
+Client Configuration:
+	Fund:                           %s
+	Period:                         %s
+	HostsNeeded:                    %s
+	Renew:                          %s
+	Redundancy:                     %s
+	ExpectedStorage:                %s
+	ExpectedUpload:                 %s
+	ExpecedDownload:                %s
+	Max Upload Speed:               %s
+	Max Download Speed:             %s
+	IP Violation Check Status:      %s
+
+`, config.RentPayment.Fund, config.RentPayment.Period, config.RentPayment.StorageHosts, config.RentPayment.RenewWindow,
+		config.RentPayment.ExpectedRedundancy, config.RentPayment.ExpectedStorage, config.RentPayment.ExpectedUpload,
+		config.RentPayment.ExpectedDownload, config.MaxUploadSpeed, config.MaxDownloadSpeed, config.EnableIPViolation)
 
 	return nil
 }
@@ -277,9 +284,11 @@ func getHosts(ctx *cli.Context) error {
 		return nil
 	}
 
+	fmt.Println("Number of storage hosts: ", len(allStorageHosts))
+
 	table := hostInfoTable(allStorageHosts)
 	table.Render()
-
+	fmt.Println()
 	return nil
 }
 
@@ -309,17 +318,23 @@ func getHostInfo(ctx *cli.Context) error {
 		return nil
 	}
 
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"ID", "IP", "AcceptingStorageContracts", "RemainingStorage",
-		"Deposit", "Contract Price", "DownloadBandwidthPrice", "Storage Price", "UploadBandwidthPrice",
-		"SectorAccessPrice"})
-	dataEntry := []string{info.EnodeID.String(), info.IP, strconv.FormatBool(info.AcceptingContracts),
-		strconv.FormatUint(info.RemainingStorage, 10), info.Deposit.String(), info.ContractPrice.String(), info.DownloadBandwidthPrice.String(),
-		info.StoragePrice.String(), info.UploadBandwidthPrice.String(), info.SectorAccessPrice.String()}
+	fmt.Printf(`
 
-	table.Append(dataEntry)
-	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
-	table.Render()
+Host Information:
+	HostID:                        %s
+	IP:                            %s
+	AcceptingStorageContracts:     %t
+	RemainingStorage:              %v bytes
+	Deposit:                       %v wei
+	Contract Price:                %v wei
+	Storage Price:                 %v wei
+	DownloadBandwidth Price:       %v wei
+	UploadBandwidth Price:         %v wei
+	Sector Access Price:           %v wei
+	
+`, info.EnodeID.String(), info.IP, info.AcceptingContracts, info.RemainingStorage, info.Deposit, info.ContractPrice,
+		info.StoragePrice, info.DownloadBandwidthPrice, info.UploadBandwidthPrice, info.SectorAccessPrice)
+
 	return nil
 }
 
@@ -342,7 +357,7 @@ func getRanking(ctx *cli.Context) error {
 
 	table := hostRankingTable(rankings)
 	table.Render()
-
+	fmt.Println()
 	return nil
 }
 
@@ -374,7 +389,7 @@ func getContracts(ctx *cli.Context) error {
 
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.Render()
-
+	fmt.Println()
 	return nil
 }
 
@@ -405,6 +420,7 @@ func getFiles(ctx *cli.Context) error {
 
 	table.SetBorders(tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 	table.Render()
+	fmt.Println()
 
 	return nil
 }
@@ -419,7 +435,7 @@ func getContract(ctx *cli.Context) error {
 	if !ctx.GlobalIsSet(utils.ContractIDFlag.Name) {
 		utils.Fatalf("the --contractid flag must be used to specify which contract information want to be retrieved")
 	} else {
-		id = ctx.GlobalString(utils.StorageHostIDFlag.Name)
+		id = ctx.GlobalString(utils.ContractIDFlag.Name)
 	}
 
 	var contract storageclient.ContractMetaDataAPIDisplay
@@ -428,21 +444,43 @@ func getContract(ctx *cli.Context) error {
 		utils.Fatalf("failed to retrieve detailed contract information: %s", err.Error())
 	}
 
-	fmt.Println("ContractID", contract.ID)
-	fmt.Println("HostID", contract.EnodeID)
-	fmt.Println("Balance", contract.ContractBalance)
-	fmt.Println("UploadCost", contract.UploadCost)
-	fmt.Println("DownloadCost", contract.DownloadCost)
-	fmt.Println("StorageCost", contract.StorageCost)
-	fmt.Println("GasCost", contract.GasCost)
-	fmt.Println("ContractCost", contract.ContractFee)
-	fmt.Println("TotalCost", contract.TotalCost)
-	fmt.Println("StartBlock", contract.StartHeight)
-	fmt.Println("EndBlock", contract.EndHeight)
-	fmt.Println("UploadAbility", contract.UploadAbility)
-	fmt.Println("RenewAbility", contract.RenewAbility)
-	fmt.Println("Canceled", contract.Canceled)
-	fmt.Printf("LatestContractRevision: %+v \n", contract.LatestContractRevision)
+	fmt.Printf(`
+
+Contract Information:
+	ContractID:           %s
+	HostID:               %v
+	Balance:              %s
+	UploadCost:           %s
+	DownloadCost:         %s
+	StorageCost:          %s
+	GasCost:              %s
+	ContractCost:         %s
+	TotalCost:            %s
+	ContractStart:        %s
+	ContractEnd:          %s
+	UploadAbility:        %s
+	RenewAbility:         %s
+	Canceled:             %s
+
+Latest ContractRevision Information:
+	ParentID:                    %v
+	UnlockConditions:            %v
+	NewRevisionNumber:           %v
+	NewFileSize:                 %v
+	NewFileMerkleRoot:           %v
+	NewWindowStart:              %v
+	NewWindowEnd:                %v
+	NewValidProofOutputs:        %v
+	NewMissedProofOutputs        %v
+
+`, contract.ID, contract.EnodeID, contract.ContractBalance, contract.UploadCost, contract.DownloadCost,
+		contract.StorageCost, contract.GasCost, contract.ContractFee, contract.TotalCost, contract.StartHeight,
+		contract.EndHeight, contract.UploadAbility, contract.RenewAbility, contract.Canceled,
+		contract.LatestContractRevision.ParentID, contract.LatestContractRevision.UnlockConditions,
+		contract.LatestContractRevision.NewRevisionNumber, contract.LatestContractRevision.NewFileSize,
+		contract.LatestContractRevision.NewFileMerkleRoot, contract.LatestContractRevision.NewWindowStart,
+		contract.LatestContractRevision.NewWindowEnd, contract.LatestContractRevision.NewValidProofOutputs,
+		contract.LatestContractRevision.NewMissedProofOutputs)
 
 	return nil
 }
@@ -459,7 +497,7 @@ func getPaymentAddress(ctx *cli.Context) error {
 		utils.Fatalf("failed to retrieve the payment address used for storage service: %s", err.Error())
 	}
 
-	fmt.Println("Payment Address:", address)
+	fmt.Println("Payment Address:", address.String())
 	return nil
 }
 
@@ -600,13 +638,19 @@ func getFile(ctx *cli.Context) error {
 		utils.Fatalf("%s", err.Error())
 	}
 
-	fmt.Println("DxPath", fileInfo.DxPath)
-	fmt.Println("Status", fileInfo.Status)
-	fmt.Println("SourcePath", fileInfo.SourcePath)
-	fmt.Println("FileSize", fileInfo.FileSize)
-	fmt.Println("Redundancy", fileInfo.Redundancy)
-	fmt.Println("StoredOnDisk", fileInfo.StoredOnDisk)
-	fmt.Println("UploadProgress", fileInfo.UploadProgress)
+	fmt.Printf(`
+
+File Information:
+	DxPath:            %s
+ 	Status:            %s
+	SourcePath:        %s
+	FileSize:          %v
+	Redundancy:        %v    
+	StorageOnDisk:     %v
+	UploadProgress:    %v
+
+`, fileInfo.DxPath, fileInfo.Status, fileInfo.SourcePath, fileInfo.FileSize, fileInfo.Redundancy,
+		fileInfo.StoredOnDisk, fileInfo.UploadProgress)
 
 	return nil
 }
@@ -725,7 +769,7 @@ func hostRankingTable(rankings []storagehostmanager.StorageHostRank) *tablewrite
 }
 
 func floatToString(val float64) string {
-	return strconv.FormatFloat(val, 'g', 1, 64)
+	return fmt.Sprintf("%v", val)
 }
 
 func boolToString(val bool) string {
