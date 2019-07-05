@@ -32,16 +32,13 @@ func (h *StorageHost) subscribeChainChangEvent() {
 //hostBlockHeightChange handle when a new block is generated or a block is rolled back
 func (h *StorageHost) hostBlockHeightChange(cce core.ChainChangeEvent) {
 
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	//Handling rolled back blocks
 	h.revertedBlockHashesStorageResponsibility(cce.RevertedBlockHashes)
 
 	//Block executing the main chain
 	taskItems := h.applyBlockHashesStorageResponsibility(cce.AppliedBlockHashes)
 	for i := range taskItems {
-		go h.handleTaskItem(taskItems[i])
+		h.handleTaskItem(taskItems[i])
 	}
 
 	err := h.syncConfig()
@@ -52,6 +49,10 @@ func (h *StorageHost) hostBlockHeightChange(cce core.ChainChangeEvent) {
 
 //applyBlockHashesStorageResponsibility block executing the main chain
 func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash) []common.Hash {
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	var taskItems []common.Hash
 	for _, blockApply := range blocks {
 		//apply contract transaction
@@ -140,6 +141,10 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 
 //revertedBlockHashesStorageResponsibility handling rolled back blocks
 func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.Hash) {
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	for _, blockReverted := range blocks {
 		//Rollback contract transaction
 		ContractCreateIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.getAllStorageContractIDsWithBlockHash(blockReverted)

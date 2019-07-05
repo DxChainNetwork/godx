@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -124,9 +125,9 @@ func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string
 	}
 	err := api.sc.DownloadSync(p)
 	if err != nil {
-		return "", err
+		return "【ERROR】failed to download", err
 	}
-	return "file downloaded successfully", nil
+	return "File downloaded successfully", nil
 }
 
 // Upload their local files to hosts made contract with

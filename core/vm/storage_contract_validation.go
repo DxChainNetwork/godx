@@ -7,6 +7,7 @@ package vm
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"hash"
@@ -18,10 +19,10 @@ import (
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"golang.org/x/crypto/sha3"
 )
 
 var (
@@ -40,10 +41,6 @@ var (
 	errNoStorageContractType                   = errors.New("no this storage contract type")
 	errInvalidStorageProof                     = errors.New("invalid storage proof")
 	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
-)
-
-const (
-	SegmentSize = 64
 )
 
 // check whether a new StorageContract is valid
@@ -333,16 +330,16 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 
 	leaves := CalculateLeaves(fileSize)
 
-	segmentLen := uint64(SegmentSize)
+	segmentLen := uint64(merkle.LeafSize)
 
 	// if this segment chosen is the final segment, it should only be as
 	// long as necessary to complete the file size.
 	if segmentIndex == leaves-1 {
-		segmentLen = fileSize % SegmentSize
+		segmentLen = fileSize % merkle.LeafSize
 	}
 
 	if segmentLen == 0 {
-		segmentLen = uint64(SegmentSize)
+		segmentLen = uint64(merkle.LeafSize)
 	}
 
 	verified := VerifySegment(
@@ -397,8 +394,8 @@ func storageProofSegment(state StateDB, windowStart, fileSize uint64, scID commo
 
 // calculate the num of leaves formed by the given file
 func CalculateLeaves(fileSize uint64) uint64 {
-	numSegments := fileSize / SegmentSize
-	if fileSize == 0 || fileSize%SegmentSize != 0 {
+	numSegments := fileSize / merkle.LeafSize
+	if fileSize == 0 || fileSize%merkle.LeafSize != 0 {
 		numSegments++
 	}
 	return numSegments
@@ -406,7 +403,7 @@ func CalculateLeaves(fileSize uint64) uint64 {
 
 // verify merkle root of given segment
 func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := sha256.New()
 
 	if merkleRoot == nil {
 		return false
@@ -422,7 +419,7 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 	}
 
 	// proofSet[0] is the segment of the file
-	sum := HashSum(hasher, proofSet[height])
+	sum := leafHash(hasher, proofSet[height])
 	height++
 
 	// While the current subtree (of height 'height') is complete, determine
@@ -453,9 +450,9 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 			return false
 		}
 		if proofIndex-subTreeStartIndex < 1<<uint(height-1) {
-			sum = HashSum(hasher, sum, proofSet[height])
+			sum = nodeHash(hasher, sum, proofSet[height])
 		} else {
-			sum = HashSum(hasher, proofSet[height], sum)
+			sum = nodeHash(hasher, proofSet[height], sum)
 		}
 		height++
 	}
@@ -467,13 +464,13 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 		if len(proofSet) <= height {
 			return false
 		}
-		sum = HashSum(hasher, sum, proofSet[height])
+		sum = nodeHash(hasher, sum, proofSet[height])
 		height++
 	}
 
 	// All remaining elements in the proof set will belong to a left sibling.
 	for height < len(proofSet) {
-		sum = HashSum(hasher, proofSet[height], sum)
+		sum = nodeHash(hasher, proofSet[height], sum)
 		height++
 	}
 
@@ -492,4 +489,12 @@ func HashSum(h hash.Hash, data ...[]byte) []byte {
 		_, _ = h.Write(d)
 	}
 	return h.Sum(nil)
+}
+
+func leafHash(h hash.Hash, data []byte) []byte {
+	return HashSum(h, []byte{0x00}, data)
+}
+
+func nodeHash(h hash.Hash, a, b []byte) []byte {
+	return HashSum(h, []byte{0x01}, a, b)
 }
