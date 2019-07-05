@@ -390,22 +390,23 @@ func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 }
 
 func (w *worker) updateWorkerContractID(contractID storage.ContractID) (*storage.HostInfo, error) {
+	hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+	if !ok {
+		return nil, ErrUnableRetrieveHostInfo
+	}
+
 	cm := w.client.contractManager
 	if _, exist := cm.RetrieveActiveContract(contractID); exist {
-		return nil, nil
+		return &hostInfo, nil
 	}
 
 	scs := cm.GetStorageContractSet()
 	renewContractID := scs.GetContractIDByHostID(w.hostID)
 	if contract, exist := cm.RetrieveActiveContract(renewContractID); exist {
 		w.contract = contract
-	} else {
-		return nil, ErrNoContractsWithHost
-	}
-
-	if hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID); ok {
+		w.hostID = contract.EnodeID
 		return &hostInfo, nil
 	} else {
-		return nil, ErrUnableRetrieveHostInfo
+		return nil, ErrNoContractsWithHost
 	}
 }
