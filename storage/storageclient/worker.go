@@ -21,6 +21,9 @@ var (
 
 	// when we can't get host info, we will terminate the worker
 	ErrUnableRetrieveHostInfo = errors.New("can't retrieve host info")
+
+	// when client and host is renewing contract, we could wait for little time
+	ErrContractRenewing = errors.New("client and host is renewing contract")
 )
 
 // Listen for a work on a certain host.
@@ -120,6 +123,10 @@ func (w *worker) workLoop() {
 			if err == ErrNoContractsWithHost || err == ErrUnableRetrieveHostInfo {
 				break
 			}
+
+			if err == ErrContractRenewing {
+				<-time.After(100 * time.Millisecond)
+			}
 			continue
 		}
 
@@ -128,6 +135,11 @@ func (w *worker) workLoop() {
 			err := w.upload(segment, sectorIndex)
 			if err == ErrNoContractsWithHost || err == ErrUnableRetrieveHostInfo {
 				break
+			}
+
+			// the client is renewing, we wait for some millisecond
+			if err == ErrContractRenewing {
+				<-time.After(100 * time.Millisecond)
 			}
 			continue
 		}
@@ -216,7 +228,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
 		w.client.log.Warn("renew contract is doing, can't upload/download")
-		return nil, errors.New("contract is renewing")
+		return nil, ErrContractRenewing
 	}
 
 	hostInfo, err := w.updateWorkerContractID(contractID)
