@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
@@ -51,7 +52,7 @@ func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
 // download remote file by sync mode
 //
 // NOTE: RPC not support async download, because it is stateless, should block until download task done.
-func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string) error {
+func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string) (string, error) {
 	p := storage.DownloadParameters{
 		// where to write the downloaded files
 		WriteToLocalPath: localPath,
@@ -61,9 +62,9 @@ func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string
 	}
 	err := api.sc.DownloadSync(p)
 	if err != nil {
-		return err
+		return "【ERROR】failed to download", err
 	}
-	return nil
+	return "download success", nil
 }
 
 // Upload their local files to hosts made contract with

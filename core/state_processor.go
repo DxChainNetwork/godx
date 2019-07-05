@@ -17,9 +17,7 @@
 package core
 
 import (
-	"bytes"
 	"math/big"
-	"reflect"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -29,9 +27,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/rlp"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -91,32 +87,28 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		// iterator all the storage contract status in this account: StorageContractID --> status
 		statedb.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			if bytes.Equal(value.Bytes(), []byte{'0'}) {
+			if value == common.BytesToHash([]byte{'0'}) {
 				contractAddr := common.BytesToAddress(key[12:])
-				mpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("MissedProofOutputs")))
-				if reflect.DeepEqual(mpoHash, common.Hash{}) {
-					log.Warn("can not retrieve missed proof outputs when processing a block maintenance", "contract_addr", contractAddr.String())
-					return false
-				}
 
-				mpos := []types.DxcoinCharge{}
-				err := rlp.DecodeBytes(mpoHash.Bytes(), &mpos)
-				if err != nil {
-					log.Error("failed to decode missed proof output bytes", "error", err)
-					return false
-				}
+				// retrieve storage contract filed data
+				clientAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
+				hostAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
+				clientMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
+				hostMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
 
-				totalValue := new(big.Int).SetInt64(0)
-				for _, mpo := range mpos {
-					totalValue.Add(totalValue, mpo.Value)
-					statedb.AddBalance(mpo.Address, mpo.Value)
-				}
+				// return back the remain amount to client and host
+				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
+				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
+				statedb.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
+				statedb.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
+
+				// deduct the sum missed output from contract account
+				totalValue := new(big.Int).Add(clientMpo, hostMpo)
 				statedb.SubBalance(contractAddr, totalValue)
 			}
 			return true
 		})
 	}
-
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
