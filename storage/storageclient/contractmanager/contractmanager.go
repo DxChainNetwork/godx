@@ -233,13 +233,3 @@ func (cm *ContractManager) HostHealthMap() (infoTable storage.HostHealthInfoTabl
 
 	return
 }
-
-func (cm *ContractManager) RetrieveContractIDByHostID(hostID enode.ID) (storage.ContractID, bool){
-	cm.lock.RLock()
-	defer cm.lock.RUnlock()
-	if contractID, ok := cm.hostToContract[hostID]; ok {
-		return contractID, true
-	} else {
-		return storage.ContractID{}, false
-	}
-}

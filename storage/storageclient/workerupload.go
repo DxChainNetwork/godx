@@ -113,7 +113,7 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 }
 
 // upload will perform some upload work
-func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
+func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error{
 	session, err := w.checkSession()
 	defer func() {
 		if session != nil {
@@ -128,7 +128,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	if err != nil {
 		w.client.log.Error("check session failed", "err", err)
 		w.uploadFailed(uc, sectorIndex)
-		return
+		return err
 	}
 
 	// upload segment to host
@@ -136,7 +136,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	if err != nil {
 		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)
-		return
+		return err
 	}
 	w.mu.Lock()
 	w.uploadConsecutiveFailures = 0
@@ -146,7 +146,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	if err != nil {
 		w.client.log.Error("Worker failed to add new sector in dxfile", "err", err)
 		w.uploadFailed(uc, sectorIndex)
-		return
+		return err
 	}
 	// Upload is complete. Update the state of the Segment and the storage client's memory
 	// available to reflect the completed upload.
@@ -159,6 +159,8 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) {
 	uc.mu.Unlock()
 	w.client.memoryManager.Return(uint64(releaseSize))
 	w.client.cleanupUploadSegment(uc)
+
+	return nil
 }
 
 // onUploadCoolDown returns true if the worker is on coolDown from failed uploads
