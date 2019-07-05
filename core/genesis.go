@@ -314,9 +314,9 @@ func DefaultGenesisBlock() *Genesis {
 		// TODO: Replace this account with the known account
 		Alloc: map[common.Address]GenesisAccount{
 			common.BytesToAddress([]byte{6, 6, 6}):                            {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
-			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 20), big.NewInt(1))},
-			common.HexToAddress("0x4c7eb4cb3ef21b7db6edcd892cb9b243780ec08a"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 20), big.NewInt(1))},
-			common.HexToAddress("0x280206ba85137b2ce5398ba1141242771f6f0de2"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 20), big.NewInt(1))},
+			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Lsh(big.NewInt(10), 20)},
+			common.HexToAddress("0x4c7eb4cb3ef21b7db6edcd892cb9b243780ec08a"): {Balance: new(big.Int).Lsh(big.NewInt(10), 20)},
+			common.HexToAddress("0x280206ba85137b2ce5398ba1141242771f6f0de2"): {Balance: new(big.Int).Lsh(big.NewInt(10), 20)},
 		},
 	}
 }
