@@ -40,7 +40,7 @@ and etc.`,
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getHostFolders),
 			Description: `
-					gdx shost folders
+			gdx shost folders
 
 will display the detailed information of the folders created by the storage host for
 storing data uploaded by the storage client, including the folder's absolute path,
@@ -53,7 +53,7 @@ total amount of data it can hold, and how many data it received in term of secto
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getFinance),
 			Description: `
-					gdx shost finance
+			gdx shost finance
 
 will display the detailed financial metrics for hosting the storage service, including both revenue, lost, and
 potential revenue.`,
@@ -65,7 +65,7 @@ potential revenue.`,
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(makeAnnounce),
 			Description: `
-					gdx shost announce
+			gdx shost announce
 
 will announce the node as a storage host node. By announcing a node as a storage host, storage client
 node will automatically communicate with it, get its settings, and to determine if it is the best fit.
@@ -80,7 +80,7 @@ If the host node has higher evaluation, client will automatically create contrac
 			Action:    utils.MigrateFlags(addFolder),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost addfolder --folderpath [argument] --size [argument]
+			gdx shost addfolder --folderpath [argument] --size [argument]
 
 will allocate disk space for saving data uploaded by storage client. Physical folder will be created
 under the file path specified using --folderpath. The size must be specified using --size as well.
@@ -96,7 +96,7 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 			Action:    utils.MigrateFlags(resizeFolder),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost resize
+			gdx shost resize
 
 will resize the disk space allocated for saving data uploaded by the storage client. The usage of this
 command is similar to addfolder, where folder size and folder path must be explicitly specified using the 
@@ -110,7 +110,7 @@ flag --folderpath and --size`,
 			Action:    utils.MigrateFlags(deleteFolder),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost deletefolder --folderpath [argument]
+			gdx shost deletefolder --folderpath [argument]
 
 will free up the disk space used for saving data uploaded by the storage client. The folder path must be
 specified using --folderpath.`,
@@ -123,7 +123,7 @@ specified using --folderpath.`,
 			Action:    utils.MigrateFlags(setDuration),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setduration --duration [argument]
+			gdx shost setduration --duration [argument]
 
 will change the storage host configuration. The duration field specified the max time length the storage
 host is willing to save the files for the storage client. The --duration flag must be used to specify
@@ -136,7 +136,7 @@ the time length`,
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getHostPaymentAddress),
 			Description: `
-					gdx shost paymentaddr
+			gdx shost paymentaddr
 
 will display the account address used for the storage service. Unless user set it explicitly, the payment
 address will always be the first account address`,
@@ -151,7 +151,7 @@ address will always be the first account address`,
 				utils.PaymentAddressFlag,
 			},
 			Description: `
-					gdx shost setpaymentaddr --address [parameter]
+			gdx shost setpaymentaddr --address [parameter]
 
 is used to register the account address to be used for the storage services. Deposit and money spent for host
 announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
@@ -165,7 +165,7 @@ client will be saved into this address as well.`,
 			Action:    utils.MigrateFlags(setDeposit),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost deposit --deposit [argument]
+			gdx shost deposit --deposit [argument]
 
 is used to specify the deposit the host is willing to put for the storage service. If the host failed to
 prove that it has the client's file at the end, a amount of money will be deducted from the deposit. Otherwise,
@@ -181,7 +181,7 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 			Action:    utils.MigrateFlags(setContractPrice),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setcontractprice --contractprice [argument]
+			gdx shost setcontractprice --contractprice [argument]
 
 is used to specify the money that storage client must be paid for singing up the contract with the storage
 host. Note, the --contractprice flag must be used to specify the money. 
@@ -196,7 +196,7 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 			Action:    utils.MigrateFlags(setDownloadBandwidthPrice),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setdownloadbandwidthprice --downloadprice [argument]
+			gdx shost setdownloadbandwidthprice --downloadprice [argument]
 
 is used to specify the download bandwidth price the client must be paid for download the data from the host.
 It must be used along with the downloadprice flag to specify the price
@@ -211,7 +211,7 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 			Action:    utils.MigrateFlags(setUploadBandwidthPrice),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setdownloadbandwidthprice --uploadprice [argument]
+			gdx shost setdownloadbandwidthprice --uploadprice [argument]
 
 is used to specify the upload bandwidth price the client must be paid for upload the data to the host.
 It must be used along with the uploadprice flag to specify the price
@@ -226,7 +226,7 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 			Action:    utils.MigrateFlags(setSectorPrice),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setsectorprice --sectorprice [argument]
+			gdx shost setsectorprice --sectorprice [argument]
 
 is used to specify the sector price that used must be paid. Data is uploaded in terms of sectors, and for
 each sector the user upload or download, this price must be paid.
@@ -241,23 +241,45 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 			Action:    utils.MigrateFlags(setStoragePrice),
 			Flags:     storageHostFlags,
 			Description: `
-					gdx shost setstorageprice --storageprice [argument]
+			gdx shost setstorageprice --storageprice [argument]
 
 is used to specify the storage price that the client must be paid, it is measured in terms of /byte/block.
 
 Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
 		},
 
-		//{
-		//	Name:      "folders",
-		//	Usage:     "",
-		//	ArgsUsage: "",
-		//	Action:    utils.MigrateFlags(),
-		//	Description: `
-		//			gdx shost folders
-		//
-		//`,
-		//},
+		{
+			Name:      "setbudget",
+			Usage:     "Defines the maximum amount of money that the storage host can allocate as deposit",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(setBudget),
+			Flags:     storageHostFlags,
+			Description: `
+			gdx shost setbudget --budget [argument]
+
+is used to specify the maximum amount of money that the storage host can allocate as deposit. The host will loose
+access to this amount of money within the contract period. Note: the --budget flag must be used to specify
+the budget.
+
+Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
+		},
+
+		{
+			Name:      "setmaxdeposit",
+			Usage:     "Specifies the max amount of deposit the host can put into a single contract",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(setMaxDeposit),
+			Flags:     storageHostFlags,
+			Description: `
+			gdx shost setmaxdeposit --maxdeposit [argument]
+
+is used to specify the max amount of deposit the host can put into a single contract. The difference between
+this parameter and the budget parameter is that the budget parameter defines the max amount of money can
+be used as deposit for all contracts that storage host signed. The --maxdeposit flag must be used to specify
+the max deposit. 
+
+Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
+		},
 	},
 }
 
@@ -582,7 +604,7 @@ func setDownloadBandwidthPrice(ctx *cli.Context) error {
 		utils.Fatalf("failed to set the download bandwidth price: %s", err.Error())
 	}
 
-	fmt.Printf("%s /n/n", resp)
+	fmt.Printf("%s \n\n", resp)
 	return nil
 }
 
@@ -604,7 +626,7 @@ func setUploadBandwidthPrice(ctx *cli.Context) error {
 		utils.Fatalf("failed to set the upload bandwidth price: %s", err.Error())
 	}
 
-	fmt.Printf("%s /n/n", resp)
+	fmt.Printf("%s \n\n", resp)
 	return nil
 }
 
@@ -626,7 +648,7 @@ func setSectorPrice(ctx *cli.Context) error {
 		utils.Fatalf("failed to set the sector price: %s", err.Error())
 	}
 
-	fmt.Printf("%s /n/n", resp)
+	fmt.Printf("%s \n\n", resp)
 	return nil
 }
 
@@ -648,28 +670,50 @@ func setStoragePrice(ctx *cli.Context) error {
 		utils.Fatalf("failed to set the storage price: %s", err.Error())
 	}
 
-	fmt.Printf("%s /n/n", resp)
+	fmt.Printf("%s \n\n", resp)
 	return nil
 }
 
-//func setCHANGED(ctx *cli.Context) error {
-//	client, err := gdxAttach(ctx)
-//	if err != nil {
-//		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-//	}
-//
-//	var CHANGED string
-//	if !ctx.GlobalIsSet(utils.CHANGED.Name) {
-//		utils.Fatalf("the --CHANGED flag must be used to specify ")
-//	} else {
-//		CHANGED = ctx.GlobalString(utils.CHANGED.Name)
-//	}
-//
-//	var resp string
-//	if err = client.Call(&resp, "shost_CHANGED", CHANGED); err != nil {
-//		utils.Fatalf("CHANGED: %s", err.Error())
-//	}
-//
-//	fmt.Printf("%s /n/n", resp)
-//	return nil
-//}
+func setBudget(ctx *cli.Context) error {
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	var budget string
+	if !ctx.GlobalIsSet(utils.BudgetPriceFlag.Name) {
+		utils.Fatalf("the --budget flag must be used to specify the budget price")
+	} else {
+		budget = ctx.GlobalString(utils.BudgetPriceFlag.Name)
+	}
+
+	var resp string
+	if err = client.Call(&resp, "shost_setDepositBudget", budget); err != nil {
+		utils.Fatalf("failed to set the budget price: %s", err.Error())
+	}
+
+	fmt.Printf("%s \n\n", resp)
+	return nil
+}
+
+func setMaxDeposit(ctx *cli.Context) error {
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	var maxDeposit string
+	if !ctx.GlobalIsSet(utils.MaxDepositFlag.Name) {
+		utils.Fatalf("the --maxdeposit flag must be used to specify the max deposit")
+	} else {
+		maxDeposit = ctx.GlobalString(utils.MaxDepositFlag.Name)
+	}
+
+	var resp string
+	if err = client.Call(&resp, "shost_setMaxDeposit", maxDeposit); err != nil {
+		utils.Fatalf("failed to set the max deposit: %s", err.Error())
+	}
+
+	fmt.Printf("%s \n\n", resp)
+	return nil
+}

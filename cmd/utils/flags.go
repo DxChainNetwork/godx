@@ -112,6 +112,16 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	MaxDepositFlag = cli.StringFlag{
+		Name:  "maxdeposit",
+		Usage: "used to specify the max deposit for shost setmaxdeposit command",
+	}
+
+	BudgetPriceFlag = cli.StringFlag{
+		Name:  "budget",
+		Usage: "used to specify the budget",
+	}
+
 	StoragePriceFlag = cli.StringFlag{
 		Name:  "storageprice",
 		Usage: "used to specify the storage price",
