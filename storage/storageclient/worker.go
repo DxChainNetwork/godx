@@ -15,6 +15,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	// when the client has no contract with host, we will terminate the worker
+	ErrNoContractsWithHost = errors.New("no contract with host which is need to terminate")
+
+	// when we can't get host info, we will terminate the worker
+	ErrUnableRetrieveHostInfo = errors.New("can't retrieve host info")
+
+	// when client and host is renewing contract, we could wait for little time
+	ErrContractRenewing = errors.New("client and host is renewing contract")
+)
+
 // Listen for a work on a certain host.
 type worker struct {
 
@@ -108,13 +119,28 @@ func (w *worker) workLoop() {
 	for {
 		downloadSegment := w.nextDownloadSegment()
 		if downloadSegment != nil {
-			w.download(downloadSegment)
+			err := w.download(downloadSegment)
+			if err == ErrNoContractsWithHost || err == ErrUnableRetrieveHostInfo {
+				break
+			}
+
+			if err == ErrContractRenewing {
+				<-time.After(50 * time.Millisecond)
+			}
 			continue
 		}
 
 		segment, sectorIndex := w.nextUploadSegment()
 		if segment != nil {
-			w.upload(segment, sectorIndex)
+			err := w.upload(segment, sectorIndex)
+			if err == ErrNoContractsWithHost || err == ErrUnableRetrieveHostInfo {
+				break
+			}
+
+			// the client is renewing, we wait for some millisecond
+			if err == ErrContractRenewing {
+				<-time.After(50 * time.Millisecond)
+			}
 			continue
 		}
 
@@ -202,7 +228,12 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	contractID := w.contract.ID
 	if w.client.contractManager.IsRenewing(contractID) {
 		w.client.log.Warn("renew contract is doing, can't upload/download")
-		return nil, errors.New("contract is renewing")
+		return nil, ErrContractRenewing
+	}
+
+	hostInfo, err := w.updateWorkerContractID(contractID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Setup an active connection to the host and we will reuse previous connection
@@ -219,28 +250,22 @@ func (w *worker) checkSession() (*storage.Session, error) {
 	}
 
 	if session == nil || session.IsClosed() {
-		hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
-		if !ok {
-			return nil, errors.New("failed to retrieve host info")
-		}
-
 		s, err := w.client.ethBackend.SetupStorageConnection(hostInfo.EnodeURL)
 		if err != nil {
 			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
 			return nil, errors.New("failed to create connection")
 		}
 
-		s.SetHostInfo(&hostInfo)
 		w.client.sessionSet[contractID] = s
-
 		session = s
 	}
 
+	session.SetHostInfo(hostInfo)
 	return session, nil
 }
 
 // Actually perform a download task
-func (w *worker) download(uds *unfinishedDownloadSegment) {
+func (w *worker) download(uds *unfinishedDownloadSegment) error{
 	session, err := w.checkSession()
 	defer func() {
 		if session != nil {
@@ -255,13 +280,13 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 
 	if err != nil {
 		w.client.log.Error("check session failed", "err", err)
-		return
+		return err
 	}
 
 	// check the uds whether can be the worker performed
 	uds = w.processDownloadSegment(uds)
 	if uds == nil {
-		return
+		return err
 	}
 
 	// whether download success or fail, we should remove the worker at last
@@ -276,7 +301,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	if err != nil {
 		w.client.log.Error("worker failed to download sector", "error", err)
 		uds.unregisterWorker(w)
-		return
+		return err
 	}
 
 	// decrypt the sector
@@ -285,7 +310,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	if err != nil {
 		w.client.log.Error("worker failed to decrypt sector", "error", err)
 		uds.unregisterWorker(w)
-		return
+		return err
 	}
 
 	// mark the sector as completed
@@ -316,6 +341,8 @@ func (w *worker) download(uds *unfinishedDownloadSegment) {
 	}
 
 	uds.mu.Unlock()
+
+	return nil
 }
 
 // Check the given download segment whether there is work to do, and update its info
@@ -372,4 +399,26 @@ func (uds *unfinishedDownloadSegment) unregisterWorker(w *worker) {
 	sectorIndex := uds.segmentMap[w.hostID.String()].index
 	uds.sectorUsage[sectorIndex] = false
 	uds.mu.Unlock()
+}
+
+func (w *worker) updateWorkerContractID(contractID storage.ContractID) (*storage.HostInfo, error) {
+	hostInfo, ok := w.client.storageHostManager.RetrieveHostInfo(w.hostID)
+	if !ok {
+		return nil, ErrUnableRetrieveHostInfo
+	}
+
+	cm := w.client.contractManager
+	if _, exist := cm.RetrieveActiveContract(contractID); exist {
+		return &hostInfo, nil
+	}
+
+	scs := cm.GetStorageContractSet()
+	renewContractID := scs.GetContractIDByHostID(w.hostID)
+	if contract, exist := cm.RetrieveActiveContract(renewContractID); exist {
+		w.contract = contract
+		w.hostID = contract.EnodeID
+		return &hostInfo, nil
+	} else {
+		return nil, ErrNoContractsWithHost
+	}
 }

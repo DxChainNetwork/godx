@@ -644,7 +644,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 30303,
+		Value: 36000,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -1368,6 +1368,11 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	if ctx.GlobalIsSet(StorageHostFlag.Name) {
 		cfg.StorageHost = ctx.GlobalBool(StorageHostFlag.Name)
+	}
+
+	// If datadir is set, change ethash directory
+	if ctx.GlobalIsSet(DataDirFlag.Name) {
+		cfg.Ethash.DatasetDir = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "Ethash")
 	}
 
 	// Override any default configs for hard coded networks.

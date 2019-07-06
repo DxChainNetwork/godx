@@ -518,6 +518,7 @@ func (sc *StorageClient) doUpload() error {
 	hosts := sc.refreshHostsAndWorkers()
 
 	// Push a min-heap of segments organized by upload progress
+	// we don't worry about the dxfile nil problem. we have done it above
 	sc.pushDirOrFileToSegmentHeap(dxFile.DxPath(), false, hosts, targetUnstuckSegments)
 	sc.uploadHeap.mu.Lock()
 	heapLen := sc.uploadHeap.heap.Len()
