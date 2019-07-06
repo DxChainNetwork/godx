@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"os"
@@ -44,7 +45,7 @@ var DefaultConfig = Config{
 		DatasetsInMem:  1,
 		DatasetsOnDisk: 2,
 	},
-	NetworkId:      1,
+	NetworkId:      36,
 	LightPeers:     100,
 	DatabaseCache:  512,
 	TrieCleanCache: 256,
@@ -72,10 +73,11 @@ func init() {
 			home = user.HomeDir
 		}
 	}
+	dir := node.DefaultDataDir()
 	if runtime.GOOS == "windows" {
 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
 	} else {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		DefaultConfig.Ethash.DatasetDir = filepath.Join(dir, "Ethash")
 	}
 }
 
