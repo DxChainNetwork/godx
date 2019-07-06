@@ -112,6 +112,61 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	MaxDepositFlag = cli.StringFlag{
+		Name:  "maxdeposit",
+		Usage: "used to specify the max deposit for shost setmaxdeposit command",
+	}
+
+	BudgetPriceFlag = cli.StringFlag{
+		Name:  "budget",
+		Usage: "used to specify the budget",
+	}
+
+	StoragePriceFlag = cli.StringFlag{
+		Name:  "storageprice",
+		Usage: "used to specify the storage price",
+	}
+
+	SectorPriceFlag = cli.StringFlag{
+		Name:  "sectorprice",
+		Usage: "used to specify the sector price",
+	}
+
+	UploadPriceFlag = cli.StringFlag{
+		Name:  "uploadprice",
+		Usage: "used to specify the upload bandwidth price",
+	}
+
+	DownloadPriceFlag = cli.StringFlag{
+		Name:  "downloadprice",
+		Usage: "used to specify the download bandwidth price",
+	}
+
+	ContractPriceFlag = cli.StringFlag{
+		Name:  "contractprice",
+		Usage: "used to specify the contract price",
+	}
+
+	DepositPriceFlag = cli.StringFlag{
+		Name:  "deposit",
+		Usage: "used to specify the deposit certain storage service",
+	}
+
+	StorageDurationFlag = cli.StringFlag{
+		Name:  "duration",
+		Usage: "used to specify the max storage time for the storage host",
+	}
+
+	FolderSizeFlag = cli.StringFlag{
+		Name:  "size",
+		Usage: "used to specify the size of the folder",
+	}
+
+	FolderPathFlag = cli.StringFlag{
+		Name:  "folderpath",
+		Usage: "used to specify the folder path",
+	}
+
 	PrevFilePathFlag = cli.StringFlag{
 		Name:  "prevpath",
 		Usage: "used to specify the previous file path",

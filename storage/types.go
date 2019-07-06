@@ -281,7 +281,7 @@ type (
 		CipherType       string    `json:"ciphertype"`
 		CreateTime       time.Time `json:"createtime"`
 		Expiration       uint64    `json:"expiration"`
-		Filesize         uint64    `json:"filesize"`
+		FileSize         uint64    `json:"filesize"`
 		Health           float64   `json:"health"`
 		LocalPath        string    `json:"localpath"`
 		MaxHealth        float64   `json:"maxhealth"`
@@ -292,7 +292,7 @@ type (
 		Recoverable      bool      `json:"recoverable"`
 		Redundancy       float64   `json:"redundancy"`
 		Renewing         bool      `json:"renewing"`
-		SiaPath          string    `json:"siapath"`
+		DxPath           string    `json:"dxpath"`
 		Stuck            bool      `json:"stuck"`
 		StuckHealth      float64   `json:"stuckhealth"`
 		UploadedBytes    uint64    `json:"uploadedbytes"`
