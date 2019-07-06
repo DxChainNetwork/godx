@@ -125,7 +125,7 @@ func (w *worker) workLoop() {
 			}
 
 			if err == ErrContractRenewing {
-				<-time.After(100 * time.Millisecond)
+				<-time.After(50 * time.Millisecond)
 			}
 			continue
 		}
@@ -139,7 +139,7 @@ func (w *worker) workLoop() {
 
 			// the client is renewing, we wait for some millisecond
 			if err == ErrContractRenewing {
-				<-time.After(100 * time.Millisecond)
+				<-time.After(50 * time.Millisecond)
 			}
 			continue
 		}
