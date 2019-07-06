@@ -334,7 +334,8 @@ func getHostFolders(ctx *cli.Context) error {
 	}
 
 	if len(hostFolders) == 0 {
-		fmt.Println("No folders created, please use `folderadd` command to create the folder first")
+		fmt.Println("No folders created, please use `addfolder` command to create the folder first")
+		return nil
 	}
 
 	fmt.Println("Folders Count: ", len(hostFolders))
@@ -420,7 +421,7 @@ func addFolder(ctx *cli.Context) error {
 	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder creation size")
 	} else {
-		size = ctx.GlobalString(utils.FolderPathFlag.Name)
+		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
 	}
 
 	var resp string
@@ -448,7 +449,7 @@ func resizeFolder(ctx *cli.Context) error {
 	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder size")
 	} else {
-		size = ctx.GlobalString(utils.FolderPathFlag.Name)
+		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
 	}
 
 	var resp string
