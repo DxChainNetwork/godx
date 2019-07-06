@@ -543,6 +543,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	// if the account not exist, create it
 	if !state.Exist(statusAddr) {
 		state.CreateAccount(statusAddr)
+		state.SetCode(statusAddr, []byte("status"))
 	}
 
 	// check if this storage contract exist
@@ -550,6 +551,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainDecode, errors.New("this storage contract already exist")
 	}
 	state.CreateAccount(contractAddr)
+	state.SetCode(contractAddr, []byte("contract"))
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
@@ -573,7 +575,8 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
-	state.SetState(statusAddr, scID, NotProofedStatus)
+	notProofedStatus := append([]byte{'0'}, contractAddr[:]...)
+	state.SetState(statusAddr, scID, common.BytesToHash(notProofedStatus))
 
 	// store storage contract in this contractAddr's state
 	state.SetState(contractAddr, KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
@@ -709,7 +712,8 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract
-	state.SetState(statusAddr, sp.ParentID, ProofedStatus)
+	proofedStatus := append([]byte{'1'}, contractAddr[:]...)
+	state.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
 
 	log.Info("storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil

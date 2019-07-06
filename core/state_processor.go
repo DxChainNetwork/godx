@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"math/big"
 	"strconv"
 
@@ -87,8 +88,9 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 		// iterator all the storage contract status in this account: StorageContractID --> status
 		statedb.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			if value == common.BytesToHash([]byte{'0'}) {
-				contractAddr := common.BytesToAddress(key[12:])
+			flag := value.Bytes()[11:12]
+			if bytes.Equal(flag, []byte{'0'}) {
+				contractAddr := common.BytesToAddress(value[12:])
 
 				// retrieve storage contract filed data
 				clientAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
