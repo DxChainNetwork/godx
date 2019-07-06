@@ -30,6 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -534,7 +535,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// create the expired storage contract status address (e.g. "expired_storage_contract_1500")
 	windowEndStr := strconv.FormatUint(sc.WindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(storagemaintenance.StrPrefixExpSC + windowEndStr))
 
 	// create storage contract address, directly use the contract ID
 	scID := sc.ID()
@@ -575,36 +576,36 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
-	notProofedStatus := append([]byte{'0'}, contractAddr[:]...)
+	notProofedStatus := append(storagemaintenance.NotProofedStatus, contractAddr[:]...)
 	state.SetState(statusAddr, scID, common.BytesToHash(notProofedStatus))
 
 	// store storage contract in this contractAddr's state
-	state.SetState(contractAddr, KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
-	state.SetState(contractAddr, KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
 
-	state.SetState(contractAddr, KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
-	state.SetState(contractAddr, KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
 	uintBytes := Uint64ToBytes(sc.FileSize)
-	state.SetState(contractAddr, KeyFileSize, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, KeyUnlockHash, sc.UnlockHash)
-	state.SetState(contractAddr, KeyFileMerkleRoot, sc.FileMerkleRoot)
+	state.SetState(contractAddr, storagemaintenance.KeyUnlockHash, sc.UnlockHash)
+	state.SetState(contractAddr, storagemaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(sc.RevisionNumber)
-	state.SetState(contractAddr, KeyRevisionNumber, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowStart)
-	state.SetState(contractAddr, KeyWindowStart, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowEnd)
-	state.SetState(contractAddr, KeyWindowEnd, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
 	log.Info("create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
@@ -642,18 +643,18 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// update revision info
 	uintBytes := Uint64ToBytes(scr.NewFileSize)
-	state.SetState(contractAddr, KeyFileSize, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, KeyFileMerkleRoot, scr.NewFileMerkleRoot)
+	state.SetState(contractAddr, storagemaintenance.KeyFileMerkleRoot, scr.NewFileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(scr.NewRevisionNumber)
-	state.SetState(contractAddr, KeyRevisionNumber, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, storagemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, storagemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
 	log.Info("storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -681,16 +682,16 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// retrieve origin data in storage contract
-	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
-	clientValidOutputHash := state.GetState(contractAddr, KeyClientValidProofOutput)
-	hostValidOutputHash := state.GetState(contractAddr, KeyHostValidProofOutput)
-	clientAddressHash := state.GetState(contractAddr, KeyClientAddress)
-	hostAddressHash := state.GetState(contractAddr, KeyHostAddress)
+	windowEndHash := state.GetState(contractAddr, storagemaintenance.KeyWindowEnd)
+	clientValidOutputHash := state.GetState(contractAddr, storagemaintenance.KeyClientValidProofOutput)
+	hostValidOutputHash := state.GetState(contractAddr, storagemaintenance.KeyHostValidProofOutput)
+	clientAddressHash := state.GetState(contractAddr, storagemaintenance.KeyClientAddress)
+	hostAddressHash := state.GetState(contractAddr, storagemaintenance.KeyHostAddress)
 
 	// get status account address
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 	windowEndStr := strconv.FormatUint(windowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(storagemaintenance.StrPrefixExpSC + windowEndStr))
 
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
@@ -712,7 +713,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract
-	proofedStatus := append([]byte{'1'}, contractAddr[:]...)
+	proofedStatus := append(storagemaintenance.ProofedStatus, contractAddr[:]...)
 	state.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
 
 	log.Info("storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())

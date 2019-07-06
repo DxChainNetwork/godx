@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -956,35 +956,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 	// maintenance missed storage proof
 	height := w.current.header.Number.Uint64()
-	windowEndStr := strconv.FormatUint(height, 10)
-	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
-	if s.Exist(statusAddr) {
-
-		// iterator all the storage contract status in this account: StorageContractID --> status
-		s.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			flag := value.Bytes()[11:12]
-			if bytes.Equal(flag, []byte{'0'}) {
-				contractAddr := common.BytesToAddress(value[12:])
-
-				// retrieve storage contract filed data
-				clientAddressHash := s.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
-				hostAddressHash := s.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
-				clientMpoHash := s.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
-				hostMpoHash := s.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
-
-				// return back the remain amount to client and host
-				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
-				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
-				s.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
-				s.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
-
-				// deduct the sum missed output from contract account
-				totalValue := new(big.Int).Add(clientMpo, hostMpo)
-				s.SubBalance(contractAddr, totalValue)
-			}
-			return true
-		})
-	}
+	storagemaintenance.MaintenanceMissedProof(height, s)
 
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
 	if err != nil {
