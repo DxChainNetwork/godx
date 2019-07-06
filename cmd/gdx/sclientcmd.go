@@ -2,24 +2,25 @@ package main
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"github.com/olekukonko/tablewriter"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/cmd/utils"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/olekukonko/tablewriter"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
 var storageClientCommand = cli.Command{
 	Name:      "sclient",
-	Usage:     "Storage Client related operations",
+	Usage:     "Storage client related operations",
 	ArgsUsage: "",
 	Category:  "STORAGE CLIENT COMMANDS",
 	Description: `
