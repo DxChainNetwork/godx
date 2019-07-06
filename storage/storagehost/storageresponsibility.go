@@ -154,11 +154,11 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	err := func() error {
-		//Submit revision time exceeds storage responsibility expiration time
-		//if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
-		//	h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
-		//	return errNotAllowed
-		//}
+		// Submit revision time exceeds storage responsibility expiration time
+		if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
+			h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
+			return errNotAllowed
+		}
 
 		//Not enough time to submit proof of storage, no need to put in the task force
 		if so.expiration()+postponedExecution >= so.proofDeadline() {

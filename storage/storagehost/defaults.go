@@ -67,7 +67,7 @@ var (
 	emptyStorageContract = types.StorageContract{}
 
 	//Total time to sign the contract
-	postponedExecutionBuffer = uint64(20)
+	postponedExecutionBuffer = storage.BlocksPerDay
 )
 
 // init set the initial value for sector height
