@@ -56,7 +56,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -353,41 +352,15 @@ func (s *Ethereum) APIs() []rpc.API {
 			// StorageClient related APIs
 			storageClientAPIs := []rpc.API{
 				{
-					Namespace: "storageclient",
+					Namespace: "sclient",
 					Version:   "1.0",
 					Service:   storageclient.NewPublicStorageClientAPI(s.storageClient),
 					Public:    true,
 				}, {
-					Namespace: "storageclient",
+					Namespace: "sclient",
 					Version:   "1.0",
 					Service:   storageclient.NewPrivateStorageClientAPI(s.storageClient),
 					Public:    false,
-				}, {
-					Namespace: "clientdebug",
-					Version:   "1.0",
-					Service:   storageclient.NewPublicStorageClientDebugAPI(s.storageClient),
-					Public:    true,
-				}, {
-					Namespace: "hostmanagerdebug",
-					Version:   "1.0",
-					Service:   storagehostmanager.NewPublicStorageClientDebugAPI(s.storageClient.GetStorageHostManager()),
-					Public:    true,
-				}, {
-					Namespace: "hostmanager",
-					Version:   "1.0",
-					Service:   storagehostmanager.NewPublicStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
-					Public:    true,
-				}, {
-					Namespace: "hostmanager",
-					Version:   "1.0",
-					Service:   storagehostmanager.NewPrivateStorageHostManagerAPI(s.storageClient.GetStorageHostManager()),
-					Public:    false,
-				},
-				{
-					Namespace: "clientfilesdebug",
-					Version:   "1.0",
-					Service:   filesystem.NewPublicFileSystemDebugAPI(s.storageClient.GetFileSystem()),
-					Public:    true,
 				}, {
 					Namespace: "clientfiles",
 					Version:   "1.0",
