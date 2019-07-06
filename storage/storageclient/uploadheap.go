@@ -7,9 +7,6 @@ package storageclient
 import (
 	"container/heap"
 	"errors"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -17,6 +14,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 type uploadTarget int
@@ -509,6 +510,7 @@ func (sc *StorageClient) doUpload() error {
 	if err != nil && err != filesystem.ErrNoRepairNeeded {
 		return err
 	}
+
 	if err == filesystem.ErrNoRepairNeeded {
 		return nil
 	}
