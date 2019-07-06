@@ -5,9 +5,9 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/DxChainNetwork/godx/common"
+	"math/big"
+	"time"
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
@@ -26,14 +26,14 @@ var (
 // Default rentPayment values
 var (
 	DefaultRentPayment = RentPayment{
-		Fund:         common.NewBigInt(500),
-		StorageHosts: 50,
-		Period:       3 * BlocksPerMonth,
-		RenewWindow:  BlocksPerMonth,
+		Fund:         common.PtrBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)),
+		StorageHosts: 3,
+		Period:       3 * BlocksPerDay,
+		RenewWindow:  12 * BlockPerHour,
 
 		ExpectedStorage:    1e12,                           // 1 TB
 		ExpectedUpload:     uint64(200e9) / BlocksPerMonth, // 200 GB per month
 		ExpectedDownload:   uint64(100e9) / BlocksPerMonth, // 100 GB per month
-		ExpectedRedundancy: 3.0,
+		ExpectedRedundancy: 2.0,
 	}
 )

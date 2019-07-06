@@ -48,7 +48,7 @@ var (
 	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
 	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
 	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
-	defaultWindowSize           = 240                       // 1 hour
+	defaultWindowSize           = 5 * storage.BlockPerHour  // 5 hours
 
 	// deposit defaults value
 	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
