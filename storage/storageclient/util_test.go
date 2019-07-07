@@ -6,11 +6,11 @@ package storageclient
 
 import (
 	"encoding/json"
-	"github.com/DxChainNetwork/godx/core/types"
 	"reflect"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"
 )
@@ -80,21 +80,6 @@ func TestModifyProofRanges(t *testing.T) {
 	if len(modifiedRanges) != 3 {
 		t.Errorf("wanted length: %v, getted length %v", 3, len(modifiedRanges))
 	}
-}
-
-func TestBigIntCal(t *testing.T) {
-	beforeClientValid := common.NewBigInt(114831385110186666)
-	beforeHostValid := common.NewBigInt(167091225066666000)
-	afterClientValid := common.NewBigInt(113954921142186666)
-	afterHostValid := common.NewBigInt(167529457050666000)
-
-	a := beforeClientValid.Add(beforeHostValid)
-	b := afterClientValid.Add(afterHostValid)
-
-	if a.Cmp(b) > 0 {
-		t.Fatal("balance is not equal")
-	}
-
 }
 
 func TestNewVision(t *testing.T) {

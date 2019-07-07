@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -956,34 +956,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 	// maintenance missed storage proof
 	height := w.current.header.Number.Uint64()
-	windowEndStr := strconv.FormatUint(height, 10)
-	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
-	if w.current.state.Exist(statusAddr) {
-
-		// iterator all the storage contract status in this account: StorageContractID --> status
-		w.current.state.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			if value == common.BytesToHash([]byte{'0'}) {
-				contractAddr := common.BytesToAddress(key[12:])
-
-				// retrieve storage contract filed data
-				clientAddressHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
-				hostAddressHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
-				clientMpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
-				hostMpoHash := w.current.state.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
-
-				// return back the remain amount to client and host
-				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
-				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
-				w.current.state.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
-				w.current.state.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
-
-				// deduct the sum missed output from contract account
-				totalValue := new(big.Int).Add(clientMpo, hostMpo)
-				w.current.state.SubBalance(contractAddr, totalValue)
-			}
-			return true
-		})
-	}
+	storagemaintenance.MaintenanceMissedProof(height, s)
 
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
 	if err != nil {

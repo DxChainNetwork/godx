@@ -23,6 +23,7 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 )
 
 var (
@@ -119,10 +120,11 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 
 	// check whether it has proofed
 	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(storagemaintenance.StrPrefixExpSC + windowEndStr))
 
-	flag := state.GetState(statusAddr, scr.ParentID)
-	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
+	statusContent := state.GetState(statusAddr, scr.ParentID)
+	flag := statusContent.Bytes()[11:12]
+	if bytes.Equal(flag, storagemaintenance.ProofedStatus) {
 		return errors.New("can not do contract revision after storage proof")
 	}
 
@@ -160,13 +162,13 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	}
 
 	// retrieve origin storage contract
-	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
-	revisionNumHash := state.GetState(contractAddr, KeyRevisionNumber)
-	unHash := state.GetState(contractAddr, KeyUnlockHash)
-	clientVpoHash := state.GetState(contractAddr, KeyClientValidProofOutput)
-	hostVpoHash := state.GetState(contractAddr, KeyHostValidProofOutput)
-	clientMpoHash := state.GetState(contractAddr, KeyClientMissedProofOutput)
-	hostMpoHash := state.GetState(contractAddr, KeyHostMissedProofOutput)
+	windowStartHash := state.GetState(contractAddr, storagemaintenance.KeyWindowStart)
+	revisionNumHash := state.GetState(contractAddr, storagemaintenance.KeyRevisionNumber)
+	unHash := state.GetState(contractAddr, storagemaintenance.KeyUnlockHash)
+	clientVpoHash := state.GetState(contractAddr, storagemaintenance.KeyClientValidProofOutput)
+	hostVpoHash := state.GetState(contractAddr, storagemaintenance.KeyHostValidProofOutput)
+	clientMpoHash := state.GetState(contractAddr, storagemaintenance.KeyClientMissedProofOutput)
+	hostMpoHash := state.GetState(contractAddr, storagemaintenance.KeyHostMissedProofOutput)
 
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
@@ -289,21 +291,22 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures 
 func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
-	flag := state.GetState(statusAddr, sp.ParentID)
-	if bytes.Equal(flag.Bytes(), ProofedStatus.Bytes()) {
+	statusContent := state.GetState(statusAddr, sp.ParentID)
+	flag := statusContent.Bytes()[11:12]
+	if bytes.Equal(flag, storagemaintenance.ProofedStatus) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
-	windowStartHash := state.GetState(contractAddr, KeyWindowStart)
+	windowStartHash := state.GetState(contractAddr, storagemaintenance.KeyWindowStart)
 	windowStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 
-	windowEndHash := state.GetState(contractAddr, KeyWindowEnd)
+	windowEndHash := state.GetState(contractAddr, storagemaintenance.KeyWindowEnd)
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 
-	fileMerkleRoot := state.GetState(contractAddr, KeyFileMerkleRoot)
+	fileMerkleRoot := state.GetState(contractAddr, storagemaintenance.KeyFileMerkleRoot)
 
-	fileSizeHash := state.GetState(contractAddr, KeyFileSize)
+	fileSizeHash := state.GetState(contractAddr, storagemaintenance.KeyFileSize)
 	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 
 	if windowStart > currentHeight {
@@ -421,34 +424,21 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 	// proofSet[0] is the segment of the file
 	sum := leafHash(hasher, proofSet[height])
 	height++
-
-	// While the current subtree (of height 'height') is complete, determine
-	// the position of the next sibling using the complete subtree algorithm.
-	// 'stableEnd' tells us the ending index of the last full subtree. It gets
-	// initialized to 'proofIndex' because the first full subtree was the
-	// subtree of height 1, created above (and had an ending index of
-	// 'proofIndex').
 	stableEnd := proofIndex
+
 	for {
-		// Determine if the subtree is complete. This is accomplished by
-		// rounding down the proofIndex to the nearest 1 << 'height', adding 1
-		// << 'height', and comparing the result to the number of leaves in the
-		// Merkle tree.
-		subTreeStartIndex := (proofIndex / (1 << uint(height))) * (1 << uint(height)) // round down to the nearest 1 << height
-		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1              // subtract 1 because the start index is inclusive
+		subTreeStartIndex := (proofIndex / (1 << uint(height))) * (1 << uint(height))
+		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1
 		if subTreeEndIndex >= numLeaves {
-			// If the Merkle tree does not have a leaf at index
-			// 'subTreeEndIndex', then the subtree of the current height is not
-			// a complete subtree.
 			break
 		}
+
 		stableEnd = subTreeEndIndex
 
-		// Determine if the proofIndex is in the first or the second half of
-		// the subtree.
 		if len(proofSet) <= height {
 			return false
 		}
+
 		if proofIndex-subTreeStartIndex < 1<<uint(height-1) {
 			sum = nodeHash(hasher, sum, proofSet[height])
 		} else {
@@ -457,27 +447,24 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 		height++
 	}
 
-	// Determine if the next hash belongs to an orphan that was elevated. This
-	// is the case IFF 'stableEnd' (the last index of the largest full subtree)
-	// is equal to the number of leaves in the Merkle tree.
 	if stableEnd != numLeaves-1 {
 		if len(proofSet) <= height {
 			return false
 		}
+
 		sum = nodeHash(hasher, sum, proofSet[height])
 		height++
 	}
 
-	// All remaining elements in the proof set will belong to a left sibling.
 	for height < len(proofSet) {
 		sum = nodeHash(hasher, proofSet[height], sum)
 		height++
 	}
 
-	// Compare our calculated Merkle root to the desired Merkle root.
 	if bytes.Equal(sum, merkleRoot) {
 		return true
 	}
+
 	return false
 }
 
