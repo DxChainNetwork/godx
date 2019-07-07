@@ -183,7 +183,7 @@ func (api *PrivateStorageClientAPI) SetConfig(settings map[string]string) (resp 
 		return
 	}
 
-	resp = fmt.Sprintf("Successfully set the storage client setting, you can use storageclient.setting() to verify")
+	resp = fmt.Sprintf("Successfully set the storage client setting")
 
 	return
 }
