@@ -64,5 +64,8 @@ func MaintenanceMissedProof(height uint64, state *state.StateDB) {
 			}
 			return true
 		})
+
+		// mark the statusAddr as empty account, that will be deleted by stateDB
+		state.SetNonce(statusAddr, 0)
 	}
 }

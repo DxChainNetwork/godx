@@ -544,7 +544,9 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	// if the account not exist, create it
 	if !state.Exist(statusAddr) {
 		state.CreateAccount(statusAddr)
-		state.SetCode(statusAddr, []byte("status"))
+
+		// before reaching the height windowEnd, mark statusAddr as not empty account to avoid being deleted by stateDB
+		state.SetNonce(statusAddr, 1)
 	}
 
 	// check if this storage contract exist
@@ -552,7 +554,9 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 		return nil, gasRemainDecode, errors.New("this storage contract already exist")
 	}
 	state.CreateAccount(contractAddr)
-	state.SetCode(contractAddr, []byte("contract"))
+
+	// before this contract finished, mark contractAddr as not empty account to avoid being deleted by stateDB
+	state.SetNonce(contractAddr, 1)
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
@@ -715,6 +719,9 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	// set completed for this storage contract
 	proofedStatus := append(storagemaintenance.ProofedStatus, contractAddr[:]...)
 	state.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
+
+	// this contract is finished, so mark it empty account that will be deleted by stateDB
+	state.SetNonce(contractAddr, 0)
 
 	log.Info("storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
