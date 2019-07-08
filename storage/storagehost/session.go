@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
@@ -35,8 +34,6 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	if err != nil {
 		return err
 	}
-
-	log.Error("handle session", "msgCode", msg.Code)
 
 	if handler, ok := handlerMap[msg.Code]; ok {
 		err = handler(h, s, msg)

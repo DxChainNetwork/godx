@@ -955,7 +955,6 @@ running:
 
 		// add storage peer dial task which will be added to the dialstate storage field
 		case n := <-srv.addStorage:
-			log.Warn("add storage peer", "enodeURL", n.String())
 			dialstate.addStorage(n)
 
 		// remove the object from dialstate storage field and then disconnect the real connection
@@ -1438,7 +1437,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
 	if err != nil {
-		clog.Error("Failed proto handshake", "err", err)
+		clog.Trace("Failed proto handshake", "err", err)
 		return err
 	}
 
