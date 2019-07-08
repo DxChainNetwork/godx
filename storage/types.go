@@ -31,6 +31,7 @@ var (
 const (
 	Override = iota
 	Append
+	Normal
 
 	Env_Prod = "prod"
 	Env_Test = "test"
