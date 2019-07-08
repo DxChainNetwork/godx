@@ -18,13 +18,13 @@ var (
 //If not locked, create a new one
 func (h *StorageHost) checkAndLockStorageResponsibility(soid common.Hash) {
 	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	tl, exists := h.lockedStorageResponsibility[soid]
 	if !exists {
 		tl = new(TryMutex)
 		h.lockedStorageResponsibility[soid] = tl
 	}
+	h.lock.Unlock()
+
 	tl.Lock()
 }
 

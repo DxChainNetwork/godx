@@ -139,7 +139,7 @@ func (api *PublicStorageClientAPI) Upload(source string, dxPath string) (string,
 	param := storage.FileUploadParams{
 		Source: source,
 		DxPath: path,
-		Mode:   storage.Normal,
+		Mode:   storage.Override,
 	}
 	if err := api.sc.Upload(param); err != nil {
 		return "", err
