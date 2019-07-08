@@ -866,7 +866,7 @@ func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.Ho
 
 	msg, err := session.ReadMsg()
 	if err != nil {
-		log.Warn("GetStorageHostSetting readMSG", "err", err.Error())
+		log.Error("GetStorageHostSetting read msg", "err", err.Error())
 		return err
 	}
 

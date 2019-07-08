@@ -229,6 +229,7 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 
 	select {
 	case <-s.ClientNegotiateStartChan():
+		//log.Error("Client receive host start chan")
 	case <-time.After(1 * time.Second):
 		return errors.New("receive client negotiate start msg timeout")
 	}

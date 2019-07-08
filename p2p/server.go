@@ -1069,7 +1069,7 @@ running:
 			}
 			// TODO: track in-progress inbound node IDs (pre-Peer) to avoid dialing them.
 			select {
-			case c.cont <- srv.encHandshakeChecks(peers, inboundCount, c):
+			case c.cont <- srv.encHandshakeChecks(peers, storagePeers, inboundCount, c):
 			case <-srv.quit:
 				break running
 			}
@@ -1080,7 +1080,7 @@ running:
 		case c := <-srv.addpeer:
 			// At this point the connection is past the protocol handshake.
 			// Its capabilities are known and the remote identity is verified.
-			err := srv.protoHandshakeChecks(peers, inboundCount, c)
+			err := srv.protoHandshakeChecks(peers, storagePeers, inboundCount, c)
 
 			// create new peer, run peer, add it to peer list, and increase the inboundCount if
 			// it is inbound connection
@@ -1097,7 +1097,7 @@ running:
 				go srv.runPeer(p)
 
 				if c.is(storageContractConn) {
-					srv.log.Error("storage p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "flag", c.flags.String(), "enodeURL", p.Node().String())
+					srv.log.Debug("storage p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "flag", c.flags.String(), "enodeURL", p.Node().String())
 					storagePeers[c.node.ID()] = p
 				} else {
 					peers[c.node.ID()] = p
@@ -1159,6 +1159,11 @@ running:
 	for _, p := range peers {
 		p.Disconnect(DiscQuitting)
 	}
+
+	for _, p := range storagePeers {
+		p.Disconnect(DiscQuitting)
+	}
+
 	// Wait for peers to shut down. Pending connections and tasks are
 	// not handled here and will terminate soon-ish because srv.quit
 	// is closed.
@@ -1167,18 +1172,37 @@ running:
 		p.log.Trace("<-delpeer (spindown)", "remainingTasks", len(runningTasks))
 		delete(peers, p.ID())
 	}
+
+	for len(storagePeers) > 0 {
+		p := <-srv.delpeer
+		p.log.Trace("<-delpeer (spindown)", "remainingTasks", len(runningTasks))
+		delete(storagePeers, p.ID())
+	}
 }
 
 // if none of server's protocol match the connection protocol, then return error
 // otherwise, repeat the encHandshake check again
-func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, storagePeers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	// Drop connections with no matching protocols.
 	if len(srv.Protocols) > 0 && countMatchingProtocols(srv.Protocols, c.caps) == 0 {
 		return DiscUselessPeer
 	}
 	// Repeat the encryption handshake checks because the
 	// peer set might have changed between the handshakes.
-	return srv.encHandshakeChecks(peers, inboundCount, c)
+	switch {
+	case !c.is(trustedConn|staticDialedConn|storageContractConn) && len(peers) >= srv.MaxPeers:
+		return DiscTooManyPeers
+	case !c.is(trustedConn) && !c.is(storageContractConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
+		return DiscTooManyPeers
+	case !c.is(storageContractConn) && peers[c.node.ID()] != nil:
+		return DiscAlreadyConnected
+	case c.is(storageContractConn) && storagePeers[c.node.ID()] != nil:
+		return DiscAlreadyConnected
+	case c.node.ID() == srv.localnode.ID():
+		return DiscSelf
+	default:
+		return nil
+	}
 }
 
 // Checking Criteria:
@@ -1186,13 +1210,13 @@ func (srv *Server) protoHandshakeChecks(peers map[enode.ID]*Peer, inboundCount i
 // 2. if the connection flag is not trusted inbound connection, and reached to max inbound connection allowed
 // 3. if the node is already connected
 // 4. if the node id is local node id
-func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, inboundCount int, c *conn) error {
+func (srv *Server) encHandshakeChecks(peers map[enode.ID]*Peer, storagePeers map[enode.ID]*Peer, inboundCount int, c *conn) error {
 	switch {
 	case !c.is(trustedConn|staticDialedConn|storageContractConn) && len(peers) >= srv.MaxPeers:
 		return DiscTooManyPeers
 	case !c.is(trustedConn) && !c.is(storageContractConn) && c.is(inboundConn) && inboundCount >= srv.maxInboundConns():
 		return DiscTooManyPeers
-	case peers[c.node.ID()] != nil:
+	case peers[c.node.ID()] != nil && storagePeers[c.node.ID()] != nil:
 		return DiscAlreadyConnected
 	case c.node.ID() == srv.localnode.ID():
 		return DiscSelf
@@ -1227,8 +1251,6 @@ func (srv *Server) maxDialedConns() int {
 // fill in the slot
 func (srv *Server) listenLoop() {
 	defer srv.loopWG.Done()
-	srv.log.Debug("TCP listener up", "addr", srv.listener.Addr())
-
 	// if maxPendingPeers was not configured in the server configuration
 	// then it will use the default value which is 50
 	tokens := defaultMaxPendingPeers
@@ -1416,7 +1438,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 
 	if err != nil {
-		clog.Trace("Failed proto handshake", "err", err)
+		clog.Error("Failed proto handshake", "err", err)
 		return err
 	}
 
