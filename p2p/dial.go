@@ -270,7 +270,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[enode.ID]*Peer, storagePeer
 	}
 
 	for id, t := range s.storage {
-		log.Info("[STORAGE] peer task", "enodeURL", t.dest.String(), "flag", t.flags.String())
+		log.Error("[STORAGE] peer task", "enodeURL", t.dest.String(), "flag", t.flags.String())
 		err := s.checkDial(t, peers, storagePeers)
 		switch err {
 		case errNotWhitelisted, errSelf:

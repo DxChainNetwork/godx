@@ -1097,7 +1097,7 @@ running:
 				go srv.runPeer(p)
 
 				if c.is(storageContractConn) {
-					srv.log.Info("storage p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "flag", c.flags.String(), "enodeURL", p.Node().String())
+					srv.log.Error("storage p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "flag", c.flags.String(), "enodeURL", p.Node().String())
 					storagePeers[c.node.ID()] = p
 				} else {
 					peers[c.node.ID()] = p
