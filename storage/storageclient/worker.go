@@ -265,7 +265,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 }
 
 // Actually perform a download task
-func (w *worker) download(uds *unfinishedDownloadSegment) error{
+func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	session, err := w.checkSession()
 	defer func() {
 		if session != nil {
@@ -277,7 +277,8 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error{
 			}
 
 			select {
-			case session.ClientNegotiateDoneChan() <- struct{}{}:
+			case <-uds.download.completeChan:
+				session.ClientNegotiateDoneChan() <- struct{}{}
 			default:
 			}
 		}

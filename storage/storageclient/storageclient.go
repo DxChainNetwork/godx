@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"io"
 	"math/big"
 	"math/bits"
@@ -28,6 +27,7 @@ import (
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/internal/ethapi"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
@@ -37,7 +37,6 @@ import (
 )
 
 var (
-	zeroValue  = new(big.Int).SetInt64(0)
 	extraRatio = 0.02
 )
 
@@ -612,7 +611,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// send download request
 	s.SetDeadLine(storage.DownloadTime)
 
-	a,_ := json.Marshal(req)
+	a, _ := json.Marshal(req)
 	log.Error("Storage Client Download 2", "download req.info", string(a))
 
 	err = s.SendStorageContractDownloadRequest(req)
