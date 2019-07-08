@@ -5,10 +5,8 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 	"time"
 
@@ -45,50 +43,49 @@ const (
 type (
 	// HostIntConfig make group of host setting as object
 	HostIntConfig struct {
-		AcceptingContracts   bool           `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchsize"`
-		MaxDuration          uint64         `json:"maxduration"`
-		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
-		WindowSize           uint64         `json:"windowsize"`
-		PaymentAddress       common.Address `json:"paymentaddress"`
+		AcceptingContracts   bool           `json:"acceptingContracts"`
+		MaxDownloadBatchSize uint64         `json:"maxDownloadBatchSize"`
+		MaxDuration          uint64         `json:"maxDuration"`
+		MaxReviseBatchSize   uint64         `json:"maxReviseBatchSize"`
+		WindowSize           uint64         `json:"windowSize"`
+		PaymentAddress       common.Address `json:"paymentAddress"`
 
-		Deposit       big.Int `json:"deposit"`
-		DepositBudget big.Int `json:"depositbudget"`
-		MaxDeposit    big.Int `json:"maxdeposit"`
+		Deposit       common.BigInt `json:"deposit"`
+		DepositBudget common.BigInt `json:"depositBudget"`
+		MaxDeposit    common.BigInt `json:"maxDeposit"`
 
-		MinBaseRPCPrice           big.Int `json:"minbaserpcprice"`
-		MinContractPrice          big.Int `json:"mincontractprice"`
-		MinDownloadBandwidthPrice big.Int `json:"mindownloadbandwidthprice"`
-		MinSectorAccessPrice      big.Int `json:"minsectoraccessprice"`
-		MinStoragePrice           big.Int `json:"minstorageprice"`
-		MinUploadBandwidthPrice   big.Int `json:"minuploadbandwidthprice"`
+		MinBaseRPCPrice           common.BigInt `json:"minBaseRPCPrice"`
+		MinContractPrice          common.BigInt `json:"minContractPrice"`
+		MinDownloadBandwidthPrice common.BigInt `json:"minDownloadBandwidthPrice"`
+		MinSectorAccessPrice      common.BigInt `json:"minSectorAccessPrice"`
+		MinStoragePrice           common.BigInt `json:"minStoragePrice"`
+		MinUploadBandwidthPrice   common.BigInt `json:"minUploadBandwidthPrice"`
 	}
 
 	// HostExtConfig make group of host setting to broadcast as object
 	HostExtConfig struct {
-		AcceptingContracts   bool           `json:"acceptingcontracts"`
-		MaxDownloadBatchSize uint64         `json:"maxdownloadbatchSize"`
-		MaxDuration          uint64         `json:"maxduration"`
-		MaxReviseBatchSize   uint64         `json:"maxrevisebatchSize"`
-		PaymentAddress       common.Address `json:"paymentaddress"`
-		RemainingStorage     uint64         `json:"remainingstorage"`
-		SectorSize           uint64         `json:"sectorsize"`
-		TotalStorage         uint64         `json:"totalstorage"`
+		AcceptingContracts   bool           `json:"acceptingContracts"`
+		MaxDownloadBatchSize uint64         `json:"maxDownloadBatchSize"`
+		MaxDuration          uint64         `json:"maxDuration"`
+		MaxReviseBatchSize   uint64         `json:"maxReviseBatchSize"`
+		PaymentAddress       common.Address `json:"paymentAddress"`
+		RemainingStorage     uint64         `json:"remainingStorage"`
+		SectorSize           uint64         `json:"sectorSize"`
+		TotalStorage         uint64         `json:"totalStorage"`
 
-		WindowSize uint64 `json:"windowsize"`
+		WindowSize uint64 `json:"windowSize"`
 
 		Deposit    common.BigInt `json:"deposit"`
-		MaxDeposit common.BigInt `json:"maxdeposit"`
+		MaxDeposit common.BigInt `json:"maxDeposit"`
 
-		BaseRPCPrice           common.BigInt `json:"baserpcprice"`
-		ContractPrice          common.BigInt `json:"contractprice"`
-		DownloadBandwidthPrice common.BigInt `json:"downloadbandwidthprice"`
-		SectorAccessPrice      common.BigInt `json:"sectoraccessprice"`
-		StoragePrice           common.BigInt `json:"storageprice"`
-		UploadBandwidthPrice   common.BigInt `json:"uploadbandwidthprice"`
+		BaseRPCPrice           common.BigInt `json:"baseRPCPrice"`
+		ContractPrice          common.BigInt `json:"contractPrice"`
+		DownloadBandwidthPrice common.BigInt `json:"downloadBandwidthPrice"`
+		SectorAccessPrice      common.BigInt `json:"sectorAccessPrice"`
+		StoragePrice           common.BigInt `json:"storagePrice"`
+		UploadBandwidthPrice   common.BigInt `json:"uploadBandwidthPrice"`
 
-		RevisionNumber uint64 `json:"revisionnumber"`
-		Version        string `json:"version"`
+		Version string `json:"version"`
 	}
 
 	// HostInfo storage storage host information
@@ -114,9 +111,9 @@ type (
 		IPNetwork           string    `json:"ipnetwork"`
 		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		EnodeID    enode.ID        `json:"enodeid"`
-		EnodeURL   string          `json:"enodeurl"`
-		NodePubKey ecdsa.PublicKey `json:"nodepubkey"`
+		EnodeID    enode.ID `json:"enodeid"`
+		EnodeURL   string   `json:"enodeurl"`
+		NodePubKey []byte   `json:"nodepubkey"`
 
 		Filtered bool `json:"filtered"`
 	}
@@ -131,6 +128,7 @@ type (
 		Success   bool      `json:"success"`
 	}
 )
+
 type ContractParams struct {
 	Allowance            RentPayment
 	HostEnodeUrl         string
@@ -359,6 +357,13 @@ type (
 		Path         string `json:"path"`
 		TotalSectors uint64 `json:"totalSectors"`
 		UsedSectors  uint64 `json:"usedSectors"`
+	}
+
+	// HostSpace is the
+	HostSpace struct {
+		TotalSectors uint64 `json:"totalSectors"`
+		UsedSectors  uint64 `json:"usedSectors"`
+		FreeSectors  uint64 `json:"freeSectors"`
 	}
 )
 

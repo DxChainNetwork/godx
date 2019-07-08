@@ -19,6 +19,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -27,8 +28,6 @@ import (
 // 		2. contracts that have insufficient amount of funding, meaning the contract is about to be
 // 		   marked as not good for data uploading
 func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment) (closeToExpireRenews []contractRenewRecord, insufficientFundingRenews []contractRenewRecord) {
-
-	cm.log.Debug("Contract renew check started")
 
 	cm.lock.RLock()
 	currentBlockHeight := cm.blockHeight
@@ -64,8 +63,7 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		sectorUploadBandwidthCost := host.UploadBandwidthPrice.MultUint64(contractset.SectorSize)
 		sectorDownloadBandwidthCost := host.DownloadBandwidthPrice.MultUint64(contractset.SectorSize)
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
-
-		remainingBalancePercentage := contract.ContractBalance.Div(contract.TotalCost).Float64()
+		remainingBalancePercentage := contract.ContractBalance.DivWithFloatResult(contract.TotalCost)
 
 		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
 			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
@@ -218,7 +216,7 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	}
 	if err = cm.updateContractStatus(renewedContract.ID, renewedContractStatus); err != nil {
 		// renew succeed, but status update failed
-		cm.log.Warn(fmt.Sprintf("failed to update the renewed oldContract status: %s", err.Error()))
+		cm.log.Warn("failed to update the renewed oldContract status", "err", err.Error())
 		if err = cm.activeContracts.Return(oldContract); err != nil {
 			cm.log.Warn("during the updating renewed oldContract failed process, the oldContract cannot be returned because it has been deleted already")
 			err = nil
@@ -366,7 +364,7 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 		contractStatus.RenewAbility = false
 		contractStatus.Canceled = true
 		if err := failedContract.UpdateStatus(contractStatus); err != nil {
-			cm.log.Warn(fmt.Sprintf("failed to update the contract status during renew failed handling: %s", err.Error()))
+			cm.log.Warn("failed to update the contract status during renew failed handling", "err", err.Error())
 		}
 
 		err = fmt.Errorf("marked the contract %v as canceled due to the large amount of renew fails: %s", failedContract.Metadata().ID, renewError.Error())
@@ -429,7 +427,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 		MissedProofOutputs: []types.DxcoinCharge{
 			{Value: clientPayout.BigIntPtr(), Address: clientAddr},
-			{Value: hostPayout.Sub(baseCollateral).Add(host.ContractPrice).BigIntPtr(), Address: hostAddr},
+			{Value: hostPayout.Sub(baseCollateral).BigIntPtr(), Address: hostAddr},
 		},
 	}
 
@@ -454,10 +452,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer func() {
-		cm.log.Error("contract renew: disconnect session")
-		cm.b.Disconnect(session, host.EnodeURL)
-	}()
+	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -545,10 +540,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
+	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
+	if err != nil {
+		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+	}
+
 	// wrap some information about this contract
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
-		EnodeID:                PubkeyToEnodeID(&host.NodePubKey),
+		EnodeID:                PubkeyToEnodeID(pubKey),
 		StartHeight:            startHeight,
 		TotalCost:              funding,
 		ContractFee:            host.ContractPrice,
@@ -560,8 +560,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	oldRoots, err := oldContract.MerkleRoots()
-	if err != nil {
+	if err != nil && err != dberrors.ErrNotFound {
 		return storage.ContractMetaData{}, err
+	} else if err == dberrors.ErrNotFound {
+		oldRoots = []common.Hash{}
 	}
 
 	// store this contract info to client local

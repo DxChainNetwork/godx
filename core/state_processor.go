@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"math/big"
 	"strconv"
 
@@ -29,8 +28,6 @@ import (
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/rlp"
-	trie2 "github.com/DxChainNetwork/godx/trie"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -88,39 +85,30 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
 	if statedb.Exist(statusAddr) {
 
-		// iterator all the storage contract status in this account
-		trie := statedb.StorageTrie(statusAddr)
-		trieNode := trie.NodeIterator(nil)
-		it := trie2.NewIterator(trieNode)
-		for it.Next() {
-			value := it.Value
+		// iterator all the storage contract status in this account: StorageContractID --> status
+		statedb.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
+			if value == common.BytesToHash([]byte{'0'}) {
+				contractAddr := common.BytesToAddress(key[12:])
 
-			// if this account has not proofed contract, effect the missed output
-			if bytes.Equal(value, []byte{'0'}) {
-				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes[12:])
-				contractTrie := statedb.StorageTrie(contractAddr)
-				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
-				if err != nil {
-					return nil, nil, 0, err
-				}
+				// retrieve storage contract filed data
+				clientAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
+				hostAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
+				clientMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
+				hostMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
 
-				mpos := []types.DxcoinCharge{}
-				err = rlp.DecodeBytes(mpoBytes, &mpos)
-				if err != nil {
-					return nil, nil, 0, err
-				}
+				// return back the remain amount to client and host
+				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
+				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
+				statedb.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
+				statedb.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
 
-				totalValue := new(big.Int).SetInt64(0)
-				for _, mpo := range mpos {
-					totalValue.Add(totalValue, mpo.Value)
-					statedb.AddBalance(mpo.Address, mpo.Value)
-				}
+				// deduct the sum missed output from contract account
+				totalValue := new(big.Int).Add(clientMpo, hostMpo)
 				statedb.SubBalance(contractAddr, totalValue)
 			}
-		}
+			return true
+		})
 	}
-
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 

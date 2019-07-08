@@ -56,7 +56,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/nat"
 	"github.com/DxChainNetwork/godx/p2p/netutil"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -113,101 +112,89 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	PrevFilePathFlag = cli.StringFlag{
+		Name:  "prevpath",
+		Usage: "used to specify the previous file path",
+	}
+
+	NewFilePathFlag = cli.StringFlag{
+		Name:  "newpath",
+		Usage: "used to specify the new file path",
+	}
+
+	FilePathFlag = cli.StringFlag{
+		Name:  "filepath",
+		Usage: "used to specify the file",
+	}
+
+	FileSourceFlag = cli.StringFlag{
+		Name:  "src",
+		Usage: "used to specify the source of the file that is going to be uploaded/downloaded from",
+	}
+
+	FileDestinationFlag = cli.StringFlag{
+		Name:  "dst",
+		Usage: "used to specify the destination of the file that is going to ge uploaded/downloaded to",
+	}
+
+	PaymentAddressFlag = cli.StringFlag{
+		Name:  "address",
+		Usage: "use to set up the payment address used for the storage service",
+	}
+
+	ContractIDFlag = cli.StringFlag{
+		Name:  "contractid",
+		Usage: "use to query the detailed contract information based on the contract ID",
+	}
+
 	PeriodFlag = cli.StringFlag{
-		Name:  "p",
-		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, days, weeks, and years",
+		Name:  "period",
+		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
 	}
 
 	HostsFlag = cli.StringFlag{
 		Name:  "host",
-		Usage: "the host flag is used to define how many hosts that storage client wanted to sign contract with, the value must be greater than 1",
+		Usage: "the host flag is used to define how many hosts that storage client wants to sign contract with, the value must be greater than 2",
 	}
 
 	RenewFlag = cli.StringFlag{
-		Name:  "r",
-		Usage: "the renew flag is used to define the automatically contract renew window. The smaller the value is, more frequent the contract will get renewed",
+		Name:  "renew",
+		Usage: "the renew flag is used to define the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
 	}
 
 	FundFlag = cli.StringFlag{
-		Name:  "f",
+		Name:  "fund",
 		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
 	}
 
-	ExpectedStorageFlag = cli.StringFlag{
-		Name:  "es",
-		Usage: "the expected storage flag is used to define the expected storage",
-	}
+	//ExpectedStorageFlag = cli.StringFlag{
+	//	Name:  "es",
+	//	Usage: "the expected storage flag is used to define the expected storage",
+	//}
+	//
+	//ExpectedUploadFlag = cli.StringFlag{
+	//	Name:  "eu",
+	//	Usage: "the expected upload flag is used to define the expected amount of data that is going to be uploaded",
+	//}
+	//
+	//ExpectedDownloadFlag = cli.StringFlag{
+	//	Name:  "ed",
+	//	Usage: "the expected download flag is used to define the expected amount of data that is going to be downloaded",
+	//}
+	//
+	//ExpectedRedundancyFlag = cli.StringFlag{
+	//	Name:  "er",
+	//	Usage: "the expected redundancy flag defines the expected data redundancies. The higher the value is, the safer the data are",
+	//}
+	//
+	//IPViolationFlag = cli.BoolFlag{
+	//	Name:  "ipcheck",
+	//	Usage: "the ip violation flag defines if the ip violation check will be enabled or not. By enabling the ip violation check, storage hosts under the same network address cannot be selected together",
+	//}
 
-	ExpectedUploadFlag = cli.StringFlag{
-		Name:  "eu",
-		Usage: "the expected upload flag is used to define the expected amount of data that is going to be uploaded",
-	}
-
-	ExpectedDownloadFlag = cli.StringFlag{
-		Name:  "ed",
-		Usage: "the expected download flag is used to define the expected amount of data that is going to be downloaded",
-	}
-
-	ExpectedRedundancyFlag = cli.StringFlag{
-		Name:  "er",
-		Usage: "the expected redundancy flag defines the expected data redundancies. The higher the value is, the safer the data are",
-	}
-
-	MaxUploadLimitFlag = cli.StringFlag{
-		Name:  "mu",
-		Usage: "the max upload limit flag defines the maximum upload speed",
-	}
-
-	MaxDownloadLimitFlag = cli.StringFlag{
-		Name:  "md",
-		Usage: "the max download limit flag defines the maximum download speed",
-	}
-
-	IPViolationFlag = cli.BoolFlag{
-		Name:  "ipcheck",
-		Usage: "the ip violation flag defines if the ip violation check will be enabled or not. By enabling the ip violation check, storage hosts under the same network address cannot be selected together",
-	}
-
-	StorageHostManagerEnodeFlag = cli.StringFlag{
-		Name:  "enodeid",
-		Usage: "used to query the storage host information based on the enode id",
-	}
-
-	// Storage Host Manager Testing
-	StorageHostManagerInsertFlag = cli.IntFlag{
-		Name:  "insertamount",
-		Usage: "set up how many host info wants to insert into the pool",
-	}
-
-	// Storage Client
-	StorageClientMemoryFlag = cli.Uint64Flag{
-		Name:  "memorylimit",
-		Usage: "Memory limitation for storage client",
-		Value: storageclient.DefaultMaxMemory,
-	}
-
-	DownloadLengthFlag = cli.Uint64Flag{
-		Name:  "length",
-		Usage: "length of file downloaded for storage client",
-		Value: storageclient.DefaultDownloadLength,
-	}
-
-	DownloadOffsetFlag = cli.Uint64Flag{
-		Name:  "offset",
-		Usage: "offset of file downloaded for storage client",
-		Value: storageclient.DefaultDownloadOffset,
-	}
-
-	DownloadLocalPathFlag = cli.StringFlag{
-		Name:  "localpath",
-		Usage: "localpath of writing the downloaded file",
-		Value: filepath.Join(node.DefaultDataDir(), "downloadfiles"),
-	}
-
-	DownloadRemotePathFlag = cli.StringFlag{
-		Name:  "remotepath",
-		Usage: "remotepath of storing the downloaded file",
-		Value: storageclient.DefaultDownloadDxFilePath,
+	StorageHostIDFlag = cli.StringFlag{
+		Name:  "hostid",
+		Usage: "used to query the storage host information based on the node id",
 	}
 
 	// General settings
@@ -602,7 +589,7 @@ var (
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
 		Usage: "Network listening port",
-		Value: 30303,
+		Value: 36000,
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
@@ -712,6 +699,16 @@ var (
 		Name:  "vm.evm",
 		Usage: "External EVM configuration (default = built-in interpreter)",
 		Value: "",
+	}
+
+	StorageHostFlag = cli.BoolFlag{
+		Name:  "storagehost",
+		Usage: "Used to enable the storage host module, the node will be act as storage host",
+	}
+
+	StorageClientFlag = cli.BoolFlag{
+		Name:  "storageclient",
+		Usage: "Used to enable the storage client module, the node will be act as storage client",
 	}
 )
 
@@ -1308,6 +1305,19 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 	if ctx.GlobalIsSet(EVMInterpreterFlag.Name) {
 		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(StorageClientFlag.Name) {
+		cfg.StorageClient = ctx.GlobalBool(StorageClientFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(StorageHostFlag.Name) {
+		cfg.StorageHost = ctx.GlobalBool(StorageHostFlag.Name)
+	}
+
+	// If datadir is set, change ethash directory
+	if ctx.GlobalIsSet(DataDirFlag.Name) {
+		cfg.Ethash.DatasetDir = filepath.Join(ctx.GlobalString(DataDirFlag.Name), "Ethash")
 	}
 
 	// Override any default configs for hard coded networks.

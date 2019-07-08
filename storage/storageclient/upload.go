@@ -6,13 +6,14 @@ package storageclient
 
 import (
 	"fmt"
+	"math"
+	"os"
+
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"math"
-	"os"
 )
 
 // Upload instructs the storage client to start tracking a file. The storage client will
@@ -42,7 +43,8 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 
 	// Delete existing file if Override mode
 	if up.Mode == storage.Override {
-		if err := sc.DeleteFile(up.DxPath); err != nil && err != dxdir.ErrUnknownPath {
+		err := sc.DeleteFile(up.DxPath)
+		if err != nil && err != dxdir.ErrUnknownPath {
 			return fmt.Errorf("cannot to delete existing file, error: %v", err)
 		}
 	}
@@ -63,13 +65,14 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 
 	// Try to create the directory. If ErrPathOverload is returned it already exists
 	dxDirEntry, err := sc.fileSystem.DirSet().NewDxDir(dirDxPath)
-	if err != dxdir.ErrPathOverload && err != nil {
+	if err != os.ErrExist && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
 		if err := dxDirEntry.Close(); err != nil {
 			return err
 		}
 	}
+	//sc.log.Error("test error for NewDxDir in upload", "error", err)
 
 	cipherKey, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -81,12 +84,8 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
-	if err := entry.Close(); err != nil {
-		return err
-	}
-
 	if sourceInfo.Size() == 0 {
-		return nil
+		return fmt.Errorf("source file size is 0, fileName: %s", sourceInfo.Name())
 	}
 
 	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file

@@ -65,9 +65,6 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
 func (sc *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
-	sc.log.Error("Retrieving Host Setting")
-	defer sc.log.Error("Got Host Setting", "setting", *config)
-
 	return sc.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
 }
 
@@ -151,14 +148,14 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo
 }
 
 func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
-	return sc.ethBackend.SetupStorageConnection(hostEnodeUrl)
+	return sc.ethBackend.SetupIndependentStorageConnection(hostEnodeUrl)
 }
 func (sc *StorageClient) AccountManager() *accounts.Manager {
 	return sc.ethBackend.AccountManager()
 }
 
 func (sc *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return sc.ethBackend.Disconnect(session, hostEnodeUrl)
+	return sc.ethBackend.StorageSessionNegotiateDone(session)
 }
 
 func (sc *StorageClient) ChainConfig() *params.ChainConfig {

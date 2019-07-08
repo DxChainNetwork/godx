@@ -234,3 +234,22 @@ func TestCmp(t *testing.T) {
 		}
 	}
 }
+
+func TestBigInt_DivWithFloatResult(t *testing.T) {
+	tables := []struct {
+		a      int64
+		b      int64
+		result float64
+	}{
+		{10000, 300, float64(10000) / float64(300)},
+		{73846123, 321, float64(73846123) / float64(321)},
+		{938381398213, 738321338211, float64(938381398213) / float64(738321338211)},
+	}
+
+	for _, table := range tables {
+		got := NewBigInt(table.a).DivWithFloatResult(NewBigInt(table.b))
+		if got != table.result {
+			t.Errorf("Division result does not match. Expected %v, got %v", table.result, got)
+		}
+	}
+}

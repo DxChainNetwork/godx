@@ -42,14 +42,14 @@ import (
 )
 
 const (
-	clientIdentifier = "geth" // Client identifier to advertise over the network
+	clientIdentifier = "gdx" // Client identifier to advertise over the network
 )
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
 	gitCommit = ""
 	// The app that holds all commands and flags.
-	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
+	app = utils.NewApp(gitCommit, "the gdx command line interface")
 	// flags that configure the node
 	nodeFlags = []cli.Flag{
 		utils.IdentityFlag,
@@ -135,6 +135,8 @@ var (
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
+		utils.StorageHostFlag,
+		utils.StorageClientFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -161,26 +163,18 @@ var (
 	}
 
 	storageClientFlags = []cli.Flag{
-		utils.StorageClientMemoryFlag,
+		utils.StorageHostIDFlag,
+		utils.ContractIDFlag,
 		utils.PeriodFlag,
 		utils.HostsFlag,
 		utils.RenewFlag,
 		utils.FundFlag,
-		utils.ExpectedStorageFlag,
-		utils.ExpectedUploadFlag,
-		utils.ExpectedDownloadFlag,
-		utils.ExpectedRedundancyFlag,
-		utils.MaxUploadLimitFlag,
-		utils.MaxDownloadLimitFlag,
-		utils.IPViolationFlag,
-	}
-
-	storageHostManagerTestFlags = []cli.Flag{
-		utils.StorageHostManagerInsertFlag,
-	}
-
-	storageHostManagerFlags = []cli.Flag{
-		utils.StorageHostManagerEnodeFlag,
+		utils.PaymentAddressFlag,
+		utils.FileSourceFlag,
+		utils.FileDestinationFlag,
+		utils.FilePathFlag,
+		utils.PrevFilePathFlag,
+		utils.NewFilePathFlag,
 	}
 )
 
@@ -188,7 +182,7 @@ func init() {
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
-	app.Copyright = "Copyright 2013-2018 The go-ethereum Authors"
+	app.Copyright = "Copyright 2018-2019 The DxChain Team"
 	app.Commands = []cli.Command{
 		// See chaincmd.go:
 		initCommand,
@@ -218,11 +212,6 @@ func init() {
 		dumpConfigCommand,
 		// See storageclientcmd.go
 		storageClientCommand,
-
-		// see shmtest.go
-		hostManagerTestCommand,
-		// see storagehostmanagercmd.go
-		hostManagerCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -232,8 +221,6 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 	app.Flags = append(app.Flags, storageClientFlags...)
-	app.Flags = append(app.Flags, storageHostManagerFlags...)
-	app.Flags = append(app.Flags, storageHostManagerTestFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""

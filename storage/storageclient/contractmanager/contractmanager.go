@@ -181,6 +181,7 @@ func (cm *ContractManager) IsRenewing(contractID storage.ContractID) (renewing b
 
 // HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by the output
 func (cm *ContractManager) HostHealthMapByID(hostIDs []enode.ID) (infoTable storage.HostHealthInfoTable) {
+	infoTable = make(storage.HostHealthInfoTable, len(hostIDs))
 	// loop through the storage host id provided
 	for _, id := range hostIDs {
 		// get the storage host information first
@@ -215,6 +216,7 @@ func (cm *ContractManager) HostHealthMapByID(hostIDs []enode.ID) (infoTable stor
 // HostHealthMap returns all storage host information and contract information from active contract list
 func (cm *ContractManager) HostHealthMap() (infoTable storage.HostHealthInfoTable) {
 	// loop through all active contracts
+	infoTable = make(storage.HostHealthInfoTable, len(cm.activeContracts.RetrieveAllContractsMetaData()))
 	for _, contract := range cm.activeContracts.RetrieveAllContractsMetaData() {
 		// find the storage host based on the enode id
 		info, exists := cm.hostManager.RetrieveHostInfo(contract.EnodeID)

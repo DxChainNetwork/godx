@@ -189,7 +189,7 @@ func (s *dialstate) removeStatic(n *enode.Node) {
 // The storage independent peer with eth peer(connection)
 // This is the method that avoids the single peer between two enode restriction
 func (s *dialstate) addStorage(n *enode.Node) {
-	s.storage[n.ID()] = &dialTask{flags: storageContractConn | storageClientConn, dest: n}
+	s.storage[n.ID()] = &dialTask{flags: storageContractConn, dest: n}
 }
 
 // remove the storage dial task

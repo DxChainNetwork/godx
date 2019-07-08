@@ -151,6 +151,7 @@ func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, e
 		// return the locked storage folder, the index, and nil error
 		return
 	}
+
 	// After loop over all folders, still no available slot found
 	return nil, 0, errAllFoldersFullOrUsed
 }

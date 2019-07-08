@@ -1572,13 +1572,21 @@ func (s *PublicNetAPI) Version() string {
 	return fmt.Sprintf("%d", s.networkVersion)
 }
 
-func (s *PublicNetAPI) AddStorageContractPeer(node *enode.Node) (bool, error) {
+func (s *PublicNetAPI) AddStorageContractPeer(node *enode.Node, peerChan chan struct{}) (bool, error) {
 	server := s.net
 	if server == nil {
 		return false, fmt.Errorf("server stopped")
 	}
 
 	server.AddStorageContractPeer(node)
+
+	// making sure to unblock the adding peer process from the storage contract
+	// connection setup
+	select {
+	case <-peerChan:
+	default:
+	}
+
 	server.AddPeer(node)
 	return true, nil
 }

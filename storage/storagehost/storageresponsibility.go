@@ -6,55 +6,16 @@ package storagehost
 
 import (
 	"bytes"
-	"errors"
 	"math/big"
 	"reflect"
-	"strconv"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-)
-
-const (
-	postponedExecution          = 3  //Total length of time to start a test task
-	confirmedBufferHeight       = 40 //signing transaction not confirmed maximum time
-	errGetStorageResponsibility = "failed to get data from DB as I wished "
-	errPutStorageResponsibility = "failed to put data from DB as I wished "
-	//PrefixStorageResponsibility db prefix for StorageResponsibility
-	PrefixStorageResponsibility = "StorageResponsibility-"
-	//PrefixHeight db prefix for task
-	PrefixHeight = "height-"
-)
-
-//Storage contract should not be empty
-var (
-	emptyStorageContract = types.StorageContract{}
-
-	//Total time to sign the contract
-	postponedExecutionBuffer = storage.BlocksPerDay
-)
-
-const (
-	unresolved storageResponsibilityStatus = iota //Storage responsibility is initialization, no meaning
-	rejected                                      //Storage responsibility never begins
-	succeeded                                     // Successful storage responsibility
-	failed                                        //Failed storage responsibility
-)
-
-var (
-	errEmptyOriginStorageContract = errors.New("storage contract has no storage responsibility")
-	errEmptyRevisionSet           = errors.New("take the last revision ")
-	errInsaneRevision             = errors.New("revision is not necessary")
-	errNotAllowed                 = errors.New("time is not allowed")
-	errTransactionNotConfirmed    = errors.New("transaction not confirmed")
 )
 
 type (
@@ -88,40 +49,7 @@ type (
 		StorageRevisionConfirmed   bool
 		StorageRevisionConstructed bool
 	}
-
-	storageResponsibilityStatus uint64
 )
-
-func (i storageResponsibilityStatus) String() string {
-	switch i {
-	case 0:
-		return "unresolved"
-	case 1:
-		return "rejected"
-	case 2:
-		return "succeeded"
-	case 3:
-		return "failed"
-	default:
-		return "storageResponsibilityStatus(" + strconv.FormatInt(int64(i), 10) + ")"
-	}
-}
-
-func getStorageResponsibility(db ethdb.Database, sc common.Hash) (StorageResponsibility, error) {
-	so, errGet := GetStorageResponsibility(db, sc)
-	if errGet != nil {
-		return StorageResponsibility{}, errGet
-	}
-	return so, nil
-}
-
-func putStorageResponsibility(db ethdb.Database, so StorageResponsibility) error {
-	return StoreStorageResponsibility(db, so.id(), so)
-}
-
-func deleteStorageResponsibility(db ethdb.Database, sc common.Hash) error {
-	return DeleteStorageResponsibility(db, sc)
-}
 
 //Returns expired block number
 func (so *StorageResponsibility) expiration() uint64 {
@@ -194,17 +122,21 @@ func (so StorageResponsibility) value() common.BigInt {
 	return so.ContractCost.Add(so.PotentialDownloadRevenue).Add(so.PotentialStorageRevenue).Add(so.PotentialUploadRevenue).Add(so.RiskedStorageDeposit)
 }
 
-func (h *StorageHost) deleteStorageResponsibilities(soids []common.Hash) error {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-	for _, soid := range soids {
-		err := deleteStorageResponsibility(h.db, soid)
-		if err != nil {
-			return err
-		}
+// storageResponsibilities fetches the set of storage Responsibility in the host and
+// returns metadata on them.
+func (h *StorageHost) storageResponsibilities() (sos []StorageResponsibility) {
+	if len(h.lockedStorageResponsibility) < 1 {
+		return nil
 	}
-
-	return nil
+	for i := range h.lockedStorageResponsibility {
+		so, err := getStorageResponsibility(h.db, i)
+		if err != nil {
+			h.log.Warn("Failed to get storage responsibility", "err", err)
+			continue
+		}
+		sos = append(sos, so)
+	}
+	return sos
 }
 
 //Schedule a task to execute at the specified block number
@@ -214,23 +146,19 @@ func (h *StorageHost) queueTaskItem(height uint64, id common.Hash) error {
 		h.log.Info("It is not appropriate to arrange such a task")
 	}
 
-	return StoreHeight(h.db, id, height)
+	return storeHeight(h.db, id, height)
 }
 
-//InsertStorageResponsibility insert a storage Responsibility to the storage host.
-func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) error {
+//insertStorageResponsibility insert a storage Responsibility to the storage host.
+func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 	err := func() error {
-		h.lock.Lock()
-		defer h.lock.Unlock()
-		if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
-			h.log.Warn("insertStorageResponsibility called with an responsibility that is not locked")
-		}
-
 		//Submit revision time exceeds storage responsibility expiration time
-		if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
-			h.log.Warn("failed to submit revision in storage responsibility due date")
-			return errNotAllowed
-		}
+		//if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
+		//	h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
+		//	return errNotAllowed
+		//}
 
 		//Not enough time to submit proof of storage, no need to put in the task force
 		if so.expiration()+postponedExecution >= so.proofDeadline() {
@@ -246,7 +174,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 					return err
 				}
 			}
-			errPut := StoreStorageResponsibility(h.db, so.id(), so)
+			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
 				return errPut
 			}
@@ -274,9 +202,6 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 	if err != nil {
 		return err
 	}
-
-	h.lock.Lock()
-	defer h.lock.Unlock()
 	//insert the check  contract create task in the task queue.
 	errContractCreate := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
 	errContractCreateDoubleTime := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
@@ -291,7 +216,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 	err = common.ErrCompose(errContractCreate, errContractCreateDoubleTime, errRevision, errRevisionDoubleTime, errProof, errProofDoubleTime)
 	if err != nil {
 		h.log.Warn("Error with task item, redacting responsibility", "id", so.id())
-		return common.ErrCompose(err, h.removeStorageResponsibility(so, rejected))
+		return common.ErrCompose(err, h.removeStorageResponsibility(so, responsibilityRejected))
 	}
 
 	return nil
@@ -299,7 +224,7 @@ func (h *StorageHost) InsertStorageResponsibility(so StorageResponsibility) erro
 
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[so.id()]; ok {
+	if _, ok := h.lockedStorageResponsibility[so.id()]; !ok {
 		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
@@ -351,7 +276,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 			return errOld
 		}
 
-		return putStorageResponsibility(h.db, so)
+		return putStorageResponsibility(h.db, so.id(), so)
 	}()
 
 	if errDBso != nil {
@@ -389,10 +314,10 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	return nil
 }
 
-//PruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
-func (h *StorageHost) PruneStaleStorageResponsibilities() error {
+//pruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
+func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 	h.lock.RLock()
-	sos := h.StorageResponsibilities()
+	sos := h.storageResponsibilities()
 	h.lock.RUnlock()
 	var scids []common.Hash
 	for _, so := range sos {
@@ -410,7 +335,6 @@ func (h *StorageHost) PruneStaleStorageResponsibilities() error {
 		h.log.Warn("unable to delete responsibility", "err", err)
 		return err
 	}
-
 	// Update the financial metrics of the host.
 	return h.resetFinancialMetrics()
 }
@@ -422,9 +346,9 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 	h.DeleteSectorBatch(so.SectorRoots)
 
 	switch sos {
-	case unresolved:
-		h.log.Info("storage responsibility 'unresolved' during call to removeStorageResponsibility", "id", so.id())
-	case rejected:
+	case responsibilityUnresolved:
+		h.log.Info("storage responsibility 'responsibilityUnresolved' during call to removeStorageResponsibility", "id", so.id())
+	case responsibilityRejected:
 		if h.financialMetrics.TransactionFeeExpenses.Cmp(so.TransactionFeeExpenses) >= 0 {
 			// Remove the responsibility statistics as potential risk and income.
 			h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(so.ContractCost)
@@ -435,7 +359,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 			h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(so.RiskedStorageDeposit)
 			h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Sub(so.TransactionFeeExpenses)
 		}
-	case succeeded:
+	case responsibilitySucceeded:
 		revenue := so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 		//No storage responsibility for file upload or download does not require proof of storage
 		if len(so.SectorRoots) == 0 {
@@ -458,7 +382,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 		h.financialMetrics.DownloadBandwidthRevenue = h.financialMetrics.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 		h.financialMetrics.UploadBandwidthRevenue = h.financialMetrics.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
 
-	case failed:
+	case responsibilityFailed:
 		// Remove the responsibility statistics as potential risk and income.
 		h.log.Info("Missed storage proof.", "Revenue", so.ContractCost.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue))
 
@@ -478,7 +402,7 @@ func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos 
 	h.financialMetrics.ContractCount--
 	so.ResponsibilityStatus = sos
 	so.SectorRoots = []common.Hash{}
-	return StoreStorageResponsibility(h.db, so.id(), so)
+	return putStorageResponsibility(h.db, so.id(), so)
 }
 
 func (h *StorageHost) resetFinancialMetrics() error {
@@ -486,13 +410,13 @@ func (h *StorageHost) resetFinancialMetrics() error {
 	defer h.lock.Unlock()
 
 	fm := HostFinancialMetrics{}
-	sos := h.StorageResponsibilities()
+	sos := h.storageResponsibilities()
 	for _, so := range sos {
 		// Submit transaction fee first
 		fm.TransactionFeeExpenses = fm.TransactionFeeExpenses.Add(so.TransactionFeeExpenses)
 		// Update the other financial values based on the responsibility status.
 		switch so.ResponsibilityStatus {
-		case unresolved:
+		case responsibilityUnresolved:
 			fm.ContractCount++
 			fm.PotentialContractCompensation = fm.PotentialContractCompensation.Add(so.ContractCost)
 			fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.LockedStorageDeposit)
@@ -500,15 +424,15 @@ func (h *StorageHost) resetFinancialMetrics() error {
 			fm.RiskedStorageDeposit = fm.RiskedStorageDeposit.Add(so.RiskedStorageDeposit)
 			fm.PotentialDownloadBandwidthRevenue = fm.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 			fm.PotentialUploadBandwidthRevenue = fm.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
-		case succeeded:
+		case responsibilitySucceeded:
 			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
 			fm.StorageRevenue = fm.StorageRevenue.Add(so.PotentialStorageRevenue)
 			fm.DownloadBandwidthRevenue = fm.DownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
 			fm.UploadBandwidthRevenue = fm.UploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
-		case failed:
+		case responsibilityFailed:
 			fm.ContractCompensation = fm.ContractCompensation.Add(so.ContractCost)
 			if !so.RiskedStorageDeposit.IsNeg() {
-				// Storage responsibility failed with risked collateral.
+				// Storage responsibility responsibilityFailed with risked collateral.
 				fm.LostRevenue = fm.LostRevenue.Add(so.PotentialStorageRevenue).Add(so.PotentialDownloadRevenue).Add(so.PotentialUploadRevenue)
 				fm.LockedStorageDeposit = fm.LockedStorageDeposit.Add(so.RiskedStorageDeposit)
 			}
@@ -520,48 +444,40 @@ func (h *StorageHost) resetFinancialMetrics() error {
 }
 
 //Handling storage responsibilities in the task queue
-func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
-	if err := h.tm.Add(); err != nil {
-		return
-	}
-	defer h.tm.Done()
-
+func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
 	defer func() {
 		h.checkAndUnlockStorageResponsibility(soid)
 	}()
 
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	// Fetch the storage Responsibility associated with the storage responsibility id.
-	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, soid)
-	h.lock.RUnlock()
 	if err != nil {
 		h.log.Warn("Could not get storage Responsibility", "err", err)
 		return
 	}
 
-	//Skip if the storage responsibility has been completed
-	if so.ResponsibilityStatus != unresolved {
+	//Skip if the storage obligation has been completed
+	if so.ResponsibilityStatus != responsibilityUnresolved {
 		return
 	}
 
 	if !so.CreateContractConfirmed {
 		if h.blockHeight > so.expiration() {
-			h.log.Info("If the storage contract has expired and the contract transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
-			err := h.removeStorageResponsibility(so, rejected)
+			h.log.Info("If the storage contract has expired and the contract transaction has not been confirmed, delete the storage responsibility", "id", so.id().String())
+			err := h.removeStorageResponsibility(so, responsibilityRejected)
 			if err != nil {
-				h.log.Warn("failed to delete storage responsibility", "err", err)
+				h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 			}
-			h.lock.Unlock()
 			return
 		}
 
 		//It is possible that the signing of the storage contract transaction has not yet been executed, and it is waiting in the task queue.
-		h.lock.Lock()
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing task item", "err", err)
 		}
@@ -571,20 +487,16 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 	//If revision meets the condition, a revision transaction will be submitted.
 	if !so.StorageRevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-postponedExecutionBuffer {
 		if h.blockHeight > so.expiration() {
-			h.log.Info("If the storage contract has expired and the revision transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
-			err := h.removeStorageResponsibility(so, rejected)
+			h.log.Info("If the storage contract has expired and the revision transaction has not been confirmed, delete the storage responsibility", "id", so.id().String())
+			err := h.removeStorageResponsibility(so, responsibilityRejected)
 			if err != nil {
-				h.log.Warn("failed to delete storage responsibility", "err", err)
+				h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 			}
-			h.lock.Unlock()
 			return
 		}
 
 		//It is possible that the signing of the storage contract transaction has not yet been executed, and it is waiting in the task queue.
-		h.lock.Lock()
 		err := h.queueTaskItem(h.blockHeight+postponedExecution, so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing action item", "err", err)
 		}
@@ -597,7 +509,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a revision transaction to the transaction pool.
-		if _, err := h.SendStorageContractRevisionTx(scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
+		if _, err := h.sendStorageContractRevisionTx(scrv.NewValidProofOutputs[1].Address, scBytes); err != nil {
 			h.log.Warn("Error sending a revision transaction", "err", err)
 			return
 		}
@@ -605,13 +517,9 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 
 	//If revision meets the condition, a proof transaction will be submitted.
 	if !so.StorageProofConfirmed && h.blockHeight >= so.expiration()+postponedExecution {
-		h.log.Warn("The host is ready to submit a proof of transaction", "id", so.id())
-
 		if len(so.SectorRoots) == 0 {
-			h.log.Warn("The sector is empty and no storage operation appears", "id", so.id())
-			h.lock.Lock()
-			err := h.removeStorageResponsibility(so, succeeded)
-			h.lock.Unlock()
+			h.log.Info("The sector is empty and no storage operation appears", "id", so.id().String())
+			err := h.removeStorageResponsibility(so, responsibilitySucceeded)
 			if err != nil {
 				h.log.Warn("Error removing storage Responsibility", "err", err)
 			}
@@ -619,10 +527,8 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		if so.proofDeadline() < h.blockHeight {
-			h.log.Info("If the storage contract has expired and the proof transaction has not been confirmed, delete the storage responsibility", "id", so.id())
-			h.lock.Lock()
-			err := h.removeStorageResponsibility(so, failed)
-			h.lock.Unlock()
+			h.log.Info("If the storage contract has expired and the proof transaction has not been confirmed, delete the storage responsibility", "id", so.id().String())
+			err := h.removeStorageResponsibility(so, responsibilityFailed)
 			if err != nil {
 				h.log.Warn("Error removing storage Responsibility", "err", err)
 			}
@@ -630,7 +536,8 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The storage host side gets the index of the data containing the segment
-		segmentIndex, err := h.storageProofSegment(so.OriginStorageContract)
+		scrv := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
+		segmentIndex, err := h.storageProofSegment(scrv)
 		if err != nil {
 			h.log.Warn("An error occurred while getting the storage certificate from the storage host", "err", err)
 			return
@@ -647,7 +554,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 
 		//Build a storage certificate for this storage contract
 		sectorSegment := segmentIndex % (storage.SectorSize / merkle.LeafSize)
-		base, cachedHashSet := MerkleProof(sectorBytes, sectorSegment)
+		base, cachedHashSet := merkleProof(sectorBytes, sectorSegment)
 		// Using the sector, build a cached root.
 		log2SectorSize := uint64(0)
 		for 1<<log2SectorSize < (storage.SectorSize / merkle.LeafSize) {
@@ -671,7 +578,7 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		//Here take the address of the storage host in the storage contract book
 		fromAddress := so.OriginStorageContract.ValidProofOutputs[1].Address
 		account := accounts.Account{Address: fromAddress}
-		wallet, err := h.ethBackend.AccountManager().Find(account)
+		wallet, err := h.am.Find(account)
 		if err != nil {
 			h.log.Warn("There was an error opening the wallet", "err", err)
 			return
@@ -690,41 +597,36 @@ func (h *StorageHost) threadedHandleTaskItem(soid common.Hash) {
 		}
 
 		//The host sends a storage proof transaction to the transaction pool.
-		if _, err := h.SendStorageProofTx(fromAddress, spBytes); err != nil {
+		if _, err := h.sendStorageProofTx(fromAddress, spBytes); err != nil {
 			h.log.Warn("Error sending a storage proof transaction", "err", err)
 			return
 		}
 
-		h.lock.Lock()
 		//Insert the check proof task in the task queue.
 		err = h.queueTaskItem(so.proofDeadline(), so.id())
-		h.lock.Unlock()
 		if err != nil {
 			h.log.Warn("Error queuing task item", err)
 		}
 	}
 
 	// Save the storage Responsibility.
-	errDB := StoreStorageResponsibility(h.db, soid, so)
+	errDB := putStorageResponsibility(h.db, soid, so)
 	if errDB != nil {
 		h.log.Warn("Error updating the storage Responsibility", errDB)
 	}
 
 	//If the submission of the storage certificate is successful during the non-expiration period, this deletes the storage responsibility
 	if so.StorageProofConfirmed && h.blockHeight >= so.proofDeadline() {
-		h.log.Info("This storage responsibility is responsible for the completion of the storage contract", "id", so.id())
-		h.lock.Lock()
-		err := h.removeStorageResponsibility(so, succeeded)
+		err := h.removeStorageResponsibility(so, responsibilitySucceeded)
 		if err != nil {
-			h.log.Warn("failed to delete storage responsibility", "err", err)
+			h.log.Warn("responsibilityFailed to delete storage responsibility", "err", err)
 		}
-		h.lock.Unlock()
 	}
 
 }
 
-//MerkleProof get the storage proof
-func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
+//merkleProof get the storage proof
+func merkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Hash) {
 	t := merkle.NewTree()
 	//This error doesn't mean anything to us.
 	t.SetIndex(proofIndex)
@@ -751,9 +653,9 @@ func MerkleProof(b []byte, proofIndex uint64) (base []byte, hashSet []common.Has
 }
 
 //If it exists, return the index of the segment in the storage contract that needs to be proved
-func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, error) {
-	fcid := fc.RLPHash()
-	triggerHeight := fc.WindowStart - 1
+func (h *StorageHost) storageProofSegment(fc types.StorageContractRevision) (uint64, error) {
+	fcid := fc.ParentID
+	triggerHeight := fc.NewWindowStart - 1
 
 	block, errGetHeight := h.ethBackend.GetBlockByNumber(triggerHeight)
 	if errGetHeight != nil {
@@ -762,7 +664,7 @@ func (h *StorageHost) storageProofSegment(fc types.StorageContract) (uint64, err
 
 	triggerID := block.Hash()
 	seed := crypto.Keccak256Hash(triggerID[:], fcid[:])
-	numSegments := int64(calculateLeaves(fc.FileSize))
+	numSegments := int64(calculateLeaves(fc.NewFileSize))
 	seedInt := new(big.Int).SetBytes(seed[:])
 	index := seedInt.Mod(seedInt, big.NewInt(numSegments)).Uint64()
 
@@ -777,336 +679,12 @@ func calculateLeaves(dataSize uint64) uint64 {
 	return numSegments
 }
 
-//HostBlockHeightChange handle when a new block is generated or a block is rolled back
-func (h *StorageHost) HostBlockHeightChange(cce core.ChainChangeEvent) {
-
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	//Handling rolled back blocks
-	h.RevertedBlockHashesStorageResponsibility(cce.RevertedBlockHashes)
-
-	//Block executing the main chain
-	taskItems := h.ApplyBlockHashesStorageResponsibility(cce.AppliedBlockHashes)
-	for i := range taskItems {
-		go h.threadedHandleTaskItem(taskItems[i])
-	}
-
-	err := h.syncConfig()
-	if err != nil {
-		h.log.Warn("could not save during ProcessConsensusChange", "err", err)
-	}
-
-}
-
-// subscribeChainChangeEvent will receive changes on the block chain (blocks added / reverted)
-// once received, a function will be triggered to analyze those blocks
-func (h *StorageHost) subscribeChainChangEvent() {
-	if err := h.tm.Add(); err != nil {
-		return
-	}
-	defer h.tm.Done()
-
-	chainChanges := make(chan core.ChainChangeEvent, 100)
-	h.ethBackend.SubscribeChainChangeEvent(chainChanges)
-
-	for {
-		select {
-		case change := <-chainChanges:
-			h.HostBlockHeightChange(change)
-		case <-h.tm.StopChan():
-			return
-		}
-	}
-}
-
-//ApplyBlockHashesStorageResponsibility block executing the main chain
-func (h *StorageHost) ApplyBlockHashesStorageResponsibility(blocks []common.Hash) []common.Hash {
-	var taskItems []common.Hash
-	for _, blockApply := range blocks {
-		//apply contract transaction
-		ContractCreateIDsApply, revisionIDsApply, storageProofIDsApply, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockApply)
-		if errGetBlock != nil {
-			continue
-		}
-
-		//Traverse all contract transactions and modify storage responsibility status
-		for _, id := range ContractCreateIDsApply {
-			so, errGet := getStorageResponsibility(h.db, id)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			so.CreateContractConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		//Traverse all revision transactions and modify storage responsibility status
-		for key, value := range revisionIDsApply {
-			so, errGet := getStorageResponsibility(h.db, key)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			if len(so.StorageContractRevisions) < 1 {
-				h.log.Warn("Storage contract cannot get revisions", "id", so.id())
-				continue
-			}
-			//To prevent vicious attacks, determine the consistency of the revision number.
-			if value == so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewRevisionNumber {
-				so.StorageRevisionConfirmed = true
-			}
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		//Traverse all storageProof transactions and modify storage responsibility status
-		for _, id := range storageProofIDsApply {
-			so, errGet := getStorageResponsibility(h.db, id)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			so.StorageProofConfirmed = true
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		if number != 0 {
-			h.blockHeight++
-		}
-		existingItems, err := GetHeight(h.db, h.blockHeight)
-		if err != nil {
-			continue
-		}
-
-		// From the existing items, pull out a storage responsibility.
-		knownActionItems := make(map[common.Hash]struct{})
-		responsibilityIDs := make([]common.Hash, len(existingItems)/common.HashLength)
-		for i := 0; i < len(existingItems); i += common.HashLength {
-			copy(responsibilityIDs[i/common.HashLength][:], existingItems[i:i+common.HashLength])
-		}
-		for _, soid := range responsibilityIDs {
-			_, exists := knownActionItems[soid]
-			if !exists {
-				taskItems = append(taskItems, soid)
-				knownActionItems[soid] = struct{}{}
-			}
-		}
-
-	}
-	return taskItems
-}
-
-//RevertedBlockHashesStorageResponsibility handling rolled back blocks
-func (h *StorageHost) RevertedBlockHashesStorageResponsibility(blocks []common.Hash) {
-	for _, blockReverted := range blocks {
-		//Rollback contract transaction
-		ContractCreateIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.GetAllStorageContractIDsWithBlockHash(blockReverted)
-		if errGetBlock != nil {
-			h.log.Warn("Failed to get the data from the block as expected ", "err", errGetBlock)
-			continue
-		}
-
-		//Traverse all ContractCreate transactions and modify storage responsibility status
-		for _, id := range ContractCreateIDs {
-			so, errGet := getStorageResponsibility(h.db, id)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			so.CreateContractConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		//Traverse all revision transactions and modify storage responsibility status
-		for key := range revisionIDs {
-			so, errGet := getStorageResponsibility(h.db, key)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			so.StorageRevisionConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		//Traverse all storageProof transactions and modify storage responsibility status
-		for _, id := range storageProofIDs {
-			so, errGet := getStorageResponsibility(h.db, id)
-			if errGet != nil {
-				h.log.Warn(errGetStorageResponsibility, "err", errGet)
-				continue
-			}
-			so.StorageProofConfirmed = false
-			errPut := putStorageResponsibility(h.db, so)
-			if errPut != nil {
-				h.log.Warn(errPutStorageResponsibility, "err", errPut)
-				continue
-			}
-		}
-
-		if number != 0 && h.blockHeight > 1 {
-			h.blockHeight--
-		}
-
-	}
-
-}
-
-//GetAllStorageContractIDsWithBlockHash analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
-func (h *StorageHost) GetAllStorageContractIDsWithBlockHash(blockHash common.Hash) (ContractCreateIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
-	revisionIDs = make(map[common.Hash]uint64)
-	precompiled := vm.PrecompiledEVMFileContracts
-	block, err := h.ethBackend.GetBlockByHash(blockHash)
-	if err != nil {
-		errGet = err
-		return
-	}
-	number = block.NumberU64()
-	txs := block.Transactions()
-	for _, tx := range txs {
-		p, ok := precompiled[*tx.To()]
-		if !ok {
-			continue
-		}
-		switch p {
-		case vm.ContractCreateTransaction:
-			var sc types.StorageContract
-			err := rlp.DecodeBytes(tx.Data(), &sc)
-			if err != nil {
-				h.log.Warn("Error when serializing storage contract:", "err", err)
-				continue
-			}
-			ContractCreateIDs = append(ContractCreateIDs, sc.RLPHash())
-		case vm.CommitRevisionTransaction:
-			var scr types.StorageContractRevision
-			err := rlp.DecodeBytes(tx.Data(), &scr)
-			if err != nil {
-				h.log.Warn("Error when serializing revision:", "err", err)
-				continue
-			}
-			revisionIDs[scr.ParentID] = scr.NewRevisionNumber
-		case vm.StorageProofTransaction:
-			var sp types.StorageProof
-			err := rlp.DecodeBytes(tx.Data(), &sp)
-			if err != nil {
-				h.log.Warn("Error when serializing proof:", "err", err)
-				continue
-			}
-			storageProofIDs = append(storageProofIDs, sp.ParentID)
-		default:
-			continue
-		}
-	}
-	return
-}
-
-// StorageResponsibilities fetches the set of storage Responsibility in the host and
-// returns metadata on them.
-func (h *StorageHost) StorageResponsibilities() (sos []StorageResponsibility) {
-	if len(h.lockedStorageResponsibility) < 1 {
-		return nil
-	}
-
-	for i := range h.lockedStorageResponsibility {
-		so, err := GetStorageResponsibility(h.db, i)
-		if err != nil {
-			h.log.Warn(errGetStorageResponsibility, "err", err)
-			continue
-		}
-
-		sos = append(sos, so)
-	}
-
-	return sos
-}
-
-// SendStorageContractRevisionTx send revision contract tx
-func (h *StorageHost) SendStorageContractRevisionTx(from common.Address, input []byte) (common.Hash, error) {
+// sendStorageContractRevisionTx send revision contract tx
+func (h *StorageHost) sendStorageContractRevisionTx(from common.Address, input []byte) (common.Hash, error) {
 	return h.parseAPI.StorageTx.SendContractRevisionTX(from, input)
 }
 
 // SendStorageProofTx send storage proof tx
-func (h *StorageHost) SendStorageProofTx(from common.Address, input []byte) (common.Hash, error) {
+func (h *StorageHost) sendStorageProofTx(from common.Address, input []byte) (common.Hash, error) {
 	return h.parseAPI.StorageTx.SendStorageProofTX(from, input)
-}
-
-//StoreStorageResponsibility storage storageResponsibility from DB
-func StoreStorageResponsibility(db ethdb.Database, storageContractID common.Hash, so StorageResponsibility) error {
-	scdb := ethdb.StorageContractDB{db}
-	data, err := rlp.EncodeToBytes(so)
-	if err != nil {
-		return err
-	}
-	return scdb.StoreWithPrefix(storageContractID, data, PrefixStorageResponsibility)
-}
-
-//DeleteStorageResponsibility delete storageResponsibility from DB
-func DeleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
-	scdb := ethdb.StorageContractDB{db}
-	return scdb.DeleteWithPrefix(storageContractID, PrefixStorageResponsibility)
-}
-
-//GetStorageResponsibility get storageResponsibility from DB
-func GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (StorageResponsibility, error) {
-	scdb := ethdb.StorageContractDB{db}
-	valueBytes, err := scdb.GetWithPrefix(storageContractID, PrefixStorageResponsibility)
-	if err != nil {
-		return StorageResponsibility{}, err
-	}
-	var so StorageResponsibility
-	err = rlp.DecodeBytes(valueBytes, &so)
-	if err != nil {
-		return StorageResponsibility{}, err
-	}
-	return so, nil
-}
-
-//StoreHeight storage task by block height
-func StoreHeight(db ethdb.Database, storageContractID common.Hash, height uint64) error {
-	scdb := ethdb.StorageContractDB{db}
-
-	existingItems, err := GetHeight(db, height)
-	if err != nil {
-		existingItems = make([]byte, 0)
-	}
-
-	existingItems = append(existingItems, storageContractID[:]...)
-
-	return scdb.StoreWithPrefix(height, existingItems, PrefixHeight)
-}
-
-//DeleteHeight delete task by block height
-func DeleteHeight(db ethdb.Database, height uint64) error {
-	scdb := ethdb.StorageContractDB{db}
-	return scdb.DeleteWithPrefix(height, PrefixHeight)
-}
-
-//GetHeight get the task by block height
-func GetHeight(db ethdb.Database, height uint64) ([]byte, error) {
-	scdb := ethdb.StorageContractDB{db}
-	valueBytes, err := scdb.GetWithPrefix(height, PrefixHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	return valueBytes, nil
 }

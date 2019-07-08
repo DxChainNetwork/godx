@@ -308,10 +308,16 @@ func DefaultGenesisBlock() *Genesis {
 	return &Genesis{
 		Config:     params.MainnetChainConfig,
 		Nonce:      66,
-		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
-		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
-		Alloc:      decodePrealloc(mainnetAllocData),
+		ExtraData:  hexutil.MustDecode("0x4478436861696e204e6574776f726b20546573746e657420302e372e32"),
+		GasLimit:   3141592,
+		Difficulty: big.NewInt(1048576),
+		// TODO: Replace this account with the known account
+		Alloc: map[common.Address]GenesisAccount{
+			common.BytesToAddress([]byte{6, 6, 6}):                            {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Lsh(big.NewInt(1), 70)},
+			common.HexToAddress("0x4c7eb4cb3ef21b7db6edcd892cb9b243780ec08a"): {Balance: new(big.Int).Lsh(big.NewInt(1), 70)},
+			common.HexToAddress("0x280206ba85137b2ce5398ba1141242771f6f0de2"): {Balance: new(big.Int).Lsh(big.NewInt(1), 70)},
+		},
 	}
 }
 

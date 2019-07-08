@@ -1,8 +1,7 @@
 package storagehost
 
 import (
-	"math/big"
-	"math/rand"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,191 +12,77 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
-// constant range for generating the number randomly
-// this is only used by test case
-const RANDRANGE = 100000000
+var dumper = spew.ConfigState{DisableMethods: true, Indent: "    "}
 
-// Test if the persist Folder could be generate as expected
-// Test if the persist file could be fill using the default value
-// 		when the host is the first time initialized
-func TestStorageHost_DefaultFolderStatus(t *testing.T) {
-	// clear the saved data for testing
-	removeFolders("./testdata/", t)
-	defer removeFolders("./testdata/", t)
-
-	// do a new host, check if the folder are all generated
-	host, err := New("./testdata/")
+// tempDir removes and creates the folder named dxfile under the temp directory.
+func tempDir(dirs ...string) string {
+	path := filepath.Join(os.TempDir(), "storagehost", filepath.Join(dirs...))
+	err := os.RemoveAll(path)
 	if err != nil {
-		t.Errorf(err.Error())
+		panic(fmt.Sprintf("cannot remove all files under %v: %v", path, err))
 	}
-
-	// check if the database folder is initialized
-	if f, err := os.Stat("./testdata/hostdb"); err != nil {
-		t.Errorf(err.Error())
-	} else if !f.IsDir() {
-		t.Error("the hostdb should be a directory")
+	err = os.MkdirAll(path, 0777)
+	if err != nil {
+		panic(fmt.Sprintf("cannot create directory %v", path))
 	}
+	return path
+}
 
-	// test if the host.json file is initialized
-	if _, err := os.Stat("./testdata/host.json"); err != nil {
-		t.Errorf(err.Error())
+func newTestStorageHost(t *testing.T) *StorageHost {
+	dir := tempDir(t.Name())
+	h, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	// close the host, the file should be synchronize
-	if err := host.Close(); err != nil {
-		t.Errorf("Unable to close the host")
+	// load the default settings
+	if err = h.load(); err != nil {
+		t.Fatal(err)
 	}
+	return h
+}
 
-	// manually load persistence, check if the setting is the default setting
-	persist := new(persistence)
-	if err := common.LoadDxJSON(storageHostMeta, filepath.Join("./testdata/", HostSettingFile), persist); err != nil {
-		t.Errorf(err.Error())
+func TestStorageHost_Load(t *testing.T) {
+	h := newTestStorageHost(t)
+	// Check whether the file has default settings
+	if err := checkHostConfigFile(filepath.Join(h.persistDir, HostSettingFile), defaultConfig()); err != nil {
+		t.Fatal(err)
 	}
+	// Set one of the value
+	if err := h.setAcceptContracts(true); err != nil {
+		t.Fatal(err)
+	}
+	// stop the host
+	if err := h.tm.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	h.StorageManager.Start()
+	h.StorageManager.Close()
+	h.db.Close()
 
-	// assert that the persistence file save the default setting
-	if !reflect.DeepEqual(persist.Config, loadDefaultConfig()) {
-		spew.Dump(persist.Config)
-		spew.Dump(loadDefaultConfig())
-		t.Errorf("the persistence file does not save the default setting as expected")
+	h2, err := New(h.persistDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h2.load(); err != nil {
+		t.Fatal(err)
+	}
+	newConfig := defaultConfig()
+	newConfig.AcceptingContracts = true
+	if err := checkHostConfigFile(filepath.Join(h2.persistDir, HostSettingFile), newConfig); err != nil {
+		t.Fatal(err)
 	}
 }
 
-// Test if changing setting would result the change of the setting file
-func TestStorageHost_DataPreservation(t *testing.T) {
-	// clear the saved data for testing
-	removeFolders("./testdata/", t)
-	defer removeFolders("./testdata/", t)
-
-	// try to do the first data json renew, use the default value
-	host, err := New("./testdata/")
-	if err != nil {
-		t.Errorf(err.Error())
+func checkHostConfigFile(path string, expect storage.HostIntConfig) error {
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("file stat: %v", err)
 	}
-
-	// extract the persistence data from host
-	persist1 := host.extractPersistence()
-
-	for Iterations := 10; Iterations > 0; Iterations-- {
-
-		// close the host to check if it can save the data as expected
-		//if err := host.Close(); err != nil {
-		//	t.Errorf(err.Error())
-		//}
-
-		// renew the host again, check if match the data saving before closed
-		//host, err = New("./testdata/")
-		//if err != nil {
-		//	t.Errorf(err.Error())
-		//}
-
-		persist2 := host.extractPersistence()
-
-		if !reflect.DeepEqual(persist1, persist2) {
-			spew.Dump(persist1)
-			spew.Dump(persist2)
-			t.Errorf("two persistance does not equal to each other")
-		}
-
-		// change serveral part in the setting again, use the random value
-		// NOTE: this number does not make any sense, just for checking
-		// 		if the related method indeed can change and persist the host
-
-		// host primitive variable
-		host.broadcast = rand.Float32() < 0.5
-		host.revisionNumber = uint64(rand.Intn(RANDRANGE))
-		// host setting structure
-		host.config.AcceptingContracts = rand.Float32() < 0.5
-		host.config.Deposit = *big.NewInt(int64(rand.Intn(RANDRANGE)))
-		// host financial Metrics
-		host.financialMetrics.ContractCount = uint64(rand.Intn(RANDRANGE))
-		host.financialMetrics.StorageRevenue = common.NewBigInt(RANDRANGE)
-
-		// extract the persistence information
-		persist1 = host.extractPersistence()
-
-		// make sure the persistence indeed loaded by the host
-		if host.broadcast != persist1.BroadCast ||
-			host.revisionNumber != persist1.RevisionNumber ||
-			host.config.AcceptingContracts != persist1.Config.AcceptingContracts ||
-			!reflect.DeepEqual(host.config.Deposit, persist1.Config.Deposit) ||
-			host.financialMetrics.ContractCount != persist1.FinalcialMetrics.ContractCount ||
-			!reflect.DeepEqual(host.financialMetrics.StorageRevenue, persist1.FinalcialMetrics.StorageRevenue) {
-			t.Errorf("persistence extracted from host does not match the expected")
-		}
+	var p persistence
+	if err := common.LoadDxJSON(storageHostMeta, path, &p); err != nil {
+		return fmt.Errorf("cannot load DxJSON: %v", err)
 	}
-
-	if err := host.Close(); err != nil {
-		t.Errorf(err.Error())
+	if !reflect.DeepEqual(p.Config, expect) {
+		return fmt.Errorf("config not expected. \n\tExpect %vGot%v", dumper.Sdump(expect), dumper.Sdump(p.Config))
 	}
-}
-
-func TestStorageHost_SetIntSetting(t *testing.T) {
-	// clear the saved data for testing
-	removeFolders("./testdata/", t)
-	defer removeFolders("./testdata/", t)
-
-	// try to do the first data json renew, use the default value
-	host, err := New("./testdata/")
-	if err != nil {
-		t.Errorf(err.Error())
-	}
-	// initialize the revision number to 0
-	host.revisionNumber = 0
-
-	for Iterations := 10; Iterations > 0; Iterations-- {
-		// selectively random a storHostIntSetting
-		internalSetting := storage.HostIntConfig{
-			AcceptingContracts:   rand.Float32() < 0.5,
-			MaxDownloadBatchSize: uint64(rand.Intn(RANDRANGE)),
-			Deposit:              *big.NewInt(int64(rand.Intn(RANDRANGE))),
-			MinBaseRPCPrice:      *big.NewInt(int64(rand.Intn(RANDRANGE))),
-		}
-
-		// set the randomly generated field to host
-		if err := host.SetIntConfig(internalSetting, true); err != nil {
-			t.Errorf("fail to set the internal setting")
-		}
-
-		// check if the revision number is increase
-		if host.revisionNumber != uint64(10-Iterations+1) {
-			t.Errorf("the revision number does not increase as expected")
-		}
-
-		// // This field just hard code the comparison, if more complex data structure is added
-		// // to field, simple use this may correct some error
-		// check if the host internal setting is set
-		//extracted := host.InternalConfig()
-		//
-		//if  extracted.AcceptingContracts != internalSetting.AcceptingContracts ||
-		//	extracted.MaxDownloadBatchSize != internalSetting.MaxDownloadBatchSize ||
-		//	!reflect.DeepEqual(extracted.Deposit, internalSetting.Deposit) ||
-		//	!reflect.DeepEqual(extracted.MinBaseRPCPrice, internalSetting.MinBaseRPCPrice){
-		//
-		//	spew.Dump(internalSetting)
-		//	spew.Dump(extracted)
-		//	t.Errorf("the host setting does not match the previously setted")
-		//}
-
-		// TODO: for a more complex data structure, some field may be init as nil, but some
-		//  filed would be init as an empty structure, in order to keep them consistence, more
-		//  handling may needed
-
-		if !reflect.DeepEqual(host.InternalConfig(), internalSetting) {
-			spew.Dump(internalSetting)
-			spew.Dump(host.InternalConfig())
-			t.Errorf("the host setting does not match the previously setted")
-		}
-	}
-
-	if err := host.Close(); err != nil {
-		t.Errorf(err.Error())
-	}
-}
-
-// helper function to clear the data file before and after a test case execute
-func removeFolders(persisDir string, t *testing.T) {
-	// clear the testing data
-	if err := os.RemoveAll(persisDir); err != nil {
-		t.Error("cannot remove the data when testing")
-	}
+	return nil
 }

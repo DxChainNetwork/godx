@@ -26,6 +26,9 @@ type EthBackend interface {
 	GetBlockChain() *core.BlockChain
 	SetupStorageConnection(hostEnodeURL string) (*Session, error)
 	Disconnect(session *Session, hostEnodeURL string) error
+	SetupIndependentStorageConnection(hostEnodeURL string) (*Session, error)
+	StorageSessionNegotiateDone(session *Session) error
+
 	GetBlockByNumber(number uint64) (*types.Block, error)
 
 	AccountManager() *accounts.Manager

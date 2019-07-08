@@ -49,6 +49,11 @@ const (
 
 	// stop msg code
 	NegotiationStopMsg = 0x34
+
+	// Storage Protocol Host Flag
+	StorageHostStartMsg = 0x35
+	StorageClientStartMsg = 0x36
+
 )
 
 type SessionSet struct {
@@ -127,21 +132,42 @@ type Session struct {
 	// upload and download tash is done, signal the renew goroutine
 	revisionDone chan struct{}
 
-	maxUploadDownloadSectorNum uint32
+	// client negotiate start chan
+	clientNegotiateStart chan struct{}
+
+	// storage negotiate protocol done
+	negotiateDone chan struct{}
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	return &Session{
-		id:         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		Peer:       p,
-		rw:         rw,
-		version:    version,
-		clientDisc: make(chan error),
+		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:         p,
+		rw:           rw,
+		version:      version,
+		clientDisc:   make(chan error),
+		revisionDone: make(chan struct{}, 1),
+		negotiateDone: make(chan struct{}, 1),
+		clientNegotiateStart: make(chan struct{}, 1),
 	}
 }
 
-func (s *Session) StopConnection() {
-	s.clientDisc <- ErrClientDisconnect
+func (s *Session) StopConnection() bool {
+	select {
+	case s.clientDisc <- ErrClientDisconnect:
+	case <-s.ClosedChan():
+	default:
+		return false
+	}
+	return true
+}
+
+func (s *Session) ClientNegotiateStartChan() chan struct{} {
+	return s.clientNegotiateStart
+}
+
+func (s *Session) ClientNegotiateDoneChan() chan struct{} {
+	return s.negotiateDone
 }
 
 func (s *Session) ClientDiscChan() chan error {
@@ -173,14 +199,6 @@ func (s *Session) RevisionDone() chan struct{} {
 	return s.revisionDone
 }
 
-func (s *Session) AddMaxUploadDownloadSectorNum(n uint32) {
-	atomic.AddUint32(&s.maxUploadDownloadSectorNum, n)
-}
-
-func (s *Session) LoadMaxUploadDownloadSectorNum() uint32{
-	return atomic.LoadUint32(&s.maxUploadDownloadSectorNum)
-}
-
 func (s *Session) getConn() net.Conn {
 	return s.Peer.GetConn()
 }
@@ -205,16 +223,37 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 }
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
+	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+		return err
+	}
+
+	select {
+	case <-s.ClientNegotiateStartChan():
+	case <-time.After(1 * time.Second):
+		return errors.New("receive client negotiate start msg timeout")
+	}
+
 	return p2p.Send(s.rw, HostSettingMsg, data)
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Warn("Sending host settings response from host", "msg", data)
+	s.Log().Debug("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {
 	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
+
+	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+		return err
+	}
+
+	select {
+	case <-s.ClientNegotiateStartChan():
+	case <-time.After(1 * time.Second):
+		return errors.New("receive client negotiate start msg timeout")
+	}
+
 	return p2p.Send(s.rw, StorageContractCreationMsg, data)
 }
 
@@ -234,38 +273,59 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 }
 
 // upload protocol
-
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload request", "request", data)
+	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+		return err
+	}
+
+	select {
+	case <-s.ClientNegotiateStartChan():
+	case <-time.After(1 * time.Second):
+		return errors.New("receive client negotiate start msg timeout")
+	}
+
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload proof", "proof", data)
 	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload client revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
 }
 
 // download protocol
-
 func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract download request", "request", data)
+	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+		return err
+	}
+
+	select {
+	case <-s.ClientNegotiateStartChan():
+	case <-time.After(1 * time.Second):
+		return errors.New("receive client negotiate start msg timeout")
+	}
+
 	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractDownloadData(data interface{}) error {
-	s.Log().Debug("Sending storage contract download data", "data", data)
 	return p2p.Send(s.rw, StorageContractDownloadDataMsg, data)
 }
+
+func (s *Session) SendStorageNegotiateHostStartMsg(data interface{}) error {
+	return p2p.Send(s.rw, StorageHostStartMsg, data)
+}
+
+func (s *Session) SendStorageNegotiateClientStartMsg(data interface{}) error {
+	return p2p.Send(s.rw, StorageClientStartMsg, data)
+}
+
 
 func (s *Session) ReadMsg() (*p2p.Msg, error) {
 	msg, err := s.rw.ReadMsg()
@@ -278,7 +338,7 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
-	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
 }
 
 func (s *Session) IsClosed() bool {

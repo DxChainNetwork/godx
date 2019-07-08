@@ -35,9 +35,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 		t.Errorf("failed to sign host announce: %v", err)
 	}
 
-	currentHeight := uint64(1001)
-
-	err = CheckMultiSignatures(ha, currentHeight, [][]byte{sigHa})
+	err = CheckMultiSignatures(ha, [][]byte{sigHa})
 	if err != nil {
 		t.Errorf("failed to check host announce signature: %v", err)
 	}
@@ -91,7 +89,7 @@ func TestCheckMultiSignatures(t *testing.T) {
 	sc.Signatures[0] = sigsScByClient
 	sc.Signatures[1] = sigsScByHost
 
-	err = CheckMultiSignatures(sc, currentHeight, sc.Signatures)
+	err = CheckMultiSignatures(sc, sc.Signatures)
 	if err != nil {
 		t.Errorf("failed to check storage contract signature: %v", err)
 	}

@@ -35,6 +35,10 @@ func (tl *TryLock) TryLock() bool {
 // Lock locks all locks at once.
 // The Lock will not cause dead lock
 func Lock(locks ...*TryLock) {
+	// If no locks input, simply return
+	if len(locks) == 0 {
+		return
+	}
 	// Pick the first lock as the hard lock.
 	// Hard lock is the lock that is lock last check by other goroutine
 	// So the hard lock is the first to check in lockHelper function
