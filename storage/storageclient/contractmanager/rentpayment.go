@@ -27,10 +27,10 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 	cm.rentPayment = rent
 	cm.lock.Unlock()
 
-	// check if the old payment is same as new payment
-	if reflect.DeepEqual(oldRent, rent) {
-		return errors.New("the payment entered is same as before")
-	}
+	//// check if the old payment is same as new payment
+	//if reflect.DeepEqual(oldRent, rent) {
+	//	return errors.New("the payment entered is same as before")
+	//}
 
 	// indicates the contracts have been canceled previously
 	if reflect.DeepEqual(oldRent, storage.RentPayment{}) {
