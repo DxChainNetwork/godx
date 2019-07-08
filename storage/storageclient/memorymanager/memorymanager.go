@@ -130,7 +130,7 @@ func (mm *MemoryManager) waitlistCheck() {
 
 	// try to process memory requests stored in the waitlist
 	for len(mm.waitlist) > 0 {
-		if !mm.try(mm.priorityWaitlist[0].amount) {
+		if !mm.try(mm.waitlist[0].amount) {
 			return
 		}
 		close(mm.waitlist[0].done)
