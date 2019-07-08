@@ -7,12 +7,12 @@ package storage
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 )
 
@@ -52,9 +52,8 @@ const (
 	NegotiationStopMsg = 0x34
 
 	// Storage Protocol Host Flag
-	StorageHostStartMsg = 0x35
+	StorageHostStartMsg   = 0x35
 	StorageClientStartMsg = 0x36
-
 )
 
 type SessionSet struct {
@@ -142,13 +141,13 @@ type Session struct {
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	return &Session{
-		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		Peer:         p,
-		rw:           rw,
-		version:      version,
-		clientDisc:   make(chan error),
-		revisionDone: make(chan struct{}, 1),
-		negotiateDone: make(chan struct{}, 1),
+		id:                   fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:                 p,
+		rw:                   rw,
+		version:              version,
+		clientDisc:           make(chan error),
+		revisionDone:         make(chan struct{}, 1),
+		negotiateDone:        make(chan struct{}, 1),
 		clientNegotiateStart: make(chan struct{}, 1),
 	}
 }
@@ -224,7 +223,7 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 }
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
-	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
 		return err
 	}
 
@@ -246,7 +245,7 @@ func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
 func (s *Session) SendStorageContractCreation(data interface{}) error {
 	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
 
-	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
 		return err
 	}
 
@@ -276,7 +275,7 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 
 // upload protocol
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
 		return err
 	}
 
@@ -303,14 +302,14 @@ func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) er
 
 // download protocol
 func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
-	if err := s.SendStorageNegotiateHostStartMsg(struct {}{}); err != nil {
+	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
 		return err
 	}
 
 	select {
 	case <-s.ClientNegotiateStartChan():
 		log.Error("receive download start chan")
-	case <-time.After(1 * time.Second):
+	case <-time.After(60 * time.Second):
 		log.Error("receive download start chan TIMEOUT")
 		return errors.New("receive client negotiate start msg timeout")
 	}
@@ -329,7 +328,6 @@ func (s *Session) SendStorageNegotiateHostStartMsg(data interface{}) error {
 func (s *Session) SendStorageNegotiateClientStartMsg(data interface{}) error {
 	return p2p.Send(s.rw, StorageClientStartMsg, data)
 }
-
 
 func (s *Session) ReadMsg() (*p2p.Msg, error) {
 	msg, err := s.rw.ReadMsg()
