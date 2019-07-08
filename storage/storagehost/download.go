@@ -3,6 +3,7 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"math/big"
 	"math/bits"
 	"reflect"
@@ -38,6 +39,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		} else if msg.Code != storage.NegotiationStopMsg {
 			stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
 		} else {
+			log.Error("handleDownload done", "msg code", msg.Code)
 			stopSignal <- nil
 		}
 	}()
@@ -193,6 +195,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		}
 	}
 
+	log.Error("-------Handle Download done------")
 	// the stop signal must arrive before RPC is complete.
 	return <-stopSignal
 }

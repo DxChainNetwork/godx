@@ -7,6 +7,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -308,7 +309,9 @@ func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
 
 	select {
 	case <-s.ClientNegotiateStartChan():
+		log.Error("receive download start chan")
 	case <-time.After(1 * time.Second):
+		log.Error("receive download start chan TIMEOUT")
 		return errors.New("receive client negotiate start msg timeout")
 	}
 

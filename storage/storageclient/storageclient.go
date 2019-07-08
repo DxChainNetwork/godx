@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -501,6 +502,8 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// the conn should be disconnected after 1 hour.
 	defer s.SetDeadLine(5 * time.Minute)
 
+	log.Error("Storage Client Download 1", "session busy", s.IsBusy())
+
 	// sanity check the request.
 	for _, sec := range req.Sections {
 		if uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize {
@@ -608,6 +611,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// send download request
 	s.SetDeadLine(storage.DownloadTime)
+
+	a,_ := json.Marshal(req)
+	log.Error("Storage Client Download 2", "download req.info", string(a))
+
 	err = s.SendStorageContractDownloadRequest(req)
 	if err != nil {
 		return err
