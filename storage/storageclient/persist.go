@@ -32,12 +32,6 @@ func (sc *StorageClient) loadPersist() error {
 	// initialize logger
 	sc.log = log.New()
 
-	// TODO (mzhang): Create Write ahead logger
-
-	// TODO (Jacky): Apply un-applied wal transactions
-
-	// TODO (Jacky): Initialize File Management Related Fields
-
 	return sc.loadSettings()
 }
 
