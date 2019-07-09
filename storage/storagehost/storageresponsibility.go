@@ -343,7 +343,9 @@ func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 func (h *StorageHost) removeStorageResponsibility(so StorageResponsibility, sos storageResponsibilityStatus) error {
 
 	//Unchecked error, even if there is an error, we want to delete
-	h.DeleteSectorBatch(so.SectorRoots)
+	if err := h.DeleteSectorBatch(so.SectorRoots); err != nil {
+		h.log.Error("delete sector batch", "err", err)
+	}
 
 	switch sos {
 	case responsibilityUnresolved:

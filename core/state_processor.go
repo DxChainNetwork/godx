@@ -17,9 +17,6 @@
 package core
 
 import (
-	"math/big"
-	"strconv"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/misc"
@@ -28,6 +25,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -81,34 +79,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// maintenance missed storage proof
 	height := header.Number.Uint64()
-	windowEndStr := strconv.FormatUint(height, 10)
-	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
-	if statedb.Exist(statusAddr) {
+	storagemaintenance.MaintenanceMissedProof(height, statedb)
 
-		// iterator all the storage contract status in this account: StorageContractID --> status
-		statedb.ForEachStorage(statusAddr, func(key, value common.Hash) bool {
-			if value == common.BytesToHash([]byte{'0'}) {
-				contractAddr := common.BytesToAddress(key[12:])
-
-				// retrieve storage contract filed data
-				clientAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientAddress")))
-				hostAddressHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostAddress")))
-				clientMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("ClientMissedProofOutput")))
-				hostMpoHash := statedb.GetState(contractAddr, common.BytesToHash([]byte("HostMissedProofOutput")))
-
-				// return back the remain amount to client and host
-				clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes())
-				hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes())
-				statedb.AddBalance(common.BytesToAddress(clientAddressHash.Bytes()), clientMpo)
-				statedb.AddBalance(common.BytesToAddress(hostAddressHash.Bytes()), hostMpo)
-
-				// deduct the sum missed output from contract account
-				totalValue := new(big.Int).Add(clientMpo, hostMpo)
-				statedb.SubBalance(contractAddr, totalValue)
-			}
-			return true
-		})
-	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)
 
