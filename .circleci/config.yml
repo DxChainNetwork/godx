@@ -1,4 +1,5 @@
-# CircleCI 2.0
+# CircleCI 2.0 configuration file
+# More details on https://circleci.com/docs/2.0/language-go/
 version: 2.0
 jobs:
   build_linux:
