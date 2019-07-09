@@ -30,5 +30,3 @@ storage/storageclient/testdata/*
 storage/storageclient/contractmanager/test/*
 
 coverage.txt
-go.mod
-go.sum

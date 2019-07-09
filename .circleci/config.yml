@@ -6,14 +6,8 @@ jobs:
       - image: circleci/golang:1.11.4
     steps:
       - checkout
-      - run:
-          name: SET go env and install package for project
-          command: |
-            go get -u golang.org/x/lint/golint
-
       - run: ./go_unit_test.sh
       - run: bash <(curl -s https://codecov.io/bash)
-      - run: go test -run=XXX -bench=. $(go list ./crypto)
       - run: make
 
 workflows:
