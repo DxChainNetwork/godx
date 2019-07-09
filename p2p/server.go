@@ -414,23 +414,7 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	case <-srv.quit:
 	}
 
-	var waitDone = make(chan struct{}, 1)
-	// wait for add done
-	go func() {
-		wg.Wait()
-		waitDone <- struct{}{}
-	}()
-
-	timeout := time.After(30 * time.Second)
-LOOP:
-	for {
-		select {
-		case <-waitDone:
-			break LOOP
-		case <-timeout:
-			break LOOP
-		}
-	}
+	wg.Wait()
 
 	delete(srv.storagePeerDoneMap, nodeID)
 }
