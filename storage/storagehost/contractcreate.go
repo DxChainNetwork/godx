@@ -22,39 +22,54 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 
 	if !h.externalConfig().AcceptingContracts {
 		err := errors.New("host is not accepting new contracts")
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
+
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("recover publicKey from signature failed", err)
 	}
+
 	// Check host balance >= storage contract cost
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("get state db error", err)
 	}
+
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
-		return ExtendErr("host balance insufficient", err)
+		err = fmt.Errorf("host balance insufficient, host balance: %v, the collateral: %v", stateDB.GetBalance(hostAddress).Uint64(), sc.HostCollateral.Value.Uint64())
+		s.SendNegotiateTerminateMsg(err.Error())
+		return err
 	}
+
 	account := accounts.Account{Address: hostAddress}
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("find host account error", err)
 	}
+
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("host account sign storage contract error", err)
 	}
+
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
 	sc.Signatures = [][]byte{req.Sign, hostContractSign}
@@ -64,14 +79,17 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		oldContractID := req.OldContractID
 		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oldContractID)
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return ExtendErr("host verify renewed storage contract failed ", err)
 		}
 	} else {
 		err = verifyStorageContract(h, &sc, clientPK, hostPK)
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return ExtendErr("host verify storage contract failed ", err)
 		}
 	}
+
 	// 2. After check, send host contract sign to client
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
 		return ExtendErr("send storage contract create sign by host", err)
@@ -83,7 +101,13 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	if err != nil {
 		return err
 	}
+
+	if s.CheckNegotiateTerminateMsg(msg) {
+		return storage.ErrNegotiateTerminate
+	}
+
 	if err = msg.Decode(&clientRevisionSign); err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 	// Reconstruct revision locally by host
@@ -108,7 +132,8 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		return ExtendErr("host sign revison error", err)
+		s.SendNegotiateTerminateMsg(err.Error())
+		return ExtendErr("host sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
@@ -142,6 +167,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		so.RiskedStorageDeposit = renewBaseDeposit(so, h.externalConfig(), req.StorageContract)
 	}
 	if err := finalizeStorageResponsibility(h, so); err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return ExtendErr("finalize storage responsibility error", err)
 	}
 	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)

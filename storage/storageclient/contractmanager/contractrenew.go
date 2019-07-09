@@ -468,6 +468,9 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	if err := session.SendStorageContractCreation(req); err != nil {
+		if err == storage.ErrSendNegotiateStartTimeout {
+			session.SendNegotiateTerminateMsg(err.Error())
+		}
 		return storage.ContractMetaData{}, err
 	}
 
@@ -477,14 +480,12 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if session.CheckNegotiateTerminateMsg(msg) {
+		return storage.ContractMetaData{}, storage.ErrNegotiateTerminate
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, err
 	}
 
@@ -506,6 +507,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
@@ -520,11 +522,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		return storage.ContractMetaData{}, err
 	}
 
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if session.CheckNegotiateTerminateMsg(msg) {
+		return storage.ContractMetaData{}, storage.ErrNegotiateTerminate
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {

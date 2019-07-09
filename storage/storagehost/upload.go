@@ -22,7 +22,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	// when occurs negotiate terminate msg, we return nil for the session continuing
 	if s.CheckNegotiateTerminateMsg(beginMsg) {
-		return nil
+		return storage.ErrNegotiateTerminate
 	}
 
 	// Read upload request
@@ -174,7 +174,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	if s.CheckNegotiateTerminateMsg(beginMsg) {
-		return nil
+		return storage.ErrNegotiateTerminate
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
@@ -215,7 +215,6 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 

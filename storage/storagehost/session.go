@@ -24,11 +24,16 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 		return errors.New("host session is nil")
 	}
 
-	if s.IsBusy() {
-		// wait for 3 seconds and retry
-		<-time.After(3 * time.Second)
-		h.log.Warn("session is busy, we will retry later")
-		return nil
+	i := 0
+	for s.IsBusy() {
+		if i < storage.BusyRetryNum {
+			// wait for 3 seconds and retry
+			<-time.After(3 * time.Second)
+			h.log.Warn("session is busy, we will retry once later")
+		} else {
+			return nil
+		}
+		i++
 	}
 
 	msg, err := s.ReadMsg()
@@ -38,7 +43,7 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	}
 
 	if s.CheckNegotiateTerminateMsg(msg) {
-		return nil
+		return storage.ErrNegotiateTerminate
 	}
 
 	log.Error("Handle Session Read Msg", "msg.Code", msg.Code)
@@ -61,7 +66,7 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 	settings := h.externalConfig()
 	if err := s.SendHostExtSettingsResponse(settings); err != nil {
 		h.log.Error("SendHostExtSettingResponse Error", "err", err)
-		return errors.New("host setting request done")
+		return errors.New("host setting request failed")
 	}
 
 	return nil

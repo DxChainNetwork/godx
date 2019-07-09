@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
 	"net"
@@ -376,41 +375,30 @@ func (pm *ProtocolManager) handle(p *peer) error {
 				return err
 			}
 
-			log.Error("Handle Read Msg", "msg code", msg.Code)
-
 			switch msg.Code {
 			case storage.StorageHostStartMsg:
-				log.Error("------Into Host Logic------")
 				// we send clientStart msg firstly to tell client we are ready to  handle negotiate process
 				if err := session.SendStorageNegotiateClientStartMsg(struct {}{}); err != nil {
 					session.Log().Error("send client negotiate start msg failed", "err", err)
 					return err
 				}
 
+				// negotiate business stage comes to an end. we will keep the underlying connection
 				if err := pm.eth.storageHost.HandleSession(session); err != nil {
-					if err != io.EOF {
-						session.Log().Error("storage host handle session message failed", "err", err)
-					}
-					return err
+					session.Log().Error("storage host handle negotiate business stage failed", "err", err)
 				}
 			case storage.StorageClientStartMsg:
-				log.Error("------Into Client Logic------")
-
 				select {
 				case session.ClientNegotiateStartChan() <- struct{}{}:
-					log.Error("Send ClientNegotiateStart Chan")
 				default:
 				}
 
 				select {
 				case err := <-session.ClientDiscChan():
-					log.Error("ClientDiscChan", "err", err)
 					return err
 				case <-session.Peer.ClosedChan():
-					log.Error("Client Session")
 					return errors.New("DX session is closed")
 				case <-session.ClientNegotiateDoneChan():
-					log.Error("---Receive ClientNegotiateDone Chan---")
 				}
 			}
 		}

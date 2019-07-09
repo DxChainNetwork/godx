@@ -253,24 +253,27 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		Renew:           false,
 	}
 	if err := session.SendStorageContractCreation(req); err != nil {
+		if err == storage.ErrSendNegotiateStartTimeout {
+			session.SendNegotiateTerminateMsg(err.Error())
+		}
 		err = fmt.Errorf("sendStorageContractCreation failed: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
+
 	var hostSign []byte
 	msg, err := session.ReadMsg()
 	if err != nil {
 		err = fmt.Errorf("contract create read message error: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+
+	if session.CheckNegotiateTerminateMsg(msg) {
+		return storage.ContractMetaData{}, storage.ErrNegotiateTerminate
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
 		err = fmt.Errorf("failed to decode host signature: %s", err.Error())
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, err
 	}
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
@@ -288,30 +291,34 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		NewMissedProofOutputs: storageContract.MissedProofOutputs,
 		NewUnlockHash:         storageContract.UnlockHash,
 	}
+
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
 	}
+
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
+
 	var hostRevisionSign []byte
 	msg, err = session.ReadMsg()
 	if err != nil {
 		err = fmt.Errorf("failed to read message after sned revision sign: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+
+	if session.CheckNegotiateTerminateMsg(msg) {
+		return storage.ContractMetaData{}, storage.ErrNegotiateTerminate
 	}
+
 	if err := msg.Decode(&hostRevisionSign); err != nil {
 		err = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
+
 	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
@@ -321,6 +328,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
+
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
@@ -338,6 +346,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			RenewAbility:  true,
 		},
 	}
+
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
@@ -345,5 +354,4 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, err
 	}
 	return meta, nil
-
 }

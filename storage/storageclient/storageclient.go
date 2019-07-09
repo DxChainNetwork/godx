@@ -504,7 +504,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 
 	if err := msg.Decode(&hostRevisionSig); err != nil {
-		session.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -518,7 +517,6 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	select {
 	case session.ClientNegotiateDoneChan() <- struct{}{}:
-		log.Error("Send Client Upload Negotiate Chan")
 	default:
 	}
 
@@ -532,8 +530,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
 	// the conn should be disconnected after 1 hour.
 	defer s.SetDeadLine(5 * time.Minute)
-
-	log.Error("Storage Client Download Negotiate Start ", "session busy", s.IsBusy())
 
 	// sanity check the request.
 	for _, sec := range req.Sections {
@@ -653,21 +649,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return err
 	}
 
-	// spawn a goroutine to handle cancellation
-	//doneChan := make(chan struct{})
-	//go func() {
-	//	select {
-	//	case <-cancel:
-	//	case <-doneChan:
-	//	}
-	//
-	//	// if negotiation is canceled or done, client should send stop msg to host
-	//	//s.SendStopMsg()
-	//}()
-	//
-	//// ensure we send DownloadStop before returning
-	//defer close(doneChan)
-
 	// read responses
 	var hostSig []byte
 	for _, sec := range req.Sections {
@@ -680,13 +661,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		if s.CheckNegotiateTerminateMsg(msg) {
 			return storage.ErrNegotiateTerminate
 		}
-
-		//// if host send some negotiation error, client should handler it
-		//if msg.Code == storage.NegotiationErrorMsg {
-		//	var negotiationErr error
-		//	msg.Decode(&negotiationErr)
-		//	return negotiationErr
-		//}
 
 		err = msg.Decode(&resp)
 		if err != nil {
@@ -718,7 +692,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 				s.SendNegotiateTerminateMsg(err.Error())
 				return err
 			}
+		}
 
+		// send sector download success msg to host that the host will transfer the next sector
+		if err := s.SendDownloadSectorSuccessMsg(sec.Offset); err != nil {
+			return err
 		}
 
 		// if host sent signature, indicate the download complete, should exit the loop
@@ -728,6 +706,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		}
 	}
 
+	// TODO remove the last hostsig check code
 	if hostSig == nil {
 		// if we haven't received host signature, just read again
 		var resp storage.DownloadResponse
@@ -740,21 +719,14 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return storage.ErrNegotiateTerminate
 		}
 
-		//// if host send some negotiation error, client should handler it
-		//if msg.Code == storage.NegotiationErrorMsg {
-		//	var negotiationErr error
-		//	msg.Decode(&negotiationErr)
-		//	return negotiationErr
-		//}
-
 		err = msg.Decode(&resp)
 		if err != nil {
-			s.SendNegotiateTerminateMsg(err.Error())
 			return err
 		}
 
 		hostSig = resp.Signature
 	}
+
 	newRevision.Signatures = [][]byte{clientSig, hostSig}
 
 	// commit this revision
@@ -765,7 +737,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	select {
 	case s.ClientNegotiateDoneChan() <- struct{}{}:
-		log.Error("Send Client Download Negotiate Chan")
 	default:
 	}
 

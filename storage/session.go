@@ -23,6 +23,8 @@ var (
 )
 
 const (
+	BusyRetryNum = 1
+
 	IDLE = 0
 	BUSY = 1
 
@@ -45,9 +47,7 @@ const (
 	// Download Data Segment Code Msg
 	StorageContractDownloadRequestMsg      = 0x30
 	StorageContractDownloadDataMsg         = 0x31
-
-	// error msg code
-	NegotiationErrorMsg = 0x32
+	StorageContractDownloadSectorSuccessMsg = 0x32
 
 	// stop msg code
 	NegotiationTerminateMsg = 0x33
@@ -239,13 +239,10 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Debug("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {
-	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
-
 	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
 		return err
 	}
@@ -253,24 +250,21 @@ func (s *Session) SendStorageContractCreation(data interface{}) error {
 	select {
 	case <-s.ClientNegotiateStartChan():
 	case <-time.After(1 * time.Second):
-		return errors.New("receive client negotiate start msg timeout")
+		return ErrSendNegotiateStartTimeout
 	}
 
 	return p2p.Send(s.rw, StorageContractCreationMsg, data)
 }
 
 func (s *Session) SendStorageContractCreationHostSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
 	return p2p.Send(s.rw, StorageContractCreationHostSignMsg, data)
 }
 
 func (s *Session) SendStorageContractCreationClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract update to storage host by storage client", "data", data)
 	return p2p.Send(s.rw, StorageContractCreationClientRevisionSignMsg, data)
 }
 
 func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract update host signatures", "signature", data)
 	return p2p.Send(s.rw, StorageContractCreationHostRevisionSignMsg, data)
 }
 
@@ -342,8 +336,12 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendNegotiateTerminateMsg(data interface{}) {
 	if err := p2p.Send(s.rw, NegotiationTerminateMsg, data); err != nil {
-		log.Error("send NegotiationTerminateMsg failed", "err", err)
+		log.Error("send negotiation terminate msg failed", "err", err)
 	}
+}
+
+func (s *Session) SendDownloadSectorSuccessMsg(data interface{}) error{
+	return p2p.Send(s.rw, StorageContractDownloadSectorSuccessMsg, data)
 }
 
 func (s *Session) IsClosed() bool {

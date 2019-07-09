@@ -3,7 +3,6 @@ package storagehost
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"math/big"
 	"math/bits"
 	"reflect"
@@ -30,20 +29,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
-
-	// as soon as client complete downloading, will send stop msg.
-	//stopSignal := make(chan error, 1)
-	//go func() {
-	//	msg, err := s.ReadMsg()
-	//	if err != nil {
-	//		stopSignal <- err
-	//	} else if msg.Code != storage.NegotiationTerminateMsg {
-	//		stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
-	//	} else {
-	//		log.Error("handleDownload done", "msg code", msg.Code)
-	//		stopSignal <- nil
-	//	}
-	//}()
 
 	// get storage responsibility
 	h.lock.RLock()
@@ -183,17 +168,6 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			MerkleProof: proof,
 		}
 
-		//select {
-		//case err := <-stopSignal:
-		//	if err != nil {
-		//		return err
-		//	}
-		//
-		//	resp.Signature = hostSig
-		//	return s.SendStorageContractDownloadData(resp)
-		//default:
-		//}
-
 		if i == len(req.Sections)-1 {
 			resp.Signature = hostSig
 		}
@@ -201,10 +175,17 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		if err := s.SendStorageContractDownloadData(resp); err != nil {
 			return err
 		}
+
+		msg, err := s.ReadMsg()
+		if err != nil {
+			return err
+		}
+
+		if s.CheckNegotiateTerminateMsg(msg) {
+			return storage.ErrNegotiateTerminate
+		}
 	}
 
-	log.Error("-------Handle Download done------")
-	// the stop signal must arrive before RPC is complete.
 	return nil
 }
 
