@@ -7,7 +7,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/merkletree"
@@ -21,9 +20,15 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	s.SetDeadLine(storage.ContractRevisionTime)
 
+	// when occurs negotiate terminate msg, we return nil for the session continuing
+	if s.CheckNegotiateTerminateMsg(beginMsg) {
+		return nil
+	}
+
 	// Read upload request
 	var uploadRequest storage.UploadRequest
 	if err := beginMsg.Decode(&uploadRequest); err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
 	}
 
@@ -33,7 +38,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	h.lock.RUnlock()
 
 	if err != nil {
-		//log.Error("getStorageResponsibility failed", "err", err)
+		s.SendNegotiateTerminateMsg(err.Error())
 		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
 	}
 
@@ -64,7 +69,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 
 		default:
-			return errors.New("unknown action type " + action.Type)
+			err := errors.New("unsupported upload action type " + action.Type)
+			s.SendNegotiateTerminateMsg(err.Error())
+			return err
 		}
 	}
 
@@ -111,7 +118,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := verifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
-		log.Error("VerifyRevision Failed", "contractID", newRevision.ParentID.String(), "err", err)
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -141,6 +148,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Construct the merkle proof
 	oldHashSet, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -161,10 +169,16 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var clientRevisionSign []byte
 	msg, err := s.ReadMsg()
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
+	if s.CheckNegotiateTerminateMsg(beginMsg) {
+		return nil
+	}
+
 	if err = msg.Decode(&clientRevisionSign); err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -172,11 +186,13 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -194,12 +210,12 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	h.lock.Unlock()
 
 	if err != nil {
-		log.Error("modifyStorageResponsibility", "err", err)
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
 	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
-		log.Error("SendStorageContractUploadHostRevisionSign", "err", err)
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 

@@ -414,12 +414,17 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		// reset deadline
 		session.SetDeadLine(5 * time.Minute)
 	}()
+
 	// 1. Send storage upload request
 	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
 		return err
 	}
 
+	// upload negotiate business start
 	if err := session.SendStorageContractUploadRequest(req); err != nil {
+		if err == storage.ErrSendNegotiateStartTimeout {
+			session.SendNegotiateTerminateMsg(err.Error())
+		}
 		return err
 	}
 
@@ -429,7 +434,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return fmt.Errorf("read upload merkle proof response msg failed, err: %v", err)
 	}
+
+	if session.CheckNegotiateTerminateMsg(msg){
+		return storage.ErrNegotiateTerminate
+	}
+
 	if err := msg.Decode(&merkleResp); err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -440,17 +451,21 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
 
-	verified, err := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
+	verified, _ := merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
 	if !verified {
-		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
+		err := fmt.Errorf("invalid merkle proof for old root, err: %v", err)
+		session.SendNegotiateTerminateMsg(err.Error())
+		return err
 	}
 
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
-	verified, err = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
+	verified, _ = merkle.VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
 	if !verified {
-		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
+		err := fmt.Errorf("invalid merkle proof for new root, err: %v", err)
+		session.SendNegotiateTerminateMsg(err.Error())
+		return err
 	}
 
 	// update the revision, sign it, and send it
@@ -462,26 +477,37 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	clientAccount := accounts.Account{Address: clientAddr}
 	clientWallet, err := am.Find(clientAccount)
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 	// client sign the new revision
 	clientRevisionSign, err := clientWallet.SignHash(clientAccount, rev.RLPHash().Bytes())
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
+
 	// send client sig to host
 	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
 		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
+
 	// read the host's signature
 	var hostRevisionSig []byte
 	msg, err = session.ReadMsg()
 	if err != nil {
 		return err
 	}
+
+	if session.CheckNegotiateTerminateMsg(msg) {
+		return storage.ErrNegotiateTerminate
+	}
+
 	if err := msg.Decode(&hostRevisionSig); err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
+
 	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
 	// commit upload revision
@@ -489,6 +515,13 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	if err != nil {
 		return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
 	}
+
+	select {
+	case session.ClientNegotiateDoneChan() <- struct{}{}:
+		log.Error("Send Client Upload Negotiate Chan")
+	default:
+	}
+
 	return nil
 }
 
@@ -611,6 +644,10 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	s.SetDeadLine(storage.DownloadTime)
 
 	err = s.SendStorageContractDownloadRequest(req)
+	if err == storage.ErrSendNegotiateStartTimeout {
+		s.SendNegotiateTerminateMsg(err.Error())
+	}
+
 	if err != nil {
 		log.Error("SendStorageContractDownloadRequest Failed", "err", err)
 		return err
@@ -640,35 +677,45 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		if s.CheckNegotiateTerminateMsg(msg) {
+			return storage.ErrNegotiateTerminate
 		}
+
+		//// if host send some negotiation error, client should handler it
+		//if msg.Code == storage.NegotiationErrorMsg {
+		//	var negotiationErr error
+		//	msg.Decode(&negotiationErr)
+		//	return negotiationErr
+		//}
 
 		err = msg.Decode(&resp)
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return err
 		}
 
 		// if host sent data, should validate it
 		if len(resp.Data) > 0 {
 			if len(resp.Data) != int(sec.Length) {
-				return errors.New("host did not send enough sector data")
+				err := errors.New("host did not send enough sector data")
+				s.SendNegotiateTerminateMsg(err.Error())
+				return err
 			}
 			if req.MerkleProof {
 				proofStart := int(sec.Offset) / merkle.LeafSize
 				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 				verified, err := merkle.VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
 				if !verified || err != nil {
-					return errors.New("host provided incorrect sector data or Merkle proof")
+					err := errors.New("host provided incorrect sector data or Merkle proof")
+					s.SendNegotiateTerminateMsg(err.Error())
+					return err
 				}
 			}
 
 			// write sector data
 			if _, err := w.Write(resp.Data); err != nil {
 				log.Error("Write Buffer", "err", err)
+				s.SendNegotiateTerminateMsg(err.Error())
 				return err
 			}
 
@@ -680,8 +727,8 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			break
 		}
 	}
-	if hostSig == nil {
 
+	if hostSig == nil {
 		// if we haven't received host signature, just read again
 		var resp storage.DownloadResponse
 		msg, err := s.ReadMsg()
@@ -689,15 +736,20 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		if s.CheckNegotiateTerminateMsg(msg) {
+			return storage.ErrNegotiateTerminate
 		}
+
+		//// if host send some negotiation error, client should handler it
+		//if msg.Code == storage.NegotiationErrorMsg {
+		//	var negotiationErr error
+		//	msg.Decode(&negotiationErr)
+		//	return negotiationErr
+		//}
 
 		err = msg.Decode(&resp)
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return err
 		}
 
@@ -711,7 +763,12 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
 	}
 
-	log.Error("Client Download Negotiate Done")
+	select {
+	case s.ClientNegotiateDoneChan() <- struct{}{}:
+		log.Error("Send Client Download Negotiate Chan")
+	default:
+	}
+
 	return nil
 }
 

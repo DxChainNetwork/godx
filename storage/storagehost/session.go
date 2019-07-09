@@ -33,8 +33,12 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 
 	msg, err := s.ReadMsg()
 	if err != nil {
-		log.Error("Handle Session Read Msg Failed", "err", err)
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
+	}
+
+	if s.CheckNegotiateTerminateMsg(msg) {
+		return nil
 	}
 
 	log.Error("Handle Session Read Msg", "msg.Code", msg.Code)

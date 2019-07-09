@@ -18,6 +18,8 @@ import (
 
 var (
 	ErrClientDisconnect = errors.New("storage client disconnect proactively")
+	ErrNegotiateTerminate = errors.New("client or host terminate in negotiate process")
+	ErrSendNegotiateStartTimeout = errors.New("receive client negotiate start msg timeout")
 )
 
 const (
@@ -48,7 +50,7 @@ const (
 	NegotiationErrorMsg = 0x32
 
 	// stop msg code
-	NegotiationStopMsg = 0x33
+	NegotiationTerminateMsg = 0x33
 
 	// Storage Protocol Host Flag
 	StorageHostStartMsg   = 0x34
@@ -281,7 +283,7 @@ func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
 	select {
 	case <-s.ClientNegotiateStartChan():
 	case <-time.After(1 * time.Second):
-		return errors.New("receive client negotiate start msg timeout")
+		return ErrSendNegotiateStartTimeout
 	}
 
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
@@ -309,9 +311,9 @@ func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
 	select {
 	case <-s.ClientNegotiateStartChan():
 		log.Error("receive download start chan")
-	case <-time.After(60 * time.Second):
+	case <-time.After(1 * time.Second):
 		log.Error("receive download start chan TIMEOUT")
-		return errors.New("receive client negotiate start msg timeout")
+		return ErrSendNegotiateStartTimeout
 	}
 
 	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
@@ -337,12 +339,20 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 	return &msg, err
 }
 
-//// send this msg to notify the other node that we want stop the negotiation
-//func (s *Session) SendStopMsg() error {
-//	s.Log().Debug("Sending negotiation stop msg")
-//	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
-//}
+// send this msg to notify the other node that we want stop the negotiation
+func (s *Session) SendNegotiateTerminateMsg(data interface{}) {
+	if err := p2p.Send(s.rw, NegotiationTerminateMsg, data); err != nil {
+		log.Error("send NegotiationTerminateMsg failed", "err", err)
+	}
+}
 
 func (s *Session) IsClosed() bool {
 	return s.Peer.IsClosed()
+}
+
+func (s *Session) CheckNegotiateTerminateMsg(msg *p2p.Msg) bool {
+	if msg != nil && msg.Code == NegotiationTerminateMsg {
+		return true
+	}
+	return false
 }

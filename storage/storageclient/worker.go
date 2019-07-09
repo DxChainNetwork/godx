@@ -275,13 +275,6 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error {
 
 			select {
 			case session.RevisionDone() <- struct{}{}:
-				log.Error("Revision Done")
-			default:
-			}
-
-			select {
-			case session.ClientNegotiateDoneChan() <- struct{}{}:
-				log.Error("Client Download Segment Done")
 			default:
 			}
 		}

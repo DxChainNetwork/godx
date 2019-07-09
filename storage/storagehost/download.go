@@ -27,6 +27,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	var req storage.DownloadRequest
 	err := beginMsg.Decode(&req)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -36,7 +37,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	//	msg, err := s.ReadMsg()
 	//	if err != nil {
 	//		stopSignal <- err
-	//	} else if msg.Code != storage.NegotiationStopMsg {
+	//	} else if msg.Code != storage.NegotiationTerminateMsg {
 	//		stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
 	//	} else {
 	//		log.Error("handleDownload done", "msg code", msg.Code)
@@ -49,18 +50,19 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	so, err := getStorageResponsibility(h.db, req.StorageContractID)
 	h.lock.RUnlock()
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
+		err := fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
+		s.SendNegotiateTerminateMsg(err.Error())
+		return err
 	}
 
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		err := errors.New("no contract locked")
-		//<-stopSignal
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
 	settings := h.externalConfig()
-
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
@@ -79,6 +81,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return err
 		}
 	}
@@ -118,6 +121,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -125,11 +129,13 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
@@ -143,15 +149,16 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
+		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 
 	// enter response loop
 	for i, sec := range req.Sections {
-
 		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {
+			s.SendNegotiateTerminateMsg(err.Error())
 			return err
 		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
@@ -163,6 +170,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
+				s.SendNegotiateTerminateMsg(err.Error())
 				return err
 			}
 		}

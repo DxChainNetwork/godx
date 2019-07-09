@@ -410,7 +410,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 					log.Error("Client Session")
 					return errors.New("DX session is closed")
 				case <-session.ClientNegotiateDoneChan():
-					log.Error("---ClientNegotiateDone---")
+					log.Error("---Receive ClientNegotiateDone Chan---")
 				}
 			}
 		}

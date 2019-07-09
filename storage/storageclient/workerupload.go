@@ -123,13 +123,9 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error{
 			case session.RevisionDone() <- struct{}{}:
 			default:
 			}
-
-			select {
-			case session.ClientNegotiateDoneChan() <- struct{}{}:
-			default:
-			}
 		}
 	}()
+
 	if err != nil {
 		w.client.log.Error("check session failed", "err", err)
 		w.uploadFailed(uc, sectorIndex)
