@@ -16,11 +16,11 @@ func TestNewDxPath(t *testing.T) {
 		s     string
 		valid bool
 	}{
-		{"valid/siapath", true},
+		{"valid/dxpath", true},
 		{"\\some\\windows\\Path", true}, // clean converts OS separators
 		{"../../../directory/traversal", false},
 		{"testpath", true},
-		{"valid/siapath/../with/directory/traversal", false},
+		{"valid/dxpath/../with/directory/traversal", false},
 		{"/usr/bin/", true},
 		{"validpath/test", true},
 		{"..validpath/..test", true},
@@ -118,7 +118,7 @@ func TestDxPath_EncodeRLP_DecodeRLP(t *testing.T) {
 	tests := []struct {
 		s string
 	}{
-		{"valid/siapath"},
+		{"valid/dxpath"},
 		{"\\some\\windows\\Path"},
 		{"testpath"},
 		{"/usr/bin/"},

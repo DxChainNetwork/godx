@@ -183,13 +183,15 @@ func (api *PrivateStorageClientAPI) SetConfig(settings map[string]string) (resp 
 		return
 	}
 
-	resp = fmt.Sprintf("Successfully set the storage client setting, you can use storageclient.setting() to verify")
+	resp = fmt.Sprintf("Successfully set the storage client setting")
 
 	return
 }
 
 //SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
-func (api *PrivateStorageClientAPI) SetPaymentAddress(paymentAddress common.Address) bool {
+func (api *PrivateStorageClientAPI) SetPaymentAddress(addrStr string) bool {
+	paymentAddress := common.HexToAddress(addrStr)
+
 	account := accounts.Account{Address: paymentAddress}
 	_, err := api.sc.ethBackend.AccountManager().Find(account)
 	if err != nil {

@@ -176,6 +176,20 @@ var (
 		utils.PrevFilePathFlag,
 		utils.NewFilePathFlag,
 	}
+
+	storageHostFlags = []cli.Flag{
+		utils.FolderSizeFlag,
+		utils.FolderPathFlag,
+		utils.StorageDurationFlag,
+		utils.DepositPriceFlag,
+		utils.ContractPriceFlag,
+		utils.DownloadPriceFlag,
+		utils.UploadPriceFlag,
+		utils.StoragePriceFlag,
+		utils.SectorPriceFlag,
+		utils.BudgetPriceFlag,
+		utils.MaxDepositFlag,
+	}
 )
 
 func init() {
@@ -210,8 +224,12 @@ func init() {
 		licenseCommand,
 		// See config.go
 		dumpConfigCommand,
-		// See storageclientcmd.go
+
+		// See sclient.go
 		storageClientCommand,
+
+		// See shostcmd.go
+		storageHostCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -221,6 +239,7 @@ func init() {
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
 	app.Flags = append(app.Flags, storageClientFlags...)
+	app.Flags = append(app.Flags, storageHostFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""

@@ -372,7 +372,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		} else if s.config.StorageHost {
 			storageHostAPIs := []rpc.API{
 				{
-					Namespace: "storagehost",
+					Namespace: "shost",
 					Version:   "1.0",
 					Service:   storagehost.NewHostPrivateAPI(s.storageHost),
 					Public:    false,
@@ -746,6 +746,10 @@ LOOP:
 		select {
 		case <-timer.C:
 			s.server.RemoveStorageHost(hostNode.IP().String())
+			select {
+			case <-peerChan:
+			default:
+			}
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)

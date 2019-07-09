@@ -127,6 +127,9 @@ func (w *worker) workLoop() {
 			if err == ErrContractRenewing {
 				<-time.After(50 * time.Millisecond)
 			}
+			if err != nil {
+				return
+			}
 			continue
 		}
 
@@ -140,6 +143,9 @@ func (w *worker) workLoop() {
 			// the client is renewing, we wait for some millisecond
 			if err == ErrContractRenewing {
 				<-time.After(50 * time.Millisecond)
+			}
+			if err != nil {
+				return
 			}
 			continue
 		}
@@ -265,7 +271,7 @@ func (w *worker) checkSession() (*storage.Session, error) {
 }
 
 // Actually perform a download task
-func (w *worker) download(uds *unfinishedDownloadSegment) error{
+func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	session, err := w.checkSession()
 	defer func() {
 		if session != nil {

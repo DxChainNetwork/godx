@@ -71,7 +71,7 @@ func (cm *ContractManager) loadSettings() (err error) {
 
 	// load data from the json file
 	var data persistence
-	err = common.LoadDxJSON(settingsMetadata, filepath.Join(cm.persistDir, PersistFileName), data)
+	err = common.LoadDxJSON(settingsMetadata, filepath.Join(cm.persistDir, PersistFileName), &data)
 	if err != nil {
 		return
 	}
