@@ -247,6 +247,8 @@ func (w *worker) checkSession() (*storage.Session, error) {
 		if session.IsClosed() {
 			delete(w.client.sessionSet, contractID)
 		}
+
+		session.SetBusy()
 	}
 
 	if session == nil || session.IsClosed() {
@@ -267,19 +269,19 @@ func (w *worker) checkSession() (*storage.Session, error) {
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	session, err := w.checkSession()
-	download := uds.download
 	defer func() {
 		if session != nil {
 			session.ResetBusy()
 
 			select {
 			case session.RevisionDone() <- struct{}{}:
+				log.Error("Revision Done")
 			default:
 			}
 
 			select {
-			case <-download.completeChan:
-				session.ClientNegotiateDoneChan() <- struct{}{}
+			case session.ClientNegotiateDoneChan() <- struct{}{}:
+				log.Error("Client Download Segment Done")
 			default:
 			}
 		}

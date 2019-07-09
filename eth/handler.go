@@ -398,6 +398,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 				select {
 				case session.ClientNegotiateStartChan() <- struct{}{}:
+					log.Error("Send ClientNegotiateStart Chan")
 				default:
 				}
 

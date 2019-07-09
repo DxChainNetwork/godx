@@ -43,17 +43,16 @@ const (
 	// Download Data Segment Code Msg
 	StorageContractDownloadRequestMsg      = 0x30
 	StorageContractDownloadDataMsg         = 0x31
-	StorageContractDownloadHostRevisionMsg = 0x32
 
 	// error msg code
-	NegotiationErrorMsg = 0x33
+	NegotiationErrorMsg = 0x32
 
 	// stop msg code
-	NegotiationStopMsg = 0x34
+	NegotiationStopMsg = 0x33
 
 	// Storage Protocol Host Flag
-	StorageHostStartMsg   = 0x35
-	StorageClientStartMsg = 0x36
+	StorageHostStartMsg   = 0x34
+	StorageClientStartMsg = 0x35
 )
 
 type SessionSet struct {
@@ -338,11 +337,11 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 	return &msg, err
 }
 
-// send this msg to notify the other node that we want stop the negotiation
-func (s *Session) SendStopMsg() error {
-	s.Log().Debug("Sending negotiation stop msg")
-	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
-}
+//// send this msg to notify the other node that we want stop the negotiation
+//func (s *Session) SendStopMsg() error {
+//	s.Log().Debug("Sending negotiation stop msg")
+//	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
+//}
 
 func (s *Session) IsClosed() bool {
 	return s.Peer.IsClosed()
