@@ -303,6 +303,7 @@ func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) er
 // download protocol
 func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
 	if err := s.SendStorageNegotiateHostStartMsg(struct{}{}); err != nil {
+		log.Error("SendStorageNegotiateHostStartMsg Failed", "err", err)
 		return err
 	}
 

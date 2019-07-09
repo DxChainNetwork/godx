@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -501,7 +500,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// the conn should be disconnected after 1 hour.
 	defer s.SetDeadLine(5 * time.Minute)
 
-	log.Error("Storage Client Download 1", "session busy", s.IsBusy())
+	log.Error("Storage Client Download Negotiate Start ", "session busy", s.IsBusy())
 
 	// sanity check the request.
 	for _, sec := range req.Sections {
@@ -611,28 +610,26 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	// send download request
 	s.SetDeadLine(storage.DownloadTime)
 
-	a, _ := json.Marshal(req)
-	log.Error("Storage Client Download 2", "download req.info", string(a))
-
 	err = s.SendStorageContractDownloadRequest(req)
 	if err != nil {
+		log.Error("SendStorageContractDownloadRequest Failed", "err", err)
 		return err
 	}
 
 	// spawn a goroutine to handle cancellation
-	doneChan := make(chan struct{})
-	go func() {
-		select {
-		case <-cancel:
-		case <-doneChan:
-		}
-
-		// if negotiation is canceled or done, client should send stop msg to host
-		s.SendStopMsg()
-	}()
-
-	// ensure we send DownloadStop before returning
-	defer close(doneChan)
+	//doneChan := make(chan struct{})
+	//go func() {
+	//	select {
+	//	case <-cancel:
+	//	case <-doneChan:
+	//	}
+	//
+	//	// if negotiation is canceled or done, client should send stop msg to host
+	//	//s.SendStopMsg()
+	//}()
+	//
+	//// ensure we send DownloadStop before returning
+	//defer close(doneChan)
 
 	// read responses
 	var hostSig []byte
@@ -714,6 +711,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
 	}
 
+	log.Error("Client Download Negotiate Done")
 	return nil
 }
 

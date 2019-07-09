@@ -31,18 +31,18 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	}
 
 	// as soon as client complete downloading, will send stop msg.
-	stopSignal := make(chan error, 1)
-	go func() {
-		msg, err := s.ReadMsg()
-		if err != nil {
-			stopSignal <- err
-		} else if msg.Code != storage.NegotiationStopMsg {
-			stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
-		} else {
-			log.Error("handleDownload done", "msg code", msg.Code)
-			stopSignal <- nil
-		}
-	}()
+	//stopSignal := make(chan error, 1)
+	//go func() {
+	//	msg, err := s.ReadMsg()
+	//	if err != nil {
+	//		stopSignal <- err
+	//	} else if msg.Code != storage.NegotiationStopMsg {
+	//		stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
+	//	} else {
+	//		log.Error("handleDownload done", "msg code", msg.Code)
+	//		stopSignal <- nil
+	//	}
+	//}()
 
 	// get storage responsibility
 	h.lock.RLock()
@@ -55,7 +55,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		err := errors.New("no contract locked")
-		<-stopSignal
+		//<-stopSignal
 		return err
 	}
 
@@ -175,16 +175,16 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			MerkleProof: proof,
 		}
 
-		select {
-		case err := <-stopSignal:
-			if err != nil {
-				return err
-			}
-
-			resp.Signature = hostSig
-			return s.SendStorageContractDownloadData(resp)
-		default:
-		}
+		//select {
+		//case err := <-stopSignal:
+		//	if err != nil {
+		//		return err
+		//	}
+		//
+		//	resp.Signature = hostSig
+		//	return s.SendStorageContractDownloadData(resp)
+		//default:
+		//}
 
 		if i == len(req.Sections)-1 {
 			resp.Signature = hostSig
@@ -197,7 +197,7 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 
 	log.Error("-------Handle Download done------")
 	// the stop signal must arrive before RPC is complete.
-	return <-stopSignal
+	return nil
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for

@@ -803,6 +803,7 @@ func (s *Ethereum) SetupIndependentStorageConnection(hostEnodeURL string) (*stor
 	// First we check storage contract session set have already connection with this node
 	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
 	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil && !conn.IsBusy() {
+		conn.SetBusy()
 		return conn, nil
 	} else if conn != nil && conn.IsBusy() {
 		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
