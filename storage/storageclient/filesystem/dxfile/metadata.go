@@ -74,7 +74,7 @@ type (
 		TimeModify       time.Time
 	}
 
-	// CachedHealthMetadata is a helper struct that contains the siafile health
+	// CachedHealthMetadata is a helper struct that contains the dxfile health
 	// metadata fields that are cached
 	CachedHealthMetadata struct {
 		Health      uint32

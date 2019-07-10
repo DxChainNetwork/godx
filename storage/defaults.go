@@ -5,9 +5,8 @@
 package storage
 
 import (
-	"time"
-
 	"github.com/DxChainNetwork/godx/common"
+	"time"
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks

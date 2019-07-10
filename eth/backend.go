@@ -372,7 +372,7 @@ func (s *Ethereum) APIs() []rpc.API {
 		} else if s.config.StorageHost {
 			storageHostAPIs := []rpc.API{
 				{
-					Namespace: "storagehost",
+					Namespace: "shost",
 					Version:   "1.0",
 					Service:   storagehost.NewHostPrivateAPI(s.storageHost),
 					Public:    false,

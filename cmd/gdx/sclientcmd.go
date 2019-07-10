@@ -2,24 +2,25 @@ package main
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-	"github.com/olekukonko/tablewriter"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/cmd/utils"
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	"github.com/olekukonko/tablewriter"
+
 	"gopkg.in/urfave/cli.v1"
 )
 
 var storageClientCommand = cli.Command{
 	Name:      "sclient",
-	Usage:     "Storage Client related operations",
+	Usage:     "Storage client related operations",
 	ArgsUsage: "",
 	Category:  "STORAGE CLIENT COMMANDS",
 	Description: `
@@ -110,7 +111,7 @@ each file, including the file's uploading status and health status'`,
 			Description: `
 			gdx sclient contract [argument]
 
-will display detailed contract information of a contract based on the provided contractID. The information
+will display detailed contract information based on the provided contractID. The information
 included contractID, revisionNumber, hostID, and etc.'`,
 		},
 
@@ -130,6 +131,7 @@ the payment address for the storage service will always be the first account add
 			Usage:     "Register the account address to be used for the storage services",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setPaymentAddress),
+			Flags:     storageClientFlags,
 			Description: `
 			gdx sclient setpaymentaddr --address [parameter]
 		
@@ -511,7 +513,7 @@ func setPaymentAddress(ctx *cli.Context) error {
 	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used for storage service")
 	} else {
-		address = ctx.GlobalString(utils.StorageHostIDFlag.Name)
+		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
 	}
 
 	var result bool
