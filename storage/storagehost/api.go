@@ -105,7 +105,7 @@ func (h *HostPrivateAPI) SetMaxDuration(str string) string {
 	if err := h.storageHost.setMaxDuration(val); err != nil {
 		return fmt.Sprintf("cannot set MaxDuration: %v", err)
 	}
-	return fmt.Sprintf("successully set MaxDuration to %v", val)
+	return fmt.Sprintf("successully set MaxDuration to %v", str)
 }
 
 // SetMaxReviseBatchSize set host MaxReviseBatchSize to value

@@ -746,6 +746,10 @@ LOOP:
 		select {
 		case <-timer.C:
 			s.server.RemoveStorageHost(hostNode.IP().String())
+			select {
+			case <-peerChan:
+			default:
+			}
 			return nil, fmt.Errorf("setup connection timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)

@@ -264,6 +264,17 @@ var AppHelpFlagGroups = []flagGroup{
 		Name: "STORAGE HOST",
 		Flags: []cli.Flag{
 			utils.StorageHostFlag,
+			utils.FolderSizeFlag,
+			utils.FolderPathFlag,
+			utils.StorageDurationFlag,
+			utils.DepositPriceFlag,
+			utils.ContractPriceFlag,
+			utils.DownloadPriceFlag,
+			utils.UploadPriceFlag,
+			utils.StoragePriceFlag,
+			utils.SectorPriceFlag,
+			utils.BudgetPriceFlag,
+			utils.MaxDepositFlag,
 		},
 	},
 	{

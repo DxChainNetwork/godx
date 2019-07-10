@@ -414,7 +414,6 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	case <-srv.quit:
 	}
 
-	// wait for add done
 	wg.Wait()
 
 	delete(srv.storagePeerDoneMap, nodeID)
