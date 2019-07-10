@@ -186,10 +186,12 @@ type Server struct {
 	removeStorageContract chan *enode.Node // used to remove storage contract peer
 	addStorageClient      chan *enode.Node // used to add storage contract client peer
 	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
-	storagePeerDoneMap 	  map[enode.ID]*sync.WaitGroup
+	storagePeerDoneMap    map[enode.ID]*sync.WaitGroup
 	posthandshake         chan *conn
 	addpeer               chan *conn
 	delpeer               chan peerDrop
+	storageHosts          map[string]struct{}
+	peerAdding            map[string]chan struct{}
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -349,6 +351,16 @@ func (srv *Server) PeerCount() int {
 //
 // Peer added is a static peer because the connection will be maintained
 func (srv *Server) AddPeer(node *enode.Node) {
+	peerChan := srv.AcquirePeerAddingChan(node.IP().String())
+
+	// if the channel is not empty, meaning another routine is
+	// tyring to add the peer, return directly
+	select {
+	case peerChan <- struct{}{}:
+	default:
+		return
+	}
+
 	select {
 	case srv.addstatic <- node:
 	case <-srv.quit:
@@ -394,18 +406,16 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 
 	select {
 	case srv.addStorageContract <- node:
-		srv.log.Warn("AddStorageContractPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
 	select {
 	case srv.addStorageClient <- node:
-		srv.log.Warn("AddStorageClientPeer", "chanContent", node.String())
 	case <-srv.quit:
 	}
 
-	// wait for add done
 	wg.Wait()
+
 	delete(srv.storagePeerDoneMap, nodeID)
 }
 
@@ -419,6 +429,26 @@ func (srv *Server) RemoveStorageContractPeer(node *enode.Node) {
 	select {
 	case srv.removeStorageClient <- node:
 	case <-srv.quit:
+	}
+}
+
+func (srv *Server) AddStorageHost(node *enode.Node) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	srv.storageHosts[node.IP().String()] = struct{}{}
+}
+
+func (srv *Server) GetStorageHost() map[string]struct{} {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	return srv.storageHosts
+}
+
+func (srv *Server) RemoveStorageHost(ip string) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	if _, exists := srv.storageHosts[ip]; exists {
+		delete(srv.storageHosts, ip)
 	}
 }
 
@@ -545,6 +575,8 @@ func (srv *Server) Start() (err error) {
 	srv.storagePeerDoneMap = make(map[enode.ID]*sync.WaitGroup)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.storageHosts = make(map[string]struct{})
+	srv.peerAdding = make(map[string]chan struct{})
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -992,6 +1024,17 @@ running:
 				if p.Inbound() {
 					inboundCount++
 				}
+
+				// empty the channel
+				ip, _, err := net.SplitHostPort(c.fd.RemoteAddr().String())
+				if err == nil {
+					peerChan := srv.AcquirePeerAddingChan(ip)
+					select {
+					case <-peerChan:
+					default:
+					}
+				}
+
 			}
 			// The dialer logic relies on the assumption that
 			// dial tasks complete after the peer has been added or
@@ -1009,7 +1052,6 @@ running:
 		// which will only return if error or disconnect request was received
 		case pd := <-srv.delpeer:
 			// A peer disconnected.
-			pd.log.Warn("removed peer")
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			pd.log.Debug("Removing p2p peer", "duration", d, "peers", len(peers)-1, "req", pd.requested, "err", pd.err)
 			delete(peers, pd.ID())
@@ -1136,6 +1178,26 @@ func (srv *Server) listenLoop() {
 			break
 		}
 
+		// check if the connection is the storageHost connection, if so, reject
+		srv.lock.Lock()
+		storageHosts := srv.storageHosts
+		srv.lock.Unlock()
+
+		// get the host from the remote address
+		host, _, err := net.SplitHostPort(fd.RemoteAddr().String())
+		if err != nil {
+			host = ""
+		}
+
+		// if exists, close the connection and waiting from the
+		// next connection
+		if _, exists := storageHosts[host]; exists {
+			srv.log.Debug("Rejected storageHost connection")
+			fd.Close()
+			slots <- struct{}{}
+			continue
+		}
+
 		// Reject connections that do not match NetRestrict.
 		// If the connection got rejected, send fill the handshake slot by one again
 		if srv.NetRestrict != nil {
@@ -1166,6 +1228,7 @@ func (srv *Server) listenLoop() {
 			slots <- struct{}{}
 		}()
 	}
+
 }
 
 // SetupConn runs the handshakes and attempts to add the connection
@@ -1181,8 +1244,22 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 	// NOTE: fd are meteredConn
 	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	err := srv.setupConn(c, flags, dialDest)
+
 	if err != nil {
 		c.close(err)
+
+		// if the connection set up failed, check and remove the peer from the
+		// storage hosts list and empty the peerAdding channel
+		if ip, _, splitError := net.SplitHostPort(fd.RemoteAddr().String()); splitError == nil {
+			peerChan := srv.AcquirePeerAddingChan(ip)
+			select {
+			case <-peerChan:
+			default:
+			}
+
+			srv.RemoveStorageHost(ip)
+		}
+
 		srv.log.Trace("Setting up connection failed", "addr", fd.RemoteAddr(), "err", err)
 	}
 	return err
@@ -1421,4 +1498,19 @@ func (srv *Server) PeersInfo() []*PeerInfo {
 		}
 	}
 	return infos
+}
+
+// AcquirePeerAddingChan will get the peer adding channel to check if the
+// another process is adding the peer
+func (srv *Server) AcquirePeerAddingChan(ip string) chan struct{} {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+
+	addingChan, ok := srv.peerAdding[ip]
+	if !ok {
+		srv.peerAdding[ip] = make(chan struct{}, 1)
+		addingChan = srv.peerAdding[ip]
+	}
+
+	return addingChan
 }

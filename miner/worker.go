@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"errors"
 	"math/big"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,8 +33,7 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/rlp"
-	trie2 "github.com/DxChainNetwork/godx/trie"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -958,42 +956,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 	// maintenance missed storage proof
 	height := w.current.header.Number.Uint64()
-	windowEndStr := strconv.FormatUint(height, 10)
-	statusAddr := common.BytesToAddress([]byte("ExpiredStorageContract_" + windowEndStr))
-	if w.current.state.Exist(statusAddr) {
-
-		// iterator all the storage contract status in this account
-		trie := w.current.state.StorageTrie(statusAddr)
-		trieNode := trie.NodeIterator(nil)
-		it := trie2.NewIterator(trieNode)
-		for it.Next() {
-			value := it.Value
-
-			// if this account has not proofed contract, effect the missed output
-			if bytes.Equal(value, []byte{'0'}) {
-				scIDBytes := it.Key
-				contractAddr := common.BytesToAddress(scIDBytes[12:])
-				contractTrie := w.current.state.StorageTrie(contractAddr)
-				mpoBytes, err := contractTrie.TryGet([]byte("MissedProofOutputs"))
-				if err != nil {
-					return err
-				}
-
-				mpos := []types.DxcoinCharge{}
-				err = rlp.DecodeBytes(mpoBytes, &mpos)
-				if err != nil {
-					return err
-				}
-
-				totalValue := new(big.Int).SetInt64(0)
-				for _, mpo := range mpos {
-					totalValue.Add(totalValue, mpo.Value)
-					w.current.state.AddBalance(mpo.Address, mpo.Value)
-				}
-				w.current.state.SubBalance(contractAddr, totalValue)
-			}
-		}
-	}
+	storagemaintenance.MaintenanceMissedProof(height, s)
 
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
 	if err != nil {

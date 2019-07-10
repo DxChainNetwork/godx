@@ -7,6 +7,7 @@ package storagehostmanager
 import (
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
@@ -140,7 +141,7 @@ func parseHostAnnouncement(announcement types.HostAnnouncement) (hostInfo storag
 	}
 	hostInfo.EnodeID = node.ID()
 	hostInfo.IP = node.IP().String()
-	hostInfo.NodePubKey = *node.Pubkey()
+	hostInfo.NodePubKey = crypto.FromECDSAPub(node.Pubkey())
 
 	return
 }

@@ -1,6 +1,8 @@
 package storagehost
 
 import (
+	"github.com/DxChainNetwork/godx/common/math"
+	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -11,7 +13,7 @@ import (
 
 const (
 	// PersistHostDir is dir path for storing the host log, json, and ect.
-	PersistHostDir = "storageHost"
+	PersistHostDir = "storagehost"
 	// Version is the version of the storage host
 	Version = "1.0"
 	// HostSettingFile is the file name for saving the setting of host
@@ -46,33 +48,20 @@ var (
 	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
 	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
 	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
-	defaultWindowSize           = 240                       // 1 hour
-
-	//// deposit defaults value
-	//defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
-	//defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
-	//defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
-	//
-	//// prices
-	//defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
-	//defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
-	//defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
-	//defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
-	//defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
-	//defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
+	defaultWindowSize           = 5 * storage.BlockPerHour  // 5 hours
 
 	// deposit defaults value
-	defaultDeposit       = common.NewBigInt(10)
-	defaultDepositBudget = common.NewBigInt(995185185185180)
-	defaultMaxDeposit    = common.NewBigInt(100000000000000000)
+	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
+	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
+	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
 
 	// prices
-	defaultBaseRPCPrice           = common.NewBigInt(2000)
-	defaultContractPrice          = common.NewBigInt(3000)
-	defaultDownloadBandwidthPrice = common.NewBigInt(4000)
-	defaultSectorAccessPrice      = common.NewBigInt(5000)
-	defaultStoragePrice           = common.NewBigInt(6000)
-	defaultUploadBandwidthPrice   = common.NewBigInt(7000)
+	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
+	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
+	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
+	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
+	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
+	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
 
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}

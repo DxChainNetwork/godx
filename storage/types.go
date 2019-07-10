@@ -5,7 +5,6 @@
 package storage
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"reflect"
@@ -32,6 +31,7 @@ var (
 const (
 	Override = iota
 	Append
+	Normal
 
 	Env_Prod = "prod"
 	Env_Test = "test"
@@ -112,9 +112,9 @@ type (
 		IPNetwork           string    `json:"ipnetwork"`
 		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
 
-		EnodeID    enode.ID        `json:"enodeid"`
-		EnodeURL   string          `json:"enodeurl"`
-		NodePubKey ecdsa.PublicKey `json:"nodepubkey"`
+		EnodeID    enode.ID `json:"enodeid"`
+		EnodeURL   string   `json:"enodeurl"`
+		NodePubKey []byte   `json:"nodepubkey"`
 
 		Filtered bool `json:"filtered"`
 	}
@@ -129,6 +129,7 @@ type (
 		Success   bool      `json:"success"`
 	}
 )
+
 type ContractParams struct {
 	Allowance            RentPayment
 	HostEnodeUrl         string
@@ -281,7 +282,7 @@ type (
 		CipherType       string    `json:"ciphertype"`
 		CreateTime       time.Time `json:"createtime"`
 		Expiration       uint64    `json:"expiration"`
-		Filesize         uint64    `json:"filesize"`
+		FileSize         uint64    `json:"filesize"`
 		Health           float64   `json:"health"`
 		LocalPath        string    `json:"localpath"`
 		MaxHealth        float64   `json:"maxhealth"`
@@ -292,7 +293,7 @@ type (
 		Recoverable      bool      `json:"recoverable"`
 		Redundancy       float64   `json:"redundancy"`
 		Renewing         bool      `json:"renewing"`
-		SiaPath          string    `json:"siapath"`
+		DxPath           string    `json:"dxpath"`
 		Stuck            bool      `json:"stuck"`
 		StuckHealth      float64   `json:"stuckhealth"`
 		UploadedBytes    uint64    `json:"uploadedbytes"`

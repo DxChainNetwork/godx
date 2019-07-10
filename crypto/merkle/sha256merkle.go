@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -304,7 +305,13 @@ func Sha256VerifyDiffProof(rangeSet []SubTreeLimit, leavesCount uint64, hashProo
 	byteRootsVerify := hashSliceToByteSlices(rootsVerify)
 
 	hasher := NewLeafRootCached(byteRootsVerify)
-	verified, err = CheckDiffStorageProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, merkleRoot[:])
+	var m []byte
+	if reflect.DeepEqual(merkleRoot, common.Hash{}) {
+		m = nil
+	} else {
+		m = merkleRoot[:]
+	}
+	verified, err = CheckDiffStorageProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, m)
 
 	return
 }

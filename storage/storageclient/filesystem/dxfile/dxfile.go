@@ -97,6 +97,7 @@ func New(filePath storage.SysPath, dxPath storage.DxPath, sourcePath storage.Sys
 	}
 	// create a metadata
 	md := &Metadata{
+		ID:              id,
 		Version:         Version,
 		HostTableOffset: PageSize,
 		SegmentOffset:   2 * PageSize,

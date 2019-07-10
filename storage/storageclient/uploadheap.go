@@ -7,8 +7,6 @@ package storageclient
 import (
 	"container/heap"
 	"errors"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -16,6 +14,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 type uploadTarget int
@@ -224,14 +226,14 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		// When the file upload does not reach the recoverable level,
 		// the source file is deleted again and will be marked as stuck = true forever
 		if !downloadable {
-			sc.log.Info("Marking segment", segment.id, "as stuck due to not being downloadable")
+			sc.log.Info("Marking segment", "ID", segment.id, "as stuck due to not being downloadable")
 			err = segment.fileEntry.SetStuckByIndex(int(segment.index), true)
 			if err != nil {
 				sc.log.Error("unable to mark segment as stuck", "err", err)
 			}
 			continue
 		} else if stuck {
-			sc.log.Info("Marking segment", segment.id, "as stuck due to being complete but having a health of", segmentHealth)
+			sc.log.Info("Marking segment", "ID", segment.id, "as stuck due to being complete but having a health of", segmentHealth)
 			err = segment.fileEntry.SetStuckByIndex(int(segment.index), true)
 			if err != nil {
 				sc.log.Error("unable to mark segment as stuck", "err", err)
@@ -242,7 +244,7 @@ func (sc *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWith
 		// Close entry of completed Segment
 		err = sc.setStuckAndClose(segment, false)
 		if err != nil {
-			sc.log.Error("unable to mark Segment as stuck and close", "err", err)
+			sc.log.Error("unable to mark segment as unstuck and close", "err", err)
 		}
 	}
 	return incompleteSegments, nil
@@ -256,17 +258,18 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 	}
 
 	// Grab a random file
+	rand.Seed(time.Now().UnixNano())
 	randFileIndex := rand.Intn(len(files))
 	file := files[randFileIndex]
-	sc.lock.Lock()
 
+	sc.lock.Lock()
 	// Build the unfinished stuck segments from the file
 	unfinishedUploadSegments, _ := sc.createUnfinishedSegments(file, hosts, target, hostHealthInfoTable)
 	sc.lock.Unlock()
 
 	// Sanity check that there are stuck segments
 	if len(unfinishedUploadSegments) == 0 {
-		sc.log.Info("[createAndPushRandomSegment]no stuck unfinishedUploadSegments returned")
+		sc.log.Info("no stuck unfinished upload segments returned")
 		return
 	}
 
@@ -274,21 +277,17 @@ func (sc *StorageClient) createAndPushRandomSegment(files []*dxfile.FileSetEntry
 	randSegmentIndex := rand.Intn(len(unfinishedUploadSegments))
 	randSegment := unfinishedUploadSegments[randSegmentIndex]
 	randSegment.stuckRepair = true
-	if !sc.uploadHeap.push(randSegment) {
-		// Segment wasn't added to the heap. Close the file
-		err := randSegment.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("unable to close file", "err", err)
-		}
-	}
-	// Close the unused unfinishedUploadSegments
-	unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
-	for _, segment := range unfinishedUploadSegments {
-		err := segment.fileEntry.Close()
-		if err != nil {
-			sc.log.Error("unable to close file", "err", err)
-		}
-	}
+
+	// add segment to upload heap
+	sc.uploadHeap.push(randSegment)
+
+	//unfinishedUploadSegments = append(unfinishedUploadSegments[:randSegmentIndex], unfinishedUploadSegments[randSegmentIndex+1:]...)
+	//for _, segment := range unfinishedUploadSegments {
+	//	err := segment.fileEntry.Close()
+	//	if err != nil {
+	//		sc.log.Error("unable to close file", "err", err)
+	//	}
+	//}
 	return
 }
 
@@ -298,23 +297,18 @@ func (sc *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryWithI
 		sc.lock.Lock()
 		unfinishedUploadSegments, err := sc.createUnfinishedSegments(file, hosts, target, hostHealthInfoTable)
 		if err != nil {
+			sc.lock.Unlock()
 			return err
 		}
 		sc.lock.Unlock()
 
 		if len(unfinishedUploadSegments) == 0 {
-			sc.log.Info("[createAndPushSegments]no unfinishedUploadSegments returned from buildUnfinishedSegments")
+			sc.log.Info("no unfinished upload segments returned")
 			continue
 		}
 
 		for i := 0; i < len(unfinishedUploadSegments); i++ {
-			if !sc.uploadHeap.push(unfinishedUploadSegments[i]) {
-				err := unfinishedUploadSegments[i].fileEntry.Close()
-				if err != nil {
-					sc.log.Error("unable to close file", "err", err)
-					return err
-				}
-			}
+			sc.uploadHeap.push(unfinishedUploadSegments[i])
 		}
 	}
 	return nil
@@ -371,20 +365,12 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 	default:
 		sc.log.Info("target not recognized", "target", target)
 	}
-
-	// Close all files
-	for _, file := range files {
-		err := file.Close()
-		if err != nil {
-			sc.log.Error("Could not close file", "err", err)
-		}
-	}
 }
 
 func (sc *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
 	file, err := sc.fileSystem.OpenFile(path)
 	if err != nil {
-		sc.log.Error("could not open dx file", "err", err)
+		sc.log.Error("Could not open dx file", "err", err)
 		return nil, err
 	}
 
@@ -425,6 +411,7 @@ func (sc *StorageClient) doProcessNextSegment(uuc *unfinishedUploadSegment) erro
 // workers for the storage client
 func (sc *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	currentContracts := sc.contractManager.GetStorageContractSet().Contracts()
+
 	hosts := make(map[string]struct{})
 	for _, contract := range currentContracts {
 		hosts[contract.Header().EnodeID.String()] = struct{}{}
@@ -461,7 +448,6 @@ func (sc *StorageClient) uploadOrRepair() {
 			continue
 		}
 
-		sc.log.Info("Sending next segment to the workers", "segmentID", nextSegment.id)
 		// If the num of workers in worker pool is not enough to cover the tasks, we will
 		// mark the segment as stuck
 		sc.lock.Lock()
@@ -497,12 +483,11 @@ func (sc *StorageClient) uploadOrRepair() {
 				}
 			}
 			for _, ss := range stuckSegments {
-				if !sc.uploadHeap.push(ss) {
-					err := ss.fileEntry.Close()
-					if err != nil {
-						sc.log.Error("Unable to close file", "err", err)
-					}
-				}
+				sc.uploadHeap.push(ss)
+				//err := ss.fileEntry.Close()
+				//if err != nil {
+				//	sc.log.Error("Unable to close file", "err", err)
+				//}
 			}
 		}
 
@@ -522,9 +507,12 @@ func (sc *StorageClient) uploadOrRepair() {
 func (sc *StorageClient) doUpload() error {
 	// Find the lowest health file to queue for repairs.
 	dxFile, err := sc.fileSystem.SelectDxFileToFix()
-	if err != nil {
-		sc.log.Error("getting worst health dxfile failed", "error", err)
+	if err != nil && err != filesystem.ErrNoRepairNeeded {
 		return err
+	}
+
+	if err == filesystem.ErrNoRepairNeeded {
+		return nil
 	}
 
 	// Refresh the worker pool and get the set of hosts that are currently
@@ -532,15 +520,14 @@ func (sc *StorageClient) doUpload() error {
 	hosts := sc.refreshHostsAndWorkers()
 
 	// Push a min-heap of segments organized by upload progress
+	// we don't worry about the dxfile nil problem. we have done it above
 	sc.pushDirOrFileToSegmentHeap(dxFile.DxPath(), false, hosts, targetUnstuckSegments)
 	sc.uploadHeap.mu.Lock()
 	heapLen := sc.uploadHeap.heap.Len()
 	sc.uploadHeap.mu.Unlock()
 	if heapLen == 0 {
-		sc.log.Info("No segments added to the heap for repair from dxpath", "dxpath", dxFile.DxPath(), "health", dxFile.GetHealth())
 		return sc.fileSystem.InitAndUpdateDirMetadata(dxFile.DxPath())
 	}
-	sc.log.Info("Repairing", "heap length", heapLen, "segments from", dxFile.DxPath())
 
 	select {
 	case sc.uploadHeap.segmentComing <- struct{}{}:
@@ -570,7 +557,6 @@ func (sc *StorageClient) uploadLoop() {
 		if err != nil {
 			// If there is an error fetching the root directory metadata, sleep
 			// for a bit and hope that on the next iteration, things will be better
-			sc.log.Error("[upload loop]fetching filesystem root metadata", "error", err)
 			select {
 			case <-time.After(UploadAndRepairErrorSleepDuration):
 			case <-sc.tm.StopChan():
@@ -595,12 +581,12 @@ func (sc *StorageClient) uploadLoop() {
 		// Last we call doUpload to complete upload task
 		err = sc.doUpload()
 		if err != nil {
-			sc.log.Error("[upload loop]performing upload and repair iteration", "error", err)
 			select {
 			case <-time.After(UploadAndRepairErrorSleepDuration):
 			case <-sc.tm.StopChan():
 				return
 			}
 		}
+		<-time.After(100 * time.Millisecond)
 	}
 }

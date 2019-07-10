@@ -63,10 +63,6 @@ var (
 	// MaxConsecutiveSegmentUploads is the maximum number of segment before rebuilding the heap.
 	MaxConsecutiveSegmentUploads = 100
 
-	// rebuildChunkHeapInterval defines how long the storage client sleeps between
-	// checking on the filesystem health.
-	RebuildSegmentHeapInterval = 15 * time.Minute
-
 	// repairStuckChunkInterval defines how long the storage client sleeps between
 	// trying to repair a stuck chunk. The uploadHeap prioritizes stuck chunks
 	// so this interval is to allow time for unstuck chunks to be repaired.
@@ -85,13 +81,10 @@ var (
 
 	// UploadFailureCoolDown is the initial time of punishment while upload consecutive fails
 	// the punishment time shows exponential growth
-	UploadFailureCoolDown = 1 * time.Minute
+	UploadFailureCoolDown = 3 * time.Second
 
 	// when uploading or downloading, the renew goroutine wait for the longest time
 	RevisionDoneTime = 1 * time.Minute
-
-	// Max sector num in one connection preventing from client and host occupied connection
-	MaxUploadDownloadSectorsNum uint32 =  5
 )
 
 var currencyIndexMap = map[string]uint64{

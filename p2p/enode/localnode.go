@@ -33,7 +33,7 @@ import (
 
 const (
 	// IP tracker configuration
-	iptrackMinStatements = 10
+	iptrackMinStatements = 2
 	iptrackWindow        = 5 * time.Minute
 	iptrackContactWindow = 10 * time.Minute
 )

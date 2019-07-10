@@ -32,26 +32,27 @@ func (h *StorageHost) subscribeChainChangEvent() {
 //hostBlockHeightChange handle when a new block is generated or a block is rolled back
 func (h *StorageHost) hostBlockHeightChange(cce core.ChainChangeEvent) {
 
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	//Handling rolled back blocks
 	h.revertedBlockHashesStorageResponsibility(cce.RevertedBlockHashes)
 
 	//Block executing the main chain
 	taskItems := h.applyBlockHashesStorageResponsibility(cce.AppliedBlockHashes)
 	for i := range taskItems {
-		go h.handleTaskItem(taskItems[i])
+		h.handleTaskItem(taskItems[i])
 	}
 
 	err := h.syncConfig()
 	if err != nil {
-		h.log.Warn("could not save during ProcessConsensusChange", "err", err)
+		h.log.Error("could not save during ProcessConsensusChange", "err", err)
 	}
 }
 
 //applyBlockHashesStorageResponsibility block executing the main chain
 func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash) []common.Hash {
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	var taskItems []common.Hash
 	for _, blockApply := range blocks {
 		//apply contract transaction
@@ -70,7 +71,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 			so.CreateContractConfirmed = true
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -83,7 +84,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 				continue
 			}
 			if len(so.StorageContractRevisions) < 1 {
-				h.log.Warn("Storage contract cannot get revisions", "id", so.id())
+				h.log.Error("Storage contract cannot get revisions", "id", so.id())
 				continue
 			}
 			//To prevent vicious attacks, determine the consistency of the revision number.
@@ -92,7 +93,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 			}
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -107,7 +108,7 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 			so.StorageProofConfirmed = true
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -140,11 +141,15 @@ func (h *StorageHost) applyBlockHashesStorageResponsibility(blocks []common.Hash
 
 //revertedBlockHashesStorageResponsibility handling rolled back blocks
 func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.Hash) {
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	for _, blockReverted := range blocks {
 		//Rollback contract transaction
 		ContractCreateIDs, revisionIDs, storageProofIDs, number, errGetBlock := h.getAllStorageContractIDsWithBlockHash(blockReverted)
 		if errGetBlock != nil {
-			h.log.Warn("Failed to get the data from the block as expected ", "err", errGetBlock)
+			h.log.Error("Failed to get the data from the block as expected ", "err", errGetBlock)
 			continue
 		}
 
@@ -158,7 +163,7 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 			so.CreateContractConfirmed = false
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -173,7 +178,7 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 			so.StorageRevisionConfirmed = false
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -188,7 +193,7 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 			so.StorageProofConfirmed = false
 			errPut := putStorageResponsibility(h.db, so.id(), so)
 			if errPut != nil {
-				h.log.Warn("Failed to put storage responsibility", "err", errPut)
+				h.log.Error("Failed to put storage responsibility", "err", errPut)
 				continue
 			}
 		}
@@ -220,7 +225,7 @@ func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var sc types.StorageContract
 			err := rlp.DecodeBytes(tx.Data(), &sc)
 			if err != nil {
-				h.log.Warn("Error when serializing storage contract:", "err", err)
+				h.log.Error("Error when serializing storage contract:", "err", err)
 				continue
 			}
 			ContractCreateIDs = append(ContractCreateIDs, sc.RLPHash())
@@ -228,7 +233,7 @@ func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var scr types.StorageContractRevision
 			err := rlp.DecodeBytes(tx.Data(), &scr)
 			if err != nil {
-				h.log.Warn("Error when serializing revision:", "err", err)
+				h.log.Error("Error when serializing revision:", "err", err)
 				continue
 			}
 			revisionIDs[scr.ParentID] = scr.NewRevisionNumber
@@ -236,7 +241,7 @@ func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Has
 			var sp types.StorageProof
 			err := rlp.DecodeBytes(tx.Data(), &sp)
 			if err != nil {
-				h.log.Warn("Error when serializing proof:", "err", err)
+				h.log.Error("Error when serializing proof:", "err", err)
 				continue
 			}
 			storageProofIDs = append(storageProofIDs, sp.ParentID)

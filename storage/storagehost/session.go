@@ -32,12 +32,12 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 
 	msg, err := s.ReadMsg()
 	if err != nil {
-		h.log.Error("read message error", "err", err.Error())
 		return err
 	}
 
 	if handler, ok := handlerMap[msg.Code]; ok {
-		return handler(h, s, msg)
+		err = handler(h, s, msg)
+		return err
 	} else {
 		h.log.Error("failed to get handler", "message", msg.Code)
 		return errors.New("failed to get handler")
@@ -56,8 +56,6 @@ func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.
 		h.log.Error("SendHostExtSettingResponse Error", "err", err)
 		return errors.New("host setting request done")
 	}
-
-	h.log.Error("successfully sent the host external setting response")
 
 	return nil
 }

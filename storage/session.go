@@ -126,17 +126,16 @@ type Session struct {
 
 	// upload and download tash is done, signal the renew goroutine
 	revisionDone chan struct{}
-
-	maxUploadDownloadSectorNum uint32
 }
 
 func NewSession(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *Session {
 	return &Session{
-		id:         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		Peer:       p,
-		rw:         rw,
-		version:    version,
-		clientDisc: make(chan error),
+		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		Peer:         p,
+		rw:           rw,
+		version:      version,
+		clientDisc:   make(chan error),
+		revisionDone: make(chan struct{}, 1),
 	}
 }
 
@@ -179,14 +178,6 @@ func (s *Session) RevisionDone() chan struct{} {
 	return s.revisionDone
 }
 
-func (s *Session) AddMaxUploadDownloadSectorNum(n uint32) {
-	atomic.AddUint32(&s.maxUploadDownloadSectorNum, n)
-}
-
-func (s *Session) LoadMaxUploadDownloadSectorNum() uint32 {
-	return atomic.LoadUint32(&s.maxUploadDownloadSectorNum)
-}
-
 func (s *Session) getConn() net.Conn {
 	return s.Peer.GetConn()
 }
@@ -215,7 +206,7 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 }
 
 func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Warn("Sending host settings response from host", "msg", data)
+	s.Log().Debug("Sending host settings response from host", "msg", data)
 	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
@@ -240,36 +231,28 @@ func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) 
 }
 
 // upload protocol
-
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload request", "request", data)
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload proof", "proof", data)
 	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract upload client revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
 }
 
 func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage host revision sign", "sign", data)
 	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
 }
 
 // download protocol
-
 func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
-	s.Log().Debug("Sending storage contract download request", "request", data)
 	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
 }
 
 func (s *Session) SendStorageContractDownloadData(data interface{}) error {
-	s.Log().Debug("Sending storage contract download data", "data", data)
 	return p2p.Send(s.rw, StorageContractDownloadDataMsg, data)
 }
 
@@ -284,7 +267,7 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendStopMsg() error {
 	s.Log().Debug("Sending negotiation stop msg")
-	return p2p.Send(s.rw, NegotiationStopMsg, nil)
+	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
 }
 
 func (s *Session) IsClosed() bool {

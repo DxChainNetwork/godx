@@ -17,6 +17,7 @@
 package eth
 
 import (
+	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"os"
@@ -61,6 +62,8 @@ var DefaultConfig = Config{
 		Percentile: 60,
 	},
 	StorageClientDir: storageclient.PersistDirectory,
+	StorageClient:    false,
+	StorageHost:      false,
 }
 
 func init() {
@@ -70,10 +73,11 @@ func init() {
 			home = user.HomeDir
 		}
 	}
+	dir := node.DefaultDataDir()
 	if runtime.GOOS == "windows" {
 		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, "AppData", "Ethash")
 	} else {
-		DefaultConfig.Ethash.DatasetDir = filepath.Join(home, ".ethash")
+		DefaultConfig.Ethash.DatasetDir = filepath.Join(dir, "Ethash")
 	}
 }
 
@@ -140,6 +144,10 @@ type Config struct {
 
 	// StorageClient Persist Directory
 	StorageClientDir string
+
+	// Role, can only be one of the two roles
+	StorageClient bool
+	StorageHost   bool
 }
 
 type configMarshaling struct {

@@ -33,7 +33,7 @@ import (
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
 
-   Copyright 2013-2018 The go-ethereum Authors
+   Copyright 2018-2019 The DxChain Team
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -240,6 +240,41 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MinerLegacyGasPriceFlag,
 			utils.MinerLegacyEtherbaseFlag,
 			utils.MinerLegacyExtraDataFlag,
+		},
+	},
+	{
+		Name: "STORAGE CLIENT",
+		Flags: []cli.Flag{
+			utils.StorageClientFlag,
+			utils.StorageHostIDFlag,
+			utils.ContractIDFlag,
+			utils.PeriodFlag,
+			utils.HostsFlag,
+			utils.RenewFlag,
+			utils.FundFlag,
+			utils.PaymentAddressFlag,
+			utils.FileSourceFlag,
+			utils.FileDestinationFlag,
+			utils.FilePathFlag,
+			utils.PrevFilePathFlag,
+			utils.NewFilePathFlag,
+		},
+	},
+	{
+		Name: "STORAGE HOST",
+		Flags: []cli.Flag{
+			utils.StorageHostFlag,
+			utils.FolderSizeFlag,
+			utils.FolderPathFlag,
+			utils.StorageDurationFlag,
+			utils.DepositPriceFlag,
+			utils.ContractPriceFlag,
+			utils.DownloadPriceFlag,
+			utils.UploadPriceFlag,
+			utils.StoragePriceFlag,
+			utils.SectorPriceFlag,
+			utils.BudgetPriceFlag,
+			utils.MaxDepositFlag,
 		},
 	},
 	{

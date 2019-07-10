@@ -17,6 +17,8 @@ import (
 type (
 	// Metadata is the Metadata of a user uploaded file.
 	Metadata struct {
+		ID FileID
+
 		// storage related
 		HostTableOffset uint64
 		SegmentOffset   uint64
@@ -67,12 +69,12 @@ type (
 		LastHealthCheck  time.Time
 		NumStuckSegments uint64
 		RecentRepairTime time.Time
-		Redundancy   	 uint32
+		Redundancy       uint32
 		Size             uint64
 		TimeModify       time.Time
 	}
 
-	// CachedHealthMetadata is a helper struct that contains the siafile health
+	// CachedHealthMetadata is a helper struct that contains the dxfile health
 	// metadata fields that are cached
 	CachedHealthMetadata struct {
 		Health      uint32
