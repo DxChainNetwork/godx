@@ -1,0 +1,24 @@
+# CircleCI 2.0 configuration file
+# More details on https://circleci.com/docs/2.0/language-go/
+version: 2.0
+jobs:
+  build_linux:
+    docker:
+      - image: circleci/golang:1.11.4
+    working_directory: /go/src/github.com/DxChainNetwork/godx
+    steps:
+      - checkout
+      - run:
+          name: Fetch project pacakge
+          command: |
+            go get -u -v github.com/kardianos/govendor
+            govendor sync -v
+      - run: ./go_unit_test.sh
+      - run: bash <(curl -s https://codecov.io/bash)
+      - run: make
+
+workflows:
+  version: 2
+  build-workflow:
+    jobs:
+      - build_linux
