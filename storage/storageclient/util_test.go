@@ -9,10 +9,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/merkletree"
 )
 
 var (
@@ -28,14 +29,14 @@ var (
 		},
 	}
 
-	leafRanges = []merkletree.LeafRange{
+	leafRanges = []merkle.SubTreeLimit{
 		{
-			Start: 123,
-			End:   234,
+			Left:  123,
+			Right: 234,
 		},
 		{
-			Start: 456,
-			End:   789,
+			Left:  456,
+			Right: 789,
 		},
 	}
 
@@ -47,8 +48,8 @@ var (
 
 func TestCalculateProofRanges(t *testing.T) {
 	calculatedRanges := CalculateProofRanges(actions, 5)
-	if !reflect.DeepEqual(calculatedRanges, []merkletree.LeafRange{}) {
-		t.Errorf("wanted %v, getted %v", []merkletree.LeafRange{}, calculatedRanges)
+	if !reflect.DeepEqual(calculatedRanges, []merkle.SubTreeLimit{}) {
+		t.Errorf("wanted %v, getted %v", []merkle.SubTreeLimit{}, calculatedRanges)
 	}
 }
 
@@ -73,8 +74,8 @@ func TestModifyProofRanges(t *testing.T) {
 		t.Error("get nil leaf range")
 	}
 
-	if reflect.DeepEqual(modifiedRanges, []merkletree.LeafRange{}) {
-		t.Errorf("getted %v", []merkletree.LeafRange{})
+	if reflect.DeepEqual(modifiedRanges, []merkle.SubTreeLimit{}) {
+		t.Errorf("getted %v", []merkle.SubTreeLimit{})
 	}
 
 	if len(modifiedRanges) != 3 {

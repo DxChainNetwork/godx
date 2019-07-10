@@ -3,6 +3,8 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+	"sort"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -10,8 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/merkletree"
-	"sort"
 )
 
 // handleUpload is the upload function to handle upload negotiation
@@ -53,7 +53,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 		switch action.Type {
 		case storage.UploadActionAppend:
 			// Update sector roots.
-			newRoot := merkle.Root(action.Data)
+			newRoot := merkle.Sha256MerkleTreeRoot(action.Data)
 			newRoots = append(newRoots, newRoot)
 			sectorsGained = append(sectorsGained, newRoot)
 			gainedSectorData = append(gainedSectorData, action.Data)
@@ -80,7 +80,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	}
 
 	// If a Merkle proof was requested, construct it
-	newMerkleRoot := merkle.CachedTreeRoot(newRoots, sectorHeight)
+	newMerkleRoot := merkle.Sha256CachedTreeRoot2(newRoots)
 
 	// Construct the new revision
 	newRevision := currentRevision
@@ -119,27 +119,26 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	var merkleResp storage.UploadMerkleProof
 	// Calculate which sectors changed
 	oldNumSectors := uint64(len(so.SectorRoots))
-	proofRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
-
+	proofRanges := make([]merkle.SubTreeLimit, 0, len(sectorsChanged))
 	for index := range sectorsChanged {
 		if index < oldNumSectors {
-			proofRanges = append(proofRanges, merkletree.LeafRange{
-				Start: index,
-				End:   index + 1,
+			proofRanges = append(proofRanges, merkle.SubTreeLimit{
+				Left:  index,
+				Right: index + 1,
 			})
 		}
 	}
 	sort.Slice(proofRanges, func(i, j int) bool {
-		return proofRanges[i].Start < proofRanges[j].Start
+		return proofRanges[i].Left < proofRanges[j].Left
 	})
 	// Record old leaf hashes for all changed sectors
 	leafHashes := make([]common.Hash, len(proofRanges))
 	for i, r := range proofRanges {
-		leafHashes[i] = so.SectorRoots[r.Start]
+		leafHashes[i] = so.SectorRoots[r.Left]
 	}
 
 	// Construct the merkle proof
-	oldHashSet, err := merkle.DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
+	oldHashSet, err := merkle.Sha256DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
 		return err
 	}
@@ -155,7 +154,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
-		return fmt.Errorf("[Error Send Storage Proof] Error: %v", err)
+		return fmt.Errorf("[Error Send Storage Sha256MerkleTreeProof] Error: %v", err)
 	}
 
 	var clientRevisionSign []byte
@@ -300,7 +299,7 @@ func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	}
 
 	// The Merkle root is checked last because it is the most expensive check.
-	if revision.NewFileMerkleRoot != merkle.CachedTreeRoot(so.SectorRoots, sectorHeight) {
+	if revision.NewFileMerkleRoot != merkle.Sha256CachedTreeRoot(so.SectorRoots, sectorHeight) {
 		return errBadFileMerkleRoot
 	}
 

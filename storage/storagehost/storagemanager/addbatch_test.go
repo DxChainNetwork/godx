@@ -37,7 +37,7 @@ func TestAddBatchConcurrent(t *testing.T) {
 	for i := 0; i != int(sectors); i++ {
 		// Add 8 sectors
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +120,7 @@ func TestAddBatchError(t *testing.T) {
 	for i := 0; i != int(sectors); i++ {
 		// Add 8 sectors
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatal(err)
 		}
@@ -194,7 +194,7 @@ func TestAddBatchRecover(t *testing.T) {
 		for i := 0; i != int(sectors); i++ {
 			// Add 8 sectors
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}
@@ -280,7 +280,7 @@ func TestAddBatchProcessDisrupt(t *testing.T) {
 		for i := 0; i != int(sectors); i++ {
 			// Add 8 sectors
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}

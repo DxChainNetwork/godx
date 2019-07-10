@@ -26,7 +26,7 @@ func TestDeleteSectorBatchNormal(t *testing.T) {
 	}
 	// create the virtual sector and add twice
 	dataVirtual := randomBytes(storage.SectorSize)
-	rootVirtual := merkle.Root(dataVirtual)
+	rootVirtual := merkle.Sha256MerkleTreeRoot(dataVirtual)
 	if err := sm.AddSector(rootVirtual, dataVirtual); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestDeleteSectorBatchNormal(t *testing.T) {
 	}
 	// create the physical sector
 	dataPhysical := randomBytes(storage.SectorSize)
-	rootPhysical := merkle.Root(dataPhysical)
+	rootPhysical := merkle.Sha256MerkleTreeRoot(dataPhysical)
 	if err := sm.AddSector(rootPhysical, dataPhysical); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestDeleteSectorBatchStop(t *testing.T) {
 		}
 		// create the virtual sector and add twice
 		dataVirtual := randomBytes(storage.SectorSize)
-		rootVirtual := merkle.Root(dataVirtual)
+		rootVirtual := merkle.Sha256MerkleTreeRoot(dataVirtual)
 		if err := sm.AddSector(rootVirtual, dataVirtual); err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestDeleteSectorBatchStop(t *testing.T) {
 		}
 		// create the physical sector
 		dataPhysical := randomBytes(storage.SectorSize)
-		rootPhysical := merkle.Root(dataPhysical)
+		rootPhysical := merkle.Sha256MerkleTreeRoot(dataPhysical)
 		if err := sm.AddSector(rootPhysical, dataPhysical); err != nil {
 			t.Fatal(err)
 		}
@@ -145,7 +145,7 @@ func TestDeleteSectorDisrupt(t *testing.T) {
 		}
 		// create the virtual sector and add twice
 		dataVirtual := randomBytes(storage.SectorSize)
-		rootVirtual := merkle.Root(dataVirtual)
+		rootVirtual := merkle.Sha256MerkleTreeRoot(dataVirtual)
 		if err := sm.AddSector(rootVirtual, dataVirtual); err != nil {
 			t.Fatal(err)
 		}
@@ -154,7 +154,7 @@ func TestDeleteSectorDisrupt(t *testing.T) {
 		}
 		// create the physical sector
 		dataPhysical := randomBytes(storage.SectorSize)
-		rootPhysical := merkle.Root(dataPhysical)
+		rootPhysical := merkle.Sha256MerkleTreeRoot(dataPhysical)
 		if err := sm.AddSector(rootPhysical, dataPhysical); err != nil {
 			t.Fatal(err)
 		}

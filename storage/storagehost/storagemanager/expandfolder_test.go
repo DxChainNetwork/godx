@@ -35,7 +35,7 @@ func TestExpandFolderNormal(t *testing.T) {
 	for i := 0; i != int(sectors); i++ {
 		// Add 8 sectors
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func TestExpandFolderDisrupt(t *testing.T) {
 		for i := 0; i != int(sectors); i++ {
 			// Add 8 sectors
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}
@@ -167,7 +167,7 @@ func TestExpandFolderStop(t *testing.T) {
 		for i := 0; i != int(sectors); i++ {
 			// Add 8 sectors
 			data := randomBytes(storage.SectorSize)
-			root := merkle.Root(data)
+			root := merkle.Sha256MerkleTreeRoot(data)
 			if err := sm.AddSector(root, data); err != nil {
 				t.Fatal(err)
 			}

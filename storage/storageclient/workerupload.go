@@ -113,7 +113,7 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 }
 
 // upload will perform some upload work
-func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error{
+func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error {
 	session, err := w.checkSession()
 	defer func() {
 		if session != nil {

@@ -1,350 +1,298 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
-// License 2.0 that can be found in the LICENSE file
+// License 2.0 that can be found in the LICENSE file.
 
 package merkle
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"errors"
-	"fmt"
-	"reflect"
+	"hash"
 
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/merkletree"
+	"github.com/DxChainNetwork/godx/log"
+
+	"github.com/pkg/errors"
 )
 
-// LeafSize is the data size stored in one merkle leaf.
-// the original data will be divided into pieces based on the
-// merkleRootSize, and then be pushed into the merkle tree
-const (
-	SectorSize = uint64(1 << 22)
-	LeafSize   = 64
+var (
+	leafPrefix = []byte{0x00}
+	dataPrefix = []byte{0x01}
 )
 
-// Tree serves as a wrapper of the merkle tree, provide a convenient way
-// to access methods associated with the merkle tree
+type subtree struct {
+	next   *subtree
+	height int
+	sum    []byte
+}
+
+// Tree the most basic structure of the merkle tree
 type Tree struct {
-	merkletree.Tree
+	top               *subtree
+	hash              hash.Hash
+	leafIndex         uint64
+	storageProofIndex uint64
+	storageProofList  [][]byte
+	usedAsProof       bool
+	usedAsCached      bool
 }
 
-// NewTree will initialize a Tree object with sha256 as
-// the hashing method
-func NewTree() (mk *Tree) {
-	mk = &Tree{
-		Tree: *merkletree.New(sha256.New()),
+// NewTree return a tree
+func NewTree(h hash.Hash) *Tree {
+	return &Tree{
+		hash: h,
 	}
-	return
 }
 
-// Root will calculate and return the merkle root of the merkle tree
-func (mt *Tree) Root() (h common.Hash) {
-	copy(h[:], mt.Tree.Root())
-	return
+// SetStorageProofIndex must be called on an empty tree.
+func (t *Tree) SetStorageProofIndex(i uint64) error {
+	if t.top != nil {
+		return errors.New("must be called on an empty tree")
+	}
+	t.usedAsProof = true
+	t.storageProofIndex = i
+	return nil
 }
 
-// CachedTree is similar to Tree, one obvious difference between them
-// is that cached merkle tree will not hash the data before inserting them into
-// the tree
-type CachedTree struct {
-	merkletree.CachedTree
+// Root traverse all subtrees and calculate the sum of the hashes
+func (t *Tree) Root() []byte {
+	//top cannot be empty
+	if t.top == nil {
+		return nil
+	}
+
+	current := t.top
+	//If the next of top is not empty, the whole
+	//merkle tree is not balanced, you need to calculate the hash manually.
+	for current.next != nil {
+		current = &subtree{
+			next:   current.next.next,
+			height: current.next.height + 1,
+			sum:    dataTotal(t.hash, current.next.sum, current.sum),
+		}
+	}
+	//prevent internal data from being tampered with
+	return append(current.sum[:0:0], current.sum...)
 }
 
-// NewCachedTree will create a CachedTree object with
-// sha256 as hashing method.
-func NewCachedTree(height uint64) (ct *CachedTree) {
-	ct = &CachedTree{
-		CachedTree: *merkletree.NewCachedTree(sha256.New(), height),
+// ProofList construct a storage proof result set for
+// the merkle tree that has established the storage proof index
+func (t *Tree) ProofList() (merkleRoot []byte, storageProofList [][]byte, storageProofIndex uint64, numLeaves uint64) {
+	//must be a merkle tree that needs to build a proof of storage
+	if !t.usedAsProof {
+		log.Error("must be a merkle tree that needs to build a proof of storage")
+		return t.Root(), nil, t.storageProofIndex, t.leafIndex
 	}
-	return
+
+	//have not yet reached the storage certificate index
+	if t.top == nil || len(t.storageProofList) == 0 {
+		return t.Root(), nil, t.storageProofIndex, t.leafIndex
+	}
+	storageProofList = t.storageProofList
+
+	current := t.top
+
+	//If there are subtrees that are not combined,
+	//then combine them into a higher subtree
+	for current.next != nil && current.next.height < len(storageProofList)-1 {
+		current = &subtree{
+			next:   current.next.next,
+			height: current.next.height + 1,
+			sum:    dataTotal(t.hash, current.next.sum, current.sum),
+		}
+	}
+
+	//If the current top does not contain a storage proof index,
+	//then its next will necessarily contain the storage proof index.
+	if current.next != nil && current.next.height == len(storageProofList)-1 {
+		storageProofList = append(storageProofList, current.sum)
+		current = current.next
+	}
+
+	current = current.next
+	//If the next subtree is not empty, return them
+	for current != nil {
+		storageProofList = append(storageProofList, current.sum)
+		current = current.next
+	}
+	return t.Root(), storageProofList, t.storageProofIndex, t.leafIndex
 }
 
-// Push will push the data into the merkle tree
-func (ct *CachedTree) Push(h common.Hash) {
-	ct.CachedTree.Push(h[:])
-}
+// PushLeaf the tree only saves the subtrees needed to calculate the merkle root.
+// the process of the push will also include the path required for the storage certificate.
+func (t *Tree) PushLeaf(data []byte) {
 
-// PushSubTree will insert a sub merkle tree and trying to combine it with
-// other data
-func (ct *CachedTree) PushSubTree(height int, h common.Hash) (err error) {
-	return ct.CachedTree.PushSubTree(height, h[:])
-}
-
-// Root will return the merkle root of the CachedTree
-func (ct *CachedTree) Root() (h common.Hash) {
-	copy(h[:], ct.CachedTree.Root())
-	return
-}
-
-// Prove will be used to generate a storage proof hash set, which is used in storage
-// responsibility to submit the storageProof. The data field gives user more freedom to
-// choose which data they want to do merkle proof with
-func (ct *CachedTree) Prove(proofData []byte, cachedHashProofSet []common.Hash) (hashProofSet []common.Hash) {
-	// combine base and cachedHashSet, which will be used to generate proof set
-	cachedProofSet := make([][]byte, len(cachedHashProofSet)+1)
-	cachedProofSet[0] = proofData
-	for i, cachedHash := range cachedHashProofSet {
-		cachedProofSet[i+1] = cachedHash.Bytes()
+	// the first element of storageProofList is the element under storageProofIndex
+	if t.leafIndex == t.storageProofIndex {
+		t.storageProofList = append(t.storageProofList, data)
 	}
 
-	// get proofSet
-	_, proofSet, _, _ := ct.CachedTree.Prove(cachedProofSet)
-
-	// convert the proof set to hashSet
-	for _, proof := range proofSet[1:] {
-		hashProofSet = append(hashProofSet, common.BytesToHash(proof))
+	//insert a leaf node
+	t.top = &subtree{
+		next:   t.top,
+		height: 0,
 	}
 
-	return
-}
-
-// Root will calculates the root of a data
-func Root(b []byte) (h common.Hash) {
-	mt := NewTree()
-	buf := bytes.NewBuffer(b)
-	for buf.Len() > 0 {
-		mt.Push(buf.Next(LeafSize))
-	}
-	return mt.Root()
-}
-
-// CachedTreeRoot will return the root of the cached tree
-func CachedTreeRoot(roots []common.Hash, height uint64) (root common.Hash) {
-	cmt := NewCachedTree(height)
-	for _, r := range roots {
-		cmt.Push(r)
-	}
-
-	return cmt.Root()
-}
-
-// Proof will return the hash proof set of the proof based on the data provided.
-// proofData represents the data that needs to be hashed and combined with the data hashes
-// in the proof set to check the integrity of the data
-func Proof(data []byte, proofIndex uint64) (proofData []byte, hashProofSet []common.Hash, leavesCount uint64, err error) {
-	// create a tree, and set the proofIndex
-	t := NewTree()
-	if err = t.SetIndex(proofIndex); err != nil {
-		return
-	}
-
-	buf := bytes.NewBuffer(data)
-	for buf.Len() > 0 {
-		t.Push(buf.Next(LeafSize))
-	}
-
-	// get the proof set
-	_, proofSet, index, leavesCount := t.Prove()
-
-	// verification, if proofSet is empty, return error
-	if proofSet == nil {
-		err = fmt.Errorf("empty proofSet, please double check the proof index: %v. The number of merkle leaves is : %v. The index must be smaller or equal to the number of the merkle leaves",
-			index, leavesCount)
-		return
-	}
-
-	// get the proof data and hashed proof set
-	proofData = proofSet[0]
-	for _, proof := range proofSet[1:] {
-		hashProofSet = append(hashProofSet, common.BytesToHash(proof))
-	}
-
-	return
-}
-
-// VerifyDataPiece will verify if the data piece exists in the merkle tree
-func VerifyDataPiece(dataPiece []byte, hashProofSet []common.Hash, numLeaves, proofIndex uint64, merkleRoot common.Hash) (verified bool) {
-	// combine data piece with hash proof set
-	proofSet := make([][]byte, len(hashProofSet)+1)
-	proofSet[0] = dataPiece
-	for i, proof := range hashProofSet {
-		proofSet[i+1] = proof.Bytes()
-	}
-
-	// verify the data piece
-	return merkletree.VerifyProof(sha256.New(), merkleRoot[:], proofSet, proofIndex, numLeaves)
-}
-
-// RangeProof will create the hashProofSet for the range of data provided
-// NOTE: proofStart and proofEnd are measured in terms of
-// merkle leaves (64), meaning data[proofStart * 64:proofEnd * 64]
-func RangeProof(data []byte, proofStart, proofEnd int) (hashPoofSet []common.Hash, err error) {
-	// range validation
-	if err = rangeVerification(proofStart, proofEnd); err != nil {
-		err = fmt.Errorf("making the merkle range proof: %s", err.Error())
-		return
-	}
-
-	// get the proof set
-	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, merkletree.NewReaderSubtreeHasher(bytes.NewReader(data), LeafSize, sha256.New()))
-	if err != nil {
-		return
-	}
-
-	// convert the hash slice
-	for _, proof := range proofSet {
-		hashPoofSet = append(hashPoofSet, common.BytesToHash(proof))
-	}
-
-	return
-}
-
-// VerifyRangeProof will verify if the data within the range provided belongs to the merkle tree
-// dataWithinRange = data[start:end]
-func VerifyRangeProof(dataWithinRange []byte, hashProofSet []common.Hash, proofStart, proofEnd int, merkleRoot common.Hash) (verified bool, err error) {
-	// range validation
-	if err = rangeVerification(proofStart, proofEnd); err != nil {
-		err = fmt.Errorf("verifying the range proof: %s", err)
-		return
-	}
-
-	// convert the hash slice to slice of byte slice
-	bytesProofSet := hashSliceToByteSlices(hashProofSet)
-
-	// verification
-	verified, err = merkletree.VerifyRangeProof(merkletree.NewReaderLeafHasher(bytes.NewReader(dataWithinRange),
-		sha256.New(), LeafSize), sha256.New(), proofStart, proofEnd, bytesProofSet, merkleRoot[:])
-
-	return
-}
-
-// SectorRangeProof is similar to RangeProof. The difference is that the latter one is
-// used to create proof set for range within the  data pieces, which is divided from the data sector.
-// The former one is used to create proof set for range within data sectors in a collection of data sectors
-// stored in the contract. roots represents the collection of data sectors
-func SectorRangeProof(roots []common.Hash, proofStart, proofEnd int) (hashProofSet []common.Hash, err error) {
-	// range validation
-	if err = rangeVerification(proofStart, proofEnd); err != nil {
-		err = fmt.Errorf("merkle sector range proof: %s", err)
-		return
-	}
-
-	// conversion
-	byteRoots := hashSliceToByteSlices(roots)
-
-	// make proofSet
-	sh := merkletree.NewCachedSubtreeHasher(byteRoots, sha256.New())
-	proofSet, err := merkletree.BuildRangeProof(proofStart, proofEnd, sh)
-	if err != nil {
-		return
-	}
-
-	// convert proofSet to hashProofSet
-	for _, proof := range proofSet {
-		hashProofSet = append(hashProofSet, common.BytesToHash(proof))
-	}
-
-	return
-}
-
-// VerifySectorRangeProof is similar to VerifyRangeProof. The difference is that the latter one is
-// used verify data pieces, which is divided from the data sector. The former one is used to verify
-// data sectors in a collection of data sectors stored in the contract. roots represents the collection
-// of data sectors. NOTE: Unlike the range proof, the data is not divided into pieces, therefore,
-// the roots need to be provided will be roots[proofStart:proofEnd] == rootsVerify
-func VerifySectorRangeProof(rootsVerify []common.Hash, hashProofSet []common.Hash, proofStart, proofEnd int, merkleRoot common.Hash) (verified bool, err error) {
-	// range validation
-	if err = rangeVerification(proofStart, proofEnd); err != nil {
-		err = fmt.Errorf("verify sector range proof: %s", err)
-		return
-	}
-
-	// conversion
-	byteRoots := hashSliceToByteSlices(rootsVerify)
-	lh := merkletree.NewCachedLeafHasher(byteRoots)
-	byteProofSet := hashSliceToByteSlices(hashProofSet)
-
-	verified, err = merkletree.VerifyRangeProof(lh, sha256.New(), proofStart, proofEnd, byteProofSet, merkleRoot[:])
-
-	return
-}
-
-// DiffProof is similar to SectorRangeProof, the only difference is that this function
-// can provide multiple ranges
-func DiffProof(roots []common.Hash, rangeSet []merkletree.LeafRange, leavesCount uint64) (hashProofSet []common.Hash, err error) {
-	// range set validation
-	if err = rangeSetVerification(rangeSet); err != nil {
-		return
-	}
-
-	byteSectorRoots := hashSliceToByteSlices(roots)
-	hasher := merkletree.NewCachedSubtreeHasher(byteSectorRoots, sha256.New())
-	proofSet, err := merkletree.BuildDiffProof(rangeSet, hasher, leavesCount)
-
-	// conversion
-	for _, proof := range proofSet {
-		hashProofSet = append(hashProofSet, common.BytesToHash(proof))
-	}
-
-	return
-}
-
-// VerifyDiffProof is similar to VerifySectorRangeProof, the only difference is that this function
-// can provide multiple ranges
-func VerifyDiffProof(rangeSet []merkletree.LeafRange, leavesCount uint64, hashProofSet, rootsVerify []common.Hash, merkleRoot common.Hash) (verified bool, err error) {
-	// rangeSet verification
-	if err = rangeSetVerification(rangeSet); err != nil {
-		return
-	}
-
-	byteProofSet := hashSliceToByteSlices(hashProofSet)
-	byteRootsVerify := hashSliceToByteSlices(rootsVerify)
-
-	hasher := merkletree.NewCachedLeafHasher(byteRootsVerify)
-
-	var m []byte
-	if reflect.DeepEqual(merkleRoot, common.Hash{}) {
-		m = nil
+	//whether to cache data, not cache data, only save data hash
+	if t.usedAsCached {
+		t.top.sum = data
 	} else {
-		m = merkleRoot[:]
+		t.top.sum = leafTotal(t.hash, data)
 	}
-	verified, err = merkletree.VerifyDiffProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, m)
 
-	return
+	//combine all subtrees of the same height.
+	t.combineAllSubTrees()
+
+	// Update the index.
+	t.leafIndex++
 }
 
-// LeavesCount will count how many leaves a merkle tree has
-func LeavesCount(dataSize uint64) (count uint64) {
-	if dataSize == 0 {
-		return 0
+//PushSubTree there is no way to judge whether the
+// inserted subtree is a balanced tree, which will bring unknown danger.
+func (t *Tree) PushSubTree(height int, sum []byte) error {
+	//Calculate the new index
+	newIndex := t.leafIndex + 1<<uint64(height)
+
+	//If the inserted subtree contains the elements
+	//of storageProofIndex. this will lose all meaning.
+	//if the leafIndex is already equal to the storageProofIndex,
+	//then the next leaf will be added to the storageProofList,
+	//the current subtree must already contain the leaf
+	//corresponding to the storageProofIndex.
+	//which is very dangerous.
+	if t.usedAsProof && (t.leafIndex == t.storageProofIndex ||
+		(t.leafIndex < t.storageProofIndex && t.storageProofIndex < newIndex)) {
+		return errors.New("which is very dangerous,this will lose all meaning")
 	}
 
-	count = dataSize / LeafSize
-	if count == 0 || dataSize%LeafSize != 0 {
-		count++
+	//When the tree at this time is not balanced and
+	// the inserted subtree height is greater than
+	// the current tree, this will not be allowed.
+	if t.top != nil && height > t.top.height {
+		return errors.New("subtrees that are not allowed to be inserted are larger than the current subtree")
 	}
-	return
+
+	t.top = &subtree{
+		height: height,
+		next:   t.top,
+		sum:    sum,
+	}
+
+	//combine all subtrees of the same height.
+	t.combineAllSubTrees()
+
+	t.leafIndex = newIndex
+
+	return nil
 }
 
-// rangeVerification validates the start and end position provided
-func rangeVerification(start, end int) (err error) {
-	if start < 0 || start > end || start == end {
-		err = errors.New("illegal range")
-		return
-	}
+// combineAllSubTrees combine all subtrees of the same height
+func (t *Tree) combineAllSubTrees() {
+	//subtrees of the same height are combined into a higher subtree
+	for t.top.next != nil && t.top.height == t.top.next.height {
 
-	return
-}
-
-// hashSliceToByteSlices convert a hash slice to a slice of byte slice
-func hashSliceToByteSlices(hs []common.Hash) (bss [][]byte) {
-	for _, h := range hs {
-		bss = append(bss, h.Bytes())
-	}
-	return
-}
-
-// rangeSetVerification validates a set of ranges provided, each range
-// contains a start position and end position
-func rangeSetVerification(rangeSet []merkletree.LeafRange) (err error) {
-	for i, r := range rangeSet {
-		if r.Start < 0 || r.Start >= r.End {
-			return errors.New("range set validation failed")
+		//check if the subtree can be added to the storageProofList
+		if t.top.height == len(t.storageProofList)-1 {
+			//one of the two subtrees being combined will be added to the storageProofList
+			leaves := uint64(1 << uint(t.top.height))
+			mid := (t.leafIndex / leaves) * leaves
+			if t.storageProofIndex < mid {
+				t.storageProofList = append(t.storageProofList, t.top.sum)
+			} else {
+				t.storageProofList = append(t.storageProofList, t.top.next.sum)
+			}
 		}
-		if i > 0 && rangeSet[i-1].End > r.Start {
-			return errors.New("range set validation failed")
+
+		//combine two subtrees
+		t.top = &subtree{
+			next:   t.top.next.next,
+			height: t.top.next.height + 1,
+			sum:    dataTotal(t.hash, t.top.next.sum, t.top.sum),
 		}
 	}
-	return
+}
+
+// leafTotal calculate leaf hash
+func leafTotal(h hash.Hash, data []byte) []byte {
+	return sum(h, leafPrefix, data)
+}
+
+// dataTotal calculate the root hash through the left and right subtrees
+func dataTotal(h hash.Hash, a, b []byte) []byte {
+	return sum(h, dataPrefix, a, b)
+}
+
+// sum calculate and return a hash through the specified interface
+func sum(h hash.Hash, data ...[]byte) []byte {
+	// Reset resets the Hash to its initial state.
+	h.Reset()
+	for _, d := range data {
+		// ignore the error here because it won't return an error
+		h.Write(d)
+	}
+
+	return h.Sum(nil)
+}
+
+// CheckStorageProof check the merkle tree
+func CheckStorageProof(h hash.Hash, merkleRoot []byte, storageProofList [][]byte, storageProofIndex uint64, number uint64) bool {
+
+	//invalid parameter
+	if merkleRoot == nil || storageProofIndex >= number || len(storageProofList) <= 0 {
+		return false
+	}
+
+	height := 0
+	//It is possible to cache the data,
+	//first calculate the hash of the first element
+	sum := leafTotal(h, storageProofList[height])
+	height++
+
+	stableEnd := storageProofIndex
+	for {
+
+		//check if the merkle tree is complete
+		subTreeStartIndex := (storageProofIndex / (1 << uint(height))) * (1 << uint(height))
+		subTreeEndIndex := subTreeStartIndex + (1 << (uint(height))) - 1
+
+		if subTreeEndIndex >= number {
+			//explain that the merkle tree is not in a balanced state.
+			break
+		}
+		stableEnd = subTreeEndIndex
+
+		//the length of the storageProofList must be
+		// greater than the height of the merkle tree.
+		if len(storageProofList) <= height {
+			return false
+		}
+
+		//determine if the leaf is left or right
+		if storageProofIndex-subTreeStartIndex < 1<<uint(height-1) {
+			sum = dataTotal(h, sum, storageProofList[height])
+		} else {
+			sum = dataTotal(h, storageProofList[height], sum)
+		}
+		height++
+	}
+
+	//if there is an extra unbalanced leaf,
+	//calculate the sum of the hashes
+	if stableEnd != number-1 {
+		if len(storageProofList) <= height {
+			return false
+		}
+		sum = dataTotal(h, sum, storageProofList[height])
+		height++
+	}
+
+	//calculate the sum of the hashes of the remaining elements of the storageProofList
+	for height < len(storageProofList) {
+		sum = dataTotal(h, storageProofList[height], sum)
+		height++
+	}
+
+	//return true if the two elements are the same
+	if bytes.Equal(sum, merkleRoot) {
+		return true
+	}
+	return false
 }
