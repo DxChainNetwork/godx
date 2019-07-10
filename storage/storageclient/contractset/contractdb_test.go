@@ -19,7 +19,6 @@ import (
 )
 
 var testDB = "./testdata/contractsetdb"
-var testDB1 = "./testdata/contractsetdb1"
 var ch = contractHeaderGenerator()
 
 func TestDB_StoreFetchDeleteContractHeader(t *testing.T) {

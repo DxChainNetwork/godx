@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+# set -e
 
 echo "" > coverage.txt
 for module in $(go list ./... | grep -v vendor); do

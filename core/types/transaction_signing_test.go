@@ -36,9 +36,9 @@ func TestMakeSigner(t *testing.T) {
 		input *big.Int
 		want  Signer
 	}{
-		{big.NewInt(0), FrontierSigner{}},
-		{big.NewInt(1000000), FrontierSigner{}},
-		{big.NewInt(2000000), HomesteadSigner{}},
+		{big.NewInt(0), EIP155Signer{}},
+		{big.NewInt(1000000), EIP155Signer{}},
+		{big.NewInt(2000000), EIP155Signer{}},
 		{big.NewInt(3000000), EIP155Signer{}},
 	}
 	for _, test := range tests {
