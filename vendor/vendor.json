@@ -33,12 +33,6 @@
 			"revisionTime": "2018-07-12T00:56:34Z"
 		},
 		{
-			"checksumSHA1": "rwiZ076UUxDDuPNYbZzgoaOPSnQ=",
-			"path": "github.com/DxChainNetwork/merkletree",
-			"revision": "8b6f2128632789039ec00c049b46a51039f38778",
-			"revisionTime": "2019-05-24T01:43:12Z"
-		},
-		{
 			"checksumSHA1": "vmaUVLsyu2kdFpZG4SidKmYkLUo=",
 			"path": "github.com/Pallinder/go-randomdata",
 			"revision": "97a2356fcab20708fb8ae46cbbf69a5bc9feca63",
