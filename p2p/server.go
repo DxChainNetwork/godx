@@ -177,21 +177,22 @@ type Server struct {
 	peerOpDone chan struct{}
 
 	// bunch of channels used for communication among different go routines
-	quit                  chan struct{}
-	addstatic             chan *enode.Node // used for adding static peers
-	removestatic          chan *enode.Node // used for static peer disconnection
-	addtrusted            chan *enode.Node // used to add a node to trusted peer
-	removetrusted         chan *enode.Node // used to remove a node from trusted peer
-	addStorageContract    chan *enode.Node // used to add storage contract peer
-	removeStorageContract chan *enode.Node // used to remove storage contract peer
-	addStorageClient      chan *enode.Node // used to add storage contract client peer
-	removeStorageClient   chan *enode.Node // used to remove storage contract client peer
-	storagePeerDoneMap    map[enode.ID]*sync.WaitGroup
-	posthandshake         chan *conn
-	addpeer               chan *conn
-	delpeer               chan peerDrop
-	storageHosts          map[string]struct{}
-	peerAdding            map[string]chan struct{}
+	quit                   chan struct{}
+	addstatic              chan *enode.Node // used for adding static peers
+	removestatic           chan *enode.Node // used for static peer disconnection
+	addtrusted             chan *enode.Node // used to add a node to trusted peer
+	removetrusted          chan *enode.Node // used to remove a node from trusted peer
+	addStorageContract     chan *enode.Node // used to add storage contract peer
+	removeStorageContract  chan *enode.Node // used to remove storage contract peer
+	addStorageClient       chan *enode.Node // used to add storage contract client peer
+	removeStorageClient    chan *enode.Node // used to remove storage contract client peer
+	storagePeerDoneMap     map[enode.ID]*sync.WaitGroup
+	storagePeerDoneMapLock sync.Mutex
+	posthandshake          chan *conn
+	addpeer                chan *conn
+	delpeer                chan peerDrop
+	storageHosts           map[string]struct{}
+	peerAdding             map[string]chan struct{}
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -396,6 +397,7 @@ func (srv *Server) RemoveTrustedPeer(node *enode.Node) {
 func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	nodeID := node.ID()
 
+	srv.storagePeerDoneMapLock.Lock()
 	wg, ok := srv.storagePeerDoneMap[nodeID]
 	if !ok {
 		_wg := &sync.WaitGroup{}
@@ -417,6 +419,7 @@ func (srv *Server) AddStorageContractPeer(node *enode.Node) {
 	wg.Wait()
 
 	delete(srv.storagePeerDoneMap, nodeID)
+	srv.storagePeerDoneMapLock.Unlock()
 }
 
 // RemoveTrustedPeer removes the given node from the trusted peer set.
