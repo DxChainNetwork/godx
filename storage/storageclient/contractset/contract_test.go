@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -177,6 +178,9 @@ func newContract() (c *Contract, err error) {
 	if err != nil {
 		return
 	}
+
+	// remove the existed values first before initializing the new db
+	os.RemoveAll("./testdata/contractsetdb")
 
 	// initialize new db
 	db, err := OpenDB("./testdata/contractsetdb")
