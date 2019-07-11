@@ -44,7 +44,7 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 	// constant
 	return &cachedSubTree{
 		height: int(merkleRootsCacheHeight + sectorHeight),
-		sum:    merkle.CachedTreeRoot(roots, sectorHeight),
+		sum:    merkle.Sha256CachedTreeRoot(roots, sectorHeight),
 	}
 }
 
@@ -102,7 +102,7 @@ func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) {
 // Note: this is only a preview, root will not be saved into the memory nor db
 func (mr *merkleRoots) newMerkleRootPreview(newRoot common.Hash) (mroot common.Hash, err error) {
 	// create a new cached merkle tree
-	ct := merkle.NewCachedTree(sectorHeight)
+	ct := merkle.NewSha256CachedTree(sectorHeight)
 
 	// append all cachedSubTrees first
 	for _, sub := range mr.cachedSubTrees {

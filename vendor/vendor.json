@@ -33,6 +33,12 @@
 			"revisionTime": "2018-07-12T00:56:34Z"
 		},
 		{
+			"checksumSHA1": "vmaUVLsyu2kdFpZG4SidKmYkLUo=",
+			"path": "github.com/Pallinder/go-randomdata",
+			"revision": "97a2356fcab20708fb8ae46cbbf69a5bc9feca63",
+			"revisionTime": "2018-10-31T20:14:56Z"
+		},
+		{
 			"checksumSHA1": "QC55lHNOv1+UAL2xtIHw17MJ8J8=",
 			"path": "github.com/StackExchange/wmi",
 			"revision": "5d049714c4a64225c3c79a7cf7d02f7fb5b96338",
@@ -352,16 +358,22 @@
 			"tree": true
 		},
 		{
-			"checksumSHA1": "lPhKP8RF7Fojz8Wm4FtB9Mud9Jw=",
+			"checksumSHA1": "rM3pI1JDvb21wOaVjTCXrf+Ce04=",
 			"path": "github.com/klauspost/cpuid",
 			"revision": "05a8198c0f5a27739aec358908d7e12c64ce6eb7",
 			"revisionTime": "2019-04-22T09:51:56Z"
 		},
 		{
-			"checksumSHA1": "qT0Z8H2bG7+Xdoin1bzDu/CTXbk=",
+			"checksumSHA1": "oNPIJ4td9Sy3KJNG32jzw0WN9nc=",
 			"path": "github.com/klauspost/reedsolomon",
 			"revision": "a373324398e4d088b67d6dd6157285b5d4e29642",
 			"revisionTime": "2019-04-07T15:36:31Z"
+		},
+		{
+			"checksumSHA1": "cxWudRxSgBo2pjN0xpRKCKlYxa4=",
+			"path": "github.com/magiconair/properties/assert",
+			"revision": "7757cc9fdb852f7579b24170bcacda2c7471bb6a",
+			"revisionTime": "2019-01-10T14:24:58Z"
 		},
 		{
 			"checksumSHA1": "7hln62oZPZmyqEmgXaybf9WxQ7A=",
@@ -737,6 +749,12 @@
 			"revisionTime": "2018-06-15T20:27:29Z"
 		},
 		{
+			"checksumSHA1": "eaK7NuGdfEVypOnqYniZSuF2S6s=",
+			"path": "golang.org/x/crypto/blake2b",
+			"revision": "38d8ce5564a5b71b2e3a00553993f1b9a7ae852f",
+			"revisionTime": "2019-04-03T20:23:40Z"
+		},
+		{
 			"checksumSHA1": "TT1rac6kpQp2vz24m5yDGUNQ/QQ=",
 			"path": "golang.org/x/crypto/cast5",
 			"revision": "ff983b9c42bc9fbf91556e191cc8efb585c16908",
@@ -849,6 +867,12 @@
 			"path": "golang.org/x/crypto/ssh/terminal",
 			"revision": "ff983b9c42bc9fbf91556e191cc8efb585c16908",
 			"revisionTime": "2018-07-25T11:53:45Z"
+		},
+		{
+			"checksumSHA1": "ICUP4tYYbQQXP1rU2YrPAPicKY4=",
+			"path": "golang.org/x/crypto/twofish",
+			"revision": "38d8ce5564a5b71b2e3a00553993f1b9a7ae852f",
+			"revisionTime": "2019-04-03T20:23:40Z"
 		},
 		{
 			"checksumSHA1": "Y+HGqEkYM15ir+J93MEaHdyFy0c=",
@@ -1175,19 +1199,19 @@
 			"revisionTime": "2018-09-06T15:38:03Z"
 		},
 		{
-			"checksumSHA1": "Wh/VK1Sq9UiMdUQCwtV5/KrMNU8=",
+			"checksumSHA1": "RYgTqTURyI5wvmDMgtDormdNIF0=",
 			"path": "gotest.tools/internal/source",
 			"revision": "92091b3f341b5c76b6d599b215adb2d632f7bca1",
 			"revisionTime": "2018-09-06T15:38:03Z"
 		},
 		{
-			"checksumSHA1": "LBBvBAk7psFEEuLdmUJsO+3D7Mo=",
+			"checksumSHA1": "pkglm9+Edrqby04AwaoL14ICSP0=",
 			"path": "gotest.tools/skip",
 			"revision": "92091b3f341b5c76b6d599b215adb2d632f7bca1",
 			"revisionTime": "2018-09-06T15:38:03Z"
 		},
 		{
-			"checksumSHA1": "hg79CioDb9i2oFSXj1V8uiIYEgQ=",
+			"checksumSHA1": "n+ogWrWCPt2eLL91DBoW6sc4yTk=",
 			"path": "gotest.tools/x/subtest",
 			"revision": "92091b3f341b5c76b6d599b215adb2d632f7bca1",
 			"revisionTime": "2018-09-06T15:38:03Z"

@@ -32,7 +32,7 @@ func TestAddSector(t *testing.T) {
 	}
 	// Create the sector
 	data := randomBytes(storage.SectorSize)
-	root := merkle.Root(data)
+	root := merkle.Sha256MerkleTreeRoot(data)
 	if err := sm.AddSector(root, data); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestDisruptedPhysicalAddSector(t *testing.T) {
 		}
 		// Create the sector
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err == nil {
 			t.Fatalf("test %v: disrupting does not give error", test.keyWord)
 		}
@@ -116,7 +116,7 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 		}
 		// Create the sector
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: first add sector give error: %v", test.keyWord, err)
 		}
@@ -154,7 +154,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: errStop should not give error: %v", test.keyWord, err)
 		}
@@ -205,7 +205,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
 		data := randomBytes(storage.SectorSize)
-		root := merkle.Root(data)
+		root := merkle.Sha256MerkleTreeRoot(data)
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: add physical sector should not give error: %v", test.keyWord, err)
 		}
@@ -301,7 +301,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 			} else {
 				// create a random sector
 				data := randomBytes(storage.SectorSize)
-				root := merkle.Root(data)
+				root := merkle.Sha256MerkleTreeRoot(data)
 				expectLock.Lock()
 				if _, exist := expect[root]; exist {
 					// The root exist. Thus unlock and return

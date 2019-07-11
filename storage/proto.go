@@ -6,13 +6,10 @@ package storage
 
 import (
 	"math/big"
-	"sort"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/merkletree"
 )
 
 const (
@@ -99,111 +96,3 @@ type (
 		MerkleProof []common.Hash
 	}
 )
-
-// newRevision creates a copy of current with its revision number incremented,
-// and with cost transferred from the storage client to the host.
-func newRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
-	rev := current
-
-	// need to manually copy slice memory
-	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
-	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 3)
-	copy(rev.NewValidProofOutputs, current.NewValidProofOutputs)
-	copy(rev.NewMissedProofOutputs, current.NewMissedProofOutputs)
-
-	// move valid payout from storage client to host
-	rev.NewValidProofOutputs[0].Value = current.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
-	rev.NewValidProofOutputs[1].Value = current.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
-
-	// move missed payout from storage client to void
-	rev.NewMissedProofOutputs[0].Value = current.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
-	rev.NewMissedProofOutputs[2].Value = current.NewMissedProofOutputs[2].Value.Add(current.NewMissedProofOutputs[2].Value, cost)
-
-	// increment revision number
-	rev.NewRevisionNumber++
-
-	return rev
-}
-
-// newDownloadRevision revises the current revision to cover the cost of
-// downloading data.
-func NewDownloadRevision(current types.StorageContractRevision, downloadCost *big.Int) types.StorageContractRevision {
-	return newRevision(current, downloadCost)
-}
-
-// calculateProofRanges returns the proof ranges that should be used to verify a
-// pre-modification Merkle diff proof for the specified actions.
-func CalculateProofRanges(actions []UploadAction, oldNumSectors uint64) []merkletree.LeafRange {
-	newNumSectors := oldNumSectors
-	sectorsChanged := make(map[uint64]struct{})
-	for _, action := range actions {
-		switch action.Type {
-		case UploadActionAppend:
-			sectorsChanged[newNumSectors] = struct{}{}
-			newNumSectors++
-		}
-	}
-
-	oldRanges := make([]merkletree.LeafRange, 0, len(sectorsChanged))
-	for index := range sectorsChanged {
-		if index < oldNumSectors {
-			oldRanges = append(oldRanges, merkletree.LeafRange{
-				Start: index,
-				End:   index + 1,
-			})
-		}
-	}
-	sort.Slice(oldRanges, func(i, j int) bool {
-		return oldRanges[i].Start < oldRanges[j].Start
-	})
-
-	return oldRanges
-}
-
-// modifyProofRanges modifies the proof ranges produced by calculateProofRanges
-// to verify a post-modification Merkle diff proof for the specified actions.
-func ModifyProofRanges(proofRanges []merkletree.LeafRange, actions []UploadAction, numSectors uint64) []merkletree.LeafRange {
-	for _, action := range actions {
-		switch action.Type {
-		case UploadActionAppend:
-			proofRanges = append(proofRanges, merkletree.LeafRange{
-				Start: numSectors,
-				End:   numSectors + 1,
-			})
-			numSectors++
-		}
-	}
-	return proofRanges
-}
-
-// modifyLeaves modifies the leaf hashes of a Merkle diff proof to verify a
-// post-modification Merkle diff proof for the specified actions.
-func ModifyLeaves(leafHashes []common.Hash, actions []UploadAction, numSectors uint64) []common.Hash {
-	// determine which sector index corresponds to each leaf hash
-	var indices []uint64
-	for _, action := range actions {
-		switch action.Type {
-		case UploadActionAppend:
-			indices = append(indices, numSectors)
-			numSectors++
-		}
-	}
-	sort.Slice(indices, func(i, j int) bool {
-		return indices[i] < indices[j]
-	})
-	indexMap := make(map[uint64]int, len(leafHashes))
-	for i, index := range indices {
-		if i > 0 && index == indices[i-1] {
-			continue // remove duplicates
-		}
-		indexMap[index] = i
-	}
-
-	for _, action := range actions {
-		switch action.Type {
-		case UploadActionAppend:
-			leafHashes = append(leafHashes, merkle.Root(action.Data))
-		}
-	}
-	return leafHashes
-}

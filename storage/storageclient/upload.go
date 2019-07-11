@@ -42,12 +42,12 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	}
 
 	// Delete existing file if Override mode
-	if up.Mode == storage.Override {
-		err := sc.DeleteFile(up.DxPath)
-		if err != nil && err != dxdir.ErrUnknownPath {
-			return fmt.Errorf("cannot to delete existing file, error: %v", err)
-		}
-	}
+	//if up.Mode == storage.Override {
+	//	err := sc.DeleteFile(up.DxPath)
+	//	if err != nil && err != dxdir.ErrUnknownPath {
+	//		return fmt.Errorf("cannot to delete existing file, error: %v", err)
+	//	}
+	//}
 
 	// Setup ECTypeStandard's ErasureCode with default params
 	if up.ErasureCode == nil {
@@ -80,7 +80,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	}
 
 	// Create the DxFile and add to client
-	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), up.Mode == storage.Override, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), false, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}

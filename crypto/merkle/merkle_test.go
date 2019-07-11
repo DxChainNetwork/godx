@@ -1,245 +1,157 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
-// License 2.0 that can be found in the LICENSE file
+// License 2.0 that can be found in the LICENSE file.
 
 package merkle
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/merkletree"
-	"math/rand"
+	"crypto/sha256"
+	"fmt"
 	"testing"
-	"time"
-
-	"github.com/DxChainNetwork/godx/common"
 )
 
-func TestLeavesCount(t *testing.T) {
-	tables := []struct {
-		dataSize uint64
-		count    uint64
-	}{
-		{64 * 2, 2},
-		{64 * 1, 1},
-		{64 * 0, 0},
-		{63, 1},
-		{65, 2},
-	}
-
-	for _, table := range tables {
-		result := LeavesCount(table.dataSize)
-		if result != table.count {
-			t.Errorf("wrong leaves count obtained. Expected: %v, got: %v",
-				table.count, result)
-		}
-	}
-}
-
-func TestRangeVerification(t *testing.T) {
-	tables := []struct {
-		start int
-		end   int
-		err   bool
-	}{
-		{1, 2, false},
-		{2, 1, true},
-		{1, 1, true},
-		{-1, 1, true},
-	}
-
-	for _, table := range tables {
-		validErr := rangeVerification(table.start, table.end)
-		if validErr == nil && table.err {
-			t.Errorf("error is expected, howoever, no error is detected")
-		}
-
-		if validErr != nil && !table.err {
-			t.Errorf("error is detected but not expected: %s", validErr.Error())
-		}
-	}
-}
-
-func TestMerkleRootProofVerification(t *testing.T) {
-	var proofIndex uint64
-	data := []byte("Good Morning")
-
-	// create merkle root
-	mr := Root(data)
-
-	// create merkle proof
-	proofDataPiece, proofSet, numLeaves, err := Proof(data, proofIndex)
+func TestTree_SetStorageProofIndex(t *testing.T) {
+	tree1 := NewTree(sha256.New())
+	err := tree1.SetStorageProofIndex(10)
 	if err != nil {
-		t.Fatalf("failed to get the merkle proof: %s", err.Error())
+		t.Error(err)
 	}
-
-	// verification
-	verified := VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
-	if !verified {
-		t.Errorf("expected merkle verification to be succeed, instead, got failed")
-	}
-
-	// randomly generate a merkle root, and do a test
-	randmr := randomMerkleRoot()
-	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, randmr)
-	if verified {
-		t.Error("expected merkle verification to be failed, instead, got succeed")
-	}
-
-	// change the proofDataPiece
-	proofDataPiece[0] = 'd'
-	verified = VerifyDataPiece(proofDataPiece, proofSet, numLeaves, proofIndex, mr)
-	if verified {
-		t.Error("expected merkle verification to be failed, instead, got succeed")
+	tree2 := NewTree(sha256.New())
+	tree2.PushLeaf([]byte("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2a"))
+	tree2.PushLeaf([]byte("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2b"))
+	tree2.PushLeaf([]byte("fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2c"))
+	err = tree2.SetStorageProofIndex(10)
+	if err == nil {
+		t.Error("this should return error")
 	}
 }
 
-func TestMerkleRangeProofVerification(t *testing.T) {
-	for piece := 0; piece < 50; piece++ {
-		data := randomDataGenerator(uint64(piece * LeafSize))
-		mr := Root(data)
-		for startProof := 0; startProof < piece; startProof++ {
-			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := RangeProof(data, startProof, endProof)
-				if err != nil {
-					t.Fatalf("failed to get merkle range proof set")
-				}
-
-				verified, err := VerifyRangeProof(data[startProof*LeafSize:endProof*LeafSize], proofSet, startProof, endProof, mr)
-				if err != nil {
-					t.Errorf("failed to obtain the range proof: %s", err.Error())
-				}
-
-				if !verified {
-					t.Errorf("expected verified, but not")
-				}
+func TestTree_Root(t *testing.T) {
+	tree := NewTree(sha256.New())
+	tree.usedAsCached = true
+	for i := 0; i < 6; i++ {
+		tree.PushLeaf([]byte(fmt.Sprintf("%d", i)))
+		treeRoot := tree.Root()
+		switch i {
+		case 0:
+			if !bytes.Equal(treeRoot, tree.top.sum) {
+				t.Error("error,id:1")
+			}
+		case 1:
+			if !bytes.Equal(treeRoot, tree.top.sum) {
+				t.Error("error,id:2")
+			}
+		case 2:
+			sum := dataTotal(tree.hash, tree.top.next.sum, tree.top.sum)
+			if !bytes.Equal(treeRoot, sum) {
+				t.Error("error,id:3")
+			}
+		case 3:
+			if !bytes.Equal(treeRoot, tree.top.sum) {
+				t.Error("error,id:4")
+			}
+		case 4:
+			sum := dataTotal(tree.hash, tree.top.next.sum, tree.top.sum)
+			if !bytes.Equal(treeRoot, sum) {
+				t.Error("error,id:5")
+			}
+		case 5:
+			sum := dataTotal(tree.hash, tree.top.next.sum, tree.top.sum)
+			if !bytes.Equal(treeRoot, sum) {
+				t.Error("error,id:6")
 			}
 		}
+
 	}
 }
 
-func TestMerkleSectorRangeProofVerification(t *testing.T) {
-	for piece := 0; piece < 50; piece++ {
-		roots := randomHashSliceGenerator(piece)
+func TestTree_ProofList(t *testing.T) {
+	tree := NewTree(sha256.New())
 
-		mr := CachedTreeRoot(roots, sectorHeight)
-
-		for startProof := 0; startProof < piece; startProof++ {
-			for endProof := startProof + 1; endProof < piece-1; endProof++ {
-				proofSet, err := SectorRangeProof(roots, startProof, endProof)
-				if err != nil {
-					t.Fatalf("failed to get the merkle sector range proof set")
-				}
-
-				verified, err := VerifySectorRangeProof(roots[startProof:endProof], proofSet, startProof, endProof, mr)
-				if err != nil {
-					t.Fatalf("failed to verify the sector range proof: %s", err.Error())
-				}
-				if !verified {
-					t.Errorf("expected verified, but not")
-				}
-			}
-		}
-	}
-}
-
-func TestMerkleDiffProofVerification(t *testing.T) {
-	roots := randomHashSliceGenerator(50)
-	mr := CachedTreeRoot(roots, sectorHeight)
-	rangeSet := []merkletree.LeafRange{
-		merkletree.LeafRange{Start: 1, End: 2},
-		merkletree.LeafRange{Start: 10, End: 20},
-		merkletree.LeafRange{Start: 30, End: 50},
+	if err := tree.SetStorageProofIndex(2); err != nil {
+		t.Error(err)
 	}
 
-	// create proofSet
-	proofSet, err := DiffProof(roots, rangeSet, uint64(50))
-	if err != nil {
-		t.Fatalf("failed to create merkleDiffProof: %s", err.Error())
+	root := tree.Root()
+	if root != nil {
+		t.Error("root must be empty")
 	}
 
-	// construct rootVerify
-	var rootVerify []common.Hash
-	sections := [][]common.Hash{
-		roots[1:2],
-		roots[10:20],
-		roots[30:50],
+	tree.PushLeaf([]byte("1"))
+	tree.PushLeaf([]byte("2"))
+
+	_, storageProofList2, _, _ := tree.ProofList()
+	if len(storageProofList2) != 0 {
+		t.Error("storageProofList must be empty")
 	}
 
-	for _, sec := range sections {
-		rootVerify = append(rootVerify, sec...)
+	tree.PushLeaf([]byte("3"))
+	_, storageProofList3, _, _ := tree.ProofList()
+	if len(storageProofList3) != 2 {
+		t.Error("The length of storageProofList should be one")
+	}
+	tree.PushLeaf([]byte("4"))
+	_, storageProofList4, _, _ := tree.ProofList()
+	if len(storageProofList4) != 3 {
+		t.Error("The length of storageProofList should be two")
+	}
+	tree.PushLeaf([]byte("5"))
+	_, storageProofList5, _, _ := tree.ProofList()
+	if len(storageProofList5) != 4 {
+		t.Error("The length of storageProofList should be two")
 	}
 
-	// verification
-	verified, err := VerifyDiffProof(rangeSet, uint64(50), proofSet, rootVerify, mr)
-	if err != nil {
-		t.Fatalf("failed to verify the diff proof: %s", err.Error())
+	tree.PushLeaf([]byte("6"))
+	_, storageProofList6, _, _ := tree.ProofList()
+	if len(storageProofList6) != 4 {
+		t.Error("The length of storageProofList should be two")
 	}
 
-	if !verified {
-		t.Errorf("diff proof is expected to be verified successfully, instead, got failed")
+	tree.PushLeaf([]byte("7"))
+	_, storageProofList7, _, _ := tree.ProofList()
+	if len(storageProofList7) != 4 {
+		t.Error("The length of storageProofList should be two")
+	}
+
+	tree.PushLeaf([]byte("8"))
+	_, storageProofList8, _, _ := tree.ProofList()
+	if len(storageProofList8) != 4 {
+		t.Error("The length of storageProofList should be two")
 	}
 
 }
 
-/*
- _____  _____  _______      __  _______ ______      ______ _    _ _   _  _____ _______ _____ ____  _   _
-|  __ \|  __ \|_   _\ \    / /\|__   __|  ____|    |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
-| |__) | |__) | | |  \ \  / /  \  | |  | |__       | |__  | |  | |  \| | |       | |    | || |  | |  \| |
-|  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|      |  __| | |  | | . ` | |       | |    | || |  | | . ` |
-| |    | | \ \ _| |_   \  / ____ \| |  | |____     | |    | |__| | |\  | |____   | |   _| || |__| | |\  |
-|_|    |_|  \_\_____|   \/_/    \_\_|  |______|    |_|     \____/|_| \_|\_____|  |_|  |_____\____/|_| \_|
+func TestCheckStorageProof(t *testing.T) {
+	tree := NewTree(sha256.New())
 
-*/
-
-const (
-	sectorSize = uint64(1 << 22)
-)
-
-var sectorHeight = func() uint64 {
-	height := uint64(0)
-	for 1<<height < (sectorSize / LeafSize) {
-		height++
-	}
-	return height
-}()
-
-func merkleLeaves(data []byte) (leaves [][]byte) {
-	// length of the data pieces should be equivalent to the number of leaves of the merkle tree
-	buf := bytes.NewBuffer(data)
-	for buf.Len() > 0 {
-		leaves = append(leaves, buf.Next(LeafSize))
+	if err := tree.SetStorageProofIndex(2); err != nil {
+		t.Error(err)
 	}
 
-	return
-}
-
-func randomHashSliceGenerator(length int) (hs []common.Hash) {
-	for i := 0; i < length; i++ {
-		hs = append(hs, randomHash())
+	root := tree.Root()
+	if root != nil {
+		t.Error("root must be empty")
 	}
-	return
-}
+	tree.PushLeaf([]byte("1"))
+	tree.PushLeaf([]byte("2"))
+	tree.PushLeaf([]byte("3"))
+	root3, list3, _, _ := tree.ProofList()
+	if !CheckStorageProof(tree.hash, root3, list3, tree.storageProofIndex, tree.leafIndex) {
+		t.Error("Check failed")
+	}
+	tree.PushLeaf([]byte("4"))
+	root4, list4, _, _ := tree.ProofList()
+	if !CheckStorageProof(tree.hash, root4, list4, tree.storageProofIndex, tree.leafIndex) {
+		t.Error("Check failed")
+	}
+	tree.PushLeaf([]byte("5"))
+	tree.PushLeaf([]byte("6"))
+	tree.PushLeaf([]byte("7"))
+	tree.PushLeaf([]byte("8"))
+	root8, list8, _, _ := tree.ProofList()
+	if !CheckStorageProof(tree.hash, root8, list8, tree.storageProofIndex, tree.leafIndex) {
+		t.Error("Check failed")
+	}
 
-func randomHash() (h common.Hash) {
-	rand.Seed(time.Now().UnixNano())
-	rand.Read(h[:])
-	return
-}
-
-func randomMerkleRoot() (mr common.Hash) {
-	rand.Seed(time.Now().UnixNano())
-	rand.Read(mr[:])
-	return
-}
-
-func randomIndex(max int) (index int) {
-	rand.Seed(time.Now().UnixNano())
-	return rand.Intn(max)
-}
-
-func randomDataGenerator(length uint64) (data []byte) {
-	data = make([]byte, length)
-	rand.Seed(time.Now().UnixNano())
-	rand.Read(data)
-	return
 }

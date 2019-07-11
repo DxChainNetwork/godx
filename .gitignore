@@ -28,3 +28,5 @@ storage/storageclient/contractset/testdata/contractset.wal
 storage/storageclient/storagehostmanager/test/*
 storage/storageclient/testdata/*
 storage/storageclient/contractmanager/test/*
+
+coverage.txt
