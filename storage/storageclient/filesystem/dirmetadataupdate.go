@@ -272,15 +272,15 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 4. If release is needed, delete the entry in fs.unfinishedUpdates.
 // 5. If release is needed, Release the transaction
 func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
+	// fs.tm.Done()
+	defer fs.tm.Done()
+
 	// If the error is errStopped, do nothing and simply return
 	if err == errStopped {
 		return
 	}
 	// Set the updateInProgress value to 0, notifying this goroutine is over
 	atomic.StoreUint32(&update.updateInProgress, 0)
-
-	// fs.tm.Done()
-	fs.tm.Done()
 
 	// determine whether release is necessary
 	// release could happen either non err or consecutiveFails reaches the limit
