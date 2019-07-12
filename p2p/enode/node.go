@@ -21,9 +21,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"math/bits"
 	"math/rand"
 	"net"
+	"net/http"
 	"strings"
 
 	"github.com/DxChainNetwork/godx/p2p/enr"
@@ -80,34 +82,37 @@ func (n *Node) IP() net.IP {
 	var ip net.IP
 	// enr.IP implemented Entry interface
 	n.Load((*enr.IP)(&ip))
+	if ip.IsLoopback() {
+		return httpGetIP()
+	}
 	return ip
 }
 
-//// httpGetIP get the IP from externalip.com
-//func httpGetIP() (ip net.IP) {
-//	var err error
-//	defer func() {
-//		if err != nil {
-//			ip = net.IP{127, 0, 0, 1}
-//		}
-//	}()
-//
-//	externalIP := "http://myexternalip.com/raw"
-//	res, err := http.Get(externalIP)
-//	if err != nil {
-//		return
-//	}
-//	ipByte, err := ioutil.ReadAll(res.Body)
-//	res.Body.Close()
-//	if err != nil {
-//		return
-//	}
-//	ip = net.ParseIP(string(ipByte))
-//	if ip == nil {
-//		return net.IP{127, 0, 0, 1}
-//	}
-//	return
-//}
+// httpGetIP get the IP from externalip.com
+func httpGetIP() (ip net.IP) {
+	var err error
+	defer func() {
+		if err != nil {
+			ip = net.IP{127, 0, 0, 1}
+		}
+	}()
+
+	externalIP := "http://myexternalip.com/raw"
+	res, err := http.Get(externalIP)
+	if err != nil {
+		return
+	}
+	ipByte, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		return
+	}
+	ip = net.ParseIP(string(ipByte))
+	if ip == nil {
+		return net.IP{127, 0, 0, 1}
+	}
+	return
+}
 
 // UDP returns the UDP port of the node.
 func (n *Node) UDP() int {

@@ -256,6 +256,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		err = fmt.Errorf("sendStorageContractCreation failed: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
+
 	var hostSign []byte
 	msg, err := session.ReadMsg()
 	if err != nil {

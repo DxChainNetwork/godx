@@ -46,17 +46,6 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 
 // handleHostSettingRequest is the function to be called when calling HostSettingMsg
 func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-	s.SetBusy()
-	defer s.ResetBusy()
-
-	s.SetDeadLine(storage.HostSettingTime)
-
-	settings := h.externalConfig()
-	if err := s.SendHostExtSettingsResponse(settings); err != nil {
-		h.log.Error("SendHostExtSettingResponse Error", "err", err)
-		return errors.New("host setting request done")
-	}
-
 	return nil
 }
 

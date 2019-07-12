@@ -83,6 +83,59 @@ type StorageClient struct {
 	// get the P2P server for adding peer
 	sessionLock sync.Mutex
 	sessionSet  map[storage.ContractID]*storage.Session
+
+	// storage client p2p related
+	clientJob map[enode.ID]storage.Operations
+}
+
+func (sc *StorageClient) RetrieveOperation(nodeID enode.ID, opCode storage.OpCode) (*storage.Operation, error) {
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+
+	if operation, exist := sc.clientJob[nodeID][opCode]; exist {
+		return &operation, nil
+	}
+
+	return nil, errors.New("the operation does not exist")
+}
+
+func (sc *StorageClient) RemoveOperation(nodeID enode.ID, opCode storage.OpCode) {
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+
+	if _, exist := sc.clientJob[nodeID][opCode]; !exist {
+		return
+	}
+
+	delete(sc.clientJob[nodeID], opCode)
+
+	// if there are no more operations left in the clientJob
+	// delete the entry directly
+	if len(sc.clientJob[nodeID]) == 0 {
+		delete(sc.clientJob, nodeID)
+	}
+}
+
+func (sc *StorageClient) InsertOperation(nodeID enode.ID, opCode storage.OpCode) (err error) {
+	sc.lock.Lock()
+	defer sc.lock.Unlock()
+
+	// if the node does not exist in the clientJob
+	// create new operations
+	if _, exist := sc.clientJob[nodeID]; !exist {
+		sc.clientJob[nodeID] = storage.NewOperations(opCode)
+		return
+	}
+
+	// if the opCode exists already, return error indicating that the
+	// client is doing the job currently
+	if _, exist := sc.clientJob[nodeID][opCode]; exist {
+		return errors.New("the client is currently doing this job")
+	}
+
+	// update the operations and client job
+	sc.clientJob[nodeID][opCode] = storage.NewOperation()
+	return
 }
 
 // New initializes StorageClient object
@@ -102,6 +155,7 @@ func New(persistDir string) (*StorageClient, error) {
 		},
 		workerPool: make(map[storage.ContractID]*worker),
 		sessionSet: make(map[storage.ContractID]*storage.Session),
+		clientJob:  make(map[enode.ID]storage.Operations),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -365,6 +419,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		storagePrice = sectorStoragePrice.MultUint64(addedSectors)
 		deposit = sectorDeposit.MultUint64(addedSectors)
 	}
+
 	// estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
 	bandwidthPrice = bandwidthPrice.Add(hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)))

@@ -49,6 +49,10 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 }
 
+func (h *StorageHost) RetrieveExternalConfig() storage.HostExtConfig {
+	return h.externalConfig()
+}
+
 // New Initialize the Host, including init the structure
 // load or use the default config, init db and ext.
 func New(persistDir string) (*StorageHost, error) {

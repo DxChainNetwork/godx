@@ -23,8 +23,8 @@ const (
 	IDLE = 0
 	BUSY = 1
 
-	HostSettingMsg         = 0x20
-	HostSettingResponseMsg = 0x21
+	//HostSettingMsg         = 0x20
+	//HostSettingResponseMsg = 0x21
 
 	// Storage Contract Negotiate Protocol belonging to eth/64
 	// Storage Contract Creation/Renew Code Msg
@@ -40,15 +40,19 @@ const (
 	StorageContractUploadHostRevisionMsg    = 0x29
 
 	// Download Data Segment Code Msg
-	StorageContractDownloadRequestMsg      = 0x30
-	StorageContractDownloadDataMsg         = 0x31
-	StorageContractDownloadHostRevisionMsg = 0x32
-
+	StorageContractDownloadRequestMsg      = 0x33
+	StorageContractDownloadDataMsg         = 0x34
+	StorageContractDownloadHostRevisionMsg = 0x35
 	// error msg code
 	NegotiationErrorMsg = 0x33
-
 	// stop msg code
 	NegotiationStopMsg = 0x34
+
+	// Client Handle Message Set
+	HostSettingMsg = 0x20
+
+	// Host Handle Message Set
+	GetHostConfigMsg = 0x30
 )
 
 type SessionSet struct {
@@ -203,11 +207,6 @@ func (s *Session) SetRW(rw p2p.MsgReadWriter) {
 
 func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 	return p2p.Send(s.rw, HostSettingMsg, data)
-}
-
-func (s *Session) SendHostExtSettingsResponse(data interface{}) error {
-	s.Log().Debug("Sending host settings response from host", "msg", data)
-	return p2p.Send(s.rw, HostSettingResponseMsg, data)
 }
 
 func (s *Session) SendStorageContractCreation(data interface{}) error {

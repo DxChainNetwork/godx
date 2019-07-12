@@ -287,6 +287,18 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts)
 }
 
+//////////////// ****************
+
+func (p *peer) SendStorageHostConfig(config storage.HostExtConfig) error {
+	return p2p.Send(p.rw, storage.HostSettingMsg, config)
+}
+
+func (p *peer) RequestStorageHostConfig() error {
+	return p2p.Send(p.rw, storage.GetHostConfigMsg, struct{}{})
+}
+
+/////////////// ******************
+
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.
 func (p *peer) RequestOneHeader(hash common.Hash) error {

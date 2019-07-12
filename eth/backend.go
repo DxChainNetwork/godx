@@ -657,6 +657,58 @@ func (s *Ethereum) RemoveStorageHost(ip string) {
 	s.server.RemoveStorageHost(ip)
 }
 
+func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (p2pPeer *peer, err error) {
+
+	// get the peer ID
+	var destNode *enode.Node
+	if destNode, err = enode.ParseV4(enodeURL); err != nil {
+		err = fmt.Errorf("failed to parse the enodeURL: %s", err.Error())
+		return
+	}
+
+	if err = s.storageClient.InsertOperation(destNode.ID(), opCode); err != nil {
+		err = fmt.Errorf("failed to set up the connection: %s", err.Error())
+		return
+	}
+
+	defer func() {
+		if err != nil {
+			// if error is not nil, remove the operation from the client job
+			s.storageClient.RemoveOperation(destNode.ID(), opCode)
+		}
+	}()
+
+	// get the peerID
+	peerID := fmt.Sprintf("%x", destNode.ID().Bytes()[:8])
+
+	// check if the peer is already existed
+	peer := s.protocolManager.peers.Peer(peerID)
+	if peer != nil {
+		// connection is already established
+		p2pPeer = peer
+		return
+	}
+
+	// the connection has not been established yet, call add peer
+	s.server.AddPeer(destNode)
+	timeout := time.After(1 * time.Minute)
+	for {
+		peer = s.protocolManager.peers.Peer(peerID)
+		if peer != nil {
+			p2pPeer = peer
+			return
+		}
+
+		select {
+		case <-timeout:
+			err = errors.New("set up connection time out")
+			return
+		default:
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
 // SetupConnection will setup connection with host if they are never connected with each other
 func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
 	if s.netRPCService == nil {
@@ -791,37 +843,40 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
-func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
-	session, err := s.SetupStorageConnection(hostEnodeURL)
-	defer func() {
-		s.Disconnect(session, hostEnodeURL)
-	}()
-
+func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostExtConfig) error {
+	// parse the storage host node's enode URL
+	hostNode, err := enode.ParseV4(enodeURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid enode url, parsing failed: %s", err.Error())
 	}
 
-	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
-		return err
-	}
-
-	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
-		return err
-	}
-
-	msg, err := session.ReadMsg()
+	// set up the connection to the storage host node
+	p, err := s.SetupConnection(enodeURL, storage.ConfigOP)
 	if err != nil {
-		log.Warn("GetStorageHostSetting readMSG", "err", err.Error())
-		return err
+		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
 
-	if msg.Code != storage.HostSettingResponseMsg {
-		return fmt.Errorf("invalid host settings response, msgCode: %v", msg.Code)
+	// remove the operation once done
+	defer s.storageClient.RemoveOperation(hostNode.ID(), storage.ConfigOP)
+
+	// send storage host config request information
+	if err := p.RequestStorageHostConfig(); err != nil {
+		return fmt.Errorf("failed to request storage host configuration: %s", err)
+	}
+
+	op, err := s.storageClient.RetrieveOperation(hostNode.ID(), storage.ConfigOP)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve the config operation: %s", err.Error())
+	}
+
+	// wait until the result is given back
+	msg, err := op.WaitMsgReceive()
+	if err != nil {
+		return fmt.Errorf("received error while waiting for retriving storage host config: %s", err.Error())
 	}
 
 	if err := msg.Decode(config); err != nil {
-		log.Error("failed to decode", "err", err.Error())
-		return err
+		return fmt.Errorf("error decoding the storage configuration: %s", err.Error())
 	}
 
 	return nil

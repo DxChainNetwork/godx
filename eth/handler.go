@@ -20,10 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/big"
-	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -283,129 +281,143 @@ func (pm *ProtocolManager) newPeer(pv int, p *p2p.Peer, rw p2p.MsgReadWriter) *p
 // handle is the callback invoked to manage the life cycle of an eth peer. When
 // this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
-	if !p.Peer.Info().Network.StorageContract {
-		// Ignore maxPeers if this is a trusted peer
-		if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
-			return p2p.DiscTooManyPeers
-		}
-		p.Log().Debug("Ethereum peer connected", "name", p.Name())
+	// Ignore maxPeers if this is a trusted peer
+	if pm.peers.Len() >= pm.maxPeers && !p.Peer.Info().Network.Trusted {
+		return p2p.DiscTooManyPeers
+	}
+	p.Log().Debug("Ethereum peer connected", "name", p.Name())
 
-		// Execute the Ethereum handshake
-		var (
-			genesis = pm.blockchain.Genesis()
-			head    = pm.blockchain.CurrentHeader()
-			hash    = head.Hash()
-			number  = head.Number.Uint64()
-			td      = pm.blockchain.GetTd(hash, number)
-		)
-		if err := p.Handshake(pm.networkID, td, hash, genesis.Hash()); err != nil {
-			p.Log().Debug("Ethereum handshake failed", "err", err)
+	// Execute the Ethereum handshake
+	var (
+		genesis = pm.blockchain.Genesis()
+		head    = pm.blockchain.CurrentHeader()
+		hash    = head.Hash()
+		number  = head.Number.Uint64()
+		td      = pm.blockchain.GetTd(hash, number)
+	)
+	if err := p.Handshake(pm.networkID, td, hash, genesis.Hash()); err != nil {
+		p.Log().Debug("Ethereum handshake failed", "err", err)
+		return err
+	}
+	if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
+		rw.Init(p.version)
+	}
+	// Register the peer locally
+	if err := pm.peers.Register(p); err != nil {
+		p.Log().Error("Ethereum peer registration failed", "err", err)
+		return err
+	}
+	defer pm.removePeer(p.id)
+
+	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {
+		return err
+	}
+	// Propagate existing transactions. new transactions appearing
+	// after this will be sent via broadcasts.
+	pm.syncTransactions(p)
+
+	// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
+	if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
+		// Request the peer's DAO fork header for extra-data validation
+		if err := p.RequestHeadersByNumber(daoBlock.Uint64(), 1, 0, false); err != nil {
 			return err
 		}
-		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
-			rw.Init(p.version)
-		}
-		// Register the peer locally
-		if err := pm.peers.Register(p); err != nil {
-			p.Log().Error("Ethereum peer registration failed", "err", err)
+		// Start a timer to disconnect if the peer doesn't reply in time
+		p.forkDrop = time.AfterFunc(daoChallengeTimeout, func() {
+			p.Log().Debug("Timed out DAO fork-check, dropping")
+			pm.removePeer(p.id)
+		})
+		// Make sure it's cleaned up if the peer dies off
+		defer func() {
+			if p.forkDrop != nil {
+				p.forkDrop.Stop()
+				p.forkDrop = nil
+			}
+		}()
+	}
+	// If we have any explicit whitelist block hashes, request them
+	for number := range pm.whitelist {
+		if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
 			return err
-		}
-		defer pm.removePeer(p.id)
-
-		// Register the peer in the downloader. If the downloader considers it banned, we disconnect
-		if err := pm.downloader.RegisterPeer(p.id, p.version, p); err != nil {
-			return err
-		}
-		// Propagate existing transactions. new transactions appearing
-		// after this will be sent via broadcasts.
-		pm.syncTransactions(p)
-
-		// If we're DAO hard-fork aware, validate any remote peer with regard to the hard-fork
-		if daoBlock := pm.chainconfig.DAOForkBlock; daoBlock != nil {
-			// Request the peer's DAO fork header for extra-data validation
-			if err := p.RequestHeadersByNumber(daoBlock.Uint64(), 1, 0, false); err != nil {
-				return err
-			}
-			// Start a timer to disconnect if the peer doesn't reply in time
-			p.forkDrop = time.AfterFunc(daoChallengeTimeout, func() {
-				p.Log().Debug("Timed out DAO fork-check, dropping")
-				pm.removePeer(p.id)
-			})
-			// Make sure it's cleaned up if the peer dies off
-			defer func() {
-				if p.forkDrop != nil {
-					p.forkDrop.Stop()
-					p.forkDrop = nil
-				}
-			}()
-		}
-		// If we have any explicit whitelist block hashes, request them
-		for number := range pm.whitelist {
-			if err := p.RequestHeadersByNumber(number, 1, 0, false); err != nil {
-				return err
-			}
-		}
-
-		// Handle incoming messages until the connection is torn down
-		for {
-			if err := pm.handleMsg(p); err != nil {
-				p.Log().Debug("Ethereum message handling failed", "err", err)
-				return err
-			}
-		}
-	} else {
-
-		p.Log().Info("DX session connected", "info", p.Peer.Info())
-		if rw, ok := p.rw.(*meteredMsgReadWriter); ok {
-			rw.Init(p.version)
-		}
-		session := p.Peer2Session()
-		if err := pm.storageContractSessions.Register(session); err != nil {
-			p.Log().Error("DX session registration failed", "err", err)
-			return err
-		}
-
-		// get the host from the peer connection
-		host, _, err := net.SplitHostPort(p.Peer.RemoteAddr().String())
-		if err != nil {
-			host = ""
-		}
-		defer pm.removeStorageContactSession(p.id, host)
-
-		if !p.Peer.Info().Network.StorageClient {
-			// host
-			for {
-				p.Log().Debug("inbound connection for loop", "remote client", p.Peer.Node().String())
-				if err := pm.eth.storageHost.HandleSession(session); err != nil {
-					if err != io.EOF {
-						p.Log().Error("Storage host handle session message failed", "err", err)
-					}
-					return err
-				}
-			}
-		} else {
-			// client
-			select {
-			case err := <-session.ClientDiscChan():
-				return err
-			case <-session.Peer.ClosedChan():
-				return errors.New("DX session is closed")
-			}
 		}
 	}
+
+	// Handle incoming messages until the connection is torn down
+	for {
+		// keep reading the message util an error occur
+		msg, err := p.rw.ReadMsg()
+		if err != nil {
+			return err
+		}
+		if msg.Size > ProtocolMaxMsgSize {
+			return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		}
+
+		// distribute the message to different handler
+		if err := pm.msgDistributor(msg, p); err != nil {
+			return err
+		}
+	}
+
+}
+
+func (pm *ProtocolManager) msgDistributor(msg p2p.Msg, p *peer) error {
+	switch {
+	case msg.Code < 0x20:
+		// eth handler
+		if err := pm.handleEthMsg(p, msg); err != nil {
+			p.Log().Error("Ethereum handle message failed", "err", err.Error())
+			return err
+		}
+	case msg.Code < 0x30:
+		// client handler
+		if err := pm.handleClientMsg(p, msg); err != nil {
+			p.Log().Error("Client handle message failed", "err", err.Error())
+			return nil
+		}
+	case msg.Code < 0x40:
+		// host handler
+		if err := pm.handleHostMsg(p, msg); err != nil {
+			p.Log().Error("Host handle message failed", "err", err.Error())
+			return nil
+		}
+	default:
+		// message code exceed the range
+		return errors.New("invalid message code")
+	}
+
+	return nil
+}
+
+func (pm *ProtocolManager) handleClientMsg(p *peer, msg p2p.Msg) error {
+	switch {
+	case msg.Code == storage.HostSettingMsg:
+		op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ConfigOP)
+		if err != nil {
+			return err
+		}
+		if err := op.Done(msg); err != nil {
+			return fmt.Errorf("handle host setting message failed: %s", err.Error())
+		}
+	}
+	return nil
+}
+
+func (pm *ProtocolManager) handleHostMsg(p *peer, msg p2p.Msg) error {
+	switch {
+	case msg.Code == storage.GetHostConfigMsg:
+		settings := pm.eth.storageHost.RetrieveExternalConfig()
+		return p.SendStorageHostConfig(settings)
+	}
+	return nil
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
-func (pm *ProtocolManager) handleMsg(p *peer) error {
+func (pm *ProtocolManager) handleEthMsg(p *peer, msg p2p.Msg) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
-	if msg.Size > ProtocolMaxMsgSize {
-		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
-	}
+
 	defer msg.Discard()
 
 	// Handle the message depending on its contents
