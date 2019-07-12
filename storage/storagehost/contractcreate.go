@@ -289,9 +289,9 @@ func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	}
 
 	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
-	//if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
-	//	return errEarlyWindow
-	//}
+	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+		return errEarlyWindow
+	}
 
 	// WindowEnd must be at least settings.WindowSize blocks after WindowStart
 	if sc.WindowEnd < sc.WindowStart+externalConfig.WindowSize {
