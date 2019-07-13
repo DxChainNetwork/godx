@@ -272,9 +272,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
-		err = fmt.Errorf("failed to decode host signature: %s", err.Error())
-		session.SendNegotiateTerminateMsg(err.Error())
-		return storage.ContractMetaData{}, err
+		session.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
+		return storage.ContractMetaData{}, fmt.Errorf("failed to decode host signature: %s", err.Error())
 	}
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
@@ -294,12 +293,13 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		session.SendNegotiateTerminateMsg(err.Error())
+		session.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
 	}
 
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
+		session.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
 
@@ -315,6 +315,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		err = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
@@ -322,15 +323,18 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		err = fmt.Errorf("failed to enocde storageContract: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
 	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
 	}
 
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
 	}
 	// wrap some information about this contract
@@ -350,8 +354,20 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
+		session.SendNegotiateTerminateMsg(err.Error())
 		err = fmt.Errorf("failed to insert the contract after created: %s", err.Error())
 		return storage.ContractMetaData{}, err
 	}
+
+	// send final success msg signal
+	if err := session.SendStorageNegotiateFinalSuccessMsg(storage.FinalSuccessMsgFlag); err != nil {
+		if c, exist := cm.GetStorageContractSet().Acquire(header.ID); exist {
+			// TODO the node turn off suddenly at this moment, how to handle it ???
+			if err := cm.GetStorageContractSet().Delete(c); err != nil {
+				return storage.ContractMetaData{}, err
+			}
+		}
+	}
+
 	return meta, nil
 }

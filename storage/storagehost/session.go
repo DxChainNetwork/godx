@@ -38,7 +38,6 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 
 	msg, err := s.ReadMsg()
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
 		return err
 	}
 

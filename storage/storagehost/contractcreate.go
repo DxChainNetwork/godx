@@ -21,21 +21,20 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	s.SetDeadLine(storage.ContractCreateTime)
 
 	if !h.externalConfig().AcceptingContracts {
-		err := errors.New("host is not accepting new contracts")
-		s.SendNegotiateTerminateMsg(err.Error())
-		return err
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
+		return errors.New("host is not accepting new contracts")
 	}
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := beginMsg.Decode(&req); err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return err
 	}
 
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("recover publicKey from signature failed", err)
 	}
 
@@ -43,33 +42,32 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("get state db error", err)
 	}
 
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
-		err = fmt.Errorf("host balance insufficient, host balance: %v, the collateral: %v", stateDB.GetBalance(hostAddress).Uint64(), sc.HostCollateral.Value.Uint64())
-		s.SendNegotiateTerminateMsg(err.Error())
-		return err
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
+		return fmt.Errorf("host balance insufficient, host balance: %v, the collateral: %v", stateDB.GetBalance(hostAddress).Uint64(), sc.HostCollateral.Value.Uint64())
 	}
 
 	account := accounts.Account{Address: hostAddress}
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("find host account error", err)
 	}
 
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("host account sign storage contract error", err)
 	}
 
 	// Ecrecover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("Ecrecover pk from sign error", err)
 	}
 	sc.Signatures = [][]byte{req.Sign, hostContractSign}
@@ -79,19 +77,20 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		oldContractID := req.OldContractID
 		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oldContractID)
 		if err != nil {
-			s.SendNegotiateTerminateMsg(err.Error())
+			s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 			return ExtendErr("host verify renewed storage contract failed ", err)
 		}
 	} else {
 		err = verifyStorageContract(h, &sc, clientPK, hostPK)
 		if err != nil {
-			s.SendNegotiateTerminateMsg(err.Error())
+			s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 			return ExtendErr("host verify storage contract failed ", err)
 		}
 	}
 
 	// 2. After check, send host contract sign to client
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("send storage contract create sign by host", err)
 	}
 
@@ -107,7 +106,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return err
 	}
 	// Reconstruct revision locally by host
@@ -132,7 +131,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("host sign revision error", err)
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
@@ -151,26 +150,45 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 		OriginStorageContract:    sc,
 		StorageContractRevisions: []types.StorageContractRevision{storageContractRevision},
 	}
+
 	if req.Renew {
 		h.lock.RLock()
 		oldSr, err := getStorageResponsibility(h.db, req.OldContractID)
 		h.lock.RUnlock()
 
 		if err != nil {
-			h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
-		} else {
-			so.SectorRoots = oldSr.SectorRoots
+			s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
+			return ExtendErr("unable to get old storage responsibility in renew case", err)
 		}
+
+		so.SectorRoots = oldSr.SectorRoots
 		renewRevenue := renewBasePrice(so, h.externalConfig(), req.StorageContract)
 		so.ContractCost = common.NewBigInt(req.StorageContract.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice).Sub(renewRevenue)
 		so.PotentialStorageRevenue = renewRevenue
 		so.RiskedStorageDeposit = renewBaseDeposit(so, h.externalConfig(), req.StorageContract)
 	}
+
 	if err := finalizeStorageResponsibility(h, so); err != nil {
-		s.SendNegotiateTerminateMsg(err.Error())
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
 		return ExtendErr("finalize storage responsibility error", err)
 	}
-	return s.SendStorageContractCreationHostRevisionSign(hostRevisionSign)
+
+	// send host sign msg error, we will rollback storage responsibility
+	if err := s.SendStorageContractCreationHostRevisionSign(hostRevisionSign); err != nil {
+		s.SendNegotiateTerminateMsg(storage.FinalFailedMsgFlag)
+		if err := h.deleteStorageResponsibilities([]common.Hash{so.OriginStorageContract.ID()}); err != nil {
+			return err
+		}
+	}
+
+	msg, err = s.ReadMsg()
+	if err != nil || msg.Code == storage.NegotiationTerminateMsg {
+		if err := h.deleteStorageResponsibilities([]common.Hash{so.OriginStorageContract.ID()}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // verifyStorageContract verify the validity of the storage contract. If discrepancy found, return error

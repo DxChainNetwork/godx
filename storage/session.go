@@ -20,6 +20,9 @@ var (
 	ErrClientDisconnect = errors.New("storage client disconnect proactively")
 	ErrNegotiateTerminate = errors.New("client or host terminate in negotiate process")
 	ErrSendNegotiateStartTimeout = errors.New("receive client negotiate start msg timeout")
+
+	FinalFailedMsgFlag  = "0"
+	FinalSuccessMsgFlag = "1"
 )
 
 const (
@@ -49,12 +52,22 @@ const (
 	StorageContractDownloadDataMsg         = 0x31
 	StorageContractDownloadSectorSuccessMsg = 0x32
 
-	// stop msg code
-	NegotiationTerminateMsg = 0x33
-
 	// Storage Protocol Host Flag
-	StorageHostStartMsg   = 0x34
-	StorageClientStartMsg = 0x35
+	StorageHostStartMsg   = 0x33
+	StorageClientStartMsg = 0x34
+
+	// negotiate terminate midway msg code
+	NegotiationTerminateMsg = 0x35
+
+	// negotiate failed finally msg
+	NegotiateFinalFailedMsg = 0x36
+
+	//negotiate success finally msg
+	NegotiateFinalSuccessMsg = 0x37
+
+	// negotiate final msg ack msg
+	NegotiateFinalAckMsg = 0x38
+
 )
 
 type SessionSet struct {
@@ -323,6 +336,18 @@ func (s *Session) SendStorageNegotiateHostStartMsg(data interface{}) error {
 
 func (s *Session) SendStorageNegotiateClientStartMsg(data interface{}) error {
 	return p2p.Send(s.rw, StorageClientStartMsg, data)
+}
+
+func (s *Session) SendStorageNegotiateFinalFailedMsg(data interface{}) error{
+	return p2p.Send(s.rw, NegotiateFinalFailedMsg, data)
+}
+
+func (s *Session) SendStorageNegotiateFinalSuccessMsg(data interface{}) error{
+	return p2p.Send(s.rw, NegotiateFinalSuccessMsg, data)
+}
+
+func (s *Session) SendStorageNegotiateFinalAckMsg(data interface{}) error{
+	return p2p.Send(s.rw, NegotiateFinalAckMsg, data)
 }
 
 func (s *Session) ReadMsg() (*p2p.Msg, error) {
