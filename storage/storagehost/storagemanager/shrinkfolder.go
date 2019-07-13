@@ -260,6 +260,9 @@ func (update *shrinkFolderUpdate) relocateSector(manager *storageManager, s *sec
 		relocatedFolder = update.targetFolder
 	} else if err == errFolderAlreadyFull {
 		relocatedFolder, index, err = manager.folders.selectFolderToAdd()
+		if relocatedFolder != nil {
+			relocatedFolder.lock.Unlock()
+		}
 		if err != nil {
 			return sectorRelocation{}, err
 		}
