@@ -35,7 +35,8 @@ const (
 type Operations map[OpCode]Operation
 
 type Operation struct {
-	msg chan p2p.Msg
+	msg1 interface{}
+	msg  chan p2p.Msg
 }
 
 func NewOperations(opCode OpCode) Operations {
@@ -52,9 +53,10 @@ func NewOperation() Operation {
 
 func (op *Operation) WaitMsgReceive() (p2p.Msg, error) {
 	timeout := time.After(1 * time.Minute)
+	var msg p2p.Msg
 	select {
-	case result := <-op.msg:
-		return result, nil
+	case msg = <-op.msg:
+		return msg, nil
 	case <-timeout:
 		return p2p.Msg{}, errors.New("timeout, failed to get the error message")
 	}

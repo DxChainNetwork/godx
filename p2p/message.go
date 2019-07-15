@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"io"
 	"io/ioutil"
 	"sync/atomic"
@@ -49,6 +50,10 @@ type Msg struct {
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
+
+	if msg.Code == 0x20 {
+	}
+
 	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
 	if err := s.Decode(val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
@@ -95,6 +100,10 @@ func Send(w MsgWriter, msgcode uint64, data interface{}) error {
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {
 		return err
+	}
+	if msgcode == 0x20 {
+		var pay io.Reader = r
+		log.Error("payload information", "payload", pay)
 	}
 	return w.WriteMsg(Msg{Code: msgcode, Size: uint32(size), Payload: r})
 }

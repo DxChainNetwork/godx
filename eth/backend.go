@@ -879,6 +879,8 @@ func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostEx
 		return fmt.Errorf("error decoding the storage configuration: %s", err.Error())
 	}
 
+	log.Info("Successfully get the storage host settings")
+
 	return nil
 }
 

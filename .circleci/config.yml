@@ -22,7 +22,3 @@ workflows:
   build-workflow:
     jobs:
       - build_linux
-        filters:
-            branches:
-              ignore:
-                - p2pmanager

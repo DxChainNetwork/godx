@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
@@ -92,20 +93,37 @@ type peer struct {
 	queuedProps chan *propEvent           // Queue of blocks to broadcast to the peer
 	queuedAnns  chan *types.Block         // Queue of blocks to announce to the peer
 	term        chan struct{}             // Termination channel to stop the broadcaster
+
+	// message channel
+	ethMsg    chan p2p.Msg
+	clientMsg chan p2p.Msg
+	hostMsg   chan p2p.Msg
+
+	// message buffer
+	ethMsgBuffer    []p2p.Msg
+	clientMsgBuffer []p2p.Msg
+	hostMsgBuffer   []p2p.Msg
+
+	// error occurred
+	msgHandleErr chan error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		id:          fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		knownTxs:    mapset.NewSet(),
-		knownBlocks: mapset.NewSet(),
-		queuedTxs:   make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps: make(chan *propEvent, maxQueuedProps),
-		queuedAnns:  make(chan *types.Block, maxQueuedAnns),
-		term:        make(chan struct{}),
+		Peer:         p,
+		rw:           rw,
+		version:      version,
+		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		knownTxs:     mapset.NewSet(),
+		knownBlocks:  mapset.NewSet(),
+		queuedTxs:    make(chan []*types.Transaction, maxQueuedTxs),
+		queuedProps:  make(chan *propEvent, maxQueuedProps),
+		queuedAnns:   make(chan *types.Block, maxQueuedAnns),
+		term:         make(chan struct{}),
+		ethMsg:       make(chan p2p.Msg, 5),
+		clientMsg:    make(chan p2p.Msg, 5),
+		hostMsg:      make(chan p2p.Msg, 5),
+		msgHandleErr: make(chan error, 1),
 	}
 }
 
@@ -290,6 +308,7 @@ func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 //////////////// ****************
 
 func (p *peer) SendStorageHostConfig(config storage.HostExtConfig) error {
+	log.Error("CONFIG SEND", "config", config)
 	return p2p.Send(p.rw, storage.HostSettingMsg, config)
 }
 

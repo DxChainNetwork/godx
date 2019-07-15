@@ -76,6 +76,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	if err := s.SendStorageContractCreationHostSign(hostContractSign); err != nil {
 		return ExtendErr("send storage contract create sign by host", err)
 	}
+	/////////
 
 	// 3. Wait for the client revision sign
 	var clientRevisionSign []byte
@@ -83,6 +84,7 @@ func handleContractCreate(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg)
 	if err != nil {
 		return err
 	}
+
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		return err
 	}

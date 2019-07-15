@@ -343,6 +343,13 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 	}
 
+	// start the client message handler
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		pm.clientMsgHandler(p, p.clientMsg)
+	}()
+
 	// Handle incoming messages until the connection is torn down
 	for {
 		// keep reading the message util an error occur
@@ -352,6 +359,15 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 		if msg.Size > ProtocolMaxMsgSize {
 			return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
+		}
+
+		// check for error
+		select {
+		case err := <-p.msgHandleErr:
+			return err
+		default:
+			// if there are no errors, continue with the message
+			// distributor
 		}
 
 		// distribute the message to different handler
@@ -370,12 +386,10 @@ func (pm *ProtocolManager) msgDistributor(msg p2p.Msg, p *peer) error {
 			p.Log().Error("Ethereum handle message failed", "err", err.Error())
 			return err
 		}
+
 	case msg.Code < 0x30:
-		// client handler
-		if err := pm.handleClientMsg(p, msg); err != nil {
-			p.Log().Error("Client handle message failed", "err", err.Error())
-			return nil
-		}
+		pm.clientMsgScheduler(msg, p)
+
 	case msg.Code < 0x40:
 		// host handler
 		if err := pm.handleHostMsg(p, msg); err != nil {
@@ -390,21 +404,68 @@ func (pm *ProtocolManager) msgDistributor(msg p2p.Msg, p *peer) error {
 	return nil
 }
 
-func (pm *ProtocolManager) handleClientMsg(p *peer, msg p2p.Msg) error {
-	switch {
-	case msg.Code == storage.HostSettingMsg:
-		op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ConfigOP)
-		if err != nil {
-			return err
+func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) {
+	// NOTE: the lock is omitted here on purpose because there is only one routine
+	// and one function used to change the client message buffer
+
+	// if there is no message in the buffer, try to send the message through the
+	// channel. If the channel is full, save the message in the buffer
+	if len(p.clientMsgBuffer) == 0 {
+		select {
+		case p.clientMsg <- msg:
+		default:
+			p.clientMsgBuffer = append(p.clientMsgBuffer, msg)
 		}
-		if err := op.Done(msg); err != nil {
-			return fmt.Errorf("handle host setting message failed: %s", err.Error())
+	} else {
+		// if there are messages left in the buffer
+		// add the new message to the buffer first,
+		// then, loop through the messages in the buffer
+		// and send the message through the channel
+		p.clientMsgBuffer = append(p.clientMsgBuffer, msg)
+		for _, msg := range p.clientMsgBuffer {
+			select {
+			case p.clientMsg <- msg:
+				p.clientMsgBuffer = p.clientMsgBuffer[1:]
+			default:
+				return
+			}
 		}
 	}
-	return nil
+
+}
+
+func (pm *ProtocolManager) clientMsgHandler(p *peer, clientMsg chan p2p.Msg) {
+	var msg p2p.Msg
+	for {
+		select {
+		case msg = <-clientMsg:
+		case <-pm.quitSync:
+			return
+		}
+
+		switch {
+		case msg.Code == storage.HostSettingMsg:
+
+			op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ConfigOP)
+			if err != nil {
+				triggerError(p, err)
+				return
+			}
+
+			if err := op.Done(msg); err != nil {
+				err = fmt.Errorf("handle host setting message failed: %s", err.Error())
+				triggerError(p, err)
+				return
+			}
+
+		}
+
+	}
 }
 
 func (pm *ProtocolManager) handleHostMsg(p *peer, msg p2p.Msg) error {
+	defer msg.Discard()
+
 	switch {
 	case msg.Code == storage.GetHostConfigMsg:
 		settings := pm.eth.storageHost.RetrieveExternalConfig()
@@ -416,8 +477,6 @@ func (pm *ProtocolManager) handleHostMsg(p *peer, msg p2p.Msg) error {
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
 func (pm *ProtocolManager) handleEthMsg(p *peer, msg p2p.Msg) error {
-	// Read the next message from the remote peer, and ensure it's fully consumed
-
 	defer msg.Discard()
 
 	// Handle the message depending on its contents
@@ -897,4 +956,11 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 
 func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
 	return pm.storageContractSessions
+}
+
+func triggerError(p *peer, err error) {
+	select {
+	case p.msgHandleErr <- err:
+	default:
+	}
 }
