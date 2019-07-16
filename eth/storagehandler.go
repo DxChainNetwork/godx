@@ -2,7 +2,7 @@ package eth
 
 import (
 	"fmt"
-
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -70,12 +70,14 @@ func (pm *ProtocolManager) clientContractMsgHandler(p *peer, contractMsg chan p2
 		case msg = <-contractMsg:
 			op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ContractOP)
 			if err != nil {
+				log.Error("failed to retrieve operation from the storage client while handling the client contract message", "err", err.Error())
 				p.TriggerError(err)
 				return
 			}
 
 			if err := op.Done(msg); err != nil {
 				err = fmt.Errorf("error operation done: %s", err.Error())
+				log.Error("error handling client contract message", "err", err.Error())
 				p.TriggerError(err)
 				return
 			}

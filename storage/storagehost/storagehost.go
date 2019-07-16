@@ -91,6 +91,7 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
+		contractMsg:                 make(chan p2p.Msg),
 	}
 
 	var err error
