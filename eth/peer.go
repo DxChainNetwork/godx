@@ -94,13 +94,14 @@ type peer struct {
 	term        chan struct{}             // Termination channel to stop the broadcaster
 
 	// eth and storage message channel
-	ethMsg            chan p2p.Msg
 	clientConfigMsg   chan p2p.Msg
 	hostConfigMsg     chan p2p.Msg
 	clientContractMsg chan p2p.Msg
 	hostContractMsg   chan p2p.Msg
 
-	ethBuffer []p2p.Msg
+	ethMsgBuffer      []p2p.Msg
+	ethStartIndicator chan struct{}
+	bufferLock        sync.RWMutex
 
 	// error channel
 	errMsg chan error
@@ -118,13 +119,31 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		queuedProps:       make(chan *propEvent, maxQueuedProps),
 		queuedAnns:        make(chan *types.Block, maxQueuedAnns),
 		term:              make(chan struct{}),
-		ethMsg:            make(chan p2p.Msg, 10),
 		clientConfigMsg:   make(chan p2p.Msg, 1),
 		hostConfigMsg:     make(chan p2p.Msg, 1),
 		clientContractMsg: make(chan p2p.Msg, 1),
 		hostContractMsg:   make(chan p2p.Msg, 1),
+		ethStartIndicator: make(chan struct{}, 1),
 		errMsg:            make(chan error, 1),
 	}
+}
+
+func (p *peer) InsertEthMsgBuffer(msg p2p.Msg) {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	p.ethMsgBuffer = append(p.ethMsgBuffer, msg)
+}
+
+func (p *peer) GetEthMsgBuffer() []p2p.Msg {
+	p.bufferLock.RLock()
+	defer p.bufferLock.RUnlock()
+	return p.ethMsgBuffer
+}
+
+func (p *peer) UpdateEthMsgBuffer() {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	p.ethMsgBuffer = p.ethMsgBuffer[1:]
 }
 
 // broadcast is a write loop that multiplexes block propagations, announcements

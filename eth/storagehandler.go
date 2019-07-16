@@ -1,6 +1,7 @@
 package eth
 
 import (
+	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
@@ -105,5 +106,40 @@ func (pm *ProtocolManager) hostContractMsgHandler(p *peer, contractMsg chan p2p.
 				err = fmt.Errorf("error insert message: %s", err.Error())
 			}
 		}
+	}
+}
+
+func (pm *ProtocolManager) ethMsgHandler(p *peer) {
+	// get the initial number of eth messages in the ethMsgBuffer
+	messages := p.GetEthMsgBuffer()
+
+	for {
+		// loop through the messages, handle each of them, and then
+		// update the eth message buffer
+		for _, msg := range messages {
+			if err := pm.handleEthMsg(p, msg); err != nil {
+				p.Log().Error("Ethereum handle message failed", "err", err.Error())
+				p.TriggerError(err)
+			}
+
+			// remove the message from the eth message buffer
+			p.UpdateEthMsgBuffer()
+		}
+
+		// waiting fro the start signal was sent, then update the
+		// eth message buffer
+		if err := pm.waitEthStartIndicator(p); err != nil {
+			return
+		}
+		messages = p.GetEthMsgBuffer()
+	}
+}
+
+func (pm *ProtocolManager) waitEthStartIndicator(p *peer) error {
+	select {
+	case <-p.ethStartIndicator:
+		return nil
+	case <-pm.quitSync:
+		return errors.New("protocol manager sync quit")
 	}
 }

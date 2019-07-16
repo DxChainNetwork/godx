@@ -33,20 +33,19 @@ func (pm *ProtocolManager) msgDispatcher(msg p2p.Msg, p *peer) error {
 
 }
 
-// TODO (mzhang): figure out what to do with ethMsgScheduler, this is not the final version
 func (pm *ProtocolManager) ethMsgScheduler(msg p2p.Msg, p *peer) error {
-	if err := pm.handleEthMsg(p, msg); err != nil {
-		p.Log().Error("Ethereum handle message failed", "err", err.Error())
-		return err
+	// insert the message into eth buffer
+	p.InsertEthMsgBuffer(msg)
+	select {
+	// send the start signal, indicating there
+	// is a new message added into the buffer
+	case p.ethStartIndicator <- struct{}{}:
+		return nil
+	default:
+		// if blocked, indicating that the ethMsgHandler is started already
+		// the messages just inserted will be handled eventually
+		return nil
 	}
-	return nil
-
-	//select {
-	//case p.ethMsg <- msg:
-	//	return nil
-	//default:
-	//	return nil
-	//}
 }
 
 func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) error {

@@ -343,7 +343,12 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 	}
 
-	// TODO: Start ETH Handler
+	// start the eth handler
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		pm.ethMsgHandler(p)
+	}()
 
 	// start the client hostConfig message handler
 	go func() {
