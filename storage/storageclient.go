@@ -27,7 +27,6 @@ type EthBackend interface {
 	SetupStorageConnection(hostEnodeURL string) (*Session, error)
 	Disconnect(session *Session, hostEnodeURL string) error
 	GetBlockByNumber(number uint64) (*types.Block, error)
-
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
 	ChainConfig() *params.ChainConfig
@@ -35,6 +34,7 @@ type EthBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	SetupConnection(enodeURL string, opCode OpCode) (Peer, error)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -45,7 +45,7 @@ type ClientBackend interface {
 	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
-	SetupConnection(hostEnodeURL string) (*Session, error)
+	SetupConnection(enodeURL string, opCode OpCode) (Peer, error)
 	AccountManager() *accounts.Manager
 	Disconnect(session *Session, hostEnodeURL string) error
 	ChainConfig() *params.ChainConfig

@@ -11,6 +11,47 @@ import (
 	"time"
 )
 
+const (
+	IDLE = 0
+	BUSY = 1
+
+	//HostConfigRespMsg         = 0x20
+	//HostSettingResponseMsg = 0x21
+
+	// Storage Contract Negotiate Protocol belonging to eth/64
+	// Storage Contract Creation/Renew Code Msg
+	StorageContractCreationMsg                   = 0x22
+	StorageContractCreationHostSignMsg           = 0x23
+	StorageContractCreationClientRevisionSignMsg = 0x24
+	StorageContractCreationHostRevisionSignMsg   = 0x25
+
+	// Upload Data Segment Code Msg
+	StorageContractUploadRequestMsg         = 0x26
+	StorageContractUploadMerkleRootProofMsg = 0x27
+	StorageContractUploadClientRevisionMsg  = 0x28
+	StorageContractUploadHostRevisionMsg    = 0x29
+
+	// Download Data Segment Code Msg
+	StorageContractDownloadRequestMsg      = 0x33
+	StorageContractDownloadDataMsg         = 0x34
+	StorageContractDownloadHostRevisionMsg = 0x35
+	// error msg code
+	NegotiationErrorMsg = 0x33
+	// stop msg code
+	NegotiationStopMsg = 0x34
+
+	////////////////////////////////////
+
+	// Client Handle Message Set
+	HostConfigRespMsg    = 0x20
+	UploadMerkleProofMsg = 0x21
+
+	// Host Handle Message Set
+	HostConfigReqMsg     = 0x30
+	ContractCreateReqMsg = 0x31
+	UploadReqMsg         = 0x32
+)
+
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
 // can be generated in an hour
 var (

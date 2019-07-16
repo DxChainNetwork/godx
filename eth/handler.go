@@ -343,11 +343,34 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 	}
 
-	// start the client message handler
+	// TODO: Start ETH Handler
+
+	// start the client hostConfig message handler
 	go func() {
 		pm.wg.Add(1)
 		defer pm.wg.Done()
-		pm.clientMsgHandler(p, p.clientMsg)
+		pm.clientHostConfigMsgHandler(p, p.clientConfigMsg)
+	}()
+
+	// start the host hostConfig message handler
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		pm.hostConfigMsgHandler(p, p.hostConfigMsg)
+	}()
+
+	// start the client contract message handler
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		pm.clientContractMsgHandler(p, p.clientContractMsg)
+	}()
+
+	// start the host contract message handler
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		pm.hostContractMsgHandler(p, p.hostContractMsg)
 	}()
 
 	// Handle incoming messages until the connection is torn down
@@ -363,115 +386,19 @@ func (pm *ProtocolManager) handle(p *peer) error {
 
 		// check for error
 		select {
-		case err := <-p.msgHandleErr:
+		case err := <-p.errMsg:
 			return err
 		default:
 			// if there are no errors, continue with the message
-			// distributor
+			// dispatcher
 		}
 
 		// distribute the message to different handler
-		if err := pm.msgDistributor(msg, p); err != nil {
+		if err := pm.msgDispatcher(msg, p); err != nil {
 			return err
 		}
 	}
 
-}
-
-func (pm *ProtocolManager) msgDistributor(msg p2p.Msg, p *peer) error {
-	switch {
-	case msg.Code < 0x20:
-		// eth handler
-		if err := pm.handleEthMsg(p, msg); err != nil {
-			p.Log().Error("Ethereum handle message failed", "err", err.Error())
-			return err
-		}
-
-	case msg.Code < 0x30:
-		pm.clientMsgScheduler(msg, p)
-
-	case msg.Code < 0x40:
-		// host handler
-		if err := pm.handleHostMsg(p, msg); err != nil {
-			p.Log().Error("Host handle message failed", "err", err.Error())
-			return nil
-		}
-	default:
-		// message code exceed the range
-		return errors.New("invalid message code")
-	}
-
-	return nil
-}
-
-func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) {
-	// NOTE: the lock is omitted here on purpose because there is only one routine
-	// and one function used to change the client message buffer
-
-	// if there is no message in the buffer, try to send the message through the
-	// channel. If the channel is full, save the message in the buffer
-	if len(p.clientMsgBuffer) == 0 {
-		select {
-		case p.clientMsg <- msg:
-		default:
-			p.clientMsgBuffer = append(p.clientMsgBuffer, msg)
-		}
-	} else {
-		// if there are messages left in the buffer
-		// add the new message to the buffer first,
-		// then, loop through the messages in the buffer
-		// and send the message through the channel
-		p.clientMsgBuffer = append(p.clientMsgBuffer, msg)
-		for _, msg := range p.clientMsgBuffer {
-			select {
-			case p.clientMsg <- msg:
-				p.clientMsgBuffer = p.clientMsgBuffer[1:]
-			default:
-				return
-			}
-		}
-	}
-
-}
-
-func (pm *ProtocolManager) clientMsgHandler(p *peer, clientMsg chan p2p.Msg) {
-	var msg p2p.Msg
-	for {
-		select {
-		case msg = <-clientMsg:
-		case <-pm.quitSync:
-			return
-		}
-
-		switch {
-		case msg.Code == storage.HostSettingMsg:
-
-			op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ConfigOP)
-			if err != nil {
-				triggerError(p, err)
-				return
-			}
-
-			if err := op.Done(msg); err != nil {
-				err = fmt.Errorf("handle host setting message failed: %s", err.Error())
-				triggerError(p, err)
-				return
-			}
-
-		}
-
-	}
-}
-
-func (pm *ProtocolManager) handleHostMsg(p *peer, msg p2p.Msg) error {
-	defer msg.Discard()
-
-	switch {
-	case msg.Code == storage.GetHostConfigMsg:
-		settings := pm.eth.storageHost.RetrieveExternalConfig()
-		return p.SendStorageHostConfig(settings)
-	}
-	return nil
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
@@ -956,11 +883,4 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 
 func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
 	return pm.storageContractSessions
-}
-
-func triggerError(p *peer, err error) {
-	select {
-	case p.msgHandleErr <- err:
-	default:
-	}
 }

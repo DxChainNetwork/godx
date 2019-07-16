@@ -234,6 +234,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("find client account error", err)
 	}
+
+	// SET UP CONNECTION
+
 	session, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		log.Error("setup connection", "err", err)

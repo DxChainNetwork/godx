@@ -110,7 +110,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
-	if err := verifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
+	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		log.Error("VerifyRevision Failed", "contractID", newRevision.ParentID.String(), "err", err)
 		return err
 	}
@@ -153,6 +153,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
+	// ------------------------ START FROM HERE --------------------------------------
 	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
 		return fmt.Errorf("[Error Send Storage Sha256MerkleTreeProof] Error: %v", err)
 	}
@@ -207,7 +208,7 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 // verifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
-func verifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
+func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
 	if len(revision.NewValidProofOutputs) != 2 || len(revision.NewMissedProofOutputs) != 2 {
 		return errBadContractOutputCounts

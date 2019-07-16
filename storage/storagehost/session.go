@@ -11,7 +11,7 @@ import (
 
 // handlerMap is the map for p2p handler
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.HostSettingMsg:                    handleHostSettingRequest,
+	storage.HostConfigRespMsg:                 handleHostSettingRequest,
 	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
@@ -44,7 +44,7 @@ func (h *StorageHost) HandleSession(s *storage.Session) error {
 	}
 }
 
-// handleHostSettingRequest is the function to be called when calling HostSettingMsg
+// handleHostSettingRequest is the function to be called when calling HostConfigRespMsg
 func handleHostSettingRequest(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	return nil
 }

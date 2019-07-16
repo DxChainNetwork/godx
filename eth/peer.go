@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
@@ -29,7 +28,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
-	mapset "github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set"
 )
 
 var (
@@ -94,36 +93,37 @@ type peer struct {
 	queuedAnns  chan *types.Block         // Queue of blocks to announce to the peer
 	term        chan struct{}             // Termination channel to stop the broadcaster
 
-	// message channel
-	ethMsg    chan p2p.Msg
-	clientMsg chan p2p.Msg
-	hostMsg   chan p2p.Msg
+	// eth and storage message channel
+	ethMsg            chan p2p.Msg
+	clientConfigMsg   chan p2p.Msg
+	hostConfigMsg     chan p2p.Msg
+	clientContractMsg chan p2p.Msg
+	hostContractMsg   chan p2p.Msg
 
-	// message buffer
-	ethMsgBuffer    []p2p.Msg
-	clientMsgBuffer []p2p.Msg
-	hostMsgBuffer   []p2p.Msg
+	ethBuffer []p2p.Msg
 
-	// error occurred
-	msgHandleErr chan error
+	// error channel
+	errMsg chan error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:         p,
-		rw:           rw,
-		version:      version,
-		id:           fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		knownTxs:     mapset.NewSet(),
-		knownBlocks:  mapset.NewSet(),
-		queuedTxs:    make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps:  make(chan *propEvent, maxQueuedProps),
-		queuedAnns:   make(chan *types.Block, maxQueuedAnns),
-		term:         make(chan struct{}),
-		ethMsg:       make(chan p2p.Msg, 5),
-		clientMsg:    make(chan p2p.Msg, 5),
-		hostMsg:      make(chan p2p.Msg, 5),
-		msgHandleErr: make(chan error, 1),
+		Peer:              p,
+		rw:                rw,
+		version:           version,
+		id:                fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		knownTxs:          mapset.NewSet(),
+		knownBlocks:       mapset.NewSet(),
+		queuedTxs:         make(chan []*types.Transaction, maxQueuedTxs),
+		queuedProps:       make(chan *propEvent, maxQueuedProps),
+		queuedAnns:        make(chan *types.Block, maxQueuedAnns),
+		term:              make(chan struct{}),
+		ethMsg:            make(chan p2p.Msg, 10),
+		clientConfigMsg:   make(chan p2p.Msg, 1),
+		hostConfigMsg:     make(chan p2p.Msg, 1),
+		clientContractMsg: make(chan p2p.Msg, 1),
+		hostContractMsg:   make(chan p2p.Msg, 1),
+		errMsg:            make(chan error, 1),
 	}
 }
 
@@ -304,19 +304,6 @@ func (p *peer) SendNodeData(data [][]byte) error {
 func (p *peer) SendReceiptsRLP(receipts []rlp.RawValue) error {
 	return p2p.Send(p.rw, ReceiptsMsg, receipts)
 }
-
-//////////////// ****************
-
-func (p *peer) SendStorageHostConfig(config storage.HostExtConfig) error {
-	log.Error("CONFIG SEND", "config", config)
-	return p2p.Send(p.rw, storage.HostSettingMsg, config)
-}
-
-func (p *peer) RequestStorageHostConfig() error {
-	return p2p.Send(p.rw, storage.GetHostConfigMsg, struct{}{})
-}
-
-/////////////// ******************
 
 // RequestOneHeader is a wrapper around the header query functions to fetch a
 // single header. It is used solely by the fetcher.

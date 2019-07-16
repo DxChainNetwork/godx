@@ -147,9 +147,10 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo
 	return dirs, files, nil
 }
 
-func (sc *StorageClient) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
-	return sc.ethBackend.SetupStorageConnection(hostEnodeUrl)
+func (sc *StorageClient) SetupConnection(enodeURL string, opCode storage.OpCode) (storage.Peer, error) {
+	return sc.ethBackend.SetupConnection(enodeURL, opCode)
 }
+
 func (sc *StorageClient) AccountManager() *accounts.Manager {
 	return sc.ethBackend.AccountManager()
 }

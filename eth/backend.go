@@ -657,8 +657,7 @@ func (s *Ethereum) RemoveStorageHost(ip string) {
 	s.server.RemoveStorageHost(ip)
 }
 
-func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (p2pPeer *peer, err error) {
-
+func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (storagePeer storage.Peer, err error) {
 	// get the peer ID
 	var destNode *enode.Node
 	if destNode, err = enode.ParseV4(enodeURL); err != nil {
@@ -685,7 +684,7 @@ func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (p2pP
 	peer := s.protocolManager.peers.Peer(peerID)
 	if peer != nil {
 		// connection is already established
-		p2pPeer = peer
+		storagePeer = peer
 		return
 	}
 
@@ -695,7 +694,7 @@ func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (p2pP
 	for {
 		peer = s.protocolManager.peers.Peer(peerID)
 		if peer != nil {
-			p2pPeer = peer
+			storagePeer = peer
 			return
 		}
 
@@ -851,7 +850,7 @@ func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostEx
 	}
 
 	// set up the connection to the storage host node
-	p, err := s.SetupConnection(enodeURL, storage.ConfigOP)
+	sp, err := s.SetupConnection(enodeURL, storage.ConfigOP)
 	if err != nil {
 		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
@@ -860,7 +859,7 @@ func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostEx
 	defer s.storageClient.RemoveOperation(hostNode.ID(), storage.ConfigOP)
 
 	// send storage host config request information
-	if err := p.RequestStorageHostConfig(); err != nil {
+	if err := sp.RequestStorageHostConfig(); err != nil {
 		return fmt.Errorf("failed to request storage host configuration: %s", err)
 	}
 
