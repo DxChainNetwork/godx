@@ -12,7 +12,6 @@ import (
 // handlerMap is the map for p2p handler
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
 	storage.HostConfigRespMsg:                 handleHostSettingRequest,
-	storage.StorageContractCreationMsg:        handleContractCreate,
 	storage.StorageContractUploadRequestMsg:   handleUpload,
 	storage.StorageContractDownloadRequestMsg: handleDownload,
 }

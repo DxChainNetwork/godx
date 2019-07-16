@@ -37,13 +37,13 @@ type ActiveContractsAPI struct {
 }
 
 // Online will be used to indicate if the local node is connected to the internet
-func (sc *StorageClient) Online() bool {
-	return sc.info.NetInfo.PeerCount() > 0
+func (client *StorageClient) Online() bool {
+	return client.info.NetInfo.PeerCount() > 0
 }
 
 // Syncing will be used to indicate if the local node is syncing with the blockchain
-func (sc *StorageClient) Syncing() bool {
-	sync, _ := sc.info.EthInfo.Syncing()
+func (client *StorageClient) Syncing() bool {
+	sync, _ := client.info.EthInfo.Syncing()
 	syncing, ok := sync.(bool)
 	if ok && !syncing {
 		return false
@@ -53,8 +53,8 @@ func (sc *StorageClient) Syncing() bool {
 }
 
 // GetTxByBlockHash will be used to get the detailed transaction by using the block hash
-func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error) {
-	block, err := sc.ethBackend.GetBlockByHash(blockHash)
+func (client *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error) {
+	block, err := client.ethBackend.GetBlockByHash(blockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -64,24 +64,24 @@ func (sc *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Transact
 
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
-func (sc *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
-	return sc.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
+func (client *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+	return client.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
 // in the blockchain
-func (sc *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
-	return sc.ethBackend.SubscribeChainChangeEvent(ch)
+func (client *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+	return client.ethBackend.SubscribeChainChangeEvent(ch)
 }
 
 // GetStorageHostManager will be used to acquire the storage host manager
-func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
-	return sc.storageHostManager
+func (client *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHostManager {
+	return client.storageHostManager
 }
 
 // DirInfo returns the Directory Information of the dxdir
-func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
-	entry, err := sc.fileSystem.DirSet().Open(dxPath)
+func (client *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
+	entry, err := client.fileSystem.DirSet().Open(dxPath)
 	if err != nil {
 		return storage.DirectoryInfo{}, err
 	}
@@ -105,22 +105,22 @@ func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, 
 }
 
 // DirList get directories and files in the dxdir
-func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo, []storage.UploadFileInfo, error) {
-	if err := sc.tm.Add(); err != nil {
+func (client *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo, []storage.UploadFileInfo, error) {
+	if err := client.tm.Add(); err != nil {
 		return nil, nil, err
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	var dirs []storage.DirectoryInfo
 	var files []storage.UploadFileInfo
 	// Get DirectoryInfo
-	di, err := sc.DirInfo(dxPath)
+	di, err := client.DirInfo(dxPath)
 	if err != nil {
 		return nil, nil, err
 	}
 	dirs = append(dirs, di)
 	// Read Directory
-	fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(storage.SysPath(sc.staticFilesDir))))
+	fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(storage.SysPath(client.staticFilesDir))))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +131,7 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo
 			if err != nil {
 				return nil, nil, err
 			}
-			di, err := sc.DirInfo(dirDxPath)
+			di, err := client.DirInfo(dirDxPath)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -147,46 +147,46 @@ func (sc *StorageClient) DirList(dxPath storage.DxPath) ([]storage.DirectoryInfo
 	return dirs, files, nil
 }
 
-func (sc *StorageClient) SetupConnection(enodeURL string, opCode storage.OpCode) (storage.Peer, error) {
-	return sc.ethBackend.SetupConnection(enodeURL, opCode)
+func (client *StorageClient) SetupConnection(enodeURL string, opCode storage.OpCode) (storage.Peer, error) {
+	return client.ethBackend.SetupConnection(enodeURL, opCode)
 }
 
-func (sc *StorageClient) AccountManager() *accounts.Manager {
-	return sc.ethBackend.AccountManager()
+func (client *StorageClient) AccountManager() *accounts.Manager {
+	return client.ethBackend.AccountManager()
 }
 
-func (sc *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return sc.ethBackend.Disconnect(session, hostEnodeUrl)
+func (client *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
+	return client.ethBackend.Disconnect(session, hostEnodeUrl)
 }
 
-func (sc *StorageClient) ChainConfig() *params.ChainConfig {
-	return sc.ethBackend.ChainConfig()
+func (client *StorageClient) ChainConfig() *params.ChainConfig {
+	return client.ethBackend.ChainConfig()
 }
 
-func (sc *StorageClient) CurrentBlock() *types.Block {
-	return sc.ethBackend.CurrentBlock()
+func (client *StorageClient) CurrentBlock() *types.Block {
+	return client.ethBackend.CurrentBlock()
 }
 
-func (sc *StorageClient) SendTx(ctx context.Context, signedTx *types.Transaction) error {
-	return sc.ethBackend.SendTx(ctx, signedTx)
+func (client *StorageClient) SendTx(ctx context.Context, signedTx *types.Transaction) error {
+	return client.ethBackend.SendTx(ctx, signedTx)
 }
 
-func (sc *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return sc.ethBackend.SuggestPrice(ctx)
+func (client *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
+	return client.ethBackend.SuggestPrice(ctx)
 }
 
-func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
-	return sc.ethBackend.GetPoolNonce(ctx, addr)
+func (client *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
+	return client.ethBackend.GetPoolNonce(ctx, addr)
 }
 
 // GetFileSystem will get the file system
-func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
-	return sc.fileSystem
+func (client *StorageClient) GetFileSystem() *filesystem.FileSystem {
+	return client.fileSystem
 }
 
 // send contract create tx
-func (sc *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
-	return sc.info.StorageTx.SendContractCreateTX(clientAddr, input)
+func (client *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
+	return client.info.StorageTx.SendContractCreateTX(clientAddr, input)
 }
 
 // calculate the proof ranges that should be used to verify a

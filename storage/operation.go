@@ -53,6 +53,6 @@ func (op *Operation) Done(msg p2p.Msg) error {
 	case op.msg <- msg:
 		return nil
 	case <-timeout:
-		return errors.New("operation finished but failed to send the message")
+		return errors.New("timeout! Operation finished but failed to send the message")
 	}
 }

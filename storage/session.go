@@ -173,26 +173,6 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 	return p2p.Send(s.rw, HostConfigRespMsg, data)
 }
 
-func (s *Session) SendStorageContractCreation(data interface{}) error {
-	s.Log().Debug("Sending storage contract creation tx to host from client", "tx", data)
-	return p2p.Send(s.rw, StorageContractCreationMsg, data)
-}
-
-func (s *Session) SendStorageContractCreationHostSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract create host signatures for storage client", "signature", data)
-	return p2p.Send(s.rw, StorageContractCreationHostSignMsg, data)
-}
-
-func (s *Session) SendStorageContractCreationClientRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract update to storage host by storage client", "data", data)
-	return p2p.Send(s.rw, StorageContractCreationClientRevisionSignMsg, data)
-}
-
-func (s *Session) SendStorageContractCreationHostRevisionSign(data interface{}) error {
-	s.Log().Debug("Sending storage contract update host signatures", "signature", data)
-	return p2p.Send(s.rw, StorageContractCreationHostRevisionSignMsg, data)
-}
-
 // upload protocol
 func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
 	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)

@@ -9,4 +9,8 @@ type Peer interface {
 	SendStorageHostConfig(config HostExtConfig) error
 	RequestStorageHostConfig() error
 	SendUploadMerkleProof(merkleProof UploadMerkleProof) error
+	RequestContractCreation(req ContractCreateRequest) error
+	SendContractCreateClientRevisionSign(revisionSign []byte) error
+	SendContractCreationHostSign(contractSign []byte) error
+	SendContractCreationHostRevisionSign(revisionSign []byte) error
 }

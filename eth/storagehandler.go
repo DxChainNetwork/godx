@@ -68,7 +68,18 @@ func (pm *ProtocolManager) clientContractMsgHandler(p *peer, contractMsg chan p2
 	for {
 		select {
 		case msg = <-contractMsg:
-			fmt.Println(msg)
+			op, err := pm.eth.storageClient.RetrieveOperation(p.ID(), storage.ContractOP)
+			if err != nil {
+				p.TriggerError(err)
+				return
+			}
+
+			if err := op.Done(msg); err != nil {
+				err = fmt.Errorf("error operation done: %s", err.Error())
+				p.TriggerError(err)
+				return
+			}
+
 		case <-pm.quitSync:
 			return
 		}
@@ -85,8 +96,12 @@ func (pm *ProtocolManager) hostContractMsgHandler(p *peer, contractMsg chan p2p.
 		}
 
 		switch {
-		case msg.Code == storage.UploadReqMsg:
-			go func() { pm.uploadHandler(p, msg) }()
+		case msg.Code == storage.ContractCreateReqMsg:
+			go func() { pm.eth.storageHost.ContractCreateHandler(p, msg) }()
+		default:
+			if err := pm.eth.storageHost.InsertMsg(msg); err != nil {
+				err = fmt.Errorf("error insert message: %s", err.Error())
+			}
 		}
 	}
 }

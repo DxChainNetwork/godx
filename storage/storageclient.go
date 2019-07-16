@@ -6,6 +6,7 @@ package storage
 
 import (
 	"context"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -57,6 +58,8 @@ type ClientBackend interface {
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 	GetPaymentAddress() (common.Address, error)
 	IsRevisionSessionDone(contractID ContractID) bool
+	RemoveOperation(nodeID enode.ID, opCode OpCode)
+	RetrieveOperation(nodeID enode.ID, opCode OpCode) (*Operation, error)
 }
 
 // DownloadParameters is the parameters to download from outer request

@@ -27,3 +27,19 @@ func (p *peer) RequestStorageHostConfig() error {
 func (p *peer) SendUploadMerkleProof(merkleProof storage.UploadMerkleProof) error {
 	return p2p.Send(p.rw, storage.UploadMerkleProofMsg, merkleProof)
 }
+
+func (p *peer) RequestContractCreation(req storage.ContractCreateRequest) error {
+	return p2p.Send(p.rw, storage.ContractCreateReqMsg, req)
+}
+
+func (p *peer) SendContractCreateClientRevisionSign(revisionSign []byte) error {
+	return p2p.Send(p.rw, storage.ContractCreateClientRevisionSign, revisionSign)
+}
+
+func (p *peer) SendContractCreationHostSign(contractSign []byte) error {
+	return p2p.Send(p.rw, storage.ContractCreateHostSign, contractSign)
+}
+
+func (p *peer) SendContractCreationHostRevisionSign(revisionSign []byte) error {
+	return p2p.Send(p.rw, storage.ContractCreateRevisionSign, revisionSign)
+}
