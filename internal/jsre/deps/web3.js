@@ -5621,12 +5621,12 @@ module.exports = Net;
               }),
 
               new Property({
-                  name: 'hosts',
+                  name: 'host.ls',
                   getter: 'sclient_hosts',
               }),
 
               new Property({
-                  name: 'hostrank',
+                  name: 'host.rank',
                   getter: 'sclient_hostRank',
               }),
 
@@ -5641,7 +5641,7 @@ module.exports = Net;
               }),
 
               new Property({
-                  name: 'files',
+                  name: 'file.ls',
                   getter: 'clientfiles_fileList'
               }),
           ];
@@ -5650,7 +5650,7 @@ module.exports = Net;
         var methods = function () {
 
             var host = new Method({
-                name: 'host',
+                name: 'host.info',
                 call: 'sclient_host',
                 params: 1,
             });
@@ -5662,13 +5662,13 @@ module.exports = Net;
             });
 
             var setconfig = new Method({
-                name: 'setconfig',
+                name: 'setConfig',
                 call: 'sclient_setConfig',
                 params: 1,
             });
 
             var setPaymentAddress = new Method({
-                name: 'setpaymentaddr',
+                name: 'setPaymentAddr',
                 call: 'sclient_setPaymentAddress',
                 params: 1,
             });
@@ -5687,19 +5687,19 @@ module.exports = Net;
             });
 
             var fileInfo = new Method({
-                name: 'file',
+                name: 'file.info',
                 call: 'clientfiles_detailedFileInfo',
                 params: 1,
             });
 
             var rename = new Method({
-                name: 'rename',
+                name: 'file.rename',
                 call: 'clientfiles_rename',
                 params: 2,
             });
 
             var deletion = new Method({
-                name: 'delete',
+                name: 'file.delete',
                 call: 'clientfiles_delete',
                 params: 1,
             });
@@ -13781,45 +13781,27 @@ module.exports = Web3;
     var utils = require('../../utils/utils');
 
     var methods = function () {
-      var folders = new Method({
-        name: 'folders',
-        call: 'shost_folders',
-        params: 0,
-      })
-
       var addFolder = new Method({
-        name: 'addFolder',
+        name: 'folder.add',
         call: 'shost_addStorageFolder',
         params: 2,
       })
 
       var resizeFolder = new Method({
-        name: 'resizeFolder',
+        name: 'folder.resize',
         call: 'shost_resizeFolder',
         params: 2,
       })
 
       var deleteFolder = new Method({
-        name: 'deleteFolder',
+        name: 'folder.delete',
         call: 'shost_deleteFolder',
         params: 1,
-      })
-
-      var availableSpace = new Method({
-        name: 'availableSpace',
-        call: 'shost_availableSpace',
-        params: 0,
       })
 
       var announce = new Method({
         name: 'announce',
         call: 'shost_announce',
-        params: 0,
-      })
-
-      var paymentAddress = new Method({
-        name: 'getPaymentAddress',
-        call: 'shost_getPaymentAddress',
         params: 0,
       })
 
@@ -13854,7 +13836,7 @@ module.exports = Web3;
       })
 
       var setPaymentAddress = new Method({
-        name: 'setPaymentAddress',
+        name: 'setPaymentAddr',
         call: 'shost_setPaymentAddress',
         params: 1,
       })
@@ -13914,13 +13896,10 @@ module.exports = Web3;
       })
 
       return [
-        folders,
         addFolder,
         resizeFolder,
         deleteFolder,
-        availableSpace,
         announce,
-        paymentAddress,
         setAcceptingContracts,
         setMaxDownloadBatch,
         setMaxDuration,
@@ -13952,7 +13931,7 @@ module.exports = Web3;
         }),
 
         new Property({
-          name: 'folders',
+          name: 'folder.ls',
           getter: 'shost_folders',
         }),
 
@@ -13971,7 +13950,12 @@ module.exports = Web3;
           getter: 'shost_getFinancialMetrics',
         }),
 
-      ];
+        new Property({
+            name: 'paymentAddr',
+            getter: 'shost_getPaymentAddress',
+        })
+
+    ];
     }
 
     function shost(web3){
