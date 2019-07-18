@@ -15,7 +15,16 @@ type Peer interface {
 	SendContractCreateClientRevisionSign(revisionSign []byte) error
 	SendContractCreationHostSign(contractSign []byte) error
 	SendContractCreationHostRevisionSign(revisionSign []byte) error
+	RequestContractUpload(req UploadRequest) error
+	SendContractUploadClientRevisionSign(revisionSign []byte) error
+	SendUploadHostRevisionSign(revisionSign []byte) error
+	RequestContractDownload(req DownloadRequest) error
+	SendRevisionStop() error
+	SendContractDownloadData(resp DownloadResponse) error
 	WaitConfigResp() (p2p.Msg, error)
 	ClientWaitContractResp() (msg p2p.Msg, err error)
 	HostWaitContractResp() (msg p2p.Msg, err error)
+	RevisionStart() error
+	IsRevising() bool
+	RevisionDone()
 }

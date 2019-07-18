@@ -6,6 +6,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
@@ -26,10 +27,6 @@ func (p *peer) RequestStorageHostConfig() error {
 	return p2p.Send(p.rw, storage.HostConfigReqMsg, struct{}{})
 }
 
-func (p *peer) SendUploadMerkleProof(merkleProof storage.UploadMerkleProof) error {
-	return p2p.Send(p.rw, storage.UploadMerkleProofMsg, merkleProof)
-}
-
 func (p *peer) RequestContractCreation(req storage.ContractCreateRequest) error {
 	return p2p.Send(p.rw, storage.ContractCreateReqMsg, req)
 }
@@ -44,6 +41,34 @@ func (p *peer) SendContractCreationHostSign(contractSign []byte) error {
 
 func (p *peer) SendContractCreationHostRevisionSign(revisionSign []byte) error {
 	return p2p.Send(p.rw, storage.ContractCreateRevisionSign, revisionSign)
+}
+
+func (p *peer) RequestContractUpload(req storage.UploadRequest) error {
+	return p2p.Send(p.rw, storage.ContractUploadReqMsg, req)
+}
+
+func (p *peer) SendContractUploadClientRevisionSign(revisionSign []byte) error {
+	return p2p.Send(p.rw, storage.ContractUploadClientRevisionSign, revisionSign)
+}
+
+func (p *peer) SendUploadMerkleProof(merkleProof storage.UploadMerkleProof) error {
+	return p2p.Send(p.rw, storage.ContractUploadMerkleProofMsg, merkleProof)
+}
+
+func (p *peer) SendUploadHostRevisionSign(revisionSign []byte) error {
+	return p2p.Send(p.rw, storage.ContractUploadRevisionSign, revisionSign)
+}
+
+func (p *peer) RequestContractDownload(req storage.DownloadRequest) error {
+	return p2p.Send(p.rw, storage.ContractDownloadReqMsg, req)
+}
+
+func (p *peer) SendRevisionStop() error {
+	return p2p.Send(p.rw, storage.NegotiationStopMsg, "revision stop")
+}
+
+func (p *peer) SendContractDownloadData(resp storage.DownloadResponse) error {
+	return p2p.Send(p.rw, storage.ContractDownloadDataMsg, resp)
 }
 
 func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {
@@ -112,5 +137,31 @@ func (p *peer) HostContractProcessingDone() {
 		return
 	default:
 		p.Log().Warn("host contract processing finished before it is actually done")
+	}
+}
+
+func (p *peer) RevisionStart() error {
+	select {
+	case p.contractRevising <- struct{}{}:
+		return nil
+	default:
+		return fmt.Errorf("another operation is revising the contract, or renewing started")
+	}
+}
+
+func (p *peer) IsRevising() bool {
+	select {
+	case p.contractRevising <- struct{}{}:
+		<-p.contractRevising
+		return false
+	default:
+		return true
+	}
+}
+
+func (p *peer) RevisionDone() {
+	select {
+	case <-p.contractRevising:
+	default:
 	}
 }

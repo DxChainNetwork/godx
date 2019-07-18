@@ -9,22 +9,26 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 // handleUpload is the upload function to handle upload negotiation
-func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-	s.SetBusy()
-	defer s.ResetBusy()
+func (h *StorageHost) UploadHandler(sp storage.Peer, uploadReqMsg p2p.Msg) {
+	var uploadErr error
 
-	s.SetDeadLine(storage.ContractRevisionTime)
+	defer func() {
+		if uploadErr != nil {
+			h.log.Error("data upload failed", "err", uploadErr.Error())
+			sp.TriggerError(uploadErr)
+		}
+	}()
 
 	// Read upload request
 	var uploadRequest storage.UploadRequest
-	if err := beginMsg.Decode(&uploadRequest); err != nil {
-		return fmt.Errorf("[Error Decode UploadRequest] Msg: %v | Error: %v", beginMsg, err)
+	if err := uploadReqMsg.Decode(&uploadRequest); err != nil {
+		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error)
+		return
 	}
 
 	// Get revision from storage responsibility
@@ -32,9 +36,9 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
 	h.lock.RUnlock()
 
+	// it is normal not getting storage responsibility
 	if err != nil {
-		//log.Error("getStorageResponsibility failed", "err", err)
-		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
+		return
 	}
 
 	settings := h.externalConfig()
@@ -62,9 +66,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 			// Update finances
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
-
 		default:
-			return errors.New("unknown action type " + action.Type)
+			uploadErr = fmt.Errorf("unknown upload action type: %s", action.Type)
 		}
 	}
 
@@ -111,8 +114,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
-		log.Error("VerifyRevision Failed", "contractID", newRevision.ParentID.String(), "err", err)
-		return err
+		uploadErr = fmt.Errorf("revision verification failed. contractID: %s, err: %s", newRevision.ParentID.String(), err.Error())
+		return
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 
@@ -140,7 +143,8 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	// Construct the merkle proof
 	oldHashSet, err := merkle.Sha256DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
-		return err
+		uploadErr = fmt.Errorf("error construct the merkle proof: %s", err.Error())
+		return
 	}
 
 	merkleResp = storage.UploadMerkleProof{
@@ -153,31 +157,35 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
-	// ------------------------ START FROM HERE --------------------------------------
-	if err := s.SendStorageContractUploadMerkleProof(merkleResp); err != nil {
-		return fmt.Errorf("[Error Send Storage Sha256MerkleTreeProof] Error: %v", err)
+	if err := sp.SendUploadMerkleProof(merkleResp); err != nil {
+		uploadErr = fmt.Errorf("storage host failed to send merkle proof to the storage client: %s", err.Error())
+		return
 	}
 
 	var clientRevisionSign []byte
-	msg, err := s.ReadMsg()
+	msg, err := sp.HostWaitContractResp()
 	if err != nil {
-		return err
+		uploadErr = fmt.Errorf("after the merkle proof was sent, failed to get the storage client's response: %s", err.Error())
+		return
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		return err
+		uploadErr = fmt.Errorf("failed to decode the client revision sign: %s", err.Error())
+		return
 	}
 
 	// Sign host's revision and send it to client
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		return err
+		uploadErr = fmt.Errorf("host failed to get the account address: %s", err.Error())
+		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		return err
+		uploadErr = fmt.Errorf("host failed to sign the new contract revision")
+		return
 	}
 
 	newRevision.Signatures = [][]byte{clientRevisionSign, hostSig}
@@ -194,16 +202,16 @@ func handleUpload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
 	h.lock.Unlock()
 
 	if err != nil {
-		log.Error("modifyStorageResponsibility", "err", err)
-		return err
+		uploadErr = fmt.Errorf("failed to modify the storage responsibility: %s", err.Error())
+		return
 	}
 
-	if err := s.SendStorageContractUploadHostRevisionSign(hostSig); err != nil {
-		log.Error("SendStorageContractUploadHostRevisionSign", "err", err)
-		return err
+	// send the host revision sign
+	if err := sp.SendUploadHostRevisionSign(hostSig); err != nil {
+		uploadErr = fmt.Errorf("failed to send the upload host revision sign: %s", err.Error())
+		return
 	}
 
-	return nil
 }
 
 // verifyRevision checks that the revision pays the host correctly, and that

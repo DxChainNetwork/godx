@@ -657,6 +657,18 @@ func (s *Ethereum) RemoveStorageHost(ip string) {
 	s.server.RemoveStorageHost(ip)
 }
 
+func (s *Ethereum) IsRevising(hostID enode.ID) bool {
+	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
+	peer := s.protocolManager.peers.Peer(peerID)
+	// if the peer does not exist, meaning currently not revising
+	if peer == nil {
+		return false
+	}
+
+	// otherwise, check if the current connection is revising the contract
+	return peer.IsRevising()
+}
+
 func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
 	// get the peer ID
 	var destNode *enode.Node
@@ -690,106 +702,6 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 		case <-timeout:
 			err = errors.New("set up connection time out")
 			return
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-}
-
-// SetupConnection will setup connection with host if they are never connected with each other
-func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
-	if s.netRPCService == nil {
-		return nil, fmt.Errorf("network API is not ready")
-	}
-
-	hostNode, err := enode.ParseV4(hostEnodeURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid enode: %v", err)
-	}
-
-	// First we check storage contract session set have already connection with this node
-	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
-	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil && !conn.IsBusy() {
-		return conn, nil
-	} else if conn != nil && conn.IsBusy() {
-		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
-	}
-
-	// check if there is another process is trying to add peer
-	peerChan := s.server.AcquirePeerAddingChan(hostNode.IP().String())
-	peerAddingTimeout := time.After(1 * time.Minute)
-
-LOOP:
-	for {
-		select {
-		// if the channel is not empty, meaning another routine is trying to add the peer
-		// wait util the peer adding is done
-		case peerChan <- struct{}{}:
-			break LOOP
-		case <-peerAddingTimeout:
-			return nil, errors.New("another process is trying to add the peer")
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-
-	// First we disconnect the ethereum connection
-	s.server.RemovePeer(hostNode)
-
-	// before disconnecting the connection, add the node to storageHosts map
-	s.server.AddStorageHost(hostNode)
-
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			// if timeout, try to remove the peer channel as well
-			select {
-			case <-peerChan:
-			default:
-			}
-
-			s.server.RemoveStorageHost(hostNode.IP().String())
-			return nil, errors.New("remove original peer timeout")
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-
-		found := false
-		peers := s.server.PeersInfo()
-		for _, p := range peers {
-			if p.ID == nodeId {
-				found = true
-			}
-		}
-		if !found {
-			break
-		}
-	}
-
-	if _, err := s.netRPCService.AddStorageContractPeer(hostNode, peerChan); err != nil {
-		return nil, err
-	}
-
-	timer := time.NewTimer(time.Minute * 1)
-	var conn *storage.Session
-	for {
-		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
-		if conn != nil {
-			if !conn.IsBusy() {
-				conn.SetBusy()
-				return conn, nil
-			}
-		}
-
-		select {
-		case <-timer.C:
-			s.server.RemoveStorageHost(hostNode.IP().String())
-			select {
-			case <-peerChan:
-			default:
-			}
-			return nil, fmt.Errorf("setup connection timeout")
 		default:
 			time.Sleep(500 * time.Millisecond)
 		}

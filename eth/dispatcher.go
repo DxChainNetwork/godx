@@ -99,13 +99,44 @@ func (pm *ProtocolManager) hostMsgScheduler(msg p2p.Msg, p *peer) error {
 		}
 
 		// start the go routine, handle the host config request
-		// once one, release the channel
+		// once done, release the channel
 		go func() {
 			pm.wg.Add(1)
 			defer pm.wg.Done()
 			defer p.HostContractProcessingDone()
 			pm.eth.storageHost.ContractCreateHandler(p, msg)
 		}()
+	case msg.Code == storage.ContractUploadReqMsg:
+		// avoid continuously contract create calls attack
+		// generate too many go routines and used all resources
+		if err := p.HostContractProcessing(); err != nil {
+			return err
+		}
+
+		// start the go routine, handle the host config request
+		// once done, release the channel
+		go func() {
+			pm.wg.Add(1)
+			defer pm.wg.Done()
+			defer p.HostContractProcessingDone()
+			pm.eth.storageHost.UploadHandler(p, msg)
+		}()
+	case msg.Code == storage.ContractDownloadReqMsg:
+		// avoid continuously contract download calls attack
+		// generate too many go routines and used all resources
+		if err := p.HostContractProcessing(); err != nil {
+			return err
+		}
+
+		// storage the go routine, handle the host config request
+		// once done, release the channel
+		go func() {
+			pm.wg.Add(1)
+			defer pm.wg.Done()
+			defer p.HostContractProcessingDone()
+			pm.eth.storageHost.DownloadHandler(p, msg)
+		}()
+
 	default:
 		select {
 		case p.hostContractMsg <- msg:

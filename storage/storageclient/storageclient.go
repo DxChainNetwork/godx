@@ -207,22 +207,6 @@ func (client *StorageClient) DeleteFile(path storage.DxPath) error {
 	return client.fileSystem.FileSet().Delete(path)
 }
 
-// Check whether the contract session is uploading or downloading
-func (client *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) bool {
-	client.sessionLock.Lock()
-	defer client.sessionLock.Unlock()
-	if s, ok := client.sessionSet[contractID]; ok && s.IsBusy() {
-		revisionDoneTime := time.After(RevisionDoneTime)
-		select {
-		case <-revisionDoneTime:
-			return false
-		case <-s.RevisionDone():
-			return true
-		}
-	}
-	return true
-}
-
 // ContractDetail will return the detailed contract information
 func (client *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {
 	return client.contractManager.RetrieveActiveContract(contractID)
@@ -246,9 +230,9 @@ func (client *StorageClient) ActiveContracts() (activeContracts []ActiveContract
 	return
 }
 
-func (client *StorageClient) CancelContracts() (err error) {
-	return client.contractManager.CancelStorageContract()
-}
+//func (client *StorageClient) CancelContracts() (err error) {
+//	return client.contractManager.CancelStorageContract()
+//}
 
 // SetClientSetting will config the client setting based on the value provided
 // it will set the bandwidth limit, rentPayment, and ipViolation check
@@ -323,24 +307,24 @@ func (client *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedL
 	return nil
 }
 
-func (client *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
-	err := client.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo *storage.HostInfo) (common.Hash, error) {
+	err := client.Write(sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
 	return merkle.Sha256MerkleTreeRoot(data), err
 }
 
-func (client *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
+func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadAction, hostInfo *storage.HostInfo) (err error) {
 	// Retrieve the last contract revision
 	scs := client.contractManager.GetStorageContractSet()
 
 	// Find the contractID formed by this host
-	hostInfo := session.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return fmt.Errorf("not exist this contract: %s", contractID.String())
+		return fmt.Errorf("contract does not exist: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
+
 	contractHeader := contract.Header()
 	contractRevision := contractHeader.LatestContractRevision
 
@@ -412,22 +396,16 @@ func (client *StorageClient) Write(session *storage.Session, actions []storage.U
 		} else {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
-
-		// reset deadline
-		session.SetDeadLine(5 * time.Minute)
 	}()
-	// 1. Send storage upload request
-	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
-		return err
-	}
 
-	if err := session.SendStorageContractUploadRequest(req); err != nil {
+	// send contract upload request
+	if err := sp.RequestContractUpload(req); err != nil {
 		return err
 	}
 
 	// 2. read merkle proof response from host
 	var merkleResp storage.UploadMerkleProof
-	msg, err := session.ReadMsg()
+	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		return fmt.Errorf("read upload merkle proof response msg failed, err: %v", err)
 	}
@@ -478,12 +456,12 @@ func (client *StorageClient) Write(session *storage.Session, actions []storage.U
 		return err
 	}
 	// send client sig to host
-	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+	if err := sp.SendContractUploadClientRevisionSign(clientRevisionSign); err != nil {
 		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
 	// read the host's signature
 	var hostRevisionSig []byte
-	msg, err = session.ReadMsg()
+	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		return err
 	}
@@ -502,11 +480,10 @@ func (client *StorageClient) Write(session *storage.Session, actions []storage.U
 
 // Download calls the Read RPC, writing the requested data to w
 // NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
-func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
+func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}, hostInfo *storage.HostInfo) (err error) {
 	// reset deadline when finished.
 	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
 	// the conn should be disconnected after 1 hour.
-	defer s.SetDeadLine(5 * time.Minute)
 
 	// sanity check the request.
 	for _, sec := range req.Sections {
@@ -545,7 +522,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	scs := client.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
-	hostInfo := s.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
@@ -614,8 +590,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	}()
 
 	// send download request
-	s.SetDeadLine(storage.DownloadTime)
-	err = s.SendStorageContractDownloadRequest(req)
+	err = sp.RequestContractDownload(req)
 	if err != nil {
 		return err
 	}
@@ -629,7 +604,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		}
 
 		// if negotiation is canceled or done, client should send stop msg to host
-		s.SendStopMsg()
+		sp.SendRevisionStop()
 	}()
 
 	// ensure we send DownloadStop before returning
@@ -639,7 +614,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	var hostSig []byte
 	for _, sec := range req.Sections {
 		var resp storage.DownloadResponse
-		msg, err := s.ReadMsg()
+		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
 		}
@@ -684,11 +659,11 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			break
 		}
 	}
-	if hostSig == nil {
 
+	if hostSig == nil {
 		// if we haven't received host signature, just read again
 		var resp storage.DownloadResponse
-		msg, err := s.ReadMsg()
+		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
 		}
@@ -719,7 +694,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 }
 
 // calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
-func (client *StorageClient) Download(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
+func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset, length uint32, hostInfo *storage.HostInfo) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
@@ -732,7 +707,7 @@ func (client *StorageClient) Download(s *storage.Session, root common.Hash, offs
 		MerkleProof: true,
 	}
 	var buf bytes.Buffer
-	err := client.Read(s, &buf, req, nil)
+	err := client.Read(sp, &buf, req, nil, hostInfo)
 	return buf.Bytes(), err
 }
 
@@ -1056,4 +1031,8 @@ func (client *StorageClient) disconnect(s *storage.Session, id enode.ID) error {
 		return fmt.Errorf("enode id not exist: %x", id)
 	}
 	return client.ethBackend.Disconnect(s, info.EnodeURL)
+}
+
+func (client *StorageClient) IsContractRevising(hostID enode.ID) bool {
+	return client.ethBackend.IsRevising(hostID)
 }

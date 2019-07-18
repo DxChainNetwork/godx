@@ -114,25 +114,17 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error {
-	session, err := w.checkSession()
-	defer func() {
-		if session != nil {
-			session.ResetBusy()
+	sp, hostInfo, err := w.checkConnection()
+	defer sp.RevisionDone()
 
-			select {
-			case session.RevisionDone() <- struct{}{}:
-			default:
-			}
-		}
-	}()
 	if err != nil {
-		w.client.log.Error("check session failed", "err", err)
+		w.client.log.Error("failed to check the connection", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return err
 	}
 
 	// upload segment to host
-	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
+	root, err := w.client.Append(sp, uc.physicalSegmentData[sectorIndex], hostInfo)
 	if err != nil {
 		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)

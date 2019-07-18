@@ -104,6 +104,9 @@ type peer struct {
 
 	hostConfigProcessing   chan struct{}
 	hostContractProcessing chan struct{}
+
+	contractRevising chan struct{}
+
 	// error channel
 	errMsg chan error
 }
@@ -127,6 +130,7 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		hostConfigProcessing:   make(chan struct{}, 1),
 		hostContractProcessing: make(chan struct{}, 1),
 		errMsg:                 make(chan error, 1),
+		contractRevising:       make(chan struct{}, 1),
 	}
 }
 

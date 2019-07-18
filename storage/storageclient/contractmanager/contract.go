@@ -16,64 +16,64 @@ import (
 
 // CancelStorageContract will cancel all currently active contracts. Once the contracts are
 // canceled, they cannot be used for file uploading, and they will not automatically be renewed
-func (cm *ContractManager) CancelStorageContract() (err error) {
-	// adding all contract into renewing list, making sure that
-	// the contract will no longer be able to perform contract revision
-	contractIDs := cm.activeContracts.IDs()
-
-	cm.lock.Lock()
-	for _, id := range contractIDs {
-		cm.renewing[id] = true
-	}
-	cm.lock.Unlock()
-
-	// delete id from the renewing list at the end
-	defer func() {
-		cm.lock.Lock()
-		for _, id := range contractIDs {
-			delete(cm.renewing, id)
-		}
-		cm.lock.Unlock()
-	}()
-
-	// if storage contract is currently revising, return error to user asking them to
-	// try again later
-	for _, id := range contractIDs {
-		if !cm.b.IsRevisionSessionDone(id) {
-			err = fmt.Errorf("contract revising, please try again later")
-			return
-		}
-	}
-
-	// update storage client settings
-	// clear the client rentPayment and current period
-	cm.lock.Lock()
-	cm.rentPayment = storage.RentPayment{}
-	cm.currentPeriod = 0
-	cm.lock.Unlock()
-
-	// save the changes persistently
-	if err = cm.saveSettings(); err != nil {
-		err = fmt.Errorf("failed to cancel storage contract, saving settings persistently failed: %s",
-			err.Error())
-		return
-	}
-
-	// terminate the storage contract maintenance
-	select {
-	case cm.maintenanceStop <- struct{}{}:
-	default:
-	}
-
-	// mark all contracts as canceled (UploadAbility, RenewAbility, Canceled)
-	for _, id := range contractIDs {
-		if err = cm.markContractCancel(id); err != nil {
-			return
-		}
-	}
-
-	return
-}
+//func (cm *ContractManager) CancelStorageContract() (err error) {
+//	// adding all contract into renewing list, making sure that
+//	// the contract will no longer be able to perform contract revision
+//	contractIDs := cm.activeContracts.IDs()
+//
+//	cm.lock.Lock()
+//	for _, id := range contractIDs {
+//		cm.renewing[id] = true
+//	}
+//	cm.lock.Unlock()
+//
+//	// delete id from the renewing list at the end
+//	defer func() {
+//		cm.lock.Lock()
+//		for _, id := range contractIDs {
+//			delete(cm.renewing, id)
+//		}
+//		cm.lock.Unlock()
+//	}()
+//
+//	// if storage contract is currently revising, return error to user asking them to
+//	// try again later
+//	for _, id := range contractIDs {
+//		if !cm.b.IsRevisionSessionDone(id) {
+//			err = fmt.Errorf("contract revising, please try again later")
+//			return
+//		}
+//	}
+//
+//	// update storage client settings
+//	// clear the client rentPayment and current period
+//	cm.lock.Lock()
+//	cm.rentPayment = storage.RentPayment{}
+//	cm.currentPeriod = 0
+//	cm.lock.Unlock()
+//
+//	// save the changes persistently
+//	if err = cm.saveSettings(); err != nil {
+//		err = fmt.Errorf("failed to cancel storage contract, saving settings persistently failed: %s",
+//			err.Error())
+//		return
+//	}
+//
+//	// terminate the storage contract maintenance
+//	select {
+//	case cm.maintenanceStop <- struct{}{}:
+//	default:
+//	}
+//
+//	// mark all contracts as canceled (UploadAbility, RenewAbility, Canceled)
+//	for _, id := range contractIDs {
+//		if err = cm.markContractCancel(id); err != nil {
+//			return
+//		}
+//	}
+//
+//	return
+//}
 
 // resumeContracts will mark all activated contracts "canceled" status
 // to be false

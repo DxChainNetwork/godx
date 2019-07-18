@@ -224,68 +224,39 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	return nextSegment
 }
 
-// check the session isRew, busy, exceed the max upload/download sector limit
-func (w *worker) checkSession() (*storage.Session, error) {
-	// we must make sure that renew and revision consistency
-	w.client.sessionLock.Lock()
-	defer w.client.sessionLock.Unlock()
-
+func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 	// check this contract whether is renewing
 	contractID := w.contract.ID
+
+	// if the storage contract is currently renewing, return error
 	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Warn("renew contract is doing, can't upload/download")
-		return nil, ErrContractRenewing
+		return nil, nil, errors.New("contract is currently renewing, revision cannot be started")
 	}
 
+	// get the storage host information
 	hostInfo, err := w.updateWorkerContractID(contractID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Setup an active connection to the host and we will reuse previous connection
-	session, _ := w.client.sessionSet[contractID]
-	if session != nil {
-		if session.IsBusy() {
-			w.client.log.Error("session is busy[hostsetting, uploading/downloading, contractcreate]")
-			return nil, errors.New("session is busy")
-		}
+	// set up the connection
+	sp, err := w.client.SetupConnection(hostInfo.EnodeURL)
 
-		if session.IsClosed() {
-			delete(w.client.sessionSet, contractID)
-		}
+	// start contract revision
+	if err := sp.RevisionStart(); err != nil {
+		return nil, nil, err
 	}
 
-	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupStorageConnection(hostInfo.EnodeURL)
-		if err != nil {
-			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
-			return nil, errors.New("failed to create connection")
-		}
-
-		w.client.sessionSet[contractID] = s
-		session = s
-	}
-
-	session.SetHostInfo(hostInfo)
-	return session, nil
+	return sp, hostInfo, err
 }
 
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) error {
-	session, err := w.checkSession()
-	defer func() {
-		if session != nil {
-			session.ResetBusy()
-
-			select {
-			case session.RevisionDone() <- struct{}{}:
-			default:
-			}
-		}
-	}()
+	sp, hostInfo, err := w.checkConnection()
+	defer sp.RevisionDone()
 
 	if err != nil {
-		w.client.log.Error("check session failed", "err", err)
+		w.client.log.Error("failed to check the connection", "err", err)
 		return err
 	}
 
@@ -303,7 +274,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	root := uds.segmentMap[w.hostID.String()].root
 
 	// call rpc request the data from host, if get error, unregister the worker.
-	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
+	sectorData, err := w.client.Download(sp, root, uint32(fetchOffset), uint32(fetchLength), hostInfo)
 	if err != nil {
 		w.client.log.Error("worker failed to download sector", "error", err)
 		uds.unregisterWorker(w)

@@ -12,36 +12,24 @@ import (
 )
 
 const (
-	IDLE = 0
-	BUSY = 1
-
-	// Upload Data Segment Code Msg
-	StorageContractUploadRequestMsg         = 0x26
-	StorageContractUploadMerkleRootProofMsg = 0x27
-	StorageContractUploadClientRevisionMsg  = 0x28
-	StorageContractUploadHostRevisionMsg    = 0x29
-
-	// Download Data Segment Code Msg
-	StorageContractDownloadRequestMsg      = 0x34
-	StorageContractDownloadDataMsg         = 0x35
-	StorageContractDownloadHostRevisionMsg = 0x36
-	// error msg code
-	NegotiationErrorMsg = 0x37
-	// stop msg code
-	NegotiationStopMsg = 0x38
-
-	////////////////////////////////////
 
 	// Client Handle Message Set
-	HostConfigRespMsg          = 0x20
-	ContractCreateHostSign     = 0x21
-	ContractCreateRevisionSign = 0x22
-	UploadMerkleProofMsg       = 0x23
+	HostConfigRespMsg            = 0x20
+	ContractCreateHostSign       = 0x21
+	ContractCreateRevisionSign   = 0x22
+	ContractUploadMerkleProofMsg = 0x23
+	ContractUploadRevisionSign   = 0x24
+	ContractDownloadDataMsg      = 0x25
+	NegotiationErrorMsg          = 0x26
 
 	// Host Handle Message Set
 	HostConfigReqMsg                 = 0x30
 	ContractCreateReqMsg             = 0x31
 	ContractCreateClientRevisionSign = 0x32
+	ContractUploadReqMsg             = 0x33
+	ContractUploadClientRevisionSign = 0x34
+	ContractDownloadReqMsg           = 0x35
+	NegotiationStopMsg               = 0x36
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks

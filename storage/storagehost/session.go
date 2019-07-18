@@ -1,46 +1,15 @@
 package storagehost
 
 import (
-	"errors"
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
-	"time"
 )
 
 // handlerMap is the map for p2p handler
 var handlerMap = map[uint64]func(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error{
-	storage.HostConfigRespMsg:                 handleHostSettingRequest,
-	storage.StorageContractUploadRequestMsg:   handleUpload,
-	storage.StorageContractDownloadRequestMsg: handleDownload,
-}
-
-// HandleSession is the function to be called from Ethereum handle method.
-func (h *StorageHost) HandleSession(s *storage.Session) error {
-	if s == nil {
-		return errors.New("host session is nil")
-	}
-
-	if s.IsBusy() {
-		// wait for 3 seconds and retry
-		<-time.After(3 * time.Second)
-		h.log.Warn("session is busy, we will retry later")
-		return nil
-	}
-
-	msg, err := s.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	if handler, ok := handlerMap[msg.Code]; ok {
-		err = handler(h, s, msg)
-		return err
-	} else {
-		h.log.Error("failed to get handler", "message", msg.Code)
-		return errors.New("failed to get handler")
-	}
+	storage.HostConfigRespMsg: handleHostSettingRequest,
 }
 
 // handleHostSettingRequest is the function to be called when calling HostConfigRespMsg

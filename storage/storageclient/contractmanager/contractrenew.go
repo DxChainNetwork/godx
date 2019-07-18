@@ -166,8 +166,15 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		cm.lock.Unlock()
 	}()
 
+	contractMeta, exists := cm.RetrieveActiveContract(renewContractID)
+	if !exists {
+		renewCost = common.BigInt0
+		err = fmt.Errorf("the oldContract that is trying to be renewed no longer exists")
+		return
+	}
+
 	// if the contract is revising, return error directly
-	if !cm.b.IsRevisionSessionDone(renewContractID) {
+	if cm.b.IsContractRevising(contractMeta.EnodeID) {
 		renewCost = common.BigInt0
 		err = fmt.Errorf("the contract is revising, cannot be renewed")
 		return

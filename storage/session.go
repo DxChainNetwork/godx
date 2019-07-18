@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p"
@@ -129,18 +128,6 @@ func (s *Session) HostInfo() *HostInfo {
 	return s.host
 }
 
-func (s *Session) SetBusy() bool {
-	return atomic.CompareAndSwapInt32(&s.busy, IDLE, BUSY)
-}
-
-func (s *Session) ResetBusy() bool {
-	return atomic.CompareAndSwapInt32(&s.busy, BUSY, IDLE)
-}
-
-func (s *Session) IsBusy() bool {
-	return atomic.LoadInt32(&s.busy) == BUSY
-}
-
 // when we renew but upload or download now, we wait for the revision done
 func (s *Session) RevisionDone() chan struct{} {
 	return s.revisionDone
@@ -173,32 +160,6 @@ func (s *Session) SendHostExtSettingsRequest(data interface{}) error {
 	return p2p.Send(s.rw, HostConfigRespMsg, data)
 }
 
-// upload protocol
-func (s *Session) SendStorageContractUploadRequest(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractUploadRequestMsg, data)
-}
-
-func (s *Session) SendStorageContractUploadMerkleProof(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractUploadMerkleRootProofMsg, data)
-}
-
-func (s *Session) SendStorageContractUploadClientRevisionSign(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractUploadClientRevisionMsg, data)
-}
-
-func (s *Session) SendStorageContractUploadHostRevisionSign(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractUploadHostRevisionMsg, data)
-}
-
-// download protocol
-func (s *Session) SendStorageContractDownloadRequest(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractDownloadRequestMsg, data)
-}
-
-func (s *Session) SendStorageContractDownloadData(data interface{}) error {
-	return p2p.Send(s.rw, StorageContractDownloadDataMsg, data)
-}
-
 func (s *Session) ReadMsg() (*p2p.Msg, error) {
 	msg, err := s.rw.ReadMsg()
 	if err != nil {
@@ -209,7 +170,6 @@ func (s *Session) ReadMsg() (*p2p.Msg, error) {
 
 // send this msg to notify the other node that we want stop the negotiation
 func (s *Session) SendStopMsg() error {
-	s.Log().Debug("Sending negotiation stop msg")
 	return p2p.Send(s.rw, NegotiationStopMsg, "revision stop")
 }
 
