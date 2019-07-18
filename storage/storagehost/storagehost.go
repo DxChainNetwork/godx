@@ -7,12 +7,6 @@ package storagehost
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/p2p"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
@@ -20,6 +14,9 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
 // StorageHost provide functions for storageHost management
@@ -49,28 +46,6 @@ type StorageHost struct {
 	// things for thread safety
 	lock sync.RWMutex
 	tm   tm.ThreadManager
-
-	// p2p contract message channel
-	contractMsg chan p2p.Msg
-}
-
-func (h *StorageHost) WaitReceived() (p2p.Msg, error) {
-	timeout := time.After(1 * time.Minute)
-	select {
-	case msg := <-h.contractMsg:
-		return msg, nil
-	case <-timeout:
-		return p2p.Msg{}, errors.New("timeout, failed to wait for client's response")
-	}
-}
-
-func (h *StorageHost) InsertMsg(msg p2p.Msg) error {
-	select {
-	case h.contractMsg <- msg:
-		return nil
-	default:
-		return errors.New("storage host is busy proceeding other messages, no other messages should be sent at this time")
-	}
 }
 
 func (h *StorageHost) RetrieveExternalConfig() storage.HostExtConfig {
@@ -91,7 +66,6 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		contractMsg:                 make(chan p2p.Msg),
 	}
 
 	var err error

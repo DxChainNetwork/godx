@@ -350,34 +350,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		pm.ethMsgHandler(p)
 	}()
 
-	// start the client hostConfig message handler
-	go func() {
-		pm.wg.Add(1)
-		defer pm.wg.Done()
-		pm.clientHostConfigMsgHandler(p, p.clientConfigMsg)
-	}()
-
-	// start the host hostConfig message handler
-	go func() {
-		pm.wg.Add(1)
-		defer pm.wg.Done()
-		pm.hostConfigMsgHandler(p, p.hostConfigMsg)
-	}()
-
-	// start the client contract message handler
-	go func() {
-		pm.wg.Add(1)
-		defer pm.wg.Done()
-		pm.clientContractMsgHandler(p, p.clientContractMsg)
-	}()
-
-	// start the host contract message handler
-	go func() {
-		pm.wg.Add(1)
-		defer pm.wg.Done()
-		pm.hostContractMsgHandler(p, p.hostContractMsg)
-	}()
-
 	// Handle incoming messages until the connection is torn down
 	for {
 		// keep reading the message util an error occur

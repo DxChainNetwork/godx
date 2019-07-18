@@ -241,8 +241,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		log.Error("contract create failed, failed to set up connection", "err", err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection failed while creating the contract", err)
 	}
-	// remove the operation once done
-	defer cm.b.RemoveOperation(host.EnodeID, storage.ContractOP)
 
 	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
@@ -262,16 +260,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, err
 	}
 
-	// retrieve the operation and wait for the response
-	op, err := cm.b.RetrieveOperation(host.EnodeID, storage.ContractOP)
-	if err != nil {
-		err := fmt.Errorf("failed to retrieve the config operation: %s", err.Error())
-		log.Error("contract create failed", "err", err.Error())
-		return storage.ContractMetaData{}, err
-	}
-
 	var hostSign []byte
-	msg, err := op.WaitMsgReceive()
+	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		err = fmt.Errorf("contract create read message error: %s", err.Error())
 		return storage.ContractMetaData{}, err
@@ -314,7 +304,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	// wait until response was sent by storage host
 	var hostRevisionSign []byte
-	msg, err = op.WaitMsgReceive()
+	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		err = fmt.Errorf("failed to read message after sned revision sign: %s", err.Error())
 		log.Error("contract create failed", "err", err.Error())

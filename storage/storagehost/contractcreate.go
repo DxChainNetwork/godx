@@ -104,7 +104,7 @@ func (h *StorageHost) ContractCreateHandler(sp storage.Peer, contractCreateReqMs
 
 	// 3. Wait for the client revision sign
 	var clientRevisionSign []byte
-	msg, err := h.WaitReceived()
+	msg, err := sp.HostWaitContractResp()
 	if err != nil {
 		contractCreateErr = fmt.Errorf("storage host failed to get client revision sign: %s", err.Error())
 		return

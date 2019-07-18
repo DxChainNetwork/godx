@@ -83,59 +83,6 @@ type StorageClient struct {
 	// get the P2P server for adding peer
 	sessionLock sync.Mutex
 	sessionSet  map[storage.ContractID]*storage.Session
-
-	// storage client p2p related
-	clientJob map[enode.ID]storage.Operations
-}
-
-func (client *StorageClient) RetrieveOperation(nodeID enode.ID, opCode storage.OpCode) (*storage.Operation, error) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
-
-	if operation, exist := client.clientJob[nodeID][opCode]; exist {
-		return &operation, nil
-	}
-
-	return nil, errors.New("the operation does not exist")
-}
-
-func (client *StorageClient) RemoveOperation(nodeID enode.ID, opCode storage.OpCode) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
-
-	if _, exist := client.clientJob[nodeID][opCode]; !exist {
-		return
-	}
-
-	delete(client.clientJob[nodeID], opCode)
-
-	// if there are no more operations left in the clientJob
-	// delete the entry directly
-	if len(client.clientJob[nodeID]) == 0 {
-		delete(client.clientJob, nodeID)
-	}
-}
-
-func (client *StorageClient) InsertOperation(nodeID enode.ID, opCode storage.OpCode) (err error) {
-	client.lock.Lock()
-	defer client.lock.Unlock()
-
-	// if the node does not exist in the clientJob
-	// create new operations
-	if _, exist := client.clientJob[nodeID]; !exist {
-		client.clientJob[nodeID] = storage.NewOperations(opCode)
-		return
-	}
-
-	// if the opCode exists already, return error indicating that the
-	// client is doing the job currently
-	if _, exist := client.clientJob[nodeID][opCode]; exist {
-		return errors.New("the client is currently doing this job")
-	}
-
-	// update the operations and client job
-	client.clientJob[nodeID][opCode] = storage.NewOperation()
-	return
 }
 
 // New initializes StorageClient object
@@ -155,7 +102,6 @@ func New(persistDir string) (*StorageClient, error) {
 		},
 		workerPool: make(map[storage.ContractID]*worker),
 		sessionSet: make(map[storage.ContractID]*storage.Session),
-		clientJob:  make(map[enode.ID]storage.Operations),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())

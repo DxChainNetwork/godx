@@ -95,7 +95,6 @@ type peer struct {
 
 	// eth and storage message channel
 	clientConfigMsg   chan p2p.Msg
-	hostConfigMsg     chan p2p.Msg
 	clientContractMsg chan p2p.Msg
 	hostContractMsg   chan p2p.Msg
 
@@ -103,28 +102,31 @@ type peer struct {
 	ethStartIndicator chan struct{}
 	bufferLock        sync.RWMutex
 
+	hostConfigProcessing   chan struct{}
+	hostContractProcessing chan struct{}
 	// error channel
 	errMsg chan error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:              p,
-		rw:                rw,
-		version:           version,
-		id:                fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		knownTxs:          mapset.NewSet(),
-		knownBlocks:       mapset.NewSet(),
-		queuedTxs:         make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps:       make(chan *propEvent, maxQueuedProps),
-		queuedAnns:        make(chan *types.Block, maxQueuedAnns),
-		term:              make(chan struct{}),
-		clientConfigMsg:   make(chan p2p.Msg, 1),
-		hostConfigMsg:     make(chan p2p.Msg, 1),
-		clientContractMsg: make(chan p2p.Msg, 1),
-		hostContractMsg:   make(chan p2p.Msg, 1),
-		ethStartIndicator: make(chan struct{}, 1),
-		errMsg:            make(chan error, 1),
+		Peer:                   p,
+		rw:                     rw,
+		version:                version,
+		id:                     fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		knownTxs:               mapset.NewSet(),
+		knownBlocks:            mapset.NewSet(),
+		queuedTxs:              make(chan []*types.Transaction, maxQueuedTxs),
+		queuedProps:            make(chan *propEvent, maxQueuedProps),
+		queuedAnns:             make(chan *types.Block, maxQueuedAnns),
+		term:                   make(chan struct{}),
+		clientConfigMsg:        make(chan p2p.Msg, 1),
+		clientContractMsg:      make(chan p2p.Msg, 1),
+		hostContractMsg:        make(chan p2p.Msg, 1),
+		ethStartIndicator:      make(chan struct{}, 1),
+		hostConfigProcessing:   make(chan struct{}, 1),
+		hostContractProcessing: make(chan struct{}, 1),
+		errMsg:                 make(chan error, 1),
 	}
 }
 

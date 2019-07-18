@@ -665,18 +665,6 @@ func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (stor
 		return
 	}
 
-	if err = s.storageClient.InsertOperation(destNode.ID(), opCode); err != nil {
-		err = fmt.Errorf("failed to set up the connection: %s", err.Error())
-		return
-	}
-
-	defer func() {
-		if err != nil {
-			// if error is not nil, remove the operation from the client job
-			s.storageClient.RemoveOperation(destNode.ID(), opCode)
-		}
-	}()
-
 	// get the peerID
 	peerID := fmt.Sprintf("%x", destNode.ID().Bytes()[:8])
 
@@ -843,33 +831,19 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostExtConfig) error {
-	// parse the storage host node's enode URL
-	hostNode, err := enode.ParseV4(enodeURL)
-	if err != nil {
-		return fmt.Errorf("invalid enode url, parsing failed: %s", err.Error())
-	}
-
 	// set up the connection to the storage host node
 	sp, err := s.SetupConnection(enodeURL, storage.ConfigOP)
 	if err != nil {
 		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
 
-	// remove the operation once done
-	defer s.storageClient.RemoveOperation(hostNode.ID(), storage.ConfigOP)
-
 	// send storage host config request information
 	if err := sp.RequestStorageHostConfig(); err != nil {
 		return fmt.Errorf("failed to request storage host configuration: %s", err)
 	}
 
-	op, err := s.storageClient.RetrieveOperation(hostNode.ID(), storage.ConfigOP)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve the config operation: %s", err.Error())
-	}
-
 	// wait until the result is given back
-	msg, err := op.WaitMsgReceive()
+	msg, err := sp.WaitConfigResp()
 	if err != nil {
 		return fmt.Errorf("received error while waiting for retriving storage host config: %s", err.Error())
 	}

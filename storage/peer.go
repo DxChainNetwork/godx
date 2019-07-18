@@ -4,6 +4,8 @@
 
 package storage
 
+import "github.com/DxChainNetwork/godx/p2p"
+
 type Peer interface {
 	TriggerError(error)
 	SendStorageHostConfig(config HostExtConfig) error
@@ -13,4 +15,7 @@ type Peer interface {
 	SendContractCreateClientRevisionSign(revisionSign []byte) error
 	SendContractCreationHostSign(contractSign []byte) error
 	SendContractCreationHostRevisionSign(revisionSign []byte) error
+	WaitConfigResp() (p2p.Msg, error)
+	ClientWaitContractResp() (msg p2p.Msg, err error)
+	HostWaitContractResp() (msg p2p.Msg, err error)
 }
