@@ -236,7 +236,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	// set up the connection with the storage host and remove the operation once done
-	sp, err := cm.b.SetupConnection(host.EnodeURL, storage.ContractOP)
+	sp, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
 		log.Error("contract create failed, failed to set up connection", "err", err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection failed while creating the contract", err)

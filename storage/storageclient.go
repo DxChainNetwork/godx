@@ -34,7 +34,7 @@ type EthBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
-	SetupConnection(enodeURL string, opCode OpCode) (Peer, error)
+	SetupConnection(enodeURL string) (Peer, error)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -45,7 +45,7 @@ type ClientBackend interface {
 	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
-	SetupConnection(enodeURL string, opCode OpCode) (Peer, error)
+	SetupConnection(enodeURL string) (Peer, error)
 	AccountManager() *accounts.Manager
 	Disconnect(session *Session, hostEnodeURL string) error
 	ChainConfig() *params.ChainConfig

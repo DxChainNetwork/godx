@@ -147,8 +147,8 @@ func (client *StorageClient) DirList(dxPath storage.DxPath) ([]storage.Directory
 	return dirs, files, nil
 }
 
-func (client *StorageClient) SetupConnection(enodeURL string, opCode storage.OpCode) (storage.Peer, error) {
-	return client.ethBackend.SetupConnection(enodeURL, opCode)
+func (client *StorageClient) SetupConnection(enodeURL string) (storage.Peer, error) {
+	return client.ethBackend.SetupConnection(enodeURL)
 }
 
 func (client *StorageClient) AccountManager() *accounts.Manager {

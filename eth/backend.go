@@ -657,7 +657,7 @@ func (s *Ethereum) RemoveStorageHost(ip string) {
 	s.server.RemoveStorageHost(ip)
 }
 
-func (s *Ethereum) SetupConnection(enodeURL string, opCode storage.OpCode) (storagePeer storage.Peer, err error) {
+func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
 	// get the peer ID
 	var destNode *enode.Node
 	if destNode, err = enode.ParseV4(enodeURL); err != nil {
@@ -832,7 +832,7 @@ func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) err
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostExtConfig) error {
 	// set up the connection to the storage host node
-	sp, err := s.SetupConnection(enodeURL, storage.ConfigOP)
+	sp, err := s.SetupConnection(enodeURL)
 	if err != nil {
 		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
