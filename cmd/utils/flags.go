@@ -757,13 +757,18 @@ var (
 	}
 
 	StorageHostFlag = cli.BoolFlag{
-		Name:  "storagehost",
+		Name:  "storage.host",
 		Usage: "Used to enable the storage host module, the node will be act as storage host",
 	}
 
 	StorageClientFlag = cli.BoolFlag{
-		Name:  "storageclient",
+		Name:  "storage.client",
 		Usage: "Used to enable the storage client module, the node will be act as storage client",
+	}
+
+	StorageDisableFlag = cli.BoolFlag{
+		Name:  "storage.disable",
+		Usage: "This flag is used to disable the storage service",
 	}
 )
 
@@ -1362,12 +1367,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
 	}
 
+	// if storage client flag is specified, meaning that storage host needs to be disabled
 	if ctx.GlobalIsSet(StorageClientFlag.Name) {
-		cfg.StorageClient = ctx.GlobalBool(StorageClientFlag.Name)
+		cfg.StorageHost = false
 	}
 
+	// if storage host flag is specified, meaning that storage client needs to be disabled
 	if ctx.GlobalIsSet(StorageHostFlag.Name) {
-		cfg.StorageHost = ctx.GlobalBool(StorageHostFlag.Name)
+		cfg.StorageClient = false
+	}
+
+	// if the storage disable flag is specified, disable both storage client and storage host
+	if ctx.GlobalIsSet(StorageDisableFlag.Name) {
+		cfg.StorageClient = false
+		cfg.StorageHost = false
 	}
 
 	// If datadir is set, change ethash directory

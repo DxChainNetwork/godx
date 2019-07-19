@@ -137,6 +137,7 @@ var (
 		configFileFlag,
 		utils.StorageHostFlag,
 		utils.StorageClientFlag,
+		utils.StorageDisableFlag,
 	}
 
 	rpcFlags = []cli.Flag{

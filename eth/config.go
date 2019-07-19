@@ -62,8 +62,8 @@ var DefaultConfig = Config{
 		Percentile: 60,
 	},
 	StorageClientDir: storageclient.PersistDirectory,
-	StorageClient:    false,
-	StorageHost:      false,
+	StorageClient:    true,
+	StorageHost:      true,
 }
 
 func init() {

@@ -204,26 +204,22 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
 
-	// if both storageClient and storageHost are true, return error directly
-	if config.StorageClient && config.StorageHost {
-		return nil, errors.New("a node can only become storage client or storage host, not both")
-	}
-
-	// Initialize StorageClient
+	// Initialize StorageClient based on the configuration
 	if config.StorageClient {
 		clientPath := ctx.ResolvePath(config.StorageClientDir)
 		eth.storageClient, err = storageclient.New(clientPath)
 		if err != nil {
 			return nil, err
 		}
-	} else if config.StorageHost {
-		// Initialize StorageHost
+	}
+
+	// Initialize StorageHost based on the configuration
+	if config.StorageHost {
 		hostPath := ctx.ResolvePath(storagehost.PersistHostDir)
 		eth.storageHost, err = storagehost.New(hostPath)
 		if err != nil {
 			return nil, err
 		}
-
 	}
 
 	return eth, nil
@@ -369,7 +365,9 @@ func (s *Ethereum) APIs() []rpc.API {
 				},
 			}
 			s.registeredAPIs = append(s.registeredAPIs, storageClientAPIs...)
-		} else if s.config.StorageHost {
+		}
+
+		if s.config.StorageHost {
 			storageHostAPIs := []rpc.API{
 				{
 					Namespace: "shost",
