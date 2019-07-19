@@ -155,10 +155,6 @@ func (client *StorageClient) AccountManager() *accounts.Manager {
 	return client.ethBackend.AccountManager()
 }
 
-func (client *StorageClient) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return client.ethBackend.Disconnect(session, hostEnodeUrl)
-}
-
 func (client *StorageClient) ChainConfig() *params.ChainConfig {
 	return client.ethBackend.ChainConfig()
 }

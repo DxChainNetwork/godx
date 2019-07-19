@@ -653,10 +653,6 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func (s *Ethereum) RemoveStorageHost(ip string) {
-	s.server.RemoveStorageHost(ip)
-}
-
 func (s *Ethereum) IsRevising(hostID enode.ID) bool {
 	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
 	peer := s.protocolManager.peers.Peer(peerID)
@@ -706,39 +702,6 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
-}
-
-// When worker is done, we disconnect with host
-func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) error {
-	if s.netRPCService == nil {
-		return fmt.Errorf("network API is not ready")
-	}
-
-	hostNode, err := enode.ParseV4(hostEnodeURL)
-	if err != nil {
-		return fmt.Errorf("invalid enode: %v", err)
-	}
-
-	// remove the storage host when the client is trying to disconnect the host
-	s.server.RemoveStorageHost(hostNode.IP().String())
-
-	if _, err := s.netRPCService.RemoveStorageContractPeer(hostNode); err != nil {
-		return err
-	}
-
-	if session != nil {
-		if session.StopConnection() {
-			// wait for connection stop
-			<-session.ClosedChan()
-		} else {
-			return errors.New("session stop time out")
-		}
-
-		// retry add origin static node peer
-		s.server.AddPeer(hostNode)
-	}
-
-	return nil
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID

@@ -103,7 +103,6 @@ func (client *StorageClient) activateWorkerPool() {
 	for id, worker := range client.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(client.sessionSet, id)
 			delete(client.workerPool, id)
 			close(worker.killChan)
 		}
@@ -176,15 +175,6 @@ func (w *worker) killDownloading() {
 	w.downloadMu.Unlock()
 
 	// close connection after downloading
-	contractID := storage.ContractID(w.contract.ID)
-	session, ok := w.client.sessionSet[contractID]
-	if session != nil && ok {
-		delete(w.client.sessionSet, contractID)
-		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
-			w.client.log.Debug("can't close connection after downloading", "error", err)
-		}
-	}
-
 	for i := 0; i < len(removedSegments); i++ {
 		removedSegments[i].removeWorker()
 	}

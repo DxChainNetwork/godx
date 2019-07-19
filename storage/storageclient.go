@@ -25,7 +25,6 @@ type EthBackend interface {
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
-	Disconnect(session *Session, hostEnodeURL string) error
 	GetBlockByNumber(number uint64) (*types.Block, error)
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
@@ -48,7 +47,6 @@ type ClientBackend interface {
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
 	SetupConnection(enodeURL string) (Peer, error)
 	AccountManager() *accounts.Manager
-	Disconnect(session *Session, hostEnodeURL string) error
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	SendTx(ctx context.Context, signedTx *types.Transaction) error

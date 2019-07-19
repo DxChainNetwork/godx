@@ -40,7 +40,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (
@@ -78,12 +77,11 @@ type ProtocolManager struct {
 	chainconfig *params.ChainConfig
 	maxPeers    int
 
-	eth                     *Ethereum
-	downloader              *downloader.Downloader
-	fetcher                 *fetcher.Fetcher
-	peers                   *peerSet
-	storageContractSessions *storage.SessionSet
-	SubProtocols            []p2p.Protocol
+	eth          *Ethereum
+	downloader   *downloader.Downloader
+	fetcher      *fetcher.Fetcher
+	peers        *peerSet
+	SubProtocols []p2p.Protocol
 
 	eventMux      *event.TypeMux
 	txsCh         chan core.NewTxsEvent
@@ -108,19 +106,18 @@ type ProtocolManager struct {
 func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode downloader.SyncMode, networkID uint64, mux *event.TypeMux, txpool txPool, engine consensus.Engine, blockchain *core.BlockChain, chaindb ethdb.Database, whitelist map[uint64]common.Hash) (*ProtocolManager, error) {
 	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		eth:                     eth,
-		networkID:               networkID,
-		eventMux:                mux,
-		txpool:                  txpool,
-		blockchain:              blockchain,
-		chainconfig:             config,
-		peers:                   newPeerSet(),
-		storageContractSessions: storage.NewSessionSet(),
-		whitelist:               whitelist,
-		newPeerCh:               make(chan *peer),
-		noMorePeers:             make(chan struct{}),
-		txsyncCh:                make(chan *txsync),
-		quitSync:                make(chan struct{}),
+		eth:         eth,
+		networkID:   networkID,
+		eventMux:    mux,
+		txpool:      txpool,
+		blockchain:  blockchain,
+		chainconfig: config,
+		peers:       newPeerSet(),
+		whitelist:   whitelist,
+		newPeerCh:   make(chan *peer),
+		noMorePeers: make(chan struct{}),
+		txsyncCh:    make(chan *txsync),
+		quitSync:    make(chan struct{}),
 	}
 	// Figure out whether to allow fast sync or not
 	if mode == downloader.FastSync && blockchain.CurrentBlock().NumberU64() > 0 {
@@ -202,28 +199,6 @@ func (pm *ProtocolManager) removePeer(id string) {
 	// Unregister the peer from the downloader and Ethereum peer set
 	pm.downloader.UnregisterPeer(id)
 	if err := pm.peers.Unregister(id); err != nil {
-		log.Error("Peer removal failed", "peer", id, "err", err)
-	}
-	// Hard disconnect at the networking layer
-	if peer != nil {
-		peer.Peer.Disconnect(p2p.DiscUselessPeer)
-	}
-}
-
-func (pm *ProtocolManager) removeStorageContactSession(id string, ip string) {
-	// remove the storage host from the map
-	// in case the disconnection is caused by the storage host
-	pm.eth.RemoveStorageHost(ip)
-
-	// Short circuit if the peer was already removed
-	peer := pm.storageContractSessions.Session(id)
-	if peer == nil {
-		return
-	}
-	log.Debug("Removing StorageContract peer", "peer", id)
-
-	// Unregister the peer from StorageContract peer set
-	if err := pm.storageContractSessions.Unregister(id); err != nil {
 		log.Error("Peer removal failed", "peer", id, "err", err)
 	}
 	// Hard disconnect at the networking layer
@@ -342,7 +317,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			return err
 		}
 	}
-
 	// start the eth handler
 	go func() {
 		pm.wg.Add(1)
@@ -856,8 +830,4 @@ func (pm *ProtocolManager) NodeInfo() *NodeInfo {
 		Config:     pm.blockchain.Config(),
 		Head:       currentBlock.Hash(),
 	}
-}
-
-func (pm *ProtocolManager) StorageContractSessions() *storage.SessionSet {
-	return pm.storageContractSessions
 }

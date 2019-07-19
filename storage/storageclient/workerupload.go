@@ -41,15 +41,6 @@ func (w *worker) killUploading() {
 	w.uploadTerminated = true
 	w.mu.Unlock()
 
-	contractID := storage.ContractID(w.contract.ID)
-	session, ok := w.client.sessionSet[contractID]
-	if session != nil && ok {
-		delete(w.client.sessionSet, contractID)
-		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
-			w.client.log.Error("can't close connection after uploading", "error", err)
-		}
-	}
-
 	// After the worker is marked as disabled, clear out all of the segments
 	w.dropUploadSegments()
 }

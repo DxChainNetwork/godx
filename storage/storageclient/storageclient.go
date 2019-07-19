@@ -79,10 +79,6 @@ type StorageClient struct {
 	info       storage.ParsedAPI
 	ethBackend storage.EthBackend
 	apiBackend ethapi.Backend
-
-	// get the P2P server for adding peer
-	sessionLock sync.Mutex
-	sessionSet  map[storage.ContractID]*storage.Session
 }
 
 // New initializes StorageClient object
@@ -101,7 +97,6 @@ func New(persistDir string) (*StorageClient, error) {
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
-		sessionSet: make(map[storage.ContractID]*storage.Session),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -1022,15 +1017,6 @@ func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 		}
 	}
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
-}
-
-// disconnect disconnect the node specified with id
-func (client *StorageClient) disconnect(s *storage.Session, id enode.ID) error {
-	info, exist := client.storageHostManager.RetrieveHostInfo(id)
-	if !exist {
-		return fmt.Errorf("enode id not exist: %x", id)
-	}
-	return client.ethBackend.Disconnect(s, info.EnodeURL)
 }
 
 func (client *StorageClient) IsContractRevising(hostID enode.ID) bool {
