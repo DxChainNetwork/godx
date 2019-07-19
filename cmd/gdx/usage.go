@@ -245,7 +245,6 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "STORAGE CLIENT",
 		Flags: []cli.Flag{
-			utils.StorageClientFlag,
 			utils.StorageHostIDFlag,
 			utils.ContractIDFlag,
 			utils.PeriodFlag,
@@ -263,7 +262,6 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "STORAGE HOST",
 		Flags: []cli.Flag{
-			utils.StorageHostFlag,
 			utils.FolderSizeFlag,
 			utils.FolderPathFlag,
 			utils.StorageDurationFlag,

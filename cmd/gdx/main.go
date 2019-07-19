@@ -135,9 +135,7 @@ var (
 		utils.EWASMInterpreterFlag,
 		utils.EVMInterpreterFlag,
 		configFileFlag,
-		utils.StorageHostFlag,
-		utils.StorageClientFlag,
-		utils.StorageDisableFlag,
+		utils.StorageRoleFlag,
 	}
 
 	rpcFlags = []cli.Flag{

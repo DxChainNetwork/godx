@@ -756,19 +756,9 @@ var (
 		Value: "",
 	}
 
-	StorageHostFlag = cli.BoolFlag{
-		Name:  "storage.host",
-		Usage: "Used to enable the storage host module, the node will be act as storage host",
-	}
-
-	StorageClientFlag = cli.BoolFlag{
-		Name:  "storage.client",
-		Usage: "Used to enable the storage client module, the node will be act as storage client",
-	}
-
-	StorageDisableFlag = cli.BoolFlag{
-		Name:  "storage.disable",
-		Usage: "This flag is used to disable the storage service",
+	StorageRoleFlag = cli.StringFlag{
+		Name:  "role",
+		Usage: "by using storage role flag, user is able to choose which role a node can be. There are four options: all, host, client, and none",
 	}
 )
 
@@ -1367,20 +1357,20 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.EVMInterpreter = ctx.GlobalString(EVMInterpreterFlag.Name)
 	}
 
-	// if storage client flag is specified, meaning that storage host needs to be disabled
-	if ctx.GlobalIsSet(StorageClientFlag.Name) {
-		cfg.StorageHost = false
-	}
-
-	// if storage host flag is specified, meaning that storage client needs to be disabled
-	if ctx.GlobalIsSet(StorageHostFlag.Name) {
-		cfg.StorageClient = false
-	}
-
-	// if the storage disable flag is specified, disable both storage client and storage host
-	if ctx.GlobalIsSet(StorageDisableFlag.Name) {
-		cfg.StorageClient = false
-		cfg.StorageHost = false
+	if ctx.GlobalIsSet(StorageRoleFlag.Name) {
+		role := ctx.GlobalString(StorageRoleFlag.Name)
+		switch {
+		case role == "all":
+			cfg.StorageClient = true
+			cfg.StorageHost = true
+		case role == "host":
+			cfg.StorageClient = false
+		case role == "client":
+			cfg.StorageHost = false
+		case role == "none":
+			cfg.StorageClient = false
+			cfg.StorageHost = false
+		}
 	}
 
 	// If datadir is set, change ethash directory
