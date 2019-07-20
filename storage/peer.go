@@ -4,7 +4,12 @@
 
 package storage
 
-import "github.com/DxChainNetwork/godx/p2p"
+import (
+	"errors"
+	"github.com/DxChainNetwork/godx/p2p"
+)
+
+var ErrRequestingHostConfig = errors.New("host configuration should only be requested one at a time")
 
 type Peer interface {
 	TriggerError(error)
@@ -27,4 +32,6 @@ type Peer interface {
 	RevisionStart() error
 	IsRevising() bool
 	RevisionDone()
+	IsRequestingConfig() error
+	DoneRequestingConfig()
 }

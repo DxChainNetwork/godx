@@ -215,7 +215,9 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)
-	if err != nil {
+	if err == storage.ErrRequestingHostConfig {
+		return
+	} else if err != nil {
 		shm.log.Warn("failed to get storage host external setting", "hostID", hi.EnodeID, "err", err.Error())
 	} else {
 		hi.HostExtConfig = hostConfig

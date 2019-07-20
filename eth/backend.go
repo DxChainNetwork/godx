@@ -712,6 +712,13 @@ func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostEx
 		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
 
+	// check if the client is currently requesting the host config
+	// once done, release the channel
+	if err := sp.IsRequestingConfig(); err != nil {
+		return err
+	}
+	defer sp.DoneRequestingConfig()
+
 	// send storage host config request information
 	if err := sp.RequestStorageHostConfig(); err != nil {
 		return fmt.Errorf("failed to request storage host configuration: %s", err)

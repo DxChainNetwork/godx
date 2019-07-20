@@ -348,6 +348,15 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		if err := pm.msgDispatcher(msg, p); err != nil {
 			return err
 		}
+
+		// check for error
+		select {
+		case err := <-p.errMsg:
+			return err
+		default:
+			// if there are no errors, continue with the message
+			// dispatcher
+		}
 	}
 
 }

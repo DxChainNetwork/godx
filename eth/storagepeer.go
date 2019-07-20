@@ -165,3 +165,19 @@ func (p *peer) RevisionDone() {
 	default:
 	}
 }
+
+func (p *peer) IsRequestingConfig() error {
+	select {
+	case p.hostConfigRequesting <- struct{}{}:
+		return nil
+	default:
+		return storage.ErrRequestingHostConfig
+	}
+}
+
+func (p *peer) DoneRequestingConfig() {
+	select {
+	case <-p.hostConfigRequesting:
+	default:
+	}
+}

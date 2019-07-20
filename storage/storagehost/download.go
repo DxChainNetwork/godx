@@ -214,6 +214,7 @@ func (h *StorageHost) DownloadHandler(sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	// the stop signal must arrive before RPC is complete.
 	downloadErr = <-stopSignal
+
 	return
 }
 
