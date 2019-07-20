@@ -64,7 +64,7 @@ func (api *PublicFileSystemAPI) DetailedFileInfo(path string) storage.FileInfo {
 	dxpath, err := storage.NewDxPath(path)
 	if err != nil {
 		// Invalid path
-		api.fs.logger.Warn("Cannot get detailed file info", "path", path, "error", err.Error())
+		api.fs.logger.Warn("Cannot get detailed file info", "path", path, "error", err)
 		return storage.FileInfo{}
 	}
 	fileInfo, err := api.fs.fileDetailedInfo(dxpath, make(storage.HostHealthInfoTable))
@@ -75,7 +75,7 @@ func (api *PublicFileSystemAPI) DetailedFileInfo(path string) storage.FileInfo {
 func (api *PublicFileSystemAPI) FileList() []storage.FileBriefInfo {
 	fileList, err := api.fs.fileList()
 	if err != nil {
-		api.fs.logger.Warn("cannot get the file list", "error", err.Error())
+		api.fs.logger.Warn("cannot get the file list", "error", err)
 		return []storage.FileBriefInfo{}
 	}
 	return fileList
@@ -85,7 +85,7 @@ func (api *PublicFileSystemAPI) FileList() []storage.FileBriefInfo {
 func (api *PublicFileSystemAPI) Uploads() []storage.FileBriefInfo {
 	rawFileList, err := api.fs.fileList()
 	if err != nil {
-		api.fs.logger.Warn("cannot get the file list", "error", err.Error())
+		api.fs.logger.Warn("cannot get the file list", "error", err)
 		return []storage.FileBriefInfo{}
 	}
 	var fileList []storage.FileBriefInfo
@@ -116,13 +116,13 @@ func (api *PublicFileSystemAPI) Rename(prevPath, newPath string) string {
 		// If got error, must be ErrAlreadyRoot. No point to update
 		err = api.fs.InitAndUpdateDirMetadata(prevParent)
 		if err != nil {
-			api.fs.logger.Warn(err.Error())
+			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	if newParent, err := newDxPath.Parent(); err == nil {
 		err = api.fs.InitAndUpdateDirMetadata(newParent)
 		if err != nil {
-			api.fs.logger.Warn(err.Error())
+			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	return fmt.Sprintf("File %v renamed to %v", prevPath, newPath)
@@ -140,7 +140,7 @@ func (api *PublicFileSystemAPI) Delete(path string) string {
 	if newParent, err := dxPath.Parent(); err == nil {
 		err = api.fs.InitAndUpdateDirMetadata(newParent)
 		if err != nil {
-			api.fs.logger.Warn(err.Error())
+			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	return fmt.Sprintf("File %v deleted", path)

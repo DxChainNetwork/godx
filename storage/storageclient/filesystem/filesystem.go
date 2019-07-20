@@ -330,7 +330,7 @@ func (fs *FileSystem) StuckFoundChan() chan struct{} {
 	return fs.stuckFound
 }
 
-func (fs *FileSystem) DirSet() *dxdir.DirSet{
+func (fs *FileSystem) DirSet() *dxdir.DirSet {
 	return fs.dirSet
 }
 
@@ -387,11 +387,11 @@ func (fs *FileSystem) loadFileWal() error {
 	for i, txn := range unappliedTxns {
 		err = storage.ApplyOperations(txn.Operations)
 		if err != nil {
-			fs.logger.Warn("cannot apply the operation of file transaction index %d: %v", i, err)
+			fs.logger.Warn("cannot apply the operation of file transaction", "index", i, "error", err)
 		}
 		err = txn.Release()
 		if err != nil {
-			fs.logger.Warn("cannot release the operation of file transaction index %d: %v", i, err)
+			fs.logger.Warn("cannot release the operation of file transaction", "index", i, "error", err)
 		}
 	}
 	fs.fileWal = fileWal
@@ -409,7 +409,7 @@ func (fs *FileSystem) loadUpdateWal() error {
 		for j, op := range txn.Operations {
 			path, err := decodeWalOp(op)
 			if err != nil {
-				fs.logger.Warn("cannot decode txn[%d].operation[%d]: %v", i, j, err)
+				fs.logger.Warn(fmt.Sprintf("cannot decode txn[%d].operation[%d]", i, j), "error", err)
 			}
 			// if error happened: already in progress
 			// release the transaction and continue to the next transaction
@@ -602,6 +602,6 @@ func randomUint32() uint32 {
 	return binary.LittleEndian.Uint32(b)
 }
 
-func (fs *FileSystem) FileRootDir() storage.SysPath{
+func (fs *FileSystem) FileRootDir() storage.SysPath {
 	return fs.fileRootDir
 }

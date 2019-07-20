@@ -184,7 +184,7 @@ func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
 		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
 		return minSectors, numSectors, extraBytes
 	default:
-		log.Crit("Unknown erasure code type ")
+		log.Error("Unknown erasure code type ")
 		return 0, 0, []byte{}
 	}
 }
