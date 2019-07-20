@@ -488,9 +488,8 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 	}
 	defer fs.tm.Done()
 
-	// TODO: Call contractManager.HostUtilsMap here to avoid calculating the map again and
-	// 	again for each file
 	var fileList []storage.FileBriefInfo
+	healthInfoTable := fs.contractManager.HostHealthMap()
 	err := filepath.Walk(string(fs.fileRootDir), func(path string, info os.FileInfo, err error) error {
 		if os.IsNotExist(err) {
 			return nil
@@ -506,7 +505,7 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 		if err != nil {
 			return err
 		}
-		fileInfo, err := fs.fileBriefInfo(dxPath, make(storage.HostHealthInfoTable))
+		fileInfo, err := fs.fileBriefInfo(dxPath, healthInfoTable)
 		if os.IsNotExist(err) {
 			return nil
 		}

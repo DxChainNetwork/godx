@@ -18,6 +18,9 @@ import (
 type contractManager interface {
 	// HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by input
 	HostHealthMapByID([]enode.ID) storage.HostHealthInfoTable
+
+	// HostHealthMap returns the full host info table of the contract manager
+	HostHealthMap() (infoTable storage.HostHealthInfoTable)
 }
 
 // AlwaysSuccessContractManager is the contractManager that always return good condition for all host keys
@@ -63,6 +66,7 @@ type randomContractManager struct {
 	lock   sync.Mutex                  // lock is the mutex to protect the table field
 }
 
+// HostHealthMapByID gives random host health map provided by ids
 func (c *randomContractManager) HostHealthMapByID(ids []enode.ID) storage.HostHealthInfoTable {
 	c.once.Do(func() {
 		c.table = make(storage.HostHealthInfoTable)
@@ -102,4 +106,9 @@ func (c *randomContractManager) HostHealthMapByID(ids []enode.ID) storage.HostHe
 		table[id] = c.table[id]
 	}
 	return table
+}
+
+// HostHealthMap is not used in tests thus not implemented
+func (c *randomContractManager) HostHealthMap() storage.HostHealthInfoTable {
+	return make(storage.HostHealthInfoTable)
 }
