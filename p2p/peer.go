@@ -206,6 +206,11 @@ func (p *Peer) Log() log.Logger {
 	return p.log
 }
 
+// for only test
+func (p *Peer) Set(f connFlag, val bool) {
+	p.rw.set(f, val)
+}
+
 // run the protocol
 // it will wait until an error occurred and two go routines finished execution
 func (p *Peer) run() (remoteRequested bool, err error) {

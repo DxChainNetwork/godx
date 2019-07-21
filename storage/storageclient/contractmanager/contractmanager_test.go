@@ -164,11 +164,7 @@ func (st *storageClientBackendContractManager) AccountManager() *accounts.Manage
 	return nil
 }
 
-func (st *storageClientBackendContractManager) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return nil
-}
-
-func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+func (st *storageClientBackendContractManager) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
 	return nil, nil
 }
 
@@ -184,6 +180,6 @@ func (st *storageClientBackendContractManager) GetPaymentAddress() (address comm
 	return
 }
 
-func (st *storageClientBackendContractManager) IsRevisionSessionDone(contractID storage.ContractID) bool {
+func (st *storageClientBackendContractManager) IsContractRevising(hostID enode.ID) bool {
 	return false
 }

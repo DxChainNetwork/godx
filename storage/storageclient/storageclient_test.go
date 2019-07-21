@@ -127,6 +127,10 @@ func (b *BackendTest) GetStorageHostSetting(hostEnodeUrl string, config *storage
 	return nil
 }
 
+func (b *BackendTest) IsRevising(hostID enode.ID) bool {
+	return false
+}
+
 func (b *BackendTest) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	var feed event.Feed
 	c := make(chan int)
@@ -141,12 +145,8 @@ func (b *BackendTest) GetBlockChain() *core.BlockChain {
 	return &core.BlockChain{}
 }
 
-func (b *BackendTest) SetupStorageConnection(hostEnodeUrl string) (*storage.Session, error) {
-	return &storage.Session{}, nil
-}
-
-func (b *BackendTest) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return nil
+func (b *BackendTest) SetupConnection(enodeURL string) (storage.Peer, error) {
+	return nil, nil
 }
 
 func (b *BackendTest) AccountManager() *accounts.Manager {

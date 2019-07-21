@@ -174,11 +174,7 @@ func (st *storageClientBackendTestData) AccountManager() *accounts.Manager {
 	return nil
 }
 
-func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeURL string) error {
-	return nil
-}
-
-func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
+func (st *storageClientBackendTestData) SetupConnection(enodeURL string) (storage.Peer, error) {
 	return nil, nil
 }
 
@@ -188,4 +184,12 @@ func (st *storageClientBackendTestData) SendStorageContractCreateTx(clientAddr c
 
 func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	return
+}
+
+func (st *storageClientBackendTestData) IsContractRevising(hostID enode.ID) bool {
+	return false
+}
+
+func (st *storageClientBackendTestData) GetPaymentAddress() (common.Address, error) {
+	return common.Address{}, nil
 }

@@ -27,7 +27,7 @@ func (h *StorageHost) UploadHandler(sp storage.Peer, uploadReqMsg p2p.Msg) {
 	// Read upload request
 	var uploadRequest storage.UploadRequest
 	if err := uploadReqMsg.Decode(&uploadRequest); err != nil {
-		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error)
+		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error())
 		return
 	}
 
