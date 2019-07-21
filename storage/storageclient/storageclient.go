@@ -602,9 +602,6 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		sp.SendRevisionStop()
 	}()
 
-	// ensure we send DownloadStop before returning
-	defer close(doneChan)
-
 	// read responses
 	var hostSig []byte
 	for _, sec := range req.Sections {
@@ -614,11 +611,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		// if host send negotiation stop msg, client should return
+		if msg.Code == storage.NegotiationStopMsg {
+			return
 		}
 
 		err = msg.Decode(&resp)
@@ -663,11 +658,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		// if host send negotiation stop msg, client should return
+		if msg.Code == storage.NegotiationStopMsg {
+			return
 		}
 
 		err = msg.Decode(&resp)
@@ -683,6 +676,20 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	err = contract.CommitDownload(walTxn, newRevision, price)
 	if err != nil {
 		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
+	}
+
+	// after downloading data, client should send negotiation stop msg to host
+	close(doneChan)
+
+	// if client has not received negotiation stop msg from host, should wait for it
+	msg, err := sp.ClientWaitContractResp()
+	if err != nil {
+		return err
+	}
+
+	// if the last msg is not stop, return err
+	if msg.Code != storage.NegotiationStopMsg {
+		return errors.New("expected 'stop' msg from host, got " + string(msg.Code))
 	}
 
 	return nil
