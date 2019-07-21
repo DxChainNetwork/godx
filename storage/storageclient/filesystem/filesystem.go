@@ -94,8 +94,8 @@ func newFileSystem(persistDir string, contractor contractManager, disrupter disr
 		logger:            log.New("module", "filesystem"),
 		disrupter:         disrupter,
 		unfinishedUpdates: make(map[storage.DxPath]*dirMetadataUpdate),
-		repairNeeded:      make(chan struct{}),
-		stuckFound:        make(chan struct{}),
+		repairNeeded:      make(chan struct{}, 1),
+		stuckFound:        make(chan struct{}, 1),
 	}
 }
 

@@ -38,6 +38,11 @@ func (c *AlwaysSuccessContractManager) HostHealthMapByID(ids []enode.ID) storage
 	return table
 }
 
+// HostHealthMap is not used by test case
+func (c *AlwaysSuccessContractManager) HostHealthMap() storage.HostHealthInfoTable {
+	return make(storage.HostHealthInfoTable)
+}
+
 // AlwaysSuccessContractManager is the contractManager that always return wrong condition for all host keys
 type alwaysFailContractManager struct{}
 
@@ -51,6 +56,11 @@ func (c *alwaysFailContractManager) HostHealthMapByID(ids []enode.ID) storage.Ho
 		}
 	}
 	return table
+}
+
+// HostHealthMap is not used by test case
+func (c *alwaysFailContractManager) HostHealthMap() storage.HostHealthInfoTable {
+	return make(storage.HostHealthInfoTable)
 }
 
 // randomContractManager is the contractManager that return condition is random possibility

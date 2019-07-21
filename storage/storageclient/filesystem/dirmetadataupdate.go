@@ -314,7 +314,6 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 				return
 			}
 			md := d.Metadata()
-			// TODO: Test this
 			if md.Health < dxfile.RepairHealthThreshold {
 				select {
 				case fs.repairNeeded <- struct{}{}:
@@ -493,7 +492,6 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 
 // applyDxDirMetadata apply the calculated metadata to the dxdir path
 func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata) error {
-	//fmt.Printf("applying %v health: %d\n", path.Path, md.Health)
 	var d *dxdir.DirSetEntryWithID
 	var err error
 	d, err = fs.dirSet.NewDxDir(path)

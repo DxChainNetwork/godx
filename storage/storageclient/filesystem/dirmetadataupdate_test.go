@@ -191,13 +191,20 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 			t.Errorf("test %d StuckHealth unexpected. Expect %v, got %v", index, stuckHealth, md.StuckHealth)
 		}
 		if md.NumStuckSegments != numStuckSegments {
-			t.Errorf("test %d numStuckSegmetns unexpected. Expect %v, Got %v", index, numStuckSegments, md.NumStuckSegments)
+			t.Errorf("test %d numStuckSegments unexpected. Expect %v, Got %v", index, numStuckSegments, md.NumStuckSegments)
 		}
 		if md.MinRedundancy != minRedundancy {
 			t.Errorf("test %d minRedundancy unexpected. Expect %v, Got %v", index, minRedundancy, md.MinRedundancy)
 		}
 		if err = dir.Close(); err != nil {
 			t.Fatal(err)
+		}
+		if _, ok := test.contractor.(*alwaysFailContractManager); ok {
+			select {
+			case <-fs.stuckFound:
+			default:
+				t.Fatalf("stuck not found for test[%v]", index)
+			}
 		}
 		fs.postTestCheck(t, true, true, nil)
 	}
