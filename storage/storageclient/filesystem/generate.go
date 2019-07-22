@@ -88,12 +88,12 @@ func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate flo
 	select {
 	case err := <-errChan:
 		return err
-	case <-time.After(100 * time.Millisecond * time.Duration(maxDepth) * time.Duration(numFiles)):
+	case <-time.After(200 * time.Millisecond * time.Duration(maxDepth) * time.Duration(numFiles)):
 		return fmt.Errorf("createRandomFiles time out")
 	case <-wait:
 	}
 	// wait for all the updates to finish
-	if err = fs.waitForUpdatesComplete(100 * time.Millisecond * time.Duration(maxDepth) * time.Duration(numFiles)); err != nil {
+	if err = fs.waitForUpdatesComplete(200 * time.Millisecond * time.Duration(maxDepth) * time.Duration(numFiles)); err != nil {
 		return err
 	}
 	return nil
