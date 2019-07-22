@@ -36,7 +36,6 @@ import (
 )
 
 var (
-	zeroValue  = new(big.Int).SetInt64(0)
 	extraRatio = 0.02
 )
 
@@ -171,6 +170,7 @@ func (client *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backe
 	return nil
 }
 
+// Close method will be used to send storage
 func (client *StorageClient) Close() error {
 	client.log.Info("Closing The Contract Manager")
 	client.contractManager.Stop()
@@ -224,10 +224,6 @@ func (client *StorageClient) ActiveContracts() (activeContracts []ActiveContract
 
 	return
 }
-
-//func (client *StorageClient) CancelContracts() (err error) {
-//	return client.contractManager.CancelStorageContract()
-//}
 
 // SetClientSetting will config the client setting based on the value provided
 // it will set the bandwidth limit, rentPayment, and ipViolation check
@@ -963,7 +959,7 @@ func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 	return err
 }
 
-//GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
+// GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
 func (client *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	precompiled := vm.PrecompiledEVMFileContracts
 	block, err := client.ethBackend.GetBlockByHash(blockHash)
@@ -995,7 +991,7 @@ func (client *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.H
 	return
 }
 
-//GetPaymentAddress get the account address used to sign the storage contract.
+// GetPaymentAddress get the account address used to sign the storage contract.
 // If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 	client.lock.Lock()
