@@ -47,7 +47,7 @@ type (
 // createRandomFiles create random files of numFiles. The file structure is defined randomly by
 // goDeepRate, goWideRate, and maxDepth. More info about the params please read comment at dirTree
 // missRate is the rate that a sector data is missing. Aimed for test the API of uploaded files
-func (fs *FileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate float32, maxDepth int, missRate float32) error {
+func (fs *fileSystem) createRandomFiles(numFiles int, goDeepRate, goWideRate float32, maxDepth int, missRate float32) error {
 	dt := newDirTree(goDeepRate, goWideRate, maxDepth)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -112,7 +112,7 @@ func tempDir(dirs ...string) storage.SysPath {
 }
 
 // newEmptyTestFileSystem creates an empty file system used for testing
-func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractManager, disrupter disrupter) *FileSystem {
+func newEmptyTestFileSystem(t *testing.T, extraNaming string, contractor contractManager, disrupter disrupter) *fileSystem {
 	var rootDir storage.SysPath
 	if len(extraNaming) == 0 {
 		rootDir = tempDir(t.Name())
@@ -197,7 +197,7 @@ func (dt dirTree) randomPath() (storage.DxPath, error) {
 }
 
 // waitForUpdatesComplete is the helper function that wait for update execution
-func (fs *FileSystem) waitForUpdatesComplete(timeout time.Duration) error {
+func (fs *fileSystem) waitForUpdatesComplete(timeout time.Duration) error {
 	c := make(chan struct{})
 	// Wait until update complete
 	go func() {

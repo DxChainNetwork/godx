@@ -13,7 +13,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// TODO(mzhang): implement this.
 // contractManager is the contractManager interface used in file system
 type contractManager interface {
 	// HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by input

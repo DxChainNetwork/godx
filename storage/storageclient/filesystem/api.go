@@ -11,12 +11,12 @@ import (
 
 // PublicFileSystemDebugAPI is the APIs for the file system
 type PublicFileSystemDebugAPI struct {
-	fs *FileSystem
+	fs *fileSystem
 }
 
 // NewPublicFileSystemDebugAPI is the function to create the PublicFileSystem API
 // with the input file system
-func NewPublicFileSystemDebugAPI(fs *FileSystem) *PublicFileSystemDebugAPI {
+func NewPublicFileSystemDebugAPI(fs *fileSystem) *PublicFileSystemDebugAPI {
 	return &PublicFileSystemDebugAPI{fs}
 }
 
@@ -41,11 +41,11 @@ func (api *PublicFileSystemDebugAPI) CreateRandomFiles(numFiles int) string {
 
 // PublicFileSystemAPI is the api for file system
 type PublicFileSystemAPI struct {
-	fs *FileSystem
+	fs *fileSystem
 }
 
 // NewPublicFileSystemAPI creates a new file system api
-func NewPublicFileSystemAPI(fs *FileSystem) *PublicFileSystemAPI {
+func NewPublicFileSystemAPI(fs *fileSystem) *PublicFileSystemAPI {
 	return &PublicFileSystemAPI{fs}
 }
 

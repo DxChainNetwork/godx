@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,8 +30,8 @@ import (
 // ErrNoRepairNeeded is the error that no repair is needed
 var ErrNoRepairNeeded = errors.New("no repair needed")
 
-// FileSystem is the structure for a file system that include a fileSet and a dirSet
-type FileSystem struct {
+// fileSystem is the structure for a file system that include a fileSet and a dirSet
+type fileSystem struct {
 	// fileRootDir is the root directory where the files locates
 	fileRootDir storage.SysPath
 
@@ -53,7 +54,7 @@ type FileSystem struct {
 	// updateWal is the wal responsible for
 	updateWal *writeaheadlog.Wal
 
-	// tm is the thread manager for manage the threads in FileSystem
+	// tm is the thread manager for manage the threads in fileSystem
 	tm *threadmanager.ThreadManager
 
 	// unfinishedUpdates is the field for the mapping from DxPath to the directory to be
@@ -77,16 +78,16 @@ type FileSystem struct {
 	stuckFound chan struct{}
 }
 
-// New is the public function used for creating a production FileSystem
-func New(persistDir string, contractor contractManager) *FileSystem {
+// New is the public function used for creating a production fileSystem
+func New(persistDir string, contractor contractManager) *fileSystem {
 	d := newStandardDisrupter()
 	return newFileSystem(persistDir, contractor, d)
 }
 
 // newFileSystem creates a new file system with the standardDisrupter
-func newFileSystem(persistDir string, contractor contractManager, disrupter disrupter) *FileSystem {
-	// create the FileSystem
-	return &FileSystem{
+func newFileSystem(persistDir string, contractor contractManager, disrupter disrupter) *fileSystem {
+	// create the fileSystem
+	return &fileSystem{
 		fileRootDir:       storage.SysPath(filepath.Join(persistDir, filesDirectory)),
 		persistDir:        storage.SysPath(persistDir),
 		contractManager:   contractor,
@@ -101,7 +102,7 @@ func newFileSystem(persistDir string, contractor contractManager, disrupter disr
 
 // Start is the function that is called for starting the file system service.
 // It open the wals, apply all transactions, and start the thread loopRepairUnfinishedDirMetadataUpdate
-func (fs *FileSystem) Start() error {
+func (fs *fileSystem) Start() error {
 	// open the fileWal
 	if err := fs.loadFileWal(); err != nil {
 		return fmt.Errorf("cannot start the file system: %v", err)
@@ -121,13 +122,8 @@ func (fs *FileSystem) Start() error {
 	return nil
 }
 
-// OpenFile opens the DxFile specified by the path
-func (fs *FileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
-	return fs.fileSet.Open(path)
-}
-
 // Close will terminate all threads opened by file system
-func (fs *FileSystem) Close() error {
+func (fs *fileSystem) Close() error {
 	var fullErr error
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
@@ -143,8 +139,33 @@ func (fs *FileSystem) Close() error {
 	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
+// OpenFile opens the DxFile specified by the path
+func (fs *fileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
+	return fs.fileSet.Open(path)
+}
+
+// OpenDxDir opens the dxdir in the file system
+func (fs *fileSystem) OpenDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error) {
+	return fs.dirSet.Open(path)
+}
+
+// NewDxDir creates a new dxdir specified by path
+func (fs *fileSystem) NewDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error) {
+	return fs.dirSet.NewDxDir(path)
+}
+
+// NewDxFile creates a new dxfile in the file system
+func (fs *fileSystem) NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*dxfile.FileSetEntryWithID, error) {
+	return fs.fileSet.NewDxFile(dxPath, sourcePath, force, erasureCode, cipherKey, fileSize, fileMode)
+}
+
+// Delete delete the dxfile from the file system
+func (fs *fileSystem) DeleteDxFile(dxPath storage.DxPath) error {
+	return fs.fileSet.Delete(dxPath)
+}
+
 // SelectDxFileToFix selects a file with the health of highest priority to repair
-func (fs *FileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
+func (fs *fileSystem) SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error) {
 	curDir, err := fs.dirSet.Open(storage.RootDxPath())
 	if err != nil {
 		return nil, err
@@ -219,7 +240,7 @@ LOOP:
 
 // RandomStuckDirectory randomly pick a stuck directory to fix. The possibility to pick
 // is proportion to the value of numStuckSegments
-func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
+func (fs *fileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 	path := storage.RootDxPath()
 	curDir, err := fs.dirSet.Open(path)
 	if err != nil {
@@ -266,7 +287,7 @@ func (fs *FileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 
 // OldestLastTimeHealthCheck find the dxpath of the directory with the oldest lastTimeHealthCheck
 // TODO: test this function
-func (fs *FileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
+func (fs *fileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
 	path := storage.RootDxPath()
 	dir, err := fs.dirSet.Open(path)
 	if err != nil {
@@ -321,26 +342,18 @@ func (fs *FileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, er
 }
 
 // RepairNeededChan return a channel that signals a repair is needed
-func (fs *FileSystem) RepairNeededChan() chan struct{} {
+func (fs *fileSystem) RepairNeededChan() chan struct{} {
 	return fs.repairNeeded
 }
 
 // StuckFoundChan returns a channel that signals a stuck segment is found
-func (fs *FileSystem) StuckFoundChan() chan struct{} {
+func (fs *fileSystem) StuckFoundChan() chan struct{} {
 	return fs.stuckFound
-}
-
-func (fs *FileSystem) DirSet() *dxdir.DirSet{
-	return fs.dirSet
-}
-
-func (fs *FileSystem) FileSet() *dxfile.FileSet {
-	return fs.fileSet
 }
 
 // dirsAndFiles return the dxdirs and dxfiles under the path. return DxPath for DxDir and DxFiles, and errors
 // The returned type map is to add the randomness in file selection
-func (fs *FileSystem) dirsAndFiles(path storage.DxPath) (map[storage.DxPath]struct{}, map[storage.DxPath]struct{}, error) {
+func (fs *fileSystem) dirsAndFiles(path storage.DxPath) (map[storage.DxPath]struct{}, map[storage.DxPath]struct{}, error) {
 	fileInfos, err := ioutil.ReadDir(string(fs.fileRootDir.Join(path)))
 	if err != nil {
 		return nil, nil, err
@@ -378,7 +391,7 @@ func (fs *FileSystem) dirsAndFiles(path storage.DxPath) (map[storage.DxPath]stru
 }
 
 // loadFileWal read the fileWal
-func (fs *FileSystem) loadFileWal() error {
+func (fs *fileSystem) loadFileWal() error {
 	fileWalPath := filepath.Join(string(fs.persistDir), fileWalName)
 	fileWal, unappliedTxns, err := writeaheadlog.New(fileWalPath)
 	if err != nil {
@@ -399,7 +412,7 @@ func (fs *FileSystem) loadFileWal() error {
 }
 
 // loadUpdateWal load the update Wal from disk, and apply unfinished updates
-func (fs *FileSystem) loadUpdateWal() error {
+func (fs *fileSystem) loadUpdateWal() error {
 	updateWalPath := filepath.Join(string(fs.persistDir), updateWalName)
 	updateWal, unappliedTxns, err := writeaheadlog.New(updateWalPath)
 	if err != nil {
@@ -425,7 +438,7 @@ func (fs *FileSystem) loadUpdateWal() error {
 
 // loopRepairUnfinishedDirMetadataUpdate is the permanent loop for repairing the unfinished
 // dirMetadataUpdate.
-func (fs *FileSystem) loopRepairUnfinishedDirMetadataUpdate() {
+func (fs *fileSystem) loopRepairUnfinishedDirMetadataUpdate() {
 	err := fs.tm.Add()
 	if err != nil {
 		return
@@ -448,7 +461,7 @@ func (fs *FileSystem) loopRepairUnfinishedDirMetadataUpdate() {
 }
 
 // repairUnfinishedDirMetadataUpdate Initialize and update all
-func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
+func (fs *fileSystem) repairUnfinishedDirMetadataUpdate() error {
 	// make a copy of the unfinishedUpdates
 	unfinishedUpdates := make(map[storage.DxPath]*dirMetadataUpdate)
 	fs.lock.Lock()
@@ -477,12 +490,12 @@ func (fs *FileSystem) repairUnfinishedDirMetadataUpdate() error {
 }
 
 // disrupt is the wrapper to disrupt with fs.standardDisrupter
-func (fs *FileSystem) disrupt(s string) bool {
+func (fs *fileSystem) disrupt(s string) bool {
 	return fs.disrupter.disrupt(s)
 }
 
 // fileList returns a brief file info list
-func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
+func (fs *fileSystem) fileList() ([]storage.FileBriefInfo, error) {
 	if err := fs.tm.Add(); err != nil {
 		return []storage.FileBriefInfo{}, err
 	}
@@ -521,7 +534,7 @@ func (fs *FileSystem) fileList() ([]storage.FileBriefInfo, error) {
 
 // fileDetailedInfo returns detailed information for a file specified by the path
 // If the input table is empty, the code the query the contractManager for health info
-func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error) {
+func (fs *fileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error) {
 	file, err := fs.fileSet.Open(path)
 	if err != nil {
 		return storage.FileInfo{}, err
@@ -554,7 +567,7 @@ func (fs *FileSystem) fileDetailedInfo(path storage.DxPath, table storage.HostHe
 
 // fileBriefInfo returns the brief info about a file specified by the path
 // If the input table is empty, the code the query the contractManager for health info
-func (fs *FileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileBriefInfo, error) {
+func (fs *fileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileBriefInfo, error) {
 	file, err := fs.fileSet.Open(path)
 	if err != nil {
 		return storage.FileBriefInfo{}, err
@@ -602,6 +615,6 @@ func randomUint32() uint32 {
 	return binary.LittleEndian.Uint32(b)
 }
 
-func (fs *FileSystem) FileRootDir() storage.SysPath{
+func (fs *fileSystem) FileRootDir() storage.SysPath {
 	return fs.fileRootDir
 }

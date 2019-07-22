@@ -81,7 +81,7 @@ func (sc *StorageClient) GetStorageHostManager() *storagehostmanager.StorageHost
 
 // DirInfo returns the Directory Information of the dxdir
 func (sc *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
-	entry, err := sc.fileSystem.DirSet().Open(dxPath)
+	entry, err := sc.fileSystem.OpenDxDir(dxPath)
 	if err != nil {
 		return storage.DirectoryInfo{}, err
 	}
@@ -179,7 +179,7 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 }
 
 // GetFileSystem will get the file system
-func (sc *StorageClient) GetFileSystem() *filesystem.FileSystem {
+func (sc *StorageClient) GetFileSystem() *filesystem.fileSystem {
 	return sc.fileSystem
 }
 
