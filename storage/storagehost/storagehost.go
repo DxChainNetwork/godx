@@ -48,10 +48,14 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 }
 
+// RetrieveExternalConfig is used to get the storage host's external
+// configuration
 func (h *StorageHost) RetrieveExternalConfig() storage.HostExtConfig {
 	return h.externalConfig()
 }
 
+// GetCurrentBlockHeight is used to retrieve the current
+// block height saved in the storage host
 func (h *StorageHost) GetCurrentBlockHeight() uint64 {
 	h.lock.RLock()
 	defer h.lock.RUnlock()

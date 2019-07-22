@@ -16,13 +16,16 @@ import (
 )
 
 var (
-	// when the client has no contract with host, we will terminate the worker
+	// ErrNoContractsWithHost will be used when the client has no contract with host
+	// the worker will be terminated
 	ErrNoContractsWithHost = errors.New("no contract with host which is need to terminate")
 
-	// when we can't get host info, we will terminate the worker
+	// ErrUnableRetrieveHostInfo is used when host information cannot be retrieved
+	// worker will be terminated
 	ErrUnableRetrieveHostInfo = errors.New("can't retrieve host info")
 
-	// when client and host is renewing contract, we could wait for little time
+	// ErrContractRenewing is used when client and host is renewing contract
+	// the worker will return directly
 	ErrContractRenewing = errors.New("client and host is renewing contract")
 )
 

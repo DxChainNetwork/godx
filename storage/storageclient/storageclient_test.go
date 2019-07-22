@@ -123,7 +123,7 @@ func (b *BackendTest) APIs() []rpc.API {
 	return res
 }
 
-func (b *BackendTest) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+func (b *BackendTest) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
 	return nil
 }
 

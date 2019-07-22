@@ -10,7 +10,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 )
 
-// update current storage contract revision with its revision number incremented, and cost transferred from the client to the host.
+// NewRevision update current storage contract revision with its revision number incremented, and cost transferred from the client to the host.
 func NewRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
 	rev := current
 

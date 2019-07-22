@@ -16,7 +16,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
-// ActiveContractAPI is used to re-format the contract information that is going to
+// ActiveContractsAPIDisplay is used to re-format the contract information that is going to
 // be displayed on the console
 type ActiveContractsAPIDisplay struct {
 	ContractID   string
@@ -75,13 +75,13 @@ func (api *PublicStorageClientAPI) HostRank() (evaluation []storagehostmanager.S
 	return api.sc.storageHostManager.StorageHostRanks()
 }
 
-// ActiveContracts will retrieve all active contracts and display their general information
+// Contracts will retrieve all active contracts and display their general information
 func (api *PublicStorageClientAPI) Contracts() (activeContracts []ActiveContractsAPIDisplay) {
 	activeContracts = api.sc.ActiveContracts()
 	return
 }
 
-// ContractDetail will retrieve detailed contract information
+// Contract will retrieve detailed contract information
 func (api *PublicStorageClientAPI) Contract(contractID string) (detail ContractMetaDataAPIDisplay, err error) {
 	// convert the string into contractID format
 	var convertContractID storage.ContractID
@@ -103,12 +103,12 @@ func (api *PublicStorageClientAPI) Contract(contractID string) (detail ContractM
 	return
 }
 
-//GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+// PaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (api *PublicStorageClientAPI) PaymentAddress() (common.Address, error) {
 	return api.sc.GetPaymentAddress()
 }
 
-// download remote file by sync mode
+// DownloadSync is used to download remote file by sync mode
 // NOTE: RPC not support async download, because it is stateless, should block until download task done.
 func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string) (string, error) {
 	p := storage.DownloadParameters{

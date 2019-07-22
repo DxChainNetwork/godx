@@ -1016,6 +1016,8 @@ func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
+// IsContractRevising will be used to check if the contract is currently
+// in the middle of the revision
 func (client *StorageClient) IsContractRevising(hostID enode.ID) bool {
 	return client.ethBackend.IsRevising(hostID)
 }

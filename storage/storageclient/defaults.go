@@ -36,7 +36,7 @@ const (
 )
 
 const (
-	// Max memory available
+	// DefaultMaxMemory available
 	DefaultMaxMemory = uint64(3 * 1 << 28)
 	extraRatio       = 0.02
 )

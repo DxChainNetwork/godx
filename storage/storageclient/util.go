@@ -26,7 +26,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
-// ActiveContractAPI is used to re-format the contract information that is going to
+// ActiveContractsAPI is used to re-format the contract information that is going to
 // be displayed on the console
 type ActiveContractsAPI struct {
 	ID           storage.ContractID
@@ -64,12 +64,12 @@ func (client *StorageClient) GetTxByBlockHash(blockHash common.Hash) (types.Tran
 
 // GetStorageHostSetting will be used to get the storage host's external setting based on the
 // peerID provided
-func (client *StorageClient) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
-	return client.ethBackend.GetStorageHostSetting(hostEnodeUrl, config)
+func (client *StorageClient) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
+	return client.ethBackend.GetStorageHostSetting(hostEnodeURL, config)
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
-// in the blockchain
+// in the block chain
 func (client *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return client.ethBackend.SubscribeChainChangeEvent(ch)
 }
@@ -147,30 +147,38 @@ func (client *StorageClient) DirList(dxPath storage.DxPath) ([]storage.Directory
 	return dirs, files, nil
 }
 
+// SetupConnection will establish the secure P2P connection with the node provided
 func (client *StorageClient) SetupConnection(enodeURL string) (storage.Peer, error) {
 	return client.ethBackend.SetupConnection(enodeURL)
 }
 
+// AccountManager will be used to acquire the account manager object which will be
+// used to sign the contract, find the account address, and etc.
 func (client *StorageClient) AccountManager() *accounts.Manager {
 	return client.ethBackend.AccountManager()
 }
 
+// ChainConfig will be used to retrieve the current chain configuration
 func (client *StorageClient) ChainConfig() *params.ChainConfig {
 	return client.ethBackend.ChainConfig()
 }
 
+// CurrentBlock is used to retrieve the current block number
 func (client *StorageClient) CurrentBlock() *types.Block {
 	return client.ethBackend.CurrentBlock()
 }
 
+// SendTx will be used to send the transaction to the transaction pool
 func (client *StorageClient) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return client.ethBackend.SendTx(ctx, signedTx)
 }
 
+// SuggestPrice returns the recommended gas price
 func (client *StorageClient) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return client.ethBackend.SuggestPrice(ctx)
 }
 
+// GetPoolNonce returns the canonical nonce for the managed or un-managed account
 func (client *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return client.ethBackend.GetPoolNonce(ctx, addr)
 }
@@ -180,12 +188,12 @@ func (client *StorageClient) GetFileSystem() *filesystem.FileSystem {
 	return client.fileSystem
 }
 
-// send contract create tx
+// SendStorageContractCreateTx is used to send the contract create transaction to the transaction pool
 func (client *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
 	return client.info.StorageTx.SendContractCreateTX(clientAddr, input)
 }
 
-// calculate the proof ranges that should be used to verify a
+// CalculateProofRanges will calculate the proof ranges which is used to verify a
 // pre-modification Merkle diff proof for the specified actions.
 func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkle.SubTreeLimit {
 	newNumSectors := oldNumSectors
@@ -214,7 +222,7 @@ func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) 
 	return oldRanges
 }
 
-// modify the proof ranges produced by calculateProofRanges
+// ModifyProofRanges will modify the proof ranges produced by calculateProofRanges
 // to verify a post-modification Merkle diff proof for the specified actions.
 func ModifyProofRanges(proofRanges []merkle.SubTreeLimit, actions []storage.UploadAction, numSectors uint64) []merkle.SubTreeLimit {
 	for _, action := range actions {
@@ -230,7 +238,7 @@ func ModifyProofRanges(proofRanges []merkle.SubTreeLimit, actions []storage.Uplo
 	return proofRanges
 }
 
-// modify the leaf hashes of a Merkle diff proof to verify a
+// ModifyLeaves will modify the leaf hashes of a Merkle diff proof to verify a
 // post-modification Merkle diff proof for the specified actions.
 func ModifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
 	for _, action := range actions {

@@ -14,6 +14,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// ContractCreateHandler will be used to handle the contract create request
+// sent by the storage client
 func (h *StorageHost) ContractCreateHandler(sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var contractCreateErr error
 	defer func() {
