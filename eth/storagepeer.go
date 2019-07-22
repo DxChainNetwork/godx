@@ -248,3 +248,8 @@ func (p *peer) DoneRequestingConfig() {
 	default:
 	}
 }
+
+// IsStaticConn checks if the connection is static connection
+func (p *peer) IsStaticConn() bool {
+	return p.Peer.Info().Network.Static
+}

@@ -186,6 +186,8 @@ type Server struct {
 	addpeer       chan *conn
 	delpeer       chan peerDrop
 
+	setstatic chan *enode.Node
+
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
 	log      log.Logger
@@ -432,6 +434,16 @@ func (s *sharedUDPConn) Close() error {
 	return nil
 }
 
+// SetStatic will convert the existed connection
+// to the static connection. In addition, the node
+// will be added to the static dialstate
+func (srv *Server) SetStatic(node *enode.Node) {
+	select {
+	case srv.setstatic <- node:
+	case <-srv.quit:
+	}
+}
+
 // Start starts running the server.
 // Servers can not be re-used after stopping.
 func (srv *Server) Start() (err error) {
@@ -485,6 +497,7 @@ func (srv *Server) Start() (err error) {
 	srv.removetrusted = make(chan *enode.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+	srv.setstatic = make(chan *enode.Node)
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -812,6 +825,18 @@ running:
 			// Mark any already-connected peer as trusted
 			if p, ok := peers[n.ID()]; ok {
 				p.rw.set(trustedConn, true)
+			}
+
+		// by setting the connection to static connection, the
+		// node information will be added to the dialstate. If
+		// the connection already existed, change the connection type
+		// to static
+		case n := <-srv.setstatic:
+			dialstate.addStatic(n)
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(staticDialedConn, true)
+				p.rw.set(inboundConn, false)
+				p.rw.set(dynDialedConn, false)
 			}
 
 		// remove the node from trusted node list

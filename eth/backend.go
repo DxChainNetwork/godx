@@ -679,6 +679,9 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 	// check if the peer is already existed
 	peer := s.protocolManager.peers.Peer(peerID)
 	if peer != nil {
+		// if the connection already existed, convert the connection
+		// to the static connection
+		s.server.SetStatic(destNode)
 		// connection is already established
 		storagePeer = peer
 		return
@@ -690,6 +693,12 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 	for {
 		peer = s.protocolManager.peers.Peer(peerID)
 		if peer != nil {
+			// check if the connection is static connection
+			// if not, set the connection to static connection
+			if !peer.IsStaticConn() {
+				s.server.SetStatic(destNode)
+			}
+			// assign the peer and return
 			storagePeer = peer
 			return
 		}
