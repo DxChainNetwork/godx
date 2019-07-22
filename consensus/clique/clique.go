@@ -242,6 +242,11 @@ func (c *Clique) Author(header *types.Header) (common.Address, error) {
 	return ecrecover(header, c.signatures)
 }
 
+// Coinbase implements consensus.Engine, returning the benefits owner of the given block
+func (c *Clique) Coinbase(header *types.Header) (common.Address, error) {
+	return header.Coinbase, nil
+}
+
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *Clique) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
 	return c.verifyHeader(chain, header, nil)

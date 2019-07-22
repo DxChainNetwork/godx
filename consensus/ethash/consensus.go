@@ -80,6 +80,11 @@ func (ethash *Ethash) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
 
+// Coinbase implements consensus.Engine, returning the benefits owner of the given block
+func (ethash *Ethash) Coinbase(header *types.Header) (common.Address, error) {
+	return header.Coinbase, nil
+}
+
 // VerifyHeader checks whether a header conforms to the consensus rules of the
 // stock Ethereum ethash engine.
 func (ethash *Ethash) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
