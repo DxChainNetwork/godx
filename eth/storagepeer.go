@@ -129,6 +129,9 @@ func (p *peer) ClientWaitContractResp() (msg p2p.Msg, err error) {
 	case <-timeout:
 		err = errors.New("timeout -> client waits too long for contract response from the host")
 		return
+	case <-p.StopChan():
+		err = errors.New("program exist")
+		return
 	}
 }
 
@@ -141,6 +144,9 @@ func (p *peer) HostWaitContractResp() (msg p2p.Msg, err error) {
 		return
 	case <-timeout:
 		err = errors.New("timeout -> host waits too long for contract response from the host")
+		return
+	case <-p.StopChan():
+		err = errors.New("program exist")
 		return
 	}
 }
