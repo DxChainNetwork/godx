@@ -13,7 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// handleUpload is the upload function to handle upload negotiation
+// UploadHandler handles the upload negotiation
 func (h *StorageHost) UploadHandler(sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var uploadErr error
 

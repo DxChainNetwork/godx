@@ -15,7 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// handleDownload is the function to be called for download negotiation
+// DownloadHandler handles the download negotiation
 func (h *StorageHost) DownloadHandler(sp storage.Peer, downloadReqMsg p2p.Msg) {
 	var downloadErr error
 
