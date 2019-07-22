@@ -16,7 +16,7 @@ import (
 
 // ContractCreateHandler will be used to handle the contract create request
 // sent by the storage client
-func (h *StorageHost) ContractCreateHandler(sp storage.Peer, contractCreateReqMsg p2p.Msg) {
+func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var contractCreateErr error
 	defer func() {
 		if contractCreateErr != nil {

@@ -2,14 +2,64 @@ package eth
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
-func (pm *ProtocolManager) hostConfigMsgHandler(p *peer, configMsg p2p.Msg) {
-	config := pm.eth.storageHost.RetrieveExternalConfig()
-	if err := p.SendStorageHostConfig(config); err != nil {
-		p.TriggerError(err)
+func (pm *ProtocolManager) hostConfigMsgHandler(p *peer, configMsg p2p.Msg) error {
+	// avoid multiple host config request calls attack
+	// generate too many go routines and used all resources
+	if err := p.HostConfigProcessing(); err != nil {
+		return err
 	}
+
+	// start the go routine, handle the host config request
+	// once done, release the channel
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		defer p.HostConfigProcessingDone()
+		config := pm.eth.storageHost.RetrieveExternalConfig()
+		if err := p.SendStorageHostConfig(config); err != nil {
+			p.TriggerError(err)
+		}
+	}()
+
+	return nil
+}
+
+func (pm *ProtocolManager) contractMsgHandler(p *peer, msg p2p.Msg) error {
+	// send the message to the hostContractMsg channel if the handler
+	// does not exist
+	select {
+	case p.hostContractMsg <- msg:
+	default:
+		err := errors.New("hostMsgScheduler error: message received before finishing the previous message handling")
+		log.Error("error handling hostContractMsg", "err", err.Error())
+		return err
+	}
+	return nil
+}
+
+func (pm *ProtocolManager) contractReqHandler(handler func(h *storagehost.StorageHost, sp storage.Peer, msg p2p.Msg), p *peer, msg p2p.Msg) error {
+	// avoid continuously contract related requests attack
+	// generate too many go routines and used all resources
+	if err := p.HostContractProcessing(); err != nil {
+		return err
+	}
+
+	// start the go routine, handle the host contract request
+	// once done, release the channel
+	go func() {
+		pm.wg.Add(1)
+		defer pm.wg.Done()
+		defer p.HostContractProcessingDone()
+		handler(pm.eth.storageHost, p, msg)
+	}()
+
+	return nil
 }
 
 func (pm *ProtocolManager) ethMsgHandler(p *peer) {

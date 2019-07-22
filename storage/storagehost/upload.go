@@ -14,7 +14,7 @@ import (
 )
 
 // UploadHandler handles the upload negotiation
-func (h *StorageHost) UploadHandler(sp storage.Peer, uploadReqMsg p2p.Msg) {
+func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var uploadErr error
 
 	defer func() {

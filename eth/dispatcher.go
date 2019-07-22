@@ -6,11 +6,18 @@ package eth
 
 import (
 	"errors"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
+
+var hostHandlers = map[uint64]func(h *storagehost.StorageHost, sp storage.Peer, msg p2p.Msg){
+	storage.ContractCreateReqMsg:   storagehost.ContractCreateHandler,
+	storage.ContractUploadReqMsg:   storagehost.UploadHandler,
+	storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
+}
 
 func (pm *ProtocolManager) msgDispatcher(msg p2p.Msg, p *peer) error {
 	switch {
@@ -75,76 +82,20 @@ func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) error {
 }
 
 func (pm *ProtocolManager) hostMsgScheduler(msg p2p.Msg, p *peer) error {
-	switch {
-	case msg.Code == storage.HostConfigReqMsg:
-		// avoid multiple host config request calls attack
-		// generate too many go routines and used all resources
-		if err := p.HostConfigProcessing(); err != nil {
-			return err
-		}
-
-		// start the go routine, handle the host config request
-		// once done, release the channel
-		go func() {
-			pm.wg.Add(1)
-			defer pm.wg.Done()
-			defer p.HostConfigProcessingDone()
-			pm.hostConfigMsgHandler(p, msg)
-		}()
-	case msg.Code == storage.ContractCreateReqMsg:
-		// avoid continuously contract create calls attack
-		// generate too many go routines and used all resources
-		if err := p.HostContractProcessing(); err != nil {
-			return err
-		}
-
-		// start the go routine, handle the host config request
-		// once done, release the channel
-		go func() {
-			pm.wg.Add(1)
-			defer pm.wg.Done()
-			defer p.HostContractProcessingDone()
-			pm.eth.storageHost.ContractCreateHandler(p, msg)
-		}()
-	case msg.Code == storage.ContractUploadReqMsg:
-		// avoid continuously contract create calls attack
-		// generate too many go routines and used all resources
-		if err := p.HostContractProcessing(); err != nil {
-			return err
-		}
-
-		// start the go routine, handle the host config request
-		// once done, release the channel
-		go func() {
-			pm.wg.Add(1)
-			defer pm.wg.Done()
-			defer p.HostContractProcessingDone()
-			pm.eth.storageHost.UploadHandler(p, msg)
-		}()
-	case msg.Code == storage.ContractDownloadReqMsg:
-		// avoid continuously contract download calls attack
-		// generate too many go routines and used all resources
-		if err := p.HostContractProcessing(); err != nil {
-			return err
-		}
-
-		// storage the go routine, handle the host config request
-		// once done, release the channel
-		go func() {
-			pm.wg.Add(1)
-			defer pm.wg.Done()
-			defer p.HostContractProcessingDone()
-			pm.eth.storageHost.DownloadHandler(p, msg)
-		}()
-
-	default:
-		select {
-		case p.hostContractMsg <- msg:
-		default:
-			err := errors.New("hostMsgScheduler error: message received before finishing the previous message handling")
-			log.Error("error handling hostContractMsg", "err", err.Error())
-			return err
-		}
+	// check if the message code is HostConfigReqMsg, which needs to be handled
+	// explicitly
+	if msg.Code == storage.HostConfigReqMsg {
+		return pm.hostConfigMsgHandler(p, msg)
 	}
-	return nil
+
+	// gets the handler based on the message code,
+	// if the handler does not exists, meaning it is not request message
+	// handle it as a dialogue message
+	handler, exists := hostHandlers[msg.Code]
+	if !exists {
+		return pm.contractMsgHandler(p, msg)
+	}
+
+	// if handler exists, handle it as the request
+	return pm.contractReqHandler(handler, p, msg)
 }

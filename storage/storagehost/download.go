@@ -16,7 +16,7 @@ import (
 )
 
 // DownloadHandler handles the download negotiation
-func (h *StorageHost) DownloadHandler(sp storage.Peer, downloadReqMsg p2p.Msg) {
+func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	var downloadErr error
 
 	defer func() {
