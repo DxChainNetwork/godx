@@ -113,6 +113,9 @@ func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {
 	case <-timeout:
 		err = errors.New("timeout -> client waits too long for config response from the host")
 		return
+	case <-p.StopChan():
+		err = errors.New("program exist")
+		return
 	}
 }
 

@@ -567,6 +567,7 @@ func (ps *peerSet) Close() {
 
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
+		p.Stop()
 	}
 	ps.closed = true
 }

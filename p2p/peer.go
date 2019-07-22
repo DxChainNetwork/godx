@@ -110,6 +110,7 @@ type Peer struct {
 	protoErr chan error
 	closed   chan struct{}   // used to indicate if the peer is closed already
 	disc     chan DiscReason // channel used to indicate the disconnection from the peer
+	stopChan chan struct{}
 
 	// events receives message send / receive events if set
 	events *event.Feed
@@ -124,6 +125,17 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 	peer := newPeer(conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
+}
+
+// StopChan returns the stop channel which used to indicate
+// that the program is exiting and the peer should be stopped
+func (p *Peer) StopChan() chan struct{} {
+	return p.stopChan
+}
+
+// Stop indicates that peer should be stopped
+func (p *Peer) Stop() {
+	close(p.stopChan)
 }
 
 // ID returns the peer node's public key. (Node ID)
@@ -196,6 +208,7 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		stopChan: make(chan struct{}),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags), // contains node id and the connFlag
 	}
 	return p
