@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
+// Negotiation related messages
 const (
-
 	// Client Handle Message Set
 	HostConfigRespMsg            = 0x20
 	ContractCreateHostSign       = 0x21

@@ -35,9 +35,10 @@ const (
 	MaxConsecutivePenalty = 10
 )
 
-// Max memory available
 const (
+	// Max memory available
 	DefaultMaxMemory = uint64(3 * 1 << 28)
+	extraRatio       = 0.02
 )
 
 // Default params about upload/download process

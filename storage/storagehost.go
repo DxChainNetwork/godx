@@ -23,7 +23,7 @@ type HostBackend interface {
 	AccountManager() *accounts.Manager
 }
 
-// Account manager is the interface for account.Manager to be used in storage host module
+// AccountManager is the interface for account.Manager to be used in storage host module
 type AccountManager interface {
 	Find(accounts.Account) (accounts.Wallet, error)
 	Wallets() []accounts.Wallet

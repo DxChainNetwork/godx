@@ -5,37 +5,17 @@
 package storage
 
 import (
-	"math/big"
-	"time"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"math/big"
 )
 
+// Defines upload mode
 const (
 	UploadActionAppend = "Append"
-	UploadActionTrim   = "Trim"
-	UploadActionSwap   = "Swap"
-	UploadActionUpdate = "Update"
-)
-
-const (
-
-	// HostSettingTime is the amount of time that host provide host settings
-	HostSettingTime = 60 * time.Second
-
-	// DownloadTime is the amount of time that the client and host have to negotiate a download request batch.
-	DownloadTime = 600 * time.Second
-
-	// ContractRevisionTime is the minimum amount of time that the client and host have to negotiate a storage contract revision.
-	ContractRevisionTime = 600 * time.Second
-
-	// the amount of time that the client and host have to negotiate a new storage contract.
-	ContractCreateTime = 360 * time.Second
 )
 
 type (
-
 	// ContractCreateRequest contains storage contract info and client pk
 	ContractCreateRequest struct {
 		StorageContract types.StorageContract

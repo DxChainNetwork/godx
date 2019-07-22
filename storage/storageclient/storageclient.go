@@ -35,10 +35,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
-var (
-	extraRatio = 0.02
-)
-
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
@@ -194,6 +190,8 @@ func (client *StorageClient) Close() error {
 	return fullErr
 }
 
+// DeleteFile will delete from the file system file set. The file
+// wil also be deleted from the disk
 func (client *StorageClient) DeleteFile(path storage.DxPath) error {
 	if err := client.tm.Add(); err != nil {
 		return err
