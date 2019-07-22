@@ -19,15 +19,10 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
-//////////////////////// *********************** //////////////////////////////
-
-//////////////////////// *********************** //////////////////////////////
-
 var (
 	// define the program running environment: test, prod
 	ENV = Env_Prod
 
-	// TODO 为了测试方便，调小参数默认值
 	DefaultMinSectors uint32 = 1
 	DefaultNumSectors uint32 = 2
 )

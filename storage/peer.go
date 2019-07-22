@@ -9,8 +9,14 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 )
 
+// ErrRequestingHostConfig is the error code used when the client asks host for its configuration multiple
+// times before the host finished handling the previous configuration request. Therefore, the host's evaluation
+// should not be deducted.
 var ErrRequestingHostConfig = errors.New("host configuration should only be requested one at a time")
 
+// Peer is the interface returned by the SetupConnection. The use of it is to allow eth.peer object
+// to be used in the storage model. All the methods provided in the Peer interface is used for negotiation
+// during the contract create, contract revision, contract renew, and configuration request
 type Peer interface {
 	TriggerError(error)
 	SendStorageHostConfig(config HostExtConfig) error
