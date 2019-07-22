@@ -714,7 +714,7 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
-func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostExtConfig) error {
+func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, config *storage.HostExtConfig) error {
 	// set up the connection to the storage host node
 	sp, err := s.SetupConnection(enodeURL)
 	if err != nil {
@@ -744,6 +744,17 @@ func (s *Ethereum) GetStorageHostSetting(enodeURL string, config *storage.HostEx
 	}
 
 	log.Info("Successfully get the storage host settings")
+
+	// once the setting is successfully retrieved, check the connection
+	// if the node is the static connection originally, do nothing
+	if s.server.IsAddedByUser(enodeID) {
+		return nil
+	}
+
+	// otherwise, stay connected but remove it from the static connection list, and change
+	// the connection type. The error message is ignored intentionally. If the parsing failed,
+	// there is no way to get the storage host config
+	_ = s.server.DeleteStatic(enodeURL)
 
 	return nil
 }

@@ -21,7 +21,7 @@ import (
 // EthBackend is an interface used to get methods implemented by Ethereum
 type EthBackend interface {
 	APIs() []rpc.API
-	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
@@ -42,7 +42,7 @@ type EthBackend interface {
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
-	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
 	SetupConnection(enodeURL string) (Peer, error)

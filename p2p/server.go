@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net"
 	"sort"
 	"sync"
@@ -186,7 +187,10 @@ type Server struct {
 	addpeer       chan *conn
 	delpeer       chan peerDrop
 
-	setstatic chan *enode.Node
+	// staticNode added by the user
+	staticNodesByUser map[enode.ID]struct{}
+	deleteStatic      chan *enode.Node
+	setstatic         chan *enode.Node
 
 	loopWG   sync.WaitGroup // loop, listenLoop
 	peerFeed event.Feed
@@ -444,6 +448,48 @@ func (srv *Server) SetStatic(node *enode.Node) {
 	}
 }
 
+// AddStaticByUser will add the static node added by the user
+// to the staticNodeByUser map
+func (srv *Server) AddStaticByUser(nodeID enode.ID) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	srv.staticNodesByUser[nodeID] = struct{}{}
+}
+
+// RemoveStaticByUser will remove the static node removed by the user
+// from the staticNodeByUser map
+func (srv *Server) RemoveStaticByUser(nodeID enode.ID) {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	delete(srv.staticNodesByUser, nodeID)
+}
+
+// IsAddedByUser checks if the static connection is declared
+// by the user
+func (srv *Server) IsAddedByUser(nodeID enode.ID) bool {
+	srv.lock.Lock()
+	defer srv.lock.Unlock()
+	_, exists := srv.staticNodesByUser[nodeID]
+	return exists
+}
+
+// DeleteStatic will remove the static task from the dialtask
+// it will also set the static connection to dynamic connection
+func (srv *Server) DeleteStatic(nodeURL string) error {
+	node, err := enode.ParseV4(nodeURL)
+	if err != nil {
+		return fmt.Errorf("failed to delete the static, the enodeURL is not valid: %s", err.Error())
+	}
+
+	// add it to the delete static channel
+	select {
+	case srv.deleteStatic <- node:
+	case <-srv.quit:
+	}
+
+	return nil
+}
+
 // Start starts running the server.
 // Servers can not be re-used after stopping.
 func (srv *Server) Start() (err error) {
@@ -497,7 +543,16 @@ func (srv *Server) Start() (err error) {
 	srv.removetrusted = make(chan *enode.Node)
 	srv.peerOp = make(chan peerOpFunc)
 	srv.peerOpDone = make(chan struct{})
+
 	srv.setstatic = make(chan *enode.Node)
+	srv.staticNodesByUser = make(map[enode.ID]struct{})
+	srv.deleteStatic = make(chan *enode.Node)
+
+	// add the pre-configured static nodes to the staticNodesByUser
+	// map
+	for _, node := range srv.Config.StaticNodes {
+		srv.staticNodesByUser[node.ID()] = struct{}{}
+	}
 
 	// setupLocalNode, setupListening, and setupDiscovery
 	if err := srv.setupLocalNode(); err != nil {
@@ -813,6 +868,16 @@ running:
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID()]; ok {
 				p.Disconnect(DiscRequested)
+			}
+
+		case n := <-srv.deleteStatic:
+			// remove the static node from the dialstate
+			// and change the connection type from static
+			// to dynamic
+			dialstate.removeStatic(n)
+			if p, ok := peers[n.ID()]; ok {
+				p.rw.set(dynDialedConn, true)
+				p.rw.set(staticDialedConn, false)
 			}
 
 		// Add node to trusted node list

@@ -238,7 +238,7 @@ func (shm *StorageHostManager) retrieveHostConfig(hi storage.HostInfo) (storage.
 	var config storage.HostExtConfig
 
 	// send message, and get host setting
-	err := shm.b.GetStorageHostSetting(hi.EnodeURL, &config)
+	err := shm.b.GetStorageHostSetting(hi.EnodeID, hi.EnodeURL, &config)
 	return config, err
 }
 
