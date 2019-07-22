@@ -135,18 +135,23 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	}
 }
 
+// InsertEthMsgBuffer will insert the ethereum p2p message into the
+// buffer list
 func (p *peer) InsertEthMsgBuffer(msg p2p.Msg) {
 	p.bufferLock.Lock()
 	defer p.bufferLock.Unlock()
 	p.ethMsgBuffer = append(p.ethMsgBuffer, msg)
 }
 
+// GetEthMsgBuffer will return the entire ethereum message buffer
 func (p *peer) GetEthMsgBuffer() []p2p.Msg {
 	p.bufferLock.RLock()
 	defer p.bufferLock.RUnlock()
 	return p.ethMsgBuffer
 }
 
+// UpdateEthMsgBuffer will update the ethereum message buffer by
+// removing the first item from the buffer list
 func (p *peer) UpdateEthMsgBuffer() {
 	p.bufferLock.Lock()
 	defer p.bufferLock.Unlock()
