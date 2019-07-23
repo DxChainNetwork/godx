@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"io/ioutil"
 	"os"
@@ -78,12 +79,6 @@ type fileSystem struct {
 	stuckFound chan struct{}
 }
 
-// New is the public function used for creating a production fileSystem
-func New(persistDir string, contractor contractManager) *fileSystem {
-	d := newStandardDisrupter()
-	return newFileSystem(persistDir, contractor, d)
-}
-
 // newFileSystem creates a new file system with the standardDisrupter
 func newFileSystem(persistDir string, contractor contractManager, disrupter disrupter) *fileSystem {
 	// create the fileSystem
@@ -139,14 +134,19 @@ func (fs *fileSystem) Close() error {
 	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
-// OpenFile opens the DxFile specified by the path
-func (fs *fileSystem) OpenFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
+// NewDxFile creates a new dxfile in the file system
+func (fs *fileSystem) NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*dxfile.FileSetEntryWithID, error) {
+	return fs.fileSet.NewDxFile(dxPath, sourcePath, force, erasureCode, cipherKey, fileSize, fileMode)
+}
+
+// OpenDxFile opens the DxFile specified by the path
+func (fs *fileSystem) OpenDxFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error) {
 	return fs.fileSet.Open(path)
 }
 
-// OpenDxDir opens the dxdir in the file system
-func (fs *fileSystem) OpenDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error) {
-	return fs.dirSet.Open(path)
+// Delete delete the dxfile from the file system
+func (fs *fileSystem) DeleteDxFile(dxPath storage.DxPath) error {
+	return fs.fileSet.Delete(dxPath)
 }
 
 // NewDxDir creates a new dxdir specified by path
@@ -154,14 +154,9 @@ func (fs *fileSystem) NewDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, e
 	return fs.dirSet.NewDxDir(path)
 }
 
-// NewDxFile creates a new dxfile in the file system
-func (fs *fileSystem) NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*dxfile.FileSetEntryWithID, error) {
-	return fs.fileSet.NewDxFile(dxPath, sourcePath, force, erasureCode, cipherKey, fileSize, fileMode)
-}
-
-// Delete delete the dxfile from the file system
-func (fs *fileSystem) DeleteDxFile(dxPath storage.DxPath) error {
-	return fs.fileSet.Delete(dxPath)
+// OpenDxDir opens the dxdir in the file system
+func (fs *fileSystem) OpenDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error) {
+	return fs.dirSet.Open(path)
 }
 
 // SelectDxFileToFix selects a file with the health of highest priority to repair
@@ -200,7 +195,7 @@ LOOP:
 				return nil, errStopped
 			default:
 			}
-			df, err := fs.OpenFile(file)
+			df, err := fs.OpenDxFile(file)
 			if err != nil {
 				fs.logger.Warn("file system open file", "path", file, "err", err)
 				continue
@@ -286,7 +281,6 @@ func (fs *fileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 }
 
 // OldestLastTimeHealthCheck find the dxpath of the directory with the oldest lastTimeHealthCheck
-// TODO: test this function
 func (fs *fileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
 	path := storage.RootDxPath()
 	dir, err := fs.dirSet.Open(path)

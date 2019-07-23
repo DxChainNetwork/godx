@@ -179,7 +179,7 @@ func (sc *StorageClient) GetPoolNonce(ctx context.Context, addr common.Address) 
 }
 
 // GetFileSystem will get the file system
-func (sc *StorageClient) GetFileSystem() *filesystem.fileSystem {
+func (sc *StorageClient) GetFileSystem() filesystem.FileSystem {
 	return sc.fileSystem
 }
 

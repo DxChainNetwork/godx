@@ -5,13 +5,48 @@
 package filesystem
 
 import (
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
+
+// FileSystem is the interface for fileSystem
+type FileSystem interface {
+	// File System is could be used as a service with New, Start, and Close
+	Start() error
+	Close() error
+
+	// DxFile related methods, including New, Open, and Delete
+	NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*dxfile.FileSetEntryWithID, error)
+	OpenDxFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error)
+	DeleteDxFile(dxPath storage.DxPath) error
+
+	// DxDir related methods, including New, and open
+	NewDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error)
+	OpenDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error)
+
+	// Upload/Download logic related functions
+	InitAndUpdateDirMetadata(path storage.DxPath) error
+	SelectDxFileToFix() (*dxfile.FileSetEntryWithID, error)
+	RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error)
+	OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error)
+	RepairNeededChan() chan struct{}
+	StuckFoundChan() chan struct{}
+}
+
+// New is the public function used for creating a production fileSystem
+func New(persistDir string, contractor contractManager) FileSystem {
+	d := newStandardDisrupter()
+	return newFileSystem(persistDir, contractor, d)
+}
 
 // contractManager is the contractManager interface used in file system
 type contractManager interface {

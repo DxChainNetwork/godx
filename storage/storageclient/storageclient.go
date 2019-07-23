@@ -43,7 +43,7 @@ var (
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
-	fileSystem *filesystem.fileSystem
+	fileSystem filesystem.FileSystem
 
 	// Memory Management
 	memoryManager *memorymanager.MemoryManager
@@ -876,7 +876,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if err != nil {
 		return nil, err
 	}
-	entry, err := client.fileSystem.OpenFile(dxPath)
+	entry, err := client.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return nil, err
 	}
