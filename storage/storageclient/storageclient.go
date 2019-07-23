@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"math/bits"
 	"os"
@@ -596,9 +597,6 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		sp.SendRevisionStop()
 	}()
 
-	// ensure we send DownloadStop before returning
-	defer close(doneChan)
-
 	// read responses
 	var hostSig []byte
 	for _, sec := range req.Sections {
@@ -608,11 +606,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		// if host send negotiation stop msg, client should return
+		if msg.Code == storage.NegotiationStopMsg {
+			return nil
 		}
 
 		err = msg.Decode(&resp)
@@ -657,11 +653,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			return err
 		}
 
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		// if host send negotiation stop msg, client should return
+		if msg.Code == storage.NegotiationStopMsg {
+			return nil
 		}
 
 		err = msg.Decode(&resp)
@@ -677,6 +671,20 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	err = contract.CommitDownload(walTxn, newRevision, price)
 	if err != nil {
 		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
+	}
+
+	// after downloading data, client should send negotiation stop msg to host
+	close(doneChan)
+
+	// if client has not received negotiation stop msg from host, should wait for it
+	msg, err := sp.ClientWaitContractResp()
+	if err != nil {
+		return err
+	}
+
+	// if the last msg is not stop, return err
+	if msg.Code != storage.NegotiationStopMsg {
+		return errors.New("expected 'stop' msg from host, got " + string(msg.Code))
 	}
 
 	return nil
@@ -722,19 +730,20 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 
 	// instantiate the download object.
 	d := &download{
-		completeChan:      make(chan struct{}),
-		startTime:         time.Now(),
-		destination:       params.destination,
-		destinationString: params.destinationString,
-		destinationType:   params.destinationType,
-		latencyTarget:     params.latencyTarget,
-		length:            params.length,
-		offset:            params.offset,
-		overdrive:         params.overdrive,
-		dxFilePath:        params.file.DxPath(),
-		priority:          params.priority,
-		log:               client.log,
-		memoryManager:     client.memoryManager,
+		completeChan:        make(chan struct{}),
+		oneSegmentCompleted: make(chan bool, 1),
+		startTime:           time.Now(),
+		destination:         params.destination,
+		destinationString:   params.destinationString,
+		destinationType:     params.destinationType,
+		latencyTarget:       params.latencyTarget,
+		length:              params.length,
+		offset:              params.offset,
+		overdrive:           params.overdrive,
+		dxFile:              params.file,
+		priority:            params.priority,
+		log:                 client.log,
+		memoryManager:       client.memoryManager,
 	}
 
 	// record the end time when it's done.
@@ -935,6 +944,24 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	d, err := client.createDownload(p)
 	if err != nil {
 		return err
+	}
+
+	// display the download status
+	segementSize := d.dxFile.SegmentSize()
+loop:
+	for {
+		select {
+		case <-d.oneSegmentCompleted:
+			completedSegmentBytes := d.length - segementSize*d.segmentsRemaining
+			downloadProgress := math.Min(100*(float64(completedSegmentBytes)/float64(d.length)), 100)
+			fmt.Printf("\n\n downloading from: %s, completed: %f \n\n", d.dxFile.DxPath(), downloadProgress)
+		case <-client.tm.StopChan():
+			return errors.New("download is shutdown")
+		default:
+			if d.segmentsRemaining == 0 {
+				break loop
+			}
+		}
 	}
 
 	// block until the download has completed

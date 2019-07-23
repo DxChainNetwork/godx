@@ -243,6 +243,7 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 	uds.download.mu.Lock()
 	defer uds.download.mu.Unlock()
 	uds.download.segmentsRemaining--
+	uds.download.oneSegmentCompleted <- true
 	if uds.download.segmentsRemaining == 0 {
 		uds.download.markComplete()
 		return err
