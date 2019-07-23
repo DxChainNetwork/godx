@@ -3,6 +3,7 @@ package storagehost
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -79,172 +80,9 @@ func (h *HostPrivateAPI) GetPaymentAddress() string {
 	return fmt.Sprintf("Current address: %v", common.Bytes2Hex(addr[:]))
 }
 
-// TODO: refactor the set methods to a map?
-// SetAcceptingContracts set host AcceptingContracts to value
-func (h *HostPrivateAPI) SetAcceptingContracts(val bool) string {
-	if err := h.storageHost.setAcceptContracts(val); err != nil {
-		return fmt.Sprintf("cannot set accepting contracts: %v", err)
-	}
-	return fmt.Sprintf("successully set accepting contracts to %v", val)
-}
-
-// SetMaxDownloadBatchSize set host MaxDownloadBatchSize to value
-func (h *HostPrivateAPI) SetMaxDownloadBatchSize(val uint64) string {
-	if err := h.storageHost.setMaxDownloadBatchSize(val); err != nil {
-		return fmt.Sprintf("cannot set MaxDownloadBatchSize: %v", err)
-	}
-	return fmt.Sprintf("successully set MaxDownloadBatchSize to %v", val)
-}
-
-// SetMaxDuration set host MaxDuration to value
-func (h *HostPrivateAPI) SetMaxDuration(str string) string {
-	val, err := storage.ParseTime(str)
-	if err != nil {
-		return fmt.Sprintf("invalid time string: %v", err)
-	}
-	if err := h.storageHost.setMaxDuration(val); err != nil {
-		return fmt.Sprintf("cannot set MaxDuration: %v", err)
-	}
-	return fmt.Sprintf("successully set MaxDuration to %v", str)
-}
-
-// SetMaxReviseBatchSize set host MaxReviseBatchSize to value
-func (h *HostPrivateAPI) SetMaxReviseBatchSize(val uint64) string {
-	if err := h.storageHost.setMaxReviseBatchSize(val); err != nil {
-		return fmt.Sprintf("cannot set MaxReviseBatchSize: %v", err)
-	}
-	return fmt.Sprintf("successully set MaxReviseBatchSize to %v", val)
-}
-
-// SetWindowSize set host WindowSize to value
-func (h *HostPrivateAPI) SetWindowSize(val uint64) string {
-	if err := h.storageHost.setWindowSize(val); err != nil {
-		return fmt.Sprintf("cannot set WindowSize: %v", err)
-	}
-	return fmt.Sprintf("successully set WindowSize to %v", val)
-}
-
-//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
-func (h *HostPrivateAPI) SetPaymentAddress(addrStr string) string {
-	addr := common.HexToAddress(addrStr)
-	if err := h.storageHost.setPaymentAddress(addr); err != nil {
-		return fmt.Sprintf("cannot set payment address: %v", err)
-	}
-	return "successfully set the payment address"
-}
-
-// SetDeposit set host Deposit to value.
-// TODO: explain the unit of the deposit
-func (h *HostPrivateAPI) SetDeposit(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setDeposit(wei); err != nil {
-		return fmt.Sprintf("cannot set Deposit: %v", err)
-	}
-	return fmt.Sprintf("successully set Deposit to %v", str)
-}
-
-// SetDepositBudget set host DepositBudget to value
-func (h *HostPrivateAPI) SetDepositBudget(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setDepositBudget(wei); err != nil {
-		return fmt.Sprintf("cannot set DepositBudget: %v", err)
-	}
-	return fmt.Sprintf("successully set DepositBudget to %v", str)
-}
-
-// SetMaxDeposit set host MaxDeposit to value
-func (h *HostPrivateAPI) SetMaxDeposit(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMaxDeposit(wei); err != nil {
-		return fmt.Sprintf("cannot set MaxDeposit: %v", err)
-	}
-	return fmt.Sprintf("successully set MaxDeposit to %v", str)
-}
-
-// SetMinBaseRPCPrice set host MinBaseRPCPrice to value
-func (h *HostPrivateAPI) SetMinBaseRPCPrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinBaseRPCPrice(wei); err != nil {
-		return fmt.Sprintf("cannot set MinBaseRPCPrice: %v", err)
-	}
-	return fmt.Sprintf("successully set MinBaseRPCPrice to %v", str)
-}
-
-// SetMinContractPrice set host MinContractPrice to value
-func (h *HostPrivateAPI) SetMinContractPrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinContractPrice(wei); err != nil {
-		return fmt.Sprintf("cannot set MinContractPrice: %v", err)
-	}
-	return fmt.Sprintf("successully set MinContractPrice to %v", str)
-}
-
-// SetMinDownloadBandwidthPrice set host MinDownloadBandwidthPrice to value
-func (h *HostPrivateAPI) SetMinDownloadBandwidthPrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinDownloadBandwidthPrice(wei); err != nil {
-		return fmt.Sprintf("cannot set MinDownloadBandwidthPrice: %v", err)
-	}
-	return fmt.Sprintf("successully set MinDownloadBandwidthPrice to %v", str)
-}
-
-// SetMinSectorAccessPrice set host MinSectorAccessPrice to value
-func (h *HostPrivateAPI) SetMinSectorAccessPrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinSectorAccessPrice(wei); err != nil {
-		return fmt.Sprintf("cannot set MinSectorAccessPrice: %v", err)
-	}
-	return fmt.Sprintf("successully set MinSectorAccessPrice to %v", str)
-}
-
-// SetMinStoragePrice set host MinStoragePrice to value
-func (h *HostPrivateAPI) SetMinStoragePrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinStoragePrice(wei); err != nil {
-		return fmt.Sprintf("cannot set MinStoragePrice: %v", err)
-	}
-	return fmt.Sprintf("successully set MinStoragePrice to %v", str)
-}
-
-// SetMinUploadBandwidthPrice set host MinUploadBandwidthPrice to value
-func (h *HostPrivateAPI) SetMinUploadBandwidthPrice(str string) string {
-	wei, err := storage.ParseFund(str)
-	if err != nil {
-		return fmt.Sprintf("invalid fund expression: %v", err)
-	}
-	if err := h.storageHost.setMinUploadBandwidthPrice(wei); err != nil {
-		return fmt.Sprintf("cannot set WindowSize: %v", err)
-	}
-	return fmt.Sprintf("successully set WindowSize to %v", str)
-}
-
 // AddStorageFolder add a storage folder with a specified size
 func (h *HostPrivateAPI) AddStorageFolder(path string, sizeStr string) (string, error) {
-	size, err := storage.ParseStorage(sizeStr)
+	size, err := unit.ParseStorage(sizeStr)
 	if err != nil {
 		return "", err
 	}
@@ -257,7 +95,7 @@ func (h *HostPrivateAPI) AddStorageFolder(path string, sizeStr string) (string, 
 
 // ResizeFolder resize the folder to specified size
 func (h *HostPrivateAPI) ResizeFolder(folderPath string, sizeStr string) (string, error) {
-	size, err := storage.ParseStorage(sizeStr)
+	size, err := unit.ParseStorage(sizeStr)
 	if err != nil {
 		return "", err
 	}
@@ -275,4 +113,186 @@ func (h *HostPrivateAPI) DeleteFolder(folderPath string) (string, error) {
 		return "", err
 	}
 	return "successfully delete the storage folder", nil
+}
+
+// host setters
+//var hostSetterCallbacks = map[string]func(*StorageHost, string) error{
+//	"acceptingContracts": (*StorageHost).SetAcceptContracts,
+//}
+
+// SetAcceptingContracts set host AcceptingContracts to value
+func (h *HostPrivateAPI) SetAcceptingContracts(valStr string) (string, error) {
+	val, err := unit.ParseBool(valStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid bool string: %v", err)
+	}
+	if err := h.storageHost.setAcceptContracts(val); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("successully set accepting contracts to %v", val), nil
+}
+
+// SetMaxDownloadBatchSize set host MaxDownloadBatchSize to value
+func (h *StorageHost) SetMaxDownloadBatchSize(valStr string) (string, error) {
+	val, err := unit.ParseStorage(valStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid storage string: %v", err)
+	}
+	if err := h.setMaxDownloadBatchSize(val); err != nil {
+		return "", fmt.Errorf("cannot set MaxDownloadBatchSize: %v", err)
+	}
+	return fmt.Sprintf("successully set MaxDownloadBatchSize to %v", val), nil
+}
+
+// SetMaxDuration set host MaxDuration to value
+func (h *StorageHost) SetMaxDuration(str string) (string, error) {
+	val, err := unit.ParseTime(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid time string: %v", err)
+	}
+	if err := h.setMaxDuration(val); err != nil {
+		return "", fmt.Errorf("cannot set MaxDuration: %v", err)
+	}
+	return fmt.Sprintf("successully set MaxDuration to %v", str), nil
+}
+
+// SetMaxReviseBatchSize set host MaxReviseBatchSize to value
+func (h *StorageHost) SetMaxReviseBatchSize(str string) (string, error) {
+	val, err := unit.ParseStorage(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid size string: %v", err)
+	}
+	if err := h.setMaxReviseBatchSize(val); err != nil {
+		return "", fmt.Errorf("cannot set MaxReviseBatchSize: %v", err)
+	}
+	return fmt.Sprintf("successully set MaxReviseBatchSize to %v", val), nil
+}
+
+// SetWindowSize set host WindowSize to value
+func (h *StorageHost) SetWindowSize(str string) (string, error) {
+	val, err := unit.ParseTime(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid time duration string: %v", err)
+	}
+	if err := h.setWindowSize(val); err != nil {
+		return "", fmt.Errorf("cannot set WindowSize: %v", err)
+	}
+	return fmt.Sprintf("successully set WindowSize to %v", val), nil
+}
+
+//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+func (h *StorageHost) SetPaymentAddress(addrStr string) (string, error) {
+	addr := common.HexToAddress(addrStr)
+	if err := h.setPaymentAddress(addr); err != nil {
+		return "", fmt.Errorf("cannot set payment address: %v", err)
+	}
+	return "successfully set the payment address", nil
+}
+
+// SetDeposit set host Deposit to value.
+func (h *StorageHost) SetDeposit(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setDeposit(wei); err != nil {
+		return "", fmt.Errorf("cannot set Deposit: %v", err)
+	}
+	return fmt.Sprintf("successully set Deposit to %v", str), nil
+}
+
+// SetDepositBudget set host DepositBudget to value
+func (h *HostPrivateAPI) SetDepositBudget(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.storageHost.setDepositBudget(wei); err != nil {
+		return "", fmt.Errorf("cannot set DepositBudget: %v", err)
+	}
+	return fmt.Sprintf("successully set DepositBudget to %v", str), nil
+}
+
+// SetMaxDeposit set host MaxDeposit to value
+func (h *StorageHost) SetMaxDeposit(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMaxDeposit(wei); err != nil {
+		return "", fmt.Errorf("cannot set MaxDeposit: %v", err)
+	}
+	return fmt.Sprintf("successully set MaxDeposit to %v", str), nil
+}
+
+// SetMinBaseRPCPrice set host MinBaseRPCPrice to value
+func (h *StorageHost) SetMinBaseRPCPrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinBaseRPCPrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set MinBaseRPCPrice: %v", err)
+	}
+	return fmt.Sprintf("successully set MinBaseRPCPrice to %v", str), nil
+}
+
+// SetMinContractPrice set host MinContractPrice to value
+func (h *StorageHost) SetMinContractPrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinContractPrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set MinContractPrice: %v", err)
+	}
+	return fmt.Sprintf("successully set MinContractPrice to %v", str), nil
+}
+
+// SetMinDownloadBandwidthPrice set host MinDownloadBandwidthPrice to value
+func (h *StorageHost) SetMinDownloadBandwidthPrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinDownloadBandwidthPrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set MinDownloadBandwidthPrice: %v", err)
+	}
+	return fmt.Sprintf("successully set MinDownloadBandwidthPrice to %v", str), nil
+}
+
+// SetMinSectorAccessPrice set host MinSectorAccessPrice to value
+func (h *StorageHost) SetMinSectorAccessPrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinSectorAccessPrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set MinSectorAccessPrice: %v", err)
+	}
+	return fmt.Sprintf("successully set MinSectorAccessPrice to %v", str), nil
+}
+
+// SetMinStoragePrice set host MinStoragePrice to value
+func (h *StorageHost) SetMinStoragePrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinStoragePrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set MinStoragePrice: %v", err)
+	}
+	return fmt.Sprintf("successully set MinStoragePrice to %v", str), nil
+}
+
+// SetMinUploadBandwidthPrice set host MinUploadBandwidthPrice to value
+func (h *StorageHost) SetMinUploadBandwidthPrice(str string) (string, error) {
+	wei, err := unit.ParseCurrency(str)
+	if err != nil {
+		return "", fmt.Errorf("invalid currency expression: %v", err)
+	}
+	if err := h.setMinUploadBandwidthPrice(wei); err != nil {
+		return "", fmt.Errorf("cannot set WindowSize: %v", err)
+	}
+	return fmt.Sprintf("successully set WindowSize to %v", str), nil
 }
