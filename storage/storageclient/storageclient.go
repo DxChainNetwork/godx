@@ -706,8 +706,6 @@ func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset,
 	var buf bytes.Buffer
 	err := client.Read(sp, &buf, req, nil, hostInfo)
 
-	time.Sleep(1 * time.Second)
-
 	return buf.Bytes(), err
 }
 
@@ -947,14 +945,14 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	}
 
 	// display the download status
-	segementSize := d.dxFile.SegmentSize()
+	segmentSize := d.dxFile.SegmentSize()
 loop:
 	for {
 		select {
 		case <-d.oneSegmentCompleted:
-			completedSegmentBytes := d.length - segementSize*d.segmentsRemaining
+			completedSegmentBytes := d.length - segmentSize*d.segmentsRemaining
 			downloadProgress := math.Min(100*(float64(completedSegmentBytes)/float64(d.length)), 100)
-			fmt.Printf("\n\n downloading from: %s, completed: %f \n\n", d.dxFile.DxPath(), downloadProgress)
+			fmt.Printf("\n\n Downloading from: %s, completed: %f \n\n", d.dxFile.DxPath(), downloadProgress)
 		case <-client.tm.StopChan():
 			return errors.New("download is shutdown")
 		default:
