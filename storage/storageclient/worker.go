@@ -232,8 +232,8 @@ func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 
 	// start contract revision, if failed, meaning the
 	// renewing is started
-	if err := sp.RevisionStart(); err != nil {
-		return nil, nil, err
+	if ok := sp.TryToRenewOrRevise(); !ok {
+		return nil, nil, errors.New("the contract is currently renewing or revising")
 	}
 
 	return sp, hostInfo, err
@@ -242,7 +242,7 @@ func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	sp, hostInfo, err := w.checkConnection()
-	defer sp.RevisionDone()
+	defer sp.RevisionOrRenewingDone()
 
 	if err != nil {
 		w.client.log.Error("failed to check the connection", "err", err)

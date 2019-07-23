@@ -1017,11 +1017,11 @@ func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 
 // IsContractRevising will be used to check if the contract is currently
 // in the middle of the revision
-func (client *StorageClient) IsContractRevising(hostID enode.ID) bool {
-	return client.ethBackend.IsRevising(hostID)
+func (client *StorageClient) TryToRenewOrRevise(hostID enode.ID) bool {
+	return client.ethBackend.TryToRenewOrRevise(hostID)
 }
 
 // RenewDone indicates that the contract finished renewing
-func (client *StorageClient) RenewDone(hostID enode.ID) {
-	client.ethBackend.RenewDone(hostID)
+func (client *StorageClient) RevisionOrRenewingDone(hostID enode.ID) {
+	client.ethBackend.RevisionOrRenewingDone(hostID)
 }

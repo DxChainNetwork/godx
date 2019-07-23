@@ -36,7 +36,7 @@ func (pm *ProtocolManager) contractMsgHandler(p *peer, msg p2p.Msg) error {
 	select {
 	case p.hostContractMsg <- msg:
 	default:
-		err := errors.New("hostMsgScheduler error: message received before finishing the previous message handling")
+		err := errors.New("hostMsgSchedule error: message received before finishing the previous message handling")
 		log.Error("error handling hostContractMsg", "err", err.Error())
 		return err
 	}

@@ -179,8 +179,8 @@ func (st *storageClientBackendContractManager) GetPaymentAddress() (address comm
 	return
 }
 
-func (st *storageClientBackendContractManager) IsContractRevising(hostID enode.ID) bool {
+func (st *storageClientBackendContractManager) TryToRenewOrRevise(hostID enode.ID) bool {
 	return false
 }
 
-func (st *storageClientBackendContractManager) RenewDone(hostID enode.ID) {}
+func (st *storageClientBackendContractManager) RevisionOrRenewingDone(hostID enode.ID) {}

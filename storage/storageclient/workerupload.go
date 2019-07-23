@@ -107,7 +107,7 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error {
 	sp, hostInfo, err := w.checkConnection()
-	defer sp.RevisionDone()
+	defer sp.RevisionOrRenewingDone()
 
 	if err != nil {
 		w.client.log.Error("failed to check the connection", "err", err)

@@ -19,19 +19,19 @@ var hostHandlers = map[uint64]func(h *storagehost.StorageHost, sp storage.Peer, 
 	storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
 }
 
-func (pm *ProtocolManager) msgDispatcher(msg p2p.Msg, p *peer) error {
+func (pm *ProtocolManager) msgDispatch(msg p2p.Msg, p *peer) error {
 	switch {
 	case msg.Code < 0x20:
-		// ethMsgScheduler
-		return pm.ethMsgScheduler(msg, p)
+		// ethMsgSchedule
+		return pm.ethMsgSchedule(msg, p)
 
 	case msg.Code < 0x30:
-		// clientMsgScheduler
-		return pm.clientMsgScheduler(msg, p)
+		// clientMsgSchedule
+		return pm.clientMsgSchedule(msg, p)
 
 	case msg.Code < 0x40:
-		// hostMsgScheduler
-		return pm.hostMsgScheduler(msg, p)
+		// hostMsgSchedule
+		return pm.hostMsgSchedule(msg, p)
 
 	default:
 		// message code exceed the range
@@ -39,7 +39,7 @@ func (pm *ProtocolManager) msgDispatcher(msg p2p.Msg, p *peer) error {
 	}
 }
 
-func (pm *ProtocolManager) ethMsgScheduler(msg p2p.Msg, p *peer) error {
+func (pm *ProtocolManager) ethMsgSchedule(msg p2p.Msg, p *peer) error {
 	// insert the message into eth buffer
 	p.InsertEthMsgBuffer(msg)
 	select {
@@ -54,7 +54,7 @@ func (pm *ProtocolManager) ethMsgScheduler(msg p2p.Msg, p *peer) error {
 	}
 }
 
-func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) error {
+func (pm *ProtocolManager) clientMsgSchedule(msg p2p.Msg, p *peer) error {
 	// if the message is hostConfigRespMsg, try to push it to the channel
 	// if failed, discard the message right away, meaning the last config
 	// message handling is not finished yet
@@ -75,13 +75,13 @@ func (pm *ProtocolManager) clientMsgScheduler(msg p2p.Msg, p *peer) error {
 	case p.clientContractMsg <- msg:
 		return nil
 	default:
-		err := errors.New("clientMsgScheduler error: message received before finishing the previous message handling")
+		err := errors.New("clientMsgSchedule error: message received before finishing the previous message handling")
 		log.Error("error handling clientContractMsg", "err", err.Error())
 		return err
 	}
 }
 
-func (pm *ProtocolManager) hostMsgScheduler(msg p2p.Msg, p *peer) error {
+func (pm *ProtocolManager) hostMsgSchedule(msg p2p.Msg, p *peer) error {
 	// check if the message code is HostConfigReqMsg, which needs to be handled
 	// explicitly
 	if msg.Code == storage.HostConfigReqMsg {

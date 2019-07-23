@@ -34,8 +34,8 @@ type EthBackend interface {
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	SetupConnection(enodeURL string) (Peer, error)
-	IsRevising(hostID enode.ID) bool
-	RenewDone(hostID enode.ID)
+	TryToRenewOrRevise(hostID enode.ID) bool
+	RevisionOrRenewingDone(hostID enode.ID)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -56,8 +56,8 @@ type ClientBackend interface {
 	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 	GetPaymentAddress() (common.Address, error)
-	IsContractRevising(hostID enode.ID) bool
-	RenewDone(hostID enode.ID)
+	TryToRenewOrRevise(hostID enode.ID) bool
+	RevisionOrRenewingDone(hostID enode.ID)
 }
 
 // DownloadParameters is the parameters to download from outer request

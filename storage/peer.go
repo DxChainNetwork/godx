@@ -35,9 +35,8 @@ type Peer interface {
 	WaitConfigResp() (p2p.Msg, error)
 	ClientWaitContractResp() (msg p2p.Msg, err error)
 	HostWaitContractResp() (msg p2p.Msg, err error)
-	RevisionStart() error
-	IsRevising() bool
-	RevisionDone()
-	IsRequestingConfig() error
-	DoneRequestingConfig()
+	TryToRenewOrRevise() bool
+	RevisionOrRenewingDone()
+	TryRequestHostConfig() error
+	RequestHostConfigDone()
 }

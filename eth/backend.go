@@ -655,7 +655,7 @@ func (s *Ethereum) Stop() error {
 
 // IsRevising is used to check if the contract is currently
 // revising
-func (s *Ethereum) IsRevising(hostID enode.ID) bool {
+func (s *Ethereum) TryToRenewOrRevise(hostID enode.ID) bool {
 	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
 	peer := s.protocolManager.peers.Peer(peerID)
 	// if the peer does not exist, meaning currently not revising
@@ -664,11 +664,11 @@ func (s *Ethereum) IsRevising(hostID enode.ID) bool {
 	}
 
 	// otherwise, check if the current connection is revising the contract
-	return peer.IsRevising()
+	return peer.TryToRenewOrRevise()
 }
 
-// RenewDone indicates the renew finished
-func (s *Ethereum) RenewDone(hostID enode.ID) {
+// RevisionOrRenewingDone indicates the renew finished
+func (s *Ethereum) RevisionOrRenewingDone(hostID enode.ID) {
 	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
 	peer := s.protocolManager.peers.Peer(peerID)
 	if peer == nil {
@@ -676,7 +676,7 @@ func (s *Ethereum) RenewDone(hostID enode.ID) {
 	}
 
 	// finished renewing
-	peer.RenewingDone()
+	peer.RevisionOrRenewingDone()
 }
 
 func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
@@ -737,10 +737,10 @@ func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, conf
 
 	// check if the client is currently requesting the host config
 	// once done, release the channel
-	if err := sp.IsRequestingConfig(); err != nil {
+	if err := sp.TryRequestHostConfig(); err != nil {
 		return err
 	}
-	defer sp.DoneRequestingConfig()
+	defer sp.RequestHostConfigDone()
 
 	// send storage host config request information
 	if err := sp.RequestStorageHostConfig(); err != nil {

@@ -6,7 +6,6 @@ package eth
 
 import (
 	"errors"
-	"fmt"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
@@ -197,48 +196,29 @@ func (p *peer) HostContractProcessingDone() {
 	}
 }
 
-// RevisionStart is used to indicate that contract revision has started, meaning
-// the renew operation will not be allowed
-func (p *peer) RevisionStart() error {
+// TryToRenewOrRevise will try to renew or revise the contract, if failed
+// the renew process and revision process will be interrupted immediately
+func (p *peer) TryToRenewOrRevise() bool {
 	select {
 	case p.contractRevisingOrRenewing <- struct{}{}:
-		return nil
-	default:
-		return fmt.Errorf("another operation is revising the contract or renewing started")
-	}
-}
-
-// IsRevising is used by the storage client to check if the storage revision
-// has started
-func (p *peer) IsRevising() bool {
-	select {
-	case p.contractRevisingOrRenewing <- struct{}{}:
-		return false
-	default:
 		return true
+	default:
+		return false
 	}
 }
 
-// RevisionDone is used to indicate the storage host has finished the revision
-func (p *peer) RevisionDone() {
+// RevisionOrRenewingDone indicates the revision or renewing operation has been finished
+func (p *peer) RevisionOrRenewingDone() {
 	select {
 	case <-p.contractRevisingOrRenewing:
 	default:
 	}
 }
 
-// RevisionDone is used to indicate the storage host has finished the contract renewing
-func (p *peer) RenewingDone() {
-	select {
-	case <-p.contractRevisingOrRenewing:
-	default:
-	}
-}
-
-// IsRequestingConfig is used to check if the client is currently requesting storage
+// TryRequestHostConfig is used to check if the client is currently requesting storage
 // client configuration, meaning the client should not send another request message
 // before the previous request has finished
-func (p *peer) IsRequestingConfig() error {
+func (p *peer) TryRequestHostConfig() error {
 	select {
 	case p.hostConfigRequesting <- struct{}{}:
 		return nil
@@ -247,9 +227,9 @@ func (p *peer) IsRequestingConfig() error {
 	}
 }
 
-// DoneRequestingConfig is used to indicate the storage client
+// RequestHostConfigDone is used to indicate the storage client
 // that the storage config request is finished
-func (p *peer) DoneRequestingConfig() {
+func (p *peer) RequestHostConfigDone() {
 	select {
 	case <-p.hostConfigRequesting:
 	default:

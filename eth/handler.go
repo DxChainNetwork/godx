@@ -345,7 +345,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 		}
 
 		// distribute the message to different handler
-		if err := pm.msgDispatcher(msg, p); err != nil {
+		if err := pm.msgDispatch(msg, p); err != nil {
 			return err
 		}
 

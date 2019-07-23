@@ -262,7 +262,9 @@ func (b *BackendTest) GetHostEnodeURL() string {
 	return ""
 }
 
-func (b *BackendTest) RenewDone(hostID enode.ID) {}
+func (b *BackendTest) TryToRenewOrRevise(hostID enode.ID) bool { return false }
+
+func (b *BackendTest) RevisionOrRenewingDone(hostID enode.ID) {}
 
 /*
 _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _

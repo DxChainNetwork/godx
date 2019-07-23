@@ -186,7 +186,7 @@ func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHa
 	return
 }
 
-func (st *storageClientBackendTestData) IsContractRevising(hostID enode.ID) bool {
+func (st *storageClientBackendTestData) TryToRenewOrRevise(hostID enode.ID) bool {
 	return false
 }
 
@@ -194,4 +194,4 @@ func (st *storageClientBackendTestData) GetPaymentAddress() (common.Address, err
 	return common.Address{}, nil
 }
 
-func (st *storageClientBackendTestData) RenewDone(hostID enode.ID) {}
+func (st *storageClientBackendTestData) RevisionOrRenewingDone(hostID enode.ID) {}
