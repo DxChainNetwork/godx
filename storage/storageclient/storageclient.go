@@ -697,6 +697,7 @@ func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset,
 	}
 	var buf bytes.Buffer
 	err := client.Read(sp, &buf, req, nil, hostInfo)
+	time.Sleep(1 * time.Second)
 
 	return buf.Bytes(), err
 }
