@@ -324,7 +324,7 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 			files = append(files, file)
 		}
 	} else {
-		fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(sc.fileSystem.FileRootDir())))
+		fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(sc.fileSystem.RootDir())))
 		if err != nil {
 			return
 		}
@@ -368,7 +368,7 @@ func (sc *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, dir b
 }
 
 func (sc *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
-	file, err := sc.fileSystem.OpenFile(path)
+	file, err := sc.fileSystem.OpenDxFile(path)
 	if err != nil {
 		sc.log.Error("Could not open dx file", "err", err)
 		return nil, err

@@ -134,9 +134,14 @@ func (fs *fileSystem) Close() error {
 	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
-// FileRootDir returns the root directory for the files
-func (fs *fileSystem) FileRootDir() storage.SysPath {
+// RootDir returns the root directory for the files
+func (fs *fileSystem) RootDir() storage.SysPath {
 	return fs.fileRootDir
+}
+
+// PersistDir returns the persist path of the file system
+func (fs *fileSystem) PersistDir() storage.SysPath {
+	return fs.persistDir
 }
 
 // NewDxFile creates a new dxfile in the file system
@@ -152,6 +157,11 @@ func (fs *fileSystem) OpenDxFile(path storage.DxPath) (*dxfile.FileSetEntryWithI
 // Delete delete the dxfile from the file system
 func (fs *fileSystem) DeleteDxFile(dxPath storage.DxPath) error {
 	return fs.fileSet.Delete(dxPath)
+}
+
+// RenameDxFile rename the dxfile from prevPath to newPath
+func (fs *fileSystem) RenameDxFile(prevPath, newPath storage.DxPath) error {
+	return fs.fileSet.Rename(prevPath, newPath)
 }
 
 // NewDxDir creates a new dxdir specified by path
@@ -581,6 +591,11 @@ func (fs *fileSystem) fileBriefInfo(path storage.DxPath, table storage.HostHealt
 		Status:         fileStatus(file, table),
 	}
 	return info, nil
+}
+
+// getLogger returns the logger of the file system
+func (fs *fileSystem) getLogger() log.Logger {
+	return fs.logger
 }
 
 // fileStatus return the human readable status

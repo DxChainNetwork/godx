@@ -41,22 +41,22 @@ func (api *PublicFileSystemDebugAPI) CreateRandomFiles(numFiles int) string {
 
 // PublicFileSystemAPI is the api for file system
 type PublicFileSystemAPI struct {
-	fs *fileSystem
+	fs FileSystem
 }
 
 // NewPublicFileSystemAPI creates a new file system api
-func NewPublicFileSystemAPI(fs *fileSystem) *PublicFileSystemAPI {
+func NewPublicFileSystemAPI(fs FileSystem) *PublicFileSystemAPI {
 	return &PublicFileSystemAPI{fs}
 }
 
 // RootDir returns the root directory of the file system
 func (api *PublicFileSystemAPI) RootDir() string {
-	return string(api.fs.fileRootDir)
+	return string(api.fs.RootDir())
 }
 
 // PersistDir return the directory where the files locates
 func (api *PublicFileSystemAPI) PersistDir() string {
-	return string(api.fs.persistDir)
+	return string(api.fs.PersistDir())
 }
 
 // DetailedFileInfo returns the detailed file info of a file specified by the path
@@ -64,7 +64,7 @@ func (api *PublicFileSystemAPI) DetailedFileInfo(path string) storage.FileInfo {
 	dxpath, err := storage.NewDxPath(path)
 	if err != nil {
 		// Invalid path
-		api.fs.logger.Warn("Cannot get detailed file info", "path", path, "error", err)
+		api.fs.getLogger().Warn("Cannot get detailed file info", "path", path, "error", err)
 		return storage.FileInfo{}
 	}
 	fileInfo, err := api.fs.fileDetailedInfo(dxpath, make(storage.HostHealthInfoTable))
@@ -75,7 +75,7 @@ func (api *PublicFileSystemAPI) DetailedFileInfo(path string) storage.FileInfo {
 func (api *PublicFileSystemAPI) FileList() []storage.FileBriefInfo {
 	fileList, err := api.fs.fileList()
 	if err != nil {
-		api.fs.logger.Warn("cannot get the file list", "error", err)
+		api.fs.getLogger().Warn("cannot get the file list", "error", err)
 		return []storage.FileBriefInfo{}
 	}
 	return fileList
@@ -85,7 +85,7 @@ func (api *PublicFileSystemAPI) FileList() []storage.FileBriefInfo {
 func (api *PublicFileSystemAPI) Uploads() []storage.FileBriefInfo {
 	rawFileList, err := api.fs.fileList()
 	if err != nil {
-		api.fs.logger.Warn("cannot get the file list", "error", err)
+		api.fs.getLogger().Warn("cannot get the file list", "error", err)
 		return []storage.FileBriefInfo{}
 	}
 	var fileList []storage.FileBriefInfo
@@ -108,7 +108,7 @@ func (api *PublicFileSystemAPI) Rename(prevPath, newPath string) string {
 	if err != nil {
 		return fmt.Sprintf("Path not valid: %v", newPath)
 	}
-	if err = api.fs.fileSet.Rename(prevDxPath, newDxPath); err != nil {
+	if err = api.fs.RenameDxFile(prevDxPath, newDxPath); err != nil {
 		return fmt.Sprintf("Cannot rename from %v to %v: %v", prevPath, newPath, err)
 	}
 
@@ -116,13 +116,13 @@ func (api *PublicFileSystemAPI) Rename(prevPath, newPath string) string {
 		// If got error, must be ErrAlreadyRoot. No point to update
 		err = api.fs.InitAndUpdateDirMetadata(prevParent)
 		if err != nil {
-			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
+			api.fs.getLogger().Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	if newParent, err := newDxPath.Parent(); err == nil {
 		err = api.fs.InitAndUpdateDirMetadata(newParent)
 		if err != nil {
-			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
+			api.fs.getLogger().Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	return fmt.Sprintf("File %v renamed to %v", prevPath, newPath)
@@ -134,13 +134,13 @@ func (api *PublicFileSystemAPI) Delete(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Path not valid: %v", path)
 	}
-	if err = api.fs.fileSet.Delete(dxPath); err != nil {
+	if err = api.fs.DeleteDxFile(dxPath); err != nil {
 		return fmt.Sprintf("Cannot delete file %v: %v", path, err)
 	}
 	if newParent, err := dxPath.Parent(); err == nil {
 		err = api.fs.InitAndUpdateDirMetadata(newParent)
 		if err != nil {
-			api.fs.logger.Warn("InitAndUpdateDirMetadata error", "error", err)
+			api.fs.getLogger().Warn("InitAndUpdateDirMetadata error", "error", err)
 		}
 	}
 	return fmt.Sprintf("File %v deleted", path)

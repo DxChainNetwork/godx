@@ -6,6 +6,7 @@ package filesystem
 
 import (
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
@@ -25,14 +26,16 @@ type FileSystem interface {
 	Close() error
 
 	// Properties
-	FileRootDir() storage.SysPath
+	RootDir() storage.SysPath
+	PersistDir() storage.SysPath
 
-	// DxFile related methods, including New, Open, and Delete
+	// DxFile related methods, including New, Open, Rename and Delete
 	NewDxFile(dxPath storage.DxPath, sourcePath storage.SysPath, force bool, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*dxfile.FileSetEntryWithID, error)
 	OpenDxFile(path storage.DxPath) (*dxfile.FileSetEntryWithID, error)
+	RenameDxFile(prevDxPath, curDxPath storage.DxPath) error
 	DeleteDxFile(dxPath storage.DxPath) error
 
-	// DxDir related methods, including New, and open
+	// DxDir related methods, including New and open
 	NewDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error)
 	OpenDxDir(path storage.DxPath) (*dxdir.DirSetEntryWithID, error)
 
@@ -43,6 +46,11 @@ type FileSystem interface {
 	OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error)
 	RepairNeededChan() chan struct{}
 	StuckFoundChan() chan struct{}
+
+	// private function fields used for APIs
+	getLogger() log.Logger
+	fileDetailedInfo(path storage.DxPath, table storage.HostHealthInfoTable) (storage.FileInfo, error)
+	fileList() ([]storage.FileBriefInfo, error)
 }
 
 // New is the public function used for creating a production fileSystem

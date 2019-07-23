@@ -18,7 +18,7 @@ import (
 // addStuckSegmentsToHeap adds all the stuck segments in a file to the repair heap
 func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 	// Open File
-	sf, err := sc.fileSystem.OpenFile(dxPath)
+	sf, err := sc.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return fmt.Errorf("unable to open Dxfile %v, error: %v", dxPath, err)
 	}
@@ -34,7 +34,7 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 
 // dirMetadata retrieve the directory metadata and returns the dir metadata after bubble
 func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
-	sysPath := dxPath.SysPath(storage.SysPath(sc.fileSystem.FileRootDir()))
+	sysPath := dxPath.SysPath(storage.SysPath(sc.fileSystem.RootDir()))
 	fi, err := os.Stat(string(sysPath))
 	if err != nil {
 		return dxdir.Metadata{}, err
