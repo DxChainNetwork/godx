@@ -228,7 +228,7 @@ func TestFileSystem_RedoProcess(t *testing.T) {
 			makeBlockDisruptFunc(c, func() bool { return false }))
 		dr = newCounterDisrupter(dr)
 
-		// create FileSystem and create a new DxFile
+		// create fileSystem and create a new DxFile
 		ct := &alwaysFailContractManager{}
 		fs := newEmptyTestFileSystem(t, "", ct, dr)
 
@@ -325,7 +325,7 @@ func TestFileSystem_SingleFail(t *testing.T) {
 	})
 	dr = newCounterDisrupter(dr)
 
-	// create FileSystem and create a new DxFile
+	// create fileSystem and create a new DxFile
 	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
@@ -401,7 +401,7 @@ func TestFileSystem_ConsecutiveFails(t *testing.T) {
 	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 	cdr := newCounterDisrupter(dr)
 
-	// create FileSystem and create a new DxFile
+	// create fileSystem and create a new DxFile
 	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, cdr)
 	path := storage.RootDxPath()
@@ -468,7 +468,7 @@ func TestFileSystem_FailedRecover(t *testing.T) {
 	// make the disrupter. Always fails
 	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 
-	// create FileSystem and create a new DxFile
+	// create fileSystem and create a new DxFile
 	ct := &alwaysFailContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	path := storage.RootDxPath()
@@ -537,7 +537,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 	// create the disrupter
 	dr := newStandardDisrupter()
 
-	// create FileSystem and create a new DxFile
+	// create fileSystem and create a new DxFile
 	ct := &AlwaysSuccessContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
@@ -637,7 +637,7 @@ func TestFileSystem_CorruptedFiles(t *testing.T) {
 }
 
 // healthParamsUpdate calculate and update the health parameters
-func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
+func (fs *fileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, stuckHealth, numStuckSegments, minRedundancy uint32) (uint32, uint32, uint32, uint32) {
 	fHealth, fStuckHealth, fNumStuckSegments := df.Health(fs.contractManager.HostHealthMapByID(df.HostIDs()))
 	fMinRedundancy := df.Redundancy(fs.contractManager.HostHealthMapByID(df.HostIDs()))
 	if dxfile.CmpRepairPriority(fHealth, health) > 0 {
@@ -655,7 +655,7 @@ func (fs *FileSystem) healthParamsUpdate(df *dxfile.FileSetEntryWithID, health, 
 
 // postTestCheck check the post test status. Checks whether could be closed in 1 seconds,
 // whether fileWal should be empty, updateWal is empty, and the fileRootDir's metadata is as expected
-func (fs *FileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updateWalShouldEmpty bool, md *dxdir.Metadata) {
+func (fs *fileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updateWalShouldEmpty bool, md *dxdir.Metadata) {
 	c := make(chan struct{})
 	go func() {
 		err := fs.Close()

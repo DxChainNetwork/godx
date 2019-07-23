@@ -76,7 +76,7 @@ type (
 
 // InitAndUpdateDirMetadata create the update intent, and then apply the intent.
 // The actual metadata update is executed in a thread updateDirMetadata
-func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
+func (fs *fileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	// Initialize the dirMetadataUpdate, that is, recordDirMetadataUpdate
 	txn, err := fs.recordDirMetadataIntent(path)
 	if err != nil {
@@ -94,7 +94,7 @@ func (fs *FileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 }
 
 // recordDirMetadataIntent record the dirMetadata intent to the wal
-func (fs *FileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadlog.Transaction, error) {
+func (fs *fileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadlog.Transaction, error) {
 	op, err := createWalOp(path)
 	if err != nil {
 		return nil, err
@@ -151,7 +151,7 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 //  1. A dxfile is updated and the update is bubble to the root
 //  2. A MaintenanceLoop loops over the fs.unfinishedUpdates field for previously failed update.
 //     In this case, walTxn should be nil
-func (fs *FileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadlog.Transaction) (err error) {
+func (fs *fileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadlog.Transaction) (err error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
 	// If the update already exists in the unfinishedUpdates, signalStop
@@ -205,7 +205,7 @@ func (update *dirMetadataUpdate) signalStop() {
 
 // calculateMetadataAndApply is the threaded function of calculate the metadata
 // and save to dxdir. This is the core function of this file
-func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
+func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	var err error
 	// Call cleanUp to clean up the update
 	defer func() {
@@ -271,7 +271,7 @@ func (fs *FileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 3. Determine whether release is necessary
 // 4. If release is needed, delete the entry in fs.unfinishedUpdates.
 // 5. If release is needed, Release the transaction
-func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
+func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	// fs.tm.Done()
 	defer fs.tm.Done()
 
@@ -352,7 +352,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *FileSystem, err error) {
 
 // loopDirAndCalculateDirMetadata loops over all files under the DxPath and calculate the updated
 // metadata of the update
-func (fs *FileSystem) loopDirAndCalculateDirMetadata(update *dirMetadataUpdate) (*dxdir.Metadata, error) {
+func (fs *fileSystem) loopDirAndCalculateDirMetadata(update *dirMetadataUpdate) (*dxdir.Metadata, error) {
 	// Set default metadata value
 	metadata := &dxdir.Metadata{
 		NumFiles:            0,
@@ -410,7 +410,7 @@ func (fs *FileSystem) loopDirAndCalculateDirMetadata(update *dirMetadataUpdate) 
 }
 
 // calculateDxFileMetadata update, calculate and apply the health related field of a dxfile.
-func (fs *FileSystem) calculateDxFileMetadata(path storage.DxPath, filename string) (*metadataForUpdate, error) {
+func (fs *fileSystem) calculateDxFileMetadata(path storage.DxPath, filename string) (*metadataForUpdate, error) {
 	// Deal with the file names. Input path is the DxPath of the target directory.
 	// filename is the system filename of the dxfile.
 	filenameNoSuffix := strings.TrimSuffix(filename, storage.DxFileExt)
@@ -458,7 +458,7 @@ func (fs *FileSystem) calculateDxFileMetadata(path storage.DxPath, filename stri
 }
 
 // calculateDxDirMetadata calculate and return the metadata from the .dxdir file
-func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename string) (*metadataForUpdate, error) {
+func (fs *fileSystem) calculateDxDirMetadata(path storage.DxPath, filename string) (*metadataForUpdate, error) {
 	path, err := path.Join(filename)
 	if err != nil {
 		return nil, err
@@ -491,7 +491,7 @@ func (fs *FileSystem) calculateDxDirMetadata(path storage.DxPath, filename strin
 }
 
 // applyDxDirMetadata apply the calculated metadata to the dxdir path
-func (fs *FileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata) error {
+func (fs *fileSystem) applyDxDirMetadata(path storage.DxPath, md *dxdir.Metadata) error {
 	var d *dxdir.DirSetEntryWithID
 	var err error
 	d, err = fs.dirSet.NewDxDir(path)

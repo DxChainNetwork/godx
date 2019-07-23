@@ -43,7 +43,7 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 		return dxdir.Metadata{}, fmt.Errorf("%v is not a directory", dxPath)
 	}
 
-	dxDir, err := sc.fileSystem.DirSet().Open(dxPath)
+	dxDir, err := sc.fileSystem.OpenDxDir(dxPath)
 	if os.IsNotExist(err) {
 		// Remember initial Error
 		initError := err
@@ -62,7 +62,7 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 
 		// If we are at the root directory or the directory is not empty, create
 		// a metadata file
-		dxDir, err = sc.fileSystem.DirSet().NewDxDir(dxPath)
+		dxDir, err = sc.fileSystem.NewDxDir(dxPath)
 	}
 	if err != nil {
 		return dxdir.Metadata{}, err
