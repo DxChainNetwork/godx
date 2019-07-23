@@ -84,7 +84,6 @@ func newContractManagerTest(hm *storagehostmanager.StorageHostManager) (cm *Cont
 		renewedTo:        make(map[storage.ContractID]storage.ContractID),
 		failedRenewCount: make(map[storage.ContractID]uint64),
 		hostToContract:   make(map[enode.ID]storage.ContractID),
-		renewing:         make(map[storage.ContractID]bool),
 		quit:             make(chan struct{}),
 		log:              log.New(),
 	}
@@ -123,7 +122,7 @@ func (st *storageClientBackendContractManager) Syncing() bool {
 	return false
 }
 
-func (st *storageClientBackendContractManager) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+func (st *storageClientBackendContractManager) GetStorageHostSetting(hostEnodeID enode.ID, peerID string, config *storage.HostExtConfig) error {
 	config = &storage.HostExtConfig{
 		AcceptingContracts: true,
 		Deposit:            common.NewBigInt(10),
@@ -183,3 +182,5 @@ func (st *storageClientBackendContractManager) GetPaymentAddress() (address comm
 func (st *storageClientBackendContractManager) IsContractRevising(hostID enode.ID) bool {
 	return false
 }
+
+func (st *storageClientBackendContractManager) RenewDone(hostID enode.ID) {}

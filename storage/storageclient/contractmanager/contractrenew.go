@@ -155,17 +155,6 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	renewContractID := record.id
 	renewContractCost := record.cost
 
-	// mark the oldContract as renewing, and remove it at the end
-	cm.lock.Lock()
-	cm.renewing[renewContractID] = true
-	cm.lock.Unlock()
-
-	defer func() {
-		cm.lock.Lock()
-		delete(cm.renewing, renewContractID)
-		cm.lock.Unlock()
-	}()
-
 	contractMeta, exists := cm.RetrieveActiveContract(renewContractID)
 	if !exists {
 		renewCost = common.BigInt0
@@ -179,6 +168,9 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 		err = fmt.Errorf("the contract is revising, cannot be renewed")
 		return
 	}
+
+	// finished renewing
+	defer cm.b.RenewDone(contractMeta.EnodeID)
 
 	// acquire the oldContract (contract that is about to be renewed)
 	oldContract, exists := cm.activeContracts.Acquire(renewContractID)

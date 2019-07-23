@@ -104,8 +104,8 @@ type peer struct {
 	hostConfigProcessing   chan struct{}
 	hostContractProcessing chan struct{}
 
-	contractRevising     chan struct{}
-	hostConfigRequesting chan struct{}
+	contractRevisingOrRenewing chan struct{}
+	hostConfigRequesting       chan struct{}
 
 	// error channel
 	errMsg chan error
@@ -113,25 +113,25 @@ type peer struct {
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:                   p,
-		rw:                     rw,
-		version:                version,
-		id:                     fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		knownTxs:               mapset.NewSet(),
-		knownBlocks:            mapset.NewSet(),
-		queuedTxs:              make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps:            make(chan *propEvent, maxQueuedProps),
-		queuedAnns:             make(chan *types.Block, maxQueuedAnns),
-		term:                   make(chan struct{}),
-		clientConfigMsg:        make(chan p2p.Msg, 1),
-		clientContractMsg:      make(chan p2p.Msg, 1),
-		hostContractMsg:        make(chan p2p.Msg, 1),
-		ethStartIndicator:      make(chan struct{}, 1),
-		hostConfigProcessing:   make(chan struct{}, 1),
-		hostContractProcessing: make(chan struct{}, 1),
-		errMsg:                 make(chan error, 1),
-		contractRevising:       make(chan struct{}, 1),
-		hostConfigRequesting:   make(chan struct{}, 1),
+		Peer:                       p,
+		rw:                         rw,
+		version:                    version,
+		id:                         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		knownTxs:                   mapset.NewSet(),
+		knownBlocks:                mapset.NewSet(),
+		queuedTxs:                  make(chan []*types.Transaction, maxQueuedTxs),
+		queuedProps:                make(chan *propEvent, maxQueuedProps),
+		queuedAnns:                 make(chan *types.Block, maxQueuedAnns),
+		term:                       make(chan struct{}),
+		clientConfigMsg:            make(chan p2p.Msg, 1),
+		clientContractMsg:          make(chan p2p.Msg, 1),
+		hostContractMsg:            make(chan p2p.Msg, 1),
+		ethStartIndicator:          make(chan struct{}, 1),
+		hostConfigProcessing:       make(chan struct{}, 1),
+		hostContractProcessing:     make(chan struct{}, 1),
+		errMsg:                     make(chan error, 1),
+		contractRevisingOrRenewing: make(chan struct{}, 1),
+		hostConfigRequesting:       make(chan struct{}, 1),
 	}
 }
 

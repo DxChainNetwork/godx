@@ -221,11 +221,6 @@ func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 	// check this contract whether is renewing
 	contractID := w.contract.ID
 
-	// if the storage contract is currently renewing, return error
-	if w.client.contractManager.IsRenewing(contractID) {
-		return nil, nil, errors.New("contract is currently renewing, revision cannot be started")
-	}
-
 	// get the storage host information
 	hostInfo, err := w.updateWorkerContractID(contractID)
 	if err != nil {
@@ -235,7 +230,8 @@ func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 	// set up the connection
 	sp, err := w.client.SetupConnection(hostInfo.EnodeURL)
 
-	// start contract revision
+	// start contract revision, if failed, meaning the
+	// renewing is started
 	if err := sp.RevisionStart(); err != nil {
 		return nil, nil, err
 	}

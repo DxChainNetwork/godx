@@ -123,7 +123,7 @@ func (b *BackendTest) APIs() []rpc.API {
 	return res
 }
 
-func (b *BackendTest) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
+func (b *BackendTest) GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *storage.HostExtConfig) error {
 	return nil
 }
 
@@ -261,6 +261,8 @@ func (b *BackendTest) SignByNode(hash []byte) ([]byte, error) {
 func (b *BackendTest) GetHostEnodeURL() string {
 	return ""
 }
+
+func (b *BackendTest) RenewDone(hostID enode.ID) {}
 
 /*
 _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _

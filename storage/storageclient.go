@@ -35,10 +35,11 @@ type EthBackend interface {
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	SetupConnection(enodeURL string) (Peer, error)
 	IsRevising(hostID enode.ID) bool
+	RenewDone(hostID enode.ID)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
-// to storagehostmanager and contract manager
+// to storage host manager and contract manager
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
@@ -56,6 +57,7 @@ type ClientBackend interface {
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 	GetPaymentAddress() (common.Address, error)
 	IsContractRevising(hostID enode.ID) bool
+	RenewDone(hostID enode.ID)
 }
 
 // DownloadParameters is the parameters to download from outer request

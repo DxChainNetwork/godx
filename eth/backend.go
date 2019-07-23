@@ -653,6 +653,8 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
+// IsRevising is used to check if the contract is currently
+// revising
 func (s *Ethereum) IsRevising(hostID enode.ID) bool {
 	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
 	peer := s.protocolManager.peers.Peer(peerID)
@@ -663,6 +665,18 @@ func (s *Ethereum) IsRevising(hostID enode.ID) bool {
 
 	// otherwise, check if the current connection is revising the contract
 	return peer.IsRevising()
+}
+
+// RenewDone indicates the renew finished
+func (s *Ethereum) RenewDone(hostID enode.ID) {
+	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
+	peer := s.protocolManager.peers.Peer(peerID)
+	if peer == nil {
+		return
+	}
+
+	// finished renewing
+	peer.RenewingDone()
 }
 
 func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {

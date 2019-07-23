@@ -133,7 +133,7 @@ func (st *storageClientBackendTestData) Syncing() bool {
 	return false
 }
 
-func (st *storageClientBackendTestData) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+func (st *storageClientBackendTestData) GetStorageHostSetting(hostEnodeID enode.ID, peerID string, config *storage.HostExtConfig) error {
 	config = &storage.HostExtConfig{
 		AcceptingContracts: true,
 		Deposit:            common.NewBigInt(10),
@@ -193,3 +193,5 @@ func (st *storageClientBackendTestData) IsContractRevising(hostID enode.ID) bool
 func (st *storageClientBackendTestData) GetPaymentAddress() (common.Address, error) {
 	return common.Address{}, nil
 }
+
+func (st *storageClientBackendTestData) RenewDone(hostID enode.ID) {}

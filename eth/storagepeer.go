@@ -201,10 +201,10 @@ func (p *peer) HostContractProcessingDone() {
 // the renew operation will not be allowed
 func (p *peer) RevisionStart() error {
 	select {
-	case p.contractRevising <- struct{}{}:
+	case p.contractRevisingOrRenewing <- struct{}{}:
 		return nil
 	default:
-		return fmt.Errorf("another operation is revising the contract, or renewing started")
+		return fmt.Errorf("another operation is revising the contract or renewing started")
 	}
 }
 
@@ -212,8 +212,7 @@ func (p *peer) RevisionStart() error {
 // has started
 func (p *peer) IsRevising() bool {
 	select {
-	case p.contractRevising <- struct{}{}:
-		<-p.contractRevising
+	case p.contractRevisingOrRenewing <- struct{}{}:
 		return false
 	default:
 		return true
@@ -223,7 +222,15 @@ func (p *peer) IsRevising() bool {
 // RevisionDone is used to indicate the storage host has finished the revision
 func (p *peer) RevisionDone() {
 	select {
-	case <-p.contractRevising:
+	case <-p.contractRevisingOrRenewing:
+	default:
+	}
+}
+
+// RevisionDone is used to indicate the storage host has finished the contract renewing
+func (p *peer) RenewingDone() {
+	select {
+	case <-p.contractRevisingOrRenewing:
 	default:
 	}
 }
