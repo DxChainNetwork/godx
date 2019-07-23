@@ -289,7 +289,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	// go on keeping the decrypted sector.
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
-		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(decryptedSector), "sectors_completed", uds.sectorsCompleted)
+		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(sectorData), "sectors_completed", uds.sectorsCompleted)
 	}
 
 	// as soon as the num of sectors completed reached the minimal num of sectors that erasureCode need,
@@ -297,7 +297,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	if uds.sectorsCompleted <= uds.erasureCode.MinSectors() {
 		// this a accumulation processing, every time we receive a sector
 		uds.physicalSegmentData[sectorIndex] = decryptedSector
-		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(decryptedSector), "sectors_completed", uds.sectorsCompleted)
+		w.client.log.Debug("received a sector,but not enough to recover", "sector_len", len(sectorData), "sectors_completed", uds.sectorsCompleted)
 	}
 
 	// recover the logical data

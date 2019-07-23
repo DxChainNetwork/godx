@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"github.com/DxChainNetwork/godx/storage/storageclient/memorymanager"
 )
@@ -28,9 +29,6 @@ type (
 		segmentsRemaining uint64
 		completeChan      chan struct{}
 		err               error
-
-		// a segment completed
-		oneSegmentCompleted chan bool
 
 		// a slice of functions which are called when completeChan is closed.
 		downloadCompleteFuncs []downloadCompleteFunc
@@ -57,8 +55,8 @@ type (
 		// the start index in file to download.
 		offset uint64
 
-		// the dx file for downloading
-		dxFile *dxfile.Snapshot
+		// the file path for downloading
+		dxFilePath storage.DxPath
 
 		// In milliseconds.
 		latencyTarget time.Duration
@@ -150,7 +148,6 @@ func (d *download) markComplete() {
 	if d.isComplete() {
 		d.log.Warn("Can't call markComplete multiple times")
 	} else {
-		d.oneSegmentCompleted <- true
 		defer close(d.completeChan)
 	}
 
