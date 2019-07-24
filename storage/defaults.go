@@ -5,11 +5,16 @@
 package storage
 
 import (
+	"errors"
 	"github.com/DxChainNetwork/godx/common"
 
 	"math/big"
 	"time"
 )
+
+// HostBusyHandleReqErr defines that client sent the contract request too frequently. If this error is occurred
+// the host's evaluation will not be deducted
+var HostBusyHandleReqErr = errors.New("client must wait until the host finish its's previous request")
 
 // Negotiation related messages
 const (
@@ -21,6 +26,7 @@ const (
 	ContractUploadRevisionSign   = 0x24
 	ContractDownloadDataMsg      = 0x25
 	NegotiationErrorMsg          = 0x26
+	HostBusyHandleReqMsg         = 0x27
 
 	// Host Handle Message Set
 	HostConfigReqMsg                 = 0x30

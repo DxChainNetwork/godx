@@ -432,10 +432,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
-		} else {
+		} else if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
 	}()
@@ -474,6 +474,12 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		return storage.ContractMetaData{}, err
+	}
+
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
 	}
 
 	// if host send some negotiation error, client should handler it

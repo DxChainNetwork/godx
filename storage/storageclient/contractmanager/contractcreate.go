@@ -131,7 +131,7 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 	// 3. create the contract
 	if newlyCreatedContract, err = cm.ContractCreate(params); err != nil {
 		formCost = common.BigInt0
-		err = fmt.Errorf("failed to create the contract with host %v: %s", newlyCreatedContract.EnodeID, err.Error())
+		err = fmt.Errorf("failed to create the contract: %s", err.Error())
 		return
 	}
 
@@ -220,10 +220,10 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
-		} else {
+		} else if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
 		}
 	}()
@@ -265,6 +265,12 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	if err != nil {
 		err = fmt.Errorf("contract create read message error: %s", err.Error())
 		return storage.ContractMetaData{}, err
+	}
+
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
 	}
 
 	// if host send some negotiation error, client should handler it

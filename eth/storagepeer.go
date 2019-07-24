@@ -103,6 +103,12 @@ func (p *peer) SendContractDownloadData(resp storage.DownloadResponse) error {
 	return p2p.Send(p.rw, storage.ContractDownloadDataMsg, resp)
 }
 
+// SendHostBusyHandleRequestErr will send a error message to client, stating that
+// the host is currently busy handling the previous error message
+func (p *peer) SendHostBusyHandleRequestErr() error {
+	return p2p.Send(p.rw, storage.HostBusyHandleReqMsg, "error handling")
+}
+
 // WaitConfigResp is used by the storage client, waiting from the configuration
 // response from the storage host
 func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {

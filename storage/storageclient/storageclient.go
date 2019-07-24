@@ -380,9 +380,9 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 	defer func() {
 		// record the successful or failed interactions
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else {
+		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -398,6 +398,13 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	if err != nil {
 		return fmt.Errorf("read upload merkle proof response msg failed, err: %v", err)
 	}
+
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.HostBusyHandleReqErr
+	}
+
 	if err := msg.Decode(&merkleResp); err != nil {
 		return err
 	}
@@ -571,9 +578,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 
 	// record the successful or failed interactions
 	defer func() {
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else {
+		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -606,6 +613,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
+		}
+
+		// meaning request was sent too frequently, the host's evaluation
+		// will not be degraded
+		if msg.Code == storage.HostBusyHandleReqMsg {
+			return storage.HostBusyHandleReqErr
 		}
 
 		// if host send some negotiation error, client should handler it
@@ -655,6 +668,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
+		}
+
+		// meaning request was sent too frequently, the host's evaluation
+		// will not be degraded
+		if msg.Code == storage.HostBusyHandleReqMsg {
+			return storage.HostBusyHandleReqErr
 		}
 
 		// if host send some negotiation error, client should handler it

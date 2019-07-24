@@ -33,6 +33,7 @@ type Peer interface {
 	RequestContractDownload(req DownloadRequest) error
 	SendRevisionStop() error
 	SendContractDownloadData(resp DownloadResponse) error
+	SendHostBusyHandleRequestErr() error
 	WaitConfigResp() (p2p.Msg, error)
 	ClientWaitContractResp() (msg p2p.Msg, err error)
 	HostWaitContractResp() (msg p2p.Msg, err error)

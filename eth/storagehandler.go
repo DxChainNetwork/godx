@@ -47,6 +47,9 @@ func (pm *ProtocolManager) contractReqHandler(handler func(h *storagehost.Storag
 	// avoid continuously contract related requests attack
 	// generate too many go routines and used all resources
 	if err := p.HostContractProcessing(); err != nil {
+		// error is ignored intentionally. If error occurred,
+		// the client must wait until time out
+		_ = p.SendHostBusyHandleRequestErr()
 		return err
 	}
 
