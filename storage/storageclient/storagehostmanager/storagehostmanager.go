@@ -186,10 +186,10 @@ func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInf
 	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
 	// cannot sign contract with it
 	_, exist := filteredHosts[hi.EnodeID]
-	hi.Filtered = whitelist != exist
 
 	// update host historical interaction record before returning
 	shm.lock.Lock()
+	hi.Filtered = whitelist != exist
 	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
 	shm.lock.Unlock()
 

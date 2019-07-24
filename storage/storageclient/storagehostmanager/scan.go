@@ -5,6 +5,7 @@
 package storagehostmanager
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -22,7 +23,9 @@ func (shm *StorageHostManager) scan() {
 
 	// wait until the node is fully synced (no block chain change)
 	// the information acquired will be more stable
-	shm.waitSync()
+	if err := shm.waitSync(); err != nil {
+		return
+	}
 
 	// get all storage hosts who have not been scanned before or no historical information
 	allStorageHosts := shm.storageHostTree.All()
@@ -33,7 +36,10 @@ func (shm *StorageHostManager) scan() {
 	}
 
 	// indicate the initial scan is finished
-	shm.waitScanFinish()
+	if err := shm.waitScanFinish(); err != nil {
+		return
+	}
+
 	shm.lock.Lock()
 	shm.initialScan = true
 	shm.lock.Unlock()
@@ -181,7 +187,9 @@ func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
 	// keep reading the host information from the worker
 	// and start to update its configuration
 	for info := range scanWorker {
-		shm.waitOnline()
+		if err := shm.waitOnline(); err != nil {
+			return
+		}
 		shm.updateHostConfig(info)
 	}
 	shm.lock.Lock()
@@ -243,7 +251,7 @@ func (shm *StorageHostManager) retrieveHostConfig(hi storage.HostInfo) (storage.
 // waitOnline will pause the current process and wait until the
 // local node is connected with some peers (meaning the local node
 // is online)
-func (shm *StorageHostManager) waitOnline() {
+func (shm *StorageHostManager) waitOnline() error {
 	for {
 		if shm.b.Online() {
 			break
@@ -252,14 +260,14 @@ func (shm *StorageHostManager) waitOnline() {
 		select {
 		case <-time.After(scanOnlineCheckDuration):
 		case <-shm.tm.StopChan():
-			return
+			return fmt.Errorf("program terminated")
 		}
 	}
 }
 
 // waitSync will pause the current go routine and wait until the
 // node is fully synced
-func (shm *StorageHostManager) waitSync() {
+func (shm *StorageHostManager) waitSync() error {
 	for {
 		if !shm.b.Syncing() {
 			break
@@ -267,7 +275,7 @@ func (shm *StorageHostManager) waitSync() {
 
 		select {
 		case <-shm.tm.StopChan():
-			return
+			return fmt.Errorf("program terminated")
 		case <-time.After(scanCheckDuration):
 		}
 	}
@@ -275,7 +283,7 @@ func (shm *StorageHostManager) waitSync() {
 
 // waitScanFinish will pause the current process until all the host stored in the scanWaitList
 // got executed
-func (shm *StorageHostManager) waitScanFinish() {
+func (shm *StorageHostManager) waitScanFinish() error {
 	for {
 		shm.lock.Lock()
 		scanningTasks := len(shm.scanWaitList)
@@ -287,7 +295,10 @@ func (shm *StorageHostManager) waitScanFinish() {
 
 		select {
 		case <-shm.tm.StopChan():
+			return fmt.Errorf("program terminated")
 		case <-time.After(scanCheckDuration):
 		}
 	}
+
+	return nil
 }

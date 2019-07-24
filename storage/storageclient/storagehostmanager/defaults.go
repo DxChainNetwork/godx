@@ -31,8 +31,10 @@ const (
 	scanOnlineCheckDuration = 30 * time.Second
 	scanCheckDuration       = time.Second
 	scanQuantity            = 2500
-	maxScanSleep            = 6 * time.Hour
-	minScanSleep            = time.Hour + time.Minute*30
+	//maxScanSleep            = 6 * time.Hour
+	//minScanSleep            = time.Hour + time.Minute*30
+	maxScanSleep = 1 * time.Minute
+	minScanSleep = 30 * time.Second
 
 	maxWorkersAllowed = 80
 	minScans          = 12
