@@ -212,7 +212,7 @@ func (h *StorageHost) getFinancialMetrics() HostFinancialMetrics {
 	return h.financialMetrics
 }
 
-// print the persist directory of the host
+// getPersistDir return the persist directory of the host
 func (h *StorageHost) getPersistDir() string {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
