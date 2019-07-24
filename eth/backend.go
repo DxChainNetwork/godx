@@ -679,6 +679,8 @@ func (s *Ethereum) RevisionOrRenewingDone(hostID enode.ID) {
 	peer.RevisionOrRenewingDone()
 }
 
+// SetupConnection will establish p2p static connection between storage client and storage host
+// only storage is able to initiate the set up connection operation
 func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
 	// get the peer ID
 	var destNode *enode.Node
