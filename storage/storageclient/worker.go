@@ -16,13 +16,16 @@ import (
 )
 
 var (
-	// when the client has no contract with host, we will terminate the worker
+	// ErrNoContractsWithHost will be used when the client has no contract with host
+	// the worker will be terminated
 	ErrNoContractsWithHost = errors.New("no contract with host which is need to terminate")
 
-	// when we can't get host info, we will terminate the worker
+	// ErrUnableRetrieveHostInfo is used when host information cannot be retrieved
+	// worker will be terminated
 	ErrUnableRetrieveHostInfo = errors.New("can't retrieve host info")
 
-	// when client and host is renewing contract, we could wait for little time
+	// ErrContractRenewing is used when client and host is renewing contract
+	// the worker will return directly
 	ErrContractRenewing = errors.New("client and host is renewing contract")
 )
 
@@ -64,14 +67,14 @@ type worker struct {
 
 // ActivateWorkerPool will grab the set of contracts from the contract manager and
 // update the worker pool to match.
-func (sc *StorageClient) activateWorkerPool() {
+func (client *StorageClient) activateWorkerPool() {
 	// get all contracts in client
-	contractMap := sc.contractManager.GetStorageContractSet().Contracts()
+	contractMap := client.contractManager.GetStorageContractSet().Contracts()
 
 	// new a worker for a contract that haven't a worker
 	for id, contract := range contractMap {
-		sc.lock.Lock()
-		_, exists := sc.workerPool[id]
+		client.lock.Lock()
+		_, exists := client.workerPool[id]
 		if !exists {
 			worker := &worker{
 				contract:     contract.Metadata(),
@@ -79,36 +82,35 @@ func (sc *StorageClient) activateWorkerPool() {
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-				client:       sc,
+				client:       client,
 			}
-			sc.workerPool[id] = worker
+			client.workerPool[id] = worker
 
 			// start worker goroutine
-			if err := sc.tm.Add(); err != nil {
+			if err := client.tm.Add(); err != nil {
 				log.Error("storage client failed to add in worker progress", "error", err)
-				sc.lock.Unlock()
+				client.lock.Unlock()
 				break
 			}
 			go func() {
-				defer sc.tm.Done()
+				defer client.tm.Done()
 				worker.workLoop()
 			}()
 
 		}
-		sc.lock.Unlock()
+		client.lock.Unlock()
 	}
 
 	// Remove a worker for any worker that is not in the set of new contracts.
-	sc.lock.Lock()
-	for id, worker := range sc.workerPool {
+	client.lock.Lock()
+	for id, worker := range client.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(sc.sessionSet, id)
-			delete(sc.workerPool, id)
+			delete(client.workerPool, id)
 			close(worker.killChan)
 		}
 	}
-	sc.lock.Unlock()
+	client.lock.Unlock()
 }
 
 // WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal
@@ -176,15 +178,6 @@ func (w *worker) killDownloading() {
 	w.downloadMu.Unlock()
 
 	// close connection after downloading
-	contractID := storage.ContractID(w.contract.ID)
-	session, ok := w.client.sessionSet[contractID]
-	if session != nil && ok {
-		delete(w.client.sessionSet, contractID)
-		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
-			w.client.log.Debug("can't close connection after downloading", "error", err)
-		}
-	}
-
 	for i := 0; i < len(removedSegments); i++ {
 		removedSegments[i].removeWorker()
 	}
@@ -224,68 +217,35 @@ func (w *worker) nextDownloadSegment() *unfinishedDownloadSegment {
 	return nextSegment
 }
 
-// check the session isRew, busy, exceed the max upload/download sector limit
-func (w *worker) checkSession() (*storage.Session, error) {
-	// we must make sure that renew and revision consistency
-	w.client.sessionLock.Lock()
-	defer w.client.sessionLock.Unlock()
-
+func (w *worker) checkConnection() (storage.Peer, *storage.HostInfo, error) {
 	// check this contract whether is renewing
 	contractID := w.contract.ID
-	if w.client.contractManager.IsRenewing(contractID) {
-		w.client.log.Warn("renew contract is doing, can't upload/download")
-		return nil, ErrContractRenewing
-	}
 
+	// get the storage host information
 	hostInfo, err := w.updateWorkerContractID(contractID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Setup an active connection to the host and we will reuse previous connection
-	session, _ := w.client.sessionSet[contractID]
-	if session != nil {
-		if session.IsBusy() {
-			w.client.log.Error("session is busy[hostsetting, uploading/downloading, contractcreate]")
-			return nil, errors.New("session is busy")
-		}
+	// set up the connection
+	sp, err := w.client.SetupConnection(hostInfo.EnodeURL)
 
-		if session.IsClosed() {
-			delete(w.client.sessionSet, contractID)
-		}
+	// start contract revision, if failed, meaning the
+	// renewing is started
+	if ok := sp.TryToRenewOrRevise(); !ok {
+		return nil, nil, errors.New("the contract is currently renewing or revising")
 	}
 
-	if session == nil || session.IsClosed() {
-		s, err := w.client.ethBackend.SetupStorageConnection(hostInfo.EnodeURL)
-		if err != nil {
-			w.client.log.Error("failed to create connection with host for file uploading/downloading", "hostUrl", w.contract.EnodeID.String(), "err", err)
-			return nil, errors.New("failed to create connection")
-		}
-
-		w.client.sessionSet[contractID] = s
-		session = s
-	}
-
-	session.SetHostInfo(hostInfo)
-	return session, nil
+	return sp, hostInfo, err
 }
 
 // Actually perform a download task
 func (w *worker) download(uds *unfinishedDownloadSegment) error {
-	session, err := w.checkSession()
-	defer func() {
-		if session != nil {
-			session.ResetBusy()
-
-			select {
-			case session.RevisionDone() <- struct{}{}:
-			default:
-			}
-		}
-	}()
+	sp, hostInfo, err := w.checkConnection()
+	defer sp.RevisionOrRenewingDone()
 
 	if err != nil {
-		w.client.log.Error("check session failed", "err", err)
+		w.client.log.Error("failed to check the connection", "err", err)
 		return err
 	}
 
@@ -303,7 +263,7 @@ func (w *worker) download(uds *unfinishedDownloadSegment) error {
 	root := uds.segmentMap[w.hostID.String()].root
 
 	// call rpc request the data from host, if get error, unregister the worker.
-	sectorData, err := w.client.Download(session, root, uint32(fetchOffset), uint32(fetchLength))
+	sectorData, err := w.client.Download(sp, root, uint32(fetchOffset), uint32(fetchLength), hostInfo)
 	if err != nil {
 		w.client.log.Error("worker failed to download sector", "error", err)
 		uds.unregisterWorker(w)

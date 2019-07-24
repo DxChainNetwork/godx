@@ -56,6 +56,10 @@ func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
 	server.AddPeer(node)
+
+	// added it to the staticNodeByUser map
+	server.AddStaticByUser(node.ID())
+
 	return true, nil
 }
 
@@ -72,6 +76,10 @@ func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
 		return false, fmt.Errorf("invalid enode: %v", err)
 	}
 	server.RemovePeer(node)
+
+	// remove the node from the staticNodeByUser map
+	server.RemoveStaticByUser(node.ID())
+
 	return true, nil
 }
 

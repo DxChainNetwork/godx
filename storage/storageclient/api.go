@@ -16,7 +16,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
-// ActiveContractAPI is used to re-format the contract information that is going to
+// ActiveContractsAPIDisplay is used to re-format the contract information that is going to
 // be displayed on the console
 type ActiveContractsAPIDisplay struct {
 	ContractID   string
@@ -43,10 +43,13 @@ func (api *PublicStorageClientAPI) Config() (setting storage.ClientSettingAPIDis
 	return formatClientSetting(api.sc.RetrieveClientSetting())
 }
 
+// Hosts will retrieve the current storage hosts from the storage host manager
 func (api *PublicStorageClientAPI) Hosts() (hosts []storage.HostInfo) {
 	return api.sc.storageHostManager.AllHosts()
 }
 
+// Host will retrieve a specific storage host information from the storage host manager
+// based on the host id
 func (api *PublicStorageClientAPI) Host(id string) (host storage.HostInfo, err error) {
 	var enodeid enode.ID
 
@@ -66,17 +69,19 @@ func (api *PublicStorageClientAPI) Host(id string) (host storage.HostInfo, err e
 	return info, nil
 }
 
+// HostRank will retrieve the rankings of the storage hosts. The ranking information also
+// includes detailed evaluation break down
 func (api *PublicStorageClientAPI) HostRank() (evaluation []storagehostmanager.StorageHostRank) {
 	return api.sc.storageHostManager.StorageHostRanks()
 }
 
-// ActiveContracts will retrieve all active contracts and display their general information
+// Contracts will retrieve all active contracts and display their general information
 func (api *PublicStorageClientAPI) Contracts() (activeContracts []ActiveContractsAPIDisplay) {
 	activeContracts = api.sc.ActiveContracts()
 	return
 }
 
-// ContractDetail will retrieve detailed contract information
+// Contract will retrieve detailed contract information
 func (api *PublicStorageClientAPI) Contract(contractID string) (detail ContractMetaDataAPIDisplay, err error) {
 	// convert the string into contractID format
 	var convertContractID storage.ContractID
@@ -98,22 +103,12 @@ func (api *PublicStorageClientAPI) Contract(contractID string) (detail ContractM
 	return
 }
 
-//GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
+// PaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
 func (api *PublicStorageClientAPI) PaymentAddress() (common.Address, error) {
 	return api.sc.GetPaymentAddress()
 }
 
-//// MemoryAvailable returns current memory available
-//func (api *PublicStorageClientAPI) MemoryAvailable() uint64 {
-//	return api.sc.memoryManager.MemoryAvailable()
-//}
-//
-//// MemoryLimit returns max memory allowed
-//func (api *PublicStorageClientAPI) MemoryLimit() uint64 {
-//	return api.sc.memoryManager.MemoryLimit()
-//}
-
-// download remote file by sync mode
+// DownloadSync is used to download remote file by sync mode
 // NOTE: RPC not support async download, because it is stateless, should block until download task done.
 func (api *PublicStorageClientAPI) DownloadSync(remoteFilePath, localPath string) (string, error) {
 	p := storage.DownloadParameters{
@@ -159,12 +154,7 @@ func NewPrivateStorageClientAPI(sc *StorageClient) *PrivateStorageClientAPI {
 	return &PrivateStorageClientAPI{sc}
 }
 
-// SetMemoryLimit allows user to expand or shrink the current memory limit
-//func (api *PrivateStorageClientAPI) SetMemoryLimit(amount uint64) string {
-//	return api.sc.memoryManager.SetMemoryLimit(amount)
-//}
-
-// SetClientSetting will configure the client setting based on the user input data
+// SetConfig will configure the client setting based on the user input data
 func (api *PrivateStorageClientAPI) SetConfig(settings map[string]string) (resp string, err error) {
 	prevClientSetting := api.sc.RetrieveClientSetting()
 	var currentSetting storage.ClientSetting
@@ -188,7 +178,7 @@ func (api *PrivateStorageClientAPI) SetConfig(settings map[string]string) (resp 
 	return
 }
 
-//SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+// SetPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
 func (api *PrivateStorageClientAPI) SetPaymentAddress(addrStr string) bool {
 	paymentAddress := common.HexToAddress(addrStr)
 
@@ -205,47 +195,3 @@ func (api *PrivateStorageClientAPI) SetPaymentAddress(addrStr string) bool {
 
 	return true
 }
-
-// CancelAllContracts will cancel all contracts signed with storage client by
-// marking all active contracts as canceled, not good for uploading, and not good
-// for renewing
-//func (api *PrivateStorageClientAPI) CancelAllContracts() (resp string) {
-//	if err := api.sc.CancelContracts(); err != nil {
-//		resp = fmt.Sprintf("Failed to cancel all contracts: %s", err.Error())
-//		return
-//	}
-//
-//	resp = fmt.Sprintf("All contracts are successfully canceled")
-//	return resp
-//}
-
-// PublicStorageClientDebugAPI defines the object used to call eligible public APIs
-// that are used to mock data
-//type PublicStorageClientDebugAPI struct {
-//	sc *StorageClient
-//}
-
-// NewPublicStorageClientDebugAPI initialize NewPublicStorageClientDebugAPI object
-// which implemented a bunch of API methods
-//func NewPublicStorageClientDebugAPI(sc *StorageClient) *PublicStorageClientDebugAPI {
-//	return &PublicStorageClientDebugAPI{sc}
-//}
-
-// InsertActiveContracts will create some random contracts based on the amount user entered
-// and inserted them into activeContracts field
-//func (api *PublicStorageClientDebugAPI) InsertActiveContracts(amount int) (resp string, err error) {
-//	// validate user input
-//	if amount <= 0 {
-//		err = fmt.Errorf("the amount you entered %v must be greater than 0", amount)
-//		return
-//	}
-//
-//	// insert random active contracts
-//	if err = api.sc.contractManager.InsertRandomActiveContracts(amount); err != nil {
-//		err = fmt.Errorf("failed to insert mocked active contracts: %s", err.Error())
-//		return
-//	}
-//
-//	resp = fmt.Sprintf("Successfully inserted %v mocked active contracts", amount)
-//	return
-//}

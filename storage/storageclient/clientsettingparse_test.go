@@ -169,7 +169,7 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 
 	rand.Seed(time.Now().UnixNano())
 
-	for key, _ := range selectedKeys {
+	for key := range selectedKeys {
 		switch {
 		case key == "fund":
 			value = common.RandomBigInt()

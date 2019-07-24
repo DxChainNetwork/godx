@@ -15,24 +15,29 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// handleDownload is the function to be called for download negotiation
-func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error {
-	s.SetBusy()
-	defer s.ResetBusy()
+// DownloadHandler handles the download negotiation
+func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
+	var downloadErr error
 
-	s.SetDeadLine(storage.DownloadTime)
+	defer func() {
+		if downloadErr != nil {
+			h.log.Error("data download failed", "err", downloadErr.Error())
+			sp.TriggerError(downloadErr)
+		}
+	}()
 
 	// read the download request.
 	var req storage.DownloadRequest
-	err := beginMsg.Decode(&req)
+	err := downloadReqMsg.Decode(&req)
 	if err != nil {
-		return err
+		downloadErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
+		return
 	}
 
 	// as soon as client complete downloading, will send stop msg.
 	stopSignal := make(chan error, 1)
 	go func() {
-		msg, err := s.ReadMsg()
+		msg, err := sp.HostWaitContractResp()
 		if err != nil {
 			stopSignal <- err
 		} else if msg.Code != storage.NegotiationStopMsg {
@@ -46,15 +51,17 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, req.StorageContractID)
 	h.lock.RUnlock()
+
+	// it is totally fine not getting the storage responsibility
 	if err != nil {
-		return fmt.Errorf("[Error Get Storage Responsibility] Error: %v", err)
+		return
 	}
 
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
-		err := errors.New("no contract locked")
+		downloadErr = errors.New("no contract locked")
 		<-stopSignal
-		return err
+		return
 	}
 
 	settings := h.externalConfig()
@@ -77,7 +84,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			err = errors.New("the number of missed proof values not match the old")
 		}
 		if err != nil {
-			return err
+			downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
+			return
 		}
 	}
 
@@ -116,19 +124,22 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		return err
+		downloadErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
+		return
 	}
 
 	// Sign the new revision.
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		return err
+		downloadErr = fmt.Errorf("failed to find the account address: %s", err.Error())
+		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		return err
+		downloadErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
+		return
 	}
 
 	newRevision.Signatures = [][]byte{req.Signature, hostSig}
@@ -141,7 +152,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 	err = h.modifyStorageResponsibility(so, nil, nil, nil)
 	h.lock.Unlock()
 	if err != nil {
-		return err
+		downloadErr = fmt.Errorf("host failed to modify the storage responsibility: %s", err.Error())
+		return
 	}
 
 	// enter response loop
@@ -150,7 +162,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {
-			return err
+			downloadErr = fmt.Errorf("host failed read sector: %s", err.Error())
+			return
 		}
 		data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
@@ -161,7 +174,8 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 			proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
-				return err
+				downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
+				return
 			}
 		}
 
@@ -176,11 +190,15 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 		select {
 		case err := <-stopSignal:
 			if err != nil {
-				return err
+				downloadErr = fmt.Errorf("stop signal received: %s", err.Error())
+				return
 			}
 
 			resp.Signature = hostSig
-			return s.SendStorageContractDownloadData(resp)
+			if err := sp.SendContractDownloadData(resp); err != nil {
+				downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
+				return
+			}
 		default:
 		}
 
@@ -188,13 +206,26 @@ func handleDownload(h *StorageHost, s *storage.Session, beginMsg *p2p.Msg) error
 			resp.Signature = hostSig
 		}
 
-		if err := s.SendStorageContractDownloadData(resp); err != nil {
-			return err
+		if err := sp.SendContractDownloadData(resp); err != nil {
+			downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
+			return
 		}
 	}
 
+	// In case the user restart the program, the contract create handler will not be
+	// reached. Therefore, needs another check in the download handler
+	if !sp.IsStaticConn() {
+		node := sp.PeerNode()
+		if node == nil {
+			return
+		}
+		h.ethBackend.SetStatic(node)
+	}
+
 	// the stop signal must arrive before RPC is complete.
-	return <-stopSignal
+	downloadErr = <-stopSignal
+
+	return
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for

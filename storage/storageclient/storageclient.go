@@ -35,11 +35,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
-var (
-	zeroValue  = new(big.Int).SetInt64(0)
-	extraRatio = 0.02
-)
-
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
@@ -79,10 +74,6 @@ type StorageClient struct {
 	info       storage.ParsedAPI
 	ethBackend storage.EthBackend
 	apiBackend ethapi.Backend
-
-	// get the P2P server for adding peer
-	sessionLock sync.Mutex
-	sessionSet  map[storage.ContractID]*storage.Session
 }
 
 // New initializes StorageClient object
@@ -101,7 +92,6 @@ func New(persistDir string) (*StorageClient, error) {
 			stuckSegmentSuccess: make(chan storage.DxPath, 1),
 		},
 		workerPool: make(map[storage.ContractID]*worker),
-		sessionSet: make(map[storage.ContractID]*storage.Session),
 	}
 
 	sc.memoryManager = memorymanager.New(DefaultMaxMemory, sc.tm.StopChan())
@@ -122,115 +112,102 @@ func New(persistDir string) (*StorageClient, error) {
 }
 
 // Start controls go routine checking and updating process
-func (sc *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
+func (client *StorageClient) Start(b storage.EthBackend, apiBackend ethapi.Backend) (err error) {
 	// get the eth backend
-	sc.ethBackend = b
+	client.ethBackend = b
 
 	// getting all needed API functions
-	if err = storage.FilterAPIs(b.APIs(), &sc.info); err != nil {
+	if err = storage.FilterAPIs(b.APIs(), &client.info); err != nil {
 		return
 	}
 
 	// start storageHostManager
-	if err = sc.storageHostManager.Start(sc); err != nil {
+	if err = client.storageHostManager.Start(client); err != nil {
 		return
 	}
 
 	// start contractManager
-	if err = sc.contractManager.Start(sc); err != nil {
+	if err = client.contractManager.Start(client); err != nil {
 		err = fmt.Errorf("error starting contract manager: %s", err.Error())
 		return
 	}
 
 	// Load settings from persist file
-	if err := sc.loadPersist(); err != nil {
+	if err := client.loadPersist(); err != nil {
 		return err
 	}
 
-	if err = sc.fileSystem.Start(); err != nil {
+	if err = client.fileSystem.Start(); err != nil {
 		return err
 	}
 
 	// active the work pool to get a worker for a upload/download task.
-	sc.activateWorkerPool()
+	client.activateWorkerPool()
 
 	// loop to download, upload, stuck and health check
-	go sc.downloadLoop()
-	go sc.uploadLoop()
-	go sc.stuckLoop()
-	go sc.uploadOrRepair()
-	go sc.healthCheckLoop()
+	go client.downloadLoop()
+	go client.uploadLoop()
+	go client.stuckLoop()
+	go client.uploadOrRepair()
+	go client.healthCheckLoop()
 
 	// kill workers on shutdown.
-	sc.tm.OnStop(func() error {
-		sc.lock.Lock()
-		for _, worker := range sc.workerPool {
+	client.tm.OnStop(func() error {
+		client.lock.Lock()
+		for _, worker := range client.workerPool {
 			close(worker.killChan)
 		}
-		sc.lock.Unlock()
+		client.lock.Unlock()
 		return nil
 	})
 
-	sc.log.Info("Storage Client Started")
+	client.log.Info("Storage Client Started")
 
 	return nil
 }
 
-func (sc *StorageClient) Close() error {
-	sc.log.Info("Closing The Contract Manager")
-	sc.contractManager.Stop()
+// Close method will be used to send storage
+func (client *StorageClient) Close() error {
+	client.log.Info("Closing The Contract Manager")
+	client.contractManager.Stop()
 
 	var fullErr error
 
 	// Closing the host manager
-	sc.log.Info("Closing the storage client host manager")
-	err := sc.storageHostManager.Close()
+	client.log.Info("Closing the storage client host manager")
+	err := client.storageHostManager.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the file system
-	sc.log.Info("Closing the storage client file system")
-	err = sc.fileSystem.Close()
+	client.log.Info("Closing the storage client file system")
+	err = client.fileSystem.Close()
 	fullErr = common.ErrCompose(fullErr, err)
 
 	// Closing the thread manager
-	sc.log.Info("Closing The Storage Client Manager")
-	err = sc.tm.Stop()
+	client.log.Info("Closing The Storage Client Manager")
+	err = client.tm.Stop()
 	fullErr = common.ErrCompose(fullErr, err)
 	return fullErr
 }
 
-func (sc *StorageClient) DeleteFile(path storage.DxPath) error {
-	if err := sc.tm.Add(); err != nil {
+// DeleteFile will delete from the file system file set. The file
+// wil also be deleted from the disk
+func (client *StorageClient) DeleteFile(path storage.DxPath) error {
+	if err := client.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tm.Done()
-	return sc.fileSystem.FileSet().Delete(path)
-}
-
-// Check whether the contract session is uploading or downloading
-func (sc *StorageClient) IsRevisionSessionDone(contractID storage.ContractID) bool {
-	sc.sessionLock.Lock()
-	defer sc.sessionLock.Unlock()
-	if s, ok := sc.sessionSet[contractID]; ok && s.IsBusy() {
-		revisionDoneTime := time.After(RevisionDoneTime)
-		select {
-		case <-revisionDoneTime:
-			return false
-		case <-s.RevisionDone():
-			return true
-		}
-	}
-	return true
+	defer client.tm.Done()
+	return client.fileSystem.FileSet().Delete(path)
 }
 
 // ContractDetail will return the detailed contract information
-func (sc *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {
-	return sc.contractManager.RetrieveActiveContract(contractID)
+func (client *StorageClient) ContractDetail(contractID storage.ContractID) (detail storage.ContractMetaData, exists bool) {
+	return client.contractManager.RetrieveActiveContract(contractID)
 }
 
 // ActiveContracts will retrieve all active contracts, reformat them, and return them back
-func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
-	allActiveContracts := sc.contractManager.RetrieveActiveContracts()
+func (client *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPIDisplay) {
+	allActiveContracts := client.contractManager.RetrieveActiveContracts()
 
 	for _, contract := range allActiveContracts {
 		activeContract := ActiveContractsAPIDisplay{
@@ -246,20 +223,17 @@ func (sc *StorageClient) ActiveContracts() (activeContracts []ActiveContractsAPI
 	return
 }
 
-func (sc *StorageClient) CancelContracts() (err error) {
-	return sc.contractManager.CancelStorageContract()
-}
-
 // SetClientSetting will config the client setting based on the value provided
 // it will set the bandwidth limit, rentPayment, and ipViolation check
 // By setting the rentPayment, the contract maintenance
-func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
+func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
 	// making sure the entire program will only be terminated after finish the SetClientSetting
 	// operation
-	if err = sc.tm.Add(); err != nil {
+
+	if err = client.tm.Add(); err != nil {
 		return
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	// input validation
 	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
@@ -269,39 +243,41 @@ func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err er
 	}
 
 	// set the rent payment
-	if err = sc.contractManager.SetRentPayment(setting.RentPayment); err != nil {
+	if err = client.contractManager.SetRentPayment(setting.RentPayment); err != nil {
 		return
 	}
 
 	// set upload/download (write/read) bandwidth limits
-	if err = sc.setBandwidthLimits(setting.MaxDownloadSpeed, setting.MaxUploadSpeed); err != nil {
+	if err = client.setBandwidthLimits(setting.MaxDownloadSpeed, setting.MaxUploadSpeed); err != nil {
 		return
 	}
 
 	// set the ip violation check
-	sc.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
+	client.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
 
 	// update and save the persist
-	sc.lock.Lock()
-	sc.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
-	sc.persist.MaxUploadSpeed = setting.MaxUploadSpeed
-	if err = sc.saveSettings(); err != nil {
+	client.lock.Lock()
+	client.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
+	client.persist.MaxUploadSpeed = setting.MaxUploadSpeed
+	if err = client.saveSettings(); err != nil {
 		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+		client.lock.Unlock()
+		return
 	}
-	sc.lock.Unlock()
+	client.lock.Unlock()
 
 	// active the worker pool
-	sc.activateWorkerPool()
+	client.activateWorkerPool()
 
 	return
 }
 
 // RetrieveClientSetting will return the current storage client setting
-func (sc *StorageClient) RetrieveClientSetting() (setting storage.ClientSetting) {
-	maxDownloadSpeed, maxUploadSpeed, _ := sc.contractManager.RetrieveRateLimit()
+func (client *StorageClient) RetrieveClientSetting() (setting storage.ClientSetting) {
+	maxDownloadSpeed, maxUploadSpeed, _ := client.contractManager.RetrieveRateLimit()
 	setting = storage.ClientSetting{
-		RentPayment:       sc.contractManager.AcquireRentPayment(),
-		EnableIPViolation: sc.storageHostManager.RetrieveIPViolationCheckSetting(),
+		RentPayment:       client.contractManager.AcquireRentPayment(),
+		EnableIPViolation: client.storageHostManager.RetrieveIPViolationCheckSetting(),
 		MaxUploadSpeed:    maxUploadSpeed,
 		MaxDownloadSpeed:  maxDownloadSpeed,
 	}
@@ -309,7 +285,7 @@ func (sc *StorageClient) RetrieveClientSetting() (setting storage.ClientSetting)
 }
 
 // setBandwidthLimits specifies the data upload and downloading speed limit
-func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit int64) (err error) {
+func (client *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit int64) (err error) {
 	// validation
 	if uploadSpeedLimit < 0 || downloadSpeedLimit < 0 {
 		return errors.New("upload/download speed limit cannot be negative")
@@ -317,37 +293,37 @@ func (sc *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedLimit
 
 	// Update the contract settings accordingly
 	if uploadSpeedLimit == 0 && downloadSpeedLimit == 0 {
-		sc.contractManager.SetRateLimits(0, 0, 0)
+		client.contractManager.SetRateLimits(0, 0, 0)
 	} else {
-		sc.contractManager.SetRateLimits(downloadSpeedLimit, uploadSpeedLimit, DefaultPacketSize)
+		client.contractManager.SetRateLimits(downloadSpeedLimit, uploadSpeedLimit, DefaultPacketSize)
 	}
 
 	return nil
 }
 
-func (sc *StorageClient) Append(session *storage.Session, data []byte) (common.Hash, error) {
-	err := sc.Write(session, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}})
+func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo *storage.HostInfo) (common.Hash, error) {
+	err := client.Write(sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
 	return merkle.Sha256MerkleTreeRoot(data), err
 }
 
-func (sc *StorageClient) Write(session *storage.Session, actions []storage.UploadAction) (err error) {
+func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadAction, hostInfo *storage.HostInfo) (err error) {
 	// Retrieve the last contract revision
-	scs := sc.contractManager.GetStorageContractSet()
+	scs := client.contractManager.GetStorageContractSet()
 
 	// Find the contractID formed by this host
-	hostInfo := session.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
-		return fmt.Errorf("not exist this contract: %s", contractID.String())
+		return fmt.Errorf("contract does not exist: %s", contractID.String())
 	}
 
 	defer scs.Return(contract)
+
 	contractHeader := contract.Header()
 	contractRevision := contractHeader.LatestContractRevision
 
 	// calculate price per sector
-	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-sc.ethBackend.GetCurrentBlockHeight())
+	blockBytes := storage.SectorSize * uint64(contractRevision.NewWindowEnd-client.ethBackend.GetCurrentBlockHeight())
 	sectorBandwidthPrice := hostInfo.UploadBandwidthPrice.MultUint64(storage.SectorSize)
 	sectorStoragePrice := hostInfo.StoragePrice.MultUint64(blockBytes)
 	sectorDeposit := hostInfo.Deposit.MultUint64(blockBytes)
@@ -367,6 +343,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		storagePrice = sectorStoragePrice.MultUint64(addedSectors)
 		deposit = sectorDeposit.MultUint64(addedSectors)
 	}
+
 	// estimate cost of Merkle proof
 	proofSize := storage.HashSize * (128 + len(actions))
 	bandwidthPrice = bandwidthPrice.Add(hostInfo.DownloadBandwidthPrice.MultUint64(uint64(proofSize)))
@@ -408,30 +385,31 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	}
 	defer func() {
 		// record the successful or failed interactions
-		if err != nil {
-			sc.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else {
-			sc.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+		if err != nil && err != storage.HostBusyHandleReqErr {
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+		} else if err == nil {
+			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
-
-		// reset deadline
-		session.SetDeadLine(5 * time.Minute)
 	}()
-	// 1. Send storage upload request
-	if err := session.SetDeadLine(storage.ContractRevisionTime); err != nil {
-		return err
-	}
 
-	if err := session.SendStorageContractUploadRequest(req); err != nil {
+	// send contract upload request
+	if err := sp.RequestContractUpload(req); err != nil {
 		return err
 	}
 
 	// 2. read merkle proof response from host
 	var merkleResp storage.UploadMerkleProof
-	msg, err := session.ReadMsg()
+	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		return fmt.Errorf("read upload merkle proof response msg failed, err: %v", err)
 	}
+
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.HostBusyHandleReqErr
+	}
+
 	if err := msg.Decode(&merkleResp); err != nil {
 		return err
 	}
@@ -445,7 +423,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 	verified, err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
 	if err != nil {
-		sc.log.Error("something wrong for verifying diff proof", "error", err)
+		client.log.Error("something wrong for verifying diff proof", "error", err)
 	}
 	if !verified {
 		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
@@ -456,7 +434,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
 	verified, err = merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
 	if err != nil {
-		sc.log.Error("something wrong for verifying diff proof", "error", err)
+		client.log.Error("something wrong for verifying diff proof", "error", err)
 	}
 	if !verified {
 		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
@@ -466,7 +444,7 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 	rev.NewFileMerkleRoot = newRoot
 
 	// get client wallet
-	am := sc.ethBackend.AccountManager()
+	am := client.ethBackend.AccountManager()
 	clientAddr := rev.NewValidProofOutputs[0].Address
 	clientAccount := accounts.Account{Address: clientAddr}
 	clientWallet, err := am.Find(clientAccount)
@@ -479,12 +457,12 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 		return err
 	}
 	// send client sig to host
-	if err := session.SendStorageContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+	if err := sp.SendContractUploadClientRevisionSign(clientRevisionSign); err != nil {
 		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
 	// read the host's signature
 	var hostRevisionSig []byte
-	msg, err = session.ReadMsg()
+	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		return err
 	}
@@ -503,11 +481,10 @@ func (sc *StorageClient) Write(session *storage.Session, actions []storage.Uploa
 
 // Download calls the Read RPC, writing the requested data to w
 // NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
-func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}) (err error) {
+func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}, hostInfo *storage.HostInfo) (err error) {
 	// reset deadline when finished.
 	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
 	// the conn should be disconnected after 1 hour.
-	defer s.SetDeadLine(5 * time.Minute)
 
 	// sanity check the request.
 	for _, sec := range req.Sections {
@@ -546,7 +523,6 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	scs := client.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
-	hostInfo := s.HostInfo()
 	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
@@ -607,16 +583,15 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 
 	// record the successful or failed interactions
 	defer func() {
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else {
+		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
 
 	// send download request
-	s.SetDeadLine(storage.DownloadTime)
-	err = s.SendStorageContractDownloadRequest(req)
+	err = sp.RequestContractDownload(req)
 	if err != nil {
 		return err
 	}
@@ -630,7 +605,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 		}
 
 		// if negotiation is canceled or done, client should send stop msg to host
-		s.SendStopMsg()
+		sp.SendRevisionStop()
 	}()
 
 	// ensure we send DownloadStop before returning
@@ -640,9 +615,15 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 	var hostSig []byte
 	for _, sec := range req.Sections {
 		var resp storage.DownloadResponse
-		msg, err := s.ReadMsg()
+		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
+		}
+
+		// meaning request was sent too frequently, the host's evaluation
+		// will not be degraded
+		if msg.Code == storage.HostBusyHandleReqMsg {
+			return storage.HostBusyHandleReqErr
 		}
 
 		// if host send some negotiation error, client should handler it
@@ -685,13 +666,19 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 			break
 		}
 	}
-	if hostSig == nil {
 
+	if hostSig == nil {
 		// if we haven't received host signature, just read again
 		var resp storage.DownloadResponse
-		msg, err := s.ReadMsg()
+		msg, err := sp.ClientWaitContractResp()
 		if err != nil {
 			return err
+		}
+
+		// meaning request was sent too frequently, the host's evaluation
+		// will not be degraded
+		if msg.Code == storage.HostBusyHandleReqMsg {
+			return storage.HostBusyHandleReqErr
 		}
 
 		// if host send some negotiation error, client should handler it
@@ -720,7 +707,7 @@ func (client *StorageClient) Read(s *storage.Session, w io.Writer, req storage.D
 }
 
 // calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
-func (client *StorageClient) Download(s *storage.Session, root common.Hash, offset, length uint32) ([]byte, error) {
+func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset, length uint32, hostInfo *storage.HostInfo) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
@@ -733,7 +720,9 @@ func (client *StorageClient) Download(s *storage.Session, root common.Hash, offs
 		MerkleProof: true,
 	}
 	var buf bytes.Buffer
-	err := client.Read(s, &buf, req, nil)
+	err := client.Read(sp, &buf, req, nil, hostInfo)
+	time.Sleep(1 * time.Second)
+
 	return buf.Bytes(), err
 }
 
@@ -991,10 +980,10 @@ func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 	return err
 }
 
-//GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
-func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
+// GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
+func (client *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
 	precompiled := vm.PrecompiledEVMFileContracts
-	block, err := sc.ethBackend.GetBlockByHash(blockHash)
+	block, err := client.ethBackend.GetBlockByHash(blockHash)
 
 	if err != nil {
 		errGet = err
@@ -1012,7 +1001,7 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 			var hac types.HostAnnouncement
 			err := rlp.DecodeBytes(tx.Data(), &hac)
 			if err != nil {
-				sc.log.Warn("Rlp decoding error as hostAnnouncements", "err", err)
+				client.log.Warn("Rlp decoding error as hostAnnouncements", "err", err)
 				continue
 			}
 			hostAnnouncements = append(hostAnnouncements, hac)
@@ -1023,38 +1012,64 @@ func (sc *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash)
 	return
 }
 
-//GetPaymentAddress get the account address used to sign the storage contract.
+// GetPaymentAddress get the account address used to sign the storage contract.
 // If not configured, the first address in the local wallet will be used as the paymentAddress by default.
-func (sc *StorageClient) GetPaymentAddress() (common.Address, error) {
-	sc.lock.Lock()
-	paymentAddress := sc.PaymentAddress
-	sc.lock.Unlock()
+func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
+	client.lock.Lock()
+	paymentAddress := client.PaymentAddress
+	client.lock.Unlock()
 
 	if paymentAddress != (common.Address{}) {
 		return paymentAddress, nil
 	}
 
 	//Local node does not contain wallet
-	if wallets := sc.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
+	if wallets := client.ethBackend.AccountManager().Wallets(); len(wallets) > 0 {
 		//The local node does not have any wallet address yet
 		if accountList := wallets[0].Accounts(); len(accountList) > 0 {
 			paymentAddress := accountList[0].Address
-			sc.lock.Lock()
+			client.lock.Lock()
 			//the first address in the local wallet will be used as the paymentAddress by default.
-			sc.PaymentAddress = paymentAddress
-			sc.lock.Unlock()
-			sc.log.Info("host automatically sets your wallet's first account as paymentAddress")
+			client.PaymentAddress = paymentAddress
+			client.lock.Unlock()
+			client.log.Info("host automatically sets your wallet's first account as paymentAddress")
 			return paymentAddress, nil
 		}
 	}
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
-// disconnect disconnect the node specified with id
-func (sc *StorageClient) disconnect(s *storage.Session, id enode.ID) error {
-	info, exist := sc.storageHostManager.RetrieveHostInfo(id)
-	if !exist {
-		return fmt.Errorf("enode id not exist: %x", id)
+// IsContractRevising will be used to check if the contract is currently
+// in the middle of the revision
+func (client *StorageClient) TryToRenewOrRevise(hostID enode.ID) bool {
+	return client.ethBackend.TryToRenewOrRevise(hostID)
+}
+
+// RenewDone indicates that the contract finished renewing
+func (client *StorageClient) RevisionOrRenewingDone(hostID enode.ID) {
+	client.ethBackend.RevisionOrRenewingDone(hostID)
+}
+
+// CheckAndUpdateConnection will check the connection between client
+// and host. If there are no contracts signed between the two, the
+// connection will be updated from the static connection to dynamic
+// connection
+func (client *StorageClient) CheckAndUpdateConnection(peerNode *enode.Node) {
+	client.ethBackend.CheckAndUpdateConnection(peerNode)
+}
+
+// IsContractSignedWithHost is used to check if the client has signed any contract
+// with the storage host provided by the user
+func (client *StorageClient) IsContractSignedWithHost(hostNode *enode.Node) bool {
+	// retrieve all active storage contracts
+	contracts := client.contractManager.RetrieveActiveContracts()
+
+	// compare the host node ID with each of them, if found, return true
+	// otherwise, return false
+	for _, contract := range contracts {
+		if contract.EnodeID == hostNode.ID() {
+			return true
+		}
 	}
-	return sc.ethBackend.Disconnect(s, info.EnodeURL)
+	return false
 }
