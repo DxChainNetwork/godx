@@ -41,4 +41,5 @@ type Peer interface {
 	TryRequestHostConfig() error
 	RequestHostConfigDone()
 	PeerNode() *enode.Node
+	IsStaticConn() bool
 }

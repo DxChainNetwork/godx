@@ -212,6 +212,15 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
+	// In case the user restart the program, the contract create handler will not be
+	// reached. Therefore, needs another check in the upload handler
+	if !sp.IsStaticConn() {
+		node := sp.PeerNode()
+		if node == nil {
+			return
+		}
+		h.ethBackend.SetStatic(node)
+	}
 }
 
 // verifyRevision checks that the revision pays the host correctly, and that

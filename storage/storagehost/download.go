@@ -212,6 +212,16 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 	}
 
+	// In case the user restart the program, the contract create handler will not be
+	// reached. Therefore, needs another check in the download handler
+	if !sp.IsStaticConn() {
+		node := sp.PeerNode()
+		if node == nil {
+			return
+		}
+		h.ethBackend.SetStatic(node)
+	}
+
 	// the stop signal must arrive before RPC is complete.
 	downloadErr = <-stopSignal
 
