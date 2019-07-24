@@ -70,21 +70,23 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"` // Hash pointer to the previous block
-	UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"` // Hash pointer to the uncle
-	Coinbase    common.Address `json:"miner"            gencodec:"required"` // Address of the miner
-	Root        common.Hash    `json:"stateRoot"        gencodec:"required"` // stateRoot
-	TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"` // txRoot
-	ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"` // Receipt root
-	Bloom       Bloom          `json:"logsBloom"        gencodec:"required"` //
-	Difficulty  *big.Int       `json:"difficulty"       gencodec:"required"` // Difficulty of the current block
-	Number      *big.Int       `json:"number"           gencodec:"required"` // Block height
-	GasLimit    uint64         `json:"gasLimit"         gencodec:"required"` // Total gases could be spent
-	GasUsed     uint64         `json:"gasUsed"          gencodec:"required"` // Gas spent in transactions from this block
-	Time        *big.Int       `json:"timestamp"        gencodec:"required"` // timestamp
-	Extra       []byte         `json:"extraData"        gencodec:"required"` // Extra info
-	MixDigest   common.Hash    `json:"mixHash"`                              // Signature?
-	Nonce       BlockNonce     `json:"nonce"`                                // Number used for PoW
+	ParentHash  common.Hash       `json:"parentHash"       gencodec:"required"` // Hash pointer to the previous block
+	UncleHash   common.Hash       `json:"sha3Uncles"       gencodec:"required"` // Hash pointer to the uncle
+	Validator   common.Address    `json:"validator"        gencodec:"required"`
+	Coinbase    common.Address    `json:"coinbase"         gencodec:"required"` // Address of the coinbase
+	Root        common.Hash       `json:"stateRoot"        gencodec:"required"` // stateRoot
+	TxHash      common.Hash       `json:"transactionsRoot" gencodec:"required"` // txRoot
+	ReceiptHash common.Hash       `json:"receiptsRoot"     gencodec:"required"` // Receipt root
+	DposContext *DposContextProto `json:"dposContext"      gencodec:"required"`
+	Bloom       Bloom             `json:"logsBloom"        gencodec:"required"` //
+	Difficulty  *big.Int          `json:"difficulty"       gencodec:"required"` // Difficulty of the current block
+	Number      *big.Int          `json:"number"           gencodec:"required"` // Block height
+	GasLimit    uint64            `json:"gasLimit"         gencodec:"required"` // Total gases could be spent
+	GasUsed     uint64            `json:"gasUsed"          gencodec:"required"` // Gas spent in transactions from this block
+	Time        *big.Int          `json:"timestamp"        gencodec:"required"` // timestamp
+	Extra       []byte            `json:"extraData"        gencodec:"required"` // Extra info
+	MixDigest   common.Hash       `json:"mixHash"`                              // Signature?
+	Nonce       BlockNonce        `json:"nonce"`                                // Number used for PoW
 }
 
 // field type overrides for gencodec
@@ -115,30 +117,34 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
-		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase    common.Address `json:"miner"            gencodec:"required"`
-		Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom       Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty  *hexutil.Big   `json:"difficulty"       gencodec:"required"`
-		Number      *hexutil.Big   `json:"number"           gencodec:"required"`
-		GasLimit    hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
-		GasUsed     hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
-		Time        *hexutil.Big   `json:"timestamp"        gencodec:"required"`
-		Extra       hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		MixDigest   common.Hash    `json:"mixHash"`
-		Nonce       BlockNonce     `json:"nonce"`
-		Hash        common.Hash    `json:"hash"`
+		ParentHash  common.Hash       `json:"parentHash"       gencodec:"required"`
+		UncleHash   common.Hash       `json:"sha3Uncles"       gencodec:"required"`
+		Validator   common.Address    `json:"validator"        gencodec:"required"`
+		Coinbase    common.Address    `json:"coinbase"         gencodec:"required"`
+		Root        common.Hash       `json:"stateRoot"        gencodec:"required"`
+		TxHash      common.Hash       `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash common.Hash       `json:"receiptsRoot"     gencodec:"required"`
+		DposContext *DposContextProto `json:"dposContext"      gencodec:"required"`
+		Bloom       Bloom             `json:"logsBloom"        gencodec:"required"`
+		Difficulty  *hexutil.Big      `json:"difficulty"       gencodec:"required"`
+		Number      *hexutil.Big      `json:"number"           gencodec:"required"`
+		GasLimit    hexutil.Uint64    `json:"gasLimit"         gencodec:"required"`
+		GasUsed     hexutil.Uint64    `json:"gasUsed"          gencodec:"required"`
+		Time        *hexutil.Big      `json:"timestamp"        gencodec:"required"`
+		Extra       hexutil.Bytes     `json:"extraData"        gencodec:"required"`
+		MixDigest   common.Hash       `json:"mixHash"`
+		Nonce       BlockNonce        `json:"nonce"`
+		Hash        common.Hash       `json:"hash"`
 	}
 	var enc Header
 	enc.ParentHash = h.ParentHash
 	enc.UncleHash = h.UncleHash
+	enc.Validator = h.Validator
 	enc.Coinbase = h.Coinbase
 	enc.Root = h.Root
 	enc.TxHash = h.TxHash
 	enc.ReceiptHash = h.ReceiptHash
+	enc.DposContext = h.DposContext
 	enc.Bloom = h.Bloom
 	enc.Difficulty = (*hexutil.Big)(h.Difficulty)
 	enc.Number = (*hexutil.Big)(h.Number)
@@ -155,81 +161,109 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
-		ParentHash  *common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash   *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase    *common.Address `json:"miner"            gencodec:"required"`
-		Root        *common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash      *common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom       *Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty  *hexutil.Big    `json:"difficulty"       gencodec:"required"`
-		Number      *hexutil.Big    `json:"number"           gencodec:"required"`
-		GasLimit    *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
-		GasUsed     *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
-		Time        *hexutil.Big    `json:"timestamp"        gencodec:"required"`
-		Extra       *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		MixDigest   *common.Hash    `json:"mixHash"`
-		Nonce       *BlockNonce     `json:"nonce"`
+		ParentHash  *common.Hash      `json:"parentHash"       gencodec:"required"`
+		UncleHash   *common.Hash      `json:"sha3Uncles"       gencodec:"required"`
+		Validator   *common.Address   `json:"validator"        gencodec:"required"`
+		Coinbase    *common.Address   `json:"coinbase"         gencodec:"required"`
+		Root        *common.Hash      `json:"stateRoot"        gencodec:"required"`
+		TxHash      *common.Hash      `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash *common.Hash      `json:"receiptsRoot"     gencodec:"required"`
+		DposContext *DposContextProto `json:"dposContext"      gencodec:"required"`
+		Bloom       *Bloom            `json:"logsBloom"        gencodec:"required"`
+		Difficulty  *hexutil.Big      `json:"difficulty"       gencodec:"required"`
+		Number      *hexutil.Big      `json:"number"           gencodec:"required"`
+		GasLimit    *hexutil.Uint64   `json:"gasLimit"         gencodec:"required"`
+		GasUsed     *hexutil.Uint64   `json:"gasUsed"          gencodec:"required"`
+		Time        *hexutil.Big      `json:"timestamp"        gencodec:"required"`
+		Extra       *hexutil.Bytes    `json:"extraData"        gencodec:"required"`
+		MixDigest   *common.Hash      `json:"mixHash"`
+		Nonce       *BlockNonce       `json:"nonce"`
 	}
+
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
+
 	if dec.ParentHash == nil {
 		return errors.New("missing required field 'parentHash' for Header")
 	}
 	h.ParentHash = *dec.ParentHash
+
 	if dec.UncleHash == nil {
 		return errors.New("missing required field 'sha3Uncles' for Header")
 	}
 	h.UncleHash = *dec.UncleHash
+
+	if dec.Validator == nil {
+		return errors.New("missing required filed 'validator' for Header")
+	}
+	h.Validator = *dec.Validator
+
 	if dec.Coinbase == nil {
-		return errors.New("missing required field 'miner' for Header")
+		return errors.New("missing required field 'coinbase' for Header")
 	}
 	h.Coinbase = *dec.Coinbase
+
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for Header")
 	}
 	h.Root = *dec.Root
+
 	if dec.TxHash == nil {
 		return errors.New("missing required field 'transactionsRoot' for Header")
 	}
 	h.TxHash = *dec.TxHash
+
 	if dec.ReceiptHash == nil {
 		return errors.New("missing required field 'receiptsRoot' for Header")
 	}
 	h.ReceiptHash = *dec.ReceiptHash
+
 	if dec.Bloom == nil {
 		return errors.New("missing required field 'logsBloom' for Header")
 	}
 	h.Bloom = *dec.Bloom
+
+	if dec.DposContext == nil {
+		return errors.New("missing required filed 'dposContext' for Header")
+	}
+	h.DposContext = dec.DposContext
+
 	if dec.Difficulty == nil {
 		return errors.New("missing required field 'difficulty' for Header")
 	}
 	h.Difficulty = (*big.Int)(dec.Difficulty)
+
 	if dec.Number == nil {
 		return errors.New("missing required field 'number' for Header")
 	}
 	h.Number = (*big.Int)(dec.Number)
+
 	if dec.GasLimit == nil {
 		return errors.New("missing required field 'gasLimit' for Header")
 	}
 	h.GasLimit = uint64(*dec.GasLimit)
+
 	if dec.GasUsed == nil {
 		return errors.New("missing required field 'gasUsed' for Header")
 	}
 	h.GasUsed = uint64(*dec.GasUsed)
+
 	if dec.Time == nil {
 		return errors.New("missing required field 'timestamp' for Header")
 	}
 	h.Time = (*big.Int)(dec.Time)
+
 	if dec.Extra == nil {
 		return errors.New("missing required field 'extraData' for Header")
 	}
 	h.Extra = *dec.Extra
+
 	if dec.MixDigest != nil {
 		h.MixDigest = *dec.MixDigest
 	}
+
 	if dec.Nonce != nil {
 		h.Nonce = *dec.Nonce
 	}
@@ -268,6 +302,8 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
+
+	DposContext *DposContext
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the
@@ -363,6 +399,13 @@ func CopyHeader(h *Header) *Header {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
 	}
+
+	// add dposContextProto to header
+	cpy.DposContext = &DposContextProto{}
+	if h.DposContext != nil {
+		cpy.DposContext = h.DposContext
+	}
+
 	return &cpy
 }
 
@@ -417,17 +460,19 @@ func (b *Block) GasUsed() uint64      { return b.header.GasUsed }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
 func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
 
-func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
-func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
-func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
-func (b *Block) Bloom() Bloom             { return b.header.Bloom }
-func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Root() common.Hash        { return b.header.Root }
-func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
-func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
-func (b *Block) ReceiptHash() common.Hash { return b.header.ReceiptHash }
-func (b *Block) UncleHash() common.Hash   { return b.header.UncleHash }
-func (b *Block) Extra() []byte            { return common.CopyBytes(b.header.Extra) }
+func (b *Block) NumberU64() uint64         { return b.header.Number.Uint64() }
+func (b *Block) MixDigest() common.Hash    { return b.header.MixDigest }
+func (b *Block) Nonce() uint64             { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
+func (b *Block) Bloom() Bloom              { return b.header.Bloom }
+func (b *Block) Coinbase() common.Address  { return b.header.Coinbase }
+func (b *Block) Root() common.Hash         { return b.header.Root }
+func (b *Block) ParentHash() common.Hash   { return b.header.ParentHash }
+func (b *Block) TxHash() common.Hash       { return b.header.TxHash }
+func (b *Block) ReceiptHash() common.Hash  { return b.header.ReceiptHash }
+func (b *Block) UncleHash() common.Hash    { return b.header.UncleHash }
+func (b *Block) Extra() []byte             { return common.CopyBytes(b.header.Extra) }
+func (b *Block) Validator() common.Address { return b.header.Validator }
+func (b *Block) DposCtx() *DposContext     { return b.DposContext }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
@@ -466,6 +511,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		header:       &cpy,
 		transactions: b.transactions,
 		uncles:       b.uncles,
+		DposContext:  b.DposContext,
 	}
 }
 
