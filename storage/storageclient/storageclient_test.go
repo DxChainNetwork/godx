@@ -118,6 +118,12 @@ func homeDir() string {
 
 type BackendTest struct{}
 
+func (b *BackendTest) SetStatic(node *enode.Node) {}
+
+func (b *BackendTest) CheckAndUpdateConnection(peerNode *enode.Node) {}
+
+func (b *BackendTest) DeleteStatic(node *enode.Node) {}
+
 func (b *BackendTest) APIs() []rpc.API {
 	var res []rpc.API
 	return res

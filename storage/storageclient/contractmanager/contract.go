@@ -121,6 +121,7 @@ func (cm *ContractManager) maintainExpiration() {
 
 	// this list will be used to delete contract from the active contract list
 	var expiredContractsIDs []storage.ContractID
+	var expiredContracts []storage.ContractMetaData
 
 	// get the current block height
 	cm.lock.RLock()
@@ -138,6 +139,7 @@ func (cm *ContractManager) maintainExpiration() {
 		if expired || renewed {
 			cm.updateExpiredContracts(contract)
 			expiredContractsIDs = append(expiredContractsIDs, contract.ID)
+			expiredContracts = append(expiredContracts, contract)
 		}
 	}
 
@@ -148,6 +150,23 @@ func (cm *ContractManager) maintainExpiration() {
 
 	// delete the expired contract from the contract set
 	cm.delFromContractSet(expiredContractsIDs)
+
+	// check and update the connection
+	cm.checkAndUpdateConnection(expiredContracts)
+}
+
+func (cm *ContractManager) checkAndUpdateConnection(contracts []storage.ContractMetaData) {
+	for _, contract := range contracts {
+		hostInfo, exists := cm.hostManager.RetrieveHostInfo(contract.EnodeID)
+		if !exists {
+			continue
+		}
+		node, err := enode.ParseV4(hostInfo.EnodeURL)
+		if err != nil {
+			continue
+		}
+		cm.b.CheckAndUpdateConnection(node)
+	}
 }
 
 // removeDuplications will loop through all active contracts, and find duplicated contracts -> multiple

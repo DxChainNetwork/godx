@@ -12,6 +12,7 @@ import (
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
 	"os"
@@ -37,6 +38,7 @@ type StorageHost struct {
 	sm.StorageManager
 
 	lockedStorageResponsibility map[common.Hash]*TryMutex
+	clientNodeToContract        map[*enode.Node]common.Hash
 
 	// things for log and persistence
 	db         *ethdb.LDBDatabase
@@ -46,6 +48,38 @@ type StorageHost struct {
 	// things for thread safety
 	lock sync.RWMutex
 	tm   tm.ThreadManager
+}
+
+// RetrieveContractClientNode will try to find the client node that the host signed
+// contract with. If the client information cannot be found, then nil will be returned.
+// Otherwise, the client node will be returned
+func (h *StorageHost) IsContractSignedWithClient(clientNode *enode.Node) bool {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	if _, exists := h.clientNodeToContract[clientNode]; exists {
+		return true
+	}
+	return false
+}
+
+// UpdateContractToClientNodeMappingAndConnection will update the contract that host signed
+// with the storage client. For any contract that are not contained in the storage
+// responsibility, it means host had not signed the contract with the client. The
+// connection will be removed from the static and the contract information will be
+// deleted from the record
+func (h *StorageHost) UpdateContractToClientNodeMappingAndConnection() {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	// loop through the clientNodeToContract mapping, found those
+	// are not included in the storage responsibility, and delete
+	// them from the clientNodeToContract mapping
+	for clientNode, contractID := range h.clientNodeToContract {
+		if _, exists := h.lockedStorageResponsibility[contractID]; !exists {
+			delete(h.clientNodeToContract, clientNode)
+			h.ethBackend.CheckAndUpdateConnection(clientNode)
+		}
+	}
 }
 
 // RetrieveExternalConfig is used to get the storage host's external
@@ -70,6 +104,7 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
+		clientNodeToContract:        make(map[*enode.Node]common.Hash),
 	}
 
 	var err error

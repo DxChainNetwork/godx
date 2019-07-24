@@ -36,6 +36,9 @@ type EthBackend interface {
 	SetupConnection(enodeURL string) (Peer, error)
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
+	SetStatic(node *enode.Node)
+	DeleteStatic(node *enode.Node)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -58,6 +61,7 @@ type ClientBackend interface {
 	GetPaymentAddress() (common.Address, error)
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
 // DownloadParameters is the parameters to download from outer request

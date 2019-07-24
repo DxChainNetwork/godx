@@ -7,6 +7,7 @@ package eth
 import (
 	"errors"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"time"
 )
@@ -239,4 +240,9 @@ func (p *peer) RequestHostConfigDone() {
 // IsStaticConn checks if the connection is static connection
 func (p *peer) IsStaticConn() bool {
 	return p.Peer.Info().Network.Static
+}
+
+// PeerNode returns the peer's node information
+func (p *peer) PeerNode() *enode.Node {
+	return p.Peer.Node()
 }

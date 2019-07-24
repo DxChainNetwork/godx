@@ -727,6 +727,19 @@ func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, e
 	}
 }
 
+// SetStatic will convert the current connection into static connection
+func (s *Ethereum) SetStatic(node *enode.Node) {
+	s.server.SetStatic(node)
+}
+
+// DeleteStatic will remove the node provided from the static dialed task
+// it will also convert the current connection type to dynamic dialed connection
+// instead of static dialed connection
+func (s *Ethereum) DeleteStatic(node *enode.Node) {
+	nodeURL := node.String()
+	_ = s.server.DeleteStatic(nodeURL)
+}
+
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, config *storage.HostExtConfig) error {
 	// set up the connection to the storage host node
@@ -759,18 +772,42 @@ func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, conf
 
 	log.Info("Successfully get the storage host settings")
 
-	// once the setting is successfully retrieved, check the connection
-	// if the node is the static connection originally, do nothing
-	if s.server.IsAddedByUser(enodeID) {
-		return nil
-	}
-
-	// otherwise, stay connected but remove it from the static connection list, and change
-	// the connection type. The error message is ignored intentionally. If the parsing failed,
-	// there is no way to get the storage host config
-	_ = s.server.DeleteStatic(enodeURL)
+	// check the connection and update the connection
+	// type if necessary
+	s.CheckAndUpdateConnection(sp.PeerNode())
 
 	return nil
+}
+
+// CheckAndUpdateConnection will regularly check the connection between two nodes
+// local and remote. If there are no contracts between two nodes and the node
+// is not added by the user, then the connection will be deleted from the static
+// dialed list, and the connection type will be converted into dynamic connection
+func (s *Ethereum) CheckAndUpdateConnection(peerNode *enode.Node) {
+	if s.server.IsAddedByUser(peerNode.ID()) {
+		return
+	}
+
+	// as a storage client, check if the contract has been signed with the peer node (host)
+	// if so, return directly
+	if s.config.StorageClient {
+		if s.storageClient.IsContractSignedWithHost(peerNode) {
+			return
+		}
+	}
+
+	// as a storage host, check if the contract has been signed with the peer node (client)
+	// if so, return directly
+	if s.config.StorageHost {
+		if s.storageHost.IsContractSignedWithClient(peerNode) {
+			return
+		}
+	}
+
+	// if the node does not signed any contract with the peer node and the peer
+	// node is not added by the user directly, reset the connection from static
+	// dialed to dynamically dialed
+	_ = s.server.DeleteStatic(peerNode.String())
 }
 
 // SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be

@@ -183,6 +183,19 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		contractCreateErr = fmt.Errorf("storage host failed to send contract creation revision sign: %s", err.Error())
 		return
 	}
+
+	// Once successfully created the contract with the storage client
+	// the host should add the storage client as static peer as well
+	node := sp.PeerNode()
+	if node == nil {
+		return
+	}
+	h.ethBackend.SetStatic(node)
+
+	// once successfully created the contract, insert the contract into the memory
+	h.lock.Lock()
+	h.clientNodeToContract[sp.PeerNode()] = sc.ID()
+	h.lock.Unlock()
 }
 
 // verifyStorageContract verify the validity of the storage contract. If discrepancy found, return error

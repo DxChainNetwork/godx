@@ -7,6 +7,7 @@ package storage
 import (
 	"errors"
 	"github.com/DxChainNetwork/godx/p2p"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
 // ErrRequestingHostConfig is the error code used when the client asks host for its configuration multiple
@@ -39,4 +40,5 @@ type Peer interface {
 	RevisionOrRenewingDone()
 	TryRequestHostConfig() error
 	RequestHostConfigDone()
+	PeerNode() *enode.Node
 }

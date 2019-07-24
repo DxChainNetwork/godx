@@ -1025,3 +1025,27 @@ func (client *StorageClient) TryToRenewOrRevise(hostID enode.ID) bool {
 func (client *StorageClient) RevisionOrRenewingDone(hostID enode.ID) {
 	client.ethBackend.RevisionOrRenewingDone(hostID)
 }
+
+// CheckAndUpdateConnection will check the connection between client
+// and host. If there are no contracts signed between the two, the
+// connection will be updated from the static connection to dynamic
+// connection
+func (client *StorageClient) CheckAndUpdateConnection(peerNode *enode.Node) {
+	client.ethBackend.CheckAndUpdateConnection(peerNode)
+}
+
+// IsContractSignedWithHost is used to check if the client has signed any contract
+// with the storage host provided by the user
+func (client *StorageClient) IsContractSignedWithHost(hostNode *enode.Node) bool {
+	// retrieve all active storage contracts
+	contracts := client.contractManager.RetrieveActiveContracts()
+
+	// compare the host node ID with each of them, if found, return true
+	// otherwise, return false
+	for _, contract := range contracts {
+		if contract.EnodeID == hostNode.ID() {
+			return true
+		}
+	}
+	return false
+}
