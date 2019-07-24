@@ -117,12 +117,12 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		RemainingStorage:       remainingStorageSpace,
 		Deposit:                h.config.Deposit,
 		MaxDeposit:             MaxDeposit,
-		BaseRPCPrice:           h.config.MinBaseRPCPrice,
-		ContractPrice:          h.config.MinContractPrice,
-		DownloadBandwidthPrice: h.config.MinDownloadBandwidthPrice,
-		SectorAccessPrice:      h.config.MinSectorAccessPrice,
-		StoragePrice:           h.config.MinStoragePrice,
-		UploadBandwidthPrice:   h.config.MinUploadBandwidthPrice,
+		BaseRPCPrice:           h.config.BaseRPCPrice,
+		ContractPrice:          h.config.ContractPrice,
+		DownloadBandwidthPrice: h.config.DownloadBandwidthPrice,
+		SectorAccessPrice:      h.config.SectorAccessPrice,
+		StoragePrice:           h.config.StoragePrice,
+		UploadBandwidthPrice:   h.config.UploadBandwidthPrice,
 		Version:                storage.ConfigVersion,
 	}
 }

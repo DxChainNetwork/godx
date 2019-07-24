@@ -306,18 +306,18 @@ Host Configuration:
 	Deposit:                       %v wei
 	DepositBudget:                 %v wei
 	MaxDeposit:                    %v wei
-	MinBaseRPCPrice:               %v wei
-	MinContractPrice:              %v wei
-	MinDownloadBandwidthPrice:     %v wei
-	MinSectorAccessPrice:          %v wei
-	MinStoragePrice:               %v wei
-	MinUploadBandwidthPrice:       %v wei
+	BaseRPCPrice:               %v wei
+	ContractPrice:              %v wei
+	DownloadBandwidthPrice:     %v wei
+	SectorAccessPrice:          %v wei
+	StoragePrice:               %v wei
+	UploadBandwidthPrice:       %v wei
 
 `, config.AcceptingContracts, config.MaxDownloadBatchSize, config.MaxDuration,
 		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress.String(),
-		config.Deposit, config.DepositBudget, config.MaxDeposit, config.MinBaseRPCPrice,
-		config.MinContractPrice, config.MinDownloadBandwidthPrice, config.MinSectorAccessPrice,
-		config.MinStoragePrice, config.MinUploadBandwidthPrice)
+		config.Deposit, config.DepositBudget, config.MaxDeposit, config.BaseRPCPrice,
+		config.ContractPrice, config.DownloadBandwidthPrice, config.SectorAccessPrice,
+		config.StoragePrice, config.UploadBandwidthPrice)
 
 	return nil
 }

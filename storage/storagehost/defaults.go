@@ -97,12 +97,12 @@ func defaultConfig() storage.HostIntConfig {
 		DepositBudget: defaultDepositBudget,
 		MaxDeposit:    defaultMaxDeposit,
 
-		MinBaseRPCPrice:           defaultBaseRPCPrice,
-		MinContractPrice:          defaultContractPrice,
-		MinDownloadBandwidthPrice: defaultDownloadBandwidthPrice,
-		MinSectorAccessPrice:      defaultSectorAccessPrice,
-		MinStoragePrice:           defaultStoragePrice,
-		MinUploadBandwidthPrice:   defaultUploadBandwidthPrice,
+		BaseRPCPrice:           defaultBaseRPCPrice,
+		ContractPrice:          defaultContractPrice,
+		DownloadBandwidthPrice: defaultDownloadBandwidthPrice,
+		SectorAccessPrice:      defaultSectorAccessPrice,
+		StoragePrice:           defaultStoragePrice,
+		UploadBandwidthPrice:   defaultUploadBandwidthPrice,
 	}
 }
 

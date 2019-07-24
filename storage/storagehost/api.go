@@ -119,21 +119,21 @@ func (h *HostPrivateAPI) DeleteFolder(folderPath string) (string, error) {
 
 // hostSetterCallbacks is the mapping from the field name to the setter function
 var hostSetterCallbacks = map[string]func(*HostPrivateAPI, string) error{
-	"acceptingContracts":        (*HostPrivateAPI).setAcceptingContracts,
-	"maxDownloadBatchSize":      (*HostPrivateAPI).setMaxDownloadBatchSize,
-	"maxDuration":               (*HostPrivateAPI).setMaxDuration,
-	"maxReviseBatchSize":        (*HostPrivateAPI).setMaxReviseBatchSize,
-	"windowSize":                (*HostPrivateAPI).setWindowSize,
-	"paymentAddress":            (*HostPrivateAPI).setPaymentAddress,
-	"deposit":                   (*HostPrivateAPI).setDeposit,
-	"depositBudget":             (*HostPrivateAPI).setDepositBudget,
-	"maxDeposit":                (*HostPrivateAPI).setMaxDeposit,
-	"minBaseRPCPrice":           (*HostPrivateAPI).setMinBaseRPCPrice,
-	"minContractPrice":          (*HostPrivateAPI).setMinContractPrice,
-	"minDownloadBandwidthPrice": (*HostPrivateAPI).setMinDownloadBandwidthPrice,
-	"minSectorAccessPrice":      (*HostPrivateAPI).setMinSectorAccessPrice,
-	"minStoragePrice":           (*HostPrivateAPI).setMinStoragePrice,
-	"minUploadBandwidthPrice":   (*HostPrivateAPI).setMinUploadBandwidthPrice,
+	"acceptingContracts":     (*HostPrivateAPI).setAcceptingContracts,
+	"maxDownloadBatchSize":   (*HostPrivateAPI).setMaxDownloadBatchSize,
+	"maxDuration":            (*HostPrivateAPI).setMaxDuration,
+	"maxReviseBatchSize":     (*HostPrivateAPI).setMaxReviseBatchSize,
+	"windowSize":             (*HostPrivateAPI).setWindowSize,
+	"paymentAddress":         (*HostPrivateAPI).setPaymentAddress,
+	"deposit":                (*HostPrivateAPI).setDeposit,
+	"depositBudget":          (*HostPrivateAPI).setDepositBudget,
+	"maxDeposit":             (*HostPrivateAPI).setMaxDeposit,
+	"baseRPCPrice":           (*HostPrivateAPI).setBaseRPCPrice,
+	"contractPrice":          (*HostPrivateAPI).setContractPrice,
+	"downloadBandwidthPrice": (*HostPrivateAPI).setDownloadBandwidthPrice,
+	"sectorAccessPrice":      (*HostPrivateAPI).setSectorAccessPrice,
+	"storagePrice":           (*HostPrivateAPI).setStoragePrice,
+	"uploadBandwidthPrice":   (*HostPrivateAPI).setUploadBandwidthPrice,
 }
 
 // SetConfig set the config specified by a mapping of key value pair
@@ -259,62 +259,62 @@ func (h *HostPrivateAPI) setMaxDeposit(str string) error {
 	return nil
 }
 
-// setMinBaseRPCPrice set host MinBaseRPCPrice to value
-func (h *HostPrivateAPI) setMinBaseRPCPrice(str string) error {
+// setBaseRPCPrice set host BaseRPCPrice to value
+func (h *HostPrivateAPI) setBaseRPCPrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinBaseRPCPrice = wei
+	h.storageHost.config.BaseRPCPrice = wei
 	return nil
 }
 
-// setMinContractPrice set host MinContractPrice to value
-func (h *HostPrivateAPI) setMinContractPrice(str string) error {
+// setContractPrice set host ContractPrice to value
+func (h *HostPrivateAPI) setContractPrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinContractPrice = wei
+	h.storageHost.config.ContractPrice = wei
 	return nil
 }
 
-// setMinDownloadBandwidthPrice set host MinDownloadBandwidthPrice to value
-func (h *HostPrivateAPI) setMinDownloadBandwidthPrice(str string) error {
+// setDownloadBandwidthPrice set host DownloadBandwidthPrice to value
+func (h *HostPrivateAPI) setDownloadBandwidthPrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinDownloadBandwidthPrice = wei
+	h.storageHost.config.DownloadBandwidthPrice = wei
 	return nil
 }
 
-// setMinSectorAccessPrice set host MinSectorAccessPrice to value
-func (h *HostPrivateAPI) setMinSectorAccessPrice(str string) error {
+// setSectorAccessPrice set host SectorAccessPrice to value
+func (h *HostPrivateAPI) setSectorAccessPrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinSectorAccessPrice = wei
+	h.storageHost.config.SectorAccessPrice = wei
 	return nil
 }
 
-// setMinStoragePrice set host MinStoragePrice to value
-func (h *HostPrivateAPI) setMinStoragePrice(str string) error {
+// setStoragePrice set host StoragePrice to value
+func (h *HostPrivateAPI) setStoragePrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinStoragePrice = wei
+	h.storageHost.config.StoragePrice = wei
 	return nil
 }
 
-// setMinUploadBandwidthPrice set host MinUploadBandwidthPrice to value
-func (h *HostPrivateAPI) setMinUploadBandwidthPrice(str string) error {
+// setUploadBandwidthPrice set host UploadBandwidthPrice to value
+func (h *HostPrivateAPI) setUploadBandwidthPrice(str string) error {
 	wei, err := unit.ParseCurrency(str)
 	if err != nil {
 		return fmt.Errorf("invalid currency expression: %v", err)
 	}
-	h.storageHost.config.MinUploadBandwidthPrice = wei
+	h.storageHost.config.UploadBandwidthPrice = wei
 	return nil
 }
