@@ -256,7 +256,6 @@ func (sc *StorageClient) CancelContracts() (err error) {
 func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err error) {
 	// making sure the entire program will only be terminated after finish the SetClientSetting
 	// operation
-
 	if err = sc.tm.Add(); err != nil {
 		return
 	}
@@ -266,6 +265,7 @@ func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err er
 	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
 		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
 			setting.MaxUploadSpeed, setting.MaxDownloadSpeed)
+		return
 	}
 
 	// set the rent payment
@@ -282,11 +282,13 @@ func (sc *StorageClient) SetClientSetting(setting storage.ClientSetting) (err er
 	sc.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
 
 	// update and save the persist
+	sc.lock.Lock()
 	sc.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
 	sc.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = sc.saveSettings(); err != nil {
 		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
 	}
+	sc.lock.Unlock()
 
 	// active the worker pool
 	sc.activateWorkerPool()
