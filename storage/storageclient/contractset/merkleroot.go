@@ -5,6 +5,7 @@
 package contractset
 
 import (
+	"fmt"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/log"
@@ -32,10 +33,11 @@ func newMerkleRoots(db *DB, id storage.ContractID) (mk *merkleRoots) {
 	}
 }
 
-func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
+func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree, err error) {
 	// input validation
 	if len(roots) != merkleRootsPerCache {
-		log.Crit("failed to create the cachedSubTree using the root provided")
+		log.Error("failed to create the cachedSubTree using the root provided")
+		return nil, fmt.Errorf("failed to create the cachedSubTree using the root provided")
 	}
 
 	// create the cachedSubTree, where the height of the sub tree
@@ -45,12 +47,12 @@ func newCachedSubTree(roots []common.Hash) (ct *cachedSubTree) {
 	return &cachedSubTree{
 		height: int(merkleRootsCacheHeight + sectorHeight),
 		sum:    merkle.Sha256CachedTreeRoot(roots, sectorHeight),
-	}
+	}, nil
 }
 
 // loadMerkleRoots will load all merkle roots saved in the dab, which
 // will then be saved into the memory
-func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *merkleRoots) {
+func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *merkleRoots, err error) {
 
 	// initialize merkle roots
 	mr = &merkleRoots{
@@ -58,7 +60,7 @@ func loadMerkleRoots(db *DB, id storage.ContractID, roots []common.Hash) (mr *me
 		id: id,
 	}
 
-	mr.appendRootMemory(roots...)
+	err = mr.appendRootMemory(roots...)
 	mr.numMerkleRoots = len(roots)
 
 	return
@@ -78,7 +80,9 @@ func (mr *merkleRoots) push(root common.Hash) (err error) {
 	}
 
 	// add the root
-	mr.appendRootMemory(root)
+	if err := mr.appendRootMemory(root); err != nil {
+		return err
+	}
 
 	mr.numMerkleRoots++
 
@@ -88,14 +92,21 @@ func (mr *merkleRoots) push(root common.Hash) (err error) {
 // appendRootMemory will store the root in the uncached roots field
 // if the number of uncached roots reached a limit, then those
 // roots will be build up to a cachedSubTree
-func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) {
+func (mr *merkleRoots) appendRootMemory(roots ...common.Hash) error {
 	for _, root := range roots {
 		mr.uncachedRoots = append(mr.uncachedRoots, root)
 		if len(mr.uncachedRoots) == merkleRootsPerCache {
-			mr.cachedSubTrees = append(mr.cachedSubTrees, newCachedSubTree(mr.uncachedRoots))
+			cachedTree, err := newCachedSubTree(mr.uncachedRoots)
+			if err != nil {
+				return err
+			}
+
+			mr.cachedSubTrees = append(mr.cachedSubTrees, cachedTree)
 			mr.uncachedRoots = mr.uncachedRoots[:0]
 		}
 	}
+
+	return nil
 }
 
 // newMerkleRootPreview will display the new merkle root when a newRoot is passed in.

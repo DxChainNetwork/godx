@@ -47,7 +47,7 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 
 	// save all the settings
 	if err = cm.saveSettings(); err != nil {
-		cm.log.Crit("unable to save settings")
+		cm.log.Error("unable to save settings")
 	}
 
 	// update storage host manager rentPayment payment

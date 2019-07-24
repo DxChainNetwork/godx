@@ -255,7 +255,10 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		}
 
 		// load merkle roots
-		mr := loadMerkleRoots(scs.db, id, roots)
+		mr, err := loadMerkleRoots(scs.db, id, roots)
+		if err != nil {
+			return fmt.Errorf("failed to load merkle roots, load contract failed: %s", err.Error())
+		}
 
 		// TODO (mzhang): currently, un-applied WAL transaction will be ignored
 		// in the future, they should be handled, however, the negotiation process
