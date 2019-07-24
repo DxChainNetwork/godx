@@ -37,7 +37,6 @@ type EthBackend interface {
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
 	SetStatic(node *enode.Node)
-	DeleteStatic(node *enode.Node)
 	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 

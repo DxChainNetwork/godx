@@ -732,14 +732,6 @@ func (s *Ethereum) SetStatic(node *enode.Node) {
 	s.server.SetStatic(node)
 }
 
-// DeleteStatic will remove the node provided from the static dialed task
-// it will also convert the current connection type to dynamic dialed connection
-// instead of static dialed connection
-func (s *Ethereum) DeleteStatic(node *enode.Node) {
-	nodeURL := node.String()
-	_ = s.server.DeleteStatic(nodeURL)
-}
-
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
 func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, config *storage.HostExtConfig) error {
 	// set up the connection to the storage host node

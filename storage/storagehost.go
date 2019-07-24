@@ -23,7 +23,6 @@ type HostBackend interface {
 	GetBlockChain() *core.BlockChain
 	AccountManager() *accounts.Manager
 	SetStatic(node *enode.Node)
-	DeleteStatic(node *enode.Node)
 	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
