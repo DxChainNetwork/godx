@@ -24,6 +24,7 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/trie"
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
@@ -436,19 +437,19 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 }
 
 // Seal implements consensus.Engine, sign the given block and return it
-func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan struct{}) (*types.Block, error) {
+func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 	number := header.Number.Uint64()
 	// Sealing the genesis block is not supported
 	if number == 0 {
-		return nil, errUnknownBlock
+		return errUnknownBlock
 	}
 	now := time.Now().Unix()
 	delay := NextSlot(now) - now
 	if delay > 0 {
 		select {
 		case <-stop:
-			return nil, nil
+			return nil
 		case <-time.After(time.Duration(delay) * time.Second):
 		}
 	}
@@ -457,10 +458,11 @@ func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, stop <-chan
 	// time's up, sign the block
 	sighash, err := d.signFn(accounts.Account{Address: d.signer}, sigHash(header).Bytes())
 	if err != nil {
-		return nil, err
+		return err
 	}
 	copy(header.Extra[len(header.Extra)-extraSeal:], sighash)
-	return block.WithSeal(header), nil
+	results <- block.WithSeal(header)
+	return nil
 }
 
 // CalcDifficulty return a constant value for dpos consensus engine
@@ -474,6 +476,25 @@ func (d *Dpos) Authorize(signer common.Address, signFn SignerFn) {
 	d.signer = signer
 	d.signFn = signFn
 	d.mu.Unlock()
+}
+
+func (d *Dpos) APIs(chain consensus.ChainReader) []rpc.API {
+	return []rpc.API{{
+		Namespace: "dpos",
+		Version:   "1.0",
+		Service:   &API{chain: chain, dpos: d},
+		Public:    true,
+	}}
+}
+
+// SealHash implements consensus.Engine, returns the hash of a block prior to it being sealed.
+func (d *Dpos) SealHash(header *types.Header) common.Hash {
+	return sigHash(header)
+}
+
+// Close implements consensus.Engine, It's a noop for clique as there are no background threads.
+func (d *Dpos) Close() error {
+	return nil
 }
 
 // ecrecover extracts the Ethereum account address from a signed header.
