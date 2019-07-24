@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/cmd/utils"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 
@@ -32,6 +33,17 @@ var storageHostCommand = cli.Command{
 will display the current storage host settings used for the storage service. Including
 but not limited to the contract price, upload bandwidth price, download bandwidth price,
 and etc.`,
+		},
+
+		{
+			Name:      "setconfig",
+			Usage:     "Set the storage host configurations",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(setHostConfig),
+			// TODO: elaborate the description
+			Description: `
+			gdx shost setconfig
+`,
 		},
 
 		{
@@ -220,21 +232,6 @@ Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "et
 		},
 
 		{
-			Name:      "setsectorprice",
-			Usage:     "Specifies the sector price the client must be paid",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setSectorPrice),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setsectorprice --sectorprice [argument]
-
-is used to specify the sector price that used must be paid. Data is uploaded in terms of sectors, and for
-each sector the user upload or download, this price must be paid.
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
 			Name:      "setstorageprice",
 			Usage:     "Specifies the storage price the client must be paid",
 			ArgsUsage: "",
@@ -320,6 +317,77 @@ Host Configuration:
 		config.StoragePrice, config.UploadBandwidthPrice)
 
 	return nil
+}
+
+// setClientConfig set the storage host settings
+func setHostConfig(ctx *cli.Context) error {
+	// setConfig is attached to the backend
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+	// get the config from user set flags
+	config := hostConfigFromFlags(ctx)
+	// set the host config
+	var resp string
+	if err = client.Call(&resp, "shost_setConfig", config); err != nil {
+		utils.Fatalf("failed to set config: %v", err)
+	}
+	fmt.Printf("%v\n\n", resp)
+	return nil
+}
+
+// hostConfigFromFlags gets the user set flag values from the command line arguments
+func hostConfigFromFlags(ctx *cli.Context) map[string]string {
+	config := make(map[string]string)
+
+	// set the value of accepting contracts
+	if ctx.GlobalIsSet(utils.AcceptingContractsFlag.Name) {
+		acceptingContracts := ctx.GlobalBool(utils.AcceptingContractsFlag.Name)
+		config["acceptingContracts"] = unit.FormatBool(acceptingContracts)
+	}
+	// set the value of max deposit
+	if ctx.GlobalIsSet(utils.MaxDepositFlag.Name) {
+		maxDeposit := ctx.GlobalString(utils.MaxDepositFlag.Name)
+		config["maxDeposit"] = maxDeposit
+	}
+	// set the value of budget price
+	if ctx.GlobalIsSet(utils.BudgetPriceFlag.Name) {
+		budget := ctx.GlobalString(utils.BudgetPriceFlag.Name)
+		config["depositBudget"] = budget
+	}
+	// set the value of storage price
+	if ctx.GlobalIsSet(utils.StoragePriceFlag.Name) {
+		storagePrice := ctx.GlobalString(utils.StoragePriceFlag.Name)
+		config["storagePrice"] = storagePrice
+	}
+	// set the upload price
+	if ctx.GlobalIsSet(utils.UploadPriceFlag.Name) {
+		uploadPrice := ctx.GlobalString(utils.UploadPriceFlag.Name)
+		config["uploadBandwidthPrice"] = uploadPrice
+	}
+	// set the download price
+	if ctx.GlobalIsSet(utils.DownloadPriceFlag.Name) {
+		downloadPrice := ctx.GlobalString(utils.DownloadPriceFlag.Name)
+		config["downloadBandwidthPrice"] = downloadPrice
+	}
+	// set the contract price
+	if ctx.GlobalIsSet(utils.ContractPriceFlag.Name) {
+		contractPrice := ctx.GlobalString(utils.ContractPriceFlag.Name)
+		config["contractPrice"] = contractPrice
+	}
+	// set the deposit price
+	if ctx.GlobalIsSet(utils.DepositPriceFlag.Name) {
+		deposit := ctx.GlobalString(utils.DepositPriceFlag.Name)
+		config["deposit"] = deposit
+	}
+	// set the duration
+	if ctx.GlobalIsSet(utils.StorageDurationFlag.Name) {
+		maxDuration := ctx.GlobalString(utils.StorageDurationFlag.Name)
+		config["maxDuration"] = maxDuration
+	}
+
+	return config
 }
 
 func getHostFolders(ctx *cli.Context) error {
@@ -625,28 +693,6 @@ func setUploadBandwidthPrice(ctx *cli.Context) error {
 	var resp string
 	if err = client.Call(&resp, "shost_setMinUploadBandwidthPrice", uploadPrice); err != nil {
 		utils.Fatalf("failed to set the upload bandwidth price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setSectorPrice(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var sectorPrice string
-	if !ctx.GlobalIsSet(utils.SectorPriceFlag.Name) {
-		utils.Fatalf("the --sectorprice flag must be used to specify the sector price")
-	} else {
-		sectorPrice = ctx.GlobalString(utils.SectorPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMinSectorAccessPrice", sectorPrice); err != nil {
-		utils.Fatalf("failed to set the sector price: %s", err.Error())
 	}
 
 	fmt.Printf("%s \n\n", resp)

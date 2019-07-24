@@ -186,7 +186,6 @@ var (
 		utils.DownloadPriceFlag,
 		utils.UploadPriceFlag,
 		utils.StoragePriceFlag,
-		utils.SectorPriceFlag,
 		utils.BudgetPriceFlag,
 		utils.MaxDepositFlag,
 	}
