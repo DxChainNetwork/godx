@@ -100,27 +100,6 @@ func TestCalcDifficulty(t *testing.T) {
 
 */
 
-func TestEthash_Prepare(t *testing.T) {
-	// TODO
-	// with chainReader
-
-}
-
-func TestEthash_Finalize(t *testing.T) {
-	// TODO
-	// with chainReader and stateDB
-}
-
-func TestEthash_VerifyHeaders(t *testing.T) {
-	// TODO
-	// need real block chain
-}
-
-func TestEthash_VerifyUncles(t *testing.T) {
-	// TODO
-	// need real block chain
-}
-
 func TestEthash_Seal(t *testing.T) {
 	results := make(chan *types.Block)
 	defer close(results)
@@ -318,35 +297,35 @@ func TestUnclesReward(t *testing.T) {
 
 }
 
-//func ExampleCalcDifficulty() {
-//	// Tip: A simple example of mining block and verify. But entire process must be associated with console, miner, transaction and blockchain modules.
-//
-//	// 1. prepare header
-//	diff := CalcDifficulty(params.MainnetChainConfig, uint64(1000), &types.Header{
-//		Number:     big.NewInt(5000000),
-//		Time:       new(big.Int).SetUint64(900),
-//		Difficulty: big.NewInt(1 << 12),
-//	})
-//	header := &types.Header{Number: big.NewInt(1), Difficulty: diff}
-//
-//	// 2. mine, call Seal method
-//	block, err := mineBlock(ethash, header, 100*time.Second)
-//	if err != nil || block == nil {
-//		fmt.Printf("mine block failed\n")
-//		return
-//	}
-//
-//	// 3. verify
-//	if err := ethash.VerifySeal(nil, block.Header()); err != nil {
-//		fmt.Printf("unexpected block verification error: %v\n", err)
-//		return
-//	} else {
-//		fmt.Printf("Successful Mined")
-//	}
-//
-//	// Output:
-//	// Successful Mined
-//}
+func ExampleCalcDifficulty() {
+	// Tip: A simple example of mining block and verify. But entire process must be associated with console, miner, transaction and blockchain modules.
+
+	// 1. prepare header
+	diff := CalcDifficulty(params.MainnetChainConfig, uint64(1000), &types.Header{
+		Number:     big.NewInt(1000),
+		Time:       new(big.Int).SetUint64(900),
+		Difficulty: big.NewInt(1),
+	})
+	header := &types.Header{Number: big.NewInt(1001), Difficulty: diff}
+
+	// 2. mine, call Seal method
+	block, err := mineBlock(ethash, header, 100*time.Second)
+	if err != nil || block == nil {
+		fmt.Printf("mine block failed\n")
+		return
+	}
+
+	// 3. verify
+	if err := ethash.VerifySeal(nil, block.Header()); err != nil {
+		fmt.Printf("unexpected block verification error: %v\n", err)
+		return
+	} else {
+		fmt.Printf("Successful Mined")
+	}
+
+	// Output:
+	// Successful Mined
+}
 
 func mineBlock(ethash *Ethash, header *types.Header, timeout time.Duration) (*types.Block, error) {
 	results := make(chan *types.Block)
