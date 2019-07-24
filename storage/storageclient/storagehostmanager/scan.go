@@ -263,6 +263,7 @@ func (shm *StorageHostManager) waitOnline() error {
 			return fmt.Errorf("program terminated")
 		}
 	}
+	return nil
 }
 
 // waitSync will pause the current go routine and wait until the
@@ -279,6 +280,7 @@ func (shm *StorageHostManager) waitSync() error {
 		case <-time.After(scanCheckDuration):
 		}
 	}
+	return nil
 }
 
 // waitScanFinish will pause the current process until all the host stored in the scanWaitList
