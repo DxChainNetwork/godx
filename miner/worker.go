@@ -958,7 +958,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	height := w.current.header.Number.Uint64()
 	coinchargemaintenance.MaintenanceMissedProof(height, s)
 
-	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
+	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts, nil)
 	if err != nil {
 		return err
 	}
