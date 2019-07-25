@@ -7,6 +7,7 @@ package storageclient
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
 	"strconv"
 )
@@ -22,7 +23,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 		switch {
 		case key == "fund":
 			var fund common.BigInt
-			fund, err = storage.ParseFund(value)
+			fund, err = unit.ParseCurrency(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the fund value: %s", err.Error())
 				break
@@ -40,7 +41,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "period":
 			var period uint64
-			period, err = storage.ParseTime(value)
+			period, err = unit.ParseTime(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the period value: %s", err.Error())
 				break
@@ -49,7 +50,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "renew":
 			var renew uint64
-			renew, err = storage.ParseTime(value)
+			renew, err = unit.ParseTime(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the renew value: %s", err.Error())
 				break
@@ -58,7 +59,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "storage":
 			var expectedStorage uint64
-			expectedStorage, err = storage.ParseStorage(value)
+			expectedStorage, err = unit.ParseStorage(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the expected storage: %s", err.Error())
 				break
@@ -94,7 +95,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "violation":
 			var status bool
-			status, err = storage.ParseBool(value)
+			status, err = unit.ParseBool(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the ip violation: %s", err.Error())
 				break
@@ -103,7 +104,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "uploadspeed":
 			var uploadSpeed int64
-			uploadSpeed, err = storage.ParseSpeed(value)
+			uploadSpeed, err = unit.ParseSpeed(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the uplaod speed: %s", err.Error())
 				break
@@ -112,7 +113,7 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 		case key == "downloadspeed":
 			var downloadSpeed int64
-			downloadSpeed, err = storage.ParseSpeed(value)
+			downloadSpeed, err = unit.ParseSpeed(value)
 			if err != nil {
 				err = fmt.Errorf("failed to parse the download speed: %s", err.Error())
 				break
@@ -136,12 +137,12 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 
 // parseStorageHosts will parse the string version of storage hosts into uint64 type
 func parseStorageHosts(hosts string) (parsed uint64, err error) {
-	return storage.ConvertUint64(hosts, 1, "")
+	return unit.ParseUint64(hosts, 1, "")
 }
 
 // parseExpectedUpload will parse the string into the form of rentPayment.ExpectedUpload
 func parseExpectedUpload(upload string) (parsed uint64, err error) {
-	if parsed, err = storage.DataSizeConverter(upload); err != nil {
+	if parsed, err = unit.ParseStorage(upload); err != nil {
 		return
 	}
 
@@ -152,7 +153,7 @@ func parseExpectedUpload(upload string) (parsed uint64, err error) {
 
 // parseExpectedDownload will parse the string into the form of rentPayment.ExpectedDownload
 func parseExpectedDownload(download string) (parsed uint64, err error) {
-	if parsed, err = storage.DataSizeConverter(download); err != nil {
+	if parsed, err = unit.ParseStorage(download); err != nil {
 		return
 	}
 

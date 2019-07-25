@@ -264,15 +264,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.FolderSizeFlag,
 			utils.FolderPathFlag,
-			utils.StorageDurationFlag,
-			utils.DepositPriceFlag,
-			utils.ContractPriceFlag,
-			utils.DownloadPriceFlag,
-			utils.UploadPriceFlag,
-			utils.StoragePriceFlag,
-			utils.SectorPriceFlag,
-			utils.BudgetPriceFlag,
-			utils.MaxDepositFlag,
 		},
 	},
 	{

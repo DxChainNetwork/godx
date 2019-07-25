@@ -55,12 +55,12 @@ type (
 		DepositBudget common.BigInt `json:"depositBudget"`
 		MaxDeposit    common.BigInt `json:"maxDeposit"`
 
-		MinBaseRPCPrice           common.BigInt `json:"minBaseRPCPrice"`
-		MinContractPrice          common.BigInt `json:"minContractPrice"`
-		MinDownloadBandwidthPrice common.BigInt `json:"minDownloadBandwidthPrice"`
-		MinSectorAccessPrice      common.BigInt `json:"minSectorAccessPrice"`
-		MinStoragePrice           common.BigInt `json:"minStoragePrice"`
-		MinUploadBandwidthPrice   common.BigInt `json:"minUploadBandwidthPrice"`
+		BaseRPCPrice           common.BigInt `json:"baseRPCPrice"`
+		ContractPrice          common.BigInt `json:"contractPrice"`
+		DownloadBandwidthPrice common.BigInt `json:"downloadBandwidthPrice"`
+		SectorAccessPrice      common.BigInt `json:"sectorAccessPrice"`
+		StoragePrice           common.BigInt `json:"storagePrice"`
+		UploadBandwidthPrice   common.BigInt `json:"uploadBandwidthPrice"`
 	}
 
 	// HostExtConfig make group of host setting to broadcast as object
