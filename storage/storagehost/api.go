@@ -225,6 +225,9 @@ func (h *HostPrivateAPI) setWindowSize(str string) error {
 func (h *HostPrivateAPI) setPaymentAddress(addrStr string) error {
 	addr := common.HexToAddress(addrStr)
 	account := accounts.Account{Address: addr}
+	if h.storageHost.am == nil {
+		return errors.New("storage host has no account manager")
+	}
 	_, err := h.storageHost.am.Find(account)
 	if err != nil {
 		return errors.New("unknown account")
