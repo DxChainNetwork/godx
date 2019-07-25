@@ -54,6 +54,21 @@ The values are associated with units.
 		},
 
 		{
+			Name:      "setpaymentaddr",
+			Usage:     "Register the account address to be used for the storage services",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(setHostPaymentAddress),
+			Flags: []cli.Flag{
+				utils.PaymentAddressFlag,
+			},
+			Description: `
+			gdx shost setpaymentaddr --address [parameter]
+is used to register the account address to be used for the storage services. Deposit and money spent for host
+announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
+client will be saved into this address as well.`,
+		},
+
+		{
 			Name:      "folders",
 			Usage:     "Retrieve the information of folders created for storing data uploaded by client",
 			ArgsUsage: "",
@@ -257,6 +272,28 @@ func hostConfigFromFlags(ctx *cli.Context) map[string]string {
 	}
 
 	return config
+}
+
+func setHostPaymentAddress(ctx *cli.Context) error {
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
+	}
+
+	var address string
+	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
+		utils.Fatalf("the --address flag must be used to specify which account address want to be used")
+	} else {
+		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
+	}
+
+	var resp string
+	if err = client.Call(&resp, "shost_setPaymentAddress", address); err != nil {
+		utils.Fatalf("failed to set up the payment address: %s", err.Error())
+	}
+
+	fmt.Printf("%s \n\n", resp)
+	return nil
 }
 
 func getHostFolders(ctx *cli.Context) error {
