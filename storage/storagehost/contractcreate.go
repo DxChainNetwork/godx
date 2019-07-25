@@ -40,7 +40,6 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
 		contractCreateErr = fmt.Errorf("failed to recover the public key from the signature: %s", err.Error())
-		sp.TriggerError(err)
 		return
 	}
 
