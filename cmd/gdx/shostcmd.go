@@ -211,48 +211,48 @@ func hostConfigFromFlags(ctx *cli.Context) map[string]string {
 	config := make(map[string]string)
 
 	// set the value of accepting contracts
-	if ctx.GlobalIsSet(utils.AcceptingContractsFlag.Name) {
-		acceptingContracts := ctx.GlobalString(utils.AcceptingContractsFlag.Name)
+	if ctx.IsSet(utils.AcceptingContractsFlag.Name) {
+		acceptingContracts := ctx.String(utils.AcceptingContractsFlag.Name)
 		config["acceptingContracts"] = acceptingContracts
 	}
 	// set the value of max deposit
-	if ctx.GlobalIsSet(utils.MaxDepositFlag.Name) {
-		maxDeposit := ctx.GlobalString(utils.MaxDepositFlag.Name)
+	if ctx.IsSet(utils.MaxDepositFlag.Name) {
+		maxDeposit := ctx.String(utils.MaxDepositFlag.Name)
 		config["maxDeposit"] = maxDeposit
 	}
 	// set the value of budget price
-	if ctx.GlobalIsSet(utils.BudgetPriceFlag.Name) {
-		budget := ctx.GlobalString(utils.BudgetPriceFlag.Name)
+	if ctx.IsSet(utils.BudgetPriceFlag.Name) {
+		budget := ctx.String(utils.BudgetPriceFlag.Name)
 		config["depositBudget"] = budget
 	}
 	// set the value of storage price
-	if ctx.GlobalIsSet(utils.StoragePriceFlag.Name) {
-		storagePrice := ctx.GlobalString(utils.StoragePriceFlag.Name)
+	if ctx.IsSet(utils.StoragePriceFlag.Name) {
+		storagePrice := ctx.String(utils.StoragePriceFlag.Name)
 		config["storagePrice"] = storagePrice
 	}
 	// set the upload price
-	if ctx.GlobalIsSet(utils.UploadPriceFlag.Name) {
-		uploadPrice := ctx.GlobalString(utils.UploadPriceFlag.Name)
+	if ctx.IsSet(utils.UploadPriceFlag.Name) {
+		uploadPrice := ctx.String(utils.UploadPriceFlag.Name)
 		config["uploadBandwidthPrice"] = uploadPrice
 	}
 	// set the download price
-	if ctx.GlobalIsSet(utils.DownloadPriceFlag.Name) {
-		downloadPrice := ctx.GlobalString(utils.DownloadPriceFlag.Name)
+	if ctx.IsSet(utils.DownloadPriceFlag.Name) {
+		downloadPrice := ctx.String(utils.DownloadPriceFlag.Name)
 		config["downloadBandwidthPrice"] = downloadPrice
 	}
 	// set the contract price
-	if ctx.GlobalIsSet(utils.ContractPriceFlag.Name) {
-		contractPrice := ctx.GlobalString(utils.ContractPriceFlag.Name)
+	if ctx.IsSet(utils.ContractPriceFlag.Name) {
+		contractPrice := ctx.String(utils.ContractPriceFlag.Name)
 		config["contractPrice"] = contractPrice
 	}
 	// set the deposit price
-	if ctx.GlobalIsSet(utils.DepositPriceFlag.Name) {
-		deposit := ctx.GlobalString(utils.DepositPriceFlag.Name)
+	if ctx.IsSet(utils.DepositPriceFlag.Name) {
+		deposit := ctx.String(utils.DepositPriceFlag.Name)
 		config["deposit"] = deposit
 	}
 	// set the duration
-	if ctx.GlobalIsSet(utils.StorageDurationFlag.Name) {
-		maxDuration := ctx.GlobalString(utils.StorageDurationFlag.Name)
+	if ctx.IsSet(utils.StorageDurationFlag.Name) {
+		maxDuration := ctx.String(utils.StorageDurationFlag.Name)
 		config["maxDuration"] = maxDuration
 	}
 
