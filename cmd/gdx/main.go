@@ -180,6 +180,19 @@ var (
 	storageHostFlags = []cli.Flag{
 		utils.FolderSizeFlag,
 		utils.FolderPathFlag,
+		utils.AcceptingContractsFlag,
+		utils.StorageDurationFlag,
+		utils.DepositPriceFlag,
+		utils.ContractPriceFlag,
+		utils.DownloadPriceFlag,
+		utils.UploadPriceFlag,
+		utils.StoragePriceFlag,
+		utils.BudgetPriceFlag,
+		utils.MaxDepositFlag,
+	}
+
+	storageHostSetterFlags = []cli.Flag{
+		utils.AcceptingContractsFlag,
 		utils.StorageDurationFlag,
 		utils.DepositPriceFlag,
 		utils.ContractPriceFlag,

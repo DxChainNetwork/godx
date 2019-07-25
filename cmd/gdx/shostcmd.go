@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/cmd/utils"
-	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 
@@ -39,6 +38,7 @@ and etc.`,
 			Name:      "setconfig",
 			Usage:     "Set the storage host configurations",
 			ArgsUsage: "",
+			Flags:     storageHostSetterFlags,
 			Action:    utils.MigrateFlags(setHostConfig),
 			// TODO: elaborate the description
 			Description: `
@@ -343,8 +343,8 @@ func hostConfigFromFlags(ctx *cli.Context) map[string]string {
 
 	// set the value of accepting contracts
 	if ctx.GlobalIsSet(utils.AcceptingContractsFlag.Name) {
-		acceptingContracts := ctx.GlobalBool(utils.AcceptingContractsFlag.Name)
-		config["acceptingContracts"] = unit.FormatBool(acceptingContracts)
+		acceptingContracts := ctx.GlobalString(utils.AcceptingContractsFlag.Name)
+		config["acceptingContracts"] = acceptingContracts
 	}
 	// set the value of max deposit
 	if ctx.GlobalIsSet(utils.MaxDepositFlag.Name) {

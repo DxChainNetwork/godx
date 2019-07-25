@@ -113,9 +113,9 @@ func NewApp(gitCommit, usage string) *cli.App {
 
 var (
 	// Accepting
-	AcceptingContractsFlag = cli.BoolFlag{
+	AcceptingContractsFlag = cli.StringFlag{
 		Name:  "acceptingcontracts",
-		Usage: "used to indicate whether the shost accepts new contracts",
+		Usage: "used to specify whether the shost accepts new contracts",
 	}
 
 	MaxDepositFlag = cli.StringFlag{
