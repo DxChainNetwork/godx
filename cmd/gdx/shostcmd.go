@@ -40,10 +40,17 @@ and etc.`,
 			ArgsUsage: "",
 			Flags:     storageHostSetterFlags,
 			Action:    utils.MigrateFlags(setHostConfig),
-			// TODO: elaborate the description
 			Description: `
-			gdx shost setconfig
-`,
+			gdx shost setconfig [--acceptingcontracts arg] [--maxdeposit arg] [--depositbudget arg] [--storageprice arg] [--uploadprice arg] [--downloadprice arg] [--contractprice arg] [--deposit arg] [--maxduration arg]
+
+change the storage host configuration. The parameters include but not limited to 
+acceptingcontracts, storageprice, uploadprice, downloadprice, etc. A complete set of 
+editable parameters please read the list of flags.
+
+The values are associated with units.
+	BOOL:       {"true", "false"}
+	CURRENCY:   {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
+	DURATION:   {"h", "b", "d", "w", "m", "y"}`,
 		},
 
 		{
@@ -129,20 +136,6 @@ specified using --folderpath.`,
 		},
 
 		{
-			Name:      "setduration",
-			Usage:     "Specify the max time length the storage host is willing to save the data for storage client",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setDuration),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setduration --duration [argument]
-
-will change the storage host configuration. The duration field specified the max time length the storage
-host is willing to save the files for the storage client. The --duration flag must be used to specify
-the time length`,
-		},
-
-		{
 			Name:      "paymentaddr",
 			Usage:     "Retrieve the account address used for storage service revenue",
 			ArgsUsage: "",
@@ -152,130 +145,6 @@ the time length`,
 
 will display the account address used for the storage service. Unless user set it explicitly, the payment
 address will always be the first account address`,
-		},
-
-		{
-			Name:      "setpaymentaddr",
-			Usage:     "Register the account address to be used for the storage services",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setHostPaymentAddress),
-			Flags: []cli.Flag{
-				utils.PaymentAddressFlag,
-			},
-			Description: `
-			gdx shost setpaymentaddr --address [parameter]
-
-is used to register the account address to be used for the storage services. Deposit and money spent for host
-announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
-client will be saved into this address as well.`,
-		},
-
-		{
-			Name:      "setdeposit",
-			Usage:     "Specifies the deposit the host is willing to put for the storage service",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setDeposit),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost deposit --deposit [argument]
-
-is used to specify the deposit the host is willing to put for the storage service. If the host failed to
-prove that it has the client's file at the end, a amount of money will be deducted from the deposit. Otherwise,
-the deposit will be returned to host at the end of the contract.
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setcontractprice",
-			Usage:     "Specifies the price the client must pay for signing the contract",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setContractPrice),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setcontractprice --contractprice [argument]
-
-is used to specify the money that storage client must be paid for singing up the contract with the storage
-host. Note, the --contractprice flag must be used to specify the money. 
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setdownloadbandwidthprice",
-			Usage:     "Specifies the download bandwidth price the client must be paid for downloading the data",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setDownloadBandwidthPrice),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setdownloadbandwidthprice --downloadprice [argument]
-
-is used to specify the download bandwidth price the client must be paid for download the data from the host.
-It must be used along with the downloadprice flag to specify the price
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setuploadbandwidthprice",
-			Usage:     "Specifies the upload bandwidth price the client must be paid for uploading the data",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setUploadBandwidthPrice),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setdownloadbandwidthprice --uploadprice [argument]
-
-is used to specify the upload bandwidth price the client must be paid for upload the data to the host.
-It must be used along with the uploadprice flag to specify the price
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setstorageprice",
-			Usage:     "Specifies the storage price the client must be paid",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setStoragePrice),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setstorageprice --storageprice [argument]
-
-is used to specify the storage price that the client must be paid, it is measured in terms of /byte/block.
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setbudget",
-			Usage:     "Defines the maximum amount of money that the storage host can allocate as deposit",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setBudget),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setbudget --budget [argument]
-
-is used to specify the maximum amount of money that the storage host can allocate as deposit. The host will loose
-access to this amount of money within the contract period. Note: the --budget flag must be used to specify
-the budget.
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
-		},
-
-		{
-			Name:      "setmaxdeposit",
-			Usage:     "Specifies the max amount of deposit the host can put into a single contract",
-			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setMaxDeposit),
-			Flags:     storageHostFlags,
-			Description: `
-			gdx shost setmaxdeposit --maxdeposit [argument]
-
-is used to specify the max amount of deposit the host can put into a single contract. The difference between
-this parameter and the budget parameter is that the budget parameter defines the max amount of money can
-be used as deposit for all contracts that storage host signed. The --maxdeposit flag must be used to specify
-the max deposit. 
-
-Available Units: {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}`,
 		},
 	},
 }
@@ -551,28 +420,6 @@ func deleteFolder(ctx *cli.Context) error {
 	return nil
 }
 
-func setDuration(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var duration string
-	if !ctx.GlobalIsSet(utils.StorageDurationFlag.Name) {
-		utils.Fatalf("the --duration flag must be used to specify the max duration")
-	} else {
-		duration = ctx.GlobalString(utils.StorageDurationFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMaxDuration", duration); err != nil {
-		utils.Fatalf("failed to set the max storage duration: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
 func getHostPaymentAddress(ctx *cli.Context) error {
 	client, err := gdxAttach(ctx)
 	if err != nil {
@@ -583,182 +430,6 @@ func getHostPaymentAddress(ctx *cli.Context) error {
 	err = client.Call(&resp, "shost_getPaymentAddress")
 	if err != nil {
 		utils.Fatalf("failed to retrieve the payment address: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setHostPaymentAddress(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var address string
-	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
-		utils.Fatalf("the --address flag must be used to specify which account address want to be used")
-	} else {
-		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setPaymentAddress", address); err != nil {
-		utils.Fatalf("failed to set up the payment address: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setDeposit(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var deposit string
-	if !ctx.GlobalIsSet(utils.DepositPriceFlag.Name) {
-		utils.Fatalf("the --deposity flag must be used to specify the amount of money the host is willing to be used as deposit")
-	} else {
-		deposit = ctx.GlobalString(utils.DepositPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setDeposit", deposit); err != nil {
-		utils.Fatalf("failed to set the deposit: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setContractPrice(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var contractPrice string
-	if !ctx.GlobalIsSet(utils.ContractPriceFlag.Name) {
-		utils.Fatalf("the --contractprice flag must be used to specify the contract price")
-	} else {
-		contractPrice = ctx.GlobalString(utils.ContractPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMinContractPrice", contractPrice); err != nil {
-		utils.Fatalf("failed to set the contract price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setDownloadBandwidthPrice(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var downloadPrice string
-	if !ctx.GlobalIsSet(utils.DownloadPriceFlag.Name) {
-		utils.Fatalf("the --downloadprice flag must be used to specify the download bandwidth price")
-	} else {
-		downloadPrice = ctx.GlobalString(utils.DownloadPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMinDownloadBandwidthPrice", downloadPrice); err != nil {
-		utils.Fatalf("failed to set the download bandwidth price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setUploadBandwidthPrice(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var uploadPrice string
-	if !ctx.GlobalIsSet(utils.UploadPriceFlag.Name) {
-		utils.Fatalf("the --uploadprice flag must be used to specify the upload bandwidth price")
-	} else {
-		uploadPrice = ctx.GlobalString(utils.UploadPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMinUploadBandwidthPrice", uploadPrice); err != nil {
-		utils.Fatalf("failed to set the upload bandwidth price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setStoragePrice(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var storagePrice string
-	if !ctx.GlobalIsSet(utils.StoragePriceFlag.Name) {
-		utils.Fatalf("the --storageprice flag must be used to specify the storage price")
-	} else {
-		storagePrice = ctx.GlobalString(utils.StoragePriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMinStoragePrice", storagePrice); err != nil {
-		utils.Fatalf("failed to set the storage price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setBudget(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var budget string
-	if !ctx.GlobalIsSet(utils.BudgetPriceFlag.Name) {
-		utils.Fatalf("the --budget flag must be used to specify the budget price")
-	} else {
-		budget = ctx.GlobalString(utils.BudgetPriceFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setDepositBudget", budget); err != nil {
-		utils.Fatalf("failed to set the budget price: %s", err.Error())
-	}
-
-	fmt.Printf("%s \n\n", resp)
-	return nil
-}
-
-func setMaxDeposit(ctx *cli.Context) error {
-	client, err := gdxAttach(ctx)
-	if err != nil {
-		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
-	}
-
-	var maxDeposit string
-	if !ctx.GlobalIsSet(utils.MaxDepositFlag.Name) {
-		utils.Fatalf("the --maxdeposit flag must be used to specify the max deposit")
-	} else {
-		maxDeposit = ctx.GlobalString(utils.MaxDepositFlag.Name)
-	}
-
-	var resp string
-	if err = client.Call(&resp, "shost_setMaxDeposit", maxDeposit); err != nil {
-		utils.Fatalf("failed to set the max deposit: %s", err.Error())
 	}
 
 	fmt.Printf("%s \n\n", resp)
