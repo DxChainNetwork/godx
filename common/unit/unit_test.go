@@ -9,26 +9,6 @@ import (
 	"testing"
 )
 
-func TestContainsDigitOnly(t *testing.T) {
-	tables := []struct {
-		input     string
-		allDigits bool
-	}{
-		{"1231232131232131231231321313", true},
-		{"fjsdlkfjalkfjlkahdfklhfiwehflsdjfkjf", false},
-		{"21rfewf2rewf4r4", false},
-		{"fdafasdf", false},
-	}
-
-	for _, table := range tables {
-		result := containsDigitOnly(table.input)
-		if result != table.allDigits {
-			t.Errorf("the string %s is expected allcontaindigit %t, got %t",
-				table.input, table.allDigits, result)
-		}
-	}
-}
-
 func TestParseFund(t *testing.T) {
 	tables := []struct {
 		fund   string

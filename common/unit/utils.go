@@ -62,34 +62,24 @@ func formatString(s string) (formatted string) {
 func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
 	// from the currency indexMap, get the conversion rate
 	conversionRate := currencyIndexMap[unit]
+	var bigFloat = new(big.Float)
 	var bigInt = new(big.Int)
 
 	// remove the unit
 	fund = strings.TrimSuffix(fund, unit)
 
-	// check if the string contains only digit
-	if !containsDigitOnly(fund) {
-		err = fmt.Errorf("the fund provided is not valid, the fund must be numbers only with the valid unit, ex 100wei. Here is a list of valid currency unit: %+v", CurrencyUnit)
-		return
-	}
-
 	// convert the string to *big.int
-	if _, err = fmt.Sscan(fund, bigInt); err != nil {
+	if _, err = fmt.Sscan(fund, bigFloat); err != nil {
 		err = fmt.Errorf("failed to convert the string to *big.Int: %s", err.Error())
 		return
 	}
 
+	parsedFloat := new(big.Float).Mul(bigFloat, new(big.Float).SetUint64(conversionRate))
+
+	parsedFloat.Int(bigInt)
+
 	// convert the result to common.BigInt
 	parsed = common.PtrBigInt(bigInt)
 
-	// unit conversion
-	parsed = parsed.MultUint64(conversionRate)
-
 	return
-}
-
-// containsDigitOnly checks if a string contains only digit
-func containsDigitOnly(s string) (digitOnly bool) {
-	notDigit := func(c rune) bool { return c < '0' || c > '9' }
-	return strings.IndexFunc(s, notDigit) == -1
 }
