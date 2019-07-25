@@ -35,10 +35,10 @@ func TestParseFund(t *testing.T) {
 		result common.BigInt
 	}{
 		{"100 wei", common.NewBigInt(100)},
-		{"100ether", common.NewBigInt(100).MultUint64(currencyIndexMap["ether"])},
-		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(currencyIndexMap["milliether"])},
-		{"100  MICROether", common.NewBigInt(100).MultUint64(currencyIndexMap["microether"])},
-		{"99876KWEI", common.NewBigInt(99876).MultUint64(currencyIndexMap["kwei"])},
+		{"100ether", common.NewBigInt(100).MultUint64(CurrencyIndexMap["ether"])},
+		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(CurrencyIndexMap["milliether"])},
+		{"100  MICROether", common.NewBigInt(100).MultUint64(CurrencyIndexMap["microether"])},
+		{"99876KWEI", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["kwei"])},
 	}
 
 	for _, table := range tables {
