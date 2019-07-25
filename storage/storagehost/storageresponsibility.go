@@ -318,6 +318,78 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	return nil
 }
 
+func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error{
+	if _, ok := h.lockedStorageResponsibility[oldSo.id()]; !ok {
+		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")
+	}
+
+	var i int
+	var err error
+	for i = range sectorsRemoved {
+		err = h.AddSector(sectorsRemoved[i], removedSectorData[i])
+		//If the adding or update fails,the added sectors should be
+		//removed and the StorageResponsibility should be considered invalid.
+		if err != nil {
+			h.log.Warn("Error writing data to the sector", "err", err)
+			break
+		}
+	}
+	//This operation is wrong, you need to restore the sector
+	if err != nil {
+		for j := 0; j < i; j++ {
+			//The error of restoring a sector doesn't make any sense to us.
+			h.DeleteSector(sectorsRemoved[j])
+		}
+		return err
+	}
+
+	for i := range sectorsGained {
+		//The error of restoring a sector doesn't make any sense to us.
+		h.DeleteSector(sectorsGained[i])
+	}
+
+	var newSo StorageResponsibility
+	var errNew error
+	errDB := func() error {
+		//Get old storage responsibility, return error if not found
+		newSo, errNew = getStorageResponsibility(h.db, oldSo.id())
+		if errNew != nil {
+			return errNew
+		}
+
+		return putStorageResponsibility(h.db, oldSo.id(), oldSo)
+	}()
+
+	if errDB != nil {
+		//This operation is wrong, you need to restore the sector
+		for i := range sectorsRemoved {
+			//The error of restoring a sector doesn't make any sense to us.
+			h.DeleteSector(sectorsRemoved[i])
+		}
+		return errDB
+	}
+
+	// revert oldSo financialMetrics
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(oldSo.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(oldSo.LockedStorageDeposit)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(oldSo.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(oldSo.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(oldSo.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(oldSo.RiskedStorageDeposit)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(oldSo.TransactionFeeExpenses)
+
+	// delete new financialMetrics
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(newSo.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(newSo.LockedStorageDeposit)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(newSo.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Sub(newSo.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Sub(newSo.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Sub(newSo.RiskedStorageDeposit)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Sub(newSo.TransactionFeeExpenses)
+
+	return nil
+}
+
 //pruneStaleStorageResponsibilities remove stale storage responsibilities because these storage responsibilities will affect the financial metrics of the host
 func (h *StorageHost) pruneStaleStorageResponsibilities() error {
 	h.lock.RLock()

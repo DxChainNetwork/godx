@@ -17,7 +17,7 @@ import (
 
 // DownloadHandler handles the download negotiation
 func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
-	var downloadErr error
+	var downloadErr, hostNegotiateErr, clientNegotiateErrerror error
 
 	defer func() {
 		if downloadErr != nil {
@@ -31,6 +31,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	err := downloadReqMsg.Decode(&req)
 	if err != nil {
 		downloadErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
+		hostNegotiateErr = downloadErr
 		return
 	}
 
@@ -54,6 +55,8 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	// it is totally fine not getting the storage responsibility
 	if err != nil {
+		downloadErr = err
+		hostNegotiateErr = downloadErr
 		return
 	}
 
@@ -85,6 +88,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 		if err != nil {
 			downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
+			hostNegotiateErr = downloadErr
 			return
 		}
 	}
@@ -125,6 +129,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
 		downloadErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
+		hostNegotiateErr = downloadErr
 		return
 	}
 
@@ -133,12 +138,14 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	wallet, err := h.am.Find(account)
 	if err != nil {
 		downloadErr = fmt.Errorf("failed to find the account address: %s", err.Error())
+		hostNegotiateErr = downloadErr
 		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
 		downloadErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
+		hostNegotiateErr = downloadErr
 		return
 	}
 
@@ -158,7 +165,6 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	// enter response loop
 	for i, sec := range req.Sections {
-
 		// fetch the requested data from host local storage
 		sectorData, err := h.ReadSector(sec.MerkleRoot)
 		if err != nil {

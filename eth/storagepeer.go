@@ -109,6 +109,41 @@ func (p *peer) SendHostBusyHandleRequestErr() error {
 	return p2p.Send(p.rw, storage.HostBusyHandleReqMsg, "error handling")
 }
 
+// SendClientNegotiateErrorMsg will send client negotiate error msg
+func (p *peer) SendClientNegotiateErrorMsg(err error) error {
+	return  p2p.Send(p.rw, storage.ClientNegotiateErrorMsg, err)
+}
+
+// SendClientCommitFailedMsg will send a error msg to Host, indicating that client occurs exception
+// when executing 'Commit Action'
+func (p *peer) SendClientCommitFailedMsg() error {
+	return p2p.Send(p.rw, storage.ClientCommitFailedMsg, "commit error")
+}
+
+// SendClientCommitSuccessMsg will send a success msg to Host, indicating that client has no error after 'Commit Action'
+func (p *peer) SendClientCommitSuccessMsg() error {
+	return p2p.Send(p.rw, storage.ClientCommitSuccessMsg, "commit success")
+}
+
+// SendClientCommitSuccessMsg will send host commit failed msg to client
+func (p *peer) SendHostCommitFailedMsg() error {
+	return p2p.Send(p.rw, storage.HostCommitFailedMsg, "commit error")
+}
+
+func (p *peer) SendClientAckMsg() error {
+	return p2p.Send(p.rw, storage.ClientAckMsg, "client ack")
+}
+
+// SendHostAckMsg will send host ack msg to client as the last negotiate msg no matter what success or failed
+func (p *peer) SendHostAckMsg() error {
+	return p2p.Send(p.rw, storage.HostAckMsg, "host ack")
+}
+
+// SendHostNegotiateErrorMsg will send host negotiate error msg
+func (p *peer) SendHostNegotiateErrorMsg(err error) error {
+	return  p2p.Send(p.rw, storage.HostNegotiateErrorMsg, err)
+}
+
 // WaitConfigResp is used by the storage client, waiting from the configuration
 // response from the storage host
 func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {

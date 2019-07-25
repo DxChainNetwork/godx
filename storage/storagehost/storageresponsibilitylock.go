@@ -56,3 +56,10 @@ func (h *StorageHost) checkAndUnlockStorageResponsibility(soid common.Hash) {
 	tl.Unlock()
 
 }
+
+func (h *StorageHost) deleteLockedStorageResponsibility(soID common.Hash) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	delete(h.lockedStorageResponsibility, soID)
+}

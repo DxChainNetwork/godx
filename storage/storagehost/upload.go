@@ -15,9 +15,22 @@ import (
 
 // UploadHandler handles the upload negotiation
 func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
-	var uploadErr error
+	var uploadErr, hostNegotiateErr, clientNegotiateErr error
 
 	defer func() {
+		if clientNegotiateErr != nil {
+			sp.SendHostAckMsg()
+		}
+
+		if hostNegotiateErr != nil {
+			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err != nil {
+				msg, err := sp.HostWaitContractResp()
+				if err == nil && msg.Code == storage.ClientAckMsg {
+					sp.SendHostAckMsg()
+				}
+			}
+		}
+
 		if uploadErr != nil {
 			h.log.Error("data upload failed", "err", uploadErr.Error())
 			sp.TriggerError(uploadErr)
@@ -28,6 +41,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var uploadRequest storage.UploadRequest
 	if err := uploadReqMsg.Decode(&uploadRequest); err != nil {
 		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -38,6 +52,8 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	// it is normal not getting storage responsibility
 	if err != nil {
+		uploadErr = fmt.Errorf("failed to get storage responsibility: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -50,7 +66,6 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	sectorsChanged := make(map[uint64]struct{})
 
 	var bandwidthRevenue common.BigInt
-	var sectorsRemoved []common.Hash
 	var sectorsGained []common.Hash
 	var gainedSectorData [][]byte
 	for _, action := range uploadRequest.Actions {
@@ -68,6 +83,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 		default:
 			uploadErr = fmt.Errorf("unknown upload action type: %s", action.Type)
+			hostNegotiateErr = uploadErr
 		}
 	}
 
@@ -115,6 +131,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
 		uploadErr = fmt.Errorf("revision verification failed. contractID: %s, err: %s", newRevision.ParentID.String(), err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -144,6 +161,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	oldHashSet, err := merkle.Sha256DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
 		uploadErr = fmt.Errorf("error construct the merkle proof: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -159,6 +177,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	if err := sp.SendUploadMerkleProof(merkleResp); err != nil {
 		uploadErr = fmt.Errorf("storage host failed to send merkle proof to the storage client: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -169,8 +188,15 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
+	if msg.Code == storage.ClientNegotiateErrorMsg {
+		msg.Decode(&clientNegotiateErr)
+		uploadErr = clientNegotiateErr
+		return
+	}
+
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		uploadErr = fmt.Errorf("failed to decode the client revision sign: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -179,12 +205,14 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	wallet, err := h.am.Find(account)
 	if err != nil {
 		uploadErr = fmt.Errorf("host failed to get the account address: %s", err.Error())
+		hostNegotiateErr = uploadErr
 		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
 		uploadErr = fmt.Errorf("host failed to sign the new contract revision")
+		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -197,18 +225,18 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 
+	// send the host revision sign
+	if err := sp.SendUploadHostRevisionSign(hostSig); err != nil {
+		uploadErr = fmt.Errorf("failed to send the upload host revision sign: %s", err.Error())
+		return
+	}
+
 	h.lock.Lock()
-	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
+	err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
 	h.lock.Unlock()
 
 	if err != nil {
 		uploadErr = fmt.Errorf("failed to modify the storage responsibility: %s", err.Error())
-		return
-	}
-
-	// send the host revision sign
-	if err := sp.SendUploadHostRevisionSign(hostSig); err != nil {
-		uploadErr = fmt.Errorf("failed to send the upload host revision sign: %s", err.Error())
 		return
 	}
 
