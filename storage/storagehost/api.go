@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -9,7 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// HostPublicAPI is the api for private usage
+// HostPrivateAPI is the api for private usage
 type HostPrivateAPI struct {
 	storageHost *StorageHost
 }
