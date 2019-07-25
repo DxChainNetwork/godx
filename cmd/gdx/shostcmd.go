@@ -202,7 +202,7 @@ func setHostConfig(ctx *cli.Context) error {
 	if err = client.Call(&resp, "shost_setConfig", config); err != nil {
 		utils.Fatalf("failed to set config: %v", err)
 	}
-	fmt.Printf("%v\n\n", resp)
+	fmt.Printf("%v\n", resp)
 	return nil
 }
 
