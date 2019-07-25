@@ -532,7 +532,7 @@ func TestResetWithEmptyAndFullByteSlice(t *testing.T) {
 			t.Errorf("str: got %x, want []", resetEncbuf.str)
 		}
 		if len(resetEncbuf.lheads) != 0 {
-			t.Errorf("lheads: got %x, want []", resetEncbuf.lheads)
+			t.Errorf("lheads: got %v, want []", resetEncbuf.lheads)
 		}
 	}
 }
