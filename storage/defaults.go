@@ -6,10 +6,10 @@ package storage
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
-
 	"math/big"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 // HostBusyHandleReqErr defines that client sent the contract request too frequently. If this error is occurred
@@ -27,6 +27,7 @@ const (
 	ContractDownloadDataMsg      = 0x25
 	NegotiationErrorMsg          = 0x26
 	HostBusyHandleReqMsg         = 0x27
+	HostStopMsg                  = 0x28
 
 	// Host Handle Message Set
 	HostConfigReqMsg                 = 0x30
@@ -35,7 +36,7 @@ const (
 	ContractUploadReqMsg             = 0x33
 	ContractUploadClientRevisionSign = 0x34
 	ContractDownloadReqMsg           = 0x35
-	NegotiationStopMsg               = 0x36
+	ClientStopMsg                    = 0x36
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
