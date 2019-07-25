@@ -5644,6 +5644,11 @@ module.exports = Net;
                   name: 'file.ls',
                   getter: 'clientfiles_fileList'
               }),
+
+              new Property({
+                  name: 'periodCost',
+                  getter: 'sclient_periodCost'
+              })
           ];
         }
 

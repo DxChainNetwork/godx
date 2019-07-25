@@ -206,6 +206,12 @@ func (api *PrivateStorageClientAPI) SetPaymentAddress(addrStr string) bool {
 	return true
 }
 
+// PeriodCost will get the client's period cost which specifies cost that storage
+// client needs to pay within one period cycle. It includes cost for all contracts
+func (api *PrivateStorageClientAPI) PeriodCost() storage.PeriodCost {
+	return api.sc.contractManager.RetrievePeriodCost()
+}
+
 // CancelAllContracts will cancel all contracts signed with storage client by
 // marking all active contracts as canceled, not good for uploading, and not good
 // for renewing

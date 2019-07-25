@@ -59,7 +59,7 @@ will automatically evaluate storage hosts from this list to sign contract with t
 			Action:    utils.MigrateFlags(getHostInfo),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient host --hostid [argument]
+			gdx sclient host --hostid [hostID]
 
 will display detailed host information based on the provided hostID, such as deposit,
 allowed storage time, and etc.`,
@@ -109,7 +109,7 @@ each file, including the file's uploading status and health status'`,
 			Action:    utils.MigrateFlags(getContract),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient contract [argument]
+			gdx sclient contract --contractid [contractID]
 
 will display detailed contract information based on the provided contractID. The information
 included contractID, revisionNumber, hostID, and etc.'`,
@@ -133,7 +133,7 @@ the payment address for the storage service will always be the first account add
 			Action:    utils.MigrateFlags(setPaymentAddress),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient setpaymentaddr --address [parameter]
+			gdx sclient setpaymentaddr --address [paymentAddress]
 		
 is used to register the account address to be used for the storage services. Money spent for the
 file uploading, downloading, storage, and etc. will be deducted from this address. The --address
@@ -170,7 +170,7 @@ Note: without using any of those flags, default settings will be used`,
 			Action:    utils.MigrateFlags(fileUpload),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient upload --src [argument] --dst [argument]
+			gdx sclient upload --src [sourcePath] --dst [destinationPath]
 		
 will upload the file specified by the client to the storage hosts. This command must be used along
 with two flags to specify the source of the file that is going to be uploaded, and the destination
@@ -184,7 +184,7 @@ that the file is going to be uploaded to. Note: the src must be absolute path: /
 			Action:    utils.MigrateFlags(fileDownload),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient download --src [argument] --dst [argument]
+			gdx sclient download --src [sourcePath] --dst [destinationPath]
 
 will download the file specified by the client to the local machine. This command must be used along
 with two flags to specify the source of the file that is going to be downloaded, and the destination
@@ -198,7 +198,7 @@ that the file is going to be downloaded from. Note, the download destination mus
 			Action:    utils.MigrateFlags(getFile),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient file --filepath [argument]
+			gdx sclient file --filepath [filePath]
 
 will display the detailed information of an uploaded/uploading file, including the file uploading
 status, health status, and etc. Note, the filepath must be specified which is the destination path
@@ -212,7 +212,7 @@ used for file uploading`,
 			Action:    utils.MigrateFlags(fileRenaming),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient rename --prevpath [argument] --newpath [argument]
+			gdx sclient rename --prevpath [oldFilePath] --newpath [newFilePath]
 
 will rename the file uploaded by the client. oldname and newname flags must be used along
 with this command`,
@@ -225,10 +225,22 @@ with this command`,
 			Action:    utils.MigrateFlags(fileDelete),
 			Flags:     storageClientFlags,
 			Description: `
-			gdx sclient delete --filepath [argument]
+			gdx sclient delete --filepath [filePath]
 
 will delete the file uploaded by the storage client. This filepath flag must be used along
 with this command to specify which file will be deleted`,
+		},
+		{
+			Name:      "periodCost",
+			Usage:     "Retrieve the client's period cost for all storage contracts",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(periodCost),
+			Description: `
+			gdx sclient periodCost
+
+will retrieve and display the cost that storage client needs to pay within one period cycle. 
+The cost includes cost for all contracts. In addition, it also provides the contract fund left,
+fund unspent, and fund withhold, along with the withhold fund release block height`,
 		},
 	},
 }
@@ -704,6 +716,39 @@ func fileDelete(ctx *cli.Context) error {
 	}
 
 	fmt.Println(resp)
+	return nil
+}
+
+func periodCost(ctx *cli.Context) error {
+	// attaching to the remote gdx
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remove gdx, please start the gdx first: %s", err.Error())
+	}
+
+	// getting the storage period cost
+	var cost storage.PeriodCost
+	if err = client.Call(&cost, "sclient_periodCost"); err != nil {
+		utils.Fatalf("failed to get the client's period cost: %s", err.Error())
+	}
+
+	// print out the result
+	fmt.Printf(`
+
+Period Cost:
+	ContractFees:                 %v wei
+ 	UploadCost:                   %v wei
+	DownloadCost:                 %v wei
+	StorageCost:                  %v wei
+	PrevContractCost:             %v wei    
+	ContractFund:                 %v wei
+	UnspentFund:                  %v wei
+	WithheldFund:                 %v wei
+	WithheldFundReleaseBlock:     %v block
+
+`, cost.ContractFees, cost.UploadCost, cost.DownloadCost, cost.StorageCost, cost.PrevContractCost,
+		cost.ContractFund, cost.UnspentFund, cost.WithheldFund, cost.WithheldFundReleaseBlock)
+
 	return nil
 }
 

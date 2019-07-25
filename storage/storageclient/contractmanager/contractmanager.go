@@ -54,6 +54,9 @@ type ContractManager struct {
 	blockHeight   uint64
 	currentPeriod uint64
 
+	// storage client period cost
+	periodCost storage.PeriodCost
+
 	// utils
 	log  log.Logger
 	lock sync.RWMutex
@@ -168,6 +171,14 @@ func (cm *ContractManager) RetrieveActiveContracts() (cms []storage.ContractMeta
 // RetrieveActiveContract will return the contract meta data based on the contract id provided
 func (cm *ContractManager) RetrieveActiveContract(contractID storage.ContractID) (contract storage.ContractMetaData, exists bool) {
 	return cm.activeContracts.RetrieveContractMetaData(contractID)
+}
+
+// RetrievePeriodCost will get the client's period cost which specifies cost that storage
+// client needs to pay within one period cycle. It includes cost for all contracts
+func (cm *ContractManager) RetrievePeriodCost() storage.PeriodCost {
+	cm.lock.RLock()
+	defer cm.lock.RUnlock()
+	return cm.periodCost
 }
 
 // IsRenewing will return if the contract with the contract ID passed in is renewing
