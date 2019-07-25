@@ -145,8 +145,8 @@ func (api *PrivateMinerAPI) SetGasPrice(gasPrice hexutil.Big) bool {
 }
 
 // SetEtherbase sets the etherbase of the miner
-func (api *PrivateMinerAPI) SetEtherbase(etherbase common.Address) bool {
-	api.e.SetEtherbase(etherbase)
+func (api *PrivateMinerAPI) SetCoinbase(coinbase common.Address) bool {
+	api.e.SetCoinbase(coinbase)
 	return true
 }
 

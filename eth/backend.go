@@ -470,12 +470,12 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 }
 
 // SetEtherbase sets the mining reward address.
-func (s *Ethereum) SetEtherbase(etherbase common.Address) {
+func (s *Ethereum) SetCoinbase(coinbase common.Address) {
 	s.lock.Lock()
-	s.etherbase = etherbase
+	s.etherbase = coinbase
 	s.lock.Unlock()
 
-	s.miner.SetEtherbase(etherbase)
+	s.miner.SetCoinbase(coinbase)
 }
 
 // StartMining starts the miner with the given number of CPU threads. If mining

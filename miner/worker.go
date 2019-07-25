@@ -26,10 +26,12 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/misc"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
@@ -91,6 +93,9 @@ type environment struct {
 	header   *types.Header
 	txs      []*types.Transaction
 	receipts []*types.Receipt
+
+	// dpos engine context
+	dposContext *types.DposContext
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -228,7 +233,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 }
 
 // setEtherbase sets the etherbase used to initialize the block coinbase field.
-func (w *worker) setEtherbase(addr common.Address) {
+func (w *worker) setCoinbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.coinbase = addr
@@ -510,6 +515,20 @@ func (w *worker) taskLoop() {
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
 			}
+
+			engine, ok := w.engine.(*dpos.Dpos)
+			if !ok {
+				log.Error("not dpos engine")
+				return
+			}
+
+			// check validator at now for dpos consensus
+			err := engine.CheckValidator(w.chain.CurrentBlock(), time.Now().Unix())
+			if err != nil {
+				log.Error("failed to mint the block", "error", err)
+				return
+			}
+
 			// Reject duplicate sealing work due to resubmitting.
 			sealHash := w.engine.SealHash(task.block.Header())
 			if sealHash == prev {
@@ -609,17 +628,26 @@ func (w *worker) resultLoop() {
 
 // makeCurrent creates a new environment for the current cycle.
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
-	state, err := w.chain.StateAt(parent.Root())
+	stateDB, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return err
 	}
+
+	// construct dpos context from parent's dpos context root
+	chainDB := stateDB.Database().TrieDB().DiskDB().(ethdb.Database)
+	dposContext, err := types.NewDposContextFromProto(chainDB, parent.Header().DposContext)
+	if err != nil {
+		return err
+	}
+
 	env := &environment{
-		signer:    types.NewEIP155Signer(w.config.ChainID),
-		state:     state,
-		ancestors: mapset.NewSet(),
-		family:    mapset.NewSet(),
-		uncles:    mapset.NewSet(),
-		header:    header,
+		signer:      types.NewEIP155Signer(w.config.ChainID),
+		state:       stateDB,
+		dposContext: dposContext,
+		ancestors:   mapset.NewSet(),
+		family:      mapset.NewSet(),
+		uncles:      mapset.NewSet(),
+		header:      header,
 	}
 
 	// when 08 is processed ancestors contain 07 (quick block)
@@ -691,10 +719,11 @@ func (w *worker) updateSnapshot() {
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
 	snap := w.current.state.Snapshot()
-
+	dposSnap := w.current.dposContext.Snapshot()
 	receipt, _, err := core.ApplyTransaction(w.config, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		w.current.state.RevertToSnapshot(snap)
+		w.current.dposContext.RevertToSnapShot(dposSnap)
 		return nil, err
 	}
 	w.current.txs = append(w.current.txs, tx)
@@ -958,10 +987,14 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	height := w.current.header.Number.Uint64()
 	coinchargemaintenance.MaintenanceMissedProof(height, s)
 
-	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts, nil)
+	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts, w.current.dposContext)
 	if err != nil {
 		return err
 	}
+
+	// fill up dpos context to new block
+	block.DposContext = w.current.dposContext
+
 	if w.isRunning() {
 		if interval != nil {
 			interval()
