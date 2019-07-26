@@ -7,12 +7,13 @@ package storageclient
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"io"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 // uploadSegmentID is a unique identifier for each segment in the storage client
@@ -145,7 +146,7 @@ func (client *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploa
 	}
 
 	// Create the download
-	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
+	buf := newDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
 	d, err := client.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
@@ -296,7 +297,7 @@ func (client *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploa
 	}
 	defer osFile.Close()
 
-	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
+	buf := newDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
 	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && needDownload {
@@ -403,7 +404,7 @@ func (client *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUpload
 	case <-client.tm.StopChan():
 		clientOffline = true
 	default:
-		if storage.ENV == storage.Env_Test {
+		if storage.ENV == storage.EnvTest {
 			clientOffline = false
 		} else {
 			// Check that the storage client is still online

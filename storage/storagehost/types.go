@@ -115,6 +115,7 @@ var (
 	errTransactionNotConfirmed    = errors.New("transaction not confirmed")
 )
 
+// ExtendErr wraps a error with a string
 func ExtendErr(s string, err error) error {
 	if err == nil {
 		return nil
@@ -147,7 +148,10 @@ type (
 		UploadBandwidthRevenue            common.BigInt `json:"uploadbandwidthrevenue"`
 	}
 
-	ErrorRevision       string
+	// ErrorRevision is some error that occurs in revision
+	ErrorRevision string
+
+	// ErrorCreateContract is some error that occurs in contract creation
 	ErrorCreateContract string
 )
 

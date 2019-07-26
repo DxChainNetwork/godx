@@ -44,7 +44,7 @@ var (
 	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
 )
 
-// check whether a new StorageContract is valid
+// CheckCreateContract checks whether a new StorageContract is valid
 func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
@@ -115,7 +115,7 @@ func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight 
 	return nil
 }
 
-// check whether a new StorageContractRevision is valid
+// CheckRevisionContract checks whether a new StorageContractRevision is valid
 func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
 
 	// check whether it has proofed
@@ -216,7 +216,7 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	return nil
 }
 
-// check whether a new StorageContractRevision is valid
+// CheckMultiSignatures checks whether a new StorageContractRevision is valid
 func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures [][]byte) error {
 	if len(signatures) == 0 {
 		return errors.New("no signatures for verification")
@@ -287,7 +287,7 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures 
 	return nil
 }
 
-// check whether a new StorageProof is valid
+// CheckStorageProof checks whether a new StorageProof is valid
 func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
@@ -359,7 +359,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 	return nil
 }
 
-// check whether host has really stored the file
+// VerifySegment checks whether host has really stored the file
 func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex uint64, merkleRoot common.Hash) bool {
 
 	// convert base and hashSet to proofSet
@@ -395,7 +395,7 @@ func storageProofSegment(state StateDB, windowStart, fileSize uint64, scID commo
 	return index, nil
 }
 
-// calculate the num of leaves formed by the given file
+// CalculateLeaves calculates the num of leaves formed by the given file
 func CalculateLeaves(fileSize uint64) uint64 {
 	numSegments := fileSize / merkle.LeafSize
 	if fileSize == 0 || fileSize%merkle.LeafSize != 0 {
@@ -404,7 +404,7 @@ func CalculateLeaves(fileSize uint64) uint64 {
 	return numSegments
 }
 
-// verify merkle root of given segment
+// VerifyProof verifys merkle root of given segment
 func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
 	hasher := sha256.New()
 
@@ -468,7 +468,7 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 	return false
 }
 
-// returns the hash of the input data using the specified algorithm.
+// HashSum returns the hash of the input data using the specified algorithm.
 func HashSum(h hash.Hash, data ...[]byte) []byte {
 	h.Reset()
 	for _, d := range data {

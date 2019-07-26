@@ -211,7 +211,7 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 		uds.mu.Lock()
 		uds.fail(err)
 		uds.mu.Unlock()
-		return errors.New(fmt.Sprintf("unable to recover segment,error: %v", err))
+		return fmt.Errorf("unable to recover segment,error: %v", err)
 	}
 
 	// clear out the physical segments, we do not need them anymore.
@@ -230,7 +230,7 @@ func (uds *unfinishedDownloadSegment) recoverLogicalData() error {
 		uds.mu.Lock()
 		uds.fail(err)
 		uds.mu.Unlock()
-		return errors.New(fmt.Sprintf("unable to write to download destination,error: %v", err))
+		return fmt.Errorf("unable to write to download destination,error: %v", err)
 	}
 	recoverWriter = nil
 

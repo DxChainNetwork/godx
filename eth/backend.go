@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/crypto"
 	"math/big"
 	"runtime"
 	"sync"
@@ -39,6 +38,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/eth/downloader"
 	"github.com/DxChainNetwork/godx/eth/filters"
 	"github.com/DxChainNetwork/godx/eth/gasprice"
@@ -59,6 +59,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
+// LesServer defines the light ethereum node service
 type LesServer interface {
 	Start(srvr *p2p.Server)
 	Stop()
@@ -109,6 +110,7 @@ type Ethereum struct {
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
 
+// AddLesServer adds a LesServer into full node service
 func (s *Ethereum) AddLesServer(ls LesServer) {
 	s.lesServer = ls
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
@@ -386,10 +388,12 @@ func (s *Ethereum) APIs() []rpc.API {
 	return s.registeredAPIs
 }
 
+// ResetWithGenesisBlock reset current blockchain to the given block
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
+// Etherbase returns coinbase address
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	s.lock.RLock()
 	etherbase := s.etherbase
@@ -653,7 +657,7 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-// IsRevising is used to check if the contract is currently
+// TryToRenewOrRevise is used to check if the contract is currently
 // revising
 func (s *Ethereum) TryToRenewOrRevise(hostID enode.ID) bool {
 	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
@@ -810,30 +814,37 @@ func (s *Ethereum) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) ev
 	return s.APIBackend.SubscribeChainChangeEvent(ch)
 }
 
+// GetBlockByHash returns the block by hash
 func (s *Ethereum) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	return s.APIBackend.GetBlock(context.Background(), blockHash)
 }
 
+// ChainConfig returns current chain config
 func (s *Ethereum) ChainConfig() *params.ChainConfig {
 	return s.APIBackend.ChainConfig()
 }
 
+// CurrentBlock returns the latest block
 func (s *Ethereum) CurrentBlock() *types.Block {
 	return s.APIBackend.CurrentBlock()
 }
 
+// SendTx sends a tx
 func (s *Ethereum) SendTx(ctx context.Context, signedTx *types.Transaction) error {
 	return s.APIBackend.SendTx(ctx, signedTx)
 }
 
+// SuggestPrice returns the suggested gas price
 func (s *Ethereum) SuggestPrice(ctx context.Context) (*big.Int, error) {
 	return s.APIBackend.SuggestPrice(ctx)
 }
 
+// GetPoolNonce returns the nonce of given account
 func (s *Ethereum) GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error) {
 	return s.APIBackend.GetPoolNonce(ctx, addr)
 }
 
+// GetBlockByNumber returns the block by number
 func (s *Ethereum) GetBlockByNumber(number uint64) (*types.Block, error) {
 	return s.APIBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 }

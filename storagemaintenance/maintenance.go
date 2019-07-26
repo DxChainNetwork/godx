@@ -14,28 +14,60 @@ import (
 )
 
 var (
+
+	// StrPrefixExpSC is the prefix string for construct contract status address
 	StrPrefixExpSC = "ExpiredStorageContract_"
 
-	ProofedStatus    = []byte{'1'}
+	// ProofedStatus indicate the contract that is proofed
+	ProofedStatus = []byte{'1'}
+
+	// NotProofedStatus indicate the contract that is not proofed
 	NotProofedStatus = []byte{'0'}
 
-	KeyClientCollateral        = common.BytesToHash([]byte("ClientCollateral"))
-	KeyHostCollateral          = common.BytesToHash([]byte("HostCollateral"))
-	KeyFileSize                = common.BytesToHash([]byte("FileSize"))
-	KeyUnlockHash              = common.BytesToHash([]byte("UnlockHash"))
-	KeyFileMerkleRoot          = common.BytesToHash([]byte("FileMerkleRoot"))
-	KeyRevisionNumber          = common.BytesToHash([]byte("RevisionNumber"))
-	KeyWindowStart             = common.BytesToHash([]byte("WindowStart"))
-	KeyWindowEnd               = common.BytesToHash([]byte("WindowEnd"))
-	KeyClientAddress           = common.BytesToHash([]byte("ClientAddress"))
-	KeyHostAddress             = common.BytesToHash([]byte("HostAddress"))
-	KeyClientValidProofOutput  = common.BytesToHash([]byte("ClientValidProofOutput"))
+	// KeyClientCollateral is the key to store client collateral value into trie
+	KeyClientCollateral = common.BytesToHash([]byte("ClientCollateral"))
+
+	// KeyHostCollateral is the key to store host collateral value into trie
+	KeyHostCollateral = common.BytesToHash([]byte("HostCollateral"))
+
+	// KeyFileSize is the key to store file size into trie
+	KeyFileSize = common.BytesToHash([]byte("FileSize"))
+
+	// KeyUnlockHash is the key to store unlock hash into trie
+	KeyUnlockHash = common.BytesToHash([]byte("UnlockHash"))
+
+	// KeyFileMerkleRoot is the key to store file merkle root into trie
+	KeyFileMerkleRoot = common.BytesToHash([]byte("FileMerkleRoot"))
+
+	// KeyRevisionNumber is the key to store revision number into trie
+	KeyRevisionNumber = common.BytesToHash([]byte("RevisionNumber"))
+
+	// KeyWindowStart is the key to store window start into trie
+	KeyWindowStart = common.BytesToHash([]byte("WindowStart"))
+
+	// KeyWindowEnd is the key to store window end into trie
+	KeyWindowEnd = common.BytesToHash([]byte("WindowEnd"))
+
+	// KeyClientAddress is the key to store client address into trie
+	KeyClientAddress = common.BytesToHash([]byte("ClientAddress"))
+
+	// KeyHostAddress is the key to store host address into trie
+	KeyHostAddress = common.BytesToHash([]byte("HostAddress"))
+
+	// KeyClientValidProofOutput is the key to store client valid proof output into trie
+	KeyClientValidProofOutput = common.BytesToHash([]byte("ClientValidProofOutput"))
+
+	// KeyClientMissedProofOutput is the key to store client missed proof output into trie
 	KeyClientMissedProofOutput = common.BytesToHash([]byte("ClientMissedProofOutput"))
-	KeyHostValidProofOutput    = common.BytesToHash([]byte("HostValidProofOutput"))
-	KeyHostMissedProofOutput   = common.BytesToHash([]byte("HostMissedProofOutput"))
+
+	// KeyHostValidProofOutput is the key to store host valid proof output into trie
+	KeyHostValidProofOutput = common.BytesToHash([]byte("HostValidProofOutput"))
+
+	// KeyHostMissedProofOutput is the key to store host missed proof output into trie
+	KeyHostMissedProofOutput = common.BytesToHash([]byte("HostMissedProofOutput"))
 )
 
-// maintenance missed storage proof
+// MaintenanceMissedProof maintains missed storage proof
 func MaintenanceMissedProof(height uint64, state *state.StateDB) {
 	windowEndStr := strconv.FormatUint(height, 10)
 	statusAddr := common.BytesToAddress([]byte(StrPrefixExpSC + windowEndStr))

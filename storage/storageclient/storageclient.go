@@ -296,6 +296,7 @@ func (client *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedL
 	return nil
 }
 
+// Append will send the given data to host and return the merkle root of data
 func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo *storage.HostInfo) (common.Hash, error) {
 	err := client.Write(sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
 	return merkle.Sha256MerkleTreeRoot(data), err
@@ -380,7 +381,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 	defer func() {
 		// record the successful or failed interactions
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.ErrHostBusyHandleReq {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
@@ -402,7 +403,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.HostBusyHandleReqErr
+		return storage.ErrHostBusyHandleReq
 	}
 
 	if err := msg.Decode(&merkleResp); err != nil {
@@ -578,7 +579,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 
 	// record the successful or failed interactions
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.ErrHostBusyHandleReq {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
@@ -615,7 +616,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		// meaning request was sent too frequently, the host's evaluation
 		// will not be degraded
 		if msg.Code == storage.HostBusyHandleReqMsg {
-			return storage.HostBusyHandleReqErr
+			return storage.ErrHostBusyHandleReq
 		}
 
 		// if host send some negotiation error, client should handler it
@@ -668,7 +669,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		// meaning request was sent too frequently, the host's evaluation
 		// will not be degraded
 		if msg.Code == storage.HostBusyHandleReqMsg {
-			return storage.HostBusyHandleReqErr
+			return storage.ErrHostBusyHandleReq
 		}
 
 		// if host send some negotiation error, client should handler it
@@ -708,7 +709,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	return nil
 }
 
-// calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
+// Download requests for a single section and returns the requested data. A Merkle proof is always requested.
 func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset, length uint32, hostInfo *storage.HostInfo) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
@@ -929,9 +930,10 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if closer, ok := dw.(io.Closer); err != nil && ok {
 		closeErr := closer.Close()
 		if closeErr != nil {
-			return nil, errors.New(fmt.Sprintf("something wrong with creating download object: %v, destination close error: %v", err, closeErr))
+			return nil, fmt.Errorf("something wrong with creating download object: %v, destination close error: %v", err, closeErr)
+
 		}
-		return nil, errors.New(fmt.Sprintf("get something wrong with creating download object: %v, destination close successfully", err))
+		return nil, fmt.Errorf("get something wrong with creating download object: %v, destination close successfully", err)
 	} else if err != nil {
 		return nil, err
 	}
@@ -950,7 +952,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 // NOTE: DownloadSync can directly be accessed to outer request via RPC or IPC ...
 // but can not async download to http response, so DownloadAsync should not open to out.
 
-// performs a file download and blocks until the download is finished.
+// DownloadSync performs a file download and blocks until the download is finished.
 func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
@@ -1053,13 +1055,13 @@ func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
-// IsContractRevising will be used to check if the contract is currently
+// TryToRenewOrRevise will be used to check if the contract is currently
 // in the middle of the revision
 func (client *StorageClient) TryToRenewOrRevise(hostID enode.ID) bool {
 	return client.ethBackend.TryToRenewOrRevise(hostID)
 }
 
-// RenewDone indicates that the contract finished renewing
+// RevisionOrRenewingDone indicates that the contract finished renewing
 func (client *StorageClient) RevisionOrRenewingDone(hostID enode.ID) {
 	client.ethBackend.RevisionOrRenewingDone(hostID)
 }

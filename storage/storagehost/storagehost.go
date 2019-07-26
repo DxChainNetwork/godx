@@ -7,6 +7,10 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
@@ -15,9 +19,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
-	"os"
-	"path/filepath"
-	"sync"
 )
 
 // StorageHost provide functions for storageHost management
@@ -50,9 +51,7 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 }
 
-// RetrieveContractClientNode will try to find the client node that the host signed
-// contract with. If the client information cannot be found, then nil will be returned.
-// Otherwise, the client node will be returned
+// IsContractSignedWithClient check whether this host signed a contract with the given client
 func (h *StorageHost) IsContractSignedWithClient(clientNode *enode.Node) bool {
 	h.lock.RLock()
 	defer h.lock.RUnlock()

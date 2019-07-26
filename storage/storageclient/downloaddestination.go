@@ -22,7 +22,7 @@ type downloadBuffer struct {
 }
 
 // NewDownloadBuffer create a new downloadBuffer
-func NewDownloadBuffer(length, sectorSize uint64) downloadBuffer {
+func newDownloadBuffer(length, sectorSize uint64) downloadBuffer {
 	// Completion the length multiple of sector size(4MB)
 	if length%sectorSize != 0 {
 		length += sectorSize - length%sectorSize

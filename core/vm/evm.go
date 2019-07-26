@@ -518,6 +518,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 	return nil, gasCheck, nil
 }
 
+// CreateContractTx executes contract creation tx
 func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter create contract tx executing ... ")
 	var (
@@ -727,6 +728,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	return nil, gasRemainCheck, nil
 }
 
+// Uint64ToBytes convert uint64 to bytes
 func Uint64ToBytes(i uint64) []byte {
 	var buf = make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, i)

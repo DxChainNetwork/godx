@@ -2,11 +2,12 @@ package storagehost
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// HostPublicAPI is the api for private usage
+// HostPrivateAPI is the api for private usage
 type HostPrivateAPI struct {
 	storageHost *StorageHost
 }
@@ -79,7 +80,6 @@ func (h *HostPrivateAPI) GetPaymentAddress() string {
 	return fmt.Sprintf("Current address: %v", common.Bytes2Hex(addr[:]))
 }
 
-// TODO: refactor the set methods to a map?
 // SetAcceptingContracts set host AcceptingContracts to value
 func (h *HostPrivateAPI) SetAcceptingContracts(val bool) string {
 	if err := h.storageHost.setAcceptContracts(val); err != nil {

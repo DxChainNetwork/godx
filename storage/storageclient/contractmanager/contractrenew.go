@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -312,7 +313,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 	// form the contract parameters
 	params := storage.ContractParams{
 		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -432,7 +433,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.ErrHostBusyHandleReq {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else if err == nil {
@@ -479,7 +480,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it

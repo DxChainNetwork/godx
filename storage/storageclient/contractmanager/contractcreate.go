@@ -120,7 +120,7 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 	// form the contract create parameters
 	params := storage.ContractParams{
 		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -220,7 +220,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.ErrHostBusyHandleReq {
 			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else if err == nil {
@@ -270,7 +270,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it

@@ -4,7 +4,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
-// make key for key-value storage
+// MakeKey constructs prefix key for key-value storage
 func MakeKey(prefix string, key interface{}) ([]byte, error) {
 	keyBytes, err := rlp.EncodeToBytes(key)
 	if err != nil {
@@ -16,10 +16,12 @@ func MakeKey(prefix string, key interface{}) ([]byte, error) {
 	return result, nil
 }
 
+// StorageContractDB wraps Database
 type StorageContractDB struct {
 	DB Database
 }
 
+// GetWithPrefix query data by prefix key
 func (scdb *StorageContractDB) GetWithPrefix(key interface{}, prefix string) ([]byte, error) {
 	keyByPrefix, err := MakeKey(prefix, key)
 	if err != nil {
@@ -34,6 +36,7 @@ func (scdb *StorageContractDB) GetWithPrefix(key interface{}, prefix string) ([]
 	return value, nil
 }
 
+// StoreWithPrefix store prefix key with value
 func (scdb *StorageContractDB) StoreWithPrefix(key interface{}, value []byte, prefix string) error {
 	keyByPrefix, err := MakeKey(prefix, key)
 	if err != nil {
@@ -48,6 +51,7 @@ func (scdb *StorageContractDB) StoreWithPrefix(key interface{}, value []byte, pr
 	return nil
 }
 
+// DeleteWithPrefix remove the value by the prefix key
 func (scdb *StorageContractDB) DeleteWithPrefix(key interface{}, prefix string) error {
 	keyByPrefix, err := MakeKey(prefix, key)
 	if err != nil {
