@@ -123,7 +123,7 @@ will automatically evaluate storage hosts from this list to sign contract with t
 				storageHostIDFlag,
 			},
 			Description: `
-			gdx sclient host --hostid [hostID]
+			gdx sclient host [--hostid arg]
 
 will display detailed host information based on the provided hostID, such as deposit,
 allowed storage time, and etc.`,
@@ -175,7 +175,7 @@ each file, including the file's uploading status and health status'`,
 				contractIDFlag,
 			},
 			Description: `
-			gdx sclient contract --contractid [contractID]
+			gdx sclient contract [--contractid arg]
 
 will display detailed contract information based on the provided contractID. The information
 included contractID, revisionNumber, hostID, and etc.'`,
@@ -201,7 +201,7 @@ the payment address for the storage service will always be the first account add
 				paymentAddressFlag,
 			},
 			Description: `
-			gdx sclient setpaymentaddr --address [paymentAddress]
+			gdx sclient setpaymentaddr [--address arg]
 		
 is used to register the account address to be used for the storage services. Money spent for the
 file uploading, downloading, storage, and etc. will be deducted from this address. The --address
@@ -220,7 +220,7 @@ flag must be used along with this flag to specify the account address`,
 				contratFundFlag,
 			},
 			Description: `
-			gdx sclient setconfig
+			gdx sclient setconfig [--period arg] [--host arg] [--renew arg] [--fund arg]
 		
 will configure the client settings used for contract creation, file upload, download, and etc. There are
 multiple flags can be used along with this command to specify the setting:
@@ -246,7 +246,7 @@ Note: without using any of those flags, default settings will be used`,
 				fileDestinationFlag,
 			},
 			Description: `
-			gdx sclient upload --src [sourcePath] --dst [destinationPath]
+			gdx sclient upload [--src arg] [--dst arg]
 		
 will upload the file specified by the client to the storage hosts. This command must be used along
 with two flags to specify the source of the file that is going to be uploaded, and the destination
@@ -263,7 +263,7 @@ that the file is going to be uploaded to. Note: the src must be absolute path: /
 				fileDestinationFlag,
 			},
 			Description: `
-			gdx sclient download --src [sourcePath] --dst [destinationPath]
+			gdx sclient download [--src arg] [--dst arg]
 
 will download the file specified by the client to the local machine. This command must be used along
 with two flags to specify the source of the file that is going to be downloaded, and the destination
@@ -279,7 +279,7 @@ that the file is going to be downloaded from. Note, the download destination mus
 				filePathFlag,
 			},
 			Description: `
-			gdx sclient file --filepath [filePath]
+			gdx sclient file [--filepath arg]
 
 will display the detailed information of an uploaded/uploading file, including the file uploading
 status, health status, and etc. Note, the filepath must be specified which is the destination path
@@ -296,7 +296,7 @@ used for file uploading`,
 				newFilePathFlag,
 			},
 			Description: `
-			gdx sclient rename --prevpath [oldFilePath] --newpath [newFilePath]
+			gdx sclient rename [--prevpath arg] [--newpath arg]
 
 will rename the file uploaded by the client. oldname and newname flags must be used along
 with this command`,
@@ -311,7 +311,7 @@ with this command`,
 				filePathFlag,
 			},
 			Description: `
-			gdx sclient delete --filepath [filePath]
+			gdx sclient delete [--filepath arg]
 
 will delete the file uploaded by the storage client. This filepath flag must be used along
 with this command to specify which file will be deleted`,

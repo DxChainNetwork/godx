@@ -13,6 +13,8 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var ()
+
 var storageHostCommand = cli.Command{
 	Name:      "shost",
 	Usage:     "Storage host related operations",
@@ -62,7 +64,7 @@ The values are associated with units.
 				utils.PaymentAddressFlag,
 			},
 			Description: `
-			gdx shost setpaymentaddr --address [parameter]
+			gdx shost setpaymentaddr [--address arg]
 is used to register the account address to be used for the storage services. Deposit and money spent for host
 announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
 client will be saved into this address as well.`,
@@ -130,7 +132,7 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 			Action:    utils.MigrateFlags(resizeFolder),
 			Flags:     storageHostFlags,
 			Description: `
-			gdx shost resize
+			gdx shost resize [--folderpath arg] [--size arg]
 
 will resize the disk space allocated for saving data uploaded by the storage client. The usage of this
 command is similar to addfolder, where folder size and folder path must be explicitly specified using the 
@@ -144,7 +146,7 @@ flag --folderpath and --size`,
 			Action:    utils.MigrateFlags(deleteFolder),
 			Flags:     storageHostFlags,
 			Description: `
-			gdx shost deletefolder --folderpath [argument]
+			gdx shost deletefolder [--folderpath arg]
 
 will free up the disk space used for saving data uploaded by the storage client. The folder path must be
 specified using --folderpath.`,
