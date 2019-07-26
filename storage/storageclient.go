@@ -6,6 +6,7 @@ package storage
 
 import (
 	"context"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -20,14 +21,11 @@ import (
 // EthBackend is an interface used to get methods implemented by Ethereum
 type EthBackend interface {
 	APIs() []rpc.API
-	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetBlockByHash(blockHash common.Hash) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
-	SetupStorageConnection(hostEnodeURL string) (*Session, error)
-	Disconnect(session *Session, hostEnodeURL string) error
 	GetBlockByNumber(number uint64) (*types.Block, error)
-
 	AccountManager() *accounts.Manager
 	GetCurrentBlockHeight() uint64
 	ChainConfig() *params.ChainConfig
@@ -35,19 +33,23 @@ type EthBackend interface {
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
 	SuggestPrice(ctx context.Context) (*big.Int, error)
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
+	SetupConnection(enodeURL string) (Peer, error)
+	TryToRenewOrRevise(hostID enode.ID) bool
+	RevisionOrRenewingDone(hostID enode.ID)
+	SetStatic(node *enode.Node)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
 // ClientBackend is an interface that used to provide necessary functions
-// to storagehostmanager and contract manager
+// to storage host manager and contract manager
 type ClientBackend interface {
 	Online() bool
 	Syncing() bool
-	GetStorageHostSetting(hostEnodeURL string, config *HostExtConfig) error
+	GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *HostExtConfig) error
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
-	SetupConnection(hostEnodeURL string) (*Session, error)
+	SetupConnection(enodeURL string) (Peer, error)
 	AccountManager() *accounts.Manager
-	Disconnect(session *Session, hostEnodeURL string) error
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -56,7 +58,9 @@ type ClientBackend interface {
 	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 	GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error)
 	GetPaymentAddress() (common.Address, error)
-	IsRevisionSessionDone(contractID ContractID) bool
+	TryToRenewOrRevise(hostID enode.ID) bool
+	RevisionOrRenewingDone(hostID enode.ID)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
 // DownloadParameters is the parameters to download from outer request

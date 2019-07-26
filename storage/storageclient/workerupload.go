@@ -1,6 +1,7 @@
 // Copyright 2019 DxChain, All rights reserved.
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file.
+
 package storageclient
 
 import (
@@ -40,15 +41,6 @@ func (w *worker) killUploading() {
 	w.mu.Lock()
 	w.uploadTerminated = true
 	w.mu.Unlock()
-
-	contractID := storage.ContractID(w.contract.ID)
-	session, ok := w.client.sessionSet[contractID]
-	if session != nil && ok {
-		delete(w.client.sessionSet, contractID)
-		if err := w.client.disconnect(session, w.contract.EnodeID); err != nil {
-			w.client.log.Error("can't close connection after uploading", "error", err)
-		}
-	}
 
 	// After the worker is marked as disabled, clear out all of the segments
 	w.dropUploadSegments()
@@ -114,25 +106,17 @@ func (w *worker) signalUploadChan(uc *unfinishedUploadSegment) {
 
 // upload will perform some upload work
 func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error {
-	session, err := w.checkSession()
-	defer func() {
-		if session != nil {
-			session.ResetBusy()
+	sp, hostInfo, err := w.checkConnection()
+	defer sp.RevisionOrRenewingDone()
 
-			select {
-			case session.RevisionDone() <- struct{}{}:
-			default:
-			}
-		}
-	}()
 	if err != nil {
-		w.client.log.Error("check session failed", "err", err)
+		w.client.log.Error("failed to check the connection", "err", err)
 		w.uploadFailed(uc, sectorIndex)
 		return err
 	}
 
 	// upload segment to host
-	root, err := w.client.Append(session, uc.physicalSegmentData[sectorIndex])
+	root, err := w.client.Append(sp, uc.physicalSegmentData[sectorIndex], hostInfo)
 	if err != nil {
 		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)

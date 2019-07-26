@@ -17,7 +17,7 @@ var TimeUnit = []string{"h", "b", "d", "w", "m", "y"}
 // DataSizeUnit defines available units used for specifying expected storage size, expected upload size, and expected download size
 var DataSizeUnit = []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
 
-// speedUint defines available units used for specifying upload and download speed
+// SpeedUnit defines available units used for specifying upload and download speed
 var SpeedUnit = []string{"bps", "kbps", "mbps", "gbps", "tbps"}
 
 var currencyIndexMap = map[string]uint64{
@@ -124,7 +124,7 @@ func containsDigitOnly(s string) (digitOnly bool) {
 	return strings.IndexFunc(s, notDigit) == -1
 }
 
-// parsePeriodAndRenew will parse the string version of period into uint64 type based on the
+// ParseTime will parse the string version of period into uint64 type based on the
 // unit provided. The supported units are blocks, hour, day, week, month, year
 func ParseTime(str string) (parsed uint64, err error) {
 	// format the string
@@ -226,7 +226,7 @@ func ParseSpeed(str string) (parsed int64, err error) {
 	str = formatString(str)
 
 	// loop through the speedMultiplier
-	for unit, _ := range speedMultiplier {
+	for unit := range speedMultiplier {
 		// unit bps is ignored due to each unit contains bps as suffix
 		if unit == "bps" {
 			continue

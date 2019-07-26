@@ -150,6 +150,7 @@ func (client *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploa
 	if err != nil {
 		return fmt.Errorf("cannot create the snapshot: %v", err)
 	}
+
 	d, err := client.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
@@ -201,6 +202,7 @@ func (client *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedU
 	}
 
 	err := client.tm.Add()
+
 	if err != nil {
 		return
 	}

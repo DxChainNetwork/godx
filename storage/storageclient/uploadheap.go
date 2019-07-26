@@ -338,6 +338,7 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 		}
 	} else {
 		fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(client.fileSystem.RootDir())))
+
 		if err != nil {
 			return
 		}
@@ -382,6 +383,7 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 
 func (client *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
 	file, err := client.fileSystem.OpenDxFile(path)
+
 	if err != nil {
 		client.log.Error("Could not open dx file", "err", err)
 		return nil, err
