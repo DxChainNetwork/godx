@@ -63,6 +63,14 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 
 // FormatCurrency is used to format the currency for displaying purpose
 func FormatCurrency(fund common.BigInt) (formatted string) {
+	// check if the fund is 0, if so, the unit should not be added
+	// at the end
+	if fund.IsEqual(common.BigInt0) {
+		formatted = fmt.Sprintf("%v", fund)
+		return
+	}
+
+	// otherwise, format the currency
 	switch {
 	case fund.DivNoRemaining(CurrencyIndexMap["ether"]):
 		formatted = fmt.Sprintf("%v ether", fund.DivUint64(CurrencyIndexMap["ether"]))
