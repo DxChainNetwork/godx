@@ -48,16 +48,6 @@ func ParseTime(str string) (parsed uint64, err error) {
 	}
 }
 
-// MustParseTime parse the string to duration. If an error happens, panic.
-// WARNING: Do not use this function in production code. Use ParseTime instead.
-func MustParseTime(str string) uint64 {
-	parsed, err := ParseTime(str)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
 // FormatTime is used to format the period and renewWindow field
 // for displaying purpose
 func FormatTime(time uint64) (formatted string) {

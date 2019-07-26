@@ -48,16 +48,6 @@ func ParseSpeed(str string) (parsed int64, err error) {
 	return
 }
 
-// MustParseSpeed parse the string to speed. If an error happens, panic.
-// WARNING: Do not use this function in production code. Use ParseSpeed instead.
-func MustParseSpeed(str string) int64 {
-	parsed, err := ParseSpeed(str)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
 // FormatSpeed is used to format max upload and download field for displaying
 // purpose
 func FormatSpeed(speed int64) (formatted string) {

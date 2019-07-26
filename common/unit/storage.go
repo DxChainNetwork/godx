@@ -45,16 +45,6 @@ func ParseStorage(str string) (parsed uint64, err error) {
 	return
 }
 
-// MustParseStorage parse the string to storage. If an error happens, panic.
-// WARNING: Do not use this function in production code. Use ParseStorage instead.
-func MustParseStorage(str string) uint64 {
-	parsed, err := ParseStorage(str)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
 // FormatStorage is used to format the data for console display purpose
 func FormatStorage(dataSize uint64, storage bool) (formatted string) {
 	additionalInfo := ""
