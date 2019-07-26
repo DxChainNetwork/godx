@@ -111,122 +111,6 @@ func NewApp(gitCommit, usage string) *cli.App {
 // The flags are defined here so their names and help texts
 // are the same for all commands.
 var (
-	// AcceptingContractsFlag is the flag for accepting contracts
-	AcceptingContractsFlag = cli.StringFlag{
-		Name:  "acceptingcontracts",
-		Usage: "BOOL - whether the host accepts new contracts",
-	}
-
-	MaxDepositFlag = cli.StringFlag{
-		Name:  "maxdeposit",
-		Usage: "CURRENCY - the max deposit for for a single contract",
-	}
-
-	BudgetPriceFlag = cli.StringFlag{
-		Name:  "depositbudget",
-		Usage: "CURRENCY - the maximum deposit for all contracts",
-	}
-
-	StoragePriceFlag = cli.StringFlag{
-		Name:  "storageprice",
-		Usage: "CURRENCY - the storage price per block per byte",
-	}
-
-	UploadPriceFlag = cli.StringFlag{
-		Name:  "uploadprice",
-		Usage: "CURRENCY - upload bandwidth price per byte",
-	}
-
-	DownloadPriceFlag = cli.StringFlag{
-		Name:  "downloadprice",
-		Usage: "CURRENCY - download bandwidth price per byte",
-	}
-
-	ContractPriceFlag = cli.StringFlag{
-		Name:  "contractprice",
-		Usage: "CURRENCY - the contract price when creating the contract",
-	}
-
-	DepositPriceFlag = cli.StringFlag{
-		Name:  "deposit",
-		Usage: "CURRENCY - deposit price per block per byte",
-	}
-
-	StorageDurationFlag = cli.StringFlag{
-		Name:  "maxduration",
-		Usage: "DURATION - the max duration for a storage contract",
-	}
-
-	FolderSizeFlag = cli.StringFlag{
-		Name:  "size",
-		Usage: "used to specify the size of the folder",
-	}
-
-	FolderPathFlag = cli.StringFlag{
-		Name:  "folderpath",
-		Usage: "used to specify the folder path",
-	}
-
-	PrevFilePathFlag = cli.StringFlag{
-		Name:  "prevpath",
-		Usage: "used to specify the previous file path",
-	}
-
-	NewFilePathFlag = cli.StringFlag{
-		Name:  "newpath",
-		Usage: "used to specify the new file path",
-	}
-
-	FilePathFlag = cli.StringFlag{
-		Name:  "filepath",
-		Usage: "used to specify the file",
-	}
-
-	FileSourceFlag = cli.StringFlag{
-		Name:  "src",
-		Usage: "used to specify the source of the file that is going to be uploaded/downloaded from",
-	}
-
-	FileDestinationFlag = cli.StringFlag{
-		Name:  "dst",
-		Usage: "used to specify the destination of the file that is going to ge uploaded/downloaded to",
-	}
-
-	PaymentAddressFlag = cli.StringFlag{
-		Name:  "address",
-		Usage: "use to set up the payment address used for the storage service",
-	}
-
-	ContractIDFlag = cli.StringFlag{
-		Name:  "contractid",
-		Usage: "use to query the detailed contract information based on the contract ID",
-	}
-
-	PeriodFlag = cli.StringFlag{
-		Name:  "period",
-		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
-	}
-
-	HostsFlag = cli.StringFlag{
-		Name:  "host",
-		Usage: "the host flag is used to define how many hosts that storage client wants to sign contract with, the value must be greater than 2",
-	}
-
-	RenewFlag = cli.StringFlag{
-		Name:  "renew",
-		Usage: "the renew flag is used to define the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
-	}
-
-	FundFlag = cli.StringFlag{
-		Name:  "fund",
-		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
-	}
-
-	StorageHostIDFlag = cli.StringFlag{
-		Name:  "hostid",
-		Usage: "used to query the storage host information based on the node id",
-	}
-
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -731,9 +615,10 @@ var (
 		Value: "",
 	}
 
+	// Storage role flag
 	StorageRoleFlag = cli.StringFlag{
 		Name:  "role",
-		Usage: "by using storage role flag, user is able to choose which role a node can be. There are four options: all, host, client, and none",
+		Usage: "Chooses which role a node can be. There are four options: all, host, client, and none",
 	}
 )
 

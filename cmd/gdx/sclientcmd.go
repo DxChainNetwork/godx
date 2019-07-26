@@ -49,7 +49,7 @@ var (
 		Usage: "defines the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
 	}
 
-	contratFundFlag = cli.StringFlag{
+	contractFundFlag = cli.StringFlag{
 		Name:  "fund",
 		Usage: "defines the max money can be spent for the storage. It can be specified in terms of DXC",
 	}
@@ -217,7 +217,7 @@ flag must be used along with this flag to specify the account address`,
 				contractPeriodFlag,
 				contractHostFlag,
 				contractRenewFlag,
-				contratFundFlag,
+				contractFundFlag,
 			},
 			Description: `
 			gdx sclient setconfig [--period arg] [--host arg] [--renew arg] [--fund arg]
@@ -399,10 +399,10 @@ func getHostInfo(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	if !ctx.IsSet(utils.StorageHostIDFlag.Name) {
+	if !ctx.IsSet(storageHostIDFlag.Name) {
 		utils.Fatalf("the --hostid flag must be used to specify which storage host information want to be retrieved")
 	} else {
-		id = ctx.String(utils.StorageHostIDFlag.Name)
+		id = ctx.String(storageHostIDFlag.Name)
 	}
 
 	var info storage.HostInfo
@@ -532,10 +532,10 @@ func getContract(ctx *cli.Context) error {
 	}
 
 	var id string
-	if !ctx.IsSet(utils.ContractIDFlag.Name) {
+	if !ctx.IsSet(contractIDFlag.Name) {
 		utils.Fatalf("the --contractid flag must be used to specify which contract information want to be retrieved")
 	} else {
-		id = ctx.String(utils.ContractIDFlag.Name)
+		id = ctx.String(contractIDFlag.Name)
 	}
 
 	var contract storageclient.ContractMetaDataAPIDisplay
@@ -608,10 +608,10 @@ func setPaymentAddress(ctx *cli.Context) error {
 	}
 
 	var address string
-	if !ctx.IsSet(utils.PaymentAddressFlag.Name) {
+	if !ctx.IsSet(paymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used for storage service")
 	} else {
-		address = ctx.String(utils.PaymentAddressFlag.Name)
+		address = ctx.String(paymentAddressFlag.Name)
 	}
 
 	var result bool
@@ -636,20 +636,20 @@ func setClientConfig(ctx *cli.Context) error {
 
 	var settings = make(map[string]string)
 
-	if ctx.IsSet(utils.PeriodFlag.Name) {
-		settings["period"] = ctx.String(utils.PeriodFlag.Name)
+	if ctx.IsSet(contractPeriodFlag.Name) {
+		settings["period"] = ctx.String(contractPeriodFlag.Name)
 	}
 
-	if ctx.IsSet(utils.HostsFlag.Name) {
-		settings["hosts"] = ctx.String(utils.HostsFlag.Name)
+	if ctx.IsSet(contractHostFlag.Name) {
+		settings["hosts"] = ctx.String(contractHostFlag.Name)
 	}
 
-	if ctx.IsSet(utils.FundFlag.Name) {
-		settings["fund"] = ctx.String(utils.FundFlag.Name)
+	if ctx.IsSet(contractFundFlag.Name) {
+		settings["fund"] = ctx.String(contractFundFlag.Name)
 	}
 
-	if ctx.IsSet(utils.RenewFlag.Name) {
-		settings["renew"] = ctx.String(utils.RenewFlag.Name)
+	if ctx.IsSet(contractRenewFlag.Name) {
+		settings["renew"] = ctx.String(contractRenewFlag.Name)
 	}
 
 	var resp string
@@ -668,16 +668,16 @@ func fileUpload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.IsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(fileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.String(utils.FileSourceFlag.Name)
+		source = ctx.String(fileSourceFlag.Name)
 	}
 
-	if !ctx.IsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(fileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.String(utils.FileDestinationFlag.Name)
+		destination = ctx.String(fileDestinationFlag.Name)
 	}
 
 	var resp string
@@ -698,16 +698,16 @@ func fileDownload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.IsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(fileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.String(utils.FileSourceFlag.Name)
+		source = ctx.String(fileSourceFlag.Name)
 	}
 
-	if !ctx.IsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(fileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.String(utils.FileDestinationFlag.Name)
+		destination = ctx.String(fileDestinationFlag.Name)
 	}
 
 	var result string
@@ -727,10 +727,10 @@ func getFile(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.IsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(filePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the detailed file information")
 	} else {
-		filePath = ctx.String(utils.FilePathFlag.Name)
+		filePath = ctx.String(filePathFlag.Name)
 	}
 
 	var fileInfo storage.FileInfo
@@ -762,16 +762,16 @@ func fileRenaming(ctx *cli.Context) error {
 	}
 
 	var prevPath, newPath string
-	if !ctx.IsSet(utils.PrevFilePathFlag.Name) {
+	if !ctx.IsSet(prevFilePathFlag.Name) {
 		utils.Fatalf("must specify the previous file path in order to change the name")
 	} else {
-		prevPath = ctx.String(utils.PrevFilePathFlag.Name)
+		prevPath = ctx.String(prevFilePathFlag.Name)
 	}
 
-	if !ctx.IsSet(utils.NewFilePathFlag.Name) {
+	if !ctx.IsSet(newFilePathFlag.Name) {
 		utils.Fatalf("must specify the new file path")
 	} else {
-		newPath = ctx.String(utils.NewFilePathFlag.Name)
+		newPath = ctx.String(newFilePathFlag.Name)
 	}
 
 	var resp string
@@ -790,10 +790,10 @@ func fileDelete(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.IsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(filePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the delete the file")
 	} else {
-		filePath = ctx.String(utils.FilePathFlag.Name)
+		filePath = ctx.String(filePathFlag.Name)
 	}
 
 	var resp string

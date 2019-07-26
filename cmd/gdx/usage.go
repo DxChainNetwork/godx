@@ -233,6 +233,12 @@ var AppHelpFlagGroups = []flagGroup{
 		},
 	},
 	{
+		Name: "STORAGE",
+		Flags: []cli.Flag{
+			utils.StorageRoleFlag,
+		},
+	},
+	{
 		Name: "DEPRECATED",
 		Flags: []cli.Flag{
 			utils.MinerLegacyThreadsFlag,
@@ -242,30 +248,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MinerLegacyExtraDataFlag,
 		},
 	},
-	//{
-	//	Name: "STORAGE CLIENT",
-	//	Flags: []cli.Flag{
-	//		utils.StorageHostIDFlag,
-	//		utils.ContractIDFlag,
-	//		utils.PeriodFlag,
-	//		utils.HostsFlag,
-	//		utils.RenewFlag,
-	//		utils.FundFlag,
-	//		utils.PaymentAddressFlag,
-	//		utils.FileSourceFlag,
-	//		utils.FileDestinationFlag,
-	//		utils.FilePathFlag,
-	//		utils.PrevFilePathFlag,
-	//		utils.NewFilePathFlag,
-	//	},
-	//},
-	{
-		Name: "STORAGE HOST",
-		Flags: []cli.Flag{
-			utils.FolderSizeFlag,
-			utils.FolderPathFlag,
-		},
-	},
+
 	{
 		Name: "MISC",
 	},

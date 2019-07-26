@@ -160,38 +160,6 @@ var (
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBHostTagFlag,
 	}
-
-	storageClientFlags = []cli.Flag{
-		utils.StorageHostIDFlag,
-		utils.ContractIDFlag,
-		utils.PeriodFlag,
-		utils.HostsFlag,
-		utils.RenewFlag,
-		utils.FundFlag,
-		utils.PaymentAddressFlag,
-		utils.FileSourceFlag,
-		utils.FileDestinationFlag,
-		utils.FilePathFlag,
-		utils.PrevFilePathFlag,
-		utils.NewFilePathFlag,
-	}
-
-	storageHostFlags = []cli.Flag{
-		utils.FolderSizeFlag,
-		utils.FolderPathFlag,
-	}
-
-	storageHostSetterFlags = []cli.Flag{
-		utils.AcceptingContractsFlag,
-		utils.StorageDurationFlag,
-		utils.DepositPriceFlag,
-		utils.ContractPriceFlag,
-		utils.DownloadPriceFlag,
-		utils.UploadPriceFlag,
-		utils.StoragePriceFlag,
-		utils.BudgetPriceFlag,
-		utils.MaxDepositFlag,
-	}
 )
 
 func init() {
@@ -240,8 +208,6 @@ func init() {
 	app.Flags = append(app.Flags, consoleFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, metricsFlags...)
-	app.Flags = append(app.Flags, storageClientFlags...)
-	app.Flags = append(app.Flags, storageHostFlags...)
 
 	app.Before = func(ctx *cli.Context) error {
 		logdir := ""

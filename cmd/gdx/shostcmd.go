@@ -203,11 +203,11 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 			Name:      "resizefolder",
 			Usage:     "Resize the disk space allocated for saving data uploaded by the storage client",
 			ArgsUsage: "",
-			Action: []cli.Flag{
+			Action:    utils.MigrateFlags(resizeFolder),
+			Flags: []cli.Flag{
 				folderPathFlag,
 				folderSizeFlag,
 			},
-			Flags: storageHostFlags,
 			Description: `
 			gdx shost resize [--folderpath arg] [--size arg]
 
@@ -307,48 +307,48 @@ func hostConfigFromFlags(ctx *cli.Context) map[string]string {
 	config := make(map[string]string)
 
 	// set the value of accepting contracts
-	if ctx.IsSet(utils.AcceptingContractsFlag.Name) {
-		acceptingContracts := ctx.String(utils.AcceptingContractsFlag.Name)
+	if ctx.IsSet(acceptingContractsFlag.Name) {
+		acceptingContracts := ctx.String(acceptingContractsFlag.Name)
 		config["acceptingContracts"] = acceptingContracts
 	}
 	// set the value of max deposit
-	if ctx.IsSet(utils.MaxDepositFlag.Name) {
-		maxDeposit := ctx.String(utils.MaxDepositFlag.Name)
+	if ctx.IsSet(maxDepositFlag.Name) {
+		maxDeposit := ctx.String(maxDepositFlag.Name)
 		config["maxDeposit"] = maxDeposit
 	}
 	// set the value of budget price
-	if ctx.IsSet(utils.BudgetPriceFlag.Name) {
-		budget := ctx.String(utils.BudgetPriceFlag.Name)
+	if ctx.IsSet(budgetPriceFlag.Name) {
+		budget := ctx.String(budgetPriceFlag.Name)
 		config["depositBudget"] = budget
 	}
 	// set the value of storage price
-	if ctx.IsSet(utils.StoragePriceFlag.Name) {
-		storagePrice := ctx.String(utils.StoragePriceFlag.Name)
+	if ctx.IsSet(storagePriceFlag.Name) {
+		storagePrice := ctx.String(storagePriceFlag.Name)
 		config["storagePrice"] = storagePrice
 	}
 	// set the upload price
-	if ctx.IsSet(utils.UploadPriceFlag.Name) {
-		uploadPrice := ctx.String(utils.UploadPriceFlag.Name)
+	if ctx.IsSet(uploadPriceFlag.Name) {
+		uploadPrice := ctx.String(uploadPriceFlag.Name)
 		config["uploadBandwidthPrice"] = uploadPrice
 	}
 	// set the download price
-	if ctx.IsSet(utils.DownloadPriceFlag.Name) {
-		downloadPrice := ctx.String(utils.DownloadPriceFlag.Name)
+	if ctx.IsSet(downloadPriceFlag.Name) {
+		downloadPrice := ctx.String(downloadPriceFlag.Name)
 		config["downloadBandwidthPrice"] = downloadPrice
 	}
 	// set the contract price
-	if ctx.IsSet(utils.ContractPriceFlag.Name) {
-		contractPrice := ctx.String(utils.ContractPriceFlag.Name)
+	if ctx.IsSet(contractPriceFlag.Name) {
+		contractPrice := ctx.String(contractPriceFlag.Name)
 		config["contractPrice"] = contractPrice
 	}
 	// set the deposit price
-	if ctx.IsSet(utils.DepositPriceFlag.Name) {
-		deposit := ctx.String(utils.DepositPriceFlag.Name)
+	if ctx.IsSet(depositPriceFlag.Name) {
+		deposit := ctx.String(depositPriceFlag.Name)
 		config["deposit"] = deposit
 	}
 	// set the duration
-	if ctx.IsSet(utils.StorageDurationFlag.Name) {
-		maxDuration := ctx.String(utils.StorageDurationFlag.Name)
+	if ctx.IsSet(storageDurationFlag.Name) {
+		maxDuration := ctx.String(storageDurationFlag.Name)
 		config["maxDuration"] = maxDuration
 	}
 
