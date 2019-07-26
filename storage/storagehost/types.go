@@ -31,10 +31,6 @@ var (
 	// changes the file size during a file contract revision.
 	errBadFileSize = ErrorRevision("responsibilityRejected for bad file size")
 
-	// errBadModificationIndex is returned if the renter requests a change on a
-	// sector root that is not in the file contract.
-	errBadModificationIndex = ErrorRevision("renter has made a modification that points to a nonexistent sector")
-
 	// errBadParentID is returned if the renter incorrectly download and
 	// provides the wrong parent id during a file contract revision.
 	errBadParentID = ErrorRevision("responsibilityRejected for bad parent id")
@@ -47,10 +43,6 @@ var (
 	// download and does not increase the revision number during a file
 	// contract revision.
 	errBadRevisionNumber = ErrorRevision("responsibilityRejected for bad revision number")
-
-	// errBadSectorSize is returned if the renter provides a sector to be
-	// inserted that is the wrong size.
-	errBadSectorSize = ErrorRevision("renter has provided an incorrectly sized sector")
 
 	// errBadUnlockConditions is returned if the renter incorrectly download
 	// and does not provide the right unlock conditions in the payment
@@ -73,10 +65,6 @@ var (
 	// has a storage proof window that is starting too near in the future.
 	errEarlyWindow = ErrorRevision("responsibilityRejected for a window that starts too soon")
 
-	// errEmptyObject is returned if the renter sends an empty or nil object
-	// unexpectedly.
-	errEmptyObject = ErrorRevision("renter has unexpectedly send an empty/nil object")
-
 	// errHighRenterMissedOutput is returned if the renter incorrectly download
 	// and deducts an insufficient amount from the renter missed outputs during
 	// a file contract revision.
@@ -87,15 +75,6 @@ var (
 	// a file contract revision.
 	errHighRenterValidOutput = ErrorRevision("responsibilityRejected for high paying renter valid output")
 
-	// errIllegalOffsetAndLength is returned if the renter tries perform a
-	// modify operation that uses a troublesome combination of offset and
-	// length.
-	errIllegalOffsetAndLength = ErrorRevision("renter is trying to do a modify with an illegal offset and length")
-
-	// errLargeSector is returned if the renter sends a RevisionAction that has
-	// data which creates a sector that is larger than what the host uses.
-	errLargeSector = ErrorRevision("renter has sent a sector that exceeds the host's sector size")
-
 	// errLateRevision is returned if the renter is attempting to revise a
 	// revision after the revision deadline. The host needs time to submit the
 	// final revision to the blockchain to guarantee payment, and therefore
@@ -103,7 +82,7 @@ var (
 	errLateRevision = ErrorRevision("renter is requesting revision after the revision deadline")
 
 	// errLongDuration is returned if the renter proposes a file contract with
-	// an experation that is too far into the future according to the host's
+	// an expiration that is too far into the future according to the host's
 	// settings.
 	errLongDuration = ErrorRevision("renter proposed a file contract with a too-long duration")
 
@@ -115,14 +94,6 @@ var (
 	// host valid proof output during a file contract revision.
 	errLowHostValidOutput = ErrorRevision("responsibilityRejected for low paying host valid output")
 
-	// errLowTransactionFees is returned if the renter provides a transaction
-	// that the host does not feel is able to make it onto the blockchain.
-	errLowTransactionFees = ErrorRevision("responsibilityRejected for including too few transaction fees")
-
-	// errLowVoidOutput is returned if the renter has not allocated enough
-	// funds to the void output.
-	errLowVoidOutput = ErrorRevision("responsibilityRejected for low value void output")
-
 	// errMismatchedHostPayouts is returned if the renter incorrectly sets the
 	// host valid and missed payouts to different values during contract
 	// formation.
@@ -132,10 +103,6 @@ var (
 	// that is too small.
 	errSmallWindow = ErrorRevision("responsibilityRejected for small window size")
 
-	// errUnknownModification is returned if the host receives a modification
-	// action from the renter that it does not understand.
-	errUnknownModification = ErrorRevision("renter is attempting an action that the host does not understand")
-
 	// errCollateralBudgetExceeded is returned if the host does not have enough
 	// room in the collateral budget to accept a particular file contract.
 	errCollateralBudgetExceeded = errors.New("host has reached its collateral budget and cannot accept the file contract")
@@ -144,10 +111,6 @@ var (
 	// would require the host to supply more collateral than the host allows
 	// per file contract.
 	errMaxCollateralReached = errors.New("file contract proposal expects the host to pay more than the maximum allowed collateral")
-
-	// errStopped is the error that happens during the execution of a file, the storage
-	// host has been stopped
-	errStopped = errors.New("storage host has been stopped")
 
 	errEmptyOriginStorageContract = errors.New("storage contract has no storage responsibility")
 	errEmptyRevisionSet           = errors.New("take the last revision ")

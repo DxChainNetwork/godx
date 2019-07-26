@@ -11,9 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/log"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )

@@ -18,11 +18,11 @@ import (
 
 // Upload instructs the storage client to start tracking a file. The storage client will
 // automatically upload and repair tracked files using a background loop.
-func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
-	if err := sc.tm.Add(); err != nil {
+func (client *StorageClient) Upload(up storage.FileUploadParams) error {
+	if err := client.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	// Check whether file is a directory
 	sourceInfo, err := os.Stat(up.Source)
@@ -43,7 +43,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 
 	// Delete existing file if Override mode
 	//if up.Mode == storage.Override {
-	//	err := sc.DeleteFile(up.DxPath)
+	//	err := client.DeleteFile(up.DxPath)
 	//	if err != nil && err != dxdir.ErrUnknownPath {
 	//		return fmt.Errorf("cannot to delete existing file, error: %v", err)
 	//	}
@@ -54,7 +54,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 		up.ErasureCode, _ = erasurecode.New(erasurecode.ECTypeStandard, storage.DefaultMinSectors, storage.DefaultNumSectors)
 	}
 
-	numContracts := uint64(len(sc.contractManager.GetStorageContractSet().Contracts()))
+	numContracts := uint64(len(client.contractManager.GetStorageContractSet().Contracts()))
 	// requiredContracts = ceil(min + redundant/2)
 	requiredContracts := math.Ceil(float64(up.ErasureCode.NumSectors()+up.ErasureCode.MinSectors()) / 2)
 	if numContracts < uint64(requiredContracts) {
@@ -64,7 +64,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	dirDxPath := up.DxPath
 
 	// Try to create the directory. If ErrPathOverload is returned it already exists
-	dxDirEntry, err := sc.fileSystem.DirSet().NewDxDir(dirDxPath)
+	dxDirEntry, err := client.fileSystem.DirSet().NewDxDir(dirDxPath)
 	if err != os.ErrExist && err != nil {
 		return fmt.Errorf("unable to create dx directory for new file, error: %v", err)
 	} else if err == nil {
@@ -72,7 +72,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 			return err
 		}
 	}
-	//sc.log.Error("test error for NewDxDir in upload", "error", err)
+	//client.log.Error("test error for NewDxDir in upload", "error", err)
 
 	cipherKey, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
 	if err != nil {
@@ -80,7 +80,7 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	}
 
 	// Create the DxFile and add to client
-	entry, err := sc.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), false, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
+	entry, err := client.fileSystem.FileSet().NewDxFile(up.DxPath, storage.SysPath(up.Source), false, up.ErasureCode, cipherKey, uint64(sourceInfo.Size()), sourceInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("could not create a new dx file, error: %v", err)
 	}
@@ -89,19 +89,19 @@ func (sc *StorageClient) Upload(up storage.FileUploadParams) error {
 	}
 
 	// Update the health of the DxFile directory recursively to ensure the health is updated with the new file
-	go sc.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
+	go client.fileSystem.InitAndUpdateDirMetadata(dirDxPath)
 
 	nilHostHealthInfoTable := make(storage.HostHealthInfoTable)
 
 	// Send the upload to the repair loop
-	hosts := sc.refreshHostsAndWorkers()
+	hosts := client.refreshHostsAndWorkers()
 
-	if err := sc.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
+	if err := client.createAndPushSegments([]*dxfile.FileSetEntryWithID{entry}, hosts, targetUnstuckSegments, nilHostHealthInfoTable); err != nil {
 		return err
 	}
 
 	select {
-	case sc.uploadHeap.segmentComing <- struct{}{}:
+	case client.uploadHeap.segmentComing <- struct{}{}:
 	default:
 	}
 	return nil

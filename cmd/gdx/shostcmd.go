@@ -176,7 +176,6 @@ func getHostConfig(ctx *cli.Context) error {
 	}
 
 	fmt.Printf(`
-	
 Host Configuration:
 	AcceptingContracts:            %t
 	MaxDownloadBatchSize:          %v bytes
@@ -187,12 +186,12 @@ Host Configuration:
 	Deposit:                       %v wei
 	DepositBudget:                 %v wei
 	MaxDeposit:                    %v wei
-	BaseRPCPrice:               %v wei
-	ContractPrice:              %v wei
-	DownloadBandwidthPrice:     %v wei
-	SectorAccessPrice:          %v wei
-	StoragePrice:               %v wei
-	UploadBandwidthPrice:       %v wei
+	BaseRPCPrice:                  %v wei
+	ContractPrice:                 %v wei
+	DownloadBandwidthPrice:        %v wei
+	SectorAccessPrice:             %v wei
+	StoragePrice:                  %v wei
+	UploadBandwidthPrice:          %v wei
 
 `, config.AcceptingContracts, config.MaxDownloadBatchSize, config.MaxDuration,
 		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress.String(),

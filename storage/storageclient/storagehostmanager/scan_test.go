@@ -133,7 +133,7 @@ func (st *storageClientBackendTestData) Syncing() bool {
 	return false
 }
 
-func (st *storageClientBackendTestData) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+func (st *storageClientBackendTestData) GetStorageHostSetting(hostEnodeID enode.ID, peerID string, config *storage.HostExtConfig) error {
 	config = &storage.HostExtConfig{
 		AcceptingContracts: true,
 		Deposit:            common.NewBigInt(10),
@@ -174,11 +174,7 @@ func (st *storageClientBackendTestData) AccountManager() *accounts.Manager {
 	return nil
 }
 
-func (st *storageClientBackendTestData) Disconnect(session *storage.Session, hostEnodeURL string) error {
-	return nil
-}
-
-func (st *storageClientBackendTestData) SetupConnection(hostEnodeURL string) (*storage.Session, error) {
+func (st *storageClientBackendTestData) SetupConnection(enodeURL string) (storage.Peer, error) {
 	return nil, nil
 }
 
@@ -190,10 +186,14 @@ func (st *storageClientBackendTestData) GetHostAnnouncementWithBlockHash(blockHa
 	return
 }
 
-func (st *storageClientBackendTestData) GetPaymentAddress() (address common.Address, err error) {
-	return
-}
-
-func (st *storageClientBackendTestData) IsRevisionSessionDone(contractID storage.ContractID) bool {
+func (st *storageClientBackendTestData) TryToRenewOrRevise(hostID enode.ID) bool {
 	return false
 }
+
+func (st *storageClientBackendTestData) GetPaymentAddress() (common.Address, error) {
+	return common.Address{}, nil
+}
+
+func (st *storageClientBackendTestData) RevisionOrRenewingDone(hostID enode.ID) {}
+
+func (st *storageClientBackendTestData) CheckAndUpdateConnection(peerNode *enode.Node) {}
