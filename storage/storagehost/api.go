@@ -68,8 +68,29 @@ func (h *HostPrivateAPI) AvailableSpace() storage.HostSpace {
 }
 
 // GetHostConfig return the internal settings of the storage host
-func (h *HostPrivateAPI) GetHostConfig() storage.HostIntConfig {
-	return h.storageHost.getInternalConfig()
+func (h *HostPrivateAPI) GetHostConfig() storage.HostIntConfigForDisplay {
+	// Get the internal setting
+	config := h.storageHost.getInternalConfig()
+	// parse the numbers to human readable string
+	display := storage.HostIntConfigForDisplay{
+		AcceptingContracts:     unit.FormatBool(config.AcceptingContracts),
+		MaxDownloadBatchSize:   unit.FormatStorage(config.MaxDownloadBatchSize, false),
+		MaxDuration:            unit.FormatTime(config.MaxDuration),
+		MaxReviseBatchSize:     unit.FormatStorage(config.MaxReviseBatchSize, false),
+		WindowSize:             unit.FormatTime(config.WindowSize),
+		PaymentAddress:         config.PaymentAddress.String(),
+		Deposit:                unit.FormatCurrency(config.Deposit, "/byte/block"),
+		DepositBudget:          unit.FormatCurrency(config.DepositBudget, "/contract"),
+		MaxDeposit:             unit.FormatCurrency(config.MaxDeposit),
+		BaseRPCPrice:           unit.FormatCurrency(config.BaseRPCPrice),
+		ContractPrice:          unit.FormatCurrency(config.ContractPrice, "/contract"),
+		DownloadBandwidthPrice: unit.FormatCurrency(config.DownloadBandwidthPrice, "/byte"),
+		SectorAccessPrice:      unit.FormatCurrency(config.SectorAccessPrice, "/sector"),
+		StoragePrice:           unit.FormatCurrency(config.StoragePrice, "/byte/block"),
+		UploadBandwidthPrice:   unit.FormatCurrency(config.UploadBandwidthPrice, "/byte"),
+	}
+
+	return display
 }
 
 // GetFinancialMetrics get the financial metrics of the host
