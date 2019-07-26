@@ -117,7 +117,12 @@ type storageClientBackendContractManager struct{}
 func (st *storageClientBackendContractManager) Online() bool {
 	return true
 }
+
 func (st *storageClientBackendContractManager) CheckAndUpdateConnection(peerNode *enode.Node) {
+}
+
+func (st *storageClientBackendContractManager) SelfEnodeURL() string {
+	return ""
 }
 
 func (st *storageClientBackendContractManager) Syncing() bool {

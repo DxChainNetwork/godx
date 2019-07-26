@@ -38,6 +38,7 @@ type EthBackend interface {
 	RevisionOrRenewingDone(hostID enode.ID)
 	SetStatic(node *enode.Node)
 	CheckAndUpdateConnection(peerNode *enode.Node)
+	SelfEnodeURL() string
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -61,6 +62,7 @@ type ClientBackend interface {
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
 	CheckAndUpdateConnection(peerNode *enode.Node)
+	SelfEnodeURL() string
 }
 
 // DownloadParameters is the parameters to download from outer request

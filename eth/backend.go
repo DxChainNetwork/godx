@@ -835,3 +835,8 @@ func (s *Ethereum) GetPoolNonce(ctx context.Context, addr common.Address) (uint6
 func (s *Ethereum) GetBlockByNumber(number uint64) (*types.Block, error) {
 	return s.APIBackend.BlockByNumber(context.Background(), rpc.BlockNumber(number))
 }
+
+// SelfEnodeURL returns the local node's url, used for storage host manager
+func (s *Ethereum) SelfEnodeURL() string {
+	return s.server.NodeInfo().Enode
+}

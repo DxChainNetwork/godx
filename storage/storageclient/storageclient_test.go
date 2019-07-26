@@ -118,6 +118,8 @@ func homeDir() string {
 
 type BackendTest struct{}
 
+func (b *BackendTest) SelfEnodeURL() string { return "" }
+
 func (b *BackendTest) SetStatic(node *enode.Node) {}
 
 func (b *BackendTest) CheckAndUpdateConnection(peerNode *enode.Node) {}

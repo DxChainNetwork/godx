@@ -193,6 +193,12 @@ func (client *StorageClient) SendStorageContractCreateTx(clientAddr common.Addre
 	return client.info.StorageTx.SendContractCreateTX(clientAddr, input)
 }
 
+// SelfEnodeURL retrieves the local node's enodeURL, used to avoid storing
+// self information inf the storage host manager
+func (client *StorageClient) SelfEnodeURL() string {
+	return client.ethBackend.SelfEnodeURL()
+}
+
 // CalculateProofRanges will calculate the proof ranges which is used to verify a
 // pre-modification Merkle diff proof for the specified actions.
 func CalculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkle.SubTreeLimit {
