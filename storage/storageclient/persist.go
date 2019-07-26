@@ -22,37 +22,37 @@ type persistence struct {
 	MaxUploadSpeed   int64
 }
 
-func (sc *StorageClient) loadPersist() error {
+func (client *StorageClient) loadPersist() error {
 	// make directory
-	err := os.MkdirAll(sc.staticFilesDir, 0700)
+	err := os.MkdirAll(client.staticFilesDir, 0700)
 	if err != nil {
 		return err
 	}
 
 	// initialize logger
-	sc.log = log.New()
+	client.log = log.New()
 
-	return sc.loadSettings()
+	return client.loadSettings()
 }
 
 // save StorageClient settings into storageclient.json file
-func (sc *StorageClient) saveSettings() error {
-	return common.SaveDxJSON(settingsMetadata, filepath.Join(sc.persistDir, PersistFilename), sc.persist)
+func (client *StorageClient) saveSettings() error {
+	return common.SaveDxJSON(settingsMetadata, filepath.Join(client.persistDir, PersistFilename), client.persist)
 }
 
 // load prior StorageClient settings
-func (sc *StorageClient) loadSettings() error {
-	sc.persist = persistence{}
-	err := common.LoadDxJSON(settingsMetadata, filepath.Join(sc.persistDir, PersistFilename), &sc.persist)
+func (client *StorageClient) loadSettings() error {
+	client.persist = persistence{}
+	err := common.LoadDxJSON(settingsMetadata, filepath.Join(client.persistDir, PersistFilename), &client.persist)
 	if os.IsNotExist(err) {
-		sc.persist.MaxDownloadSpeed = DefaultMaxDownloadSpeed
-		sc.persist.MaxUploadSpeed = DefaultMaxUploadSpeed
-		err = sc.saveSettings()
+		client.persist.MaxDownloadSpeed = DefaultMaxDownloadSpeed
+		client.persist.MaxUploadSpeed = DefaultMaxUploadSpeed
+		err = client.saveSettings()
 		if err != nil {
 			return err
 		}
 	} else if err != nil {
 		return err
 	}
-	return sc.setBandwidthLimits(sc.persist.MaxUploadSpeed, sc.persist.MaxUploadSpeed)
+	return client.setBandwidthLimits(client.persist.MaxUploadSpeed, client.persist.MaxUploadSpeed)
 }

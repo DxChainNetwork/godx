@@ -11,6 +11,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// ContractMetaDataAPIDisplay is the data structure used for console
+// contract information display purposes
 type ContractMetaDataAPIDisplay struct {
 	ID                     string
 	EnodeID                enode.ID

@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/big"
 	"sync"
 	"time"
@@ -28,7 +27,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
-	mapset "github.com/deckarep/golang-set"
+	"github.com/deckarep/golang-set"
 )
 
 var (
@@ -92,21 +91,71 @@ type peer struct {
 	queuedProps chan *propEvent           // Queue of blocks to broadcast to the peer
 	queuedAnns  chan *types.Block         // Queue of blocks to announce to the peer
 	term        chan struct{}             // Termination channel to stop the broadcaster
+
+	// eth and storage message channel
+	clientConfigMsg   chan p2p.Msg
+	clientContractMsg chan p2p.Msg
+	hostContractMsg   chan p2p.Msg
+
+	ethMsgBuffer      []p2p.Msg
+	ethStartIndicator chan struct{}
+	bufferLock        sync.RWMutex
+
+	hostConfigProcessing   chan struct{}
+	hostContractProcessing chan struct{}
+
+	contractRevisingOrRenewing chan struct{}
+	hostConfigRequesting       chan struct{}
+
+	// error channel
+	errMsg chan error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 	return &peer{
-		Peer:        p,
-		rw:          rw,
-		version:     version,
-		id:          fmt.Sprintf("%x", p.ID().Bytes()[:8]),
-		knownTxs:    mapset.NewSet(),
-		knownBlocks: mapset.NewSet(),
-		queuedTxs:   make(chan []*types.Transaction, maxQueuedTxs),
-		queuedProps: make(chan *propEvent, maxQueuedProps),
-		queuedAnns:  make(chan *types.Block, maxQueuedAnns),
-		term:        make(chan struct{}),
+		Peer:                       p,
+		rw:                         rw,
+		version:                    version,
+		id:                         fmt.Sprintf("%x", p.ID().Bytes()[:8]),
+		knownTxs:                   mapset.NewSet(),
+		knownBlocks:                mapset.NewSet(),
+		queuedTxs:                  make(chan []*types.Transaction, maxQueuedTxs),
+		queuedProps:                make(chan *propEvent, maxQueuedProps),
+		queuedAnns:                 make(chan *types.Block, maxQueuedAnns),
+		term:                       make(chan struct{}),
+		clientConfigMsg:            make(chan p2p.Msg, 1),
+		clientContractMsg:          make(chan p2p.Msg, 1),
+		hostContractMsg:            make(chan p2p.Msg, 1),
+		ethStartIndicator:          make(chan struct{}, 1),
+		hostConfigProcessing:       make(chan struct{}, 1),
+		hostContractProcessing:     make(chan struct{}, 1),
+		errMsg:                     make(chan error, 1),
+		contractRevisingOrRenewing: make(chan struct{}, 1),
+		hostConfigRequesting:       make(chan struct{}, 1),
 	}
+}
+
+// InsertEthMsgBuffer will insert the ethereum p2p message into the
+// buffer list
+func (p *peer) InsertEthMsgBuffer(msg p2p.Msg) {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	p.ethMsgBuffer = append(p.ethMsgBuffer, msg)
+}
+
+// GetEthMsgBuffer will return the entire ethereum message buffer
+func (p *peer) GetEthMsgBuffer() []p2p.Msg {
+	p.bufferLock.RLock()
+	defer p.bufferLock.RUnlock()
+	return p.ethMsgBuffer
+}
+
+// UpdateEthMsgBuffer will update the ethereum message buffer by
+// removing the first item from the buffer list
+func (p *peer) UpdateEthMsgBuffer() {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	p.ethMsgBuffer = p.ethMsgBuffer[1:]
 }
 
 // broadcast is a write loop that multiplexes block propagations, announcements
@@ -397,10 +446,6 @@ func (p *peer) String() string {
 	)
 }
 
-func (p *peer) Peer2Session() *storage.Session {
-	return storage.NewSession(p.version, p.Peer, p.rw)
-}
-
 // peerSet represents the collection of active peers currently participating in
 // the Ethereum sub-protocol.
 type peerSet struct {
@@ -522,6 +567,7 @@ func (ps *peerSet) Close() {
 
 	for _, p := range ps.peers {
 		p.Disconnect(p2p.DiscQuitting)
+		p.Stop()
 	}
 	ps.closed = true
 }

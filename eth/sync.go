@@ -143,14 +143,12 @@ func (pm *ProtocolManager) syncer() {
 
 	for {
 		select {
-		case peer := <-pm.newPeerCh:
-			if !peer.Peer.Info().Network.StorageContract {
-				// Make sure we have peers to select from, then sync
-				if pm.peers.Len() < minDesiredPeerCount {
-					break
-				}
-				go pm.synchronise(pm.peers.BestPeer())
+		case <-pm.newPeerCh:
+			// Make sure we have peers to select from, then sync
+			if pm.peers.Len() < minDesiredPeerCount {
+				break
 			}
+			go pm.synchronise(pm.peers.BestPeer())
 
 		case <-forceSync.C:
 			// Force a sync even if not enough peers are present
