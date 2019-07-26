@@ -32,17 +32,17 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 		},
 		"maxDuration": {
 			map[string]string{"maxDuration": "1b"},
-			storage.HostIntConfig{MaxDuration: uint64(unit.MustParseTime("1b"))},
+			storage.HostIntConfig{MaxDuration: uint64(mustParseTime("1b"))},
 			nil,
 		},
 		"maxReviseBatchSize": {
 			map[string]string{"maxReviseBatchSize": "1kb"},
-			storage.HostIntConfig{MaxReviseBatchSize: uint64(unit.MustParseStorage("1kb"))},
+			storage.HostIntConfig{MaxReviseBatchSize: uint64(mustParseStorage("1kb"))},
 			nil,
 		},
 		"windowSize": {
 			map[string]string{"windowSize": "1b"},
-			storage.HostIntConfig{WindowSize: uint64(unit.MustParseTime("1b"))},
+			storage.HostIntConfig{WindowSize: uint64(mustParseTime("1b"))},
 			nil,
 		},
 		"paymentAddress": {
@@ -52,47 +52,47 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 		},
 		"deposit": {
 			map[string]string{"deposit": "1wei"},
-			storage.HostIntConfig{Deposit: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{Deposit: mustParseCurrency("1wei")},
 			nil,
 		},
 		"depositBudget": {
 			map[string]string{"depositBudget": "100wei"},
-			storage.HostIntConfig{DepositBudget: unit.MustParseCurrency("100wei")},
+			storage.HostIntConfig{DepositBudget: mustParseCurrency("100wei")},
 			nil,
 		},
 		"maxDeposit": {
 			map[string]string{"maxDeposit": "1000wei"},
-			storage.HostIntConfig{MaxDeposit: unit.MustParseCurrency("1000wei")},
+			storage.HostIntConfig{MaxDeposit: mustParseCurrency("1000wei")},
 			nil,
 		},
 		"baseRPCPrice": {
 			map[string]string{"baseRPCPrice": "1wei"},
-			storage.HostIntConfig{BaseRPCPrice: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{BaseRPCPrice: mustParseCurrency("1wei")},
 			nil,
 		},
 		"contractPrice": {
 			map[string]string{"contractPrice": "10wei"},
-			storage.HostIntConfig{ContractPrice: unit.MustParseCurrency("10wei")},
+			storage.HostIntConfig{ContractPrice: mustParseCurrency("10wei")},
 			nil,
 		},
 		"downloadBandwidthPrice": {
 			map[string]string{"downloadBandwidthPrice": "1wei"},
-			storage.HostIntConfig{DownloadBandwidthPrice: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{DownloadBandwidthPrice: mustParseCurrency("1wei")},
 			nil,
 		},
 		"sectorAccessPrice": {
 			map[string]string{"sectorAccessPrice": "1wei"},
-			storage.HostIntConfig{SectorAccessPrice: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{SectorAccessPrice: mustParseCurrency("1wei")},
 			nil,
 		},
 		"storagePrice": {
 			map[string]string{"storagePrice": "1wei"},
-			storage.HostIntConfig{StoragePrice: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{StoragePrice: mustParseCurrency("1wei")},
 			nil,
 		},
 		"uploadBandwidthPrice": {
 			map[string]string{"uploadBandwidthPrice": "1wei"},
-			storage.HostIntConfig{UploadBandwidthPrice: unit.MustParseCurrency("1wei")},
+			storage.HostIntConfig{UploadBandwidthPrice: mustParseCurrency("1wei")},
 			nil,
 		},
 		"currency parse error": {
@@ -134,19 +134,19 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 			},
 			storage.HostIntConfig{
 				AcceptingContracts:     true,
-				MaxDownloadBatchSize:   uint64(unit.MustParseStorage("10mb")),
-				MaxDuration:            uint64(unit.MustParseTime("1d")),
-				MaxReviseBatchSize:     uint64(unit.MustParseStorage("10mb")),
-				WindowSize:             uint64(unit.MustParseTime("12h")),
-				Deposit:                unit.MustParseCurrency("1000wei"),
-				DepositBudget:          unit.MustParseCurrency("100ether"),
-				MaxDeposit:             unit.MustParseCurrency("10000wei"),
-				BaseRPCPrice:           unit.MustParseCurrency("500000wei"),
-				ContractPrice:          unit.MustParseCurrency("50microether"),
-				DownloadBandwidthPrice: unit.MustParseCurrency("100000wei"),
-				SectorAccessPrice:      unit.MustParseCurrency("10000wei"),
-				StoragePrice:           unit.MustParseCurrency("10000wei"),
-				UploadBandwidthPrice:   unit.MustParseCurrency("10000wei"),
+				MaxDownloadBatchSize:   uint64(mustParseStorage("10mb")),
+				MaxDuration:            uint64(mustParseTime("1d")),
+				MaxReviseBatchSize:     uint64(mustParseStorage("10mb")),
+				WindowSize:             uint64(mustParseTime("12h")),
+				Deposit:                mustParseCurrency("1000wei"),
+				DepositBudget:          mustParseCurrency("100ether"),
+				MaxDeposit:             mustParseCurrency("10000wei"),
+				BaseRPCPrice:           mustParseCurrency("500000wei"),
+				ContractPrice:          mustParseCurrency("50microether"),
+				DownloadBandwidthPrice: mustParseCurrency("100000wei"),
+				SectorAccessPrice:      mustParseCurrency("10000wei"),
+				StoragePrice:           mustParseCurrency("10000wei"),
+				UploadBandwidthPrice:   mustParseCurrency("10000wei"),
 			},
 			nil,
 		},
@@ -179,4 +179,40 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 				dumper.Sdump(persist.Config), dumper.Sdump(test.expect))
 		}
 	}
+}
+
+// mustParseCurrency parse the string to currency. If an error happens, panic.
+func mustParseCurrency(str string) common.BigInt {
+	parsed, err := unit.ParseCurrency(str)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
+
+// mustParseSpeed parse the string to speed. If an error happens, panic.
+func mustParseSpeed(str string) int64 {
+	parsed, err := unit.ParseSpeed(str)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
+
+// mustParseTime parse the string to duration. If an error happens, panic.
+func mustParseTime(str string) uint64 {
+	parsed, err := unit.ParseTime(str)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
+}
+
+// mustParseStorage parse the string to storage. If an error happens, panic.
+func mustParseStorage(str string) uint64 {
+	parsed, err := unit.ParseStorage(str)
+	if err != nil {
+		panic(err)
+	}
+	return parsed
 }
