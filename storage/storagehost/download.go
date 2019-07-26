@@ -24,6 +24,9 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 			h.log.Error("data download failed", "err", downloadErr.Error())
 			sp.TriggerError(downloadErr)
 		}
+
+		// before host download handler return, should send negotiation stop msg to client
+		sp.SendHostRevisionStop()
 	}()
 
 	// read the download request.
@@ -40,7 +43,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		msg, err := sp.HostWaitContractResp()
 		if err != nil {
 			stopSignal <- err
-		} else if msg.Code != storage.NegotiationStopMsg {
+		} else if msg.Code != storage.ClientStopMsg {
 			stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
 		} else {
 			stopSignal <- nil

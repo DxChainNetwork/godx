@@ -6,6 +6,7 @@ package storage
 
 import (
 	"errors"
+
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )
@@ -31,7 +32,8 @@ type Peer interface {
 	SendContractUploadClientRevisionSign(revisionSign []byte) error
 	SendUploadHostRevisionSign(revisionSign []byte) error
 	RequestContractDownload(req DownloadRequest) error
-	SendRevisionStop() error
+	SendClientRevisionStop() error
+	SendHostRevisionStop() error
 	SendContractDownloadData(resp DownloadResponse) error
 	SendHostBusyHandleRequestErr() error
 	WaitConfigResp() (p2p.Msg, error)
