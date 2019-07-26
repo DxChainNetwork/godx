@@ -31,27 +31,14 @@ const (
 	// how long to wait for a worker after a worker failed to perform a download task.
 	DownloadFailureCooldown = time.Second * 3
 
-	// how many times a bad host's timeout/cooldown can be doubled before a maximum cooldown is reached.
+	// how many times a bad host's timeout/cool down can be doubled before a maximum cool down is reached.
 	MaxConsecutivePenalty = 10
 )
 
-// Max memory available
 const (
+	// DefaultMaxMemory available
 	DefaultMaxMemory = uint64(3 * 1 << 28)
-)
-
-// default download parameter
-const (
-	DefaultDownloadLength     = uint64(250)
-	DefaultDownloadOffset     = uint64(0)
-	DefaultDownloadDxFilePath = ""
-)
-
-// Backup Header
-const (
-	encryptionPlaintext = "plaintext"
-	encryptionTwofish   = "twofish"
-	encryptionVersion   = "1.0"
+	extraRatio       = 0.02
 )
 
 // Default params about upload/download process
@@ -82,39 +69,7 @@ var (
 	// UploadFailureCoolDown is the initial time of punishment while upload consecutive fails
 	// the punishment time shows exponential growth
 	UploadFailureCoolDown = 3 * time.Second
-
-	// when uploading or downloading, the renew goroutine wait for the longest time
-	RevisionDoneTime = 1 * time.Minute
 )
-
-var currencyIndexMap = map[string]uint64{
-	"wei":        1,
-	"kwei":       1e3,
-	"mwei":       1e6,
-	"gwei":       1e9,
-	"microether": 1e12,
-	"milliether": 1e15,
-	"ether":      1e18,
-}
-
-var dataSizeMultiplier = map[string]uint64{
-	"kb":  1e3,
-	"mb":  1e6,
-	"gb":  1e9,
-	"tb":  1e12,
-	"kib": 1 << 10,
-	"mib": 1 << 20,
-	"gib": 1 << 30,
-	"tib": 1 << 40,
-}
-
-var speedMultiplier = map[string]int64{
-	"bps":  1,
-	"kbps": 1e3,
-	"mbps": 1e6,
-	"gbps": 1e9,
-	"tbps": 1e12,
-}
 
 var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",
 	"redundancy", "violation", "uploadspeed", "downloadspeed"}

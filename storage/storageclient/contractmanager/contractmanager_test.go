@@ -84,7 +84,6 @@ func newContractManagerTest(hm *storagehostmanager.StorageHostManager) (cm *Cont
 		renewedTo:        make(map[storage.ContractID]storage.ContractID),
 		failedRenewCount: make(map[storage.ContractID]uint64),
 		hostToContract:   make(map[enode.ID]storage.ContractID),
-		renewing:         make(map[storage.ContractID]bool),
 		quit:             make(chan struct{}),
 		log:              log.New(),
 	}
@@ -118,12 +117,14 @@ type storageClientBackendContractManager struct{}
 func (st *storageClientBackendContractManager) Online() bool {
 	return true
 }
+func (st *storageClientBackendContractManager) CheckAndUpdateConnection(peerNode *enode.Node) {
+}
 
 func (st *storageClientBackendContractManager) Syncing() bool {
 	return false
 }
 
-func (st *storageClientBackendContractManager) GetStorageHostSetting(peerID string, config *storage.HostExtConfig) error {
+func (st *storageClientBackendContractManager) GetStorageHostSetting(hostEnodeID enode.ID, peerID string, config *storage.HostExtConfig) error {
 	config = &storage.HostExtConfig{
 		AcceptingContracts: true,
 		Deposit:            common.NewBigInt(10),
@@ -164,11 +165,7 @@ func (st *storageClientBackendContractManager) AccountManager() *accounts.Manage
 	return nil
 }
 
-func (st *storageClientBackendContractManager) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return nil
-}
-
-func (st *storageClientBackendContractManager) SetupConnection(hostEnodeUrl string) (*storage.Session, error) {
+func (st *storageClientBackendContractManager) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
 	return nil, nil
 }
 
@@ -184,6 +181,8 @@ func (st *storageClientBackendContractManager) GetPaymentAddress() (address comm
 	return
 }
 
-func (st *storageClientBackendContractManager) IsRevisionSessionDone(contractID storage.ContractID) bool {
+func (st *storageClientBackendContractManager) TryToRenewOrRevise(hostID enode.ID) bool {
 	return false
 }
+
+func (st *storageClientBackendContractManager) RevisionOrRenewingDone(hostID enode.ID) {}

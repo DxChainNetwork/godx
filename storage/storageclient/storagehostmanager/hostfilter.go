@@ -100,6 +100,7 @@ func (fm FilterMode) String() string {
 	}
 }
 
+// ToFilterMode is used to convert the string formatted filterMode to FilterMode format
 func ToFilterMode(fm string) (filterMode FilterMode, err error) {
 	switch {
 	case fm == "Disabled":
