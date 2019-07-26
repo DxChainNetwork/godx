@@ -115,7 +115,7 @@ var (
 	// AcceptingContractsFlag is the flag for accepting contracts
 	AcceptingContractsFlag = cli.StringFlag{
 		Name:  "acceptingcontracts",
-		Usage: "BOOL - whether the shost accepts new contracts",
+		Usage: "BOOL - whether the host accepts new contracts",
 	}
 
 	MaxDepositFlag = cli.StringFlag{

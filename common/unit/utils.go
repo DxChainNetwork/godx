@@ -61,8 +61,8 @@ func formatString(s string) (formatted string) {
 // stringToBigInt will convert the string to common.BigInt type
 func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
 	// from the currency indexMap, get the conversion rate
-	conversionRate := currencyIndexMap[unit]
 	var bigFloat = new(big.Float)
+	conversionRate := CurrencyIndexMap[unit]
 	var bigInt = new(big.Int)
 
 	// remove the unit

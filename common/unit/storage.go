@@ -12,7 +12,7 @@ import (
 // DataSizeUnit defines available units used for specifying expected storage size, expected upload size, and expected download size
 var DataSizeUnit = []string{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}
 
-var dataSizeMultiplier = map[string]uint64{
+var DataSizeMultiplier = map[string]uint64{
 	"kb":  1e3,
 	"mb":  1e6,
 	"gb":  1e9,
@@ -30,7 +30,7 @@ func ParseStorage(str string) (parsed uint64, err error) {
 	str = strings.ToLower(str)
 
 	// convert the data size into bytes
-	for unit, multiplier := range dataSizeMultiplier {
+	for unit, multiplier := range DataSizeMultiplier {
 		if strings.HasSuffix(str, unit) {
 			return ParseUint64(str, multiplier, unit)
 		}
@@ -53,29 +53,29 @@ func FormatStorage(dataSize uint64, storage bool) (formatted string) {
 	}
 
 	switch {
-	case dataSize%dataSizeMultiplier["tib"] == 0:
-		formatted = fmt.Sprintf("%v TiB%s", dataSize/dataSizeMultiplier["tib"], additionalInfo)
+	case dataSize%DataSizeMultiplier["tib"] == 0:
+		formatted = fmt.Sprintf("%v TiB%s", dataSize/DataSizeMultiplier["tib"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["gib"] == 0:
-		formatted = fmt.Sprintf("%v GiB%s", dataSize/dataSizeMultiplier["gib"], additionalInfo)
+	case dataSize%DataSizeMultiplier["gib"] == 0:
+		formatted = fmt.Sprintf("%v GiB%s", dataSize/DataSizeMultiplier["gib"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["mib"] == 0:
-		formatted = fmt.Sprintf("%v MiB%s", dataSize/dataSizeMultiplier["mib"], additionalInfo)
+	case dataSize%DataSizeMultiplier["mib"] == 0:
+		formatted = fmt.Sprintf("%v MiB%s", dataSize/DataSizeMultiplier["mib"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["kib"] == 0:
-		formatted = fmt.Sprintf("%v KiB%s", dataSize/dataSizeMultiplier["kib"], additionalInfo)
+	case dataSize%DataSizeMultiplier["kib"] == 0:
+		formatted = fmt.Sprintf("%v KiB%s", dataSize/DataSizeMultiplier["kib"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["tb"] == 0:
-		formatted = fmt.Sprintf("%v TB%s", dataSize/dataSizeMultiplier["tb"], additionalInfo)
+	case dataSize%DataSizeMultiplier["tb"] == 0:
+		formatted = fmt.Sprintf("%v TB%s", dataSize/DataSizeMultiplier["tb"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["gb"] == 0:
-		formatted = fmt.Sprintf("%v GB%s", dataSize/dataSizeMultiplier["gb"], additionalInfo)
+	case dataSize%DataSizeMultiplier["gb"] == 0:
+		formatted = fmt.Sprintf("%v GB%s", dataSize/DataSizeMultiplier["gb"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["mb"] == 0:
-		formatted = fmt.Sprintf("%v MB%s", dataSize/dataSizeMultiplier["mb"], additionalInfo)
+	case dataSize%DataSizeMultiplier["mb"] == 0:
+		formatted = fmt.Sprintf("%v MB%s", dataSize/DataSizeMultiplier["mb"], additionalInfo)
 		return
-	case dataSize%dataSizeMultiplier["kb"] == 0:
-		formatted = fmt.Sprintf("%v KB%s", dataSize/dataSizeMultiplier["kb"], additionalInfo)
+	case dataSize%DataSizeMultiplier["kb"] == 0:
+		formatted = fmt.Sprintf("%v KB%s", dataSize/DataSizeMultiplier["kb"], additionalInfo)
 		return
 	default:
 		formatted = fmt.Sprintf("%v B%s", dataSize, additionalInfo)

@@ -13,7 +13,7 @@ import (
 // CurrencyUnit defines available units used for rentPayment fund
 var CurrencyUnit = []string{"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
 
-var currencyIndexMap = map[string]uint64{
+var CurrencyIndexMap = map[string]uint64{
 	"wei":        1,
 	"kwei":       1e3,
 	"mwei":       1e6,
@@ -31,7 +31,7 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 
 	// check the suffix and convert the units into wei, which is the smallest unit
 	// for the eth currency type
-	for unit := range currencyIndexMap {
+	for unit := range CurrencyIndexMap {
 		// skip wei or ether because other currency unit also
 		// includes these kind of suffix, such as milliether and
 		// kwei
@@ -64,23 +64,23 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 // FormatCurrency is used to format the currency for displaying purpose
 func FormatCurrency(fund common.BigInt) (formatted string) {
 	switch {
-	case fund.DivNoRemaining(currencyIndexMap["ether"]):
-		formatted = fmt.Sprintf("%v ether", fund.DivUint64(currencyIndexMap["ether"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["ether"]):
+		formatted = fmt.Sprintf("%v ether", fund.DivUint64(CurrencyIndexMap["ether"]))
 		return
-	case fund.DivNoRemaining(currencyIndexMap["milliether"]):
-		formatted = fmt.Sprintf("%v milliether", fund.DivUint64(currencyIndexMap["milliether"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["milliether"]):
+		formatted = fmt.Sprintf("%v milliether", fund.DivUint64(CurrencyIndexMap["milliether"]))
 		return
-	case fund.DivNoRemaining(currencyIndexMap["microether"]):
-		formatted = fmt.Sprintf("%v microether", fund.DivUint64(currencyIndexMap["microether"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["microether"]):
+		formatted = fmt.Sprintf("%v microether", fund.DivUint64(CurrencyIndexMap["microether"]))
 		return
-	case fund.DivNoRemaining(currencyIndexMap["gwei"]):
-		formatted = fmt.Sprintf("%v Gwei", fund.DivUint64(currencyIndexMap["gwei"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["gwei"]):
+		formatted = fmt.Sprintf("%v Gwei", fund.DivUint64(CurrencyIndexMap["gwei"]))
 		return
-	case fund.DivNoRemaining(currencyIndexMap["mwei"]):
-		formatted = fmt.Sprintf("%v Mwei", fund.DivUint64(currencyIndexMap["mwei"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["mwei"]):
+		formatted = fmt.Sprintf("%v Mwei", fund.DivUint64(CurrencyIndexMap["mwei"]))
 		return
-	case fund.DivNoRemaining(currencyIndexMap["kwei"]):
-		formatted = fmt.Sprintf("%v Kwei", fund.DivUint64(currencyIndexMap["kwei"]))
+	case fund.DivNoRemaining(CurrencyIndexMap["kwei"]):
+		formatted = fmt.Sprintf("%v Kwei", fund.DivUint64(CurrencyIndexMap["kwei"]))
 		return
 	default:
 		formatted = fmt.Sprintf("%v wei", fund)

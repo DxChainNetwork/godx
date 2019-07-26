@@ -13,7 +13,7 @@ import (
 // SpeedUnit defines available units used for specifying upload and download speed
 var SpeedUnit = []string{"bps", "kbps", "mbps", "gbps", "tbps"}
 
-var speedMultiplier = map[string]int64{
+var SpeedMultiplier = map[string]int64{
 	"bps":  1,
 	"kbps": 1e3,
 	"mbps": 1e6,
@@ -27,8 +27,8 @@ func ParseSpeed(str string) (parsed int64, err error) {
 	// remove whitespace and convert all to lower case
 	str = formatString(str)
 
-	// loop through the speedMultiplier
-	for unit := range speedMultiplier {
+	// loop through the SpeedMultiplier
+	for unit := range SpeedMultiplier {
 		// unit bps is ignored due to each unit contains bps as suffix
 		if unit == "bps" {
 			continue
@@ -58,17 +58,17 @@ func FormatSpeed(speed int64) (formatted string) {
 	}
 
 	switch {
-	case speed%speedMultiplier["tbps"] == 0:
-		formatted = fmt.Sprintf("%v Tbps", speed/speedMultiplier["tbps"])
+	case speed%SpeedMultiplier["tbps"] == 0:
+		formatted = fmt.Sprintf("%v Tbps", speed/SpeedMultiplier["tbps"])
 		return
-	case speed%speedMultiplier["gbps"] == 0:
-		formatted = fmt.Sprintf("%v Gbps", speed/speedMultiplier["gbps"])
+	case speed%SpeedMultiplier["gbps"] == 0:
+		formatted = fmt.Sprintf("%v Gbps", speed/SpeedMultiplier["gbps"])
 		return
-	case speed%speedMultiplier["mbps"] == 0:
-		formatted = fmt.Sprintf("%v Mbps", speed/speedMultiplier["mbps"])
+	case speed%SpeedMultiplier["mbps"] == 0:
+		formatted = fmt.Sprintf("%v Mbps", speed/SpeedMultiplier["mbps"])
 		return
-	case speed%speedMultiplier["kbps"] == 0:
-		formatted = fmt.Sprintf("%v Kbps", speed/speedMultiplier["kbps"])
+	case speed%SpeedMultiplier["kbps"] == 0:
+		formatted = fmt.Sprintf("%v Kbps", speed/SpeedMultiplier["kbps"])
 		return
 	default:
 		formatted = fmt.Sprintf("%v bps", speed)
@@ -88,7 +88,7 @@ func speedConvert(speed string, unit string) (parsed int64, err error) {
 	}
 
 	// convert the the result into bps format
-	parsed *= speedMultiplier[unit]
+	parsed *= SpeedMultiplier[unit]
 
 	return
 }
