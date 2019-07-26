@@ -62,7 +62,6 @@ type protoHandshake struct {
 	Caps       []Cap  // list of protocols supported
 	ListenPort uint64
 	ID         []byte // secp256k1 public key
-	Flags      connFlag
 	// Ignore additional fields (for forward compatibility).
 	Rest []rlp.RawValue `rlp:"tail"`
 }
@@ -111,6 +110,7 @@ type Peer struct {
 	protoErr chan error
 	closed   chan struct{}   // used to indicate if the peer is closed already
 	disc     chan DiscReason // channel used to indicate the disconnection from the peer
+	stopChan chan struct{}
 
 	// events receives message send / receive events if set
 	events *event.Feed
@@ -125,6 +125,17 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 	peer := newPeer(conn, nil)
 	close(peer.closed) // ensures Disconnect doesn't block
 	return peer
+}
+
+// StopChan returns the stop channel which used to indicate
+// that the program is exiting and the peer should be stopped
+func (p *Peer) StopChan() chan struct{} {
+	return p.stopChan
+}
+
+// Stop indicates that peer should be stopped
+func (p *Peer) Stop() {
+	close(p.stopChan)
 }
 
 // ID returns the peer node's public key. (Node ID)
@@ -186,11 +197,6 @@ func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
 
-// for only test
-func (p *Peer) Set(f connFlag, val bool) {
-	p.rw.set(f, val)
-}
-
 // create and initialize new peer object
 // protocols: a list of protocols supported by the peer
 func newPeer(conn *conn, protocols []Protocol) *Peer {
@@ -202,6 +208,7 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		stopChan: make(chan struct{}),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags), // contains node id and the connFlag
 	}
 	return p
@@ -210,6 +217,11 @@ func newPeer(conn *conn, protocols []Protocol) *Peer {
 // returns the peer's log
 func (p *Peer) Log() log.Logger {
 	return p.log
+}
+
+// for only test
+func (p *Peer) Set(f connFlag, val bool) {
+	p.rw.set(f, val)
 }
 
 // run the protocol
@@ -501,14 +513,11 @@ type PeerInfo struct {
 	Name    string   `json:"name"`  // Name of the node, including client type, version, OS, custom data
 	Caps    []string `json:"caps"`  // Protocols advertised by this peer
 	Network struct {
-		LocalAddress    string `json:"localAddress"`  // Local endpoint of the TCP data connection
-		RemoteAddress   string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
-		Inbound         bool   `json:"inbound"`
-		Trusted         bool   `json:"trusted"`
-		Static          bool   `json:"static"`
-		StorageContract bool   `json:"storageContract"`
-		StorageClient   bool   `json:"storageClient"`
-		StorageHost     bool   `json:"storageHost"`
+		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
+		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
+		Inbound       bool   `json:"inbound"`
+		Trusted       bool   `json:"trusted"`
+		Static        bool   `json:"static"`
 	} `json:"network"`
 	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
 }
@@ -533,8 +542,6 @@ func (p *Peer) Info() *PeerInfo {
 	info.Network.Inbound = p.rw.is(inboundConn)
 	info.Network.Trusted = p.rw.is(trustedConn)
 	info.Network.Static = p.rw.is(staticDialedConn)
-	info.Network.StorageContract = p.rw.is(storageContractConn)
-	info.Network.StorageClient = p.rw.is(storageClientConn)
 
 	// Gather all the running protocol infos
 	for _, proto := range p.running {
@@ -549,21 +556,4 @@ func (p *Peer) Info() *PeerInfo {
 		info.Protocols[proto.Name] = protoInfo
 	}
 	return info
-}
-
-func (p *Peer) GetConn() net.Conn {
-	return p.rw.GetNetConn()
-}
-
-func (p *Peer) IsClosed() bool {
-	select {
-	case <-p.closed:
-		return true
-	default:
-		return false
-	}
-}
-
-func (p *Peer) ClosedChan() chan struct{} {
-	return p.closed
 }

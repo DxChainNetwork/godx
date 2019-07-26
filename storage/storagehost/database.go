@@ -39,6 +39,14 @@ func (h *StorageHost) deleteStorageResponsibilities(soids []common.Hash) error {
 	return nil
 }
 
+// GetStorageResponsibility will be used to get the storage responsibility information
+// based on the storage contractID provided
+func (h *StorageHost) GetStorageResponsibility(storageContractID common.Hash) (StorageResponsibility, error) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return getStorageResponsibility(h.db, storageContractID)
+}
+
 //deleteStorageResponsibility delete storageResponsibility from DB
 func deleteStorageResponsibility(db ethdb.Database, storageContractID common.Hash) error {
 	scdb := ethdb.StorageContractDB{db}

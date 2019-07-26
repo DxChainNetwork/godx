@@ -100,27 +100,6 @@ func TestCalcDifficulty(t *testing.T) {
 
 */
 
-func TestEthash_Prepare(t *testing.T) {
-	// TODO
-	// with chainReader
-
-}
-
-func TestEthash_Finalize(t *testing.T) {
-	// TODO
-	// with chainReader and stateDB
-}
-
-func TestEthash_VerifyHeaders(t *testing.T) {
-	// TODO
-	// need real block chain
-}
-
-func TestEthash_VerifyUncles(t *testing.T) {
-	// TODO
-	// need real block chain
-}
-
 func TestEthash_Seal(t *testing.T) {
 	results := make(chan *types.Block)
 	defer close(results)
@@ -323,11 +302,11 @@ func ExampleCalcDifficulty() {
 
 	// 1. prepare header
 	diff := CalcDifficulty(params.MainnetChainConfig, uint64(1000), &types.Header{
-		Number:     big.NewInt(5000000),
+		Number:     big.NewInt(1000),
 		Time:       new(big.Int).SetUint64(900),
-		Difficulty: big.NewInt(1 << 12),
+		Difficulty: big.NewInt(1),
 	})
-	header := &types.Header{Number: big.NewInt(1), Difficulty: diff}
+	header := &types.Header{Number: big.NewInt(1001), Difficulty: diff}
 
 	// 2. mine, call Seal method
 	block, err := mineBlock(ethash, header, 100*time.Second)

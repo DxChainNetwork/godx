@@ -23,16 +23,18 @@ var (
 	// define the program running environment: test, prod
 	ENV = Env_Prod
 
-	// TODO 为了测试方便，调小参数默认值
 	DefaultMinSectors uint32 = 1
 	DefaultNumSectors uint32 = 2
 )
 
+// Defines the download mode
 const (
 	Override = iota
 	Append
 	Normal
+)
 
+const (
 	Env_Prod = "prod"
 	Env_Test = "test"
 
@@ -130,6 +132,7 @@ type (
 	}
 )
 
+// ContractParams is the drafted contract sent by the storage client.
 type ContractParams struct {
 	Allowance            RentPayment
 	HostEnodeUrl         string
@@ -167,8 +170,8 @@ type ClientSetting struct {
 	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
 }
 
-// both RentPaymentAPIDisplay and ClientSettingAPIDisplay are used for API configurations
 type (
+	// RentPaymentAPIDisplay is used for API Configurations Display
 	RentPaymentAPIDisplay struct {
 		Fund         string `json:"Fund"`
 		StorageHosts string `json:"Number of Storage Hosts"`
@@ -185,6 +188,7 @@ type (
 		ExpectedRedundancy string `json:"Expected Redundancy"`
 	}
 
+	// ClientSettingAPIDisplay is used for API Configurations Display
 	ClientSettingAPIDisplay struct {
 		RentPayment       RentPaymentAPIDisplay `json:"RentPayment Setting"`
 		EnableIPViolation string                `json:"IP Violation Check Status"`
@@ -193,21 +197,20 @@ type (
 	}
 )
 
-// Storage Contract Related
 type (
+	// ContractID is used to define the contract ID data type
 	ContractID common.Hash
 
+	// ContractStatus is used to define the contract status data type. There
+	// are three status in total: able to upload, able to renew, and if the contract
+	// has been canceled
 	ContractStatus struct {
 		UploadAbility bool
 		RenewAbility  bool
 		Canceled      bool
 	}
 
-	RecoverableContract struct {
-		ID      ContractID
-		EnodeID enode.ID
-	}
-
+	// ContractMetaData defines read-only detailed contract information
 	ContractMetaData struct {
 		ID                     ContractID
 		EnodeID                enode.ID
@@ -247,6 +250,7 @@ type (
 	}
 )
 
+// String method is used to convert the contractID into string format
 func (ci ContractID) String() string {
 	return hexutil.Encode(ci[:])
 }

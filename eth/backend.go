@@ -651,178 +651,155 @@ func (s *Ethereum) Stop() error {
 	return nil
 }
 
-func (s *Ethereum) RemoveStorageHost(ip string) {
-	s.server.RemoveStorageHost(ip)
+// IsRevising is used to check if the contract is currently
+// revising
+func (s *Ethereum) TryToRenewOrRevise(hostID enode.ID) bool {
+	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
+	peer := s.protocolManager.peers.Peer(peerID)
+	// if the peer does not exist, meaning currently not revising
+	if peer == nil {
+		return false
+	}
+
+	// otherwise, check if the current connection is revising the contract
+	return peer.TryToRenewOrRevise()
 }
 
-// SetupConnection will setup connection with host if they are never connected with each other
-func (s *Ethereum) SetupStorageConnection(hostEnodeURL string) (*storage.Session, error) {
-	if s.netRPCService == nil {
-		return nil, fmt.Errorf("network API is not ready")
+// RevisionOrRenewingDone indicates the renew finished
+func (s *Ethereum) RevisionOrRenewingDone(hostID enode.ID) {
+	peerID := fmt.Sprintf("%x", hostID.Bytes()[:8])
+	peer := s.protocolManager.peers.Peer(peerID)
+	if peer == nil {
+		return
 	}
 
-	hostNode, err := enode.ParseV4(hostEnodeURL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid enode: %v", err)
+	// finished renewing
+	peer.RevisionOrRenewingDone()
+}
+
+// SetupConnection will establish p2p static connection between storage client and storage host
+// only storage is able to initiate the set up connection operation
+func (s *Ethereum) SetupConnection(enodeURL string) (storagePeer storage.Peer, err error) {
+	// get the peer ID
+	var destNode *enode.Node
+	if destNode, err = enode.ParseV4(enodeURL); err != nil {
+		err = fmt.Errorf("failed to parse the enodeURL: %s", err.Error())
+		return
 	}
 
-	// First we check storage contract session set have already connection with this node
-	nodeId := fmt.Sprintf("%x", hostNode.ID().Bytes()[:8])
-	if conn := s.protocolManager.StorageContractSessions().Session(nodeId); conn != nil && !conn.IsBusy() {
-		return conn, nil
-	} else if conn != nil && conn.IsBusy() {
-		return nil, fmt.Errorf("session is busy now, EnodeID: %v", conn.ID().String())
+	// get the peerID
+	peerID := fmt.Sprintf("%x", destNode.ID().Bytes()[:8])
+
+	// check if the peer is already existed
+	peer := s.protocolManager.peers.Peer(peerID)
+	if peer != nil {
+		// if the connection already existed, convert the connection
+		// to the static connection
+		s.server.SetStatic(destNode)
+		// connection is already established
+		storagePeer = peer
+		return
 	}
 
-	// check if there is another process is trying to add peer
-	peerChan := s.server.AcquirePeerAddingChan(hostNode.IP().String())
-	peerAddingTimeout := time.After(1 * time.Minute)
-
-LOOP:
+	// the connection has not been established yet, call add peer
+	s.server.AddPeer(destNode)
+	timeout := time.After(1 * time.Minute)
 	for {
-		select {
-		// if the channel is not empty, meaning another routine is trying to add the peer
-		// wait util the peer adding is done
-		case peerChan <- struct{}{}:
-			break LOOP
-		case <-peerAddingTimeout:
-			return nil, errors.New("another process is trying to add the peer")
-		default:
-			time.Sleep(500 * time.Millisecond)
+		peer = s.protocolManager.peers.Peer(peerID)
+		if peer != nil {
+			// check if the connection is static connection
+			// if not, set the connection to static connection
+			if !peer.IsStaticConn() {
+				s.server.SetStatic(destNode)
+			}
+			// assign the peer and return
+			storagePeer = peer
+			return
 		}
-	}
 
-	// First we disconnect the ethereum connection
-	s.server.RemovePeer(hostNode)
-
-	// before disconnecting the connection, add the node to storageHosts map
-	s.server.AddStorageHost(hostNode)
-
-	timeout := time.After(10 * time.Second)
-	for {
 		select {
 		case <-timeout:
-			// if timeout, try to remove the peer channel as well
-			select {
-			case <-peerChan:
-			default:
-			}
-
-			s.server.RemoveStorageHost(hostNode.IP().String())
-			return nil, errors.New("remove original peer timeout")
-		default:
-			time.Sleep(500 * time.Millisecond)
-		}
-
-		found := false
-		peers := s.server.PeersInfo()
-		for _, p := range peers {
-			if p.ID == nodeId {
-				found = true
-			}
-		}
-		if !found {
-			break
-		}
-	}
-
-	if _, err := s.netRPCService.AddStorageContractPeer(hostNode, peerChan); err != nil {
-		return nil, err
-	}
-
-	timer := time.NewTimer(time.Minute * 1)
-	var conn *storage.Session
-	for {
-		conn = s.protocolManager.StorageContractSessions().Session(nodeId)
-		if conn != nil {
-			if !conn.IsBusy() {
-				conn.SetBusy()
-				return conn, nil
-			}
-		}
-
-		select {
-		case <-timer.C:
-			s.server.RemoveStorageHost(hostNode.IP().String())
-			select {
-			case <-peerChan:
-			default:
-			}
-			return nil, fmt.Errorf("setup connection timeout")
+			err = errors.New("set up connection time out")
+			return
 		default:
 			time.Sleep(500 * time.Millisecond)
 		}
 	}
 }
 
-// When worker is done, we disconnect with host
-func (s *Ethereum) Disconnect(session *storage.Session, hostEnodeURL string) error {
-	if s.netRPCService == nil {
-		return fmt.Errorf("network API is not ready")
-	}
-
-	hostNode, err := enode.ParseV4(hostEnodeURL)
-	if err != nil {
-		return fmt.Errorf("invalid enode: %v", err)
-	}
-
-	// remove the storage host when the client is trying to disconnect the host
-	s.server.RemoveStorageHost(hostNode.IP().String())
-
-	if _, err := s.netRPCService.RemoveStorageContractPeer(hostNode); err != nil {
-		return err
-	}
-
-	if session != nil {
-		if session.StopConnection() {
-			// wait for connection stop
-			<-session.ClosedChan()
-		} else {
-			return errors.New("session stop time out")
-		}
-
-		// retry add origin static node peer
-		s.server.AddPeer(hostNode)
-	}
-
-	return nil
+// SetStatic will convert the current connection into static connection
+func (s *Ethereum) SetStatic(node *enode.Node) {
+	s.server.SetStatic(node)
 }
 
 // GetStorageHostSetting will send message to the peer with the corresponded peer ID
-func (s *Ethereum) GetStorageHostSetting(hostEnodeURL string, config *storage.HostExtConfig) error {
-	session, err := s.SetupStorageConnection(hostEnodeURL)
-	defer func() {
-		s.Disconnect(session, hostEnodeURL)
-	}()
-
+func (s *Ethereum) GetStorageHostSetting(enodeID enode.ID, enodeURL string, config *storage.HostExtConfig) error {
+	// set up the connection to the storage host node
+	sp, err := s.SetupConnection(enodeURL)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get the storage host configuration: %s", err.Error())
 	}
 
-	if err := session.SetDeadLine(storage.HostSettingTime); err != nil {
+	// check if the client is currently requesting the host config
+	// once done, release the channel
+	if err := sp.TryRequestHostConfig(); err != nil {
 		return err
 	}
+	defer sp.RequestHostConfigDone()
 
-	if err := session.SendHostExtSettingsRequest(struct{}{}); err != nil {
-		return err
+	// send storage host config request information
+	if err := sp.RequestStorageHostConfig(); err != nil {
+		return fmt.Errorf("failed to request storage host configuration: %s", err)
 	}
 
-	msg, err := session.ReadMsg()
+	// wait until the result is given back
+	msg, err := sp.WaitConfigResp()
 	if err != nil {
-		log.Warn("GetStorageHostSetting readMSG", "err", err.Error())
-		return err
-	}
-
-	if msg.Code != storage.HostSettingResponseMsg {
-		return fmt.Errorf("invalid host settings response, msgCode: %v", msg.Code)
+		return fmt.Errorf("received error while waiting for retriving storage host config: %s", err.Error())
 	}
 
 	if err := msg.Decode(config); err != nil {
-		log.Error("failed to decode", "err", err.Error())
-		return err
+		return fmt.Errorf("error decoding the storage configuration: %s", err.Error())
 	}
 
+	log.Info("Successfully get the storage host settings")
+
+	// check the connection and update the connection
+	// type if necessary
+	s.CheckAndUpdateConnection(sp.PeerNode())
+
 	return nil
+}
+
+// CheckAndUpdateConnection will regularly check the connection between two nodes
+// local and remote. If there are no contracts between two nodes and the node
+// is not added by the user, then the connection will be deleted from the static
+// dialed list, and the connection type will be converted into dynamic connection
+func (s *Ethereum) CheckAndUpdateConnection(peerNode *enode.Node) {
+	if s.server.IsAddedByUser(peerNode.ID()) {
+		return
+	}
+
+	// as a storage client, check if the contract has been signed with the peer node (host)
+	// if so, return directly
+	if s.config.StorageClient {
+		if s.storageClient.IsContractSignedWithHost(peerNode) {
+			return
+		}
+	}
+
+	// as a storage host, check if the contract has been signed with the peer node (client)
+	// if so, return directly
+	if s.config.StorageHost {
+		if s.storageHost.IsContractSignedWithClient(peerNode) {
+			return
+		}
+	}
+
+	// if the node does not signed any contract with the peer node and the peer
+	// node is not added by the user directly, reset the connection from static
+	// dialed to dynamically dialed
+	_ = s.server.DeleteStatic(peerNode.String())
 }
 
 // SubscribeChainChangeEvent will report the changes happened to block chain, the changes will be

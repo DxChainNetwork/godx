@@ -47,7 +47,6 @@ func TestJSONCompat(t *testing.T) {
 
 // test concurrent loading / saving errors
 func TestLoadingSavingConcurrent(t *testing.T) {
-
 	var errHandle = make(chan error)
 
 	go func() {

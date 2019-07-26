@@ -7,17 +7,17 @@ package storagehost
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	tm "github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	sm "github.com/DxChainNetwork/godx/storage/storagehost/storagemanager"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
 // StorageHost provide functions for storageHost management
@@ -38,6 +38,7 @@ type StorageHost struct {
 	sm.StorageManager
 
 	lockedStorageResponsibility map[common.Hash]*TryMutex
+	clientNodeToContract        map[*enode.Node]common.Hash
 
 	// things for log and persistence
 	db         *ethdb.LDBDatabase
@@ -49,6 +50,52 @@ type StorageHost struct {
 	tm   tm.ThreadManager
 }
 
+// RetrieveContractClientNode will try to find the client node that the host signed
+// contract with. If the client information cannot be found, then nil will be returned.
+// Otherwise, the client node will be returned
+func (h *StorageHost) IsContractSignedWithClient(clientNode *enode.Node) bool {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	if _, exists := h.clientNodeToContract[clientNode]; exists {
+		return true
+	}
+	return false
+}
+
+// UpdateContractToClientNodeMappingAndConnection will update the contract that host signed
+// with the storage client. For any contract that are not contained in the storage
+// responsibility, it means host had not signed the contract with the client. The
+// connection will be removed from the static and the contract information will be
+// deleted from the record
+func (h *StorageHost) UpdateContractToClientNodeMappingAndConnection() {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	// loop through the clientNodeToContract mapping, found those
+	// are not included in the storage responsibility, and delete
+	// them from the clientNodeToContract mapping
+	for clientNode, contractID := range h.clientNodeToContract {
+		if _, exists := h.lockedStorageResponsibility[contractID]; !exists {
+			delete(h.clientNodeToContract, clientNode)
+			h.ethBackend.CheckAndUpdateConnection(clientNode)
+		}
+	}
+}
+
+// RetrieveExternalConfig is used to get the storage host's external
+// configuration
+func (h *StorageHost) RetrieveExternalConfig() storage.HostExtConfig {
+	return h.externalConfig()
+}
+
+// GetCurrentBlockHeight is used to retrieve the current
+// block height saved in the storage host
+func (h *StorageHost) GetCurrentBlockHeight() uint64 {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return h.blockHeight
+}
+
 // New Initialize the Host, including init the structure
 // load or use the default config, init db and ext.
 func New(persistDir string) (*StorageHost, error) {
@@ -57,6 +104,7 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
+		clientNodeToContract:        make(map[*enode.Node]common.Hash),
 	}
 
 	var err error
@@ -358,4 +406,71 @@ func (h *StorageHost) setUploadBandwidthPrice(val common.BigInt) error {
 
 	h.config.UploadBandwidthPrice = val
 	return h.syncConfig()
+}
+
+//return the externalConfig for host
+func (h *StorageHost) externalConfig() storage.HostExtConfig {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	// Get the total and remaining disk space
+	var totalStorageSpace uint64
+	var remainingStorageSpace uint64
+	hs := h.StorageManager.AvailableSpace()
+	totalStorageSpace = storage.SectorSize * hs.TotalSectors
+	remainingStorageSpace = storage.SectorSize * hs.FreeSectors
+
+	acceptingContracts := h.config.AcceptingContracts
+	MaxDeposit := h.config.MaxDeposit
+	paymentAddress := h.config.PaymentAddress
+
+	if paymentAddress == (common.Address{}) {
+		acceptingContracts = false
+		return storage.HostExtConfig{AcceptingContracts: false}
+	}
+
+	account := accounts.Account{Address: paymentAddress}
+	wallet, err := h.am.Find(account)
+	if err != nil {
+		h.log.Warn("Failed to find the wallet", "err", err)
+		acceptingContracts = false
+	}
+	//If the wallet is locked, you will not be able to enter the signing phase.
+	status, err := wallet.Status()
+	if status == "Locked" || err != nil {
+		h.log.Warn("Wallet is not unlocked", "err", err)
+		acceptingContracts = false
+	}
+
+	stateDB, err := h.ethBackend.GetBlockChain().State()
+	if err != nil {
+		h.log.Warn("Failed to find the stateDB", "err", err)
+	} else {
+		balance := stateDB.GetBalance(paymentAddress)
+		//If the maximum deposit amount exceeds the account balance, set it as the account balance
+		if balance.Cmp(MaxDeposit.BigIntPtr()) < 0 {
+			MaxDeposit = common.PtrBigInt(balance)
+		}
+	}
+
+	return storage.HostExtConfig{
+		AcceptingContracts:     acceptingContracts,
+		MaxDownloadBatchSize:   h.config.MaxDownloadBatchSize,
+		MaxDuration:            h.config.MaxDuration,
+		MaxReviseBatchSize:     h.config.MaxReviseBatchSize,
+		SectorSize:             storage.SectorSize,
+		WindowSize:             h.config.WindowSize,
+		PaymentAddress:         paymentAddress,
+		TotalStorage:           totalStorageSpace,
+		RemainingStorage:       remainingStorageSpace,
+		Deposit:                h.config.Deposit,
+		MaxDeposit:             MaxDeposit,
+		BaseRPCPrice:           h.config.MinBaseRPCPrice,
+		ContractPrice:          h.config.MinContractPrice,
+		DownloadBandwidthPrice: h.config.MinDownloadBandwidthPrice,
+		SectorAccessPrice:      h.config.MinSectorAccessPrice,
+		StoragePrice:           h.config.MinStoragePrice,
+		UploadBandwidthPrice:   h.config.MinUploadBandwidthPrice,
+		Version:                storage.ConfigVersion,
+	}
 }

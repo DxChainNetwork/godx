@@ -47,7 +47,6 @@ type ContractManager struct {
 	// and renewed to connect [old] -> new
 	renewedFrom      map[storage.ContractID]storage.ContractID
 	renewedTo        map[storage.ContractID]storage.ContractID
-	renewing         map[storage.ContractID]bool
 	failedRenewCount map[storage.ContractID]uint64
 
 	// used to acquire storage contract
@@ -76,7 +75,6 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 		renewedTo:        make(map[storage.ContractID]storage.ContractID),
 		failedRenewCount: make(map[storage.ContractID]uint64),
 		hostToContract:   make(map[enode.ID]storage.ContractID),
-		renewing:         make(map[storage.ContractID]bool),
 		quit:             make(chan struct{}),
 	}
 
@@ -179,15 +177,6 @@ func (cm *ContractManager) RetrievePeriodCost() storage.PeriodCost {
 	cm.lock.RLock()
 	defer cm.lock.RUnlock()
 	return cm.periodCost
-}
-
-// IsRenewing will return if the contract with the contract ID passed in is renewing
-func (cm *ContractManager) IsRenewing(contractID storage.ContractID) (renewing bool) {
-	cm.lock.RLock()
-	defer cm.lock.RUnlock()
-
-	_, renewing = cm.renewing[contractID]
-	return
 }
 
 // HostHealthMapByID return storage.HostHealthInfoTable for hosts specified by the output

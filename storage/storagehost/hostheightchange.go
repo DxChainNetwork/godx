@@ -45,6 +45,10 @@ func (h *StorageHost) hostBlockHeightChange(cce core.ChainChangeEvent) {
 		h.handleTaskItem(taskItems[i])
 	}
 
+	// update the contractToClientID
+	h.UpdateContractToClientNodeMappingAndConnection()
+
+	// sync the configuration
 	err := h.syncConfig()
 	if err != nil {
 		h.log.Error("could not save during ProcessConsensusChange", "err", err)

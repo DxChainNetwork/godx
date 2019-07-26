@@ -53,61 +53,61 @@ func (dch *downloadSegmentHeap) Pop() interface{} {
 }
 
 // downloadLoop utilizes the worker pool to make progress on any queued downloads.
-func (c *StorageClient) downloadLoop() {
-	err := c.tm.Add()
+func (client *StorageClient) downloadLoop() {
+	err := client.tm.Add()
 	if err != nil {
 		log.Error("storage client thread manager failed to add in downloadLoop", "error", err)
 		return
 	}
-	defer c.tm.Done()
+	defer client.tm.Done()
 
 	// infinite loop to process downloads, return if get stopping signal.
 LOOP:
 	for {
 		// wait until the client is online.
-		if !c.blockUntilOnline() {
+		if !client.blockUntilOnline() {
 			return
 		}
 
-		c.activateWorkerPool()
+		client.activateWorkerPool()
 		workerActivateTime := time.Now()
 
 		// pull downloads out of the heap
 		for {
 
 			// if client is offline, or timeout for activating worker pool, will reset to loop
-			if !c.Online() || time.Now().After(workerActivateTime.Add(WorkerActivateTimeout)) {
+			if !client.Online() || time.Now().After(workerActivateTime.Add(WorkerActivateTimeout)) {
 				continue LOOP
 			}
 
 			// get the next segment.
-			nextSegment := c.nextDownloadSegment()
+			nextSegment := client.nextDownloadSegment()
 			if nextSegment == nil {
 				break
 			}
 
 			// get the required memory to download this segment.
-			if !c.acquireMemoryForDownloadSegment(nextSegment) {
+			if !client.acquireMemoryForDownloadSegment(nextSegment) {
 				return
 			}
 
 			// distribute the segment to workers.
-			c.distributeDownloadSegmentToWorkers(nextSegment)
+			client.distributeDownloadSegmentToWorkers(nextSegment)
 		}
 
 		// wait for more work.
 		select {
-		case <-c.tm.StopChan():
+		case <-client.tm.StopChan():
 			return
-		case <-c.newDownloads:
+		case <-client.newDownloads:
 		}
 	}
 }
 
-func (c *StorageClient) blockUntilOnline() bool {
-	for !c.Online() {
+func (client *StorageClient) blockUntilOnline() bool {
+	for !client.Online() {
 		select {
-		case <-c.tm.StopChan():
+		case <-client.tm.StopChan():
 			return false
 		case <-time.After(OnlineCheckFrequency):
 		}
@@ -116,15 +116,15 @@ func (c *StorageClient) blockUntilOnline() bool {
 }
 
 // fetch the next segment from the download heap
-func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
-	c.downloadHeapMu.Lock()
-	defer c.downloadHeapMu.Unlock()
+func (client *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
+	client.downloadHeapMu.Lock()
+	defer client.downloadHeapMu.Unlock()
 
 	for {
-		if c.downloadHeap.Len() <= 0 {
+		if client.downloadHeap.Len() <= 0 {
 			return nil
 		}
-		nextSegment := heap.Pop(c.downloadHeap).(*unfinishedDownloadSegment)
+		nextSegment := heap.Pop(client.downloadHeap).(*unfinishedDownloadSegment)
 		if !nextSegment.download.isComplete() {
 			return nextSegment
 		}
@@ -132,26 +132,26 @@ func (c *StorageClient) nextDownloadSegment() *unfinishedDownloadSegment {
 }
 
 // Request memory to download segment, will block until memory is available
-func (c *StorageClient) acquireMemoryForDownloadSegment(uds *unfinishedDownloadSegment) bool {
+func (client *StorageClient) acquireMemoryForDownloadSegment(uds *unfinishedDownloadSegment) bool {
 
 	// the amount of memory required is equal minimum number of sectors plus the overdrive amount.
 	memoryRequired := uint64(uds.overdrive+uds.erasureCode.MinSectors()) * uds.sectorSize
 	uds.memoryAllocated = memoryRequired
-	return c.memoryManager.Request(memoryRequired, true)
+	return client.memoryManager.Request(memoryRequired, true)
 }
 
 // Pass a segment out to all of the workers.
-func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownloadSegment) {
+func (client *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownloadSegment) {
 
 	// distribute the segment to workers, marking the number of workers that have received the work.
-	c.lock.Lock()
+	client.lock.Lock()
 	uds.mu.Lock()
-	uds.workersRemaining = uint32(len(c.workerPool))
+	uds.workersRemaining = uint32(len(client.workerPool))
 	uds.mu.Unlock()
-	for _, worker := range c.workerPool {
+	for _, worker := range client.workerPool {
 		worker.queueDownloadSegment(uds)
 	}
-	c.lock.Unlock()
+	client.lock.Unlock()
 
 	// if there are no workers, there will be no workers to attempt to clean up
 	// the segment, so we must make sure that cleanUp is called at least once on the segment.
@@ -159,16 +159,16 @@ func (c *StorageClient) distributeDownloadSegmentToWorkers(uds *unfinishedDownlo
 }
 
 // Add a segment to the download heap
-func (c *StorageClient) addSegmentToDownloadHeap(uds *unfinishedDownloadSegment) {
+func (client *StorageClient) addSegmentToDownloadHeap(uds *unfinishedDownloadSegment) {
 
 	// the sole purpose of the heap is to block workers from receiving a segment until memory has been allocated
 	if !uds.needsMemory {
-		c.distributeDownloadSegmentToWorkers(uds)
+		client.distributeDownloadSegmentToWorkers(uds)
 		return
 	}
 
 	// put the segment into the segment heap.
-	c.downloadHeapMu.Lock()
-	c.downloadHeap.Push(uds)
-	c.downloadHeapMu.Unlock()
+	client.downloadHeapMu.Lock()
+	client.downloadHeap.Push(uds)
+	client.downloadHeapMu.Unlock()
 }

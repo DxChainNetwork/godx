@@ -107,6 +107,10 @@ func (so *StorageResponsibility) payouts() ([]types.DxcoinCharge, []types.Dxcoin
 	return validProofOutputs, missedProofOutputs
 }
 
+func (so *StorageResponsibility) ProofDeadline() uint64 {
+	return so.proofDeadline()
+}
+
 //The block number that the proof must submit
 func (so *StorageResponsibility) proofDeadline() uint64 {
 	//If there is revision, return NewWindowEnd

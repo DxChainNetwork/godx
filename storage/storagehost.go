@@ -10,6 +10,7 @@ import (
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rpc"
 )
 
@@ -21,9 +22,11 @@ type HostBackend interface {
 	GetBlockByNumber(number uint64) (*types.Block, error)
 	GetBlockChain() *core.BlockChain
 	AccountManager() *accounts.Manager
+	SetStatic(node *enode.Node)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 }
 
-// Account manager is the interface for account.Manager to be used in storage host module
+// AccountManager is the interface for account.Manager to be used in storage host module
 type AccountManager interface {
 	Find(accounts.Account) (accounts.Wallet, error)
 	Wallets() []accounts.Wallet
