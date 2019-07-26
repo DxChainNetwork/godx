@@ -61,16 +61,6 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	return
 }
 
-// MustParseCurrency parse the string to currency. If an error happens, panic.
-// WARNING: Do not use this function in production code. Use ParseCurrency instead.
-func MustParseCurrency(str string) common.BigInt {
-	parsed, err := ParseCurrency(str)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
 // FormatCurrency is used to format the currency for displaying purpose
 func FormatCurrency(fund common.BigInt) (formatted string) {
 	switch {
