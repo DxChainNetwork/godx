@@ -142,7 +142,7 @@ type (
 
 // ContractParams is the drafted contract sent by the storage client.
 type ContractParams struct {
-	Allowance            RentPayment
+	RentPayment          RentPayment
 	HostEnodeURL         string
 	Funding              common.BigInt
 	StartHeight          uint64

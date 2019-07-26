@@ -113,7 +113,7 @@ func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
 		return
 	}
 
-	// set allowance
+	// set rent payment
 	if err = cm.hostManager.SetRentPayment(cm.rentPayment); err != nil {
 		return
 	}

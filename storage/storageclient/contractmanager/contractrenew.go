@@ -10,16 +10,15 @@ import (
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -312,7 +311,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 
 	// form the contract parameters
 	params := storage.ContractParams{
-		Allowance:            rentPayment,
+		RentPayment:          rentPayment,
 		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
@@ -383,7 +382,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	lastRev := contract.LatestContractRevision
 
 	// Extract vars from params, for convenience
-	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
+	rentPayment, funding, startHeight, endHeight, host := params.RentPayment, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral common.BigInt
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
@@ -394,7 +393,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
+	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
 	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
