@@ -13,7 +13,67 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var ()
+var (
+	acceptingContractsFlag = cli.StringFlag{
+		Name:  "acceptingcontracts",
+		Usage: "BOOL - whether the host accepts new contracts",
+	}
+
+	maxDepositFlag = cli.StringFlag{
+		Name:  "maxdeposit",
+		Usage: "CURRENCY - the max deposit for for a single contract",
+	}
+
+	budgetPriceFlag = cli.StringFlag{
+		Name:  "depositbudget",
+		Usage: "CURRENCY - the maximum deposit for all contracts",
+	}
+
+	storagePriceFlag = cli.StringFlag{
+		Name:  "storageprice",
+		Usage: "CURRENCY - the storage price per block per byte",
+	}
+
+	uploadPriceFlag = cli.StringFlag{
+		Name:  "uploadprice",
+		Usage: "CURRENCY - upload bandwidth price per byte",
+	}
+
+	downloadPriceFlag = cli.StringFlag{
+		Name:  "downloadprice",
+		Usage: "CURRENCY - download bandwidth price per byte",
+	}
+
+	contractPriceFlag = cli.StringFlag{
+		Name:  "contractprice",
+		Usage: "CURRENCY - the contract price when creating the contract",
+	}
+
+	depositPriceFlag = cli.StringFlag{
+		Name:  "deposit",
+		Usage: "CURRENCY - deposit price per block per byte",
+	}
+
+	storageDurationFlag = cli.StringFlag{
+		Name:  "maxduration",
+		Usage: "DURATION - the max duration for a storage contract",
+	}
+
+	hostPaymentAddressFlag = cli.StringFlag{
+		Name:  "address",
+		Usage: "specifies the payment address used for the storage service",
+	}
+
+	folderSizeFlag = cli.StringFlag{
+		Name:  "size",
+		Usage: "specifies the size of the folder",
+	}
+
+	folderPathFlag = cli.StringFlag{
+		Name:  "folderpath",
+		Usage: "specifies the folder path",
+	}
+)
 
 var storageHostCommand = cli.Command{
 	Name:      "shost",
@@ -40,8 +100,19 @@ and etc.`,
 			Name:      "setconfig",
 			Usage:     "Set the storage host configurations",
 			ArgsUsage: "",
-			Flags:     storageHostSetterFlags,
-			Action:    utils.MigrateFlags(setHostConfig),
+			Flags: []cli.Flag{
+				acceptingContractsFlag,
+				storageDurationFlag,
+				depositPriceFlag,
+				contractPriceFlag,
+				downloadPriceFlag,
+				uploadPriceFlag,
+				storagePriceFlag,
+				budgetPriceFlag,
+				maxDepositFlag,
+			},
+
+			Action: utils.MigrateFlags(setHostConfig),
 			Description: `
 			gdx shost setconfig [--acceptingcontracts arg] [--maxdeposit arg] [--depositbudget arg] [--storageprice arg] [--uploadprice arg] [--downloadprice arg] [--contractprice arg] [--deposit arg] [--maxduration arg]
 
@@ -61,7 +132,7 @@ The values are associated with units.
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setHostPaymentAddress),
 			Flags: []cli.Flag{
-				utils.PaymentAddressFlag,
+				hostPaymentAddressFlag,
 			},
 			Description: `
 			gdx shost setpaymentaddr [--address arg]
@@ -114,9 +185,12 @@ If the host node has higher evaluation, client will automatically create contrac
 			Usage:     "Allocate disk space for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(addFolder),
-			Flags:     storageHostFlags,
+			Flags: []cli.Flag{
+				folderPathFlag,
+				folderSizeFlag,
+			},
 			Description: `
-			gdx shost addfolder --folderpath [argument] --size [argument]
+			gdx shost addfolder [--folderpath arg] [--size arg]
 
 will allocate disk space for saving data uploaded by storage client. Physical folder will be created
 under the file path specified using --folderpath. The size must be specified using --size as well.
@@ -129,8 +203,11 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 			Name:      "resizefolder",
 			Usage:     "Resize the disk space allocated for saving data uploaded by the storage client",
 			ArgsUsage: "",
-			Action:    utils.MigrateFlags(resizeFolder),
-			Flags:     storageHostFlags,
+			Action: []cli.Flag{
+				folderPathFlag,
+				folderSizeFlag,
+			},
+			Flags: storageHostFlags,
 			Description: `
 			gdx shost resize [--folderpath arg] [--size arg]
 
@@ -144,7 +221,9 @@ flag --folderpath and --size`,
 			Usage:     "Free up the disk space used for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(deleteFolder),
-			Flags:     storageHostFlags,
+			Flags: []cli.Flag{
+				folderPathFlag,
+			},
 			Description: `
 			gdx shost deletefolder [--folderpath arg]
 
@@ -283,10 +362,10 @@ func setHostPaymentAddress(ctx *cli.Context) error {
 	}
 
 	var address string
-	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
+	if !ctx.IsSet(paymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used")
 	} else {
-		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
+		address = ctx.String(paymentAddressFlag.Name)
 	}
 
 	var resp string
@@ -388,16 +467,16 @@ func addFolder(ctx *cli.Context) error {
 	}
 
 	var path, size string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder creation location")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
+	if !ctx.IsSet(folderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder creation size")
 	} else {
-		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
+		size = ctx.String(folderSizeFlag.Name)
 	}
 
 	var resp string
@@ -416,16 +495,16 @@ func resizeFolder(ctx *cli.Context) error {
 	}
 
 	var path, size string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder that is going to be resize")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
+	if !ctx.IsSet(folderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder size")
 	} else {
-		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
+		size = ctx.String(folderSizeFlag.Name)
 	}
 
 	var resp string
@@ -444,10 +523,10 @@ func deleteFolder(ctx *cli.Context) error {
 	}
 
 	var path string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder to be deleted")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
 	var resp string

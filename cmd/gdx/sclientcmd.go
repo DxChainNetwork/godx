@@ -21,37 +21,37 @@ import (
 var (
 	storageHostIDFlag = cli.StringFlag{
 		Name:  "hostid",
-		Usage: "used to query the storage host information based on the node id",
+		Usage: "query the storage host information based on the node id",
 	}
 
 	contractIDFlag = cli.StringFlag{
 		Name:  "contractid",
-		Usage: "use to query the detailed contract information based on the contract ID",
+		Usage: "query the detailed contract information based on the contract ID",
 	}
 
 	paymentAddressFlag = cli.StringFlag{
 		Name:  "address",
-		Usage: "use to set up the payment address used for the storage service",
+		Usage: "specifies the payment address used for the storage service",
 	}
 
 	contractPeriodFlag = cli.StringFlag{
 		Name:  "period",
-		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
+		Usage: "sets the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
 	}
 
 	contractHostFlag = cli.StringFlag{
 		Name:  "host",
-		Usage: "the host flag is used to define how many hosts that storage client wants to sign contract with, the value must be greater than 2",
+		Usage: "defines how many hosts that storage client wants to sign contract with, the value must be greater than 2",
 	}
 
 	contractRenewFlag = cli.StringFlag{
 		Name:  "renew",
-		Usage: "the renew flag is used to define the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
+		Usage: "defines the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
 	}
 
 	contratFundFlag = cli.StringFlag{
 		Name:  "fund",
-		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
+		Usage: "defines the max money can be spent for the storage. It can be specified in terms of DXC",
 	}
 
 	fileSourceFlag = cli.StringFlag{
