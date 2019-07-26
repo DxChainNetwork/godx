@@ -110,7 +110,6 @@ func NewApp(gitCommit, usage string) *cli.App {
 //
 // The flags are defined here so their names and help texts
 // are the same for all commands.
-
 var (
 	// AcceptingContractsFlag is the flag for accepting contracts
 	AcceptingContractsFlag = cli.StringFlag{
@@ -222,31 +221,6 @@ var (
 		Name:  "fund",
 		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
 	}
-
-	//ExpectedStorageFlag = cli.StringFlag{
-	//	Name:  "es",
-	//	Usage: "the expected storage flag is used to define the expected storage",
-	//}
-	//
-	//ExpectedUploadFlag = cli.StringFlag{
-	//	Name:  "eu",
-	//	Usage: "the expected upload flag is used to define the expected amount of data that is going to be uploaded",
-	//}
-	//
-	//ExpectedDownloadFlag = cli.StringFlag{
-	//	Name:  "ed",
-	//	Usage: "the expected download flag is used to define the expected amount of data that is going to be downloaded",
-	//}
-	//
-	//ExpectedRedundancyFlag = cli.StringFlag{
-	//	Name:  "er",
-	//	Usage: "the expected redundancy flag defines the expected data redundancies. The higher the value is, the safer the data are",
-	//}
-	//
-	//IPViolationFlag = cli.BoolFlag{
-	//	Name:  "ipcheck",
-	//	Usage: "the ip violation flag defines if the ip violation check will be enabled or not. By enabling the ip violation check, storage hosts under the same network address cannot be selected together",
-	//}
 
 	StorageHostIDFlag = cli.StringFlag{
 		Name:  "hostid",

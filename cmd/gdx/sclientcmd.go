@@ -18,6 +18,68 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var (
+	storageHostIDFlag = cli.StringFlag{
+		Name:  "hostid",
+		Usage: "used to query the storage host information based on the node id",
+	}
+
+	contractIDFlag = cli.StringFlag{
+		Name:  "contractid",
+		Usage: "use to query the detailed contract information based on the contract ID",
+	}
+
+	paymentAddressFlag = cli.StringFlag{
+		Name:  "address",
+		Usage: "use to set up the payment address used for the storage service",
+	}
+
+	contractPeriodFlag = cli.StringFlag{
+		Name:  "period",
+		Usage: "the period flag is used to set the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
+	}
+
+	contractHostFlag = cli.StringFlag{
+		Name:  "host",
+		Usage: "the host flag is used to define how many hosts that storage client wants to sign contract with, the value must be greater than 2",
+	}
+
+	contractRenewFlag = cli.StringFlag{
+		Name:  "renew",
+		Usage: "the renew flag is used to define the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
+	}
+
+	contratFundFlag = cli.StringFlag{
+		Name:  "fund",
+		Usage: "the fund flag defined the max money can be spent for the storage. It can be specified in terms of DXC",
+	}
+
+	fileSourceFlag = cli.StringFlag{
+		Name:  "src",
+		Usage: "specifies the source of the file that is going to be uploaded/downloaded from",
+	}
+
+	fileDestinationFlag = cli.StringFlag{
+		Name:  "dst",
+		Usage: "specifies the destination of the file that is going to ge uploaded/downloaded to",
+	}
+
+	filePathFlag = cli.StringFlag{
+		Name:  "filepath",
+		Usage: "specifies the file path",
+	}
+
+	prevFilePathFlag = cli.StringFlag{
+		Name:  "prevpath",
+		Usage: "specifies the old file path, used for file renaming",
+	}
+
+	newFilePathFlag = cli.StringFlag{
+		Name:  "newpath",
+		Usage: "specifies the new file path, used for file renmaing",
+	}
+)
+
 var storageClientCommand = cli.Command{
 	Name:      "sclient",
 	Usage:     "Storage client related operations",
@@ -57,7 +119,9 @@ will automatically evaluate storage hosts from this list to sign contract with t
 			Usage:     "Retrieve detailed host information based on the provided hostID",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getHostInfo),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				storageHostIDFlag,
+			},
 			Description: `
 			gdx sclient host --hostid [hostID]
 
@@ -107,7 +171,9 @@ each file, including the file's uploading status and health status'`,
 			Usage:     "Retrieve detailed contract information of a contract ",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getContract),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				contractIDFlag,
+			},
 			Description: `
 			gdx sclient contract --contractid [contractID]
 
@@ -131,7 +197,9 @@ the payment address for the storage service will always be the first account add
 			Usage:     "Register the account address to be used for the storage services",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setPaymentAddress),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				paymentAddressFlag,
+			},
 			Description: `
 			gdx sclient setpaymentaddr --address [paymentAddress]
 		
@@ -145,7 +213,12 @@ flag must be used along with this flag to specify the account address`,
 			Usage:     "Configure the client settings used for contract creation, file upload, download, and etc.",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setClientConfig),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				contractPeriodFlag,
+				contractHostFlag,
+				contractRenewFlag,
+				contratFundFlag,
+			},
 			Description: `
 			gdx sclient setconfig
 		
@@ -168,7 +241,10 @@ Note: without using any of those flags, default settings will be used`,
 			Usage:     "Upload the file from the local machine",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileUpload),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				fileSourceFlag,
+				fileDestinationFlag,
+			},
 			Description: `
 			gdx sclient upload --src [sourcePath] --dst [destinationPath]
 		
@@ -182,7 +258,10 @@ that the file is going to be uploaded to. Note: the src must be absolute path: /
 			Usage:     "Download file to the local machine",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileDownload),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				fileSourceFlag,
+				fileDestinationFlag,
+			},
 			Description: `
 			gdx sclient download --src [sourcePath] --dst [destinationPath]
 
@@ -196,7 +275,9 @@ that the file is going to be downloaded from. Note, the download destination mus
 			Usage:     "Retrieve detailed information of an uploaded/uploading file",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getFile),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				filePathFlag,
+			},
 			Description: `
 			gdx sclient file --filepath [filePath]
 
@@ -210,7 +291,10 @@ used for file uploading`,
 			Usage:     "Rename the file uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileRenaming),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				prevFilePathFlag,
+				newFilePathFlag,
+			},
 			Description: `
 			gdx sclient rename --prevpath [oldFilePath] --newpath [newFilePath]
 
@@ -223,7 +307,9 @@ with this command`,
 			Usage:     "Rename the file uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileDelete),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				filePathFlag,
+			},
 			Description: `
 			gdx sclient delete --filepath [filePath]
 
@@ -313,10 +399,10 @@ func getHostInfo(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	if !ctx.GlobalIsSet(utils.StorageHostIDFlag.Name) {
+	if !ctx.IsSet(utils.StorageHostIDFlag.Name) {
 		utils.Fatalf("the --hostid flag must be used to specify which storage host information want to be retrieved")
 	} else {
-		id = ctx.GlobalString(utils.StorageHostIDFlag.Name)
+		id = ctx.String(utils.StorageHostIDFlag.Name)
 	}
 
 	var info storage.HostInfo
@@ -446,10 +532,10 @@ func getContract(ctx *cli.Context) error {
 	}
 
 	var id string
-	if !ctx.GlobalIsSet(utils.ContractIDFlag.Name) {
+	if !ctx.IsSet(utils.ContractIDFlag.Name) {
 		utils.Fatalf("the --contractid flag must be used to specify which contract information want to be retrieved")
 	} else {
-		id = ctx.GlobalString(utils.ContractIDFlag.Name)
+		id = ctx.String(utils.ContractIDFlag.Name)
 	}
 
 	var contract storageclient.ContractMetaDataAPIDisplay
@@ -522,10 +608,10 @@ func setPaymentAddress(ctx *cli.Context) error {
 	}
 
 	var address string
-	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
+	if !ctx.IsSet(utils.PaymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used for storage service")
 	} else {
-		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
+		address = ctx.String(utils.PaymentAddressFlag.Name)
 	}
 
 	var result bool
@@ -550,20 +636,20 @@ func setClientConfig(ctx *cli.Context) error {
 
 	var settings = make(map[string]string)
 
-	if ctx.GlobalIsSet(utils.PeriodFlag.Name) {
-		settings["period"] = ctx.GlobalString(utils.PeriodFlag.Name)
+	if ctx.IsSet(utils.PeriodFlag.Name) {
+		settings["period"] = ctx.String(utils.PeriodFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.HostsFlag.Name) {
-		settings["hosts"] = ctx.GlobalString(utils.HostsFlag.Name)
+	if ctx.IsSet(utils.HostsFlag.Name) {
+		settings["hosts"] = ctx.String(utils.HostsFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.FundFlag.Name) {
-		settings["fund"] = ctx.GlobalString(utils.FundFlag.Name)
+	if ctx.IsSet(utils.FundFlag.Name) {
+		settings["fund"] = ctx.String(utils.FundFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.RenewFlag.Name) {
-		settings["renew"] = ctx.GlobalString(utils.RenewFlag.Name)
+	if ctx.IsSet(utils.RenewFlag.Name) {
+		settings["renew"] = ctx.String(utils.RenewFlag.Name)
 	}
 
 	var resp string
@@ -582,16 +668,16 @@ func fileUpload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.GlobalIsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(utils.FileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.GlobalString(utils.FileSourceFlag.Name)
+		source = ctx.String(utils.FileSourceFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(utils.FileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.GlobalString(utils.FileDestinationFlag.Name)
+		destination = ctx.String(utils.FileDestinationFlag.Name)
 	}
 
 	var resp string
@@ -612,16 +698,16 @@ func fileDownload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.GlobalIsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(utils.FileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.GlobalString(utils.FileSourceFlag.Name)
+		source = ctx.String(utils.FileSourceFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(utils.FileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.GlobalString(utils.FileDestinationFlag.Name)
+		destination = ctx.String(utils.FileDestinationFlag.Name)
 	}
 
 	var result string
@@ -641,10 +727,10 @@ func getFile(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.GlobalIsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(utils.FilePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the detailed file information")
 	} else {
-		filePath = ctx.GlobalString(utils.FilePathFlag.Name)
+		filePath = ctx.String(utils.FilePathFlag.Name)
 	}
 
 	var fileInfo storage.FileInfo
@@ -676,16 +762,16 @@ func fileRenaming(ctx *cli.Context) error {
 	}
 
 	var prevPath, newPath string
-	if !ctx.GlobalIsSet(utils.PrevFilePathFlag.Name) {
+	if !ctx.IsSet(utils.PrevFilePathFlag.Name) {
 		utils.Fatalf("must specify the previous file path in order to change the name")
 	} else {
-		prevPath = ctx.GlobalString(utils.PrevFilePathFlag.Name)
+		prevPath = ctx.String(utils.PrevFilePathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.NewFilePathFlag.Name) {
+	if !ctx.IsSet(utils.NewFilePathFlag.Name) {
 		utils.Fatalf("must specify the new file path")
 	} else {
-		newPath = ctx.GlobalString(utils.NewFilePathFlag.Name)
+		newPath = ctx.String(utils.NewFilePathFlag.Name)
 	}
 
 	var resp string
@@ -704,10 +790,10 @@ func fileDelete(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.GlobalIsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(utils.FilePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the delete the file")
 	} else {
-		filePath = ctx.GlobalString(utils.FilePathFlag.Name)
+		filePath = ctx.String(utils.FilePathFlag.Name)
 	}
 
 	var resp string
