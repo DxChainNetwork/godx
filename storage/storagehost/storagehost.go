@@ -38,7 +38,7 @@ type StorageHost struct {
 	sm.StorageManager
 
 	lockedStorageResponsibility map[common.Hash]*TryMutex
-	clientNodeToContract        map[*enode.Node]common.Hash
+	clientToContract            map[string]common.Hash
 
 	// things for log and persistence
 	db         *ethdb.LDBDatabase
@@ -56,7 +56,7 @@ type StorageHost struct {
 func (h *StorageHost) IsContractSignedWithClient(clientNode *enode.Node) bool {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
-	if _, exists := h.clientNodeToContract[clientNode]; exists {
+	if _, exists := h.clientToContract[clientNode.String()]; exists {
 		return true
 	}
 	return false
@@ -71,12 +71,17 @@ func (h *StorageHost) UpdateContractToClientNodeMappingAndConnection() {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	// loop through the clientNodeToContract mapping, found those
+	// loop through the clientToContract mapping, found those
 	// are not included in the storage responsibility, and delete
-	// them from the clientNodeToContract mapping
-	for clientNode, contractID := range h.clientNodeToContract {
+	// them from the clientToContract mapping
+	for clientURL, contractID := range h.clientToContract {
 		if _, exists := h.lockedStorageResponsibility[contractID]; !exists {
-			delete(h.clientNodeToContract, clientNode)
+			delete(h.clientToContract, clientURL)
+			// parse the client URL to node
+			clientNode, err := enode.ParseV4(clientURL)
+			if err != nil {
+				continue
+			}
 			h.ethBackend.CheckAndUpdateConnection(clientNode)
 		}
 	}
@@ -104,7 +109,7 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		clientNodeToContract:        make(map[*enode.Node]common.Hash),
+		clientToContract:            make(map[string]common.Hash),
 	}
 
 	var err error
