@@ -64,14 +64,14 @@ type worker struct {
 
 // ActivateWorkerPool will grab the set of contracts from the contract manager and
 // update the worker pool to match.
-func (sc *StorageClient) activateWorkerPool() {
+func (client *StorageClient) activateWorkerPool() {
 	// get all contracts in client
-	contractMap := sc.contractManager.GetStorageContractSet().Contracts()
+	contractMap := client.contractManager.GetStorageContractSet().Contracts()
 
 	// new a worker for a contract that haven't a worker
 	for id, contract := range contractMap {
-		sc.lock.Lock()
-		_, exists := sc.workerPool[id]
+		client.lock.Lock()
+		_, exists := client.workerPool[id]
 		if !exists {
 			worker := &worker{
 				contract:     contract.Metadata(),
@@ -79,36 +79,36 @@ func (sc *StorageClient) activateWorkerPool() {
 				downloadChan: make(chan struct{}, 1),
 				uploadChan:   make(chan struct{}, 1),
 				killChan:     make(chan struct{}),
-				client:       sc,
+				client:       client,
 			}
-			sc.workerPool[id] = worker
+			client.workerPool[id] = worker
 
 			// start worker goroutine
-			if err := sc.tm.Add(); err != nil {
+			if err := client.tm.Add(); err != nil {
 				log.Error("storage client failed to add in worker progress", "error", err)
-				sc.lock.Unlock()
+				client.lock.Unlock()
 				break
 			}
 			go func() {
-				defer sc.tm.Done()
+				defer client.tm.Done()
 				worker.workLoop()
 			}()
 
 		}
-		sc.lock.Unlock()
+		client.lock.Unlock()
 	}
 
 	// Remove a worker for any worker that is not in the set of new contracts.
-	sc.lock.Lock()
-	for id, worker := range sc.workerPool {
+	client.lock.Lock()
+	for id, worker := range client.workerPool {
 		_, exists := contractMap[storage.ContractID(id)]
 		if !exists {
-			delete(sc.sessionSet, id)
-			delete(sc.workerPool, id)
+			delete(client.sessionSet, id)
+			delete(client.workerPool, id)
 			close(worker.killChan)
 		}
 	}
-	sc.lock.Unlock()
+	client.lock.Unlock()
 }
 
 // WorkLoop repeatedly issues task to a worker, will stop when receive stop or kill signal

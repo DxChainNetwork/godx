@@ -32,11 +32,11 @@ type backupHeader struct {
 }
 
 // CreateBackup will create backup of dxfiles
-func (sc *StorageClient) CreateBackup(dst string, secret []byte) error {
-	if err := sc.tm.Add(); err != nil {
+func (client *StorageClient) CreateBackup(dst string, secret []byte) error {
+	if err := client.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	// create gzip file
 	file, err := os.Create(dst)
@@ -84,7 +84,7 @@ func (sc *StorageClient) CreateBackup(dst string, secret []byte) error {
 	archive = io.MultiWriter(archive, h)
 	gzw := gzip.NewWriter(archive)
 	tw := tar.NewWriter(gzw)
-	if err := sc.managedTarDxFiles(tw); err != nil {
+	if err := client.managedTarDxFiles(tw); err != nil {
 		// TODO: ErrCompose Method
 		//twErr := tw.Close()
 		//gzwErr := gzw.Close()
@@ -103,11 +103,11 @@ func (sc *StorageClient) CreateBackup(dst string, secret []byte) error {
 
 // LoadBackup will load the backup created previously, and restore them back to the original
 // files and directory
-func (sc *StorageClient) LoadBackup(src string, secret []byte) error {
-	if err := sc.tm.Add(); err != nil {
+func (client *StorageClient) LoadBackup(src string, secret []byte) error {
+	if err := client.tm.Add(); err != nil {
 		return err
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	// open the file
 	file, err := os.Open(src)
@@ -183,12 +183,12 @@ func (sc *StorageClient) LoadBackup(src string, secret []byte) error {
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
-	return untarDir(tr, sc.staticFilesDir)
+	return untarDir(tr, client.staticFilesDir)
 
 }
 
-func (sc *StorageClient) managedTarDxFiles(tw *tar.Writer) error {
-	return filepath.Walk(sc.staticFilesDir, func(path string, info os.FileInfo, err error) error {
+func (client *StorageClient) managedTarDxFiles(tw *tar.Writer) error {
+	return filepath.Walk(client.staticFilesDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -199,7 +199,7 @@ func (sc *StorageClient) managedTarDxFiles(tw *tar.Writer) error {
 		if err != nil {
 			return err
 		}
-		realpath := strings.TrimPrefix(path, sc.staticFilesDir)
+		realpath := strings.TrimPrefix(path, client.staticFilesDir)
 		header.Name = realpath
 		if err := tw.WriteHeader(header); err != nil {
 			return err
