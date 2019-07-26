@@ -94,8 +94,25 @@ func (h *HostPrivateAPI) GetHostConfig() storage.HostIntConfigForDisplay {
 }
 
 // GetFinancialMetrics get the financial metrics of the host
-func (h *HostPrivateAPI) GetFinancialMetrics() HostFinancialMetrics {
-	return h.storageHost.getFinancialMetrics()
+func (h *HostPrivateAPI) GetFinancialMetrics() HostFinancialMetricsForDisplay {
+	fm := h.storageHost.getFinancialMetrics()
+	display := HostFinancialMetricsForDisplay{
+		ContractCount:                     fm.ContractCount,
+		ContractCompensation:              unit.FormatCurrency(fm.ContractCompensation),
+		PotentialContractCompensation:     unit.FormatCurrency(fm.PotentialContractCompensation),
+		LockedStorageDeposit:              unit.FormatCurrency(fm.LockedStorageDeposit),
+		LostRevenue:                       unit.FormatCurrency(fm.LostRevenue),
+		LostStorageDeposit:                unit.FormatCurrency(fm.LostStorageDeposit),
+		PotentialStorageRevenue:           unit.FormatCurrency(fm.PotentialStorageRevenue),
+		RiskedStorageDeposit:              unit.FormatCurrency(fm.RiskedStorageDeposit),
+		StorageRevenue:                    unit.FormatCurrency(fm.StorageRevenue),
+		TransactionFeeExpenses:            unit.FormatCurrency(fm.TransactionFeeExpenses),
+		DownloadBandwidthRevenue:          unit.FormatCurrency(fm.DownloadBandwidthRevenue),
+		PotentialDownloadBandwidthRevenue: unit.FormatCurrency(fm.PotentialDownloadBandwidthRevenue),
+		PotentialUploadBandwidthRevenue:   unit.FormatCurrency(fm.PotentialUploadBandwidthRevenue),
+		UploadBandwidthRevenue:            unit.FormatCurrency(fm.UploadBandwidthRevenue),
+	}
+	return display
 }
 
 //GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.
