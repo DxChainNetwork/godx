@@ -917,11 +917,15 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	destinationType = "file"
 
 	// create the download object.
+	snap, err := entry.Snapshot()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create snapshot: %v", err)
+	}
 	d, err := client.newDownload(downloadParams{
 		destination:       dw,
 		destinationType:   destinationType,
 		destinationString: p.WriteToLocalPath,
-		file:              entry.DxFile.Snapshot(),
+		file:              snap,
 		latencyTarget:     25e3 * time.Millisecond,
 
 		// always download the whole file

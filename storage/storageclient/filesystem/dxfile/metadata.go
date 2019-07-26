@@ -5,6 +5,7 @@
 package dxfile
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -219,38 +220,38 @@ func (df *DxFile) SegmentSize() uint64 {
 }
 
 // CipherKey return the cipher key
-func (df *DxFile) CipherKey() crypto.CipherKey {
+func (df *DxFile) CipherKey() (crypto.CipherKey, error) {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
 	if df.cipherKey != nil {
-		return df.cipherKey
+		return df.cipherKey, nil
 	}
 	key, err := crypto.NewCipherKey(df.metadata.CipherKeyCode, df.metadata.CipherKey)
 	if err != nil {
 		// this should never happen
 		log.Error("New Cipher Key return an error: %v", err)
-		return key
+		return nil, fmt.Errorf("new Cipher Key return an error: %v", err)
 	}
-	return key
+	return key, nil
 }
 
 // ErasureCode return the erasure code
-func (df *DxFile) ErasureCode() erasurecode.ErasureCoder {
+func (df *DxFile) ErasureCode() (erasurecode.ErasureCoder, error) {
 	df.lock.RLock()
 	defer df.lock.RUnlock()
 
 	if df.erasureCode != nil {
-		return df.erasureCode
+		return df.erasureCode, nil
 	}
 	ec, err := erasurecode.New(df.metadata.ErasureCodeType, df.metadata.MinSectors, df.metadata.NumSectors,
 		df.metadata.ECExtra)
 	if err != nil {
 		// this shall not happen
 		log.Error("New erasure code return an error: %v", err)
-		return ec
+		return ec, err
 	}
-	return ec
+	return ec, nil
 }
 
 // FileMode return the os file mode of a dxfile

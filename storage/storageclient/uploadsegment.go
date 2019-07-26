@@ -146,10 +146,14 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 
 	// Create the download
 	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
+	snap, err := segment.fileEntry.Snapshot()
+	if err != nil {
+		return fmt.Errorf("cannot create the snapshot: %v", err)
+	}
 	d, err := sc.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
-		file:            segment.fileEntry.Snapshot(),
+		file:            snap,
 
 		latencyTarget: 200e3, // No need to rush latency on repair downloads.
 		length:        downloadLength,
@@ -202,7 +206,12 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	}
 	defer sc.tm.Done()
 
-	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(segment.fileEntry.ErasureCode().MinSectors())
+	ec, err := segment.fileEntry.ErasureCode()
+	if err != nil {
+		return
+	}
+
+	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(ec.MinSectors())
 	var sectorCompletedMemory uint64
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
@@ -229,7 +238,7 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	for _, b := range segment.logicalSegmentData {
 		segmentBytes = append(segmentBytes, b...)
 	}
-	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
+	segment.physicalSegmentData, err = ec.Encode(segmentBytes)
 	if err != nil {
 		segment.workersRemain = 0
 		sc.memoryManager.Return(sectorCompletedMemory)
@@ -250,14 +259,17 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		sc.log.Info("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
-
+	key, err := segment.fileEntry.CipherKey()
+	if err != nil {
+		return
+	}
 	// Loop through the sectorSlots and encrypt any that are needed
 	// If the sector has been used, set physicalSegmentData nil and gc routine will collect this memory
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
 			segment.physicalSegmentData[i] = nil
 		} else {
-			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
+			cipherData, err := key.Encrypt(segment.physicalSegmentData[i])
 			if err != nil {
 				segment.physicalSegmentData[i] = nil
 				sc.log.Error("encrypt segment after erasure encode failed", "err", err)
