@@ -91,12 +91,6 @@ func (p *peer) RequestContractDownload(req storage.DownloadRequest) error {
 	return p2p.Send(p.rw, storage.ContractDownloadReqMsg, req)
 }
 
-// SendRevisionStop is sent by the storage client which used to indicate
-// the storage download revision is done
-func (p *peer) SendRevisionStop() error {
-	return p2p.Send(p.rw, storage.NegotiationStopMsg, "revision stop")
-}
-
 // SendContractDownloadData is sent by the client. Data piece requested by the
 // storage client will be included
 func (p *peer) SendContractDownloadData(resp storage.DownloadResponse) error {

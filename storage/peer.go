@@ -31,7 +31,6 @@ type Peer interface {
 	SendContractUploadClientRevisionSign(revisionSign []byte) error
 	SendUploadHostRevisionSign(revisionSign []byte) error
 	RequestContractDownload(req DownloadRequest) error
-	SendRevisionStop() error
 	SendContractDownloadData(resp DownloadResponse) error
 	SendHostBusyHandleRequestErr() error
 	SendClientNegotiateErrorMsg(err error) error
