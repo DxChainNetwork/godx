@@ -45,7 +45,7 @@ and etc.`,
 
 change the storage host configuration. The parameters include but not limited to 
 acceptingcontracts, storageprice, uploadprice, downloadprice, etc. A complete set of 
-editable parameters please read the list of flags.
+configurable parameters please read the list of flags.
 
 The values are associated with units.
 	BOOL:       {"true", "false"}
