@@ -6,10 +6,11 @@ package eth
 
 import (
 	"errors"
+	"time"
+
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"time"
 )
 
 // TriggerError is used to send the error message to the errMsg channel,

@@ -834,7 +834,7 @@ func (client *StorageClient) newDownload(params downloadParams) (*download, erro
 		length:            params.length,
 		offset:            params.offset,
 		overdrive:         params.overdrive,
-		dxFilePath:        params.file.DxPath(),
+		dxFile:            params.file,
 		priority:          params.priority,
 		log:               client.log,
 		memoryManager:     client.memoryManager,
@@ -1039,6 +1039,18 @@ func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	if err != nil {
 		return err
 	}
+
+	// display the download status
+	fmt.Printf("\n\ndownloading>")
+	go func() {
+		for {
+			time.Sleep(time.Millisecond * 500)
+			fmt.Printf(">")
+			if d.segmentsRemaining == 0 {
+				break
+			}
+		}
+	}()
 
 	// block until the download has completed
 	select {

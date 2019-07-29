@@ -6,6 +6,7 @@ package storage
 
 import (
 	"errors"
+
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 )

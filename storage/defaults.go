@@ -6,10 +6,10 @@ package storage
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
-
 	"math/big"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 var (
@@ -41,11 +41,10 @@ const (
 	ContractUploadReqMsg             = 0x33
 	ContractUploadClientRevisionSign = 0x34
 	ContractDownloadReqMsg           = 0x35
-	NegotiationStopMsg               = 0x36
-	ClientCommitSuccessMsg           = 0x37
-	ClientCommitFailedMsg            = 0x38
-	ClientAckMsg                     = 0x39
-	ClientNegotiateErrorMsg          = 0x40
+	ClientCommitSuccessMsg           = 0x36
+	ClientCommitFailedMsg            = 0x37
+	ClientAckMsg                     = 0x38
+	ClientNegotiateErrorMsg          = 0x39
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
