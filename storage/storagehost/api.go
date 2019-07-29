@@ -68,13 +68,51 @@ func (h *HostPrivateAPI) AvailableSpace() storage.HostSpace {
 }
 
 // GetHostConfig return the internal settings of the storage host
-func (h *HostPrivateAPI) GetHostConfig() storage.HostIntConfig {
-	return h.storageHost.getInternalConfig()
+func (h *HostPrivateAPI) GetHostConfig() storage.HostIntConfigForDisplay {
+	// Get the internal setting
+	config := h.storageHost.getInternalConfig()
+	// parse the numbers to human readable string
+	display := storage.HostIntConfigForDisplay{
+		AcceptingContracts:     unit.FormatBool(config.AcceptingContracts),
+		MaxDownloadBatchSize:   unit.FormatStorage(config.MaxDownloadBatchSize, false),
+		MaxDuration:            unit.FormatTime(config.MaxDuration),
+		MaxReviseBatchSize:     unit.FormatStorage(config.MaxReviseBatchSize, false),
+		WindowSize:             unit.FormatTime(config.WindowSize),
+		PaymentAddress:         config.PaymentAddress.String(),
+		Deposit:                unit.FormatCurrency(config.Deposit, "/byte/block"),
+		DepositBudget:          unit.FormatCurrency(config.DepositBudget, "/contract"),
+		MaxDeposit:             unit.FormatCurrency(config.MaxDeposit),
+		BaseRPCPrice:           unit.FormatCurrency(config.BaseRPCPrice),
+		ContractPrice:          unit.FormatCurrency(config.ContractPrice, "/contract"),
+		DownloadBandwidthPrice: unit.FormatCurrency(config.DownloadBandwidthPrice, "/byte"),
+		SectorAccessPrice:      unit.FormatCurrency(config.SectorAccessPrice, "/sector"),
+		StoragePrice:           unit.FormatCurrency(config.StoragePrice, "/byte/block"),
+		UploadBandwidthPrice:   unit.FormatCurrency(config.UploadBandwidthPrice, "/byte"),
+	}
+
+	return display
 }
 
 // GetFinancialMetrics get the financial metrics of the host
-func (h *HostPrivateAPI) GetFinancialMetrics() HostFinancialMetrics {
-	return h.storageHost.getFinancialMetrics()
+func (h *HostPrivateAPI) GetFinancialMetrics() HostFinancialMetricsForDisplay {
+	fm := h.storageHost.getFinancialMetrics()
+	display := HostFinancialMetricsForDisplay{
+		ContractCount:                     fm.ContractCount,
+		ContractCompensation:              unit.FormatCurrency(fm.ContractCompensation),
+		PotentialContractCompensation:     unit.FormatCurrency(fm.PotentialContractCompensation),
+		LockedStorageDeposit:              unit.FormatCurrency(fm.LockedStorageDeposit),
+		LostRevenue:                       unit.FormatCurrency(fm.LostRevenue),
+		LostStorageDeposit:                unit.FormatCurrency(fm.LostStorageDeposit),
+		PotentialStorageRevenue:           unit.FormatCurrency(fm.PotentialStorageRevenue),
+		RiskedStorageDeposit:              unit.FormatCurrency(fm.RiskedStorageDeposit),
+		StorageRevenue:                    unit.FormatCurrency(fm.StorageRevenue),
+		TransactionFeeExpenses:            unit.FormatCurrency(fm.TransactionFeeExpenses),
+		DownloadBandwidthRevenue:          unit.FormatCurrency(fm.DownloadBandwidthRevenue),
+		PotentialDownloadBandwidthRevenue: unit.FormatCurrency(fm.PotentialDownloadBandwidthRevenue),
+		PotentialUploadBandwidthRevenue:   unit.FormatCurrency(fm.PotentialUploadBandwidthRevenue),
+		UploadBandwidthRevenue:            unit.FormatCurrency(fm.UploadBandwidthRevenue),
+	}
+	return display
 }
 
 //GetPaymentAddress get the account address used to sign the storage contract. If not configured, the first address in the local wallet will be used as the paymentAddress by default.

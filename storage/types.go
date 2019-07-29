@@ -65,6 +65,27 @@ type (
 		UploadBandwidthPrice   common.BigInt `json:"uploadBandwidthPrice"`
 	}
 
+	// HostIntConfigForDisplay is the host internal config for displayd
+	HostIntConfigForDisplay struct {
+		AcceptingContracts   string `json:"acceptingContracts"`
+		MaxDownloadBatchSize string `json:"maxDownloadBatchSize"`
+		MaxDuration          string `json:"maxDuration"`
+		MaxReviseBatchSize   string `json:"maxReviseBatchSize"`
+		WindowSize           string `json:"windowSize"`
+		PaymentAddress       string `json:"paymentAddress"`
+
+		Deposit       string `json:"deposit"`
+		DepositBudget string `json:"depositBudget"`
+		MaxDeposit    string `json:"maxDeposit"`
+
+		BaseRPCPrice           string `json:"baseRPCPrice"`
+		ContractPrice          string `json:"contractPrice"`
+		DownloadBandwidthPrice string `json:"downloadBandwidthPrice"`
+		SectorAccessPrice      string `json:"sectorAccessPrice"`
+		StoragePrice           string `json:"storagePrice"`
+		UploadBandwidthPrice   string `json:"uploadBandwidthPrice"`
+	}
+
 	// HostExtConfig make group of host setting to broadcast as object
 	HostExtConfig struct {
 		AcceptingContracts   bool           `json:"acceptingContracts"`

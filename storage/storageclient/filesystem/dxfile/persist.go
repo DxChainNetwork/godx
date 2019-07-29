@@ -171,21 +171,21 @@ func (md Metadata) newErasureCode() (erasurecode.ErasureCoder, error) {
 
 // erasureCodeToParams is the the helper function to interpret the erasureCoder to params
 // return minSectors, numSectors, and extra
-func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte) {
+func erasureCodeToParams(ec erasurecode.ErasureCoder) (uint32, uint32, []byte, error) {
 	minSectors := ec.MinSectors()
 	numSectors := ec.NumSectors()
 	switch ec.Type() {
 	case erasurecode.ECTypeStandard:
-		return minSectors, numSectors, nil
+		return minSectors, numSectors, nil, nil
 	case erasurecode.ECTypeShard:
 		extra := ec.Extra()
 		extraBytes := make([]byte, 4)
 		shardSize := extra[0].(int)
 		binary.LittleEndian.PutUint32(extraBytes, uint32(shardSize))
-		return minSectors, numSectors, extraBytes
+		return minSectors, numSectors, extraBytes, nil
 	default:
-		log.Crit("Unknown erasure code type ")
-		return 0, 0, []byte{}
+		log.Error("Unknown erasure code type ")
+		return 0, 0, []byte{}, fmt.Errorf("unknown erasure code type")
 	}
 }
 

@@ -118,7 +118,7 @@ and etc.`,
 
 change the storage host configuration. The parameters include but not limited to 
 acceptingcontracts, storageprice, uploadprice, downloadprice, etc. A complete set of 
-editable parameters please read the list of flags.
+configurable parameters please read the list of flags.
 
 The values are associated with units.
 	BOOL:       {"true", "false"}
@@ -251,32 +251,31 @@ func getHostConfig(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	var config storage.HostIntConfig
+	var config storage.HostIntConfigForDisplay
 	if err = client.Call(&config, "shost_getHostConfig"); err != nil {
 		utils.Fatalf("failed to get the storage host configuration: %s", err.Error())
 	}
 
 	fmt.Printf(`
-	
 Host Configuration:
-	AcceptingContracts:            %t
-	MaxDownloadBatchSize:          %v bytes
-	MaxDuration:                   %v blocks
-	MaxReviseBatchSize:            %v bytes
-	WindowSize:                    %v blocks
+	AcceptingContracts:            %v
+	MaxDownloadBatchSize:          %v
+	MaxDuration:                   %v
+	MaxReviseBatchSize:            %v
+	WindowSize:                    %v
 	PaymentAddress:                %s 
-	Deposit:                       %v wei
-	DepositBudget:                 %v wei
-	MaxDeposit:                    %v wei
-	BaseRPCPrice:               %v wei
-	ContractPrice:              %v wei
-	DownloadBandwidthPrice:     %v wei
-	SectorAccessPrice:          %v wei
-	StoragePrice:               %v wei
-	UploadBandwidthPrice:       %v wei
+	Deposit:                       %v
+	DepositBudget:                 %v
+	MaxDeposit:                    %v
+	BaseRPCPrice:                  %v
+	ContractPrice:                 %v
+	DownloadBandwidthPrice:        %v
+	SectorAccessPrice:             %v
+	StoragePrice:                  %v
+	UploadBandwidthPrice:          %v
 
 `, config.AcceptingContracts, config.MaxDownloadBatchSize, config.MaxDuration,
-		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress.String(),
+		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress,
 		config.Deposit, config.DepositBudget, config.MaxDeposit, config.BaseRPCPrice,
 		config.ContractPrice, config.DownloadBandwidthPrice, config.SectorAccessPrice,
 		config.StoragePrice, config.UploadBandwidthPrice)

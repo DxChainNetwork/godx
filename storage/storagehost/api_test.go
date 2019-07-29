@@ -6,12 +6,14 @@ package storagehost
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/unit"
-	"github.com/DxChainNetwork/godx/storage"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 func TestHostPrivateAPI_SetConfig(t *testing.T) {
@@ -177,6 +179,9 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 		if !reflect.DeepEqual(persist.Config, test.expect) {
 			t.Fatalf("Test %v config not expected.\nGot %vExpect %v", key,
 				dumper.Sdump(persist.Config), dumper.Sdump(test.expect))
+		}
+		if err = os.Remove(hostSettingFile); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

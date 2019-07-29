@@ -61,37 +61,40 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	return
 }
 
-// FormatCurrency is used to format the currency for displaying purpose
-func FormatCurrency(fund common.BigInt) (formatted string) {
-	// check if the fund is 0, if so, the unit should not be added
-	// at the end
+// FormatCurrency is used to format the currency for displaying purpose. The extra string will append
+// to the unit
+func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
+	var extraStr string
+	if len(extra) > 0 {
+		extraStr = strings.Join(extra, "")
+	}
+
 	if fund.IsEqual(common.BigInt0) {
-		formatted = fmt.Sprintf("%v", fund)
+		formatted = fmt.Sprintf("%v wei%v", fund, extraStr)
 		return
 	}
 
-	// otherwise, format the currency
 	switch {
 	case fund.DivNoRemaining(CurrencyIndexMap["ether"]):
-		formatted = fmt.Sprintf("%v ether", fund.DivUint64(CurrencyIndexMap["ether"]))
+		formatted = fmt.Sprintf("%v ether%v", fund.DivUint64(CurrencyIndexMap["ether"]), extraStr)
 		return
 	case fund.DivNoRemaining(CurrencyIndexMap["milliether"]):
-		formatted = fmt.Sprintf("%v milliether", fund.DivUint64(CurrencyIndexMap["milliether"]))
+		formatted = fmt.Sprintf("%v milliether%v", fund.DivUint64(CurrencyIndexMap["milliether"]), extraStr)
 		return
 	case fund.DivNoRemaining(CurrencyIndexMap["microether"]):
-		formatted = fmt.Sprintf("%v microether", fund.DivUint64(CurrencyIndexMap["microether"]))
+		formatted = fmt.Sprintf("%v microether%v", fund.DivUint64(CurrencyIndexMap["microether"]), extraStr)
 		return
 	case fund.DivNoRemaining(CurrencyIndexMap["gwei"]):
-		formatted = fmt.Sprintf("%v Gwei", fund.DivUint64(CurrencyIndexMap["gwei"]))
+		formatted = fmt.Sprintf("%v Gwei%v", fund.DivUint64(CurrencyIndexMap["gwei"]), extraStr)
 		return
 	case fund.DivNoRemaining(CurrencyIndexMap["mwei"]):
-		formatted = fmt.Sprintf("%v Mwei", fund.DivUint64(CurrencyIndexMap["mwei"]))
+		formatted = fmt.Sprintf("%v Mwei%v", fund.DivUint64(CurrencyIndexMap["mwei"]), extraStr)
 		return
 	case fund.DivNoRemaining(CurrencyIndexMap["kwei"]):
-		formatted = fmt.Sprintf("%v Kwei", fund.DivUint64(CurrencyIndexMap["kwei"]))
+		formatted = fmt.Sprintf("%v Kwei%v", fund.DivUint64(CurrencyIndexMap["kwei"]), extraStr)
 		return
 	default:
-		formatted = fmt.Sprintf("%v wei", fund)
+		formatted = fmt.Sprintf("%v wei%v", fund, extraStr)
 		return
 	}
 }
