@@ -61,11 +61,11 @@ func TestContract_RecordUploadPreRev(t *testing.T) {
 	defer contract.db.Close()
 	defer contract.db.EmptyDB()
 
-	storageCost := common.RandomBigInt()
-	bandWidthCost := common.RandomBigInt()
-	root := randomRootGenerator()
+	//storageCost := common.RandomBigInt()
+	//bandWidthCost := common.RandomBigInt()
+	//root := randomRootGenerator()
 
-	wt, err := contract.UndoRevisionLog(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
+	wt, err := contract.UndoRevisionLog(contract.header)
 	if err != nil {
 		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
 	}
@@ -137,13 +137,17 @@ func TestContract_CommitUpload(t *testing.T) {
 	bandWidthCost := common.RandomBigInt()
 	root := randomRootGenerator()
 
-	wt, err := contract.UndoRevisionLog(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
+	wt, err := contract.UndoRevisionLog(contract.header)
 	if err != nil {
 		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
 	}
 
-	if err := contract.CommitUpload(wt, storageContractRevisionGenerator(), root, storageCost, bandWidthCost); err != nil {
+	if err := contract.CommitUpload(wt, storageContractRevisionGenerator(), storageCost, bandWidthCost); err != nil {
 		t.Fatalf("failed to commit upload: %s", err.Error())
+	}
+
+	if err := contract.merkleRoots.push(root); err != nil {
+		t.Fatalf("push merkle roots failed: %s", err.Error())
 	}
 
 	// verify the correct root has been inserted into the db
