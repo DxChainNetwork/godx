@@ -294,14 +294,14 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	// 3. If no error happened, delete the entry in fs.unfinishedUpdates.
 	// 4. If no error happened, Release the transaction
 	if release {
-		fs.lock.Lock()
-		delete(fs.unfinishedUpdates, update.dxPath)
-		fs.lock.Unlock()
-
 		txn := (*writeaheadlog.Transaction)(atomic.LoadPointer(&update.walTxn))
 		if txn != nil {
 			err = common.ErrCompose(err, txn.Release())
 		}
+
+		fs.lock.Lock()
+		delete(fs.unfinishedUpdates, update.dxPath)
+		fs.lock.Unlock()
 	}
 
 	if err == nil {

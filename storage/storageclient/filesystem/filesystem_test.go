@@ -49,7 +49,7 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 	}{
 		{1},
 		{10},
-		{1000},
+		{100},
 	}
 	if testing.Short() {
 		tests = tests[:1]
