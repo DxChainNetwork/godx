@@ -1,11 +1,11 @@
 package storagehost
 
 import (
-	"testing"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"reflect"
+	"testing"
 )
 
 func TestStoreStorageResponsibility(t *testing.T) {
@@ -36,6 +36,44 @@ func TestStoreStorageResponsibility(t *testing.T) {
 	err = deleteStorageResponsibility(db, so.OriginStorageContract.RLPHash())
 	if err != nil {
 		t.Error(err)
+	}
+}
+
+func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
+	db,_ := ethdb.NewLDBDatabase("./db", 16, 16)
+	defer db.Close()
+
+	h := newTestStorageHost(t)
+	h.db = db
+
+	so := StorageResponsibility{
+		OriginStorageContract: types.StorageContract{
+			WindowStart:    1000000,
+			RevisionNumber: 1,
+			WindowEnd:      1440000,
+		},
+	}
+	if err := finalizeStorageResponsibility(h, so); err != nil {
+		t.Fatal(err)
+	}
+
+	oldSo, err := getStorageResponsibility(h.db, so.id())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(oldSo.OriginStorageContract.ID(), so.OriginStorageContract.ID()) {
+		t.Fatal("origin storage responsibility is not equal to responsibility from database")
+	}
+
+	if err := rollbackStorageResponsibility(h, so); err != nil {
+		t.Fatal(err)
+	}
+
+
+	_, err = getStorageResponsibility(h.db, so.id())
+	if err == nil {
+		t.Fatal("rollback is not successful")
 	}
 }
 

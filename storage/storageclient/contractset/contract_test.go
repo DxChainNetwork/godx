@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -163,6 +164,52 @@ func TestContract_CommitUpload(t *testing.T) {
 	if r[0] != root {
 		t.Fatalf("root getting from the db does not match with the root inserted. Expected %v, got %v",
 			root, r[0])
+	}
+}
+
+func TestContract_CommitUploadAndRollback(t *testing.T) {
+	contract, err := newContract()
+	if err != nil {
+		t.Fatalf("failed to generate new contract: %s", err.Error())
+	}
+
+	defer contract.db.Close()
+	defer contract.db.EmptyDB()
+
+	storageCost := common.RandomBigInt()
+	bandWidthCost := common.RandomBigInt()
+
+	wt, err := contract.UndoRevisionLog(contract.header)
+	if err != nil {
+		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
+	}
+
+	originRevision := storageContractRevisionGenerator()
+	if err := contract.CommitUpload(wt, originRevision, storageCost, bandWidthCost); err != nil {
+		t.Fatalf("failed to commit upload: %s", err.Error())
+	}
+
+	revision := contract.Header().LatestContractRevision
+	if !reflect.DeepEqual(originRevision.RLPHash(), revision.RLPHash()) {
+		t.Fatal("origin revision is not equal to revision from database")
+	}
+
+
+	wt, err = contract.UndoRevisionLog(contract.header)
+	if err != nil {
+		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
+	}
+
+	revision.NewRevisionNumber += 100
+	if err := contract.CommitUpload(wt, revision, storageCost, bandWidthCost); err != nil {
+		t.Fatalf("failed to commit upload: %s", err.Error())
+	}
+
+	contract.RollbackUndo(wt)
+
+	rollbackRevision := contract.Header().LatestContractRevision
+	if !reflect.DeepEqual(originRevision.RLPHash(), rollbackRevision.RLPHash()) {
+		t.Fatal("origin revision is not equal to rollback revision")
 	}
 }
 
