@@ -6,33 +6,43 @@ package contractmanager
 
 import (
 	"errors"
+	"fmt"
 	"github.com/DxChainNetwork/godx/storage"
 	"reflect"
 )
 
-// SetRentPayment will set the rentpayment to the value passed in by the user
+// SetRentPayment will set the rent payment to the value passed in by the user
 // through the command line interface
 func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) {
 	if cm.b.Syncing() {
-		return errors.New("setrentpayment can only be done once the blockchain finished syncing")
+		return errors.New("setRentPayment can only be done once the block chain finished syncing")
 	}
 
+	// validate the rentPayment, making sure that fields are not empty
 	if err = RentPaymentValidation(rent); err != nil {
 		return
 	}
 
 	// getting the old payment
 	cm.lock.Lock()
+	oldCurrentPeriod := cm.currentPeriod
 	oldRent := cm.rentPayment
 	cm.rentPayment = rent
 	cm.lock.Unlock()
 
-	//// check if the old payment is same as new payment
-	//if reflect.DeepEqual(oldRent, rent) {
-	//	return errors.New("the payment entered is same as before")
-	//}
+	// if error is not nil, revert the settings back to the
+	// original settings
+	defer func() {
+		if err != nil {
+			cm.lock.Lock()
+			cm.rentPayment = oldRent
+			cm.currentPeriod = oldCurrentPeriod
+			cm.lock.Unlock()
+		}
+	}()
 
 	// indicates the contracts have been canceled previously
+	// or it is client's first time signing the storage contract
 	if reflect.DeepEqual(oldRent, storage.RentPayment{}) {
 		// update the current period
 		cm.lock.Lock()
@@ -41,19 +51,24 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 
 		// reuse the active canceled contracts
 		if err = cm.resumeContracts(); err != nil {
+			cm.log.Error("SetRentPayment failed, error resuming the active storage contracts", "err", err.Error())
 			return
 		}
-	}
-
-	// save all the settings
-	if err = cm.saveSettings(); err != nil {
-		cm.log.Error("unable to save settings")
 	}
 
 	// update storage host manager rentPayment payment
 	// which updates the storage host evaluation function
 	if err = cm.hostManager.SetRentPayment(rent); err != nil {
+		cm.log.Error("SetRentPayment failed, failed to set the rent payment for host manager", "err", err.Error())
 		return
+	}
+
+	// save all the settings
+	if err = cm.saveSettings(); err != nil {
+		cm.log.Error("SetRentPayment failed, unable to save settings while setting the rent payment", "err", err.Error())
+		// set the storage host's rentPayment back to original value
+		_ = cm.hostManager.SetRentPayment(oldRent)
+		return fmt.Errorf("failed to save settings persistently: %s", err.Error())
 	}
 
 	// if the maintenance process is running, stop it
