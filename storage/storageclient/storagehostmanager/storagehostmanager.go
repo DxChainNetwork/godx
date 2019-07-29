@@ -139,21 +139,20 @@ func (shm *StorageHostManager) ActiveStorageHosts() (activeStorageHosts []storag
 // SetRentPayment will modify the rent payment and update the storage host
 // evaluation function
 func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err error) {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
 	// during initialization, the value might be empty
 	if reflect.DeepEqual(rent, storage.RentPayment{}) {
 		rent = storage.DefaultRentPayment
 	}
 
 	// update the rent
-	shm.lock.Lock()
 	shm.rent = rent
-	shm.lock.Unlock()
 
 	// update the storage host evaluation function
 	evalFunc := shm.calculateEvaluationFunc(rent)
-	shm.lock.Lock()
 	shm.evalFunc = evalFunc
-	shm.lock.Unlock()
 
 	// update the storage host tree and filtered tree evaluation func
 	err = shm.storageHostTree.SetEvaluationFunc(evalFunc)
@@ -187,12 +186,13 @@ func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInf
 	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
 	// cannot sign contract with it
 	_, exist := filteredHosts[hi.EnodeID]
-	hi.Filtered = whitelist != exist
 
 	// update host historical interaction record before returning
-	shm.lock.RLock()
+	shm.lock.Lock()
+	hi.Filtered = whitelist != exist
 	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
-	shm.lock.RUnlock()
+	shm.lock.Unlock()
+
 	return
 }
 
@@ -207,7 +207,7 @@ func (shm *StorageHostManager) SetIPViolationCheck(violationCheck bool) {
 // RetrieveIPViolationCheckSetting will return the current tipViolationCheck
 func (shm *StorageHostManager) RetrieveIPViolationCheckSetting() (violationCheck bool) {
 	shm.lock.RLock()
-	shm.lock.RUnlock()
+	defer shm.lock.RUnlock()
 	return shm.ipViolationCheck
 }
 
@@ -313,7 +313,11 @@ func (shm *StorageHostManager) AllHosts() []storage.HostInfo {
 // StorageHostRanks will return the storage host rankings based on their evaluations. The
 // higher the evaluation is, the higher order it will be placed
 func (shm *StorageHostManager) StorageHostRanks() (rankings []StorageHostRank) {
-	allHosts := shm.AllHosts()
+	shm.lock.RLock()
+	defer shm.lock.RUnlock()
+
+	allHosts := shm.storageHostTree.All()
+
 	// based on the host information, calculate the evaluation
 	for _, host := range allHosts {
 		eval := shm.evalFunc(host)
