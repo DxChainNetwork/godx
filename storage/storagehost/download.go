@@ -48,20 +48,6 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		return
 	}
 
-	// as soon as client complete downloading, will send stop msg.
-	negotiateStopSignal := make(chan error, 1)
-	go func() {
-
-		msg, err := sp.HostWaitContractResp()
-		if err != nil {
-			negotiateStopSignal <- err
-		} else if msg.Code != storage.NegotiationStopMsg {
-			negotiateStopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
-		} else {
-			negotiateStopSignal <- nil
-		}
-	}()
-
 	// get storage responsibility
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, req.StorageContractID)
@@ -86,25 +72,23 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
-	for _, sec := range req.Sections {
-		var err error
-		switch {
-		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
-			err = errors.New("download out boundary of sector")
-		case sec.Length == 0:
-			err = errors.New("length cannot be 0")
-		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
-			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
-		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
-			err = errors.New("the number of valid proof values not match the old")
-		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
-			err = errors.New("the number of missed proof values not match the old")
-		}
-		if err != nil {
-			downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
-			hostNegotiateErr = downloadErr
-			return
-		}
+	sec := req.Sector
+	switch {
+	case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
+		err = errors.New("download out boundary of sector")
+	case sec.Length == 0:
+		err = errors.New("length cannot be 0")
+	case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
+		err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
+	case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
+		err = errors.New("the number of valid proof values not match the old")
+	case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
+		err = errors.New("the number of missed proof values not match the old")
+	}
+	if err != nil {
+		downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
+		hostNegotiateErr = downloadErr
+		return
 	}
 
 	// construct the new revision
@@ -128,13 +112,11 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	// calculate expected cost and verify against client's revision
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
-	for _, sec := range req.Sections {
-		// use the worst-case proof size of 2*tree depth (this occurs when
-		// proving across the two leaves in the center of the tree)
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
-		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
-		sectorAccesses[sec.MerkleRoot] = struct{}{}
-	}
+	// use the worst-case proof size of 2*tree depth (this occurs when
+	// proving across the two leaves in the center of the tree)
+	estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
+	estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
+	sectorAccesses[sec.MerkleRoot] = struct{}{}
 
 	// calculate total cost
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
@@ -170,66 +152,39 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 
+	// fetch the requested data from host local storage
+	sectorData, err := h.ReadSector(sec.MerkleRoot)
+	if err != nil {
+		downloadErr = fmt.Errorf("host failed read sector: %s", err.Error())
+		return
+	}
+	data := sectorData[sec.Offset : sec.Offset+sec.Length]
 
-	// enter response loop
-	for i, sec := range req.Sections {
-		// fetch the requested data from host local storage
-		sectorData, err := h.ReadSector(sec.MerkleRoot)
+	// construct the Merkle proof, if requested.
+	var proof []common.Hash
+	if req.MerkleProof {
+		proofStart := int(sec.Offset) / merkle.LeafSize
+		proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
+		proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
 		if err != nil {
-			downloadErr = fmt.Errorf("host failed read sector: %s", err.Error())
-			return
-		}
-		data := sectorData[sec.Offset : sec.Offset+sec.Length]
-
-		// construct the Merkle proof, if requested.
-		var proof []common.Hash
-		if req.MerkleProof {
-			proofStart := int(sec.Offset) / merkle.LeafSize
-			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
-			proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
-			if err != nil {
-				downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
-				hostNegotiateErr = downloadErr
-				return
-			}
-		}
-
-		// send the response.
-		// if host received a stop signal, or this is the final response, include host's signature in the response.
-		resp := storage.DownloadResponse{
-			Signature:   nil,
-			Data:        data,
-			MerkleProof: proof,
-		}
-
-		select {
-		case err := <-negotiateStopSignal:
-			if err != nil {
-				downloadErr = fmt.Errorf("stop signal received: %s", err.Error())
-				clientNegotiateErr = downloadErr
-				return
-			}
-
-			resp.Signature = hostSig
-			if err := sp.SendContractDownloadData(resp); err != nil {
-				downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
-				return
-			}
-		default:
-		}
-
-		if i == len(req.Sections)-1 {
-			resp.Signature = hostSig
-		}
-
-		if err := sp.SendContractDownloadData(resp); err != nil {
-			downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
+			downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
+			hostNegotiateErr = downloadErr
 			return
 		}
 	}
 
-	// the stop signal must arrive before RPC is complete.
-	downloadErr = <-negotiateStopSignal
+	// send the response
+	resp := storage.DownloadResponse{
+		Signature:   nil,
+		Data:        data,
+		MerkleProof: proof,
+	}
+
+	resp.Signature = hostSig
+	if err := sp.SendContractDownloadData(resp); err != nil {
+		downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
+		return
+	}
 
 	// wait for client commit success msg
 	msg, err := sp.HostWaitContractResp()

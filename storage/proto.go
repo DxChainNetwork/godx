@@ -53,7 +53,7 @@ type (
 	// DownloadRequest contains the request parameters for RPCDownload.
 	DownloadRequest struct {
 		StorageContractID common.Hash
-		Sections          []DownloadRequestSection
+		Sector            DownloadRequestSector
 		MerkleProof       bool
 
 		NewRevisionNumber    uint64
@@ -63,7 +63,7 @@ type (
 	}
 
 	// DownloadRequestSection is a section requested in DownloadRequest.
-	DownloadRequestSection struct {
+	DownloadRequestSector struct {
 		MerkleRoot [32]byte
 		Offset     uint32
 		Length     uint32

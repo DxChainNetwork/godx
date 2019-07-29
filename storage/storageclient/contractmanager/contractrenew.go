@@ -430,16 +430,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 	}
 
-	// Increase Successful/Failed interactions accordingly
-	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
-			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
-			err = common.ErrExtend(err, ErrHostFault)
-		} else if err == nil {
-			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
-		}
-	}()
-
 	account := accounts.Account{Address: clientAddr}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
@@ -452,6 +442,26 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		cm.log.Error("contract create failed, failed to set up connection", "err", err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
+
+	// Increase Successful/Failed interactions accordingly
+	var clientNegotiateErr, hostNegotiateErr error
+	defer func(sp storage.Peer) {
+		if clientNegotiateErr != nil {
+			sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
+		}
+
+		if hostNegotiateErr != nil {
+			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
+			sp.SendClientAckMsg()
+		}
+
+		if err != nil && err != storage.HostBusyHandleReqErr {
+			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+			err = common.ErrExtend(err, ErrHostFault)
+		} else if err == nil {
+			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
+		}
+	}(sp)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -483,13 +493,13 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		msg.Decode(&hostNegotiateErr)
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
@@ -511,7 +521,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
+		clientNegotiateErr = storagehost.ExtendErr("client sign revision error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
@@ -526,28 +537,31 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		msg.Decode(&hostNegotiateErr)
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
 	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		clientNegotiateErr = storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		clientNegotiateErr = storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	// wrap some information about this contract
@@ -566,6 +580,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	oldRoots, err := oldContract.MerkleRoots()
 	if err != nil && err != dberrors.ErrNotFound {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	} else if err == dberrors.ErrNotFound {
 		oldRoots = []common.Hash{}
@@ -574,9 +589,47 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// store this contract info to client local
 	contractMetaData, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
 	if err != nil {
+		// ignore the send message error
+		sp.SendClientCommitFailedMsg()
+
+		// wait for host ack msg
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			err = errors.New("failed to insert the contract after announce host",)
+		} else if err != nil {
+			err = fmt.Errorf("failed to insert the contract after announce host, but cann't receive host ack msg: %s", err.Error())
+		}
 		return storage.ContractMetaData{}, err
 	}
-	return contractMetaData, nil
+
+	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		return storage.ContractMetaData{}, err
+	}
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		return storage.ContractMetaData{}, err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return contractMetaData, nil
+	case storage.HostCommitFailedMsg:
+		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
+		sp.SendClientAckMsg()
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg{
+			return storage.ContractMetaData{}, errors.New("host finalize storage responsibility error")
+		}
+	}
+
+	return storage.ContractMetaData{}, errors.New("last msg is not host ack msg")
+
 }
 
 // PubkeyToEnodeID calculate Enode.ContractID, reference:
