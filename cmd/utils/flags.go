@@ -112,49 +112,50 @@ func NewApp(gitCommit, usage string) *cli.App {
 // are the same for all commands.
 
 var (
+	// AcceptingContractsFlag is the flag for accepting contracts
+	AcceptingContractsFlag = cli.StringFlag{
+		Name:  "acceptingcontracts",
+		Usage: "BOOL - whether the host accepts new contracts",
+	}
+
 	MaxDepositFlag = cli.StringFlag{
 		Name:  "maxdeposit",
-		Usage: "used to specify the max deposit for shost setmaxdeposit command",
+		Usage: "CURRENCY - the max deposit for for a single contract",
 	}
 
 	BudgetPriceFlag = cli.StringFlag{
-		Name:  "budget",
-		Usage: "used to specify the budget",
+		Name:  "depositbudget",
+		Usage: "CURRENCY - the maximum deposit for all contracts",
 	}
 
 	StoragePriceFlag = cli.StringFlag{
 		Name:  "storageprice",
-		Usage: "used to specify the storage price",
-	}
-
-	SectorPriceFlag = cli.StringFlag{
-		Name:  "sectorprice",
-		Usage: "used to specify the sector price",
+		Usage: "CURRENCY - the storage price per block per byte",
 	}
 
 	UploadPriceFlag = cli.StringFlag{
 		Name:  "uploadprice",
-		Usage: "used to specify the upload bandwidth price",
+		Usage: "CURRENCY - upload bandwidth price per byte",
 	}
 
 	DownloadPriceFlag = cli.StringFlag{
 		Name:  "downloadprice",
-		Usage: "used to specify the download bandwidth price",
+		Usage: "CURRENCY - download bandwidth price per byte",
 	}
 
 	ContractPriceFlag = cli.StringFlag{
 		Name:  "contractprice",
-		Usage: "used to specify the contract price",
+		Usage: "CURRENCY - the contract price when creating the contract",
 	}
 
 	DepositPriceFlag = cli.StringFlag{
 		Name:  "deposit",
-		Usage: "used to specify the deposit certain storage service",
+		Usage: "CURRENCY - deposit price per block per byte",
 	}
 
 	StorageDurationFlag = cli.StringFlag{
-		Name:  "duration",
-		Usage: "used to specify the max storage time for the storage host",
+		Name:  "maxduration",
+		Usage: "DURATION - the max duration for a storage contract",
 	}
 
 	FolderSizeFlag = cli.StringFlag{

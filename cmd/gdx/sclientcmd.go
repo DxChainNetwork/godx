@@ -144,7 +144,7 @@ flag must be used along with this flag to specify the account address`,
 			Name:      "setconfig",
 			Usage:     "Configure the client settings used for contract creation, file upload, download, and etc.",
 			ArgsUsage: "",
-			Action:    utils.MigrateFlags(setConfig),
+			Action:    utils.MigrateFlags(setClientConfig),
 			Flags:     storageClientFlags,
 			Description: `
 			gdx sclient setconfig
@@ -530,7 +530,7 @@ func setPaymentAddress(ctx *cli.Context) error {
 	return nil
 }
 
-func setConfig(ctx *cli.Context) error {
+func setClientConfig(ctx *cli.Context) error {
 	client, err := gdxAttach(ctx)
 	if err != nil {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
