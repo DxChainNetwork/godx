@@ -239,6 +239,7 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
 		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
 			setting.MaxUploadSpeed, setting.MaxDownloadSpeed)
+		return
 	}
 
 	// set the rent payment
@@ -255,11 +256,15 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	client.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
 
 	// update and save the persist
+	client.lock.Lock()
 	client.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
 	client.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = client.saveSettings(); err != nil {
 		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+		client.lock.Unlock()
+		return
 	}
+	client.lock.Unlock()
 
 	// active the worker pool
 	client.activateWorkerPool()
