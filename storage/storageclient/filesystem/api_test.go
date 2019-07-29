@@ -219,7 +219,7 @@ func TestPublicFileSystemAPI_Delete(t *testing.T) {
 }
 
 // checkDxDirMetadata checks whether the dxdir with path has the expected metadata
-func (fs *FileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
+func (fs *fileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
 	dir, err := fs.dirSet.Open(path)
 	if err != nil {
 		return err

@@ -69,7 +69,7 @@ func (client *StorageClient) GetStorageHostSetting(hostEnodeID enode.ID, hostEno
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
-// in the block chain
+// in the blockchain
 func (client *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return client.ethBackend.SubscribeChainChangeEvent(ch)
 }
@@ -81,7 +81,7 @@ func (client *StorageClient) GetStorageHostManager() *storagehostmanager.Storage
 
 // DirInfo returns the Directory Information of the dxdir
 func (client *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
-	entry, err := client.fileSystem.DirSet().Open(dxPath)
+	entry, err := client.fileSystem.OpenDxDir(dxPath)
 	if err != nil {
 		return storage.DirectoryInfo{}, err
 	}
@@ -184,7 +184,7 @@ func (client *StorageClient) GetPoolNonce(ctx context.Context, addr common.Addre
 }
 
 // GetFileSystem will get the file system
-func (client *StorageClient) GetFileSystem() *filesystem.FileSystem {
+func (client *StorageClient) GetFileSystem() filesystem.FileSystem {
 	return client.fileSystem
 }
 

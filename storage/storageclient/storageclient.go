@@ -38,7 +38,7 @@ import (
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
-	fileSystem *filesystem.FileSystem
+	fileSystem filesystem.FileSystem
 
 	// Memory Management
 	memoryManager *memorymanager.MemoryManager
@@ -197,7 +197,7 @@ func (client *StorageClient) DeleteFile(path storage.DxPath) error {
 		return err
 	}
 	defer client.tm.Done()
-	return client.fileSystem.FileSet().Delete(path)
+	return client.fileSystem.DeleteDxFile(path)
 }
 
 // ContractDetail will return the detailed contract information
@@ -385,6 +385,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 	defer func() {
 		// record the successful or failed interactions
+
 		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
@@ -874,7 +875,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if err != nil {
 		return nil, err
 	}
-	entry, err := client.fileSystem.OpenFile(dxPath)
+	entry, err := client.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return nil, err
 	}
@@ -915,11 +916,15 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	destinationType = "file"
 
 	// create the download object.
+	snap, err := entry.Snapshot()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create snapshot: %v", err)
+	}
 	d, err := client.newDownload(downloadParams{
 		destination:       dw,
 		destinationType:   destinationType,
 		destinationString: p.WriteToLocalPath,
-		file:              entry.DxFile.Snapshot(),
+		file:              snap,
 		latencyTarget:     25e3 * time.Millisecond,
 
 		// always download the whole file

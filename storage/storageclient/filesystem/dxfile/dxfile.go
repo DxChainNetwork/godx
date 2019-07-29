@@ -87,11 +87,14 @@ type (
 func New(filePath storage.SysPath, dxPath storage.DxPath, sourcePath storage.SysPath, wal *writeaheadlog.Wal, erasureCode erasurecode.ErasureCoder, cipherKey crypto.CipherKey, fileSize uint64, fileMode os.FileMode) (*DxFile, error) {
 	currentTime := uint64(time.Now().Unix())
 	// create the params for erasureCode and cipherKey
-	minSectors, numSectors, extra := erasureCodeToParams(erasureCode)
+	minSectors, numSectors, extra, err := erasureCodeToParams(erasureCode)
+	if err != nil {
+		return nil, err
+	}
 	cipherKeyCode := crypto.CipherCodeByName(cipherKey.CodeName())
 	// create a random FileID
 	var id FileID
-	_, err := rand.Read(id[:])
+	_, err = rand.Read(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("cannot create a random id: %v", err)
 	}

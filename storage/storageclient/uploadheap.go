@@ -7,6 +7,7 @@ package storageclient
 import (
 	"container/heap"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -104,7 +105,11 @@ func (uh *uploadHeap) pop() (uc *unfinishedUploadSegment) {
 }
 
 func (client *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntryWithID, hosts map[string]struct{}, target uploadTarget, hostHealthInfoTable storage.HostHealthInfoTable) ([]*unfinishedUploadSegment, error) {
-	if len(client.workerPool) < int(entry.ErasureCode().MinSectors()) {
+	ec, err := entry.ErasureCode()
+	if err != nil {
+		return nil, err
+	}
+	if len(client.workerPool) < int(ec.MinSectors()) {
 		client.log.Info("cannot create any segment from file because there are not enough workers, so marked all unhealthy segments as stuck")
 
 		var err error
@@ -141,6 +146,14 @@ func (client *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntry
 		}
 
 		// Create unfinishedUploadSegment
+		key, err := entry.CipherKey()
+		if err != nil {
+			return nil, fmt.Errorf("cannot create cipher: %v", err)
+		}
+		ec, err := entry.ErasureCode()
+		if err != nil {
+			return nil, fmt.Errorf("cannot create erasure code: %v", err)
+		}
 		newUnfinishedSegments[i] = &unfinishedUploadSegment{
 			fileEntry: entry.CopyEntry(),
 
@@ -153,14 +166,14 @@ func (client *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntry
 			length: entry.SegmentSize(),
 			offset: int64(uint64(index) * entry.SegmentSize()),
 
-			memoryNeeded:      entry.SectorSize()*uint64(entry.ErasureCode().NumSectors()+entry.ErasureCode().MinSectors()) + uint64(entry.ErasureCode().NumSectors())*uint64(entry.CipherKey().Overhead()),
-			sectorsMinNeedNum: int(entry.ErasureCode().MinSectors()),
-			sectorsAllNeedNum: int(entry.ErasureCode().NumSectors()),
+			memoryNeeded:      entry.SectorSize()*uint64(ec.NumSectors()+ec.MinSectors()) + uint64(ec.NumSectors())*uint64(key.Overhead()),
+			sectorsMinNeedNum: int(ec.MinSectors()),
+			sectorsAllNeedNum: int(ec.NumSectors()),
 			stuck:             entry.GetStuckByIndex(index),
 
-			physicalSegmentData: make([][]byte, entry.ErasureCode().NumSectors()),
+			physicalSegmentData: make([][]byte, ec.NumSectors()),
 
-			sectorSlotsStatus: make([]bool, entry.ErasureCode().NumSectors()),
+			sectorSlotsStatus: make([]bool, ec.NumSectors()),
 			unusedHosts:       make(map[string]struct{}),
 		}
 
@@ -324,7 +337,8 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 			files = append(files, file)
 		}
 	} else {
-		fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(client.fileSystem.FileRootDir())))
+		fileInfos, err := ioutil.ReadDir(string(dxPath.SysPath(client.fileSystem.RootDir())))
+
 		if err != nil {
 			return
 		}
@@ -368,7 +382,8 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 }
 
 func (client *StorageClient) openDxFile(path storage.DxPath, target uploadTarget) (*dxfile.FileSetEntryWithID, error) {
-	file, err := client.fileSystem.OpenFile(path)
+	file, err := client.fileSystem.OpenDxFile(path)
+
 	if err != nil {
 		client.log.Error("Could not open dx file", "err", err)
 		return nil, err
