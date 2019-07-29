@@ -23,7 +23,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		}
 
 		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err != nil {
+			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg {
 					sp.SendHostAckMsg()
@@ -48,6 +48,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	// Get revision from storage responsibility
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	snapshotSo := so
 	h.lock.RUnlock()
 
 	// it is normal not getting storage responsibility
@@ -177,7 +178,6 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	if err := sp.SendUploadMerkleProof(merkleResp); err != nil {
 		uploadErr = fmt.Errorf("storage host failed to send merkle proof to the storage client: %s", err.Error())
-		hostNegotiateErr = uploadErr
 		return
 	}
 
@@ -231,12 +231,37 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
-	h.lock.Lock()
-	err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
-	h.lock.Unlock()
-
+	// wait for client commit success msg
+	msg, err = sp.HostWaitContractResp()
 	if err != nil {
-		uploadErr = fmt.Errorf("failed to modify the storage responsibility: %s", err.Error())
+		uploadErr = fmt.Errorf("storage host failed to get client commit success msg: %s", err.Error())
+		return
+	}
+
+	if msg.Code == storage.ClientCommitSuccessMsg {
+		h.lock.Lock()
+		err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
+		h.lock.Unlock()
+
+		if err != nil {
+			if err := sp.SendHostCommitFailedMsg(); err != nil {
+				uploadErr = fmt.Errorf("storage host failed to send commit failed msg: %s", err.Error())
+				return
+			}
+
+			// wait for client ack msg
+			msg, err = sp.HostWaitContractResp()
+			if err != nil {
+				uploadErr = fmt.Errorf("storage host failed to get client ack msg: %s", err.Error())
+				return
+			}
+		}
+	}
+
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
+		uploadErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
 		return
 	}
 

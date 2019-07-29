@@ -17,9 +17,22 @@ import (
 
 // DownloadHandler handles the download negotiation
 func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
-	var downloadErr, hostNegotiateErr, clientNegotiateErrerror error
+	var downloadErr, hostNegotiateErr, clientNegotiateErr error
 
 	defer func() {
+		if clientNegotiateErr != nil {
+			sp.SendHostAckMsg()
+		}
+
+		if hostNegotiateErr != nil {
+			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
+				msg, err := sp.HostWaitContractResp()
+				if err == nil && msg.Code == storage.ClientAckMsg {
+					sp.SendHostAckMsg()
+				}
+			}
+		}
+
 		if downloadErr != nil {
 			h.log.Error("data download failed", "err", downloadErr.Error())
 			sp.TriggerError(downloadErr)
@@ -36,21 +49,23 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	}
 
 	// as soon as client complete downloading, will send stop msg.
-	stopSignal := make(chan error, 1)
+	negotiateStopSignal := make(chan error, 1)
 	go func() {
+
 		msg, err := sp.HostWaitContractResp()
 		if err != nil {
-			stopSignal <- err
+			negotiateStopSignal <- err
 		} else if msg.Code != storage.NegotiationStopMsg {
-			stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
+			negotiateStopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
 		} else {
-			stopSignal <- nil
+			negotiateStopSignal <- nil
 		}
 	}()
 
 	// get storage responsibility
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, req.StorageContractID)
+	snapshotSo := so
 	h.lock.RUnlock()
 
 	// it is totally fine not getting the storage responsibility
@@ -63,12 +78,11 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
 		downloadErr = errors.New("no contract locked")
-		<-stopSignal
+		hostNegotiateErr = downloadErr
 		return
 	}
 
 	settings := h.externalConfig()
-
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
@@ -155,13 +169,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-	h.lock.Lock()
-	err = h.modifyStorageResponsibility(so, nil, nil, nil)
-	h.lock.Unlock()
-	if err != nil {
-		downloadErr = fmt.Errorf("host failed to modify the storage responsibility: %s", err.Error())
-		return
-	}
+
 
 	// enter response loop
 	for i, sec := range req.Sections {
@@ -181,6 +189,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 			proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
 			if err != nil {
 				downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
+				hostNegotiateErr = downloadErr
 				return
 			}
 		}
@@ -194,9 +203,10 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 
 		select {
-		case err := <-stopSignal:
+		case err := <-negotiateStopSignal:
 			if err != nil {
 				downloadErr = fmt.Errorf("stop signal received: %s", err.Error())
+				clientNegotiateErr = downloadErr
 				return
 			}
 
@@ -218,6 +228,42 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 	}
 
+	// the stop signal must arrive before RPC is complete.
+	downloadErr = <-negotiateStopSignal
+
+	// wait for client commit success msg
+	msg, err := sp.HostWaitContractResp()
+	if err != nil {
+		downloadErr = fmt.Errorf("storage host failed to get client commit success msg: %s", err.Error())
+		return
+	}
+
+	if msg.Code == storage.ClientCommitSuccessMsg {
+		h.lock.Lock()
+		err = h.modifyStorageResponsibility(so, nil, nil, nil)
+		h.lock.Unlock()
+		if err != nil {
+			if err := sp.SendHostCommitFailedMsg(); err != nil {
+				downloadErr = fmt.Errorf("storage host failed to send commit failed msg: %s", err.Error())
+				return
+			}
+
+			// wait for client ack msg
+			msg, err = sp.HostWaitContractResp()
+			if err != nil {
+				downloadErr = fmt.Errorf("storage host failed to get client ack msg: %s", err.Error())
+				return
+			}
+		}
+	}
+
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
+		downloadErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
+		return
+	}
+
 	// In case the user restart the program, the contract create handler will not be
 	// reached. Therefore, needs another check in the download handler
 	if !sp.IsStaticConn() {
@@ -227,9 +273,6 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 		h.ethBackend.SetStatic(node)
 	}
-
-	// the stop signal must arrive before RPC is complete.
-	downloadErr = <-stopSignal
 
 	return
 }

@@ -16,14 +16,14 @@ import (
 // ContractCreateHandler will be used to handle the contract create request
 // sent by the storage client
 func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
-	var contractCreateErr , hostNegotiateErr, clientNegotiateErr error
+	var contractCreateErr, hostNegotiateErr, clientNegotiateErr error
 	defer func() {
 		if clientNegotiateErr != nil {
 			sp.SendHostAckMsg()
 		}
 
 		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err != nil {
+			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg{
 					sp.SendHostAckMsg()
@@ -218,16 +218,17 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 			so.PotentialStorageRevenue = renewRevenue
 			so.RiskedStorageDeposit = renewBaseDeposit(so, h.externalConfig(), req.StorageContract)
 		}
+
 		if err := finalizeStorageResponsibility(h, so); err != nil {
 			contractCreateErr = fmt.Errorf("storage host failed to finialize storage responsibility: %s", err.Error())
-			sp.SendHostCommitFailedMsg()
+			if err := sp.SendHostCommitFailedMsg(); err != nil {
+				contractCreateErr = fmt.Errorf("storage host failed to send commit failed msg: %s", err.Error())
+				return
+			}
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
 			if err != nil {
-				// TODO rollback storage responsibility
-				// TODO how to dealt that rollback error
-				rollbackStorageResponsibility(h, so)
 				contractCreateErr = fmt.Errorf("storage host failed to get client ack msg: %s", err.Error())
 				return
 			}
@@ -347,6 +348,7 @@ func finalizeStorageResponsibility(h *StorageHost, so StorageResponsibility) err
 	defer h.checkAndUnlockStorageResponsibility(so.id())
 
 	if err := h.insertStorageResponsibility(so); err != nil {
+		h.deleteLockedStorageResponsibility(so.id())
 		return err
 	}
 	return nil

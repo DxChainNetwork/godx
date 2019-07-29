@@ -297,7 +297,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 		h.DeleteSector(sectorsRemoved[k])
 	}
 
-	// Update the financial information for the storage responsibility - apply the
+	// Update the financial information for the storage responsibility - apply the cost
 	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(so.ContractCost)
 	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.LockedStorageDeposit)
 	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(so.PotentialStorageRevenue)
@@ -306,7 +306,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(so.RiskedStorageDeposit)
 	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(so.TransactionFeeExpenses)
 
-	// Update the financial information for the storage responsibility - remove the
+	// Update the financial information for the storage responsibility - remove the cost
 	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(oldso.ContractCost)
 	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Sub(oldso.LockedStorageDeposit)
 	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Sub(oldso.PotentialStorageRevenue)
@@ -318,6 +318,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	return nil
 }
 
+// rollbackStorageResponsibility will rollback storage responsibility after modify when receive error
 func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error{
 	if _, ok := h.lockedStorageResponsibility[oldSo.id()]; !ok {
 		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")

@@ -315,6 +315,14 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	defer scs.Return(contract)
 
 	contractHeader := contract.Header()
+	// record the change to this contract, that can allow us to continue this incomplete upload at last time
+	walTxn, err := contract.UndoRevisionLog(contractHeader)
+	if err != nil {
+		log.Error("RecordUploadPreRev Failed", "err", err)
+		return err
+	}
+
+	// old contract revision
 	contractRevision := contractHeader.LatestContractRevision
 
 	// calculate price per sector
@@ -372,18 +380,33 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		req.NewMissedProofValues[i] = o.Value
 	}
 
-	// record the change to this contract, that can allow us to continue this incomplete upload at last time
-	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, storagePrice, bandwidthPrice)
-	if err != nil {
-		log.Error("RecordUploadPreRev Failed", "err", err)
-		return err
-	}
+	var clientNegotiateErr, hostNegotiateErr error
 	defer func() {
 		// record the successful or failed interactions
 		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+		}
+
+		if clientNegotiateErr != nil {
+			if err := sp.SendClientNegotiateErrorMsg(clientNegotiateErr); err != nil {
+				return
+			}
+		}
+
+		if hostNegotiateErr != nil {
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+			if err := sp.SendClientAckMsg(); err != nil {
+				return
+			}
+		}
+
+		// only negotiate error occurs, we wait for host ack msg
+		if clientNegotiateErr != nil || hostNegotiateErr != nil {
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
 		}
 	}()
 
@@ -405,7 +428,13 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		return storage.HostBusyHandleReqErr
 	}
 
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		msg.Decode(&hostNegotiateErr)
+		return hostNegotiateErr
+	}
+
 	if err := msg.Decode(&merkleResp); err != nil {
+		clientNegotiateErr = err
 		return err
 	}
 
@@ -421,6 +450,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		client.log.Error("something wrong for verifying diff proof", "error", err)
 	}
 	if !verified {
+		clientNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
 	}
 
@@ -432,6 +462,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		client.log.Error("something wrong for verifying diff proof", "error", err)
 	}
 	if !verified {
+		clientNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
 	}
 
@@ -449,29 +480,78 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	// client sign the new revision
 	clientRevisionSign, err := clientWallet.SignHash(clientAccount, rev.RLPHash().Bytes())
 	if err != nil {
+		clientNegotiateErr = err
 		return err
 	}
+
 	// send client sig to host
 	if err := sp.SendContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		clientNegotiateErr = err
 		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
+
 	// read the host's signature
 	var hostRevisionSig []byte
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		return err
 	}
+
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		msg.Decode(&hostNegotiateErr)
+		return hostNegotiateErr
+	}
+
 	if err := msg.Decode(&hostRevisionSig); err != nil {
+		clientNegotiateErr = err
 		return err
 	}
+
 	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
 	// commit upload revision
-	err = contract.CommitUpload(walTxn, rev, common.Hash{}, storagePrice, bandwidthPrice)
+	err = contract.CommitUpload(walTxn, rev, storagePrice, bandwidthPrice)
 	if err != nil {
-		return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		if err := sp.SendClientCommitFailedMsg(); err != nil {
+			return err
+		}
+
+		// wait for host ack msg
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		}
+		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
 	}
-	return nil
+
+	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		contract.RollbackUndo(walTxn)
+		return err
+	}
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		contract.RollbackUndo(walTxn)
+		log.Error("contract upload failed when wait for host ACK msg", "err", err.Error())
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		return err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return
+	case storage.HostCommitFailedMsg:
+		contract.RollbackUndo(walTxn)
+
+		sp.SendClientAckMsg()
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg{
+			return errors.New("host finalize upload revision error")
+		}
+	}
+
+	return errors.New("last msg is not host ack msg")
 }
 
 // Download calls the Read RPC, writing the requested data to w
@@ -526,8 +606,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 
 	defer scs.Return(contract)
 	contractHeader := contract.Header()
-	lastRevision := contractHeader.LatestContractRevision
+	walTxn, err := contract.UndoRevisionLog(contractHeader)
+	if err != nil {
+		return err
+	}
 
+	lastRevision := contractHeader.LatestContractRevision
 	// calculate price
 	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessPrice := hostInfo.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
@@ -570,18 +654,33 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		req.NewMissedProofValues[i] = nmpo.Value
 	}
 
-	// record the change to this contract
-	walTxn, err := contract.RecordDownloadPreRev(newRevision, price)
-	if err != nil {
-		return err
-	}
-
 	// record the successful or failed interactions
+	var clientNegotiateErr, hostNegotiateErr error
 	defer func() {
 		if err != nil && err != storage.HostBusyHandleReqErr {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+		}
+
+		if clientNegotiateErr != nil {
+			if err := sp.SendClientNegotiateErrorMsg(clientNegotiateErr); err != nil {
+				return
+			}
+		}
+
+		if hostNegotiateErr != nil {
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+			if err := sp.SendClientAckMsg(); err != nil {
+				return
+			}
+		}
+
+		// only negotiate error occurs, we wait for host ack msg
+		if clientNegotiateErr != nil || hostNegotiateErr != nil {
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
 		}
 	}()
 
@@ -591,20 +690,20 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		return err
 	}
 
-	// spawn a goroutine to handle cancellation
-	doneChan := make(chan struct{})
-	go func() {
-		select {
-		case <-cancel:
-		case <-doneChan:
-		}
-
-		// if negotiation is canceled or done, client should send stop msg to host
-		sp.SendRevisionStop()
-	}()
-
-	// ensure we send DownloadStop before returning
-	defer close(doneChan)
+	//// spawn a goroutine to handle cancellation
+	//doneChan := make(chan struct{})
+	//go func() {
+	//	select {
+	//	case <-cancel:
+	//	case <-doneChan:
+	//	}
+	//
+	//	// if negotiation is canceled or done, client should send stop msg to host
+	//	sp.SendRevisionStop()
+	//}()
+	//
+	//// ensure we send DownloadStop before returning
+	//defer close(doneChan)
 
 	// read responses
 	var hostSig []byte
@@ -622,38 +721,44 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		}
 
 		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
+		if msg.Code == storage.HostNegotiateErrorMsg {
+			msg.Decode(&hostNegotiateErr)
+			return hostNegotiateErr
 		}
 
 		err = msg.Decode(&resp)
 		if err != nil {
+			clientNegotiateErr = err
 			return err
 		}
 
 		// if host sent data, should validate it
 		if len(resp.Data) > 0 {
 			if len(resp.Data) != int(sec.Length) {
-				return errors.New("host did not send enough sector data")
+				err = errors.New("host did not send enough sector data")
+				clientNegotiateErr = err
+				return err
 			}
 			if req.MerkleProof {
 				proofStart := int(sec.Offset) / merkle.LeafSize
 				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 				verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
 				if !verified || err != nil {
-					return errors.New("host provided incorrect sector data or Merkle proof")
+					err = errors.New("host provided incorrect sector data or Merkle proof")
+					clientNegotiateErr = err
+					return err
 				}
 			}
 
 			// write sector data
 			if _, err := w.Write(resp.Data); err != nil {
 				log.Error("Write Buffer", "err", err)
+				clientNegotiateErr = err
 				return err
 			}
 
 		}
+
 
 		// if host sent signature, indicate the download complete, should exit the loop
 		if len(resp.Signature) > 0 {
@@ -662,43 +767,80 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		}
 	}
 
-	if hostSig == nil {
-		// if we haven't received host signature, just read again
-		var resp storage.DownloadResponse
-		msg, err := sp.ClientWaitContractResp()
-		if err != nil {
-			return err
-		}
+	//if hostSig == nil {
+	//	// if we haven't received host signature, just read again
+	//	var resp storage.DownloadResponse
+	//	msg, err := sp.ClientWaitContractResp()
+	//	if err != nil {
+	//		return err
+	//	}
+	//
+	//	// meaning request was sent too frequently, the host's evaluation
+	//	// will not be degraded
+	//	if msg.Code == storage.HostBusyHandleReqMsg {
+	//		return storage.HostBusyHandleReqErr
+	//	}
+	//
+	//	// if host send some negotiation error, client should handler it
+	//	if msg.Code == storage.HostNegotiateErrorMsg {
+	//		msg.Decode(&hostNegotiateErr)
+	//		return hostNegotiateErr
+	//	}
+	//
+	//	err = msg.Decode(&resp)
+	//	if err != nil {
+	//		clientNegotiateErr = err
+	//		return err
+	//	}
+	//
+	//	hostSig = resp.Signature
+	//}
 
-		// meaning request was sent too frequently, the host's evaluation
-		// will not be degraded
-		if msg.Code == storage.HostBusyHandleReqMsg {
-			return storage.HostBusyHandleReqErr
-		}
-
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.NegotiationErrorMsg {
-			var negotiationErr error
-			msg.Decode(&negotiationErr)
-			return negotiationErr
-		}
-
-		err = msg.Decode(&resp)
-		if err != nil {
-			return err
-		}
-
-		hostSig = resp.Signature
-	}
 	newRevision.Signatures = [][]byte{clientSig, hostSig}
 
 	// commit this revision
 	err = contract.CommitDownload(walTxn, newRevision, price)
 	if err != nil {
-		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
+		if err := sp.SendClientCommitFailedMsg(); err != nil {
+			return err
+		}
+
+		// wait for host ack msg
+		msg, err := sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		}
+		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
 	}
 
-	return nil
+	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		contract.RollbackUndo(walTxn)
+		return err
+	}
+
+	// wait for HostAckMsg until timeout
+	msg, err := sp.ClientWaitContractResp()
+	if err != nil {
+		contract.RollbackUndo(walTxn)
+		log.Error("contract upload failed when wait for host ACK msg", "err", err.Error())
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		return err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return
+	case storage.HostCommitFailedMsg:
+		contract.RollbackUndo(walTxn)
+
+		sp.SendClientAckMsg()
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg{
+			return errors.New("host finalize upload revision error")
+		}
+	}
+
+	return errors.New("last msg is not host ack msg")
 }
 
 // calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.

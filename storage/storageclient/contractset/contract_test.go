@@ -65,7 +65,7 @@ func TestContract_RecordUploadPreRev(t *testing.T) {
 	bandWidthCost := common.RandomBigInt()
 	root := randomRootGenerator()
 
-	wt, err := contract.RecordUploadPreRev(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
+	wt, err := contract.UndoRevisionLog(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
 	if err != nil {
 		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
 	}
@@ -137,7 +137,7 @@ func TestContract_CommitUpload(t *testing.T) {
 	bandWidthCost := common.RandomBigInt()
 	root := randomRootGenerator()
 
-	wt, err := contract.RecordUploadPreRev(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
+	wt, err := contract.UndoRevisionLog(storageContractRevisionGenerator(), root, storageCost, bandWidthCost)
 	if err != nil {
 		t.Fatalf("failed to record the upload pre revision: %s", err.Error())
 	}

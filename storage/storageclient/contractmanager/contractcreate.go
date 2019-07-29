@@ -325,8 +325,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
-		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
-		return storage.ContractMetaData{}, clientNegotiateErr
+		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
 
 	// wait until response was sent by storage host
@@ -383,7 +382,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
-		//TODO when occur error, we don't rollback temporarily and only send error msg to host
+		// ignore the send message error
 		sp.SendClientCommitFailedMsg()
 
 		// wait for host ack msg
@@ -415,6 +414,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return meta, nil
 	case storage.HostCommitFailedMsg:
 		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
 		sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg{

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -65,32 +66,15 @@ func (c *Contract) UpdateStatus(status storage.ContractStatus) (err error) {
 // RecordUploadPreRev will record pre-revision contract revision, which
 // is not stored in the database. once negotiation has completed, CommitUpload
 // will be called to record the actual contract revision and store it into database
-func (c *Contract) RecordUploadPreRev(rev types.StorageContractRevision, root common.Hash, storageCost, bandwidthCost common.BigInt) (t *writeaheadlog.Transaction, err error) {
-	// get the contract header from the memory
-	c.headerLock.Lock()
-	contractHeader := c.header
-	rootCount := c.merkleRoots.len()
-	c.headerLock.Unlock()
-
-	// update header information
-	contractHeader.LatestContractRevision = rev
-	contractHeader.UploadCost = contractHeader.UploadCost.Add(bandwidthCost)
-	contractHeader.StorageCost = contractHeader.StorageCost.Add(storageCost)
-
+func (c *Contract) UndoRevisionLog(contractHeader ContractHeader) (t *writeaheadlog.Transaction, err error) {
 	// make header and root update wal operations
 	chOp, err := c.contractHeaderWalOP(contractHeader)
 	if err != nil {
 		return
 	}
 
-	rtOp, err := c.merkleRootWalOP(root, rootCount)
-	if err != nil {
-		return
-	}
-
 	t, err = c.wal.NewTransaction([]writeaheadlog.Operation{
 		chOp,
-		rtOp,
 	})
 
 	if err != nil {
@@ -146,7 +130,15 @@ func (c *Contract) RecordDownloadPreRev(rev types.StorageContractRevision, bandw
 
 // CommitUpload will update the contract header and merkle root information after each file upload
 // information will be stored in both db and memory
-func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.StorageContractRevision, root common.Hash, storageCost, bandwidthCost common.BigInt) (err error) {
+func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.StorageContractRevision, storageCost, bandwidthCost common.BigInt) (err error) {
+	defer func() {
+		if err != nil {
+			if errUndo := c.RollbackUndo(t); errUndo != nil {
+				log.Error("[CommitUpload] Rollback undo transaction failed", "err", errUndo)
+			}
+		}
+	}()
+
 	// get the contract header information
 	c.headerLock.Lock()
 	contractHeader := c.header
@@ -159,10 +151,6 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 
 	if err = c.contractHeaderUpdate(contractHeader); err != nil {
 		return fmt.Errorf("during the upload commiting, %s", err.Error())
-	}
-
-	if err = c.merkleRoots.push(root); err != nil {
-		return fmt.Errorf("failed to save the root into db while commit upload: %s", err.Error())
 	}
 
 	if err = t.Release(); err != nil {
@@ -183,6 +171,14 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 // CommitDownload will update the contract header information after each file download
 // information will be stored in both db and memory
 func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.StorageContractRevision, bandwidth common.BigInt) (err error) {
+	defer func() {
+		if err != nil {
+			if errUndo := c.RollbackUndo(t); errUndo != nil {
+				log.Error("[CommitUpload] Rollback undo transaction failed", "err", errUndo)
+			}
+		}
+	}()
+
 	// get the contract header information
 	c.headerLock.Lock()
 	contractHeader := c.header
@@ -243,6 +239,27 @@ func (c *Contract) CommitTxns() (err error) {
 
 	// empty all un-applied transactions
 	c.unappliedTxns = nil
+	return
+}
+
+func (c *Contract) RollbackUndo(t *writeaheadlog.Transaction) (err error)  {
+	for _, op := range t.Operations {
+		switch op.Name {
+		case dbContractHeader:
+			var walHeader walContractHeaderEntry
+			if err = json.Unmarshal(op.Data, &walHeader); err != nil {
+				return
+			}
+			if err = c.contractHeaderUpdate(walHeader.Header); err != nil {
+				return
+			}
+		}
+	}
+
+	if err = t.Release(); err != nil {
+		return
+	}
+
 	return
 }
 
