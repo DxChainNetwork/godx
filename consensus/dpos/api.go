@@ -35,7 +35,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 	}
 
 	dbWithCache := trie.NewDatabaseWithCache(api.dpos.db, 256)
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochHash, dbWithCache)
+	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
