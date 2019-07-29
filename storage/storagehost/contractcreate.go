@@ -193,7 +193,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	// once successfully created the contract, insert the contract into the memory
 	h.lock.Lock()
-	h.clientNodeToContract[sp.PeerNode()] = sc.ID()
+	h.clientToContract[sp.PeerNode().String()] = sc.ID()
 	h.lock.Unlock()
 }
 
