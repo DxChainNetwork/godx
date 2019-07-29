@@ -6,10 +6,11 @@ package eth
 
 import (
 	"errors"
+	"time"
+
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"time"
 )
 
 // TriggerError is used to send the error message to the errMsg channel,
@@ -91,10 +92,16 @@ func (p *peer) RequestContractDownload(req storage.DownloadRequest) error {
 	return p2p.Send(p.rw, storage.ContractDownloadReqMsg, req)
 }
 
-// SendRevisionStop is sent by the storage client which used to indicate
+// SendClientRevisionStop is sent by the storage client which used to indicate
 // the storage download revision is done
-func (p *peer) SendRevisionStop() error {
-	return p2p.Send(p.rw, storage.NegotiationStopMsg, "revision stop")
+func (p *peer) SendClientRevisionStop() error {
+	return p2p.Send(p.rw, storage.ClientStopMsg, "client revision stop")
+}
+
+// SendHostRevisionStop is sent by the storage host which used to indicate
+// the storage download revision is done
+func (p *peer) SendHostRevisionStop() error {
+	return p2p.Send(p.rw, storage.HostStopMsg, "host revision stop")
 }
 
 // SendContractDownloadData is sent by the client. Data piece requested by the
