@@ -99,27 +99,27 @@ func NewDposContext(db ethdb.Database) (*DposContext, error) {
 func NewDposContextFromProto(db ethdb.Database, ctxProto *DposContextProto) (*DposContext, error) {
 	dbWithCache := trie.NewDatabaseWithCache(db, 256)
 
-	epochTrie, err := NewEpochTrie(ctxProto.EpochHash, dbWithCache)
+	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := NewDelegateTrie(ctxProto.DelegateHash, dbWithCache)
+	delegateTrie, err := NewDelegateTrie(ctxProto.DelegateRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := NewVoteTrie(ctxProto.VoteHash, dbWithCache)
+	voteTrie, err := NewVoteTrie(ctxProto.VoteRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := NewCandidateTrie(ctxProto.CandidateHash, dbWithCache)
+	candidateTrie, err := NewCandidateTrie(ctxProto.CandidateRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
 
-	mintCntTrie, err := NewMintCntTrie(ctxProto.MintCntHash, dbWithCache)
+	mintCntTrie, err := NewMintCntTrie(ctxProto.MintCntRoot, dbWithCache)
 	if err != nil {
 		return nil, err
 	}
@@ -179,58 +179,58 @@ func (dc *DposContext) RevertToSnapShot(snapshot *DposContext) {
 // FromProto will recover the entire DposContext with the given trie root
 func (dc *DposContext) FromProto(dcp *DposContextProto) error {
 	var err error
-	dc.epochTrie, err = NewEpochTrie(dcp.EpochHash, dc.db)
+	dc.epochTrie, err = NewEpochTrie(dcp.EpochRoot, dc.db)
 	if err != nil {
 		return err
 	}
 
-	dc.delegateTrie, err = NewDelegateTrie(dcp.DelegateHash, dc.db)
+	dc.delegateTrie, err = NewDelegateTrie(dcp.DelegateRoot, dc.db)
 	if err != nil {
 		return err
 	}
 
-	dc.candidateTrie, err = NewCandidateTrie(dcp.CandidateHash, dc.db)
+	dc.candidateTrie, err = NewCandidateTrie(dcp.CandidateRoot, dc.db)
 	if err != nil {
 		return err
 	}
 
-	dc.voteTrie, err = NewVoteTrie(dcp.VoteHash, dc.db)
+	dc.voteTrie, err = NewVoteTrie(dcp.VoteRoot, dc.db)
 	if err != nil {
 		return err
 	}
 
-	dc.mintCntTrie, err = NewMintCntTrie(dcp.MintCntHash, dc.db)
+	dc.mintCntTrie, err = NewMintCntTrie(dcp.MintCntRoot, dc.db)
 	return err
 }
 
 // DposContextProto wrap 5 trie root hash
 type DposContextProto struct {
-	EpochHash     common.Hash `json:"epochRoot"        gencodec:"required"`
-	DelegateHash  common.Hash `json:"delegateRoot"     gencodec:"required"`
-	CandidateHash common.Hash `json:"candidateRoot"    gencodec:"required"`
-	VoteHash      common.Hash `json:"voteRoot"         gencodec:"required"`
-	MintCntHash   common.Hash `json:"mintCntRoot"      gencodec:"required"`
+	EpochRoot     common.Hash `json:"epochRoot"        gencodec:"required"`
+	DelegateRoot  common.Hash `json:"delegateRoot"     gencodec:"required"`
+	CandidateRoot common.Hash `json:"candidateRoot"    gencodec:"required"`
+	VoteRoot      common.Hash `json:"voteRoot"         gencodec:"required"`
+	MintCntRoot   common.Hash `json:"mintCntRoot"      gencodec:"required"`
 }
 
 // ToProto convert DposContext to DposContextProto
 func (dc *DposContext) ToProto() *DposContextProto {
 	return &DposContextProto{
-		EpochHash:     dc.epochTrie.Hash(),
-		DelegateHash:  dc.delegateTrie.Hash(),
-		CandidateHash: dc.candidateTrie.Hash(),
-		VoteHash:      dc.voteTrie.Hash(),
-		MintCntHash:   dc.mintCntTrie.Hash(),
+		EpochRoot:     dc.epochTrie.Hash(),
+		DelegateRoot:  dc.delegateTrie.Hash(),
+		CandidateRoot: dc.candidateTrie.Hash(),
+		VoteRoot:      dc.voteTrie.Hash(),
+		MintCntRoot:   dc.mintCntTrie.Hash(),
 	}
 }
 
 // Root calculates the root hash of 5 tries in DposContext
 func (dcp *DposContextProto) Root() (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
-	rlp.Encode(hw, dcp.EpochHash)
-	rlp.Encode(hw, dcp.DelegateHash)
-	rlp.Encode(hw, dcp.CandidateHash)
-	rlp.Encode(hw, dcp.VoteHash)
-	rlp.Encode(hw, dcp.MintCntHash)
+	rlp.Encode(hw, dcp.EpochRoot)
+	rlp.Encode(hw, dcp.DelegateRoot)
+	rlp.Encode(hw, dcp.CandidateRoot)
+	rlp.Encode(hw, dcp.VoteRoot)
+	rlp.Encode(hw, dcp.MintCntRoot)
 	hw.Sum(h[:0])
 	return h
 }
@@ -373,11 +373,11 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 	}
 
 	return &DposContextProto{
-		EpochHash:     epochRoot,
-		DelegateHash:  delegateRoot,
-		VoteHash:      voteRoot,
-		CandidateHash: candidateRoot,
-		MintCntHash:   mintCntRoot,
+		EpochRoot:     epochRoot,
+		DelegateRoot:  delegateRoot,
+		VoteRoot:      voteRoot,
+		CandidateRoot: candidateRoot,
+		MintCntRoot:   mintCntRoot,
 	}, nil
 }
 
