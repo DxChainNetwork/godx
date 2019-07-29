@@ -6,13 +6,14 @@ package storagehost
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/unit"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 func TestHostPrivateAPI_SetConfig(t *testing.T) {
