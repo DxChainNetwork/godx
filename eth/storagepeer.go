@@ -13,8 +13,8 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// TriggerError is used to send the error message to the errMsg channel,
-// where the node will exit the readLoop and disconnect with the peer
+// TriggerError is used to terminate the connection
+// between local node and peer node
 func (p *peer) TriggerError(err error) {
 	p.Disconnect(p2p.DiscStorageError)
 }
