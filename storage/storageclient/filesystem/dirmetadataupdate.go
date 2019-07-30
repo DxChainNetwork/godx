@@ -115,7 +115,7 @@ func (fs *fileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadl
 
 // createWalOp creates a dir metadata update based on the give path
 func createWalOp(path storage.DxPath) (writeaheadlog.Operation, error) {
-	b, err := rlp.EncodeToBytes(path)
+	b, err := rlp.EncodeToBytes(path.Path)
 	if err != nil {
 		return writeaheadlog.Operation{}, err
 	}
@@ -133,6 +133,9 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 	var s string
 	if err := rlp.DecodeBytes(operation.Data, &s); err != nil {
 		return storage.DxPath{}, err
+	}
+	if len(s) == 0 {
+		return storage.RootDxPath(), nil
 	}
 	return storage.NewDxPath(s)
 }

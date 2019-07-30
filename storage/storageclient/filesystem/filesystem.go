@@ -432,6 +432,7 @@ func (fs *fileSystem) loadUpdateWal() error {
 			path, err := decodeWalOp(op)
 			if err != nil {
 				fs.logger.Warn(fmt.Sprintf("cannot decode txn[%d].operation[%d]", i, j), "error", err)
+				continue
 			}
 			// if error happened: already in progress
 			// release the transaction and continue to the next transaction
