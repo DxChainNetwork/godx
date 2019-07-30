@@ -299,9 +299,11 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 			err = common.ErrCompose(err, txn.Release())
 		}
 
-		fs.lock.Lock()
-		delete(fs.unfinishedUpdates, update.dxPath)
-		fs.lock.Unlock()
+		defer func() {
+			fs.lock.Lock()
+			delete(fs.unfinishedUpdates, update.dxPath)
+			fs.lock.Unlock()
+		}()
 	}
 
 	if err == nil {
