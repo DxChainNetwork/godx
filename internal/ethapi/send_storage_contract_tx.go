@@ -7,12 +7,13 @@ package ethapi
 import (
 	"context"
 	"errors"
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rlp"
-	"math/big"
 )
 
 // PrivateStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
@@ -172,5 +173,5 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Back
 		return nil, errors.New(`storage contract tx without to or input`)
 	}
 
-	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+	return types.NewTransaction(types.Binary, uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
 }
