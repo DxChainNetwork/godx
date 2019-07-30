@@ -22,6 +22,34 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
+// TestCreateDecodeWalOp test the conversion between createWalOp and decodeWalOp
+func TestCreateDecodeWalOp(t *testing.T) {
+	tests := []struct {
+		path   string
+		expect string
+	}{
+		{"/User/ubuntu/temp", "User/ubuntu/temp"},
+		{"testDir", "testDir"},
+	}
+	for _, test := range tests {
+		path, err := storage.NewDxPath(test.path)
+		if err != nil {
+			t.Fatalf("invalid input path: %v", test.path)
+		}
+		op, err := createWalOp(path)
+		if err != nil {
+			t.Fatalf("cannot create wal operation: %v", test.path)
+		}
+		recovered, err := decodeWalOp(op)
+		if err != nil {
+			t.Fatalf("cannot decode wal operation: %v", test.path)
+		}
+		if recovered.Path != test.expect {
+			t.Errorf("unexpected path. Got %v, Expect %v", recovered.Path, test.expect)
+		}
+	}
+}
+
 // TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
 // under different contractManager under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
