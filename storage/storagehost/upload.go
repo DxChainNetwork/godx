@@ -189,7 +189,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	}
 
 	if msg.Code == storage.ClientNegotiateErrorMsg {
-		msg.Decode(&clientNegotiateErr)
+		clientNegotiateErr = storage.ClientNegotiateErr
 		uploadErr = clientNegotiateErr
 		return
 	}

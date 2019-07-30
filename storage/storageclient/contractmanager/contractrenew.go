@@ -451,7 +451,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		}
 
 		if hostNegotiateErr != nil {
-			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			sp.SendClientAckMsg()
 		}
 
@@ -494,7 +493,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		msg.Decode(&hostNegotiateErr)
+		hostNegotiateErr = storage.HostNegotiateErr
 		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
@@ -538,7 +537,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		msg.Decode(&hostNegotiateErr)
+		hostNegotiateErr = storage.HostNegotiateErr
 		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 

@@ -135,7 +135,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	}
 
 	if msg.Code == storage.ClientNegotiateErrorMsg {
-		msg.Decode(&clientNegotiateErr)
+		clientNegotiateErr = storage.ClientNegotiateErr
 		contractCreateErr = clientNegotiateErr
 		return
 	}

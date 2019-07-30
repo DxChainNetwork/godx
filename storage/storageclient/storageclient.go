@@ -396,7 +396,6 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		}
 
 		if hostNegotiateErr != nil {
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 			if err := sp.SendClientAckMsg(); err != nil {
 				return
 			}
@@ -429,7 +428,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		msg.Decode(&hostNegotiateErr)
+		hostNegotiateErr = storage.HostNegotiateErr
 		return hostNegotiateErr
 	}
 
@@ -498,7 +497,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		msg.Decode(&hostNegotiateErr)
+		hostNegotiateErr = storage.HostNegotiateErr
 		return hostNegotiateErr
 	}
 
@@ -657,7 +656,6 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		}
 
 		if hostNegotiateErr != nil {
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 			if err := sp.SendClientAckMsg(); err != nil {
 				return
 			}
@@ -694,7 +692,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		msg.Decode(&hostNegotiateErr)
+		hostNegotiateErr = storage.HostNegotiateErr
 		return hostNegotiateErr
 	}
 

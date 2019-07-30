@@ -17,7 +17,11 @@ var (
 	// the host's evaluation will not be deducted
 	HostBusyHandleReqErr = errors.New("client must wait until the host finish its's previous request")
 
+	// ClientNegotiateErr defines that client occurs error while negotiate
+	ClientNegotiateErr = errors.New("client negotiate error")
 
+	// HostNegotiateErr defines that client occurs error while negotiate
+	HostNegotiateErr = errors.New("host negotiate error")
 )
 
 // Negotiation related messages
