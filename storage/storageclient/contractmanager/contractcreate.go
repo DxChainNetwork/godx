@@ -20,6 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
+// prepareCreateContract refers that client will sign some contracts with hosts, which satisfies the upload/download demand
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
@@ -234,15 +235,17 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection failed while creating the contract", err)
 	}
 
-	var clientNegotiateErr, hostNegotiateErr error
 	// Increase Successful/Failed interactions accordingly
+	// Ignore the send negotiate network error, we expect that client will wait for host
+	// that prevents client from opening another negotiate stage prematurely but receives host busy signal
+	var clientNegotiateErr, hostNegotiateErr error
 	defer func(sp storage.Peer) {
 		if clientNegotiateErr != nil {
-			sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
+			_ = sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
 		}
 
 		if hostNegotiateErr != nil {
-			sp.SendClientAckMsg()
+			_ = sp.SendClientAckMsg()
 		}
 
 		// only negotiate error occurs, we wait for host ack msg
@@ -324,7 +327,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
+		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	// wait until response was sent by storage host
@@ -381,8 +385,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
-		// ignore the send message error
-		sp.SendClientCommitFailedMsg()
+		// ignore the send message error the same as negotiate error
+		_ = sp.SendClientCommitFailedMsg()
 
 		// wait for host ack msg
 		msg, err = sp.ClientWaitContractResp()
@@ -395,16 +399,16 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
-		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
 		log.Error("contract create failed when wait for host ACK msg", "err", err.Error())
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -412,9 +416,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	case storage.HostAckMsg:
 		return meta, nil
 	case storage.HostCommitFailedMsg:
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = sp.SendClientAckMsg()
 
-		sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg{
 			return storage.ContractMetaData{}, errors.New("host finalize storage responsibility error")
@@ -430,7 +434,6 @@ func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage
 		return nil
 	}
 	if c, exist := contractSet.Acquire(id); exist {
-		// TODO the node turn off suddenly at this moment, how to handle it ???
 		if err := contractSet.Delete(c); err != nil {
 			return err
 		}

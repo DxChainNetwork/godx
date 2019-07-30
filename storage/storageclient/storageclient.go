@@ -314,15 +314,8 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 
 	defer scs.Return(contract)
 
+	// old contract header and revision
 	contractHeader := contract.Header()
-	// record the change to this contract, that can allow us to continue this incomplete upload at last time
-	walTxn, err := contract.UndoRevisionLog(contractHeader)
-	if err != nil {
-		log.Error("RecordUploadPreRev Failed", "err", err)
-		return err
-	}
-
-	// old contract revision
 	contractRevision := contractHeader.LatestContractRevision
 
 	// calculate price per sector
@@ -474,6 +467,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	clientAccount := accounts.Account{Address: clientAddr}
 	clientWallet, err := am.Find(clientAccount)
 	if err != nil {
+		clientNegotiateErr = err
 		return err
 	}
 	// client sign the new revision
@@ -509,7 +503,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
 	// commit upload revision
-	err = contract.CommitUpload(walTxn, rev, storagePrice, bandwidthPrice)
+	err = contract.CommitRevision(rev, storagePrice, bandwidthPrice)
 	if err != nil {
 		if err := sp.SendClientCommitFailedMsg(); err != nil {
 			return err
@@ -524,15 +518,16 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		contract.RollbackUndo(walTxn)
+		_ = contract.RollbackUndoMem(contractHeader)
 		return err
 	}
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
-		contract.RollbackUndo(walTxn)
 		log.Error("contract upload failed when wait for host ACK msg", "err", err.Error())
+
+		_ = contract.RollbackUndoMem(contractHeader)
 		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
 		return err
 	}
@@ -541,9 +536,8 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	case storage.HostAckMsg:
 		return
 	case storage.HostCommitFailedMsg:
-		contract.RollbackUndo(walTxn)
-
-		sp.SendClientAckMsg()
+		_ = contract.RollbackUndoMem(contractHeader)
+		_ = sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg {
 			return errors.New("host finalize upload revision error")
@@ -589,15 +583,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	if !exist {
 		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
-
 	defer scs.Return(contract)
-	contractHeader := contract.Header()
-	walTxn, err := contract.UndoRevisionLog(contractHeader)
-	if err != nil {
-		return err
-	}
 
+	// old contract header and revision
+	contractHeader := contract.Header()
 	lastRevision := contractHeader.LatestContractRevision
+
 	// calculate price
 	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
 	sectorAccessPrice := hostInfo.SectorAccessPrice
@@ -740,7 +731,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	newRevision.Signatures = [][]byte{clientSig, hostSig}
 
 	// commit this revision
-	err = contract.CommitDownload(walTxn, newRevision, price)
+	err = contract.CommitRevision(newRevision, price)
 	if err != nil {
 		if err := sp.SendClientCommitFailedMsg(); err != nil {
 			return err
@@ -755,15 +746,16 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		contract.RollbackUndo(walTxn)
+		_ = contract.RollbackUndoMem(contractHeader)
 		return err
 	}
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
-		contract.RollbackUndo(walTxn)
-		log.Error("contract upload failed when wait for host ACK msg", "err", err.Error())
+		log.Error("contract download failed when wait for host ACK msg", "err", err.Error())
+
+		_ = contract.RollbackUndoMem(contractHeader)
 		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
 		return err
 	}
@@ -772,9 +764,9 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	case storage.HostAckMsg:
 		return
 	case storage.HostCommitFailedMsg:
-		contract.RollbackUndo(walTxn)
+		_ = contract.RollbackUndoMem(contractHeader)
+		_ = sp.SendClientAckMsg()
 
-		sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg {
 			return errors.New("host finalize upload revision error")

@@ -19,14 +19,14 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	var contractCreateErr, hostNegotiateErr, clientNegotiateErr error
 	defer func() {
 		if clientNegotiateErr != nil {
-			sp.SendHostAckMsg()
+			_ = sp.SendHostAckMsg()
 		}
 
 		if hostNegotiateErr != nil {
 			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg{
-					sp.SendHostAckMsg()
+					_ = sp.SendHostAckMsg()
 				}
 			}
 		}
@@ -237,7 +237,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
-		rollbackStorageResponsibility(h, so)
+		_ = rollbackStorageResponsibility(h, so)
 		contractCreateErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
 		return
 	}
@@ -354,6 +354,7 @@ func finalizeStorageResponsibility(h *StorageHost, so StorageResponsibility) err
 	return nil
 }
 
+// rollbackStorageResponsibility will delete storage responsibility through finalizeStorageResponsibility method
 func rollbackStorageResponsibility(h *StorageHost, so StorageResponsibility) error {
 	// Get a lock on the storage responsibility
 	lockErr := h.checkAndTryLockStorageResponsibility(so.id(), storage.ResponsibilityLockTimeout)

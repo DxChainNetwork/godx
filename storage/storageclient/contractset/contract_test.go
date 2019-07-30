@@ -205,7 +205,7 @@ func TestContract_CommitUploadAndRollback(t *testing.T) {
 		t.Fatalf("failed to commit upload: %s", err.Error())
 	}
 
-	contract.RollbackUndo(wt)
+	contract.RollbackUndoWal(wt)
 
 	rollbackRevision := contract.Header().LatestContractRevision
 	if !reflect.DeepEqual(originRevision.RLPHash(), rollbackRevision.RLPHash()) {

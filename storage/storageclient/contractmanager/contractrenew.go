@@ -447,11 +447,18 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	var clientNegotiateErr, hostNegotiateErr error
 	defer func(sp storage.Peer) {
 		if clientNegotiateErr != nil {
-			sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
+			_ = sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
 		}
 
 		if hostNegotiateErr != nil {
-			sp.SendClientAckMsg()
+			_ = sp.SendClientAckMsg()
+		}
+
+		// only negotiate error occurs, we wait for host ack msg
+		if clientNegotiateErr != nil || hostNegotiateErr != nil {
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
 		}
 
 		if err != nil && err != storage.HostBusyHandleReqErr {
@@ -526,7 +533,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
+		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	var hostRevisionSign []byte
@@ -589,7 +597,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	contractMetaData, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
 	if err != nil {
 		// ignore the send message error
-		sp.SendClientCommitFailedMsg()
+		_ = sp.SendClientCommitFailedMsg()
 
 		// wait for host ack msg
 		msg, err = sp.ClientWaitContractResp()
@@ -602,7 +610,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -610,7 +618,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -618,9 +626,9 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	case storage.HostAckMsg:
 		return contractMetaData, nil
 	case storage.HostCommitFailedMsg:
-		rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		_ = sp.SendClientAckMsg()
 
-		sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg{
 			return storage.ContractMetaData{}, errors.New("host finalize storage responsibility error")

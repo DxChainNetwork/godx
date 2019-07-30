@@ -63,48 +63,38 @@ func (c *Contract) UpdateStatus(status storage.ContractStatus) (err error) {
 	return
 }
 
-// RecordUploadPreRev will record pre-revision contract revision, which
-// is not stored in the database. once negotiation has completed, CommitUpload
-// will be called to record the actual contract revision and store it into database
-func (c *Contract) UndoRevisionLog(contractHeader ContractHeader) (t *writeaheadlog.Transaction, err error) {
-	// make header and root update wal operations
-	chOp, err := c.contractHeaderWalOP(contractHeader)
-	if err != nil {
-		return
-	}
-
-	t, err = c.wal.NewTransaction([]writeaheadlog.Operation{
-		chOp,
-	})
-
-	if err != nil {
-		return
-	}
-
-	if err = <-t.Commit(); err != nil {
-		return
-	}
-
-	// append the transaction into the un-applied transactions
-	c.unappliedTxns = append(c.unappliedTxns, t)
-
-	return
-}
-
-// RecordDownloadPreRev will record pre-revision contract revision after file download operation,
-// which is not stored in the database. once negotiation has completed, CommitDownload
-// will be called to record the actual contract revision and store it into database
-func (c *Contract) RecordDownloadPreRev(rev types.StorageContractRevision, bandwidthCost common.BigInt) (t *writeaheadlog.Transaction, err error) {
-	// get the storage contract header information from the memory
+// CommitRevision unify the CommitUpload and CommitDownload signature and use memory snapshot instead of WAL.Transaction log
+func (c *Contract) CommitRevision(signedRevision types.StorageContractRevision,  costs ...common.BigInt) (err error) {
+	// get the contract header information
 	c.headerLock.Lock()
 	contractHeader := c.header
 	c.headerLock.Unlock()
 
-	// update the contract header information
-	contractHeader.LatestContractRevision = rev
-	contractHeader.DownloadCost = contractHeader.DownloadCost.Add(bandwidthCost)
+	// update the contract
+	contractHeader.LatestContractRevision = signedRevision
 
-	// make header wal transaction
+	paramLen := len(costs)
+	if paramLen == 2 {
+		// upload scenario
+		contractHeader.StorageCost = contractHeader.StorageCost.Add(costs[0])
+		contractHeader.UploadCost = contractHeader.UploadCost.Add(costs[1])
+	} else if paramLen == 1 {
+		// download scenario
+		contractHeader.DownloadCost = contractHeader.DownloadCost.Add(costs[0])
+	}
+
+	if err = c.contractHeaderUpdate(contractHeader); err != nil {
+		return fmt.Errorf("during the upload commiting, %s", err.Error())
+	}
+
+	return
+}
+
+// UndoRevisionLog will record pre-revision contract revision, which
+// is not stored in the database. once negotiation has completed, CommitUpload/CommitDownload
+// will be called to record the actual contract revision and store it into database
+func (c *Contract) UndoRevisionLog(contractHeader ContractHeader) (t *writeaheadlog.Transaction, err error) {
+	// make header and root update wal operations
 	chOp, err := c.contractHeaderWalOP(contractHeader)
 	if err != nil {
 		return
@@ -133,7 +123,7 @@ func (c *Contract) RecordDownloadPreRev(rev types.StorageContractRevision, bandw
 func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.StorageContractRevision, storageCost, bandwidthCost common.BigInt) (err error) {
 	defer func() {
 		if err != nil {
-			if errUndo := c.RollbackUndo(t); errUndo != nil {
+			if errUndo := c.RollbackUndoWal(t); errUndo != nil {
 				log.Error("[CommitUpload] Rollback undo transaction failed", "err", errUndo)
 			}
 		}
@@ -173,7 +163,7 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.StorageContractRevision, bandwidth common.BigInt) (err error) {
 	defer func() {
 		if err != nil {
-			if errUndo := c.RollbackUndo(t); errUndo != nil {
+			if errUndo := c.RollbackUndoWal(t); errUndo != nil {
 				log.Error("[CommitUpload] Rollback undo transaction failed", "err", errUndo)
 			}
 		}
@@ -242,7 +232,8 @@ func (c *Contract) CommitTxns() (err error) {
 	return
 }
 
-func (c *Contract) RollbackUndo(t *writeaheadlog.Transaction) (err error)  {
+// RollbackUndoWal will execute rollback from WAL undo record
+func (c *Contract) RollbackUndoWal(t *writeaheadlog.Transaction) (err error)  {
 	for _, op := range t.Operations {
 		switch op.Name {
 		case dbContractHeader:
@@ -256,10 +247,14 @@ func (c *Contract) RollbackUndo(t *writeaheadlog.Transaction) (err error)  {
 		}
 	}
 
-	if err = t.Release(); err != nil {
+	return
+}
+
+// RollbackUndoMem will execute rollback from memory undo record
+func (c *Contract) RollbackUndoMem(undoHeader ContractHeader) (err error)  {
+	if err = c.contractHeaderUpdate(undoHeader); err != nil {
 		return
 	}
-
 	return
 }
 

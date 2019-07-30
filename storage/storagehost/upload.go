@@ -19,14 +19,14 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	defer func() {
 		if clientNegotiateErr != nil {
-			sp.SendHostAckMsg()
+			_ = sp.SendHostAckMsg()
 		}
 
 		if hostNegotiateErr != nil {
 			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg {
-					sp.SendHostAckMsg()
+					_ = sp.SendHostAckMsg()
 				}
 			}
 		}
@@ -260,7 +260,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
-		h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
+		_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
 		uploadErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
 		return
 	}
