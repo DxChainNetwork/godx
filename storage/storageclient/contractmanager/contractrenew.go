@@ -8,17 +8,17 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-
 	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
-	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -155,23 +155,22 @@ func (cm *ContractManager) contractRenewStart(record contractRenewRecord, curren
 	renewContractID := record.id
 	renewContractCost := record.cost
 
-	// mark the oldContract as renewing, and remove it at the end
-	cm.lock.Lock()
-	cm.renewing[renewContractID] = true
-	cm.lock.Unlock()
-
-	defer func() {
-		cm.lock.Lock()
-		delete(cm.renewing, renewContractID)
-		cm.lock.Unlock()
-	}()
+	contractMeta, exists := cm.RetrieveActiveContract(renewContractID)
+	if !exists {
+		renewCost = common.BigInt0
+		err = fmt.Errorf("the oldContract that is trying to be renewed no longer exists")
+		return
+	}
 
 	// if the contract is revising, return error directly
-	if !cm.b.IsRevisionSessionDone(renewContractID) {
+	if cm.b.TryToRenewOrRevise(contractMeta.EnodeID) {
 		renewCost = common.BigInt0
 		err = fmt.Errorf("the contract is revising, cannot be renewed")
 		return
 	}
+
+	// finished renewing
+	defer cm.b.RevisionOrRenewingDone(contractMeta.EnodeID)
 
 	// acquire the oldContract (contract that is about to be renewed)
 	oldContract, exists := cm.activeContracts.Acquire(renewContractID)
@@ -433,10 +432,10 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil {
+		if err != nil && err != storage.HostBusyHandleReqErr {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
-		} else {
+		} else if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
 	}()
@@ -448,11 +447,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// Setup connection with storage host
-	session, err := cm.b.SetupConnection(host.EnodeURL)
+	sp, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
+		cm.log.Error("contract create failed, failed to set up connection", "err", err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
-	defer cm.b.Disconnect(session, host.EnodeURL)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -467,14 +466,20 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		OldContractID:   lastRev.ParentID,
 	}
 
-	if err := session.SendStorageContractCreation(req); err != nil {
+	if err := sp.RequestContractCreation(req); err != nil {
 		return storage.ContractMetaData{}, err
 	}
 
 	var hostSign []byte
-	msg, err := session.ReadMsg()
+	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		return storage.ContractMetaData{}, err
+	}
+
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
 	}
 
 	// if host send some negotiation error, client should handler it
@@ -510,12 +515,12 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
-	if err := session.SendStorageContractCreationClientRevisionSign(clientRevisionSign); err != nil {
+	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
 		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
 	}
 
 	var hostRevisionSign []byte
-	msg, err = session.ReadMsg()
+	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}

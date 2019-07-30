@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -97,12 +101,12 @@ func defaultConfig() storage.HostIntConfig {
 		DepositBudget: defaultDepositBudget,
 		MaxDeposit:    defaultMaxDeposit,
 
-		MinBaseRPCPrice:           defaultBaseRPCPrice,
-		MinContractPrice:          defaultContractPrice,
-		MinDownloadBandwidthPrice: defaultDownloadBandwidthPrice,
-		MinSectorAccessPrice:      defaultSectorAccessPrice,
-		MinStoragePrice:           defaultStoragePrice,
-		MinUploadBandwidthPrice:   defaultUploadBandwidthPrice,
+		BaseRPCPrice:           defaultBaseRPCPrice,
+		ContractPrice:          defaultContractPrice,
+		DownloadBandwidthPrice: defaultDownloadBandwidthPrice,
+		SectorAccessPrice:      defaultSectorAccessPrice,
+		StoragePrice:           defaultStoragePrice,
+		UploadBandwidthPrice:   defaultUploadBandwidthPrice,
 	}
 }
 

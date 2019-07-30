@@ -29,7 +29,7 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 		{1, 0, 1 << 22 * 10 * 10 * 1, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 		{10, 0, 1 << 22 * 10 * 10 * 10, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 		{10, 1, 1 << 22 * 10 * 10 * 10, 200, 0, 0, 11 * 10},
-		{1000, 0, 1 << 22 * 10 * 10 * 1000, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
+		{100, 0, 1 << 22 * 10 * 10 * 100, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 	}
 	if testing.Short() {
 		tests = tests[:len(tests)-1]
@@ -219,7 +219,7 @@ func TestPublicFileSystemAPI_Delete(t *testing.T) {
 }
 
 // checkDxDirMetadata checks whether the dxdir with path has the expected metadata
-func (fs *FileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
+func (fs *fileSystem) checkDxDirMetadata(path storage.DxPath, expectMd dxdir.Metadata) error {
 	dir, err := fs.dirSet.Open(path)
 	if err != nil {
 		return err

@@ -69,9 +69,15 @@ func (sr *SnapshotReader) Close() error {
 }
 
 // Snapshot creates the Snapshot of the DxFile
-func (df *DxFile) Snapshot() *Snapshot {
-	ck := df.CipherKey()
-	ec := df.ErasureCode()
+func (df *DxFile) Snapshot() (*Snapshot, error) {
+	ck, err := df.CipherKey()
+	if err != nil {
+		return nil, err
+	}
+	ec, err := df.ErasureCode()
+	if err != nil {
+		return nil, err
+	}
 
 	df.lock.RLock()
 	defer df.lock.RUnlock()
@@ -95,7 +101,7 @@ func (df *DxFile) Snapshot() *Snapshot {
 		segments:    segments,
 		hostTable:   hostTable,
 		dxPath:      df.metadata.DxPath,
-	}
+	}, nil
 }
 
 // SegmentIndexByOffset return the segment index and offset with the give offset of a file

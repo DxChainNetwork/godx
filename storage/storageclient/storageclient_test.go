@@ -53,7 +53,7 @@ func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithI
 	mb := 9
 	filePath, fileSize, _ := generateFile(t, homeDir(), mb)
 
-	entry, err := client.fileSystem.FileSet().NewDxFile(randomDxPath(), storage.SysPath(filePath), false, ec, ck, uint64(fileSize), 777)
+	entry, err := client.fileSystem.NewDxFile(randomDxPath(), storage.SysPath(filePath), false, ec, ck, uint64(fileSize), 777)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,13 +118,21 @@ func homeDir() string {
 
 type BackendTest struct{}
 
+func (b *BackendTest) SetStatic(node *enode.Node) {}
+
+func (b *BackendTest) CheckAndUpdateConnection(peerNode *enode.Node) {}
+
 func (b *BackendTest) APIs() []rpc.API {
 	var res []rpc.API
 	return res
 }
 
-func (b *BackendTest) GetStorageHostSetting(hostEnodeUrl string, config *storage.HostExtConfig) error {
+func (b *BackendTest) GetStorageHostSetting(hostEnodeID enode.ID, hostEnodeURL string, config *storage.HostExtConfig) error {
 	return nil
+}
+
+func (b *BackendTest) IsRevising(hostID enode.ID) bool {
+	return false
 }
 
 func (b *BackendTest) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
@@ -141,12 +149,8 @@ func (b *BackendTest) GetBlockChain() *core.BlockChain {
 	return &core.BlockChain{}
 }
 
-func (b *BackendTest) SetupStorageConnection(hostEnodeUrl string) (*storage.Session, error) {
-	return &storage.Session{}, nil
-}
-
-func (b *BackendTest) Disconnect(session *storage.Session, hostEnodeUrl string) error {
-	return nil
+func (b *BackendTest) SetupConnection(enodeURL string) (storage.Peer, error) {
+	return nil, nil
 }
 
 func (b *BackendTest) AccountManager() *accounts.Manager {
@@ -261,6 +265,10 @@ func (b *BackendTest) SignByNode(hash []byte) ([]byte, error) {
 func (b *BackendTest) GetHostEnodeURL() string {
 	return ""
 }
+
+func (b *BackendTest) TryToRenewOrRevise(hostID enode.ID) bool { return false }
+
+func (b *BackendTest) RevisionOrRenewingDone(hostID enode.ID) {}
 
 /*
 _____  _____  _______      __  _______ ______        ______ _    _ _   _  _____ _______ _____ ____  _   _

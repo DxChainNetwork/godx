@@ -7,6 +7,7 @@ package storageclient
 import (
 	"fmt"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"testing"
@@ -165,46 +166,46 @@ func randomKeys() (selectedKeys map[string]string, err error) {
 func randomValue(selectedKeys map[string]string) (settings map[string]string, err error) {
 	settings = make(map[string]string)
 
-	var value, unit interface{}
+	var value, granularity interface{}
 
 	rand.Seed(time.Now().UnixNano())
 
-	for key, _ := range selectedKeys {
+	for key := range selectedKeys {
 		switch {
 		case key == "fund":
 			value = common.RandomBigInt()
-			unit = storage.CurrencyUnit[rand.Intn(len(storage.CurrencyUnit))]
+			granularity = unit.CurrencyUnit[rand.Intn(len(unit.CurrencyUnit))]
 			break
 		case key == "period" || key == "renew":
 			value = rand.Uint64()
-			unit = storage.TimeUnit[rand.Intn(len(storage.TimeUnit))]
+			granularity = unit.TimeUnit[rand.Intn(len(unit.TimeUnit))]
 			break
 		case key == "storage" || key == "upload" || key == "download":
 			value = rand.Uint64()
-			unit = storage.DataSizeUnit[rand.Intn(len(storage.DataSizeUnit))]
+			granularity = unit.DataSizeUnit[rand.Intn(len(unit.DataSizeUnit))]
 			break
 		case key == "redundancy":
 			value = rand.Float64()
-			unit = ""
+			granularity = ""
 			break
 		case key == "violation":
 			value = rand.Intn(2) == 0
-			unit = ""
+			granularity = ""
 			break
 		case key == "hosts":
 			value = rand.Int63()
-			unit = ""
+			granularity = ""
 			break
 		case key == "uploadspeed" || key == "downloadspeed":
 			value = rand.Int63()
-			unit = storage.SpeedUnit[rand.Intn(len(storage.SpeedUnit))]
+			granularity = unit.SpeedUnit[rand.Intn(len(unit.SpeedUnit))]
 			break
 		default:
 			err = fmt.Errorf("the key received is not valid: %s", key)
 			return
 		}
 
-		settings[key] = fmt.Sprintf("%v%v", value, unit)
+		settings[key] = fmt.Sprintf("%v%v", value, granularity)
 	}
 	return
 }

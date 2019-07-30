@@ -16,7 +16,7 @@ func TestCreateRandomFiles(t *testing.T) {
 	}
 	dr := newStandardDisrupter()
 
-	// create FileSystem and create a new DxFile
+	// create fileSystem and create a new DxFile
 	ct := &AlwaysSuccessContractManager{}
 	fs := newEmptyTestFileSystem(t, "", ct, dr)
 	c := make(chan struct{})
@@ -29,8 +29,8 @@ func TestCreateRandomFiles(t *testing.T) {
 	}()
 	select {
 	case <-c:
-	case <-time.After(20 * time.Second):
-		t.Fatal("create random file used more than 20 seconds")
+	case <-time.After(200 * time.Second):
+		t.Fatal("create random file used more than 200 seconds")
 	}
 }
 

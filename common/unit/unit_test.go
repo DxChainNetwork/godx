@@ -2,7 +2,7 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package storage
+package unit
 
 import (
 	"github.com/DxChainNetwork/godx/common"
@@ -35,16 +35,16 @@ func TestParseFund(t *testing.T) {
 		result common.BigInt
 	}{
 		{"100 wei", common.NewBigInt(100)},
-		{"100ether", common.NewBigInt(100).MultUint64(currencyIndexMap["ether"])},
-		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(currencyIndexMap["milliether"])},
-		{"100  MICROether", common.NewBigInt(100).MultUint64(currencyIndexMap["microether"])},
-		{"99876KWEI", common.NewBigInt(99876).MultUint64(currencyIndexMap["kwei"])},
+		{"100ether", common.NewBigInt(100).MultUint64(CurrencyIndexMap["ether"])},
+		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(CurrencyIndexMap["milliether"])},
+		{"100  MICROether", common.NewBigInt(100).MultUint64(CurrencyIndexMap["microether"])},
+		{"99876KWEI", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["kwei"])},
 	}
 
 	for _, table := range tables {
 
 		// parse the fund
-		parsed, err := ParseFund(table.fund)
+		parsed, err := ParseCurrency(table.fund)
 		if err != nil {
 			t.Fatalf("failed to parse the fund %s: %s", table.fund, err.Error())
 		}
@@ -67,7 +67,7 @@ func TestParseFundFail(t *testing.T) {
 	}
 
 	for _, failedCase := range failedExpected {
-		if _, err := ParseFund(failedCase); err == nil {
+		if _, err := ParseCurrency(failedCase); err == nil {
 			t.Errorf("error is expected with the input %s", failedCase)
 		}
 

@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -8,9 +12,10 @@ import (
 
 // the fields that need to write into the jason file
 type persistence struct {
-	BlockHeight      uint64                `json:"blockHeight"`
-	FinancialMetrics HostFinancialMetrics  `json:"financialmetrics"`
-	Config           storage.HostIntConfig `json:"config"`
+	BlockHeight      uint64                 `json:"blockHeight"`
+	FinancialMetrics HostFinancialMetrics   `json:"financialmetrics"`
+	Config           storage.HostIntConfig  `json:"config"`
+	Contracts        map[string]common.Hash `json:"contracts"`
 }
 
 // save the host config: the filed as persistence shown, to the json file
@@ -43,6 +48,7 @@ func (h *StorageHost) extractPersistence() *persistence {
 		BlockHeight:      h.blockHeight,
 		FinancialMetrics: h.financialMetrics,
 		Config:           h.config,
+		Contracts:        h.clientToContract,
 	}
 }
 
@@ -52,4 +58,5 @@ func (h *StorageHost) loadPersistence(persist *persistence) {
 	h.blockHeight = persist.BlockHeight
 	h.financialMetrics = persist.FinancialMetrics
 	h.config = persist.Config
+	h.clientToContract = persist.Contracts
 }

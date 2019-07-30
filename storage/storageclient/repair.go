@@ -16,9 +16,9 @@ import (
 )
 
 // addStuckSegmentsToHeap adds all the stuck segments in a file to the repair heap
-func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
+func (client *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 	// Open File
-	sf, err := sc.fileSystem.OpenFile(dxPath)
+	sf, err := client.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return fmt.Errorf("unable to open Dxfile %v, error: %v", dxPath, err)
 	}
@@ -26,15 +26,15 @@ func (sc *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 
 	// Add stuck segments from file to repair heap
 	files := []*dxfile.FileSetEntryWithID{sf}
-	hosts := sc.refreshHostsAndWorkers()
-	hostHealthInfoTable := sc.contractManager.HostHealthMap()
-	sc.createAndPushSegments(files, hosts, targetStuckSegments, hostHealthInfoTable)
+	hosts := client.refreshHostsAndWorkers()
+	hostHealthInfoTable := client.contractManager.HostHealthMap()
+	client.createAndPushSegments(files, hosts, targetStuckSegments, hostHealthInfoTable)
 	return nil
 }
 
 // dirMetadata retrieve the directory metadata and returns the dir metadata after bubble
-func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
-	sysPath := dxPath.SysPath(storage.SysPath(sc.fileSystem.FileRootDir()))
+func (client *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
+	sysPath := dxPath.SysPath(storage.SysPath(client.fileSystem.RootDir()))
 	fi, err := os.Stat(string(sysPath))
 	if err != nil {
 		return dxdir.Metadata{}, err
@@ -43,7 +43,7 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 		return dxdir.Metadata{}, fmt.Errorf("%v is not a directory", dxPath)
 	}
 
-	dxDir, err := sc.fileSystem.DirSet().Open(dxPath)
+	dxDir, err := client.fileSystem.OpenDxDir(dxPath)
 	if os.IsNotExist(err) {
 		// Remember initial Error
 		initError := err
@@ -62,7 +62,7 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 
 		// If we are at the root directory or the directory is not empty, create
 		// a metadata file
-		dxDir, err = sc.fileSystem.DirSet().NewDxDir(dxPath)
+		dxDir, err = client.fileSystem.NewDxDir(dxPath)
 	}
 	if err != nil {
 		return dxdir.Metadata{}, err
@@ -74,25 +74,25 @@ func (sc *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, err
 
 // stuckLoop go through the storage client directory and finds the stuck
 // Segments and tries to repair them
-func (sc *StorageClient) stuckLoop() {
-	err := sc.tm.Add()
+func (client *StorageClient) stuckLoop() {
+	err := client.tm.Add()
 	if err != nil {
 		return
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
 	// Loop until the storage client has shutdown or until there are no stuck segments
 	for {
 		<-time.After(100 * time.Millisecond)
 		// Wait until the storage client is online to proceed.
-		if !sc.blockUntilOnline() {
+		if !client.blockUntilOnline() {
 			// The storage client shut down before the internet connection was restored.
-			sc.log.Info("storage client shutdown before internet connection")
+			client.log.Info("storage client shutdown before internet connection")
 			return
 		}
 
 		// Randomly get directory with stuck files
-		dir, err := sc.fileSystem.RandomStuckDirectory()
+		dir, err := client.fileSystem.RandomStuckDirectory()
 		if err != nil && err != filesystem.ErrNoRepairNeeded {
 			// sleep 5 seconds. wait for the filesystem
 			<-time.After(5 * time.Second)
@@ -101,16 +101,16 @@ func (sc *StorageClient) stuckLoop() {
 		if err == filesystem.ErrNoRepairNeeded {
 			// Block until new work is required
 			select {
-			case <-sc.tm.StopChan():
+			case <-client.tm.StopChan():
 				// The storage client has shut down
 				return
-			case <-sc.fileSystem.StuckFoundChan():
+			case <-client.fileSystem.StuckFoundChan():
 				// Health Loop found stuck segment
-			case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
+			case dxPath := <-client.uploadHeap.stuckSegmentSuccess:
 				// Stuck segment was successfully repaired. Add the rest of the file to the heap
-				err := sc.addStuckSegmentsToHeap(dxPath)
+				err := client.addStuckSegmentsToHeap(dxPath)
 				if err != nil {
-					sc.log.Error("unable to add stuck segments from file", dxPath, "to heap:", err)
+					client.log.Error("unable to add stuck segments from file", dxPath, "to heap:", err)
 				}
 			}
 			continue
@@ -118,42 +118,42 @@ func (sc *StorageClient) stuckLoop() {
 
 		// Refresh the worker pool and get the set of hosts that are currently
 		// useful for uploading.
-		hosts := sc.refreshHostsAndWorkers()
+		hosts := client.refreshHostsAndWorkers()
 
 		// push stuck segment to upload heap
-		sc.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
+		client.pushDirOrFileToSegmentHeap(dir.DxPath(), true, hosts, targetStuckSegments)
 
-		sc.uploadHeap.mu.Lock()
-		heapLen := sc.uploadHeap.heap.Len()
-		sc.uploadHeap.mu.Unlock()
+		client.uploadHeap.mu.Lock()
+		heapLen := client.uploadHeap.heap.Len()
+		client.uploadHeap.mu.Unlock()
 		if heapLen == 0 {
 			continue
 		}
 
 		select {
-		case sc.uploadHeap.segmentComing <- struct{}{}:
+		case client.uploadHeap.segmentComing <- struct{}{}:
 		default:
 		}
 
 		// Call bubble once all segments have been popped off heap
-		if err := sc.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {
-			sc.log.Error("[stuck loop]update dir meta data failed", "error", err)
+		if err := client.fileSystem.InitAndUpdateDirMetadata(dir.DxPath()); err != nil {
+			client.log.Error("[stuck loop]update dir meta data failed", "error", err)
 		}
 
 		// Sleep until it is time to try and repair another stuck Segment
 		rebuildStuckHeapSignal := time.After(RepairStuckSegmentInterval)
 		select {
-		case <-sc.tm.StopChan():
+		case <-client.tm.StopChan():
 			// Return if the return has been shutdown
 			return
 		case <-rebuildStuckHeapSignal:
 			// Time to find another random segment
-		case dxPath := <-sc.uploadHeap.stuckSegmentSuccess:
+		case dxPath := <-client.uploadHeap.stuckSegmentSuccess:
 			// Stuck segment was successfully repaired. Add the rest of the file
 			// to the heap
-			err := sc.addStuckSegmentsToHeap(dxPath)
+			err := client.addStuckSegmentsToHeap(dxPath)
 			if err != nil {
-				sc.log.Error("unable to add stuck segments from file", "dxpath", dxPath, "error", err)
+				client.log.Error("unable to add stuck segments from file", "dxpath", dxPath, "error", err)
 			}
 		}
 	}
@@ -161,24 +161,24 @@ func (sc *StorageClient) stuckLoop() {
 
 // healthCheckLoop reads all the dxfiles in the storage client, calculates
 // the health of each file and updates the directory metadata
-func (sc *StorageClient) healthCheckLoop() {
-	err := sc.tm.Add()
+func (client *StorageClient) healthCheckLoop() {
+	err := client.tm.Add()
 	if err != nil {
 		return
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 	// Loop until the storage client has shutdown or until the storage client's top level files
 	// directory has a LasHealthCheckTime within the healthCheckInterval
 	for {
 		select {
-		case <-sc.tm.StopChan():
+		case <-client.tm.StopChan():
 			return
 		default:
 		}
 		// get path of oldest time, return directory and timestamp
-		dxPath, lastHealthCheckTime, err := sc.fileSystem.OldestLastTimeHealthCheck()
+		dxPath, lastHealthCheckTime, err := client.fileSystem.OldestLastTimeHealthCheck()
 		if err != nil {
-			sc.log.Error("could not find oldest health check time", "error", err)
+			client.log.Error("could not find oldest health check time", "error", err)
 			// sleep 3 seconds. Avoid consuming cpu
 			<-time.After(3 * time.Second)
 			continue
@@ -193,11 +193,11 @@ func (sc *StorageClient) healthCheckLoop() {
 		}
 		healthCheckSignal := time.After(nextCheckTime)
 		select {
-		case <-sc.tm.StopChan():
+		case <-client.tm.StopChan():
 			return
 		case <-healthCheckSignal:
-			if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
-				sc.log.Error("[health check loop]update dir meta data failed", "error", err)
+			if err := client.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+				client.log.Error("[health check loop]update dir meta data failed", "error", err)
 			}
 		}
 	}

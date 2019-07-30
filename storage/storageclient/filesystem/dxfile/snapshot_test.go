@@ -77,12 +77,20 @@ func TestSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := df.Snapshot()
-	if !reflect.DeepEqual(s.ErasureCode(), df.ErasureCode()) {
-		t.Errorf("erasure code not equal. Expect %+v, Got %+v", df.ErasureCode(), s.ErasureCode())
+	s, _ := df.Snapshot()
+	ec, err := df.ErasureCode()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(s.CipherKey(), df.CipherKey()) {
-		t.Errorf("cipher key not equal. Expect %+v, Got %+v", df.CipherKey(), s.CipherKey())
+	if !reflect.DeepEqual(s.ErasureCode(), ec) {
+		t.Errorf("erasure code not equal. Expect %+v, Got %+v", ec, s.ErasureCode())
+	}
+	cipherKey, err := df.CipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.CipherKey(), cipherKey) {
+		t.Errorf("cipher key not equal. Expect %+v, Got %+v", cipherKey, s.CipherKey())
 	}
 	if s.FileMode() != df.metadata.FileMode {
 		t.Errorf("file mode not equal. Expect %v, Got %+v", df.metadata.FileMode, s.FileMode())

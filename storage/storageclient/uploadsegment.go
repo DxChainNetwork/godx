@@ -102,29 +102,29 @@ func (uc *unfinishedUploadSegment) IsSegmentUploadComplete() bool {
 // dispatchSegment dispatches segments to the workers in the pool in the current solution
 // Now it may be that one sector will not be assigned to worker, and this doesn't have a big impact on the upload process
 // But we will optimize this features and schedule strategy is more balanced and fair
-func (sc *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
+func (client *StorageClient) dispatchSegment(uc *unfinishedUploadSegment) {
 	// Add segment to pendingSegments map
-	sc.uploadHeap.mu.Lock()
-	_, exists := sc.uploadHeap.pendingSegments[uc.id]
+	client.uploadHeap.mu.Lock()
+	_, exists := client.uploadHeap.pendingSegments[uc.id]
 	if !exists {
-		sc.uploadHeap.pendingSegments[uc.id] = struct{}{}
+		client.uploadHeap.pendingSegments[uc.id] = struct{}{}
 	}
-	sc.uploadHeap.mu.Unlock()
+	client.uploadHeap.mu.Unlock()
 
 	// Distribute the segment to each worker in the work pool, marking the number of workers that have received the segment
-	sc.lock.Lock()
-	uc.workersRemain += len(sc.workerPool)
-	workers := make([]*worker, 0, len(sc.workerPool))
-	for _, worker := range sc.workerPool {
+	client.lock.Lock()
+	uc.workersRemain += len(client.workerPool)
+	workers := make([]*worker, 0, len(client.workerPool))
+	for _, worker := range client.workerPool {
 		workers = append(workers, worker)
 	}
-	sc.lock.Unlock()
+	client.lock.Unlock()
 
-	sc.assignSectorTaskToWorker(workers, uc)
+	client.assignSectorTaskToWorker(workers, uc)
 }
 
 // assignSectorTaskToWorker will assign non uploaded sector to worker
-func (sc *StorageClient) assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
+func (client *StorageClient) assignSectorTaskToWorker(workers []*worker, uc *unfinishedUploadSegment) {
 	for _, w := range workers {
 		if w.isReady(uc) {
 			w.pendingSegments = append(w.pendingSegments, uc)
@@ -138,7 +138,7 @@ func (sc *StorageClient) assignSectorTaskToWorker(workers []*worker, uc *unfinis
 
 // downloadLogicalSegmentData will fetch the logical segment data by sending a
 // download to the storage client's downloader, and then assign the data to the field
-func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSegment) error {
+func (client *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSegment) error {
 	downloadLength := segment.length
 	if segment.index == uint64(segment.fileEntry.NumSegments()-1) && segment.fileEntry.FileSize()%segment.length != 0 {
 		downloadLength = segment.fileEntry.FileSize() % segment.length
@@ -146,10 +146,15 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 
 	// Create the download
 	buf := NewDownloadBuffer(segment.length, segment.fileEntry.SectorSize())
-	d, err := sc.newDownload(downloadParams{
+	snap, err := segment.fileEntry.Snapshot()
+	if err != nil {
+		return fmt.Errorf("cannot create the snapshot: %v", err)
+	}
+
+	d, err := client.newDownload(downloadParams{
 		destination:     buf,
 		destinationType: "buffer",
-		file:            segment.fileEntry.Snapshot(),
+		file:            snap,
 
 		latencyTarget: 200e3, // No need to rush latency on repair downloads.
 		length:        downloadLength,
@@ -176,7 +181,7 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 	// Wait for the download to complete.
 	select {
 	case <-d.completeChan:
-	case <-sc.tm.StopChan():
+	case <-client.tm.StopChan():
 		return errors.New("repair download interrupted by stop call")
 	}
 	if d.Err() != nil {
@@ -189,20 +194,26 @@ func (sc *StorageClient) downloadLogicalSegmentData(segment *unfinishedUploadSeg
 
 // retrieveDataAndDispatchSegment will fetch the logical data for a segment, encode
 // the physical data for the segment, and then distribute them.
-func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploadSegment) {
+func (client *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploadSegment) {
 	select {
-	case <-sc.tm.StopChan():
+	case <-client.tm.StopChan():
 		return
 	default:
 	}
 
-	err := sc.tm.Add()
+	err := client.tm.Add()
+
 	if err != nil {
 		return
 	}
-	defer sc.tm.Done()
+	defer client.tm.Done()
 
-	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(segment.fileEntry.ErasureCode().MinSectors())
+	ec, err := segment.fileEntry.ErasureCode()
+	if err != nil {
+		return
+	}
+
+	erasureCodingMemory := segment.fileEntry.SectorSize() * uint64(ec.MinSectors())
 	var sectorCompletedMemory uint64
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
@@ -210,17 +221,17 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 		}
 	}
 
-	defer sc.cleanupUploadSegment(segment)
+	defer client.cleanupUploadSegment(segment)
 
 	// Retrieve the logical data for the segment
-	err = sc.retrieveLogicalSegmentData(segment)
+	err = client.retrieveLogicalSegmentData(segment)
 	if err != nil {
 		// retrieve logical data failed, interrupt upload and release memory
 		segment.logicalSegmentData = nil
 		segment.workersRemain = 0
-		sc.memoryManager.Return(erasureCodingMemory + sectorCompletedMemory)
+		client.memoryManager.Return(erasureCodingMemory + sectorCompletedMemory)
 		segment.memoryReleased += erasureCodingMemory + sectorCompletedMemory
-		sc.log.Error("retrieve logical data of a segment failed:", err)
+		client.log.Error("retrieve logical data of a segment failed:", err)
 		return
 	}
 
@@ -229,38 +240,41 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	for _, b := range segment.logicalSegmentData {
 		segmentBytes = append(segmentBytes, b...)
 	}
-	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
+	segment.physicalSegmentData, err = ec.Encode(segmentBytes)
 	if err != nil {
 		segment.workersRemain = 0
-		sc.memoryManager.Return(sectorCompletedMemory)
+		client.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 		for i := 0; i < len(segment.physicalSegmentData); i++ {
 			segment.physicalSegmentData[i] = nil
 		}
-		sc.log.Error("Erasure encode physical data of a segment failed", "err", err)
+		client.log.Error("Erasure encode physical data of a segment failed", "err", err)
 		return
 	}
 
 	segment.logicalSegmentData = nil
-	sc.memoryManager.Return(erasureCodingMemory)
+	client.memoryManager.Return(erasureCodingMemory)
 	segment.memoryReleased += erasureCodingMemory
 
 	// Sanity check that at least as many physical data sectors as sector slots
 	if len(segment.physicalSegmentData) < len(segment.sectorSlotsStatus) {
-		sc.log.Info("not enough physical sectors to match the upload sector slots of the file")
+		client.log.Info("not enough physical sectors to match the upload sector slots of the file")
 		return
 	}
-
+	key, err := segment.fileEntry.CipherKey()
+	if err != nil {
+		return
+	}
 	// Loop through the sectorSlots and encrypt any that are needed
 	// If the sector has been used, set physicalSegmentData nil and gc routine will collect this memory
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
 			segment.physicalSegmentData[i] = nil
 		} else {
-			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
+			cipherData, err := key.Encrypt(segment.physicalSegmentData[i])
 			if err != nil {
 				segment.physicalSegmentData[i] = nil
-				sc.log.Error("encrypt segment after erasure encode failed", "err", err)
+				client.log.Error("encrypt segment after erasure encode failed", "err", err)
 			} else {
 				segment.physicalSegmentData[i] = cipherData
 			}
@@ -268,21 +282,21 @@ func (sc *StorageClient) retrieveDataAndDispatchSegment(segment *unfinishedUploa
 	}
 
 	if sectorCompletedMemory > 0 {
-		sc.memoryManager.Return(sectorCompletedMemory)
+		client.memoryManager.Return(sectorCompletedMemory)
 		segment.memoryReleased += sectorCompletedMemory
 	}
-	sc.dispatchSegment(segment)
+	client.dispatchSegment(segment)
 }
 
 // retrieveLogicalSegmentData will get the raw data from disk if possible otherwise queueing a download
-func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
+func (client *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSegment) error {
 	numRedundantSectors := float64(segment.sectorsAllNeedNum - segment.sectorsMinNeedNum)
 	minMissingSectorsToDownload := int(numRedundantSectors * RemoteRepairDownloadThreshold)
 	needDownload := segment.sectorsCompletedNum+minMissingSectorsToDownload < segment.sectorsAllNeedNum
 
 	// Download the segment if it's not on disk.
 	if segment.fileEntry.LocalPath() == "" && needDownload {
-		return sc.downloadLogicalSegmentData(segment)
+		return client.downloadLogicalSegmentData(segment)
 	} else if segment.fileEntry.LocalPath() == "" {
 		return errors.New("file not available locally")
 	}
@@ -290,7 +304,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	// Try to read the file content from disk. If failed, go through needDownload
 	osFile, err := os.Open(string(segment.fileEntry.LocalPath()))
 	if err != nil && needDownload {
-		return sc.downloadLogicalSegmentData(segment)
+		return client.downloadLogicalSegmentData(segment)
 	} else if err != nil {
 		return errors.New("failed to open file locally")
 	}
@@ -300,10 +314,10 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 	sr := io.NewSectionReader(osFile, segment.offset, int64(segment.length))
 	_, err = buf.ReadFrom(sr)
 	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF && needDownload {
-		sc.log.Error("failed to read file, downloading instead", "err", err)
-		return sc.downloadLogicalSegmentData(segment)
+		client.log.Error("failed to read file, downloading instead", "err", err)
+		return client.downloadLogicalSegmentData(segment)
 	} else if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-		sc.log.Error("failed to read file locally", "err", err)
+		client.log.Error("failed to read file locally", "err", err)
 		return errors.New("failed to read file locally")
 	}
 	segment.logicalSegmentData = buf.buf
@@ -314,7 +328,7 @@ func (sc *StorageClient) retrieveLogicalSegmentData(segment *unfinishedUploadSeg
 // cleanupUploadSegment will check the state of the segment and perform any
 // cleanup required. This can include returning memory and releasing the segment
 // from the map of active segments in the segment heap.
-func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
+func (client *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	uc.mu.Lock()
 	sectorsAvailable := 0
 	var memoryReleased uint64
@@ -342,10 +356,10 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 	// If required, remove the segment from the set of repairing segments.
 	if segmentComplete && !released {
 		uc.released = true
-		sc.updateUploadSegmentStuckStatus(uc)
-		sc.uploadHeap.mu.Lock()
-		delete(sc.uploadHeap.pendingSegments, uc.id)
-		sc.uploadHeap.mu.Unlock()
+		client.updateUploadSegmentStuckStatus(uc)
+		client.uploadHeap.mu.Lock()
+		delete(client.uploadHeap.pendingSegments, uc.id)
+		client.uploadHeap.mu.Unlock()
 	}
 
 	uc.memoryReleased += uint64(memoryReleased)
@@ -358,24 +372,24 @@ func (sc *StorageClient) cleanupUploadSegment(uc *unfinishedUploadSegment) {
 
 	// If required, return the memory to the storage client.
 	if memoryReleased > 0 {
-		sc.memoryManager.Return(memoryReleased)
+		client.memoryManager.Return(memoryReleased)
 	}
 
 	// Sanity check - all memory should be released if the segment is complete.
 	if segmentComplete && totalMemoryReleased != uc.memoryNeeded {
-		sc.log.Info("No workers remaining, but not all memory released", "workersRemain", uc.workersRemain, "sectorsUploadingNum", uc.sectorsUploadingNum, "memoryReleased", uc.memoryReleased, "memoryNeeded", uc.memoryNeeded)
+		client.log.Info("No workers remaining, but not all memory released", "workersRemain", uc.workersRemain, "sectorsUploadingNum", uc.sectorsUploadingNum, "memoryReleased", uc.memoryReleased, "memoryNeeded", uc.memoryNeeded)
 	}
 
 }
 
 // setStuckAndClose sets the unfinishedUploadSegment's stuck status
-func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck bool) error {
+func (client *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck bool) error {
 	err := uc.fileEntry.SetStuckByIndex(int(uc.index), stuck)
 	if err != nil {
 		return fmt.Errorf("unable to update Segment stuck status for file %v: %v", uc.fileEntry.DxPath(), err)
 	}
 
-	go sc.fileSystem.InitAndUpdateDirMetadata(uc.fileEntry.DxPath())
+	go client.fileSystem.InitAndUpdateDirMetadata(uc.fileEntry.DxPath())
 
 	//err = uc.fileEntry.Close()
 	//if err != nil {
@@ -386,7 +400,7 @@ func (sc *StorageClient) setStuckAndClose(uc *unfinishedUploadSegment, stuck boo
 
 // updateUploadSegmentStuckStatus checks to see if the repair was
 // successful and then updates the segment's stuck status
-func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegment) {
+func (client *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegment) {
 	// Grab necessary information from upload segment under lock
 	index := uc.id.index
 	stuck := uc.stuck
@@ -400,14 +414,14 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 	// Check if client shut down
 	var clientOffline bool
 	select {
-	case <-sc.tm.StopChan():
+	case <-client.tm.StopChan():
 		clientOffline = true
 	default:
 		if storage.ENV == storage.Env_Test {
 			clientOffline = false
 		} else {
 			// Check that the storage client is still online
-			if !sc.Online() {
+			if !client.Online() {
 				clientOffline = true
 			}
 		}
@@ -415,35 +429,35 @@ func (sc *StorageClient) updateUploadSegmentStuckStatus(uc *unfinishedUploadSegm
 
 	// If the repair was unsuccessful and there was a client closed then return
 	if !successfulRepair && clientOffline {
-		sc.log.Info("repair unsuccessful for segment due to client shut down", "unfinishedSegmentID", uc.id)
+		client.log.Info("repair unsuccessful for segment due to client shut down", "unfinishedSegmentID", uc.id)
 		return
 	}
 
 	if !successfulRepair {
-		sc.log.Info("repair unsuccessful, marking segment", "unfinishedSegmentID", uc.id, "completePercent", float64(sectorsCompleteNum)/float64(sectorsNeedNum))
+		client.log.Info("repair unsuccessful, marking segment", "unfinishedSegmentID", uc.id, "completePercent", float64(sectorsCompleteNum)/float64(sectorsNeedNum))
 	} else {
-		sc.log.Info("repair successful, marking segment as non-stuck", "unfinishedSegmentID", uc.id)
+		client.log.Info("repair successful, marking segment as non-stuck", "unfinishedSegmentID", uc.id)
 	}
 
 	if err := uc.fileEntry.SetStuckByIndex(int(index), !successfulRepair); err != nil {
-		sc.log.Error("could not set segment stuck status for file", "unfinishedSegmentID", uc.id, "dxpath", uc.fileEntry.DxPath(), "err", err)
+		client.log.Error("could not set segment stuck status for file", "unfinishedSegmentID", uc.id, "dxpath", uc.fileEntry.DxPath(), "err", err)
 	}
 
 	dxPath := uc.fileEntry.DxPath()
 
-	if err := sc.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
-		sc.log.Error("update dir meta data failed", "err", err)
+	if err := client.fileSystem.InitAndUpdateDirMetadata(dxPath); err != nil {
+		client.log.Error("update dir meta data failed", "err", err)
 	}
 
 	// Check to see if the segment was stuck and now is successfully repaired by the stuck loop
 	if stuck && successfulRepair && stuckRepair {
 		// Signal the stuck loop that the Segment was successfully repaired
-		sc.log.Info("Stuck segment successfully repaired", "unfinishedSegmentID", uc.id)
+		client.log.Info("Stuck segment successfully repaired", "unfinishedSegmentID", uc.id)
 		select {
-		case <-sc.tm.StopChan():
-			sc.log.Info("storage client shut down before the stuck loop was signalled that the stuck repair was successful")
+		case <-client.tm.StopChan():
+			client.log.Info("storage client shut down before the stuck loop was signalled that the stuck repair was successful")
 			return
-		case sc.uploadHeap.stuckSegmentSuccess <- dxPath:
+		case client.uploadHeap.stuckSegmentSuccess <- dxPath:
 		}
 	}
 }

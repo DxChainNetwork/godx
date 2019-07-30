@@ -79,7 +79,7 @@ func (scs *StorageContractSet) Close() (err error) {
 	return
 }
 
-// Empty db will clear all data stored in the contractset database
+// EmptyDB will clear all data stored in the contractset database
 func (scs *StorageContractSet) EmptyDB() (err error) {
 	err = scs.db.EmptyDB()
 	return
@@ -255,7 +255,10 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 		}
 
 		// load merkle roots
-		mr := loadMerkleRoots(scs.db, id, roots)
+		mr, err := loadMerkleRoots(scs.db, id, roots)
+		if err != nil {
+			return fmt.Errorf("failed to load merkle roots, load contract failed: %s", err.Error())
+		}
 
 		// TODO (mzhang): currently, un-applied WAL transaction will be ignored
 		// in the future, they should be handled, however, the negotiation process
@@ -279,14 +282,14 @@ func (scs *StorageContractSet) loadContract(walTxns []*writeaheadlog.Transaction
 	return
 }
 
-// get all contracts of client
+// Contracts is used to get all active contracts signed by the storage client
 func (scs *StorageContractSet) Contracts() map[storage.ContractID]*Contract {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
 	return scs.contracts
 }
 
-// get the contractID by hostID
+// GetContractIDByHostID will retrieve the contractID based on the hostID provided
 func (scs *StorageContractSet) GetContractIDByHostID(hostID enode.ID) storage.ContractID {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()

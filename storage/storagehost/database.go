@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -33,6 +37,14 @@ func (h *StorageHost) deleteStorageResponsibilities(soids []common.Hash) error {
 		}
 	}
 	return nil
+}
+
+// GetStorageResponsibility will be used to get the storage responsibility information
+// based on the storage contractID provided
+func (h *StorageHost) GetStorageResponsibility(storageContractID common.Hash) (StorageResponsibility, error) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	return getStorageResponsibility(h.db, storageContractID)
 }
 
 //deleteStorageResponsibility delete storageResponsibility from DB
