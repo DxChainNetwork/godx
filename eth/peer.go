@@ -106,9 +106,6 @@ type peer struct {
 
 	contractRevisingOrRenewing chan struct{}
 	hostConfigRequesting       chan struct{}
-
-	// error channel
-	errMsg chan error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -129,7 +126,6 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		ethStartIndicator:          make(chan struct{}, 1),
 		hostConfigProcessing:       make(chan struct{}, 1),
 		hostContractProcessing:     make(chan struct{}, 1),
-		errMsg:                     make(chan error, 1),
 		contractRevisingOrRenewing: make(chan struct{}, 1),
 		hostConfigRequesting:       make(chan struct{}, 1),
 	}

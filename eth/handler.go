@@ -335,27 +335,9 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 		}
 
-		// check for error
-		select {
-		case err := <-p.errMsg:
-			return err
-		default:
-			// if there are no errors, continue with the message
-			// dispatcher
-		}
-
 		// distribute the message to different handler
 		if err := pm.msgDispatch(msg, p); err != nil {
 			return err
-		}
-
-		// check for error
-		select {
-		case err := <-p.errMsg:
-			return err
-		default:
-			// if there are no errors, continue with the message
-			// dispatcher
 		}
 	}
 

@@ -16,10 +16,7 @@ import (
 // TriggerError is used to send the error message to the errMsg channel,
 // where the node will exit the readLoop and disconnect with the peer
 func (p *peer) TriggerError(err error) {
-	select {
-	case p.errMsg <- err:
-	default:
-	}
+	p.Disconnect(p2p.DiscStorageError)
 }
 
 // SendStorageHostConfig will send the storage host configuration to the client

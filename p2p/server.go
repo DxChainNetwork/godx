@@ -996,6 +996,14 @@ running:
 		// This message will be received from runPeer function
 		// which will only return if error or disconnect request was received
 		case pd := <-srv.delpeer:
+			// check the disconnect reason. If the disconnect reason is
+			// storage error, remove the static peer from the static
+			// peer list
+			var storageErr DiscReason = DiscStorageError
+			if pd.err == storageErr {
+				dialstate.removeStatic(pd.Node())
+			}
+
 			// A peer disconnected.
 			d := common.PrettyDuration(mclock.Now() - pd.created)
 			pd.log.Debug("Removing p2p peer", "duration", d, "peers", len(peers)-1, "req", pd.requested, "err", pd.err)
