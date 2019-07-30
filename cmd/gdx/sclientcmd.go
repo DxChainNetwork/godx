@@ -230,7 +230,7 @@ multiple flags can be used along with this command to specify the setting:
 4. fund: specifies the amount of money the client wants to be used for the storage service
 
 units:
-currency: [wei, kwei, mwei, gwei, microether, milliether, ether]
+currency: [hump, ghump, dx]
 time: [h, b, d, w, m, y] -> hour, block, day, week, month, year
 
 Note: without using any of those flags, default settings will be used`,
@@ -420,12 +420,12 @@ func getHostInfo(ctx *cli.Context) error {
 	IP:                            %s
 	AcceptingStorageContracts:     %t
 	RemainingStorage:              %v bytes
-	Deposit:                       %v wei
-	Contract Price:                %v wei
-	Storage Price:                 %v wei
-	DownloadBandwidth Price:       %v wei
-	UploadBandwidth Price:         %v wei
-	Sector Access Price:           %v wei
+	Deposit:                       %v hump
+	Contract Price:                %v hump
+	Storage Price:                 %v hump
+	DownloadBandwidth Price:       %v hump
+	UploadBandwidth Price:         %v hump
+	Sector Access Price:           %v hump
 	
 `, info.EnodeID.String(), info.IP, info.AcceptingContracts, info.RemainingStorage, info.Deposit, info.ContractPrice,
 		info.StoragePrice, info.DownloadBandwidthPrice, info.UploadBandwidthPrice, info.SectorAccessPrice)
@@ -809,14 +809,14 @@ func periodCost(ctx *cli.Context) error {
 
 	// print out the result
 	fmt.Printf(`Period Cost:
-	ContractFees:                 %v wei
- 	UploadCost:                   %v wei
-	DownloadCost:                 %v wei
-	StorageCost:                  %v wei
-	PrevContractCost:             %v wei    
-	ContractFund:                 %v wei
-	UnspentFund:                  %v wei
-	WithheldFund:                 %v wei
+	ContractFees:                 %v hump
+ 	UploadCost:                   %v hump
+	DownloadCost:                 %v hump
+	StorageCost:                  %v hump
+	PrevContractCost:             %v hump    
+	ContractFund:                 %v hump
+	UnspentFund:                  %v hump
+	WithheldFund:                 %v hump
 	WithheldFundReleaseBlock:     %v block
 `, cost.ContractFees, cost.UploadCost, cost.DownloadCost, cost.StorageCost, cost.PrevContractCost,
 		cost.ContractFund, cost.UnspentFund, cost.WithheldFund, cost.WithheldFundReleaseBlock)

@@ -122,7 +122,7 @@ configurable parameters please read the list of flags.
 
 The values are associated with units.
 	BOOL:       {"true", "false"}
-	CURRENCY:   {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
+	CURRENCY:   {"hump", "ghump", "dx"}
 	DURATION:   {"h", "b", "d", "w", "m", "y"}`,
 		},
 
@@ -415,19 +415,19 @@ func getFinance(ctx *cli.Context) error {
 
 	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
-	ContractCompensation:                   %v wei
-	PotentialContractCompensation:          %v wei
-	LockedStorageDeposit:                   %v wei
-	LostRevenue:                            %v wei
-	LostStorageDeposit:                     %v wei
-	PotentialStorageRevenue:                %v wei
-	RiskedStorageDeposit:                   %v wei
-	StorageRevenue:                         %v wei
-	TransactionFeeExpenses:                 %v wei
-	DownloadBandwidthRevenue:               %v wei
-	PotentialDownloadBandwidthRevenue:      %v wei
-	PotentialUploadBandwidthRevenue:        %v wei
-	UploadBandwidthRevenue:                 %v wei
+	ContractCompensation:                   %v hump
+	PotentialContractCompensation:          %v hump
+	LockedStorageDeposit:                   %v hump
+	LostRevenue:                            %v hump
+	LostStorageDeposit:                     %v hump
+	PotentialStorageRevenue:                %v hump
+	RiskedStorageDeposit:                   %v hump
+	StorageRevenue:                         %v hump
+	TransactionFeeExpenses:                 %v hump
+	DownloadBandwidthRevenue:               %v hump
+	PotentialDownloadBandwidthRevenue:      %v hump
+	PotentialUploadBandwidthRevenue:        %v hump
+	UploadBandwidthRevenue:                 %v hump
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,

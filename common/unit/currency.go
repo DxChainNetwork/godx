@@ -11,16 +11,12 @@ import (
 )
 
 // CurrencyUnit defines available units used for rentPayment fund
-var CurrencyUnit = []string{"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
+var CurrencyUnit = []string{"hump", "ghump", "dx"}
 
 var CurrencyIndexMap = map[string]uint64{
-	"wei":        1,
-	"kwei":       1e3,
-	"mwei":       1e6,
-	"gwei":       1e9,
-	"microether": 1e12,
-	"milliether": 1e15,
-	"ether":      1e18,
+	"hump":  1,
+	"ghump": 1e9,
+	"dx":    1e18,
 }
 
 // ParseCurrency will parse the user string input, and convert it into common.BigInt
@@ -32,10 +28,9 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	// check the suffix and convert the units into wei, which is the smallest unit
 	// for the eth currency type
 	for unit := range CurrencyIndexMap {
-		// skip wei or ether because other currency unit also
-		// includes these kind of suffix, such as milliether and
-		// kwei
-		if unit == "wei" || unit == "ether" {
+		// skip ether or dx because other currency unit also
+		// includes these kind of suffix
+		if unit == "hump" || unit == "dx" {
 			continue
 		}
 
@@ -47,13 +42,13 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	}
 
 	// check if the suffix contains wei
-	if strings.HasSuffix(str, "wei") {
-		return stringToBigInt("wei", str)
+	if strings.HasSuffix(str, "hump") {
+		return stringToBigInt("hump", str)
 	}
 
 	// check if the suffix contains ether
-	if strings.HasSuffix(str, "ether") {
-		return stringToBigInt("ether", str)
+	if strings.HasSuffix(str, "dx") {
+		return stringToBigInt("dx", str)
 	}
 
 	// otherwise, return error
@@ -70,31 +65,19 @@ func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
 	}
 
 	if fund.IsEqual(common.BigInt0) {
-		formatted = fmt.Sprintf("%v wei%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v hump%v", fund, extraStr)
 		return
 	}
 
 	switch {
-	case fund.DivNoRemaining(CurrencyIndexMap["ether"]):
-		formatted = fmt.Sprintf("%v ether%v", fund.DivUint64(CurrencyIndexMap["ether"]), extraStr)
+	case fund.DivNoRemaining(CurrencyIndexMap["dx"]):
+		formatted = fmt.Sprintf("%v dx%v", fund.DivUint64(CurrencyIndexMap["dx"]), extraStr)
 		return
-	case fund.DivNoRemaining(CurrencyIndexMap["milliether"]):
-		formatted = fmt.Sprintf("%v milliether%v", fund.DivUint64(CurrencyIndexMap["milliether"]), extraStr)
-		return
-	case fund.DivNoRemaining(CurrencyIndexMap["microether"]):
-		formatted = fmt.Sprintf("%v microether%v", fund.DivUint64(CurrencyIndexMap["microether"]), extraStr)
-		return
-	case fund.DivNoRemaining(CurrencyIndexMap["gwei"]):
-		formatted = fmt.Sprintf("%v Gwei%v", fund.DivUint64(CurrencyIndexMap["gwei"]), extraStr)
-		return
-	case fund.DivNoRemaining(CurrencyIndexMap["mwei"]):
-		formatted = fmt.Sprintf("%v Mwei%v", fund.DivUint64(CurrencyIndexMap["mwei"]), extraStr)
-		return
-	case fund.DivNoRemaining(CurrencyIndexMap["kwei"]):
-		formatted = fmt.Sprintf("%v Kwei%v", fund.DivUint64(CurrencyIndexMap["kwei"]), extraStr)
+	case fund.DivNoRemaining(CurrencyIndexMap["ghump"]):
+		formatted = fmt.Sprintf("%v Ghump%v", fund.DivUint64(CurrencyIndexMap["ghump"]), extraStr)
 		return
 	default:
-		formatted = fmt.Sprintf("%v wei%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v hump%v", fund, extraStr)
 		return
 	}
 }
