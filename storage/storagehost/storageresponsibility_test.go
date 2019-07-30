@@ -4,6 +4,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"os"
 	"reflect"
 	"testing"
 )
@@ -42,6 +43,7 @@ func TestStoreStorageResponsibility(t *testing.T) {
 func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
 	db,_ := ethdb.NewLDBDatabase("./db", 16, 16)
 	defer db.Close()
+	defer os.RemoveAll("./db")
 
 	h := newTestStorageHost(t)
 	h.db = db
