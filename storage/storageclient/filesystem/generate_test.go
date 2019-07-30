@@ -29,8 +29,8 @@ func TestCreateRandomFiles(t *testing.T) {
 	}()
 	select {
 	case <-c:
-	case <-time.After(20 * time.Second):
-		t.Fatal("create random file used more than 20 seconds")
+	case <-time.After(200 * time.Second):
+		t.Fatal("create random file used more than 200 seconds")
 	}
 }
 

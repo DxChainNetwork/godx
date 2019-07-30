@@ -29,7 +29,7 @@ func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
 		{1, 0, 1 << 22 * 10 * 10 * 1, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 		{10, 0, 1 << 22 * 10 * 10 * 10, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 		{10, 1, 1 << 22 * 10 * 10 * 10, 200, 0, 0, 11 * 10},
-		{1000, 0, 1 << 22 * 10 * 10 * 1000, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
+		{100, 0, 1 << 22 * 10 * 10 * 100, dxdir.DefaultHealth, dxdir.DefaultHealth, 300, 0},
 	}
 	if testing.Short() {
 		tests = tests[:len(tests)-1]
