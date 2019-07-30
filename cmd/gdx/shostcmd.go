@@ -13,6 +13,68 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var (
+	acceptingContractsFlag = cli.StringFlag{
+		Name:  "acceptingcontracts",
+		Usage: "BOOL - whether the host accepts new contracts",
+	}
+
+	maxDepositFlag = cli.StringFlag{
+		Name:  "maxdeposit",
+		Usage: "CURRENCY - the max deposit for for a single contract",
+	}
+
+	budgetPriceFlag = cli.StringFlag{
+		Name:  "depositbudget",
+		Usage: "CURRENCY - the maximum deposit for all contracts",
+	}
+
+	storagePriceFlag = cli.StringFlag{
+		Name:  "storageprice",
+		Usage: "CURRENCY - the storage price per block per byte",
+	}
+
+	uploadPriceFlag = cli.StringFlag{
+		Name:  "uploadprice",
+		Usage: "CURRENCY - upload bandwidth price per byte",
+	}
+
+	downloadPriceFlag = cli.StringFlag{
+		Name:  "downloadprice",
+		Usage: "CURRENCY - download bandwidth price per byte",
+	}
+
+	contractPriceFlag = cli.StringFlag{
+		Name:  "contractprice",
+		Usage: "CURRENCY - the contract price when creating the contract",
+	}
+
+	depositPriceFlag = cli.StringFlag{
+		Name:  "deposit",
+		Usage: "CURRENCY - deposit price per block per byte",
+	}
+
+	storageDurationFlag = cli.StringFlag{
+		Name:  "maxduration",
+		Usage: "DURATION - the max duration for a storage contract",
+	}
+
+	hostPaymentAddressFlag = cli.StringFlag{
+		Name:  "address",
+		Usage: "Payment address for the storage service",
+	}
+
+	folderSizeFlag = cli.StringFlag{
+		Name:  "size",
+		Usage: "Size of the folder",
+	}
+
+	folderPathFlag = cli.StringFlag{
+		Name:  "folderpath",
+		Usage: "Path of the folder",
+	}
+)
+
 var storageHostCommand = cli.Command{
 	Name:      "shost",
 	Usage:     "Storage host related operations",
@@ -38,8 +100,19 @@ and etc.`,
 			Name:      "setconfig",
 			Usage:     "Set the storage host configurations",
 			ArgsUsage: "",
-			Flags:     storageHostSetterFlags,
-			Action:    utils.MigrateFlags(setHostConfig),
+			Flags: []cli.Flag{
+				acceptingContractsFlag,
+				storageDurationFlag,
+				depositPriceFlag,
+				contractPriceFlag,
+				downloadPriceFlag,
+				uploadPriceFlag,
+				storagePriceFlag,
+				budgetPriceFlag,
+				maxDepositFlag,
+			},
+
+			Action: utils.MigrateFlags(setHostConfig),
 			Description: `
 			gdx shost setconfig [--acceptingcontracts arg] [--maxdeposit arg] [--depositbudget arg] [--storageprice arg] [--uploadprice arg] [--downloadprice arg] [--contractprice arg] [--deposit arg] [--maxduration arg]
 
@@ -59,10 +132,10 @@ The values are associated with units.
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setHostPaymentAddress),
 			Flags: []cli.Flag{
-				utils.PaymentAddressFlag,
+				hostPaymentAddressFlag,
 			},
 			Description: `
-			gdx shost setpaymentaddr --address [parameter]
+			gdx shost setpaymentaddr [--address arg]
 is used to register the account address to be used for the storage services. Deposit and money spent for host
 announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
 client will be saved into this address as well.`,
@@ -112,9 +185,12 @@ If the host node has higher evaluation, client will automatically create contrac
 			Usage:     "Allocate disk space for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(addFolder),
-			Flags:     storageHostFlags,
+			Flags: []cli.Flag{
+				folderPathFlag,
+				folderSizeFlag,
+			},
 			Description: `
-			gdx shost addfolder --folderpath [argument] --size [argument]
+			gdx shost addfolder [--folderpath arg] [--size arg]
 
 will allocate disk space for saving data uploaded by storage client. Physical folder will be created
 under the file path specified using --folderpath. The size must be specified using --size as well.
@@ -128,9 +204,12 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 			Usage:     "Resize the disk space allocated for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(resizeFolder),
-			Flags:     storageHostFlags,
+			Flags: []cli.Flag{
+				folderPathFlag,
+				folderSizeFlag,
+			},
 			Description: `
-			gdx shost resize
+			gdx shost resize [--folderpath arg] [--size arg]
 
 will resize the disk space allocated for saving data uploaded by the storage client. The usage of this
 command is similar to addfolder, where folder size and folder path must be explicitly specified using the 
@@ -142,9 +221,11 @@ flag --folderpath and --size`,
 			Usage:     "Free up the disk space used for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(deleteFolder),
-			Flags:     storageHostFlags,
+			Flags: []cli.Flag{
+				folderPathFlag,
+			},
 			Description: `
-			gdx shost deletefolder --folderpath [argument]
+			gdx shost deletefolder [--folderpath arg]
 
 will free up the disk space used for saving data uploaded by the storage client. The folder path must be
 specified using --folderpath.`,
@@ -175,8 +256,7 @@ func getHostConfig(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the storage host configuration: %s", err.Error())
 	}
 
-	fmt.Printf(`
-Host Configuration:
+	fmt.Printf(`Host Configuration:
 	AcceptingContracts:            %v
 	MaxDownloadBatchSize:          %v
 	MaxDuration:                   %v
@@ -192,7 +272,6 @@ Host Configuration:
 	SectorAccessPrice:             %v
 	StoragePrice:                  %v
 	UploadBandwidthPrice:          %v
-
 `, config.AcceptingContracts, config.MaxDownloadBatchSize, config.MaxDuration,
 		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress,
 		config.Deposit, config.DepositBudget, config.MaxDeposit, config.BaseRPCPrice,
@@ -225,48 +304,48 @@ func hostConfigFromFlags(ctx *cli.Context) map[string]string {
 	config := make(map[string]string)
 
 	// set the value of accepting contracts
-	if ctx.IsSet(utils.AcceptingContractsFlag.Name) {
-		acceptingContracts := ctx.String(utils.AcceptingContractsFlag.Name)
+	if ctx.IsSet(acceptingContractsFlag.Name) {
+		acceptingContracts := ctx.String(acceptingContractsFlag.Name)
 		config["acceptingContracts"] = acceptingContracts
 	}
 	// set the value of max deposit
-	if ctx.IsSet(utils.MaxDepositFlag.Name) {
-		maxDeposit := ctx.String(utils.MaxDepositFlag.Name)
+	if ctx.IsSet(maxDepositFlag.Name) {
+		maxDeposit := ctx.String(maxDepositFlag.Name)
 		config["maxDeposit"] = maxDeposit
 	}
 	// set the value of budget price
-	if ctx.IsSet(utils.BudgetPriceFlag.Name) {
-		budget := ctx.String(utils.BudgetPriceFlag.Name)
+	if ctx.IsSet(budgetPriceFlag.Name) {
+		budget := ctx.String(budgetPriceFlag.Name)
 		config["depositBudget"] = budget
 	}
 	// set the value of storage price
-	if ctx.IsSet(utils.StoragePriceFlag.Name) {
-		storagePrice := ctx.String(utils.StoragePriceFlag.Name)
+	if ctx.IsSet(storagePriceFlag.Name) {
+		storagePrice := ctx.String(storagePriceFlag.Name)
 		config["storagePrice"] = storagePrice
 	}
 	// set the upload price
-	if ctx.IsSet(utils.UploadPriceFlag.Name) {
-		uploadPrice := ctx.String(utils.UploadPriceFlag.Name)
+	if ctx.IsSet(uploadPriceFlag.Name) {
+		uploadPrice := ctx.String(uploadPriceFlag.Name)
 		config["uploadBandwidthPrice"] = uploadPrice
 	}
 	// set the download price
-	if ctx.IsSet(utils.DownloadPriceFlag.Name) {
-		downloadPrice := ctx.String(utils.DownloadPriceFlag.Name)
+	if ctx.IsSet(downloadPriceFlag.Name) {
+		downloadPrice := ctx.String(downloadPriceFlag.Name)
 		config["downloadBandwidthPrice"] = downloadPrice
 	}
 	// set the contract price
-	if ctx.IsSet(utils.ContractPriceFlag.Name) {
-		contractPrice := ctx.String(utils.ContractPriceFlag.Name)
+	if ctx.IsSet(contractPriceFlag.Name) {
+		contractPrice := ctx.String(contractPriceFlag.Name)
 		config["contractPrice"] = contractPrice
 	}
 	// set the deposit price
-	if ctx.IsSet(utils.DepositPriceFlag.Name) {
-		deposit := ctx.String(utils.DepositPriceFlag.Name)
+	if ctx.IsSet(depositPriceFlag.Name) {
+		deposit := ctx.String(depositPriceFlag.Name)
 		config["deposit"] = deposit
 	}
 	// set the duration
-	if ctx.IsSet(utils.StorageDurationFlag.Name) {
-		maxDuration := ctx.String(utils.StorageDurationFlag.Name)
+	if ctx.IsSet(storageDurationFlag.Name) {
+		maxDuration := ctx.String(storageDurationFlag.Name)
 		config["maxDuration"] = maxDuration
 	}
 
@@ -280,10 +359,10 @@ func setHostPaymentAddress(ctx *cli.Context) error {
 	}
 
 	var address string
-	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
+	if !ctx.IsSet(paymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used")
 	} else {
-		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
+		address = ctx.String(paymentAddressFlag.Name)
 	}
 
 	var resp string
@@ -313,13 +392,10 @@ func getHostFolders(ctx *cli.Context) error {
 
 	fmt.Println("Folders Count: ", len(hostFolders))
 	for i, folder := range hostFolders {
-		fmt.Printf(`
-
-Host Folder #%v:
+		fmt.Printf(`Host Folder #%v:
 	Folder Path:    %s
 	TotalSpace:     %v sectors
 	UsedSpace:      %v sectors
-
 `, i+1, folder.Path, folder.TotalSectors, folder.UsedSectors)
 	}
 
@@ -337,9 +413,7 @@ func getFinance(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the host financial metrics: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Host Financial Metrics:
+	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
 	ContractCompensation:                   %v wei
 	PotentialContractCompensation:          %v wei
@@ -354,7 +428,6 @@ Host Financial Metrics:
 	PotentialDownloadBandwidthRevenue:      %v wei
 	PotentialUploadBandwidthRevenue:        %v wei
 	UploadBandwidthRevenue:                 %v wei
-
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,
@@ -385,16 +458,16 @@ func addFolder(ctx *cli.Context) error {
 	}
 
 	var path, size string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder creation location")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
+	if !ctx.IsSet(folderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder creation size")
 	} else {
-		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
+		size = ctx.String(folderSizeFlag.Name)
 	}
 
 	var resp string
@@ -413,16 +486,16 @@ func resizeFolder(ctx *cli.Context) error {
 	}
 
 	var path, size string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder that is going to be resize")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FolderSizeFlag.Name) {
+	if !ctx.IsSet(folderSizeFlag.Name) {
 		utils.Fatalf("the --size flag must be used to specify the folder size")
 	} else {
-		size = ctx.GlobalString(utils.FolderSizeFlag.Name)
+		size = ctx.String(folderSizeFlag.Name)
 	}
 
 	var resp string
@@ -441,10 +514,10 @@ func deleteFolder(ctx *cli.Context) error {
 	}
 
 	var path string
-	if !ctx.GlobalIsSet(utils.FolderPathFlag.Name) {
+	if !ctx.IsSet(folderPathFlag.Name) {
 		utils.Fatalf("the --folderpath flag must be used to specify the folder to be deleted")
 	} else {
-		path = ctx.GlobalString(utils.FolderPathFlag.Name)
+		path = ctx.String(folderPathFlag.Name)
 	}
 
 	var resp string

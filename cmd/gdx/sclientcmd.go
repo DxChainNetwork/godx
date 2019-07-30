@@ -18,6 +18,68 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+var (
+	storageHostIDFlag = cli.StringFlag{
+		Name:  "hostid",
+		Usage: "Storage host enode ID",
+	}
+
+	contractIDFlag = cli.StringFlag{
+		Name:  "contractid",
+		Usage: "Contract ID ",
+	}
+
+	paymentAddressFlag = cli.StringFlag{
+		Name:  "address",
+		Usage: "Payment address for the storage service",
+	}
+
+	contractPeriodFlag = cli.StringFlag{
+		Name:  "period",
+		Usage: "Duration of data storage ",
+	}
+
+	contractHostFlag = cli.StringFlag{
+		Name:  "host",
+		Usage: "Number of hosts that storage client wants to sign the contract with",
+	}
+
+	contractRenewFlag = cli.StringFlag{
+		Name:  "renew",
+		Usage: "Time for automatic contract renew",
+	}
+
+	contractFundFlag = cli.StringFlag{
+		Name:  "fund",
+		Usage: "Money can be spent for the file storage within in one period",
+	}
+
+	fileSourceFlag = cli.StringFlag{
+		Name:  "src",
+		Usage: "Absolute path of the file that is going to be uploaded/downloaded from (source)",
+	}
+
+	fileDestinationFlag = cli.StringFlag{
+		Name:  "dst",
+		Usage: "Absolute path of the file that is going to ge uploaded/downloaded to (destination)",
+	}
+
+	filePathFlag = cli.StringFlag{
+		Name:  "filepath",
+		Usage: "Absolute path of the file",
+	}
+
+	prevFilePathFlag = cli.StringFlag{
+		Name:  "prevpath",
+		Usage: "Previous absolute file path",
+	}
+
+	newFilePathFlag = cli.StringFlag{
+		Name:  "newpath",
+		Usage: "New absolute file path",
+	}
+)
+
 var storageClientCommand = cli.Command{
 	Name:      "sclient",
 	Usage:     "Storage client related operations",
@@ -57,9 +119,11 @@ will automatically evaluate storage hosts from this list to sign contract with t
 			Usage:     "Retrieve detailed host information based on the provided hostID",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getHostInfo),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				storageHostIDFlag,
+			},
 			Description: `
-			gdx sclient host --hostid [argument]
+			gdx sclient host [--hostid arg]
 
 will display detailed host information based on the provided hostID, such as deposit,
 allowed storage time, and etc.`,
@@ -107,9 +171,11 @@ each file, including the file's uploading status and health status'`,
 			Usage:     "Retrieve detailed contract information of a contract ",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getContract),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				contractIDFlag,
+			},
 			Description: `
-			gdx sclient contract [argument]
+			gdx sclient contract [--contractid arg]
 
 will display detailed contract information based on the provided contractID. The information
 included contractID, revisionNumber, hostID, and etc.'`,
@@ -131,9 +197,11 @@ the payment address for the storage service will always be the first account add
 			Usage:     "Register the account address to be used for the storage services",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setPaymentAddress),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				paymentAddressFlag,
+			},
 			Description: `
-			gdx sclient setpaymentaddr --address [parameter]
+			gdx sclient setpaymentaddr [--address arg]
 		
 is used to register the account address to be used for the storage services. Money spent for the
 file uploading, downloading, storage, and etc. will be deducted from this address. The --address
@@ -145,9 +213,14 @@ flag must be used along with this flag to specify the account address`,
 			Usage:     "Configure the client settings used for contract creation, file upload, download, and etc.",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setClientConfig),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				contractPeriodFlag,
+				contractHostFlag,
+				contractRenewFlag,
+				contractFundFlag,
+			},
 			Description: `
-			gdx sclient setconfig
+			gdx sclient setconfig [--period arg] [--host arg] [--renew arg] [--fund arg]
 		
 will configure the client settings used for contract creation, file upload, download, and etc. There are
 multiple flags can be used along with this command to specify the setting:
@@ -168,9 +241,12 @@ Note: without using any of those flags, default settings will be used`,
 			Usage:     "Upload the file from the local machine",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileUpload),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				fileSourceFlag,
+				fileDestinationFlag,
+			},
 			Description: `
-			gdx sclient upload --src [argument] --dst [argument]
+			gdx sclient upload [--src arg] [--dst arg]
 		
 will upload the file specified by the client to the storage hosts. This command must be used along
 with two flags to specify the source of the file that is going to be uploaded, and the destination
@@ -182,9 +258,12 @@ that the file is going to be uploaded to. Note: the src must be absolute path: /
 			Usage:     "Download file to the local machine",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileDownload),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				fileSourceFlag,
+				fileDestinationFlag,
+			},
 			Description: `
-			gdx sclient download --src [argument] --dst [argument]
+			gdx sclient download [--src arg] [--dst arg]
 
 will download the file specified by the client to the local machine. This command must be used along
 with two flags to specify the source of the file that is going to be downloaded, and the destination
@@ -196,9 +275,11 @@ that the file is going to be downloaded from. Note, the download destination mus
 			Usage:     "Retrieve detailed information of an uploaded/uploading file",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getFile),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				filePathFlag,
+			},
 			Description: `
-			gdx sclient file --filepath [argument]
+			gdx sclient file [--filepath arg]
 
 will display the detailed information of an uploaded/uploading file, including the file uploading
 status, health status, and etc. Note, the filepath must be specified which is the destination path
@@ -210,9 +291,12 @@ used for file uploading`,
 			Usage:     "Rename the file uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileRenaming),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				prevFilePathFlag,
+				newFilePathFlag,
+			},
 			Description: `
-			gdx sclient rename --prevpath [argument] --newpath [argument]
+			gdx sclient rename [--prevpath arg] [--newpath arg]
 
 will rename the file uploaded by the client. oldname and newname flags must be used along
 with this command`,
@@ -223,12 +307,26 @@ with this command`,
 			Usage:     "Rename the file uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(fileDelete),
-			Flags:     storageClientFlags,
+			Flags: []cli.Flag{
+				filePathFlag,
+			},
 			Description: `
-			gdx sclient delete --filepath [argument]
+			gdx sclient delete [--filepath arg]
 
 will delete the file uploaded by the storage client. This filepath flag must be used along
 with this command to specify which file will be deleted`,
+		},
+		{
+			Name:      "periodCost",
+			Usage:     "Retrieve the client's period cost for all storage contracts",
+			ArgsUsage: "",
+			Action:    utils.MigrateFlags(periodCost),
+			Description: `
+			gdx sclient periodCost
+
+will retrieve and display the cost that storage client needs to pay within one period cycle. 
+The cost includes cost for all contracts. In addition, it also provides the contract fund left,
+fund unspent, and fund withhold, along with the withhold fund release block height`,
 		},
 	},
 }
@@ -245,9 +343,7 @@ func getConfig(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the storage client configuration: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Client Configuration:
+	fmt.Printf(`Client Configuration:
 	Fund:                           %s
 	Period:                         %s
 	HostsNeeded:                    %s
@@ -259,7 +355,6 @@ Client Configuration:
 	Max Upload Speed:               %s
 	Max Download Speed:             %s
 	IP Violation Check Status:      %s
-
 `, config.RentPayment.Fund, config.RentPayment.Period, config.RentPayment.StorageHosts, config.RentPayment.RenewWindow,
 		config.RentPayment.ExpectedRedundancy, config.RentPayment.ExpectedStorage, config.RentPayment.ExpectedUpload,
 		config.RentPayment.ExpectedDownload, config.MaxUploadSpeed, config.MaxDownloadSpeed, config.EnableIPViolation)
@@ -301,10 +396,10 @@ func getHostInfo(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	if !ctx.GlobalIsSet(utils.StorageHostIDFlag.Name) {
+	if !ctx.IsSet(storageHostIDFlag.Name) {
 		utils.Fatalf("the --hostid flag must be used to specify which storage host information want to be retrieved")
 	} else {
-		id = ctx.GlobalString(utils.StorageHostIDFlag.Name)
+		id = ctx.String(storageHostIDFlag.Name)
 	}
 
 	var info storage.HostInfo
@@ -320,9 +415,7 @@ func getHostInfo(ctx *cli.Context) error {
 		return nil
 	}
 
-	fmt.Printf(`
-
-Host Information:
+	fmt.Printf(`Host Information:
 	HostID:                        %s
 	IP:                            %s
 	AcceptingStorageContracts:     %t
@@ -434,10 +527,10 @@ func getContract(ctx *cli.Context) error {
 	}
 
 	var id string
-	if !ctx.GlobalIsSet(utils.ContractIDFlag.Name) {
+	if !ctx.IsSet(contractIDFlag.Name) {
 		utils.Fatalf("the --contractid flag must be used to specify which contract information want to be retrieved")
 	} else {
-		id = ctx.GlobalString(utils.ContractIDFlag.Name)
+		id = ctx.String(contractIDFlag.Name)
 	}
 
 	var contract storageclient.ContractMetaDataAPIDisplay
@@ -446,9 +539,7 @@ func getContract(ctx *cli.Context) error {
 		utils.Fatalf("failed to retrieve detailed contract information: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Contract Information:
+	fmt.Printf(`Contract Information:
 	ContractID:           %s
 	HostID:               %v
 	Balance:              %s
@@ -474,7 +565,6 @@ Latest ContractRevision Information:
 	NewWindowEnd:                %v
 	NewValidProofOutputs:        %v
 	NewMissedProofOutputs        %v
-
 `, contract.ID, contract.EnodeID, contract.ContractBalance, contract.UploadCost, contract.DownloadCost,
 		contract.StorageCost, contract.GasCost, contract.ContractFee, contract.TotalCost, contract.StartHeight,
 		contract.EndHeight, contract.UploadAbility, contract.RenewAbility, contract.Canceled,
@@ -510,10 +600,10 @@ func setPaymentAddress(ctx *cli.Context) error {
 	}
 
 	var address string
-	if !ctx.GlobalIsSet(utils.PaymentAddressFlag.Name) {
+	if !ctx.IsSet(paymentAddressFlag.Name) {
 		utils.Fatalf("the --address flag must be used to specify which account address want to be used for storage service")
 	} else {
-		address = ctx.GlobalString(utils.PaymentAddressFlag.Name)
+		address = ctx.String(paymentAddressFlag.Name)
 	}
 
 	var result bool
@@ -538,20 +628,20 @@ func setClientConfig(ctx *cli.Context) error {
 
 	var settings = make(map[string]string)
 
-	if ctx.GlobalIsSet(utils.PeriodFlag.Name) {
-		settings["period"] = ctx.GlobalString(utils.PeriodFlag.Name)
+	if ctx.IsSet(contractPeriodFlag.Name) {
+		settings["period"] = ctx.String(contractPeriodFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.HostsFlag.Name) {
-		settings["hosts"] = ctx.GlobalString(utils.HostsFlag.Name)
+	if ctx.IsSet(contractHostFlag.Name) {
+		settings["hosts"] = ctx.String(contractHostFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.FundFlag.Name) {
-		settings["fund"] = ctx.GlobalString(utils.FundFlag.Name)
+	if ctx.IsSet(contractFundFlag.Name) {
+		settings["fund"] = ctx.String(contractFundFlag.Name)
 	}
 
-	if ctx.GlobalIsSet(utils.RenewFlag.Name) {
-		settings["renew"] = ctx.GlobalString(utils.RenewFlag.Name)
+	if ctx.IsSet(contractRenewFlag.Name) {
+		settings["renew"] = ctx.String(contractRenewFlag.Name)
 	}
 
 	var resp string
@@ -570,16 +660,16 @@ func fileUpload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.GlobalIsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(fileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.GlobalString(utils.FileSourceFlag.Name)
+		source = ctx.String(fileSourceFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(fileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.GlobalString(utils.FileDestinationFlag.Name)
+		destination = ctx.String(fileDestinationFlag.Name)
 	}
 
 	var resp string
@@ -600,16 +690,16 @@ func fileDownload(ctx *cli.Context) error {
 	}
 
 	var source, destination string
-	if !ctx.GlobalIsSet(utils.FileSourceFlag.Name) {
+	if !ctx.IsSet(fileSourceFlag.Name) {
 		utils.Fatalf("must specify the source path of the file used for uploading")
 	} else {
-		source = ctx.GlobalString(utils.FileSourceFlag.Name)
+		source = ctx.String(fileSourceFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.FileDestinationFlag.Name) {
+	if !ctx.IsSet(fileDestinationFlag.Name) {
 		utils.Fatalf("must specify the destination path used for saving the file")
 	} else {
-		destination = ctx.GlobalString(utils.FileDestinationFlag.Name)
+		destination = ctx.String(fileDestinationFlag.Name)
 	}
 
 	var result string
@@ -629,10 +719,10 @@ func getFile(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.GlobalIsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(filePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the detailed file information")
 	} else {
-		filePath = ctx.GlobalString(utils.FilePathFlag.Name)
+		filePath = ctx.String(filePathFlag.Name)
 	}
 
 	var fileInfo storage.FileInfo
@@ -640,9 +730,7 @@ func getFile(ctx *cli.Context) error {
 		utils.Fatalf("%s", err.Error())
 	}
 
-	fmt.Printf(`
-
-File Information:
+	fmt.Printf(`File Information:
 	DxPath:            %s
  	Status:            %s
 	SourcePath:        %s
@@ -650,7 +738,6 @@ File Information:
 	Redundancy:        %v    
 	StorageOnDisk:     %v
 	UploadProgress:    %v
-
 `, fileInfo.DxPath, fileInfo.Status, fileInfo.SourcePath, fileInfo.FileSize, fileInfo.Redundancy,
 		fileInfo.StoredOnDisk, fileInfo.UploadProgress)
 
@@ -664,16 +751,16 @@ func fileRenaming(ctx *cli.Context) error {
 	}
 
 	var prevPath, newPath string
-	if !ctx.GlobalIsSet(utils.PrevFilePathFlag.Name) {
+	if !ctx.IsSet(prevFilePathFlag.Name) {
 		utils.Fatalf("must specify the previous file path in order to change the name")
 	} else {
-		prevPath = ctx.GlobalString(utils.PrevFilePathFlag.Name)
+		prevPath = ctx.String(prevFilePathFlag.Name)
 	}
 
-	if !ctx.GlobalIsSet(utils.NewFilePathFlag.Name) {
+	if !ctx.IsSet(newFilePathFlag.Name) {
 		utils.Fatalf("must specify the new file path")
 	} else {
-		newPath = ctx.GlobalString(utils.NewFilePathFlag.Name)
+		newPath = ctx.String(newFilePathFlag.Name)
 	}
 
 	var resp string
@@ -692,10 +779,10 @@ func fileDelete(ctx *cli.Context) error {
 	}
 
 	var filePath string
-	if !ctx.GlobalIsSet(utils.FilePathFlag.Name) {
+	if !ctx.IsSet(filePathFlag.Name) {
 		utils.Fatalf("must specify the file path used for uploading in order to get the delete the file")
 	} else {
-		filePath = ctx.GlobalString(utils.FilePathFlag.Name)
+		filePath = ctx.String(filePathFlag.Name)
 	}
 
 	var resp string
@@ -704,6 +791,36 @@ func fileDelete(ctx *cli.Context) error {
 	}
 
 	fmt.Println(resp)
+	return nil
+}
+
+func periodCost(ctx *cli.Context) error {
+	// attaching to the remote gdx
+	client, err := gdxAttach(ctx)
+	if err != nil {
+		utils.Fatalf("unable to connect to remove gdx, please start the gdx first: %s", err.Error())
+	}
+
+	// getting the storage period cost
+	var cost storage.PeriodCost
+	if err = client.Call(&cost, "sclient_periodCost"); err != nil {
+		utils.Fatalf("failed to get the client's period cost: %s", err.Error())
+	}
+
+	// print out the result
+	fmt.Printf(`Period Cost:
+	ContractFees:                 %v wei
+ 	UploadCost:                   %v wei
+	DownloadCost:                 %v wei
+	StorageCost:                  %v wei
+	PrevContractCost:             %v wei    
+	ContractFund:                 %v wei
+	UnspentFund:                  %v wei
+	WithheldFund:                 %v wei
+	WithheldFundReleaseBlock:     %v block
+`, cost.ContractFees, cost.UploadCost, cost.DownloadCost, cost.StorageCost, cost.PrevContractCost,
+		cost.ContractFund, cost.UnspentFund, cost.WithheldFund, cost.WithheldFundReleaseBlock)
+
 	return nil
 }
 

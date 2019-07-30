@@ -81,6 +81,11 @@ func (cm *ContractManager) contractMaintenance() {
 	var clientRemainingFund common.BigInt
 	periodCost := cm.CalculatePeriodCost(rentPayment)
 
+	// update the periodCost in the contract manager
+	cm.lock.Lock()
+	cm.periodCost = periodCost
+	cm.lock.Unlock()
+
 	// calculate the clientRemainingFund, in case the remaining fund is negative
 	// set it to 0
 	clientRemainingFund = rentPayment.Fund.Sub(periodCost.ContractFund)

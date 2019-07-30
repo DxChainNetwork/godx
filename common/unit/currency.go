@@ -68,6 +68,12 @@ func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
 	if len(extra) > 0 {
 		extraStr = strings.Join(extra, "")
 	}
+
+	if fund.IsEqual(common.BigInt0) {
+		formatted = fmt.Sprintf("%v wei%v", fund, extraStr)
+		return
+	}
+
 	switch {
 	case fund.DivNoRemaining(CurrencyIndexMap["ether"]):
 		formatted = fmt.Sprintf("%v ether%v", fund.DivUint64(CurrencyIndexMap["ether"]), extraStr)
