@@ -68,6 +68,12 @@ func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
 	// remove the unit
 	fund = strings.TrimSuffix(fund, unit)
 
+	// check if the string is numeric
+	if !isNumeric(fund) {
+		err = fmt.Errorf("failed to parse the currency, the input is not numeric")
+		return
+	}
+
 	// convert the string to *big.int
 	if _, err = fmt.Sscan(fund, bigFloat); err != nil {
 		err = fmt.Errorf("failed to convert the string to *big.Int: %s", err.Error())
@@ -82,4 +88,24 @@ func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
 	parsed = common.PtrBigInt(bigInt)
 
 	return
+}
+
+// isNumeric checks if the string is a number
+func isNumeric(str string) bool {
+	dotFound := false
+	for _, char := range str {
+		// making sure the dot will not be considered as false
+		// also making sure that the dot should only show once
+		// as if the input string is a number
+		if char == '.' {
+			if dotFound {
+				return false
+			}
+			dotFound = true
+		} else if char < '0' || char > '9' {
+			return false
+		}
+	}
+
+	return true
 }
