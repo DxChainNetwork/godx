@@ -256,8 +256,7 @@ func getHostConfig(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the storage host configuration: %s", err.Error())
 	}
 
-	fmt.Printf(`
-Host Configuration:
+	fmt.Printf(`Host Configuration:
 	AcceptingContracts:            %v
 	MaxDownloadBatchSize:          %v
 	MaxDuration:                   %v
@@ -273,7 +272,6 @@ Host Configuration:
 	SectorAccessPrice:             %v
 	StoragePrice:                  %v
 	UploadBandwidthPrice:          %v
-
 `, config.AcceptingContracts, config.MaxDownloadBatchSize, config.MaxDuration,
 		config.MaxReviseBatchSize, config.WindowSize, config.PaymentAddress,
 		config.Deposit, config.DepositBudget, config.MaxDeposit, config.BaseRPCPrice,
@@ -394,13 +392,10 @@ func getHostFolders(ctx *cli.Context) error {
 
 	fmt.Println("Folders Count: ", len(hostFolders))
 	for i, folder := range hostFolders {
-		fmt.Printf(`
-
-Host Folder #%v:
+		fmt.Printf(`Host Folder #%v:
 	Folder Path:    %s
 	TotalSpace:     %v sectors
 	UsedSpace:      %v sectors
-
 `, i+1, folder.Path, folder.TotalSectors, folder.UsedSectors)
 	}
 
@@ -418,9 +413,7 @@ func getFinance(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the host financial metrics: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Host Financial Metrics:
+	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
 	ContractCompensation:                   %v wei
 	PotentialContractCompensation:          %v wei
@@ -435,7 +428,6 @@ Host Financial Metrics:
 	PotentialDownloadBandwidthRevenue:      %v wei
 	PotentialUploadBandwidthRevenue:        %v wei
 	UploadBandwidthRevenue:                 %v wei
-
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,

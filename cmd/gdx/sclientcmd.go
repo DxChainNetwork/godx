@@ -343,9 +343,7 @@ func getConfig(ctx *cli.Context) error {
 		utils.Fatalf("failed to get the storage client configuration: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Client Configuration:
+	fmt.Printf(`Client Configuration:
 	Fund:                           %s
 	Period:                         %s
 	HostsNeeded:                    %s
@@ -357,7 +355,6 @@ Client Configuration:
 	Max Upload Speed:               %s
 	Max Download Speed:             %s
 	IP Violation Check Status:      %s
-
 `, config.RentPayment.Fund, config.RentPayment.Period, config.RentPayment.StorageHosts, config.RentPayment.RenewWindow,
 		config.RentPayment.ExpectedRedundancy, config.RentPayment.ExpectedStorage, config.RentPayment.ExpectedUpload,
 		config.RentPayment.ExpectedDownload, config.MaxUploadSpeed, config.MaxDownloadSpeed, config.EnableIPViolation)
@@ -418,9 +415,7 @@ func getHostInfo(ctx *cli.Context) error {
 		return nil
 	}
 
-	fmt.Printf(`
-
-Host Information:
+	fmt.Printf(`Host Information:
 	HostID:                        %s
 	IP:                            %s
 	AcceptingStorageContracts:     %t
@@ -544,9 +539,7 @@ func getContract(ctx *cli.Context) error {
 		utils.Fatalf("failed to retrieve detailed contract information: %s", err.Error())
 	}
 
-	fmt.Printf(`
-
-Contract Information:
+	fmt.Printf(`Contract Information:
 	ContractID:           %s
 	HostID:               %v
 	Balance:              %s
@@ -572,7 +565,6 @@ Latest ContractRevision Information:
 	NewWindowEnd:                %v
 	NewValidProofOutputs:        %v
 	NewMissedProofOutputs        %v
-
 `, contract.ID, contract.EnodeID, contract.ContractBalance, contract.UploadCost, contract.DownloadCost,
 		contract.StorageCost, contract.GasCost, contract.ContractFee, contract.TotalCost, contract.StartHeight,
 		contract.EndHeight, contract.UploadAbility, contract.RenewAbility, contract.Canceled,
@@ -738,9 +730,7 @@ func getFile(ctx *cli.Context) error {
 		utils.Fatalf("%s", err.Error())
 	}
 
-	fmt.Printf(`
-
-File Information:
+	fmt.Printf(`File Information:
 	DxPath:            %s
  	Status:            %s
 	SourcePath:        %s
@@ -748,7 +738,6 @@ File Information:
 	Redundancy:        %v    
 	StorageOnDisk:     %v
 	UploadProgress:    %v
-
 `, fileInfo.DxPath, fileInfo.Status, fileInfo.SourcePath, fileInfo.FileSize, fileInfo.Redundancy,
 		fileInfo.StoredOnDisk, fileInfo.UploadProgress)
 
@@ -819,9 +808,7 @@ func periodCost(ctx *cli.Context) error {
 	}
 
 	// print out the result
-	fmt.Printf(`
-
-Period Cost:
+	fmt.Printf(`Period Cost:
 	ContractFees:                 %v wei
  	UploadCost:                   %v wei
 	DownloadCost:                 %v wei
@@ -831,7 +818,6 @@ Period Cost:
 	UnspentFund:                  %v wei
 	WithheldFund:                 %v wei
 	WithheldFundReleaseBlock:     %v block
-
 `, cost.ContractFees, cost.UploadCost, cost.DownloadCost, cost.StorageCost, cost.PrevContractCost,
 		cost.ContractFund, cost.UnspentFund, cost.WithheldFund, cost.WithheldFundReleaseBlock)
 
