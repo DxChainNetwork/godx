@@ -101,6 +101,17 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	return nil
 }
 
+// ValidateDposState validates that the dpos context of given block is not changed
+func (v *BlockValidator) ValidateDposState(block *types.Block) error {
+	header := block.Header()
+	localRoot := block.DposCtx().Root()
+	remoteRoot := header.DposContext.Root()
+	if remoteRoot != localRoot {
+		return fmt.Errorf("invalid dpos root (remote: %x local: %x)", remoteRoot, localRoot)
+	}
+	return nil
+}
+
 // CalcGasLimit computes the gas limit of the next block after parent. It aims
 // to keep the baseline gas above the provided floor, and increase it towards the
 // ceil if the blocks are full. If the ceil is exceeded, it will always decrease

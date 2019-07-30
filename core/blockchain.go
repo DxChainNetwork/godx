@@ -31,6 +31,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/mclock"
 	"github.com/DxChainNetwork/godx/common/prque"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -955,6 +956,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	// commit dpos context to local db
+	_, err = block.DposContext.Commit()
+	if err != nil {
+		return NonStatTy, err
+	}
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
@@ -1208,6 +1215,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if parent == nil {
 			parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		}
+
+		// construct dpos context from parent's dpos context root
+		block.DposContext, err = types.NewDposContextFromProto(bc.db, parent.Header().DposContext)
+		if err != nil {
+			return it.index, events, coalescedLogs, err
+		}
+
 		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
@@ -1225,6 +1239,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
+
+		// Validate the dpos state using the default validator
+		err = bc.Validator().ValidateDposState(block)
+		if err != nil {
+			bc.reportBlock(block, receipts, err)
+			return it.index, events, coalescedLogs, err
+		}
+
+		// if dpos engine, check whether the signature of given block is right
+		if dposEngine, ok := bc.engine.(*dpos.Dpos); ok {
+			err = dposEngine.VerifySeal(bc, block.Header())
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				return it.index, events, coalescedLogs, err
+			}
+		}
+
 		t2 := time.Now()
 		proctime := time.Since(start)
 
