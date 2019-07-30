@@ -21,62 +21,62 @@ import (
 var (
 	storageHostIDFlag = cli.StringFlag{
 		Name:  "hostid",
-		Usage: "query the storage host information based on the node id",
+		Usage: "Storage host enode ID",
 	}
 
 	contractIDFlag = cli.StringFlag{
 		Name:  "contractid",
-		Usage: "query the detailed contract information based on the contract ID",
+		Usage: "Contract ID ",
 	}
 
 	paymentAddressFlag = cli.StringFlag{
 		Name:  "address",
-		Usage: "specifies the payment address used for the storage service",
+		Usage: "Payment address for the storage service",
 	}
 
 	contractPeriodFlag = cli.StringFlag{
 		Name:  "period",
-		Usage: "sets the client setting period field. It can be specified in terms of blocks, hours, days, weeks, and years",
+		Usage: "Duration of data storage ",
 	}
 
 	contractHostFlag = cli.StringFlag{
 		Name:  "host",
-		Usage: "defines how many hosts that storage client wants to sign contract with, the value must be greater than 2",
+		Usage: "Number of hosts that storage client wants to sign the contract with",
 	}
 
 	contractRenewFlag = cli.StringFlag{
 		Name:  "renew",
-		Usage: "defines the automatically contract renew. If the value is closer to period, more frequent the contract will get renewed",
+		Usage: "Time for automatic contract renew",
 	}
 
 	contractFundFlag = cli.StringFlag{
 		Name:  "fund",
-		Usage: "defines the max money can be spent for the storage. It can be specified in terms of DXC",
+		Usage: "Money can be spent for the file storage within in one period",
 	}
 
 	fileSourceFlag = cli.StringFlag{
 		Name:  "src",
-		Usage: "specifies the source of the file that is going to be uploaded/downloaded from",
+		Usage: "Absolute path of the file that is going to be uploaded/downloaded from (source)",
 	}
 
 	fileDestinationFlag = cli.StringFlag{
 		Name:  "dst",
-		Usage: "specifies the destination of the file that is going to ge uploaded/downloaded to",
+		Usage: "Absolute path of the file that is going to ge uploaded/downloaded to (destination)",
 	}
 
 	filePathFlag = cli.StringFlag{
 		Name:  "filepath",
-		Usage: "specifies the file path",
+		Usage: "Absolute path of the file",
 	}
 
 	prevFilePathFlag = cli.StringFlag{
 		Name:  "prevpath",
-		Usage: "specifies the old file path, used for file renaming",
+		Usage: "Previous absolute file path",
 	}
 
 	newFilePathFlag = cli.StringFlag{
 		Name:  "newpath",
-		Usage: "specifies the new file path, used for file renmaing",
+		Usage: "New absolute file path",
 	}
 )
 

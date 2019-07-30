@@ -61,17 +61,17 @@ var (
 
 	hostPaymentAddressFlag = cli.StringFlag{
 		Name:  "address",
-		Usage: "specifies the payment address used for the storage service",
+		Usage: "Payment address for the storage service",
 	}
 
 	folderSizeFlag = cli.StringFlag{
 		Name:  "size",
-		Usage: "specifies the size of the folder",
+		Usage: "Size of the folder",
 	}
 
 	folderPathFlag = cli.StringFlag{
 		Name:  "folderpath",
-		Usage: "specifies the folder path",
+		Usage: "Path of the folder",
 	}
 )
 
