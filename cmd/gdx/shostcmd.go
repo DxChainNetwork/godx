@@ -408,7 +408,7 @@ func getFinance(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	var finance storagehost.HostFinancialMetrics
+	var finance storagehost.HostFinancialMetricsForDisplay
 	if err = client.Call(&finance, "shost_getFinancialMetrics"); err != nil {
 		utils.Fatalf("failed to get the host financial metrics: %s", err.Error())
 	}

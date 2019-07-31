@@ -65,17 +65,17 @@ func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
 	}
 
 	if fund.IsEqual(common.BigInt0) {
-		formatted = fmt.Sprintf("%v camel%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v Camel%v", fund, extraStr)
 		return
 	}
 
 	// pick up the most suitable unit
 	if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["dx"]); value >= 0.001 {
-		formatted = fmt.Sprintf("%v dx%v", value, extraStr)
+		formatted = fmt.Sprintf("%v DX%v", value, extraStr)
 	} else if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["gcamel"]); value >= 0.001 {
 		formatted = fmt.Sprintf("%v Gcamel%v", value, extraStr)
 	} else {
-		formatted = fmt.Sprintf("%v camel%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v Camel%v", fund, extraStr)
 	}
 
 	return
