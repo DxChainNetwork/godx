@@ -11,12 +11,12 @@ import (
 )
 
 // CurrencyUnit defines available units used for rentPayment fund
-var CurrencyUnit = []string{"hump", "ghump", "dx"}
+var CurrencyUnit = []string{"camel", "gcamel", "dx"}
 
 var CurrencyIndexMap = map[string]uint64{
-	"hump":  1,
-	"ghump": 1e9,
-	"dx":    1e18,
+	"camel":  1,
+	"gcamel": 1e9,
+	"dx":     1e18,
 }
 
 // ParseCurrency will parse the user string input, and convert it into common.BigInt
@@ -30,7 +30,7 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	for unit := range CurrencyIndexMap {
 		// skip ether or dx because other currency unit also
 		// includes these kind of suffix
-		if unit == "hump" || unit == "dx" {
+		if unit == "camel" || unit == "dx" {
 			continue
 		}
 
@@ -42,8 +42,8 @@ func ParseCurrency(str string) (parsed common.BigInt, err error) {
 	}
 
 	// check if the suffix contains wei
-	if strings.HasSuffix(str, "hump") {
-		return stringToBigInt("hump", str)
+	if strings.HasSuffix(str, "camel") {
+		return stringToBigInt("camel", str)
 	}
 
 	// check if the suffix contains ether
@@ -65,17 +65,17 @@ func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
 	}
 
 	if fund.IsEqual(common.BigInt0) {
-		formatted = fmt.Sprintf("%v hump%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v camel%v", fund, extraStr)
 		return
 	}
 
 	// pick up the most suitable unit
-	if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["dx"]); value > 0.001 {
+	if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["dx"]); value >= 0.001 {
 		formatted = fmt.Sprintf("%v dx%v", value, extraStr)
-	} else if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["ghump"]); value > 0.001 {
-		formatted = fmt.Sprintf("%v Ghump%v", value, extraStr)
+	} else if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["gcamel"]); value >= 0.001 {
+		formatted = fmt.Sprintf("%v Gcamel%v", value, extraStr)
 	} else {
-		formatted = fmt.Sprintf("%v hump%v", fund, extraStr)
+		formatted = fmt.Sprintf("%v camel%v", fund, extraStr)
 	}
 
 	return

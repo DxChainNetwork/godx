@@ -230,7 +230,7 @@ multiple flags can be used along with this command to specify the setting:
 4. fund: specifies the amount of money the client wants to be used for the storage service
 
 units:
-currency: [hump, ghump, dx]
+currency: [camel, gcamel, dx]
 time: [h, b, d, w, m, y] -> hour, block, day, week, month, year
 
 Note: without using any of those flags, default settings will be used`,
@@ -420,12 +420,12 @@ func getHostInfo(ctx *cli.Context) error {
 	IP:                            %s
 	AcceptingStorageContracts:     %t
 	RemainingStorage:              %v bytes
-	Deposit:                       %v hump
-	Contract Price:                %v hump
-	Storage Price:                 %v hump
-	DownloadBandwidth Price:       %v hump
-	UploadBandwidth Price:         %v hump
-	Sector Access Price:           %v hump
+	Deposit:                       %v camel
+	Contract Price:                %v camel
+	Storage Price:                 %v camel
+	DownloadBandwidth Price:       %v camel
+	UploadBandwidth Price:         %v camel
+	Sector Access Price:           %v camel
 	
 `, info.EnodeID.String(), info.IP, info.AcceptingContracts, info.RemainingStorage, info.Deposit, info.ContractPrice,
 		info.StoragePrice, info.DownloadBandwidthPrice, info.UploadBandwidthPrice, info.SectorAccessPrice)
@@ -809,14 +809,14 @@ func periodCost(ctx *cli.Context) error {
 
 	// print out the result
 	fmt.Printf(`Period Cost:
-	ContractFees:                 %v hump
- 	UploadCost:                   %v hump
-	DownloadCost:                 %v hump
-	StorageCost:                  %v hump
-	PrevContractCost:             %v hump    
-	ContractFund:                 %v hump
-	UnspentFund:                  %v hump
-	WithheldFund:                 %v hump
+	ContractFees:                 %v camel
+ 	UploadCost:                   %v camel
+	DownloadCost:                 %v camel
+	StorageCost:                  %v camel
+	PrevContractCost:             %v camel
+	ContractFund:                 %v camel
+	UnspentFund:                  %v camel
+	WithheldFund:                 %v camel
 	WithheldFundReleaseBlock:     %v block
 `, cost.ContractFees, cost.UploadCost, cost.DownloadCost, cost.StorageCost, cost.PrevContractCost,
 		cost.ContractFund, cost.UnspentFund, cost.WithheldFund, cost.WithheldFundReleaseBlock)

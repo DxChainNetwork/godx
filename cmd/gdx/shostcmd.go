@@ -122,7 +122,7 @@ configurable parameters please read the list of flags.
 
 The values are associated with units.
 	BOOL:       {"true", "false"}
-	CURRENCY:   {"hump", "ghump", "dx"}
+	CURRENCY:   {"camel", "gcamel", "dx"}
 	DURATION:   {"h", "b", "d", "w", "m", "y"}`,
 		},
 
@@ -415,19 +415,20 @@ func getFinance(ctx *cli.Context) error {
 
 	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
-	ContractCompensation:                   %v hump
-	PotentialContractCompensation:          %v hump
-	LockedStorageDeposit:                   %v hump
-	LostRevenue:                            %v hump
-	LostStorageDeposit:                     %v hump
-	PotentialStorageRevenue:                %v hump
-	RiskedStorageDeposit:                   %v hump
-	StorageRevenue:                         %v hump
-	TransactionFeeExpenses:                 %v hump
-	DownloadBandwidthRevenue:               %v hump
-	PotentialDownloadBandwidthRevenue:      %v hump
-	PotentialUploadBandwidthRevenue:        %v hump
-	UploadBandwidthRevenue:                 %v hump
+	ContractCompensation:                   %v camel
+	ContractCompensation:                   %v camel
+	PotentialContractCompensation:          %v camel
+	LockedStorageDeposit:                   %v camel
+	LostRevenue:                            %v camel
+	LostStorageDeposit:                     %v camel
+	PotentialStorageRevenue:                %v camel
+	RiskedStorageDeposit:                   %v camel
+	StorageRevenue:                         %v camel
+	TransactionFeeExpenses:                 %v camel
+	DownloadBandwidthRevenue:               %v camel
+	PotentialDownloadBandwidthRevenue:      %v camel
+	PotentialUploadBandwidthRevenue:        %v camel
+	UploadBandwidthRevenue:                 %v camel
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,

@@ -14,9 +14,9 @@ func TestParseFund(t *testing.T) {
 		fund   string
 		result common.BigInt
 	}{
-		{"100 hump", common.NewBigInt(100)},
-		{"100hump", common.NewBigInt(100).MultUint64(CurrencyIndexMap["hump"])},
-		{"99876GHUMP", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["ghump"])},
+		{"100 camel", common.NewBigInt(100)},
+		{"100camel", common.NewBigInt(100).MultUint64(CurrencyIndexMap["camel"])},
+		{"99876GCAMEL", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["gcamel"])},
 	}
 
 	for _, table := range tables {
@@ -37,11 +37,11 @@ func TestParseFund(t *testing.T) {
 
 func TestParseFundFail(t *testing.T) {
 	var failedExpected = []string{
-		"100ether",  // does not match with any unit
-		"100fdx",    // error, even the suffix is dx
-		"120cdhump", // error, even the suffix is dx
-		"a1200hump", // error, even the suffix is dx
-		"120gdxc",   // error, does not match with any unit
+		"100ether",   // does not match with any unit
+		"100fdx",     // error, even the suffix is dx
+		"120cdcamel", // error, even the suffix is dx
+		"a1200camel", // error, even the suffix is dx
+		"120gdxc",    // error, does not match with any unit
 	}
 
 	for _, failedCase := range failedExpected {
