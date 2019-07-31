@@ -69,15 +69,14 @@ func FormatCurrency(fund common.BigInt, extra ...string) (formatted string) {
 		return
 	}
 
-	switch {
-	case fund.DivNoRemaining(CurrencyIndexMap["dx"]):
-		formatted = fmt.Sprintf("%v dx%v", fund.DivUint64(CurrencyIndexMap["dx"]), extraStr)
-		return
-	case fund.DivNoRemaining(CurrencyIndexMap["ghump"]):
-		formatted = fmt.Sprintf("%v Ghump%v", fund.DivUint64(CurrencyIndexMap["ghump"]), extraStr)
-		return
-	default:
+	// pick up the most suitable unit
+	if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["dx"]); value > 0.001 {
+		formatted = fmt.Sprintf("%v dx%v", value, extraStr)
+	} else if value := fund.DivWithFloatResultUint64(CurrencyIndexMap["ghump"]); value > 0.001 {
+		formatted = fmt.Sprintf("%v Ghump%v", value, extraStr)
+	} else {
 		formatted = fmt.Sprintf("%v hump%v", fund, extraStr)
-		return
 	}
+
+	return
 }
