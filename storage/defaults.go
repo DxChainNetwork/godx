@@ -20,8 +20,14 @@ var (
 	// ClientNegotiateErr defines that client occurs error while negotiate
 	ClientNegotiateErr = errors.New("client negotiate error")
 
+	// ClientCommitErr defines that client occurs error while commit(finalize)
+	ClientCommitErr = errors.New("client commit error")
+
 	// HostNegotiateErr defines that client occurs error while negotiate
 	HostNegotiateErr = errors.New("host negotiate error")
+
+	// HostCommitErr defines that host occurs error while commit(finalize)
+	HostCommitErr = errors.New("host commit error")
 )
 
 // Negotiation related messages

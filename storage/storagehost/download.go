@@ -17,7 +17,7 @@ import (
 
 // DownloadHandler handles the download negotiation
 func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
-	var downloadErr, hostNegotiateErr, clientNegotiateErr error
+	var downloadErr, hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
 		if clientNegotiateErr != nil {
@@ -25,7 +25,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 
 		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
+			if err := sp.SendHostNegotiateErrorMsg(); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg {
 					_ = sp.SendHostAckMsg()
@@ -33,9 +33,12 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 			}
 		}
 
+		if clientNegotiateErr != nil || clientCommitErr != nil {
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
 		if downloadErr != nil {
 			h.log.Error("data download failed", "err", downloadErr.Error())
-			sp.TriggerError(downloadErr)
 		}
 	}()
 
@@ -44,7 +47,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	err := downloadReqMsg.Decode(&req)
 	if err != nil {
 		downloadErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
-		hostNegotiateErr = downloadErr
+		clientNegotiateErr = downloadErr
 		return
 	}
 
@@ -210,6 +213,8 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 				return
 			}
 		}
+	} else if msg.Code == storage.ClientCommitFailedMsg {
+		clientCommitErr = storage.ClientCommitErr
 	}
 
 	// send host 'ACK' msg to client

@@ -12,6 +12,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -444,24 +445,26 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// Increase Successful/Failed interactions accordingly
-	var clientNegotiateErr, hostNegotiateErr error
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func(sp storage.Peer) {
 		if clientNegotiateErr != nil {
-			_ = sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
-		}
-
-		if hostNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		} else if hostNegotiateErr != nil {
 			_ = sp.SendClientAckMsg()
-		}
-
-		// only negotiate error occurs, we wait for host ack msg
-		if clientNegotiateErr != nil || hostNegotiateErr != nil {
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
 				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		// we will delete static flag when host negotiate or commit error
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
+		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else if err == nil {
@@ -505,7 +508,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
-		clientNegotiateErr = err
+		hostNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
@@ -550,7 +553,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
-		clientNegotiateErr = err
+		hostNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
@@ -626,6 +629,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	case storage.HostAckMsg:
 		return contractMetaData, nil
 	case storage.HostCommitFailedMsg:
+		hostCommitErr = storage.HostCommitErr
+
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		_ = sp.SendClientAckMsg()
 

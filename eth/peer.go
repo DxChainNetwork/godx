@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"math/big"
 	"sync"
 	"time"
@@ -109,6 +110,8 @@ type peer struct {
 
 	// error channel
 	errMsg chan error
+
+	checkPeerStopHook func(*peer) error
 }
 
 func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -132,6 +135,7 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		errMsg:                     make(chan error, 1),
 		contractRevisingOrRenewing: make(chan struct{}, 1),
 		hostConfigRequesting:       make(chan struct{}, 1),
+		checkPeerStopHook:			checkPeerStop,
 	}
 }
 
@@ -570,4 +574,13 @@ func (ps *peerSet) Close() {
 		p.Stop()
 	}
 	ps.closed = true
+}
+
+func checkPeerStop(p *peer) error {
+	select {
+	case <-p.StopChan():
+		return storagemaintenance.ErrProgramExit
+	default:
+		return nil
+	}
 }

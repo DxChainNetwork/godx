@@ -16,14 +16,14 @@ import (
 // ContractCreateHandler will be used to handle the contract create request
 // sent by the storage client
 func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
-	var contractCreateErr, hostNegotiateErr, clientNegotiateErr error
+	var contractCreateErr, hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendHostAckMsg()
 		}
 
 		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
+			if err := sp.SendHostNegotiateErrorMsg(); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg{
 					_ = sp.SendHostAckMsg()
@@ -31,9 +31,12 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 			}
 		}
 
+		if clientNegotiateErr != nil || clientCommitErr != nil {
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
 		if contractCreateErr != nil {
 			log.Error("contract create failed", "err", contractCreateErr.Error())
-			sp.TriggerError(contractCreateErr)
 		}
 	}()
 
@@ -47,7 +50,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	var req storage.ContractCreateRequest
 	if err := contractCreateReqMsg.Decode(&req); err != nil {
 		contractCreateErr = fmt.Errorf("failed to decode the contract create request message: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		clientNegotiateErr = contractCreateErr
 		return
 	}
 
@@ -142,7 +145,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		contractCreateErr = fmt.Errorf("storage host failed to decode client revision sign: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		clientNegotiateErr = contractCreateErr
 		return
 	}
 
@@ -233,6 +236,8 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 				return
 			}
 		}
+	} else if msg.Code == storage.ClientCommitFailedMsg {
+		clientCommitErr = storage.ClientCommitErr
 	}
 
 	// send host 'ACK' msg to client

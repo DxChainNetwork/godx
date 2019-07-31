@@ -15,15 +15,16 @@ import (
 
 // UploadHandler handles the upload negotiation
 func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
-	var uploadErr, hostNegotiateErr, clientNegotiateErr error
+	var uploadErr, hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendHostAckMsg()
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
 		}
 
 		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(hostNegotiateErr); err == nil {
+			if err := sp.SendHostNegotiateErrorMsg(); err == nil {
 				msg, err := sp.HostWaitContractResp()
 				if err == nil && msg.Code == storage.ClientAckMsg {
 					_ = sp.SendHostAckMsg()
@@ -31,9 +32,12 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 			}
 		}
 
+		if clientNegotiateErr != nil || clientCommitErr != nil {
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
 		if uploadErr != nil {
 			h.log.Error("data upload failed", "err", uploadErr.Error())
-			sp.TriggerError(uploadErr)
 		}
 	}()
 
@@ -41,7 +45,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var uploadRequest storage.UploadRequest
 	if err := uploadReqMsg.Decode(&uploadRequest); err != nil {
 		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error())
-		hostNegotiateErr = uploadErr
+		clientNegotiateErr = uploadErr
 		return
 	}
 
@@ -196,7 +200,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
 		uploadErr = fmt.Errorf("failed to decode the client revision sign: %s", err.Error())
-		hostNegotiateErr = uploadErr
+		clientNegotiateErr = uploadErr
 		return
 	}
 
@@ -256,6 +260,8 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 				return
 			}
 		}
+	} else if msg.Code == storage.ClientCommitFailedMsg {
+		clientCommitErr = storage.ClientCommitErr
 	}
 
 	// send host 'ACK' msg to client

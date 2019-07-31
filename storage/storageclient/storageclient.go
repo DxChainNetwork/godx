@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"io"
 	"math/big"
 	"math/bits"
@@ -373,32 +374,30 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		req.NewMissedProofValues[i] = o.Value
 	}
 
-	var clientNegotiateErr, hostNegotiateErr error
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func() {
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendClientAckMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
+
+		// we will delete static flag when host negotiate or commit error
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			client.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
 		// record the successful or failed interactions
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
-		}
-
-		if clientNegotiateErr != nil {
-			if err := sp.SendClientNegotiateErrorMsg(clientNegotiateErr); err != nil {
-				return
-			}
-		}
-
-		if hostNegotiateErr != nil {
-			if err := sp.SendClientAckMsg(); err != nil {
-				return
-			}
-		}
-
-		// only negotiate error occurs, we wait for host ack msg
-		if clientNegotiateErr != nil || hostNegotiateErr != nil {
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
-				log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
 		}
 	}()
 
@@ -426,7 +425,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if err := msg.Decode(&merkleResp); err != nil {
-		clientNegotiateErr = err
+		hostNegotiateErr = err
 		return err
 	}
 
@@ -496,7 +495,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if err := msg.Decode(&hostRevisionSig); err != nil {
-		clientNegotiateErr = err
+		hostNegotiateErr = err
 		return err
 	}
 
@@ -536,6 +535,8 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	case storage.HostAckMsg:
 		return
 	case storage.HostCommitFailedMsg:
+		hostCommitErr = storage.HostCommitErr
+
 		_ = contract.RollbackUndoMem(contractHeader)
 		_ = sp.SendClientAckMsg()
 		msg, err = sp.ClientWaitContractResp()
@@ -632,31 +633,29 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	}
 
 	// record the successful or failed interactions
-	var clientNegotiateErr, hostNegotiateErr error
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendClientAckMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
+
+		// we will delete static flag when host negotiate or commit error
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			client.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
+		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		} else if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
-		}
-
-		if clientNegotiateErr != nil {
-			if err := sp.SendClientNegotiateErrorMsg(clientNegotiateErr); err != nil {
-				return
-			}
-		}
-
-		if hostNegotiateErr != nil {
-			if err := sp.SendClientAckMsg(); err != nil {
-				return
-			}
-		}
-
-		// only negotiate error occurs, we wait for host ack msg
-		if clientNegotiateErr != nil || hostNegotiateErr != nil {
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
-				log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
 		}
 	}()
 
@@ -689,7 +688,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 
 	err = msg.Decode(&resp)
 	if err != nil {
-		clientNegotiateErr = err
+		hostNegotiateErr = err
 		return err
 	}
 
@@ -764,6 +763,8 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	case storage.HostAckMsg:
 		return
 	case storage.HostCommitFailedMsg:
+		hostCommitErr = storage.HostCommitErr
+
 		_ = contract.RollbackUndoMem(contractHeader)
 		_ = sp.SendClientAckMsg()
 

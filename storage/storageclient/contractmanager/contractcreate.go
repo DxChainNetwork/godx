@@ -6,6 +6,7 @@ package contractmanager
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"github.com/pkg/errors"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -238,24 +239,26 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// Increase Successful/Failed interactions accordingly
 	// Ignore the send negotiate network error, we expect that client will wait for host
 	// that prevents client from opening another negotiate stage prematurely but receives host busy signal
-	var clientNegotiateErr, hostNegotiateErr error
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func(sp storage.Peer) {
 		if clientNegotiateErr != nil {
-			_ = sp.SendClientNegotiateErrorMsg(clientNegotiateErr)
-		}
-
-		if hostNegotiateErr != nil {
-			_ = sp.SendClientAckMsg()
-		}
-
-		// only negotiate error occurs, we wait for host ack msg
-		if clientNegotiateErr != nil || hostNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
-				log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendClientAckMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		// we will delete static flag when host negotiate or commit error
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
+		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
 			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else if err == nil {
@@ -301,7 +304,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
-		clientNegotiateErr = fmt.Errorf("failed to decode host signature: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("failed to decode host signature: %s", err.Error())
 		return storage.ContractMetaData{}, 	clientNegotiateErr
 
 	}
@@ -347,7 +350,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
-		clientNegotiateErr = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
 		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
@@ -416,6 +419,8 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	case storage.HostAckMsg:
 		return meta, nil
 	case storage.HostCommitFailedMsg:
+		hostCommitErr = storage.HostCommitErr
+
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		_ = sp.SendClientAckMsg()
 
