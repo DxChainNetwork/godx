@@ -415,20 +415,19 @@ func getFinance(ctx *cli.Context) error {
 
 	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
-	ContractCompensation:                   %v camel
-	ContractCompensation:                   %v camel
-	PotentialContractCompensation:          %v camel
-	LockedStorageDeposit:                   %v camel
-	LostRevenue:                            %v camel
-	LostStorageDeposit:                     %v camel
-	PotentialStorageRevenue:                %v camel
-	RiskedStorageDeposit:                   %v camel
-	StorageRevenue:                         %v camel
-	TransactionFeeExpenses:                 %v camel
-	DownloadBandwidthRevenue:               %v camel
-	PotentialDownloadBandwidthRevenue:      %v camel
-	PotentialUploadBandwidthRevenue:        %v camel
-	UploadBandwidthRevenue:                 %v camel
+	ContractCompensation:                   %v 
+	PotentialContractCompensation:          %v 
+	LockedStorageDeposit:                   %v 
+	LostRevenue:                            %v 
+	LostStorageDeposit:                     %v 
+	PotentialStorageRevenue:                %v 
+	RiskedStorageDeposit:                   %v 
+	StorageRevenue:                         %v 
+	TransactionFeeExpenses:                 %v 
+	DownloadBandwidthRevenue:               %v 
+	PotentialDownloadBandwidthRevenue:      %v 
+	PotentialUploadBandwidthRevenue:        %v 
+	UploadBandwidthRevenue:                 %v 
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,
