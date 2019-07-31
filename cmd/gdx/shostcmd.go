@@ -122,7 +122,7 @@ configurable parameters please read the list of flags.
 
 The values are associated with units.
 	BOOL:       {"true", "false"}
-	CURRENCY:   {"wei", "kwei", "mwei", "gwei", "microether", "milliether", "ether"}
+	CURRENCY:   {"camel", "gcamel", "dx"}
 	DURATION:   {"h", "b", "d", "w", "m", "y"}`,
 		},
 
@@ -408,26 +408,26 @@ func getFinance(ctx *cli.Context) error {
 		utils.Fatalf("unable to connect to remote gdx, please start the gdx first: %s", err.Error())
 	}
 
-	var finance storagehost.HostFinancialMetrics
+	var finance storagehost.HostFinancialMetricsForDisplay
 	if err = client.Call(&finance, "shost_getFinancialMetrics"); err != nil {
 		utils.Fatalf("failed to get the host financial metrics: %s", err.Error())
 	}
 
 	fmt.Printf(`Host Financial Metrics:
 	ContractCount:                          %v
-	ContractCompensation:                   %v wei
-	PotentialContractCompensation:          %v wei
-	LockedStorageDeposit:                   %v wei
-	LostRevenue:                            %v wei
-	LostStorageDeposit:                     %v wei
-	PotentialStorageRevenue:                %v wei
-	RiskedStorageDeposit:                   %v wei
-	StorageRevenue:                         %v wei
-	TransactionFeeExpenses:                 %v wei
-	DownloadBandwidthRevenue:               %v wei
-	PotentialDownloadBandwidthRevenue:      %v wei
-	PotentialUploadBandwidthRevenue:        %v wei
-	UploadBandwidthRevenue:                 %v wei
+	ContractCompensation:                   %v 
+	PotentialContractCompensation:          %v 
+	LockedStorageDeposit:                   %v 
+	LostRevenue:                            %v 
+	LostStorageDeposit:                     %v 
+	PotentialStorageRevenue:                %v 
+	RiskedStorageDeposit:                   %v 
+	StorageRevenue:                         %v 
+	TransactionFeeExpenses:                 %v 
+	DownloadBandwidthRevenue:               %v 
+	PotentialDownloadBandwidthRevenue:      %v 
+	PotentialUploadBandwidthRevenue:        %v 
+	UploadBandwidthRevenue:                 %v 
 `, finance.ContractCount, finance.ContractCompensation, finance.PotentialContractCompensation,
 		finance.LockedStorageDeposit, finance.LostRevenue, finance.LostStorageDeposit, finance.PotentialStorageRevenue,
 		finance.RiskedStorageDeposit, finance.StorageRevenue, finance.TransactionFeeExpenses, finance.DownloadBandwidthRevenue,

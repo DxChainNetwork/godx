@@ -166,7 +166,7 @@ func (x BigInt) DivNoRemaining(y uint64) (noRemaining bool) {
 	return false
 }
 
-// Division between two BigInt values and return with float64 result
+// DivWithFloatResult specifies division between two BigInt values and return with float64 result
 func (x BigInt) DivWithFloatResult(y BigInt) (quotient float64) {
 	// making sure that denominator is not 0
 	if y.IsEqual(BigInt0) {
@@ -176,6 +176,12 @@ func (x BigInt) DivWithFloatResult(y BigInt) (quotient float64) {
 	// division
 	quotient, _ = big.NewRat(0, 1).SetFrac(&x.b, &y.b).Float64()
 	return
+}
+
+// DivWithFloatResultUint64 specifies division between BigInt and uint64 values and return with float64 result
+func (x BigInt) DivWithFloatResultUint64(y uint64) (quotient float64) {
+	bigInt := NewBigIntUint64(y)
+	return x.DivWithFloatResult(bigInt)
 }
 
 // Cmp will compare two BigInt Data

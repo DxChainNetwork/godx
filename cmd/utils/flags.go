@@ -1230,6 +1230,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		case role == "none":
 			cfg.StorageClient = false
 			cfg.StorageHost = false
+		default:
+			Fatalf("the role %s is not valid, valid roles are [all, host, client, none]", role)
 		}
 	}
 
