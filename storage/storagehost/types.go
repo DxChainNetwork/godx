@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -153,6 +157,24 @@ type (
 
 	// ErrorCreateContract is some error that occurs in contract creation
 	ErrorCreateContract string
+
+	// HostFinancialMetricsForDisplay is the financial metric for display
+	HostFinancialMetricsForDisplay struct {
+		ContractCount                     uint64 `json:"contractcount"`
+		ContractCompensation              string `json:"contractcompensation"`
+		PotentialContractCompensation     string `json:"potentialcontractcompensation"`
+		LockedStorageDeposit              string `json:"lockedstoragedeposit"`
+		LostRevenue                       string `json:"lostrevenue"`
+		LostStorageDeposit                string `json:"loststoragedeposit"`
+		PotentialStorageRevenue           string `json:"potentialstoragerevenue"`
+		RiskedStorageDeposit              string `json:"riskedstoragedeposit"`
+		StorageRevenue                    string `json:"storagerevenue"`
+		TransactionFeeExpenses            string `json:"transactionfeeexpenses"`
+		DownloadBandwidthRevenue          string `json:"downloadbandwidthrevenue"`
+		PotentialDownloadBandwidthRevenue string `json:"potentialdownloadbandwidthrevenue"`
+		PotentialUploadBandwidthRevenue   string `json:"potentialuploadbandwidthrevenue"`
+		UploadBandwidthRevenue            string `json:"uploadbandwidthrevenue"`
+	}
 )
 
 func (e ErrorRevision) Error() string {

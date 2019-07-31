@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -42,13 +43,13 @@ func formatContractMetaData(data storage.ContractMetaData) (formatted ContractMe
 	formatted.StartHeight = fmt.Sprintf("%v b", data.StartHeight)
 	formatted.EndHeight = fmt.Sprintf("%v b", data.EndHeight)
 
-	formatted.ContractBalance = storage.FormatFund(data.ContractBalance)
-	formatted.UploadCost = storage.FormatFund(data.UploadCost)
-	formatted.DownloadCost = storage.FormatFund(data.DownloadCost)
-	formatted.StorageCost = storage.FormatFund(data.StorageCost)
-	formatted.TotalCost = storage.FormatFund(data.TotalCost)
-	formatted.GasCost = storage.FormatFund(data.GasCost)
-	formatted.ContractFee = storage.FormatFund(data.ContractFee)
+	formatted.ContractBalance = unit.FormatCurrency(data.ContractBalance)
+	formatted.UploadCost = unit.FormatCurrency(data.UploadCost)
+	formatted.DownloadCost = unit.FormatCurrency(data.DownloadCost)
+	formatted.StorageCost = unit.FormatCurrency(data.StorageCost)
+	formatted.TotalCost = unit.FormatCurrency(data.TotalCost)
+	formatted.GasCost = unit.FormatCurrency(data.GasCost)
+	formatted.ContractFee = unit.FormatCurrency(data.ContractFee)
 
 	formatted.UploadAbility, formatted.RenewAbility, formatted.Canceled =
 		formatStatus(data.Status.UploadAbility, data.Status.RenewAbility, data.Status.Canceled)
@@ -81,8 +82,8 @@ func formatStatus(upload, renew, canceled bool) (formatUpload, formatRenew, form
 // ClientSettingAPIDisplay, which is used for console display.
 func formatClientSetting(setting storage.ClientSetting) (formatted storage.ClientSettingAPIDisplay) {
 	formatted.EnableIPViolation = formatIPViolation(setting.EnableIPViolation)
-	formatted.MaxUploadSpeed = storage.FormatSpeed(setting.MaxUploadSpeed)
-	formatted.MaxDownloadSpeed = storage.FormatSpeed(setting.MaxDownloadSpeed)
+	formatted.MaxUploadSpeed = unit.FormatSpeed(setting.MaxUploadSpeed)
+	formatted.MaxDownloadSpeed = unit.FormatSpeed(setting.MaxDownloadSpeed)
 	formatted.RentPayment = formatRentPayment(setting.RentPayment)
 	return
 }
@@ -100,13 +101,13 @@ func formatIPViolation(enabled bool) (formatted string) {
 // formatRentPayment is used to format rentPayment field for displaying
 // purpose
 func formatRentPayment(rent storage.RentPayment) (formatted storage.RentPaymentAPIDisplay) {
-	formatted.Fund = storage.FormatFund(rent.Fund)
+	formatted.Fund = unit.FormatCurrency(rent.Fund)
 	formatted.StorageHosts = formatHosts(rent.StorageHosts)
-	formatted.Period = storage.FormatTime(rent.Period)
-	formatted.RenewWindow = storage.FormatTime(rent.RenewWindow)
-	formatted.ExpectedStorage = storage.FormatStorage(rent.ExpectedStorage, true)
-	formatted.ExpectedUpload = storage.FormatStorage(rent.ExpectedUpload, false)
-	formatted.ExpectedDownload = storage.FormatStorage(rent.ExpectedDownload, false)
+	formatted.Period = unit.FormatTime(rent.Period)
+	formatted.RenewWindow = unit.FormatTime(rent.RenewWindow)
+	formatted.ExpectedStorage = unit.FormatStorage(rent.ExpectedStorage, true)
+	formatted.ExpectedUpload = unit.FormatStorage(rent.ExpectedUpload, false)
+	formatted.ExpectedDownload = unit.FormatStorage(rent.ExpectedDownload, false)
 	formatted.ExpectedRedundancy = formatRedundancy(rent.ExpectedRedundancy)
 	return
 }

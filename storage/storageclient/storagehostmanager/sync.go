@@ -85,6 +85,11 @@ func (shm *StorageHostManager) analyzeHostAnnouncements(hostAnnouncements []type
 			continue
 		}
 
+		// check if the announcement is made by the local node
+		if info.EnodeURL == shm.b.SelfEnodeURL() {
+			continue
+		}
+
 		shm.insertStorageHostInformation(info)
 	}
 }

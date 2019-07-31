@@ -53,7 +53,7 @@ func newFileEntry(t *testing.T, client *StorageClient) *dxfile.FileSetEntryWithI
 	mb := 9
 	filePath, fileSize, _ := generateFile(t, homeDir(), mb)
 
-	entry, err := client.fileSystem.FileSet().NewDxFile(randomDxPath(), storage.SysPath(filePath), false, ec, ck, uint64(fileSize), 777)
+	entry, err := client.fileSystem.NewDxFile(randomDxPath(), storage.SysPath(filePath), false, ec, ck, uint64(fileSize), 777)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +117,8 @@ func homeDir() string {
 }
 
 type BackendTest struct{}
+
+func (b *BackendTest) SelfEnodeURL() string { return "" }
 
 func (b *BackendTest) SetStatic(node *enode.Node) {}
 

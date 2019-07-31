@@ -39,7 +39,7 @@ type StorageHost struct {
 	sm.StorageManager
 
 	lockedStorageResponsibility map[common.Hash]*TryMutex
-	clientNodeToContract        map[*enode.Node]common.Hash
+	clientToContract            map[string]common.Hash
 
 	// things for log and persistence
 	db         *ethdb.LDBDatabase
@@ -55,7 +55,7 @@ type StorageHost struct {
 func (h *StorageHost) IsContractSignedWithClient(clientNode *enode.Node) bool {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
-	if _, exists := h.clientNodeToContract[clientNode]; exists {
+	if _, exists := h.clientToContract[clientNode.String()]; exists {
 		return true
 	}
 	return false
@@ -70,12 +70,17 @@ func (h *StorageHost) UpdateContractToClientNodeMappingAndConnection() {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	// loop through the clientNodeToContract mapping, found those
+	// loop through the clientToContract mapping, found those
 	// are not included in the storage responsibility, and delete
-	// them from the clientNodeToContract mapping
-	for clientNode, contractID := range h.clientNodeToContract {
+	// them from the clientToContract mapping
+	for clientURL, contractID := range h.clientToContract {
 		if _, exists := h.lockedStorageResponsibility[contractID]; !exists {
-			delete(h.clientNodeToContract, clientNode)
+			delete(h.clientToContract, clientURL)
+			// parse the client URL to node
+			clientNode, err := enode.ParseV4(clientURL)
+			if err != nil {
+				continue
+			}
 			h.ethBackend.CheckAndUpdateConnection(clientNode)
 		}
 	}
@@ -103,7 +108,7 @@ func New(persistDir string) (*StorageHost, error) {
 		log:                         log.New(),
 		persistDir:                  persistDir,
 		lockedStorageResponsibility: make(map[common.Hash]*TryMutex),
-		clientNodeToContract:        make(map[*enode.Node]common.Hash),
+		clientToContract:            make(map[string]common.Hash),
 	}
 
 	var err error
@@ -259,7 +264,7 @@ func (h *StorageHost) getFinancialMetrics() HostFinancialMetrics {
 	return h.financialMetrics
 }
 
-// print the persist directory of the host
+// getPersistDir return the persist directory of the host
 func (h *StorageHost) getPersistDir() string {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
@@ -353,57 +358,57 @@ func (h *StorageHost) setMaxDeposit(val common.BigInt) error {
 	return h.syncConfig()
 }
 
-// setMinBaseRPCPrice set the MinBaseRPCPrice to val
-func (h *StorageHost) setMinBaseRPCPrice(val common.BigInt) error {
+// setBaseRPCPrice set the BaseRPCPrice to val
+func (h *StorageHost) setBaseRPCPrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinBaseRPCPrice = val
+	h.config.BaseRPCPrice = val
 	return h.syncConfig()
 }
 
-// setMinContractPrice set the MinContractPrice to val
-func (h *StorageHost) setMinContractPrice(val common.BigInt) error {
+// setContractPrice set the ContractPrice to val
+func (h *StorageHost) setContractPrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinContractPrice = val
+	h.config.ContractPrice = val
 	return h.syncConfig()
 }
 
-// setMinDownloadBandwidthPrice set the MinDownloadBandwidthPrice to val
-func (h *StorageHost) setMinDownloadBandwidthPrice(val common.BigInt) error {
+// setDownloadBandwidthPrice set the DownloadBandwidthPrice to val
+func (h *StorageHost) setDownloadBandwidthPrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinDownloadBandwidthPrice = val
+	h.config.DownloadBandwidthPrice = val
 	return h.syncConfig()
 }
 
-// setMinSectorAccessPrice set the MinSectorAccessPrice to val
-func (h *StorageHost) setMinSectorAccessPrice(val common.BigInt) error {
+// setSectorAccessPrice set the SectorAccessPrice to val
+func (h *StorageHost) setSectorAccessPrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinSectorAccessPrice = val
+	h.config.SectorAccessPrice = val
 	return h.syncConfig()
 }
 
-// setMinStoragePrice set the MinStoragePrice to val
-func (h *StorageHost) setMinStoragePrice(val common.BigInt) error {
+// setStoragePrice set the StoragePrice to val
+func (h *StorageHost) setStoragePrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinStoragePrice = val
+	h.config.StoragePrice = val
 	return h.syncConfig()
 }
 
-// setMinUploadBandwidthPrice set the MinUploadBandwidthPrice to val
-func (h *StorageHost) setMinUploadBandwidthPrice(val common.BigInt) error {
+// setUploadBandwidthPrice set the UploadBandwidthPrice to val
+func (h *StorageHost) setUploadBandwidthPrice(val common.BigInt) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.config.MinUploadBandwidthPrice = val
+	h.config.UploadBandwidthPrice = val
 	return h.syncConfig()
 }
 
@@ -464,12 +469,12 @@ func (h *StorageHost) externalConfig() storage.HostExtConfig {
 		RemainingStorage:       remainingStorageSpace,
 		Deposit:                h.config.Deposit,
 		MaxDeposit:             MaxDeposit,
-		BaseRPCPrice:           h.config.MinBaseRPCPrice,
-		ContractPrice:          h.config.MinContractPrice,
-		DownloadBandwidthPrice: h.config.MinDownloadBandwidthPrice,
-		SectorAccessPrice:      h.config.MinSectorAccessPrice,
-		StoragePrice:           h.config.MinStoragePrice,
-		UploadBandwidthPrice:   h.config.MinUploadBandwidthPrice,
+		BaseRPCPrice:           h.config.BaseRPCPrice,
+		ContractPrice:          h.config.ContractPrice,
+		DownloadBandwidthPrice: h.config.DownloadBandwidthPrice,
+		SectorAccessPrice:      h.config.SectorAccessPrice,
+		StoragePrice:           h.config.StoragePrice,
+		UploadBandwidthPrice:   h.config.UploadBandwidthPrice,
 		Version:                storage.ConfigVersion,
 	}
 }

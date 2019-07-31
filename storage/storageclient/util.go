@@ -69,7 +69,7 @@ func (client *StorageClient) GetStorageHostSetting(hostEnodeID enode.ID, hostEno
 }
 
 // SubscribeChainChangeEvent will be used to get block information every time a change happened
-// in the block chain
+// in the blockchain
 func (client *StorageClient) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return client.ethBackend.SubscribeChainChangeEvent(ch)
 }
@@ -81,7 +81,7 @@ func (client *StorageClient) GetStorageHostManager() *storagehostmanager.Storage
 
 // DirInfo returns the Directory Information of the dxdir
 func (client *StorageClient) DirInfo(dxPath storage.DxPath) (storage.DirectoryInfo, error) {
-	entry, err := client.fileSystem.DirSet().Open(dxPath)
+	entry, err := client.fileSystem.OpenDxDir(dxPath)
 	if err != nil {
 		return storage.DirectoryInfo{}, err
 	}
@@ -184,13 +184,19 @@ func (client *StorageClient) GetPoolNonce(ctx context.Context, addr common.Addre
 }
 
 // GetFileSystem will get the file system
-func (client *StorageClient) GetFileSystem() *filesystem.FileSystem {
+func (client *StorageClient) GetFileSystem() filesystem.FileSystem {
 	return client.fileSystem
 }
 
 // SendStorageContractCreateTx is used to send the contract create transaction to the transaction pool
 func (client *StorageClient) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
 	return client.info.StorageTx.SendContractCreateTX(clientAddr, input)
+}
+
+// SelfEnodeURL retrieves the local node's enodeURL, used to avoid storing
+// self information inf the storage host manager
+func (client *StorageClient) SelfEnodeURL() string {
+	return client.ethBackend.SelfEnodeURL()
 }
 
 // CalculateProofRanges will calculate the proof ranges which is used to verify a

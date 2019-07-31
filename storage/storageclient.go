@@ -6,7 +6,6 @@ package storage
 
 import (
 	"context"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -14,6 +13,7 @@ import (
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rpc"
 )
@@ -38,6 +38,7 @@ type EthBackend interface {
 	RevisionOrRenewingDone(hostID enode.ID)
 	SetStatic(node *enode.Node)
 	CheckAndUpdateConnection(peerNode *enode.Node)
+	SelfEnodeURL() string
 }
 
 // ClientBackend is an interface that used to provide necessary functions
@@ -61,6 +62,7 @@ type ClientBackend interface {
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
 	CheckAndUpdateConnection(peerNode *enode.Node)
+	SelfEnodeURL() string
 }
 
 // DownloadParameters is the parameters to download from outer request

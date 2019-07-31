@@ -195,3 +195,53 @@ func (api *PrivateStorageClientAPI) SetPaymentAddress(addrStr string) bool {
 
 	return true
 }
+
+// PeriodCost will get the client's period cost which specifies cost that storage
+// client needs to pay within one period cycle. It includes cost for all contracts
+func (api *PrivateStorageClientAPI) PeriodCost() storage.PeriodCost {
+	return api.sc.contractManager.RetrievePeriodCost()
+}
+
+// CancelAllContracts will cancel all contracts signed with storage client by
+// marking all active contracts as canceled, not good for uploading, and not good
+// for renewing
+//func (api *PrivateStorageClientAPI) CancelAllContracts() (resp string) {
+//	if err := api.sc.CancelContracts(); err != nil {
+//		resp = fmt.Sprintf("Failed to cancel all contracts: %s", err.Error())
+//		return
+//	}
+//
+//	resp = fmt.Sprintf("All contracts are successfully canceled")
+//	return resp
+//}
+
+// PublicStorageClientDebugAPI defines the object used to call eligible public APIs
+// that are used to mock data
+//type PublicStorageClientDebugAPI struct {
+//	sc *StorageClient
+//}
+
+// NewPublicStorageClientDebugAPI initialize NewPublicStorageClientDebugAPI object
+// which implemented a bunch of API methods
+//func NewPublicStorageClientDebugAPI(sc *StorageClient) *PublicStorageClientDebugAPI {
+//	return &PublicStorageClientDebugAPI{sc}
+//}
+
+// InsertActiveContracts will create some random contracts based on the amount user entered
+// and inserted them into activeContracts field
+//func (api *PublicStorageClientDebugAPI) InsertActiveContracts(amount int) (resp string, err error) {
+//	// validate user input
+//	if amount <= 0 {
+//		err = fmt.Errorf("the amount you entered %v must be greater than 0", amount)
+//		return
+//	}
+//
+//	// insert random active contracts
+//	if err = api.sc.contractManager.InsertRandomActiveContracts(amount); err != nil {
+//		err = fmt.Errorf("failed to insert mocked active contracts: %s", err.Error())
+//		return
+//	}
+//
+//	resp = fmt.Sprintf("Successfully inserted %v mocked active contracts", amount)
+//	return
+//}
