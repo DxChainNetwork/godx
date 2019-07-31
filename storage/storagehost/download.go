@@ -3,6 +3,7 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/log"
 	"math/big"
 	"math/bits"
 	"reflect"
@@ -17,7 +18,7 @@ import (
 
 // DownloadHandler handles the download negotiation
 func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
-	var downloadErr, hostNegotiateErr, clientNegotiateErr, clientCommitErr error
+	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
 		if clientNegotiateErr != nil {
@@ -36,18 +37,13 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		if clientNegotiateErr != nil || clientCommitErr != nil {
 			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
 		}
-
-		if downloadErr != nil {
-			h.log.Error("data download failed", "err", downloadErr.Error())
-		}
 	}()
 
 	// read the download request.
 	var req storage.DownloadRequest
 	err := downloadReqMsg.Decode(&req)
 	if err != nil {
-		downloadErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
-		clientNegotiateErr = downloadErr
+		clientNegotiateErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
 		return
 	}
 
@@ -59,15 +55,13 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	// it is totally fine not getting the storage responsibility
 	if err != nil {
-		downloadErr = err
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = err
 		return
 	}
 
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
-		downloadErr = errors.New("no contract locked")
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = errors.New("no contract locked")
 		return
 	}
 
@@ -89,8 +83,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		err = errors.New("the number of missed proof values not match the old")
 	}
 	if err != nil {
-		downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = fmt.Errorf("download request validation failed: %s", err.Error())
 		return
 	}
 
@@ -127,8 +120,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		downloadErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
 		return
 	}
 
@@ -136,15 +128,13 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		downloadErr = fmt.Errorf("failed to find the account address: %s", err.Error())
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = fmt.Errorf("failed to find the account address: %s", err.Error())
 		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		downloadErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
-		hostNegotiateErr = downloadErr
+		hostNegotiateErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
 		return
 	}
 
@@ -158,7 +148,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	// fetch the requested data from host local storage
 	sectorData, err := h.ReadSector(sec.MerkleRoot)
 	if err != nil {
-		downloadErr = fmt.Errorf("host failed read sector: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("host failed read sector: %s", err.Error())
 		return
 	}
 	data := sectorData[sec.Offset : sec.Offset+sec.Length]
@@ -170,8 +160,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
 		proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
 		if err != nil {
-			downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
-			hostNegotiateErr = downloadErr
+			hostNegotiateErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
 			return
 		}
 	}
@@ -185,14 +174,14 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	resp.Signature = hostSig
 	if err := sp.SendContractDownloadData(resp); err != nil {
-		downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
+		log.Error("failed to send the contract download data message", "err", err)
 		return
 	}
 
 	// wait for client commit success msg
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
-		downloadErr = fmt.Errorf("storage host failed to get client commit success msg: %s", err.Error())
+		log.Error("storage host failed to get client commit success msg", "err", err)
 		return
 	}
 
@@ -202,14 +191,14 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		h.lock.Unlock()
 		if err != nil {
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
-				downloadErr = fmt.Errorf("storage host failed to send commit failed msg: %s", err.Error())
+				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
 			}
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
 			if err != nil {
-				downloadErr = fmt.Errorf("storage host failed to get client ack msg: %s", err.Error())
+				log.Error("storage host failed to get client ack msg", "err", err)
 				return
 			}
 		}
@@ -219,8 +208,8 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
 		_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
-		downloadErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
 		return
 	}
 

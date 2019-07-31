@@ -16,7 +16,7 @@ import (
 // ContractCreateHandler will be used to handle the contract create request
 // sent by the storage client
 func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
-	var contractCreateErr, hostNegotiateErr, clientNegotiateErr, clientCommitErr error
+	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendHostAckMsg()
@@ -34,31 +34,24 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		if clientNegotiateErr != nil || clientCommitErr != nil {
 			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
 		}
-
-		if contractCreateErr != nil {
-			log.Error("contract create failed", "err", contractCreateErr.Error())
-		}
 	}()
 
 	if !h.externalConfig().AcceptingContracts {
-		contractCreateErr = errors.New("host is not accepting new contracts")
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = errors.New("host is not accepting new contracts")
 		return
 	}
 
 	// 1. Read ContractCreateRequest msg
 	var req storage.ContractCreateRequest
 	if err := contractCreateReqMsg.Decode(&req); err != nil {
-		contractCreateErr = fmt.Errorf("failed to decode the contract create request message: %s", err.Error())
-		clientNegotiateErr = contractCreateErr
+		clientNegotiateErr = fmt.Errorf("failed to decode the contract create request message: %s", err.Error())
 		return
 	}
 
 	sc := req.StorageContract
 	clientPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), req.Sign)
 	if err != nil {
-		contractCreateErr = fmt.Errorf("failed to recover the public key from the signature: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("failed to recover the public key from the signature: %s", err.Error())
 		return
 	}
 
@@ -66,15 +59,13 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	hostAddress := sc.ValidProofOutputs[1].Address
 	stateDB, err := h.ethBackend.GetBlockChain().State()
 	if err != nil {
-		contractCreateErr = fmt.Errorf("failed to get the state db: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("failed to get the state db: %s", err.Error())
 		return
 	}
 
 	// check the storage host balance
 	if stateDB.GetBalance(hostAddress).Cmp(sc.HostCollateral.Value) < 0 {
-		contractCreateErr = fmt.Errorf("insufficient host balance")
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("insufficient host balance")
 		return
 	}
 
@@ -82,24 +73,21 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	account := accounts.Account{Address: hostAddress}
 	wallet, err := h.ethBackend.AccountManager().Find(account)
 	if err != nil {
-		contractCreateErr = fmt.Errorf("failed to get the account from the storage host: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("failed to get the account from the storage host: %s", err.Error())
 		return
 	}
 
 	// sign the storage client
 	hostContractSign, err := wallet.SignHash(account, sc.RLPHash().Bytes())
 	if err != nil {
-		contractCreateErr = fmt.Errorf("storage hostfailed to sign contract: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("storage hostfailed to sign contract: %s", err.Error())
 		return
 	}
 
 	// recover host pk for setup unlock conditions
 	hostPK, err := crypto.SigToPub(sc.RLPHash().Bytes(), hostContractSign)
 	if err != nil {
-		contractCreateErr = fmt.Errorf("failed to recover the storage host's public key from the signature: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("failed to recover the storage host's public key from the signature: %s", err.Error())
 		return
 	}
 
@@ -110,22 +98,20 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		oldContractID := req.OldContractID
 		err = verifyRenewedContract(h, &sc, clientPK, hostPK, oldContractID)
 		if err != nil {
-			contractCreateErr = fmt.Errorf("storage host failed to verify the renewed storage contract: %s", err.Error())
-			hostNegotiateErr = contractCreateErr
+			hostNegotiateErr = fmt.Errorf("storage host failed to verify the renewed storage contract: %s", err.Error())
 			return
 		}
 	} else {
 		err = verifyStorageContract(h, &sc, clientPK, hostPK)
 		if err != nil {
-			contractCreateErr = fmt.Errorf("storage host failed to verify the storage contract: %s", err.Error())
-			hostNegotiateErr = contractCreateErr
+			hostNegotiateErr = fmt.Errorf("storage host failed to verify the storage contract: %s", err.Error())
 			return
 		}
 	}
 
 	// 2. After check, send host contract sign to client
 	if err := sp.SendContractCreationHostSign(hostContractSign); err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to send contract creation host sign: %s", err.Error())
+		log.Error("storage host failed to send contract creation host sign","err", err)
 		return
 	}
 
@@ -133,19 +119,17 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	var clientRevisionSign []byte
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to get client revision sign: %s", err.Error())
+		log.Error("storage host failed to get client revision sign","err", err)
 		return
 	}
 
 	if msg.Code == storage.ClientNegotiateErrorMsg {
 		clientNegotiateErr = storage.ClientNegotiateErr
-		contractCreateErr = clientNegotiateErr
 		return
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to decode client revision sign: %s", err.Error())
-		clientNegotiateErr = contractCreateErr
+		clientNegotiateErr = fmt.Errorf("storage host failed to decode client revision sign: %s", err.Error())
 		return
 	}
 
@@ -171,14 +155,13 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	// Sign revision by storage host
 	hostRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to sign the contract revision: %s", err.Error())
-		hostNegotiateErr = contractCreateErr
+		hostNegotiateErr = fmt.Errorf("storage host failed to sign the contract revision: %s", err.Error())
 		return
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
 	if err := sp.SendContractCreationHostRevisionSign(hostRevisionSign); err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to send contract creation revision sign: %s", err.Error())
+		log.Error("storage host failed to send contract creation revision sign","err", err)
 		return
 	}
 
@@ -200,7 +183,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	// wait for client commit success msg
 	msg, err = sp.HostWaitContractResp()
 	if err != nil {
-		contractCreateErr = fmt.Errorf("storage host failed to get client commit success msg: %s", err.Error())
+		log.Error("storage host failed to get client commit success msg", "err", err)
 		return
 	}
 
@@ -223,16 +206,15 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		}
 
 		if err := finalizeStorageResponsibility(h, so); err != nil {
-			contractCreateErr = fmt.Errorf("storage host failed to finialize storage responsibility: %s", err.Error())
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
-				contractCreateErr = fmt.Errorf("storage host failed to send commit failed msg: %s", err.Error())
+				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
 			}
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
 			if err != nil {
-				contractCreateErr = fmt.Errorf("storage host failed to get client ack msg: %s", err.Error())
+				log.Error("storage host failed to get client ack msg", "err", err)
 				return
 			}
 		}
@@ -242,8 +224,8 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
 		_ = rollbackStorageResponsibility(h, so)
-		contractCreateErr = fmt.Errorf("storage host failed to send host ack msg: %s", err.Error())
 		return
 	}
 
