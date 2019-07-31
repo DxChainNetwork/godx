@@ -21,7 +21,6 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendHostAckMsg()
-			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
 		}
 
 		if hostNegotiateErr != nil {
