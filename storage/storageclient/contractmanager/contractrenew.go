@@ -531,7 +531,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		clientNegotiateErr = storagehost.ExtendErr("client sign revision error", err)
 		return storage.ContractMetaData{}, clientNegotiateErr
 	}
-	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
 		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
@@ -573,6 +572,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// wrap some information about this contract
+	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(pubKey),

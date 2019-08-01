@@ -353,7 +353,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
-	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
 		clientNegotiateErr = fmt.Errorf("failed to enocde storageContract: %s", err.Error())
@@ -372,6 +371,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	// wrap some information about this contract
+	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(pubKey),
