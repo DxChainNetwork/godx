@@ -185,11 +185,13 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		return
 	}
 
+	var isHostCommitSuccess = true
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, nil, nil)
 		h.lock.Unlock()
 		if err != nil {
+			isHostCommitSuccess = false
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
 				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
@@ -204,12 +206,8 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		}
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
-	}
-
-	// send host 'ACK' msg to client
-	if err := sp.SendHostAckMsg(); err != nil {
-		log.Error("storage host failed to send host ack msg", "err", err)
-		_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
+	} else if msg.Code == storage.ClientNegotiateErrorMsg {
+		clientNegotiateErr = storage.ClientNegotiateErr
 		return
 	}
 
@@ -223,7 +221,14 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		h.ethBackend.SetStatic(node)
 	}
 
-	return
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
+
+		if isHostCommitSuccess {
+			_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
+		}
+	}
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for

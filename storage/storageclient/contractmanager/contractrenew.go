@@ -9,18 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
+	"time"
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -460,14 +459,13 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		}
 
 		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			cm.b.CheckAndUpdateConnection(sp.PeerNode())
+			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
-			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
-			err = common.ErrExtend(err, ErrHostFault)
-		} else if err == nil {
+		if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
 	}(sp)
@@ -613,6 +611,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		// wait for host end that host will read msg timeout
+		select {
+		case <-time.After(1 * time.Minute):
+		}
+
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}

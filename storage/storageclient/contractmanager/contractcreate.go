@@ -6,8 +6,8 @@ package contractmanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"github.com/pkg/errors"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -254,14 +254,13 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		}
 
 		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
+			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
 			cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
-			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
-			err = common.ErrExtend(err, ErrHostFault)
-		} else if err == nil {
+		if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
 		}
 	}(sp)
@@ -305,7 +304,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	if err := msg.Decode(&hostSign); err != nil {
 		hostNegotiateErr = fmt.Errorf("failed to decode host signature: %s", err.Error())
-		return storage.ContractMetaData{}, 	clientNegotiateErr
+		return storage.ContractMetaData{}, 	hostNegotiateErr
 
 	}
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
@@ -351,7 +350,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
 		hostNegotiateErr = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
-		return storage.ContractMetaData{}, clientNegotiateErr
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
@@ -402,6 +401,11 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		// wait for host end that host will read msg timeout
+		select {
+		case <-time.After(1 * time.Minute):
+		}
+
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
@@ -410,7 +414,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		log.Error("contract create failed when wait for host ACK msg", "err", err.Error())
-		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}

@@ -188,17 +188,17 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	}
 
 	// host will finalize storage responsibility when client commit success
+	var isHostCommitSuccess = true
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		if req.Renew {
 			h.lock.RLock()
-			oldSr, err := getStorageResponsibility(h.db, req.OldContractID)
+			oldSo, err := getStorageResponsibility(h.db, req.OldContractID)
 			h.lock.RUnlock()
 
-			if err != nil {
-				h.log.Warn("Unable to get old storage responsibility when renewing", "err", err)
-			} else {
-				so.SectorRoots = oldSr.SectorRoots
+			if err == nil {
+				so.SectorRoots = oldSo.SectorRoots
 			}
+
 			renewRevenue := renewBasePrice(so, h.externalConfig(), req.StorageContract)
 			so.ContractCost = common.NewBigInt(req.StorageContract.ValidProofOutputs[1].Value.Int64()).Sub(h.externalConfig().ContractPrice).Sub(renewRevenue)
 			so.PotentialStorageRevenue = renewRevenue
@@ -206,6 +206,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		}
 
 		if err := finalizeStorageResponsibility(h, so); err != nil {
+			isHostCommitSuccess = false
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
 				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
@@ -220,17 +221,14 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		}
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
-	}
-
-	// send host 'ACK' msg to client
-	if err := sp.SendHostAckMsg(); err != nil {
-		log.Error("storage host failed to send host ack msg", "err", err)
-		_ = rollbackStorageResponsibility(h, so)
+	} else if msg.Code == storage.ClientNegotiateErrorMsg {
+		clientNegotiateErr = storage.ClientNegotiateErr
 		return
 	}
 
 	// Once successfully created the contract with the storage client
 	// the host should add the storage client as static peer as well
+	// set static code earlier than send ack msg prevent host.lock from blocking msg send
 	node := sp.PeerNode()
 	if node == nil {
 		return
@@ -241,6 +239,15 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	h.lock.Lock()
 	h.clientNodeToContract[sp.PeerNode()] = sc.ID()
 	h.lock.Unlock()
+
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
+
+		if isHostCommitSuccess {
+			_ = rollbackStorageResponsibility(h, so)
+		}
+	}
 }
 
 // verifyStorageContract verify the validity of the storage contract. If discrepancy found, return error

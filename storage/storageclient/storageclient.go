@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"io"
 	"math/big"
 	"math/bits"
@@ -391,12 +390,10 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		// we will delete static flag when host negotiate or commit error
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			client.CheckAndUpdateConnection(sp.PeerNode())
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		}
 
-		// record the successful or failed interactions
-		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else if err == nil {
+		if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -517,6 +514,11 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		// wait for host end that host will read msg timeout
+		select {
+		case <-time.After(1 * time.Minute):
+		}
+
 		_ = contract.RollbackUndoMem(contractHeader)
 		return err
 	}
@@ -648,13 +650,13 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		}
 
 		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			client.CheckAndUpdateConnection(sp.PeerNode())
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
 		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr && err != storagemaintenance.ErrProgramExit {
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else if err == nil {
+		if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -745,6 +747,11 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	}
 
 	if err := sp.SendClientCommitSuccessMsg(); err != nil {
+		// wait for host end that host will read msg timeout
+		select {
+		case <-time.After(1 * time.Minute):
+		}
+
 		_ = contract.RollbackUndoMem(contractHeader)
 		return err
 	}
