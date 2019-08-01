@@ -21,7 +21,7 @@ type downloadBuffer struct {
 	sectorSize uint64
 }
 
-// NewDownloadBuffer create a new downloadBuffer
+//  create a new downloadBuffer
 func newDownloadBuffer(length, sectorSize uint64) downloadBuffer {
 	// Completion the length multiple of sector size(4MB)
 	if length%sectorSize != 0 {
