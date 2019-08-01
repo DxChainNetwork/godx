@@ -6,7 +6,7 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 [![Golang](https://img.shields.io/badge/go-1.11.4-blue.svg)](https://golang.org/dl/)
 [![release](https://img.shields.io/badge/release-v0.8.0-blue)](https://github.com/DxChainNetwork/godx/releases)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)
+[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://opensource.org/)
 
 
 
@@ -15,64 +15,64 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 
 **Table of contents:**
 - [Go DX](#go-dx)
-- [Getting Started](#getting-started)
-  - [1. Prerequisites](#1-prerequisites)
-    - [1.1. Golang](#11-golang)
-    - [1.2. Xcode](#12-xcode)
-    - [1.3. Go Vendor](#13-go-vendor)
-    - [1.4. Docker](#14-docker)
-  - [2. Build from source](#2-build-from-source)
-    - [2.1. Clone Project](#21-clone-project)
-    - [2.2. Packages Installation](#22-packages-installation)
-    - [2.3. Build](#23-build)
-- [Running `gdx`](#running-gdx)
-  - [1. Run as miner](#1-run-as-miner)
-  - [2. Run as storage client](#2-run-as-storage-client)
-  - [3. Run as storage host](#3-run-as-storage-host)
-- [Tutorial](#tutorial)
-- [Basic Console Commands](#basic-console-commands)
-  - [1. Account](#1-account)
-    - [1.1. personal.newAccount](#11-personalnewaccount)
-    - [1.2. eth.accounts](#12-ethaccounts)
-    - [1.3. personal.unlockAccount](#13-personalunlockaccount)
-    - [1.4. eth.getBalance](#14-ethgetbalance)
-  - [2. Mining](#2-mining)
-    - [2.1. miner.start](#21-minerstart)
-    - [2.2. miner.stop](#22-minerstop)
-    - [2.3. eth.mining](#23-ethmining)
-  - [3. Node](#3-node)
-    - [3.1. eth.blockHeight](#31-ethblockheight)
-    - [3.2. admin.peers](#32-adminpeers)
-    - [3.3. admin.nodeInfo](#33-adminnodeinfo)
-  - [4. StorageClient](#4-storageclient)
-    - [4.1. sclient.host.<span>ls](#41-sclienthostspanls)
-    - [4.2. sclient.paymentaddr](#42-sclientpaymentaddr)
-    - [4.3. sclient.setPaymentAddr](#43-sclientsetpaymentaddr)
-    - [4.4. sclient.setConfig](#44-sclientsetconfig)
-    - [4.5. sclient.config](#45-sclientconfig)
-    - [4.6. sclient.contracts](#46-sclientcontracts)
-    - [4.7 sclient.contract](#47-sclientcontract)
-    - [4.8 sclient.upload](#48-sclientupload)
-    - [4.9 sclient.download](#49-sclientdownload)
-    - [4.10 sclient.file.<span>ls](#410-sclientfilespanls)
-    - [4.11 sclient.file.rename](#411-sclientfilerename)
-    - [4.12 sclient.file.delete](#412-sclientfiledelete)
-  - [5. StorageHost](#5-storagehost)
-    - [5.1. shost.config](#51-shostconfig)
-    - [5.2. shost.setConfig](#52-shostsetconfig)
-    - [5.3. shost.paymentAddr](#53-shostpaymentaddr)
-    - [5.4. shost.announce](#54-shostannounce)
-    - [5.5. shost.folder.add](#55-shostfolderadd)
-    - [5.6. shost.folder.<span>ls](#56-shostfolderspanls)
-    - [5.7. shost.folder.resize](#57-shostfolderresize)
-    - [5.8. shost.folder.delete](#58-shostfolderdelete)
-- [Contact](#contact)
+- [Section 1. Getting Started](#section-1-getting-started)
+  - [1.1. Prerequisites](#11-prerequisites)
+    - [1.1.1. Golang](#111-golang)
+    - [1.1.2. Xcode](#112-xcode)
+    - [1.1.3. Go Vendor](#113-go-vendor)
+    - [1.1.4. Docker](#114-docker)
+  - [1.2. Build from source](#12-build-from-source)
+    - [1.2.1. Clone Project](#121-clone-project)
+    - [1.2.2. Packages Installation](#122-packages-installation)
+    - [1.2.3. Build](#123-build)
+- [Section 2. Running `gdx`](#section-2-running-gdx)
+  - [2.1. Run as miner](#21-run-as-miner)
+  - [2.2. Run as storage client](#22-run-as-storage-client)
+  - [2.3. Run as storage host](#23-run-as-storage-host)
+- [Section 3. Tutorial](#section-3-tutorial)
+- [Section 4. Basic Console Commands](#section-4-basic-console-commands)
+  - [4.1. Account](#41-account)
+    - [4.1.1. personal.newAccount](#411-personalnewaccount)
+    - [4.1.2. eth.accounts](#412-ethaccounts)
+    - [4.1.3. personal.unlockAccount](#413-personalunlockaccount)
+    - [4.1.4. eth.getBalance](#414-ethgetbalance)
+  - [4.2. Mining](#42-mining)
+    - [4.2.1. miner.start](#421-minerstart)
+    - [4.2.2. miner.stop](#422-minerstop)
+    - [4.2.3. eth.mining](#423-ethmining)
+  - [4.3. Node](#43-node)
+    - [4.3.1. eth.blockHeight](#431-ethblockheight)
+    - [4.3.2. admin.peers](#432-adminpeers)
+    - [4.3.3. admin.nodeInfo](#433-adminnodeinfo)
+  - [4.4. StorageClient](#44-storageclient)
+    - [4.4.1. sclient.host.<span>ls](#441-sclienthostspanls)
+    - [4.4.2. sclient.paymentaddr](#442-sclientpaymentaddr)
+    - [4.4.3. sclient.setPaymentAddr](#443-sclientsetpaymentaddr)
+    - [4.4.4. sclient.setConfig](#444-sclientsetconfig)
+    - [4.4.5. sclient.config](#445-sclientconfig)
+    - [4.4.6. sclient.contracts](#446-sclientcontracts)
+    - [4.4.7 sclient.contract](#447-sclientcontract)
+    - [4.4.8 sclient.upload](#448-sclientupload)
+    - [4.4.9 sclient.download](#449-sclientdownload)
+    - [4.4.10 sclient.file.<span>ls](#4410-sclientfilespanls)
+    - [4.4.11 sclient.file.rename](#4411-sclientfilerename)
+    - [4.4.12 sclient.file.delete](#4412-sclientfiledelete)
+  - [4.5. StorageHost](#45-storagehost)
+    - [4.5.1. shost.config](#451-shostconfig)
+    - [4.5.2. shost.setConfig](#452-shostsetconfig)
+    - [4.5.3. shost.paymentAddr](#453-shostpaymentaddr)
+    - [4.5.4. shost.announce](#454-shostannounce)
+    - [4.5.5. shost.folder.add](#455-shostfolderadd)
+    - [4.5.6. shost.folder.<span>ls](#456-shostfolderspanls)
+    - [4.5.7. shost.folder.resize](#457-shostfolderresize)
+    - [4.5.8. shost.folder.delete](#458-shostfolderdelete)
+- [Section 5. Contact](#section-5-contact)
 
-# Getting Started
+# Section 1. Getting Started
 
-## 1. Prerequisites
+## 1.1. Prerequisites
 
-### 1.1. Golang
+### 1.1.1. Golang
 
 To build the program from the source code, Golang 1.11 is required. Please follow [this link](https://golang.org/doc/install) to install Golang on your computer. To check if the program is installed successfully, use the following command:
 
@@ -80,11 +80,11 @@ To build the program from the source code, Golang 1.11 is required. Please follo
 $ go version
 ```
 
-### 1.2. Xcode
+### 1.1.2. Xcode
 
 Xcode can be installed from the App Store
 
-### 1.3. Go Vendor
+### 1.1.3. Go Vendor
 
 [Go Vendor](https://github.com/kardianos/govendor) is a package management tool used for this project. It can be installed via: 
 
@@ -92,7 +92,7 @@ Xcode can be installed from the App Store
 $ go get -u -v github.com/kardianos/govendor
 ```
 
-### 1.4. Docker
+### 1.1.4. Docker
 
 The installation of Docker is optional. Docker is used for cross-platform build meaning if you want to build linux version of `gdx` on your MacBook, you have to install Docker. Docker can be installed via: 
 
@@ -102,9 +102,9 @@ $ brew cask install docker
 
 [Docker Installation Guide for Linux](https://runnable.com/docker/install-docker-on-linux)
 
-## 2. Build from source
+## 1.2. Build from source
 
-### 2.1. Clone Project
+### 1.2.1. Clone Project
 
 ```shell
 $ mkdir -p $GOPATH/src/github.com/DxChainNetwork
@@ -112,7 +112,7 @@ $ cd $GOPATH/src/github.com/DxChainNetwork
 $ git clone git@github.com:DxChainNetwork/go-dxc.git
 ```
 
-### 2.2. Packages Installation
+### 1.2.2. Packages Installation
 
 Required packages can be installed via go vendor
 
@@ -123,7 +123,7 @@ govendor sync -v
 
 All packages saved in the `gdx/vendor/vendor.json` will be downloaded. It may take some time.
 
-### 2.3. Build
+### 1.2.3. Build
 
 **Build for your operating system**
 
@@ -137,7 +137,7 @@ $ make gdx
 $ make gdx-cross
 ```
 
-# Running `gdx`
+# Section 2. Running `gdx`
 
 A node in the DxChain Network can become the following three roles
 * Storage Client
@@ -152,7 +152,7 @@ To run the node that is capable of performing all operations, use the following 
 $ gdx
 ```
 
-## 1. Run as miner
+## 2.1. Run as miner
 
 If you do not intend to become neither a storage client nor a storage host, you can start the program by running the following command in the terminal
 
@@ -160,7 +160,7 @@ If you do not intend to become neither a storage client nor a storage host, you 
 $ gdx --role miner
 ```
 
-## 2. Run as storage client
+## 2.2. Run as storage client
 
 By paying DX tokens to storage hosts, storage client is able to rent storage space and store files in the DX network safely and securely. When needed, storage client can download those files from the network.
 
@@ -170,7 +170,7 @@ If you intend to become a storage client only, run the following command in the 
 $ gdx --role client
 ```
 
-## 3. Run as storage host
+## 2.3. Run as storage host
 
 Storage host serves as a storage service provider, gaining profit for storing data uploaded by the storage client.
 
@@ -180,12 +180,12 @@ If you intend to become a storage host only, run the following command in the te
 $ gdx --role host
 ```
 
-# Tutorial
+# Section 3. Tutorial
 
 The basic tutorial can be found [here]()
 
 
-# Basic Console Commands
+# Section 4. Basic Console Commands
 
 Once the `gdx` program is up and running, you can use the following command to open the `gdx` console to perform different operations, such as mining, creating storage contract, uploading files, and etc.
 
@@ -193,9 +193,9 @@ Once the `gdx` program is up and running, you can use the following command to o
 $ gdx attach
 ```
 
-## 1. Account
+## 4.1. Account
 
-### 1.1. personal.newAccount
+### 4.1.1. personal.newAccount
 
 | Usage                 | Description            |
 |-----------------------|------------------------|
@@ -211,7 +211,7 @@ Repeat passphrase:
 "0x1ec76840382bfde5ec6a03dadd71947d842577e3"
 ```
 
-### 1.2. eth.accounts
+### 4.1.2. eth.accounts
 
 | Usage        | Description           |
 |--------------|-----------------------|
@@ -224,7 +224,7 @@ Example
   ["0x1ec76840382bfde5ec6a03dadd71947d842577e3"]
   ```
 
-### 1.3. personal.unlockAccount
+### 4.1.3. personal.unlockAccount
 
 | Usage                                                 | Description        |
 |-------------------------------------------------------|--------------------|
@@ -247,7 +247,7 @@ which is equivalent to
 true
 ```
 
-### 1.4. eth.getBalance
+### 4.1.4. eth.getBalance
 
 | Usage                   | Description               |
 |-------------------------|---------------------------|
@@ -260,9 +260,9 @@ Example:
 0
 ```
 
-## 2. Mining
+## 4.2. Mining
 
-### 2.1. miner.start
+### 4.2.1. miner.start
 
 | Usage         | Description  |
 |---------------|--------------|
@@ -275,7 +275,7 @@ Example:
 null
 ```
 
-### 2.2. miner.stop
+### 4.2.2. miner.stop
 
 | Usage        | Description |
 |--------------|-------------|
@@ -288,7 +288,7 @@ Example:
 null
 ```
 
-### 2.3. eth.mining
+### 4.2.3. eth.mining
 
 | Usage      | Description                 |
 |------------|-----------------------------|
@@ -301,9 +301,9 @@ Example:
 false
 ```
 
-## 3. Node
+## 4.3. Node
 
-### 3.1. eth.blockHeight
+### 4.3.1. eth.blockHeight
 
 | Usage           | Description          |
 |-----------------|----------------------|
@@ -317,7 +317,7 @@ Example:
 12
 ```
 
-### 3.2. admin.peers
+### 4.3.2. admin.peers
 
 | Usage       | Description               |
 |-------------|---------------------------|
@@ -349,7 +349,7 @@ Example:
 }]
 ```
 
-### 3.3. admin.nodeInfo
+### 4.3.3. admin.nodeInfo
 
 | Usage          | Description                     |
 |----------------|---------------------------------|
@@ -391,9 +391,9 @@ Example:
 }
 ```
 
-## 4. StorageClient
+## 4.4. StorageClient
 
-### 4.1. sclient.host.<span>ls
+### 4.4.1. sclient.host.<span>ls
 
 | Usage                 | Description                          |
 |-----------------------|--------------------------------------|
@@ -454,7 +454,7 @@ Example:
 1
 ```
 
-### 4.2. sclient.paymentaddr
+### 4.4.2. sclient.paymentaddr
 
 | Usage               | Description                                   |
 |---------------------|-----------------------------------------------|
@@ -469,7 +469,7 @@ Example:
 "0x792e6b278ef8ec562b9530bf5df70064a55c3744"
 ```
 
-### 4.3. sclient.setPaymentAddr
+### 4.4.3. sclient.setPaymentAddr
 
 | Usage                           | Description                                                     |
 |---------------------------------|-----------------------------------------------------------------|
@@ -482,7 +482,7 @@ Example:
 true
 ```
 
-### 4.4. sclient.setConfig
+### 4.4.4. sclient.setConfig
 
 | Usage                     | Description                                                       |
 |---------------------------|-------------------------------------------------------------------|
@@ -537,7 +537,7 @@ Period: 2 Days
 
 **NOTE:** once the client configuration is settled, the contracts will be automatically created.
 
-### 4.5. sclient.config
+### 4.4.5. sclient.config
 
 | Usage          | Description                                                  |
 |----------------|--------------------------------------------------------------|
@@ -564,7 +564,7 @@ Example:
 }
 ```
 
-### 4.6. sclient.contracts
+### 4.4.6. sclient.contracts
 
 | Usage             | Description                                           |
 |-------------------|-------------------------------------------------------|
@@ -590,7 +590,7 @@ to get the number of contracts that the storage client signed
 1
 ```
 
-### 4.7 sclient.contract
+### 4.4.7 sclient.contract
 
 | Usage                        | Description                                                     |
 |------------------------------|-----------------------------------------------------------------|
@@ -646,7 +646,7 @@ Example:
 }
 ```
 
-### 4.8 sclient.upload
+### 4.4.8 sclient.upload
 
 | Usage                              | Description                                                      |
 |------------------------------------|------------------------------------------------------------------|
@@ -661,7 +661,7 @@ Example:
 "success"
 ```
 
-### 4.9 sclient.download
+### 4.4.9 sclient.download
 
 | Usage                                | Description                                                    |
 |--------------------------------------|----------------------------------------------------------------|
@@ -676,7 +676,7 @@ Example:
 "File downloaded successfully"
 ```
 
-### 4.10 sclient.file.<span>ls
+### 4.4.10 sclient.file.<span>ls
 
 | Usage                 | Description                          |
 |-----------------------|--------------------------------------|
@@ -694,7 +694,7 @@ Example:
 }]
 ```
 
-### 4.11 sclient.file.rename
+### 4.4.11 sclient.file.rename
 
 | Usage                                 | Description              |
 |---------------------------------------|--------------------------|
@@ -707,7 +707,7 @@ Example:
 "File download.file renamed to newfile.file"
 ```
 
-### 4.12 sclient.file.delete
+### 4.4.12 sclient.file.delete
 
 | Usage                     | Description     |
 |---------------------------|-----------------|
@@ -721,9 +721,9 @@ Example:
 ```
 
 
-## 5. StorageHost
+## 4.5. StorageHost
 
-### 5.1. shost.config
+### 4.5.1. shost.config
 
 | Usage        | Description                                          |
 |--------------|------------------------------------------------------|
@@ -754,7 +754,7 @@ Example:
 }
 ```
 
-### 5.2. shost.setConfig
+### 4.5.2. shost.setConfig
 
 | Usage                   | Description                         |
 |-------------------------|-------------------------------------|
@@ -772,7 +772,7 @@ The following is a list of available configurations:
 * maxDeposit: the max deposit for a single storage contract
 * paymentAddress: account address used for the storage service
 
-**NOTE** for available units, please refer to [Section 4.4](#44-sclientsetconfig)
+**NOTE** for available units, please refer to [Section 4.4.4](#444-sclientsetconfig)
 
 Example:
 
@@ -781,12 +781,12 @@ Example:
 "Successfully set the host config"
 ```
 
-### 5.3. shost.paymentAddr
+### 4.5.3. shost.paymentAddr
 
-Please refer to [Section 4.2](#42-sclientpaymentaddr). Unlike the storage client, the profit host made will be saved in this account as well
+Please refer to [Section 4.4.2](#442-sclientpaymentaddr). Unlike the storage client, the profit host made will be saved in this account as well
 
 
-### 5.4. shost.announce
+### 4.5.4. shost.announce
 
 | Usage          | Description                            |
 |----------------|----------------------------------------|
@@ -823,7 +823,7 @@ to check the transaction detail, use the following command
 }
 ```
 
-### 5.5. shost.folder.add
+### 4.5.5. shost.folder.add
 
 | Usage                        | Description                                                        |
 |------------------------------|--------------------------------------------------------------------|
@@ -838,7 +838,7 @@ Example:
 "successfully added the storage folder"
 ```
 
-### 5.6. shost.folder.<span>ls
+### 4.5.6. shost.folder.<span>ls
 
 | Usage                 | Description                                                        |
 |-----------------------|--------------------------------------------------------------------|
@@ -855,7 +855,7 @@ Example:
 }]
 ```
 
-### 5.7. shost.folder.resize
+### 4.5.7. shost.folder.resize
 
 | Usage                             | Description                                                                    |
 |-----------------------------------|--------------------------------------------------------------------------------|
@@ -868,7 +868,7 @@ Example:
 "successfully resize the storage folder"
 ```
 
-### 5.8. shost.folder.delete
+### 4.5.8. shost.folder.delete
 
 | Usage                       | Description                                                                |
 |-----------------------------|----------------------------------------------------------------------------|
@@ -881,6 +881,6 @@ Example:
 "successfully delete the storage folder"
 ```
 
-# Contact
+# Section 5. Contact
 
 Thank you so much for your support and your confidence in this project. If you have any question, please do not hesitated to contact us via support@dxchain.com
