@@ -189,13 +189,12 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		return
 	}
 
-	var isHostCommitSuccess = true
+	var isHostCommitSuccess = false
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, nil, nil)
 		h.lock.Unlock()
 		if err != nil {
-			isHostCommitSuccess = false
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
 				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
@@ -208,6 +207,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 				return
 			}
 		}
+		isHostCommitSuccess = true
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
@@ -229,7 +229,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
-		if isHostCommitSuccess {
+		if !isHostCommitSuccess {
 			_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
 		}
 	}

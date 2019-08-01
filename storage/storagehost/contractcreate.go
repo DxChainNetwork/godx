@@ -192,7 +192,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	}
 
 	// host will finalize storage responsibility when client commit success
-	var isHostCommitSuccess = true
+	var isHostCommitSuccess = false
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		if req.Renew {
 			h.lock.RLock()
@@ -210,7 +210,6 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		}
 
 		if err := finalizeStorageResponsibility(h, so); err != nil {
-			isHostCommitSuccess = false
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
 				log.Error("storage host failed to send commit failed msg", "err", err)
 				return
@@ -223,6 +222,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 				return
 			}
 		}
+		isHostCommitSuccess = true
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
@@ -248,7 +248,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
-		if isHostCommitSuccess {
+		if !isHostCommitSuccess {
 			_ = rollbackStorageResponsibility(h, so)
 		}
 	}

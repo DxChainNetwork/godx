@@ -161,7 +161,7 @@ func (p *peer) SendHostBusyHandleRequestErr() error {
 func (p *peer) SendClientNegotiateErrorMsg() error {
 	var err error
 	if err = p.checkPeerStopHook(p); err == nil {
-		return p2p.Send(p.rw, storage.ClientNegotiateErrorMsg, "client negotiate error")
+		return p2p.Send(p.rw, storage.ClientNegotiateErrorMsg, storage.ClientNegotiateErr.Error())
 	}
 	return err
 }
@@ -171,7 +171,7 @@ func (p *peer) SendClientNegotiateErrorMsg() error {
 func (p *peer) SendClientCommitFailedMsg() error {
 	var err error
 	if err = p.checkPeerStopHook(p); err == nil {
-		return p2p.Send(p.rw, storage.ClientCommitFailedMsg, "commit error")
+		return p2p.Send(p.rw, storage.ClientCommitFailedMsg, storage.ClientCommitErr.Error())
 	}
 	return err
 }
@@ -189,7 +189,7 @@ func (p *peer) SendClientCommitSuccessMsg() error {
 func (p *peer) SendHostCommitFailedMsg() error {
 	var err error
 	if err = p.checkPeerStopHook(p); err == nil {
-		return p2p.Send(p.rw, storage.HostCommitFailedMsg, "commit error")
+		return p2p.Send(p.rw, storage.HostCommitFailedMsg, storage.HostCommitErr.Error())
 	}
 	return err
 }
@@ -215,7 +215,7 @@ func (p *peer) SendHostAckMsg() error {
 func (p *peer) SendHostNegotiateErrorMsg() error {
 	var err error
 	if err = p.checkPeerStopHook(p); err == nil {
-		return p2p.Send(p.rw, storage.HostNegotiateErrorMsg, "host negotiate error")
+		return p2p.Send(p.rw, storage.HostNegotiateErrorMsg, storage.HostNegotiateErr.Error())
 	}
 	return err
 }

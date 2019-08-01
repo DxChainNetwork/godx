@@ -233,14 +233,13 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
-	var isHostCommitSuccess = true
+	var isHostCommitSuccess = false
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
 		h.lock.Unlock()
 
 		if err != nil {
-			isHostCommitSuccess = false
 			if err := sp.SendHostCommitFailedMsg(); err != nil {
 				log.Error("storage host failed to send commit failed msg: %s", "err", err)
 				return
@@ -253,6 +252,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 				return
 			}
 		}
+		isHostCommitSuccess = true
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
@@ -275,7 +275,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
 		// check host commit success. we will rollback only when host commit is successful
-		if isHostCommitSuccess {
+		if !isHostCommitSuccess {
 			_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
 		}
 	}
