@@ -229,7 +229,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
-		if !isHostCommitSuccess {
+		if isHostCommitSuccess {
 			_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
 		}
 	}

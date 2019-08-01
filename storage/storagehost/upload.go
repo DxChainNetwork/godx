@@ -275,7 +275,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
 		// check host commit success. we will rollback only when host commit is successful
-		if !isHostCommitSuccess {
+		if isHostCommitSuccess {
 			_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
 		}
 	}

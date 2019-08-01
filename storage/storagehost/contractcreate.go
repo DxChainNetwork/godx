@@ -248,7 +248,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
 
-		if !isHostCommitSuccess {
+		if isHostCommitSuccess {
 			_ = rollbackStorageResponsibility(h, so)
 		}
 	}
