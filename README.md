@@ -46,7 +46,7 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
     - [4.3.3. admin.nodeInfo](#433-adminnodeinfo)
   - [4.4. StorageClient](#44-storageclient)
     - [4.4.1. sclient.host.<span>ls](#441-sclienthostspanls)
-    - [4.4.2. sclient.paymentaddr](#442-sclientpaymentaddr)
+    - [4.4.2. sclient.paymentAddr](#442-sclientpaymentaddr)
     - [4.4.3. sclient.setPaymentAddr](#443-sclientsetpaymentaddr)
     - [4.4.4. sclient.setConfig](#444-sclientsetconfig)
     - [4.4.5. sclient.config](#445-sclientconfig)
@@ -454,18 +454,18 @@ Example:
 1
 ```
 
-### 4.4.2. sclient.paymentaddr
+### 4.4.2. sclient.paymentAddr
 
 | Usage               | Description                                   |
 |---------------------|-----------------------------------------------|
-| sclient.paymentaddr | Retrieve the account used for storage service |
+| sclient.paymentAddr | Retrieve the account used for storage service |
 
 **NOTE:** By default, the first account user generated will be used as the storage service payment address. All the storage cost will be spent from this account.
 
 Example:
 
 ```shell
-> sclient.paymentaddr
+> sclient.paymentAddr
 "0x792e6b278ef8ec562b9530bf5df70064a55c3744"
 ```
 
