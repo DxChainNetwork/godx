@@ -2,49 +2,27 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package storage
+package unit
 
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"testing"
 )
 
-func TestContainsDigitOnly(t *testing.T) {
-	tables := []struct {
-		input     string
-		allDigits bool
-	}{
-		{"1231232131232131231231321313", true},
-		{"fjsdlkfjalkfjlkahdfklhfiwehflsdjfkjf", false},
-		{"21rfewf2rewf4r4", false},
-		{"fdafasdf", false},
-	}
-
-	for _, table := range tables {
-		result := containsDigitOnly(table.input)
-		if result != table.allDigits {
-			t.Errorf("the string %s is expected allcontaindigit %t, got %t",
-				table.input, table.allDigits, result)
-		}
-	}
-}
-
 func TestParseFund(t *testing.T) {
 	tables := []struct {
 		fund   string
 		result common.BigInt
 	}{
-		{"100 wei", common.NewBigInt(100)},
-		{"100ether", common.NewBigInt(100).MultUint64(currencyIndexMap["ether"])},
-		{"100 MILLIETHER", common.NewBigInt(100).MultUint64(currencyIndexMap["milliether"])},
-		{"100  MICROether", common.NewBigInt(100).MultUint64(currencyIndexMap["microether"])},
-		{"99876KWEI", common.NewBigInt(99876).MultUint64(currencyIndexMap["kwei"])},
+		{"100 camel", common.NewBigInt(100)},
+		{"100camel", common.NewBigInt(100).MultUint64(CurrencyIndexMap["camel"])},
+		{"99876GCAMEL", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["gcamel"])},
 	}
 
 	for _, table := range tables {
 
 		// parse the fund
-		parsed, err := ParseFund(table.fund)
+		parsed, err := ParseCurrency(table.fund)
 		if err != nil {
 			t.Fatalf("failed to parse the fund %s: %s", table.fund, err.Error())
 		}
@@ -59,15 +37,15 @@ func TestParseFund(t *testing.T) {
 
 func TestParseFundFail(t *testing.T) {
 	var failedExpected = []string{
-		"100dxc",     // does not match with any unit
-		"100fwei",    // error, even the suffix is dx
-		"120cdwei",   // error, even the suffix is dx
-		"a1200ether", // error, even the suffix is dx
-		"120gether",  // error, does not match with any unit
+		"100ether",   // does not match with any unit
+		"100fdx",     // error, even the suffix is dx
+		"120cdcamel", // error, even the suffix is dx
+		"a1200camel", // error, even the suffix is dx
+		"120gdxc",    // error, does not match with any unit
 	}
 
 	for _, failedCase := range failedExpected {
-		if _, err := ParseFund(failedCase); err == nil {
+		if _, err := ParseCurrency(failedCase); err == nil {
 			t.Errorf("error is expected with the input %s", failedCase)
 		}
 

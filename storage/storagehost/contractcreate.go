@@ -1,3 +1,7 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package storagehost
 
 import (
@@ -237,7 +241,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	// once successfully created the contract, insert the contract into the memory
 	h.lock.Lock()
-	h.clientNodeToContract[sp.PeerNode()] = sc.ID()
+	h.clientToContract[sp.PeerNode().String()] = sc.ID()
 	h.lock.Unlock()
 
 	// send host 'ACK' msg to client

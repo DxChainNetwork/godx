@@ -18,7 +18,7 @@ import (
 // addStuckSegmentsToHeap adds all the stuck segments in a file to the repair heap
 func (client *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error {
 	// Open File
-	sf, err := client.fileSystem.OpenFile(dxPath)
+	sf, err := client.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return fmt.Errorf("unable to open Dxfile %v, error: %v", dxPath, err)
 	}
@@ -34,7 +34,7 @@ func (client *StorageClient) addStuckSegmentsToHeap(dxPath storage.DxPath) error
 
 // dirMetadata retrieve the directory metadata and returns the dir metadata after bubble
 func (client *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata, error) {
-	sysPath := dxPath.SysPath(storage.SysPath(client.fileSystem.FileRootDir()))
+	sysPath := dxPath.SysPath(storage.SysPath(client.fileSystem.RootDir()))
 	fi, err := os.Stat(string(sysPath))
 	if err != nil {
 		return dxdir.Metadata{}, err
@@ -43,7 +43,7 @@ func (client *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata,
 		return dxdir.Metadata{}, fmt.Errorf("%v is not a directory", dxPath)
 	}
 
-	dxDir, err := client.fileSystem.DirSet().Open(dxPath)
+	dxDir, err := client.fileSystem.OpenDxDir(dxPath)
 	if os.IsNotExist(err) {
 		// Remember initial Error
 		initError := err
@@ -62,7 +62,7 @@ func (client *StorageClient) dirMetadata(dxPath storage.DxPath) (dxdir.Metadata,
 
 		// If we are at the root directory or the directory is not empty, create
 		// a metadata file
-		dxDir, err = client.fileSystem.DirSet().NewDxDir(dxPath)
+		dxDir, err = client.fileSystem.NewDxDir(dxPath)
 	}
 	if err != nil {
 		return dxdir.Metadata{}, err

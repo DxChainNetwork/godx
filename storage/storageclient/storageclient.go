@@ -38,7 +38,7 @@ import (
 // StorageClient contains fields that are used to perform StorageHost
 // selection operation, file uploading, downloading operations, and etc.
 type StorageClient struct {
-	fileSystem *filesystem.FileSystem
+	fileSystem filesystem.FileSystem
 
 	// Memory Management
 	memoryManager *memorymanager.MemoryManager
@@ -197,7 +197,7 @@ func (client *StorageClient) DeleteFile(path storage.DxPath) error {
 		return err
 	}
 	defer client.tm.Done()
-	return client.fileSystem.FileSet().Delete(path)
+	return client.fileSystem.DeleteDxFile(path)
 }
 
 // ContractDetail will return the detailed contract information
@@ -239,6 +239,7 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	if setting.MaxUploadSpeed < 0 || setting.MaxDownloadSpeed < 0 {
 		err = fmt.Errorf("both upload speed %v and download speed %v cannot be smaller than 0",
 			setting.MaxUploadSpeed, setting.MaxDownloadSpeed)
+		return
 	}
 
 	// set the rent payment
@@ -255,11 +256,15 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	client.storageHostManager.SetIPViolationCheck(setting.EnableIPViolation)
 
 	// update and save the persist
+	client.lock.Lock()
 	client.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
 	client.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = client.saveSettings(); err != nil {
 		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+		client.lock.Unlock()
+		return
 	}
+	client.lock.Unlock()
 
 	// active the worker pool
 	client.activateWorkerPool()
@@ -945,7 +950,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if err != nil {
 		return nil, err
 	}
-	entry, err := client.fileSystem.OpenFile(dxPath)
+	entry, err := client.fileSystem.OpenDxFile(dxPath)
 	if err != nil {
 		return nil, err
 	}
@@ -986,11 +991,15 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	destinationType = "file"
 
 	// create the download object.
+	snap, err := entry.Snapshot()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create snapshot: %v", err)
+	}
 	d, err := client.newDownload(downloadParams{
 		destination:       dw,
 		destinationType:   destinationType,
 		destinationString: p.WriteToLocalPath,
-		file:              entry.DxFile.Snapshot(),
+		file:              snap,
 		latencyTarget:     25e3 * time.Millisecond,
 
 		// always download the whole file

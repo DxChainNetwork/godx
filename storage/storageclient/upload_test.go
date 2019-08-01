@@ -284,7 +284,11 @@ func TestRetrieveData(t *testing.T) {
 	}
 
 	var err error
-	segment.physicalSegmentData, err = segment.fileEntry.ErasureCode().Encode(segmentBytes)
+	ec, err := segment.fileEntry.ErasureCode()
+	if err != nil {
+		t.Fatal("Cannot create erasure code", err)
+	}
+	segment.physicalSegmentData, err = ec.Encode(segmentBytes)
 	if err != nil {
 		t.Fatal("ErasureCode encode failed", err)
 	}
@@ -293,13 +297,18 @@ func TestRetrieveData(t *testing.T) {
 		t.Fatal("not enough physical sectors to match the upload sector slots of the file")
 	}
 
+	cipherKey, err := segment.fileEntry.CipherKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// Loop through the sectorSlots and encrypt any that are needed
 	// If the sector has been used, set physicalSegmentData nil and gc routine will collect this memory
 	for i := 0; i < len(segment.sectorSlotsStatus); i++ {
 		if segment.sectorSlotsStatus[i] {
 			segment.physicalSegmentData[i] = nil
 		} else {
-			cipherData, err := segment.fileEntry.CipherKey().Encrypt(segment.physicalSegmentData[i])
+			cipherData, err := cipherKey.Encrypt(segment.physicalSegmentData[i])
 			if err != nil {
 				segment.physicalSegmentData[i] = nil
 				t.Fatal("encrypt segment after erasure encode failed", "err", err)

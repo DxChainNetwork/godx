@@ -197,3 +197,7 @@ func (st *storageClientBackendTestData) GetPaymentAddress() (common.Address, err
 func (st *storageClientBackendTestData) RevisionOrRenewingDone(hostID enode.ID) {}
 
 func (st *storageClientBackendTestData) CheckAndUpdateConnection(peerNode *enode.Node) {}
+
+func (st *storageClientBackendTestData) SelfEnodeURL() string {
+	return ""
+}

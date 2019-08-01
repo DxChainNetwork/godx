@@ -62,7 +62,7 @@ func TestNewErasureCode_ErasureCodeToParams(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		recoveredMin, recoveredNum, recoveredExtra := erasureCodeToParams(ec)
+		recoveredMin, recoveredNum, recoveredExtra, _ := erasureCodeToParams(ec)
 		if recoveredMin != test.minSectors {
 			t.Errorf("Test %d: Recovered minSectors not expected. Want %v, Got %v", i, test.minSectors, recoveredMin)
 		}
