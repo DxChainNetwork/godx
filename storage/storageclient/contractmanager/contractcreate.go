@@ -185,7 +185,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
+	clientPayout, hostPayout, _, err := ClientPayouts(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
 	if err != nil {
 		err = fmt.Errorf("failed to calculate the client payouts: %s", err.Error())
 		return storage.ContractMetaData{}, err

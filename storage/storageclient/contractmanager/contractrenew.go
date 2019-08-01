@@ -394,7 +394,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
 	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
-	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
+	clientPayout, hostPayout, hostCollateral, err := ClientPayouts(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -589,8 +589,8 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
-// ClientPayoutsPreTax calculate client and host collateral
-func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
+// ClientPayouts calculate client and host collateral
+func ClientPayouts(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
 		host.StoragePrice = common.NewBigIntUint64(1)
