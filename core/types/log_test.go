@@ -2,8 +2,8 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/pkg/errors"
 	"reflect"
 	"testing"
 

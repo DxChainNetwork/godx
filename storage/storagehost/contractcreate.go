@@ -22,21 +22,12 @@ import (
 func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 	defer func() {
-		if clientNegotiateErr != nil {
-			_ = sp.SendHostAckMsg()
-		}
-
-		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(); err == nil {
-				msg, err := sp.HostWaitContractResp()
-				if err == nil && msg.Code == storage.ClientAckMsg{
-					_ = sp.SendHostAckMsg()
-				}
-			}
-		}
-
+		// ensure that host send the last msg and return
 		if clientNegotiateErr != nil || clientCommitErr != nil {
+			_ = sp.SendHostAckMsg()
 			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendHostNegotiateErrorMsg()
 		}
 	}()
 
@@ -192,7 +183,6 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	}
 
 	// host will finalize storage responsibility when client commit success
-	var isHostCommitSuccess = false
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		if req.Renew {
 			h.lock.RLock()
@@ -210,21 +200,23 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 		}
 
 		if err := finalizeStorageResponsibility(h, so); err != nil {
-			if err := sp.SendHostCommitFailedMsg(); err != nil {
-				log.Error("storage host failed to send commit failed msg", "err", err)
-				return
-			}
+			_ = sp.SendHostCommitFailedMsg()
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
-			if err != nil {
+			if err != nil || msg.Code != storage.ClientAckMsg {
 				log.Error("storage host failed to get client ack msg", "err", err)
+				clientCommitErr = storage.ClientCommitErr
 				return
 			}
+
+			// host send the last ack msg and return
+			_ = sp.SendHostAckMsg()
+			return
 		}
-		isHostCommitSuccess = true
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
+		return
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
 		clientNegotiateErr = storage.ClientNegotiateErr
 		return
@@ -235,6 +227,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	// set static code earlier than send ack msg prevent host.lock from blocking msg send
 	node := sp.PeerNode()
 	if node == nil {
+		hostNegotiateErr = storage.HostNegotiateErr
 		return
 	}
 	h.ethBackend.SetStatic(node)
@@ -247,10 +240,8 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
-
-		if isHostCommitSuccess {
-			_ = rollbackStorageResponsibility(h, so)
-		}
+		_ = rollbackStorageResponsibility(h, so)
+		rollbackPeerStatic(h, sp)
 	}
 }
 
@@ -478,4 +469,12 @@ func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	}
 
 	return nil
+}
+
+func rollbackPeerStatic(h *StorageHost, sp storage.Peer) {
+	h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+
+	h.lock.Lock()
+	delete(h.clientToContract, sp.PeerNode().String())
+	h.lock.Unlock()
 }

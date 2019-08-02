@@ -5,10 +5,8 @@
 package contractmanager
 
 import (
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
-	"time"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -232,7 +230,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// set up the connection with the storage host and remove the operation once done
 	sp, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
-		cm.log.Error("contract create failed, failed to set up connection", "err", err.Error())
+		cm.log.Error("contract create failed, failed to set up connection", "err", err)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection failed while creating the contract", err)
 	}
 
@@ -240,14 +238,9 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// Ignore the send negotiate network error, we expect that client will wait for host
 	// that prevents client from opening another negotiate stage prematurely but receives host busy signal
 	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
-	defer func(sp storage.Peer) {
+	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
-				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
-		} else if hostNegotiateErr != nil {
-			_ = sp.SendClientAckMsg()
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
 				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
@@ -263,7 +256,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
 		}
-	}(sp)
+	}()
 
 	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
@@ -279,7 +272,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	if err := sp.RequestContractCreation(req); err != nil {
 		err = fmt.Errorf("failed to send the contract creation request: %s", err.Error())
-		log.Error("contract create failed", "err", err.Error())
+		log.Error("contract create failed", "err", err)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -393,27 +386,21 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		// wait for host ack msg
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg {
-			err = errors.New("failed to insert the contract after announce host",)
+			err = errors.New("failed to insert the contract after announce host")
 		} else if err != nil {
 			err = fmt.Errorf("failed to insert the contract after announce host, but cann't receive host ack msg: %s", err.Error())
 		}
 		return storage.ContractMetaData{}, err
 	}
 
-	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		// wait for host end that host will read msg timeout
-		select {
-		case <-time.After(1 * time.Minute):
-		}
-
-		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
-		return storage.ContractMetaData{}, err
-	}
+	// send the commit success msg if insert contract occurs no error
+	// we ignore any error and then wait the host ack msg
+	_ = sp.SendClientCommitSuccessMsg()
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
-		log.Error("contract create failed when wait for host ACK msg", "err", err.Error())
+		log.Error("contract create failed when wait for host ACK msg", "err", err)
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 		return storage.ContractMetaData{}, err
 	}
@@ -423,24 +410,21 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		return meta, nil
 	case storage.HostCommitFailedMsg:
 		hostCommitErr = storage.HostCommitErr
-
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
 		_ = sp.SendClientAckMsg()
 
-		msg, err = sp.ClientWaitContractResp()
-		if err == nil && msg.Code == storage.HostAckMsg{
-			return storage.ContractMetaData{}, errors.New("host finalize storage responsibility error")
-		}
+		// client wait for host last ack msg. if timeout or not ack,
+		// client still throw host error. so we ignore any msg content and the return error
+		_, _ = sp.ClientWaitContractResp()
+
+		return storage.ContractMetaData{}, hostCommitErr
+	default:
+		return storage.ContractMetaData{}, hostCommitErr
 	}
-
-	return storage.ContractMetaData{}, errors.New("last msg is not host ack msg")
-
 }
 
 func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage.ContractID) error{
-	if contractSet == nil {
-		return nil
-	}
 	if c, exist := contractSet.Acquire(id); exist {
 		if err := contractSet.Delete(c); err != nil {
 			return err

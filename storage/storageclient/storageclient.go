@@ -385,11 +385,6 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
 				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
-		} else if hostNegotiateErr != nil {
-			_ = sp.SendClientAckMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
-				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
 		}
 
 		// we will delete static flag when host negotiate or commit error
@@ -438,24 +433,16 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
 
-	verified, err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
-	if err != nil {
-		client.log.Error("something wrong for verifying diff proof", "error", err)
-	}
-	if !verified {
-		clientNegotiateErr = err
+	if err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot); err != nil {
+		hostNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
 	}
 
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
-	verified, err = merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
-	if err != nil {
-		client.log.Error("something wrong for verifying diff proof", "error", err)
-	}
-	if !verified {
-		clientNegotiateErr = err
+	if err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot); err != nil {
+		hostNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
 	}
 
@@ -506,9 +493,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	// commit upload revision
 	err = contract.CommitRevision(rev, storagePrice, bandwidthPrice)
 	if err != nil {
-		if err := sp.SendClientCommitFailedMsg(); err != nil {
-			return err
-		}
+		_ = sp.SendClientCommitFailedMsg()
 
 		// wait for host ack msg
 		msg, err = sp.ClientWaitContractResp()
@@ -518,15 +503,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
 	}
 
-	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		// wait for host end that host will read msg timeout
-		select {
-		case <-time.After(1 * time.Minute):
-		}
-
-		_ = contract.RollbackUndoMem(contractHeader)
-		return err
-	}
+	_ = sp.SendClientCommitSuccessMsg()
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
@@ -543,16 +520,14 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		return
 	case storage.HostCommitFailedMsg:
 		hostCommitErr = storage.HostCommitErr
-
 		_ = contract.RollbackUndoMem(contractHeader)
-		_ = sp.SendClientAckMsg()
-		msg, err = sp.ClientWaitContractResp()
-		if err == nil && msg.Code == storage.HostAckMsg {
-			return errors.New("host finalize upload revision error")
-		}
-	}
 
-	return errors.New("last msg is not host ack msg")
+		_ = sp.SendClientAckMsg()
+		_, _ = sp.ClientWaitContractResp()
+		return hostCommitErr
+	default:
+		return hostCommitErr
+	}
 }
 
 // Download calls the Read RPC, writing the requested data to w
@@ -647,11 +622,6 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
 				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
-		} else if hostNegotiateErr != nil {
-			_ = sp.SendClientAckMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
-				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
 		}
 
 		// we will delete static flag when host negotiate or commit error
@@ -703,7 +673,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	if len(resp.Data) > 0 {
 		if len(resp.Data) != int(sector.Length) {
 			err = errors.New("host did not send enough sector data")
-			clientNegotiateErr = err
+			hostNegotiateErr = err
 			return err
 		}
 
@@ -713,7 +683,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 			verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sector.MerkleRoot)
 			if !verified || err != nil {
 				err = errors.New("host provided incorrect sector data or Merkle proof")
-				clientNegotiateErr = err
+				hostNegotiateErr = err
 				return err
 			}
 		}
@@ -751,15 +721,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
 	}
 
-	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		// wait for host end that host will read msg timeout
-		select {
-		case <-time.After(1 * time.Minute):
-		}
-
-		_ = contract.RollbackUndoMem(contractHeader)
-		return err
-	}
+	_ = sp.SendClientCommitSuccessMsg()
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
@@ -776,17 +738,14 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		return
 	case storage.HostCommitFailedMsg:
 		hostCommitErr = storage.HostCommitErr
-
 		_ = contract.RollbackUndoMem(contractHeader)
+
 		_ = sp.SendClientAckMsg()
-
-		msg, err = sp.ClientWaitContractResp()
-		if err == nil && msg.Code == storage.HostAckMsg {
-			return errors.New("host finalize upload revision error")
-		}
+		_, _ = sp.ClientWaitContractResp()
+		return hostCommitErr
+	default:
+		return hostCommitErr
 	}
-
-	return errors.New("last msg is not host ack msg")
 }
 
 // calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.

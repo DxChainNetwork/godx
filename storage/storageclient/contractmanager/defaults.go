@@ -5,8 +5,8 @@
 package contractmanager
 
 import (
+	"errors"
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/pkg/errors"
 	"math/big"
 )
 

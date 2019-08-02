@@ -382,6 +382,8 @@ func (c *Contract) merkleRootWalOP(root common.Hash, rootCount int) (op writeahe
 
 // Header will return the contract header information of the contract
 func (c *Contract) Header() ContractHeader {
+	c.headerLock.Lock()
+	defer c.headerLock.Unlock()
 	return c.header
 }
 

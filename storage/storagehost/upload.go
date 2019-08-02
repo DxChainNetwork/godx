@@ -23,21 +23,11 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
-		if clientNegotiateErr != nil {
-			_ = sp.SendHostAckMsg()
-		}
-
-		if hostNegotiateErr != nil {
-			if err := sp.SendHostNegotiateErrorMsg(); err == nil {
-				msg, err := sp.HostWaitContractResp()
-				if err == nil && msg.Code == storage.ClientAckMsg {
-					_ = sp.SendHostAckMsg()
-				}
-			}
-		}
-
 		if clientNegotiateErr != nil || clientCommitErr != nil {
+			_ = sp.SendHostAckMsg()
 			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendHostNegotiateErrorMsg()
 		}
 	}()
 
@@ -233,28 +223,29 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
-	var isHostCommitSuccess = false
 	if msg.Code == storage.ClientCommitSuccessMsg {
 		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
 		h.lock.Unlock()
 
 		if err != nil {
-			if err := sp.SendHostCommitFailedMsg(); err != nil {
-				log.Error("storage host failed to send commit failed msg: %s", "err", err)
-				return
-			}
+			_ = sp.SendHostCommitFailedMsg()
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
-			if err != nil {
+			if err != nil || msg.Code != storage.ClientAckMsg {
 				log.Error("storage host failed to get client ack msg", "err", err)
+				clientCommitErr = storage.ClientCommitErr
 				return
 			}
+
+			// host send the last ack msg and return
+			_ = sp.SendHostAckMsg()
+			return
 		}
-		isHostCommitSuccess = true
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		clientCommitErr = storage.ClientCommitErr
+		return
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
 		clientNegotiateErr = storage.ClientNegotiateErr
 		return
@@ -273,11 +264,8 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	// send host 'ACK' msg to client
 	if err := sp.SendHostAckMsg(); err != nil {
 		log.Error("storage host failed to send host ack msg", "err", err)
-
-		// check host commit success. we will rollback only when host commit is successful
-		if isHostCommitSuccess {
-			_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
-		}
+		_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
+		h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
 	}
 }
 

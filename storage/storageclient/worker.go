@@ -5,6 +5,7 @@
 package storageclient
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 
-	"github.com/pkg/errors"
 )
 
 var (
