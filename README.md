@@ -109,7 +109,7 @@ $ brew cask install docker
 ```shell
 $ mkdir -p $GOPATH/src/github.com/DxChainNetwork
 $ cd $GOPATH/src/github.com/DxChainNetwork
-$ git clone git@github.com:DxChainNetwork/go-dxc.git
+$ git clone git@github.com:DxChainNetwork/gdx.git
 ```
 
 ### 1.2.2. Packages Installation
