@@ -18,13 +18,14 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 - [Section 1. Getting Started](#section-1-getting-started)
   - [1.1. Prerequisites](#11-prerequisites)
     - [1.1.1. Golang](#111-golang)
-    - [1.1.2. Xcode](#112-xcode)
+    - [1.1.2. Xcode (for macOS only)](#112-xcode-for-macos-only)
     - [1.1.3. Go Vendor](#113-go-vendor)
-    - [1.1.4. Docker](#114-docker)
+    - [1.1.4. Docker (Optional)](#114-docker-optional)
   - [1.2. Build from source](#12-build-from-source)
     - [1.2.1. Clone Project](#121-clone-project)
     - [1.2.2. Packages Installation](#122-packages-installation)
     - [1.2.3. Build](#123-build)
+    - [1.2.4. Add `gdx` to path](#124-add-gdx-to-path)
 - [Section 2. Running `gdx`](#section-2-running-gdx)
   - [2.1. Run as miner](#21-run-as-miner)
   - [2.2. Run as storage client](#22-run-as-storage-client)
@@ -66,11 +67,16 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
     - [4.5.6. shost.folder.<span>ls](#456-shostfolderspanls)
     - [4.5.7. shost.folder.resize](#457-shostfolderresize)
     - [4.5.8. shost.folder.delete](#458-shostfolderdelete)
-- [Section 5. Contact](#section-5-contact)
+- [Section 5. License](#section-5-license)
+- [Section 6. Appendix](#section-6-appendix)
+  - [Section 6.1 Units](#section-61-units)
+- [Section 7. Contact](#section-7-contact)
 
 # Section 1. Getting Started
 
 ## 1.1. Prerequisites
+
+**NOTE:** currently, we only support MacOS and Linux. Windows is not supported yet.
 
 ### 1.1.1. Golang
 
@@ -80,7 +86,7 @@ To build the program from the source code, Golang 1.11 is required. Please follo
 $ go version
 ```
 
-### 1.1.2. Xcode
+### 1.1.2. Xcode (for macOS only)
 
 Xcode can be installed from the App Store
 
@@ -92,13 +98,11 @@ Xcode can be installed from the App Store
 $ go get -u -v github.com/kardianos/govendor
 ```
 
-### 1.1.4. Docker
+### 1.1.4. Docker (Optional)
 
-The installation of Docker is optional. Docker is used for cross-platform build meaning if you want to build linux version of `gdx` on your MacBook, you have to install Docker. Docker can be installed via: 
+The installation of Docker is optional. Docker is used for cross-platform build meaning if you want to build linux version of `gdx` on your MacBook, you have to install Docker. Please follow the following installation guide:
 
-```shell
-$ brew cask install docker
-```
+[Docker Installation Guide for Mac](https://docs.docker.com/docker-for-mac/install/)
 
 [Docker Installation Guide for Linux](https://runnable.com/docker/install-docker-on-linux)
 
@@ -109,19 +113,19 @@ $ brew cask install docker
 ```shell
 $ mkdir -p $GOPATH/src/github.com/DxChainNetwork
 $ cd $GOPATH/src/github.com/DxChainNetwork
-$ git clone git@github.com:DxChainNetwork/gdx.git
+$ git clone git@github.com:DxChainNetwork/godx.git
 ```
 
 ### 1.2.2. Packages Installation
 
-Required packages can be installed via go vendor
+Required packages can be installed via go vendor,
 
 ```shell
-cd go-dxc
-govendor sync -v
+$ cd $GOPATH/src/github.com/DxChainNetwork/godx
+$ govendor sync -v
 ```
 
-All packages saved in the `gdx/vendor/vendor.json` will be downloaded. It may take some time.
+All packages saved in the `godx/vendor/vendor.json` will be downloaded. Please wait for download to finish. 
 
 ### 1.2.3. Build
 
@@ -131,11 +135,16 @@ All packages saved in the `gdx/vendor/vendor.json` will be downloaded. It may ta
 $ make gdx
 ```
 
-**Cross platform build**
+### 1.2.4. Add `gdx` to path
+
+Add `gdx` executable to your path by going through the following commands:
 
 ```shell
-$ make gdx-cross
+$ cd $GOPATH/src/github.com/DxChainNetwork/godx/build/bin
+$ export PATH=$PATH:$(pwd)
 ```
+
+For each terminal you open, you have to run the above commands. For more advanced users, you can add the export statement in the shell init file like `~/.bash_profile` or `~/.zshrc`
 
 # Section 2. Running `gdx`
 
@@ -226,9 +235,9 @@ Example
 
 ### 4.1.3. personal.unlockAccount
 
-| Usage                                                 | Description        |
-|-------------------------------------------------------|--------------------|
-| personal.unlockAccount(address, passphrase, duration) | Unlock the account |
+| Usage                                                       | Description        |
+|-------------------------------------------------------------|--------------------|
+| personal.unlockAccount(*address*, *passphrase*, *duration*) | Unlock the account |
 
 **NOTE:** To send transactions, the account must be unlocked. To use storage services, the account must be unlocked permanently because the transactions are made automatically. 
 
@@ -249,9 +258,9 @@ true
 
 ### 4.1.4. eth.getBalance
 
-| Usage                   | Description               |
-|-------------------------|---------------------------|
-| eth.getBalance(address) | Check the account balance |
+| Usage                     | Description               |
+|---------------------------|---------------------------|
+| eth.getBalance(*address*) | Check the account balance |
 
 Example:
 
@@ -393,6 +402,8 @@ Example:
 
 ## 4.4. StorageClient
 
+**NOTE:** To be able to use the following commands, the storage client module must be enabled when you start the `gdx` program. Otherwise, error will be returned.
+
 ### 4.4.1. sclient.host.<span>ls
 
 | Usage                 | Description                          |
@@ -447,7 +458,7 @@ Example:
 }]
 ```
 
-**NOTE:** length can be attach to the end of the command to get number of storage hosts that the client learnt from the network. If error returned, meaning that there are no hosts available
+**NOTE:** length can be attach to the end of the command to get number of storage hosts that the client learnt from the network. If error returned, meaning that there are no hosts available.
 
 ```shell
 > sclient.host.ls.length
@@ -471,9 +482,9 @@ Example:
 
 ### 4.4.3. sclient.setPaymentAddr
 
-| Usage                           | Description                                                     |
-|---------------------------------|-----------------------------------------------------------------|
-| sclient.setPaymentAddr(address) | Register the account address to be used for the storage service |
+| Usage                             | Description                                                     |
+|-----------------------------------|-----------------------------------------------------------------|
+| sclient.setPaymentAddr(*address*) | Register the account address to be used for the storage service |
 
 Example:
 
@@ -484,32 +495,25 @@ true
 
 ### 4.4.4. sclient.setConfig
 
-| Usage                     | Description                                                       |
-|---------------------------|-------------------------------------------------------------------|
-| sclient.setConfig(config) | Configure the client settings used for contract creation and etc. |
+| Usage                       | Description                                                       |
+|-----------------------------|-------------------------------------------------------------------|
+| sclient.setConfig(*config*) | Configure the client settings used for contract creation and etc. |
 
 The following is a list of supported configuration:
-* period: file storage duration. 
-* hosts: number of storage hosts that the client want to sign contract with
-* renew: time that the contract will automatically be renewed. Available units are same as period
-* fund: amount of money the client wants to be used for the storage service within one period. 
 
-**NOTE:** units must be included when config the storage client configuration
+| Config |    Type   | Description                                                                           |
+|--------|-----------|---------------------------------------------------------------------------------------|
+| period | Duration  | file storage duration                                                                 |
+| hosts  | Number    | number of storage hosts that the client want to sign contract with                    |
+| renew  | Duration  | time that the contract will automatically be renewed                                  |
+| fund   | Currency  | amount of money the client wants to be used for the storage service within one period |
 
-| Duration/Time | Representation |
-|---------------|----------------|
-| b             | block          |
-| h             | hour           |
-| d             | day            |
-| w             | week           |
-| m             | month          |
-| y             | year           |
 
-| Currency | Transfer Rate          |
-|----------|------------------------|
-| camel    | smallest currency unit |
-| Gcamel   | 1e9 camel              |
-| DX       | 1e18 camel             |
+**NOTE:** units must be included when config the storage client configuration, please refer to [Section 6.1 Units](#section-61-units) for available units
+
+Before setting the client config, please make sure that you have enough balance in your payment account. Please refer to [4.1.4. eth.getBalance](#414-ethgetbalance) to check balance. 
+
+In addition, the payment account must be permanently unlocked first. To unlock the account, please refer to [4.1.3. personal.unlockAccount](#413-personalunlockaccount)
 
 
 Example:
@@ -594,7 +598,7 @@ to get the number of contracts that the storage client signed
 
 | Usage                        | Description                                                     |
 |------------------------------|-----------------------------------------------------------------|
-| sclient.contract(contractID) | Detailed contract information based on the provided contract ID |
+| sclient.contract(*contractID*) | Detailed contract information based on the provided contract ID |
 
 Example:
 
@@ -648,9 +652,9 @@ Example:
 
 ### 4.4.8 sclient.upload
 
-| Usage                              | Description                                                      |
-|------------------------------------|------------------------------------------------------------------|
-| sclient.upload(source,destination) | Upload the file specified by the storage client to storage hosts |
+| Usage                                   | Description                                                      |
+|-----------------------------------------|------------------------------------------------------------------|
+| sclient.upload(*source*, *destination*) | Upload the file specified by the storage client to storage hosts |
 
 **NOTE:** both source and destination path must be absolute path
 
@@ -663,9 +667,9 @@ Example:
 
 ### 4.4.9 sclient.download
 
-| Usage                                | Description                                                    |
-|--------------------------------------|----------------------------------------------------------------|
-| sclient.download(source,destination) | Download the file specified by the client to the local machine |
+| Usage                                     | Description                                                    |
+|-------------------------------------------|----------------------------------------------------------------|
+| sclient.download(*source*, *destination*) | Download the file specified by the client to the local machine |
 
 **NOTE:** both source and destination path must be absolute path
 
@@ -696,9 +700,9 @@ Example:
 
 ### 4.4.11 sclient.file.rename
 
-| Usage                                 | Description              |
-|---------------------------------------|--------------------------|
-| sclient.file.rename(oldName, newName) | Rename the file uploaded |
+| Usage                                     | Description              |
+|-------------------------------------------|--------------------------|
+| sclient.file.rename(*oldName*, *newName*) | Rename the file uploaded |
 
 Example:
 
@@ -709,9 +713,9 @@ Example:
 
 ### 4.4.12 sclient.file.delete
 
-| Usage                     | Description     |
-|---------------------------|-----------------|
-| sclient.file.delete(file) | Delete the file |
+| Usage                       | Description     |
+|-----------------------------|-----------------|
+| sclient.file.delete(*file*) | Delete the file |
 
 Example:
 
@@ -723,13 +727,15 @@ Example:
 
 ## 4.5. StorageHost
 
+**NOTE:** To be able to use the following commands, the storage host module must be enabled when you start the `gdx` program. Otherwise, error will be returned.
+
 ### 4.5.1. shost.config
 
 | Usage        | Description                                          |
 |--------------|------------------------------------------------------|
 | shost.config | Storage host configurations used for storage service |
 
-**NOTE:** the storage host do not have to make configurations, default configuration will be used automatically
+**NOTE:** if the configuration is not set, default configuration will be used.
 
 Example:
 
@@ -756,23 +762,26 @@ Example:
 
 ### 4.5.2. shost.setConfig
 
-| Usage                   | Description                         |
-|-------------------------|-------------------------------------|
-| shost.setConfig(config) | Set the storage host configurations |
+| Usage                     | Description                         |
+|---------------------------|-------------------------------------|
+| shost.setConfig(*config*) | Set the storage host configurations |
 
 The following is a list of available configurations:
-* acceptingContracts: whether the host accepts new contracts
-* maxDuration: the max duration for a storage contract
-* deposit: deposit price per block per byte
-* contractPrice: price that client must be paid when creating contract
-* downloadPrice: download bandwidth price per byte
-* uploadPrice: upload bandwidth price per byte
-* storagePrice: the storage price per block per byte
-* depositBudget: the maximum deposit for all contracts
-* maxDeposit: the max deposit for a single storage contract
-* paymentAddress: account address used for the storage service
 
-**NOTE** for available units, please refer to [Section 4.4.4](#444-sclientsetconfig)
+| Config             | Type     | Description                                           |
+|--------------------|----------|-------------------------------------------------------|
+| acceptingContracts | Boolean  | whether the host accepts new contracts                |
+| maxDuration        | Duration | max duration for a storage contract                   |
+| deposit            | Currency | deposit price per block per byte                      |
+| contractPrice      | Currency | price that client must be paid when creating contract |
+| downloadPrice      | Currency | download bandwidth price per byte                     |
+| uploadPrice        | Currency | upload bandwidth price per byte                       |
+| storagePrice       | Currency | storage price per block per byte                      |
+| depositBudget      | Currency | the maximum deposit for all contracts                 |
+| maxDeposit         | Currency | the max deposit for a single storage contract         |
+| paymentAddress     | Address  | account address used for the storage service          |
+
+**NOTE** for available units, please refer to [Section 6.1 Units](#section-61-units)
 
 Example:
 
@@ -783,8 +792,18 @@ Example:
 
 ### 4.5.3. shost.paymentAddr
 
-Please refer to [Section 4.4.2](#442-sclientpaymentaddr). Unlike the storage client, the profit host made will be saved in this account as well
+| Usage             | Description                                   |
+|-------------------|-----------------------------------------------|
+| shost.paymentAddr | Retrieve the account used for storage service |
 
+**NOTE:** By default, the first account user generated will be used as the storage service payment address. All the storage cost will be spent from this account. All the profit will be saved in this account as well
+
+Example:
+
+```shell
+> shost.paymentAddr
+"0x792e6b278ef8ec562b9530bf5df70064a55c3744"
+```
 
 ### 4.5.4. shost.announce
 
@@ -792,7 +811,9 @@ Please refer to [Section 4.4.2](#442-sclientpaymentaddr). Unlike the storage cli
 |----------------|----------------------------------------|
 | shost.announce | Announce the node as storage host node |
 
-**NOTE:** there is no limitation on number of announcements. However, each announcement will cost a small amount of transaction fee
+**NOTE:** there is no limitation on number of announcements. However, each announcement will cost a small amount of transaction fee. Before making announcement, please make sure that you have enough balance in your payment account. Please refer to [4.1.4. eth.getBalance](#414-ethgetbalance) to check balance. 
+
+In addition, the payment account must be permanently unlocked first. To unlock the account, please refer to [4.1.3. personal.unlockAccount](#413-personalunlockaccount)
 
 Example:
 
@@ -825,11 +846,11 @@ to check the transaction detail, use the following command
 
 ### 4.5.5. shost.folder.add
 
-| Usage                        | Description                                                        |
-|------------------------------|--------------------------------------------------------------------|
-| shost.folder.add(path, size) | Allocate disk space for saving data uploaded by the storage client |
+| Usage                            | Description                                                        |
+|----------------------------------|--------------------------------------------------------------------|
+| shost.folder.add(*path*, *size*) | Allocate disk space for saving data uploaded by the storage client |
 
-**NOTE:** supported folder size unit: `kb, mb, gb, tb, kib, mib, gib, tib`
+**NOTE:** for supported storage size unit, please refer to [Section 6.1 Units](#section-61-units)
 
 Example:
 
@@ -857,9 +878,9 @@ Example:
 
 ### 4.5.7. shost.folder.resize
 
-| Usage                             | Description                                                                    |
-|-----------------------------------|--------------------------------------------------------------------------------|
-| shost.folder.resize(folder, size) | Resize the disk space allocated for saving data uploaded by the storage client |
+| Usage                                    | Description                                                                    |
+|------------------------------------------|--------------------------------------------------------------------------------|
+| shost.folder.resize(*directory*, *size*) | Resize the disk space allocated for saving data uploaded by the storage client |
 
 Example:
 
@@ -870,9 +891,11 @@ Example:
 
 ### 4.5.8. shost.folder.delete
 
-| Usage                       | Description                                                                |
-|-----------------------------|----------------------------------------------------------------------------|
-| shost.folder.delete(folder) | Free up the disk space used for saving data uploaded by the storage client |
+| Usage                            | Description                                                                |
+|----------------------------------|----------------------------------------------------------------------------|
+| shost.folder.delete(*directory*) | Free up the disk space used for saving data uploaded by the storage client |
+
+**NOTE:** this command will not delete the directory created on your local machine
 
 Example:
 
@@ -881,6 +904,46 @@ Example:
 "successfully delete the storage folder"
 ```
 
-# Section 5. Contact
+# Section 5. License
+
+GoDx is released under the [Apache 2.0 License](https://opensource.org/licenses/Apache-2.0). See LICENSE for more information.
+
+# Section 6. Appendix
+
+## Section 6.1 Units
+
+Duration:
+
+| Duration/Time | Representation |
+|---------------|----------------|
+| b             | block          |
+| h             | hour           |
+| d             | day            |
+| w             | week           |
+| m             | month          |
+| y             | year           |
+
+Currency:
+
+| Currency | Transfer Rate          |
+|----------|------------------------|
+| camel    | smallest currency unit |
+| Gcamel   | 1e9 camel              |
+| DX       | 1e18 camel             |
+
+Storage Size:
+
+| Storage Size | Representation |
+|--------------|----------------|
+| kb           | 1e3 bytes      |
+| mb           | 1e6 bytes      |
+| gb           | 1e9 bytes      |
+| tb           | 1e12 bytes     |
+| kib          | 1 << 10 bytes  |
+| mib          | 1 << 20 bytes  |
+| gib          | 1 << 30 bytes  |
+| tib          | 1 << 40 bytes  |
+
+# Section 7. Contact
 
 Thank you so much for your support and your confidence in this project. If you have any question, please do not hesitated to contact us via support@dxchain.com
