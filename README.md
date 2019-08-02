@@ -67,10 +67,10 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
     - [4.5.6. shost.folder.<span>ls](#456-shostfolderspanls)
     - [4.5.7. shost.folder.resize](#457-shostfolderresize)
     - [4.5.8. shost.folder.delete](#458-shostfolderdelete)
-- [Section 5. License](#section-5-license)
-- [Section 6. Appendix](#section-6-appendix)
-  - [Section 6.1 Units](#section-61-units)
-- [Section 7. Contact](#section-7-contact)
+- [License](#license)
+- [Appendix](#appendix)
+  - [Units](#units)
+- [Contact](#contact)
 
 # Section 1. Getting Started
 
@@ -114,6 +114,12 @@ The installation of Docker is optional. Docker is used for cross-platform build 
 $ mkdir -p $GOPATH/src/github.com/DxChainNetwork
 $ cd $GOPATH/src/github.com/DxChainNetwork
 $ git clone git@github.com:DxChainNetwork/godx.git
+```
+
+**NOTE:** please checkout to the latest release branch by using the following command:
+
+```shell
+$ git checkout release0.8.0
 ```
 
 ### 1.2.2. Packages Installation
@@ -509,7 +515,7 @@ The following is a list of supported configuration:
 | fund   | Currency  | amount of money the client wants to be used for the storage service within one period |
 
 
-**NOTE:** units must be included when config the storage client configuration, please refer to [Section 6.1 Units](#section-61-units) for available units
+**NOTE:** units must be included when config the storage client configuration, please refer to [Units](#units) for available units
 
 Before setting the client config, please make sure that you have enough balance in your payment account. Please refer to [4.1.4. eth.getBalance](#414-ethgetbalance) to check balance. 
 
@@ -781,7 +787,7 @@ The following is a list of available configurations:
 | maxDeposit         | Currency | the max deposit for a single storage contract         |
 | paymentAddress     | Address  | account address used for the storage service          |
 
-**NOTE** for available units, please refer to [Section 6.1 Units](#section-61-units)
+**NOTE** for available units, please refer to [Units](#units)
 
 Example:
 
@@ -850,7 +856,7 @@ to check the transaction detail, use the following command
 |----------------------------------|--------------------------------------------------------------------|
 | shost.folder.add(*path*, *size*) | Allocate disk space for saving data uploaded by the storage client |
 
-**NOTE:** for supported storage size unit, please refer to [Section 6.1 Units](#section-61-units)
+**NOTE:** for supported storage size unit, please refer to [Units](#units)
 
 Example:
 
@@ -880,7 +886,7 @@ Example:
 
 | Usage                                    | Description                                                                    |
 |------------------------------------------|--------------------------------------------------------------------------------|
-| shost.folder.resize(*directory*, *size*) | Resize the disk space allocated for saving data uploaded by the storage client |
+| shost.folder.resize(*folder*, *size*) | Resize the disk space allocated for saving data uploaded by the storage client |
 
 Example:
 
@@ -893,7 +899,7 @@ Example:
 
 | Usage                            | Description                                                                |
 |----------------------------------|----------------------------------------------------------------------------|
-| shost.folder.delete(*directory*) | Free up the disk space used for saving data uploaded by the storage client |
+| shost.folder.delete(*folder*) | Free up the disk space used for saving data uploaded by the storage client |
 
 **NOTE:** this command will not delete the directory created on your local machine
 
@@ -904,13 +910,13 @@ Example:
 "successfully delete the storage folder"
 ```
 
-# Section 5. License
+# License
 
 GoDx is released under the [Apache 2.0 License](https://opensource.org/licenses/Apache-2.0). See LICENSE for more information.
 
-# Section 6. Appendix
+# Appendix
 
-## Section 6.1 Units
+## Units
 
 Duration:
 
@@ -944,6 +950,6 @@ Storage Size:
 | gib          | 1 << 30 bytes  |
 | tib          | 1 << 40 bytes  |
 
-# Section 7. Contact
+# Contact
 
 Thank you so much for your support and your confidence in this project. If you have any question, please do not hesitated to contact us via support@dxchain.com
