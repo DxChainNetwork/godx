@@ -25,7 +25,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/storage/filecontractmaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -79,7 +79,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 
 	// maintenance missed storage proof
 	height := header.Number.Uint64()
-	filecontractmaintenance.MaintenanceMissedProof(height, statedb)
+	coinchargemaintenance.MaintenanceMissedProof(height, statedb)
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	p.engine.Finalize(p.bc, header, statedb, block.Transactions(), block.Uncles(), receipts)

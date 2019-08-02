@@ -22,7 +22,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/filecontractmaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 var (
@@ -130,96 +130,96 @@ func TestEVM_CreateContractTx(t *testing.T) {
 	}
 
 	windowEndStr := strconv.FormatUint(sc.WindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 	if !stateDB.Exist(statusAddr) {
 		t.Error("this status account not register into state")
 	}
 
 	statusFlag := stateDB.GetState(statusAddr, scID)
-	if !bytes.Equal(statusFlag.Bytes()[11:12], filecontractmaintenance.NotProofedStatus) {
-		t.Errorf("write wrong contract status into state,wanted %v,getted %v", filecontractmaintenance.NotProofedStatus, statusFlag.Bytes())
+	if !bytes.Equal(statusFlag.Bytes()[11:12], coinchargemaintenance.NotProofedStatus) {
+		t.Errorf("write wrong contract status into state,wanted %v,getted %v", coinchargemaintenance.NotProofedStatus, statusFlag.Bytes())
 	}
 
 	clientCollateral := sc.ClientCollateral.Value
 	hostCollateral := sc.HostCollateral.Value
 
-	clientCollateralHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientCollateral)
+	clientCollateralHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientCollateral)
 	clientCollateralValue := new(big.Int).SetBytes(clientCollateralHash.Bytes()).Uint64()
 	if clientCollateralValue != clientCollateral.Uint64() {
 		t.Errorf("write wrong client collateral data into state,wanted %v,getted %v", clientCollateral.Uint64(), clientCollateralValue)
 	}
 
-	hostCollateralHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostCollateral)
+	hostCollateralHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostCollateral)
 	hostCollateralValue := new(big.Int).SetBytes(hostCollateralHash.Bytes()).Uint64()
 	if hostCollateralValue != hostCollateral.Uint64() {
 		t.Errorf("write wrong host collateral data into state,wanted %v,getted %v", hostCollateral.Uint64(), hostCollateralValue)
 	}
 
-	fileSizeHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyFileSize)
+	fileSizeHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyFileSize)
 	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 	if fileSize != 0 {
 		t.Errorf("write wrong file size data into state,wanted %v,getted %v", 0, fileSize)
 	}
 
-	unlockHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyUnlockHash)
+	unlockHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyUnlockHash)
 	if unlockHash != sc.UnlockHash {
 		t.Errorf("write wrong unlock hash data into state,wanted %v,getted %v", sc.UnlockHash, unlockHash)
 	}
 
-	fileMerkleRoot := stateDB.GetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot)
+	fileMerkleRoot := stateDB.GetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot)
 	if fileMerkleRoot != sc.FileMerkleRoot {
 		t.Errorf("write wrong file merkle root data into state,wanted %v,getted %v", sc.FileMerkleRoot, fileMerkleRoot)
 	}
 
-	revisionNumHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyRevisionNumber)
+	revisionNumHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyRevisionNumber)
 	revisionNum := new(big.Int).SetBytes(revisionNumHash.Bytes()).Uint64()
 	if revisionNum != sc.RevisionNumber {
 		t.Errorf("write wrong revision num data into state,wanted %v,getted %v", sc.RevisionNumber, revisionNum)
 	}
 
-	windowStartHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyWindowStart)
+	windowStartHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyWindowStart)
 	windowStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 	if windowStart != sc.WindowStart {
 		t.Errorf("write wrong window start data into state,wanted %v,getted %v", sc.WindowStart, windowStart)
 	}
 
-	windowEndHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyWindowEnd)
+	windowEndHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 	if windowEnd != sc.WindowEnd {
 		t.Errorf("write wrong window end data into state,wanted %v,getted %v", sc.WindowEnd, windowEnd)
 	}
 
-	clientVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput)
+	clientVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
 	clientVpo := new(big.Int).SetBytes(clientVpoHash.Bytes()).Uint64()
 	if clientVpo != sc.ValidProofOutputs[0].Value.Uint64() {
 		t.Errorf("write wrong client valid proof outputs data into state,wanted %v,getted %v", sc.ValidProofOutputs[0].Value.Uint64(), clientVpo)
 	}
 
-	hostVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput)
+	hostVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
 	hostVpo := new(big.Int).SetBytes(hostVpoHash.Bytes()).Uint64()
 	if hostVpo != sc.ValidProofOutputs[1].Value.Uint64() {
 		t.Errorf("write wrong host valid proof outputs data into state,wanted %v,getted %v", sc.ValidProofOutputs[1].Value.Uint64(), hostVpo)
 	}
 
-	clientMpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput)
+	clientMpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput)
 	clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes()).Uint64()
 	if clientMpo != sc.MissedProofOutputs[0].Value.Uint64() {
 		t.Errorf("write wrong client missed proof outputs data into state,wanted %v,getted %v", sc.MissedProofOutputs[0].Value.Uint64(), clientMpo)
 	}
 
-	hostMpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput)
+	hostMpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput)
 	hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes()).Uint64()
 	if hostMpo != sc.MissedProofOutputs[1].Value.Uint64() {
 		t.Errorf("write wrong host missed proof outputs data into state,wanted %v,getted %v", sc.MissedProofOutputs[1].Value.Uint64(), hostMpo)
 	}
 
-	clientAddressHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientAddress)
+	clientAddressHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientAddress)
 	ca := common.BytesToAddress(clientAddressHash.Bytes())
 	if ca != clientAddress {
 		t.Errorf("write wrong client address data into state,wanted %v,getted %v", clientAddress, ca)
 	}
 
-	hostAddressHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostAddress)
+	hostAddressHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostAddress)
 	ha := common.BytesToAddress(hostAddressHash.Bytes())
 	if ha != hostAddress {
 		t.Errorf("write wrong host address data into state,wanted %v,getted %v", hostAddress, ha)
@@ -286,42 +286,42 @@ func TestEVM_CommitRevisionTx(t *testing.T) {
 		t.Error("this storage contract account not register into state")
 	}
 
-	fileSizeHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyFileSize)
+	fileSizeHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyFileSize)
 	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 	if fileSize != 1000 {
 		t.Errorf("failed to update file size data into state,wanted %v,getted %v", 1000, fileSize)
 	}
 
-	fileMerkleRoot := stateDB.GetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot)
+	fileMerkleRoot := stateDB.GetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot)
 	if fileMerkleRoot != common.HexToHash("0x20198404b29fdc225c1ad7df48da3e16c08f8c9fb50c1768ce08baeba57b3bd7") {
 		t.Errorf("failed to update file merkle root data into state,wanted %v,getted %v", common.HexToHash("0x20198404b29fdc225c1ad7df48da3e16c08f8c9fb50c1768ce08baeba57b3bd7"), fileMerkleRoot)
 	}
 
-	revisionNumHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyRevisionNumber)
+	revisionNumHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyRevisionNumber)
 	revisionNum := new(big.Int).SetBytes(revisionNumHash.Bytes()).Uint64()
 	if revisionNum != 2 {
 		t.Errorf("failed to update revision num data into state,wanted %v,getted %v", 2, revisionNum)
 	}
 
-	clientVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput)
+	clientVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
 	clientVpo := new(big.Int).SetBytes(clientVpoHash.Bytes()).Uint64()
 	if clientVpo != new(big.Int).Sub(clientCollateral, cost).Uint64() {
 		t.Errorf("failed to update client valid proof outputs data into state,wanted %v,getted %v", new(big.Int).Sub(clientCollateral, cost).Uint64(), clientVpo)
 	}
 
-	hostVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput)
+	hostVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
 	hostVpo := new(big.Int).SetBytes(hostVpoHash.Bytes()).Uint64()
 	if hostVpo != new(big.Int).Add(hostCollateral, cost).Uint64() {
 		t.Errorf("failed to update host valid proof outputs data into state,wanted %v,getted %v", new(big.Int).Add(hostCollateral, cost).Uint64(), hostVpo)
 	}
 
-	clientMpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput)
+	clientMpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput)
 	clientMpo := new(big.Int).SetBytes(clientMpoHash.Bytes()).Uint64()
 	if clientMpo != new(big.Int).Sub(clientCollateral, cost).Uint64() {
 		t.Errorf("failed to update client missed proof outputs data into state,wanted %v,getted %v", new(big.Int).Sub(clientCollateral, cost).Uint64(), clientMpo)
 	}
 
-	hostMpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput)
+	hostMpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput)
 	hostMpo := new(big.Int).SetBytes(hostMpoHash.Bytes()).Uint64()
 	if hostMpo != hostCollateral.Uint64() {
 		t.Errorf("failed to update host missed proof outputs data into state,wanted %v,getted %v", hostCollateral.Uint64(), hostMpo)
@@ -375,14 +375,14 @@ func TestEVM_StorageProofTx(t *testing.T) {
 
 	// retrieve origin storage contract data
 	contractAddr := common.BytesToAddress(sp.ParentID[12:])
-	clientVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput)
-	hostVpoHash := stateDB.GetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput)
+	clientVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
+	hostVpoHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
 
 	// check contract status
 	windowEndStr := strconv.FormatUint(1101, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 	statusHash := stateDB.GetState(statusAddr, sp.ParentID)
-	if !bytes.Equal(statusHash.Bytes()[11:12], filecontractmaintenance.ProofedStatus) {
+	if !bytes.Equal(statusHash.Bytes()[11:12], coinchargemaintenance.ProofedStatus) {
 		t.Errorf("failed to set contract proofed after executing storage proof tx")
 	}
 
@@ -570,7 +570,7 @@ func mockWriteStorageContractIntoState(sc types.StorageContract, state *state.St
 
 	// create the expired storage contract status address (e.g. "expired_storage_contract_1500")
 	windowEndStr := strconv.FormatUint(sc.WindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
 	// create storage contract address, directly use the contract ID
 	scID := sc.ID()
@@ -581,35 +581,35 @@ func mockWriteStorageContractIntoState(sc types.StorageContract, state *state.St
 	state.CreateAccount(contractAddr)
 
 	// mark this new storage contract as not proofed
-	state.SetState(statusAddr, scID, common.BytesToHash(append(filecontractmaintenance.NotProofedStatus, contractAddr[:]...)))
+	state.SetState(statusAddr, scID, common.BytesToHash(append(coinchargemaintenance.NotProofedStatus, contractAddr[:]...)))
 
 	// store storage contract in this contractAddr's state
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
 	uintBytes := Uint64ToBytes(sc.FileSize)
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileSize, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyUnlockHash, sc.UnlockHash)
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
+	state.SetState(contractAddr, coinchargemaintenance.KeyUnlockHash, sc.UnlockHash)
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(sc.RevisionNumber)
-	state.SetState(contractAddr, filecontractmaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowStart)
-	state.SetState(contractAddr, filecontractmaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowEnd)
-	state.SetState(contractAddr, filecontractmaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 }
 
 func mockStorageProof(prvKeyHost *ecdsa.PrivateKey, parentID common.Hash) (*types.StorageProof, error) {

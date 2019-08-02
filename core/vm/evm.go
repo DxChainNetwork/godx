@@ -30,7 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/filecontractmaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -536,7 +536,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// create the expired storage contract status address (e.g. "expired_storage_contract_1500")
 	windowEndStr := strconv.FormatUint(sc.WindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
 	// create storage contract address, directly use the contract ID
 	scID := sc.ID()
@@ -581,36 +581,36 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	state.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
-	notProofedStatus := append(filecontractmaintenance.NotProofedStatus, contractAddr[:]...)
+	notProofedStatus := append(coinchargemaintenance.NotProofedStatus, contractAddr[:]...)
 	state.SetState(statusAddr, scID, common.BytesToHash(notProofedStatus))
 
 	// store storage contract in this contractAddr's state
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
 	uintBytes := Uint64ToBytes(sc.FileSize)
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileSize, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyUnlockHash, sc.UnlockHash)
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
+	state.SetState(contractAddr, coinchargemaintenance.KeyUnlockHash, sc.UnlockHash)
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(sc.RevisionNumber)
-	state.SetState(contractAddr, filecontractmaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowStart)
-	state.SetState(contractAddr, filecontractmaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowEnd)
-	state.SetState(contractAddr, filecontractmaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
 	log.Info("create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
@@ -648,18 +648,18 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// update revision info
 	uintBytes := Uint64ToBytes(scr.NewFileSize)
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileSize, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot, scr.NewFileMerkleRoot)
+	state.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, scr.NewFileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(scr.NewRevisionNumber)
-	state.SetState(contractAddr, filecontractmaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
+	state.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
+	state.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
 	log.Info("storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -687,16 +687,16 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	}
 
 	// retrieve origin data in storage contract
-	windowEndHash := state.GetState(contractAddr, filecontractmaintenance.KeyWindowEnd)
-	clientValidOutputHash := state.GetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput)
-	hostValidOutputHash := state.GetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput)
-	clientAddressHash := state.GetState(contractAddr, filecontractmaintenance.KeyClientAddress)
-	hostAddressHash := state.GetState(contractAddr, filecontractmaintenance.KeyHostAddress)
+	windowEndHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
+	clientValidOutputHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
+	hostValidOutputHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
+	clientAddressHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientAddress)
+	hostAddressHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostAddress)
 
 	// get status account address
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 	windowEndStr := strconv.FormatUint(windowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
 	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
@@ -718,7 +718,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	state.SubBalance(contractAddr, totalVale)
 
 	// set completed for this storage contract
-	proofedStatus := append(filecontractmaintenance.ProofedStatus, contractAddr[:]...)
+	proofedStatus := append(coinchargemaintenance.ProofedStatus, contractAddr[:]...)
 	state.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
 
 	// this contract is finished, so mark it empty account that will be deleted by stateDB

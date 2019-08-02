@@ -23,7 +23,7 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/storage/filecontractmaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 var (
@@ -120,11 +120,11 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 
 	// check whether it has proofed
 	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(filecontractmaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
 	statusContent := state.GetState(statusAddr, scr.ParentID)
 	flag := statusContent.Bytes()[11:12]
-	if bytes.Equal(flag, filecontractmaintenance.ProofedStatus) {
+	if bytes.Equal(flag, coinchargemaintenance.ProofedStatus) {
 		return errors.New("can not do contract revision after storage proof")
 	}
 
@@ -162,13 +162,13 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	}
 
 	// retrieve origin storage contract
-	windowStartHash := state.GetState(contractAddr, filecontractmaintenance.KeyWindowStart)
-	revisionNumHash := state.GetState(contractAddr, filecontractmaintenance.KeyRevisionNumber)
-	unHash := state.GetState(contractAddr, filecontractmaintenance.KeyUnlockHash)
-	clientVpoHash := state.GetState(contractAddr, filecontractmaintenance.KeyClientValidProofOutput)
-	hostVpoHash := state.GetState(contractAddr, filecontractmaintenance.KeyHostValidProofOutput)
-	clientMpoHash := state.GetState(contractAddr, filecontractmaintenance.KeyClientMissedProofOutput)
-	hostMpoHash := state.GetState(contractAddr, filecontractmaintenance.KeyHostMissedProofOutput)
+	windowStartHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowStart)
+	revisionNumHash := state.GetState(contractAddr, coinchargemaintenance.KeyRevisionNumber)
+	unHash := state.GetState(contractAddr, coinchargemaintenance.KeyUnlockHash)
+	clientVpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
+	hostVpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
+	clientMpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput)
+	hostMpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput)
 
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
@@ -293,20 +293,20 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 	// check whether it proofed repeatedly
 	statusContent := state.GetState(statusAddr, sp.ParentID)
 	flag := statusContent.Bytes()[11:12]
-	if bytes.Equal(flag, filecontractmaintenance.ProofedStatus) {
+	if bytes.Equal(flag, coinchargemaintenance.ProofedStatus) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
-	windowStartHash := state.GetState(contractAddr, filecontractmaintenance.KeyWindowStart)
+	windowStartHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowStart)
 	windowStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 
-	windowEndHash := state.GetState(contractAddr, filecontractmaintenance.KeyWindowEnd)
+	windowEndHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 
-	fileMerkleRoot := state.GetState(contractAddr, filecontractmaintenance.KeyFileMerkleRoot)
+	fileMerkleRoot := state.GetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot)
 
-	fileSizeHash := state.GetState(contractAddr, filecontractmaintenance.KeyFileSize)
+	fileSizeHash := state.GetState(contractAddr, coinchargemaintenance.KeyFileSize)
 	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 
 	if windowStart > currentHeight {
