@@ -182,7 +182,7 @@ $ gdx --role host
 
 # Section 3. Tutorial
 
-The basic tutorial can be found [here]()
+The basic tutorial can be found [here](./TUTORIAL.md)
 
 
 # Section 4. Basic Console Commands
