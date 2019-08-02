@@ -103,7 +103,7 @@ func threadDelete(t *testing.T, start int, mem *MemDatabase, c chan string) {
 	qlength := len(queue)
 	for qlength != 0 {
 		runtime.Gosched()
-		for key, _ := range queue {
+		for key := range queue {
 			if contains, err := mem.Has([]byte(key)); err != nil {
 				t.Errorf("calling 'Has' fail")
 			} else if contains == true {

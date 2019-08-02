@@ -91,7 +91,7 @@ func TestPreimagesStorage(t *testing.T) {
 		common.BytesToHash([]byte("img005")): []byte("test img 005"),
 	}
 	// try to read the empty db, expected nil data
-	for key, _ := range preimages {
+	for key := range preimages {
 		if data := ReadPreimage(db, key); data != nil {
 			t.Errorf("find non existing data in the db")
 		}

@@ -342,7 +342,7 @@ func TestPrefixItr(t *testing.T) {
 	itrs := []iterator.Iterator{itrkey, itrpre, itremp, itrnoexist}
 	ans := []map[string]string{anskey, anspre, ansemp, ansnoexist}
 
-	for i, _ := range itrs {
+	for i := range itrs {
 		counter := 0
 		for itrs[i].Next() {
 			if val, ok := ans[i][string(itrs[i].Key())]; ok {
