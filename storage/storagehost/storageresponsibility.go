@@ -107,6 +107,7 @@ func (so *StorageResponsibility) payouts() ([]types.DxcoinCharge, []types.Dxcoin
 	return validProofOutputs, missedProofOutputs
 }
 
+// ProofDeadline calculates the block number that the proof must submit
 func (so *StorageResponsibility) ProofDeadline() uint64 {
 	return so.proofDeadline()
 }

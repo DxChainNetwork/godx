@@ -12,9 +12,9 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 )
 
-// HostBusyHandleReqErr defines that client sent the contract request too frequently. If this error is occurred
+// ErrHostBusyHandleReq defines that client sent the contract request too frequently. If this error is occurred
 // the host's evaluation will not be deducted
-var HostBusyHandleReqErr = errors.New("client must wait until the host finish its's previous request")
+var ErrHostBusyHandleReq = errors.New("client must wait until the host finish its's previous request")
 
 // Negotiation related messages
 const (

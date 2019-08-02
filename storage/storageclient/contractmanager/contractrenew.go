@@ -8,17 +8,17 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -311,8 +311,8 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 
 	// form the contract parameters
 	params := storage.ContractParams{
-		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		RentPayment:          rentPayment,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -382,7 +382,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	lastRev := contract.LatestContractRevision
 
 	// Extract vars from params, for convenience
-	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
+	rentPayment, funding, startHeight, endHeight, host := params.RentPayment, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral common.BigInt
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
@@ -393,8 +393,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
-	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
+	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
+	clientPayout, hostPayout, hostCollateral, err := ClientPayouts(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -432,7 +432,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Increase Successful/Failed interactions accordingly
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if err != nil && err != storage.ErrHostBusyHandleReq {
 			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
 			err = common.ErrExtend(err, ErrHostFault)
 		} else if err == nil {
@@ -479,7 +479,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it
@@ -589,8 +589,8 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
-// ClientPayoutsPreTax calculate client and host collateral
-func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
+// ClientPayouts calculate client and host collateral
+func ClientPayouts(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
 		host.StoragePrice = common.NewBigIntUint64(1)

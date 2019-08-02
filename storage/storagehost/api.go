@@ -7,6 +7,7 @@ package storagehost
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
@@ -259,7 +260,8 @@ func (h *HostPrivateAPI) setWindowSize(str string) error {
 	return nil
 }
 
-// setPaymentAddress configure the account address used to sign the storage contract, which has and can only be the address of the local wallet.
+// setPaymentAddress configure the account address used to sign the storage contract,
+// which has and can only be the address of the local wallet.
 func (h *HostPrivateAPI) setPaymentAddress(addrStr string) error {
 	addr := common.HexToAddress(addrStr)
 	account := accounts.Account{Address: addr}

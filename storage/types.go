@@ -20,10 +20,13 @@ import (
 )
 
 var (
-	// define the program running environment: test, prod
-	ENV = Env_Prod
+	// ENV define the program running environment: test, prod
+	ENV = EnvProd
 
+	// DefaultMinSectors define the default minimum sectors needed to recovery
 	DefaultMinSectors uint32 = 1
+
+	// DefaultNumSectors define the default total sectors needed to recovery
 	DefaultNumSectors uint32 = 2
 )
 
@@ -35,11 +38,16 @@ const (
 )
 
 const (
-	Env_Prod = "prod"
-	Env_Test = "test"
+	// EnvProd marks the production execution environment
+	EnvProd = "prod"
+
+	// EnvTest marks the test execution environment
+	EnvTest = "test"
 
 	// DxFileExt is the extension of DxFile
-	DxFileExt     = ".dxfile"
+	DxFileExt = ".dxfile"
+
+	// ConfigVersion is the version of host config
 	ConfigVersion = "1.0.1"
 )
 
@@ -155,8 +163,8 @@ type (
 
 // ContractParams is the drafted contract sent by the storage client.
 type ContractParams struct {
-	Allowance            RentPayment
-	HostEnodeUrl         string
+	RentPayment          RentPayment
+	HostEnodeURL         string
 	Funding              common.BigInt
 	StartHeight          uint64
 	EndHeight            uint64
@@ -291,7 +299,7 @@ func StringToContractID(s string) (id ContractID, err error) {
 }
 
 type (
-	// UploadParams contains the information used by the Client to upload a file
+	// FileUploadParams contains the information used by the Client to upload a file
 	FileUploadParams struct {
 		Source      string
 		DxPath      DxPath
@@ -299,7 +307,7 @@ type (
 		Mode        int
 	}
 
-	// FileInfo provides information about a file
+	// UploadFileInfo provides information about a file
 	UploadFileInfo struct {
 		AccessTime       time.Time `json:"accesstime"`
 		Available        bool      `json:"available"`
