@@ -20,7 +20,7 @@ func (mm *MemoryManager) MemoryAvailable() uint64 {
 func (mm *MemoryManager) SetMemoryLimit(amount uint64) string {
 	if amount < mm.limit {
 		mm.shrinkMaxMemory(amount)
-		return fmt.Sprintf("shrinked the max memory available to %d", amount)
+		return fmt.Sprintf("shrunk the max memory available to %d", amount)
 	} else if amount > mm.limit {
 		mm.expandMaxMemory(amount)
 		return fmt.Sprintf("expaneded the max memory available to %d", amount)

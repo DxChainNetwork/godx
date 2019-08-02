@@ -46,15 +46,15 @@ func TestMemoryManager_SetMemoryLimit_Shrink(t *testing.T) {
 	mm.Request(15000, true)
 	mm.SetMemoryLimit(5000)
 	if mm.underflow != 10000 {
-		t.Errorf("error: memoery shrinked, the memory underflow should be 10000, instead got: %d",
+		t.Errorf("error: memoery shrunk, the memory underflow should be 10000, instead got: %d",
 			mm.underflow)
 	}
 
 	if mm.limit != 5000 {
-		t.Errorf("error: memory shrinked, the limit should be 5000, instead got: %d", mm.limit)
+		t.Errorf("error: memory shrunk, the limit should be 5000, instead got: %d", mm.limit)
 	}
 	mm.Return(15000)
 	if mm.available != 5000 {
-		t.Errorf("error: memory shinked, memory left should be 5000, instead got: %d", mm.available)
+		t.Errorf("error: memory shrunk, memory left should be 5000, instead got: %d", mm.available)
 	}
 }

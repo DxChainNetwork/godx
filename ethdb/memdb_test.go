@@ -74,13 +74,13 @@ func checkMem(t *testing.T, mem *MemDatabase, expected []struct {
 		countlength++
 	}
 	if mem.Len() != countlength {
-		t.Errorf("the length of the datbase does not match the expected")
+		t.Errorf("the length of the database does not match the expected")
 	}
 }
 
 /**
 @param start: start position to grab data from large data set
-@param c: chanel for recording the complishment of the test function, also used for exiting while timeout
+@param c: chanel for recording the accomplishment of the test function, also used for exiting while timeout
 */
 func threadDelete(t *testing.T, start int, mem *MemDatabase, c chan string) {
 	//var queue []struct{key string; value string}

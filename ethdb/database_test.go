@@ -87,7 +87,7 @@ func TestCreatedb(t *testing.T) {
 	for _, tt := range tmpdbs {
 		db, err := NewLDBDatabase(emptydb, tt.cache, tt.handles)
 		if err != nil {
-			t.Errorf("Handled excpetion, but not in specification")
+			t.Errorf("Handled exception, but not in specification")
 		}
 		if _, err := os.Stat(emptydb); err != nil {
 			t.Errorf("Creation fail")

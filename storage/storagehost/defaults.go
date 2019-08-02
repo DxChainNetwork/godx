@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// PersistHostDir is dir path for storing the host log, json, and ect.
+	// PersistHostDir is dir path for storing the host log, json, and etc.
 	PersistHostDir = "storagehost"
 	// Version is the version of the storage host
 	Version = "1.0"

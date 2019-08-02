@@ -268,7 +268,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 		case <-stopChan:
 			t.Fatalf("After 10 seconds, still not complete")
 		case err := <-errChan:
-			t.Fatalf("error happend %v", err)
+			t.Fatalf("error happened %v", err)
 		default:
 		}
 		// increment numSectors when a sector is successfully added

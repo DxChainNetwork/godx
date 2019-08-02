@@ -260,7 +260,7 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	client.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
 	client.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = client.saveSettings(); err != nil {
-		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+		err = fmt.Errorf("failed to save the storage client settings: %s", err.Error())
 		client.lock.Unlock()
 		return
 	}

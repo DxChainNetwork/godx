@@ -158,7 +158,7 @@ func (c *Contract) CommitUpload(t *writeaheadlog.Transaction, signedRev types.St
 	contractHeader.UploadCost = contractHeader.UploadCost.Add(bandwidthCost)
 
 	if err = c.contractHeaderUpdate(contractHeader); err != nil {
-		return fmt.Errorf("during the upload commiting, %s", err.Error())
+		return fmt.Errorf("during the upload committing, %s", err.Error())
 	}
 
 	if err = c.merkleRoots.push(root); err != nil {
@@ -193,7 +193,7 @@ func (c *Contract) CommitDownload(t *writeaheadlog.Transaction, signedRev types.
 	contractHeader.DownloadCost = contractHeader.DownloadCost.Add(bandwidth)
 
 	if err = c.contractHeaderUpdate(contractHeader); err != nil {
-		return fmt.Errorf("during the download commiting, %s", err.Error())
+		return fmt.Errorf("during the download committing, %s", err.Error())
 	}
 
 	if err = t.Release(); err != nil {

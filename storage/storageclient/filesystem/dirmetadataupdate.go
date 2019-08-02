@@ -312,7 +312,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	}
 
 	if err == nil {
-		// no error happend. Continue to update parent
+		// no error happened. Continue to update parent
 		if update.dxPath.IsRoot() {
 			// If root check for repairNeeded and stuckFound, and there is no need to further update parent
 			d, err := fs.dirSet.Open(update.dxPath)

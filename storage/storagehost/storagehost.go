@@ -23,7 +23,7 @@ import (
 
 // StorageHost provide functions for storageHost management
 // It loads or use default config when it have been initialized
-// It aims at communicate by protocal with client and lent its own storage to the client
+// It aims at communicate by protocol with client and lent its own storage to the client
 type StorageHost struct {
 	// backend support
 	ethBackend storage.HostBackend
