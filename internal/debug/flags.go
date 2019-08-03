@@ -28,7 +28,7 @@ import (
 	"github.com/DxChainNetwork/godx/metrics"
 	"github.com/DxChainNetwork/godx/metrics/exp"
 	"github.com/fjl/memsize/memsizeui"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"
 )

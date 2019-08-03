@@ -229,7 +229,7 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageResponsibility[so.id()]; !ok {
-		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")
+		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
 	//Need enough time to submit revision
@@ -319,9 +319,9 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 }
 
 // rollbackStorageResponsibility will rollback storage responsibility after modify when receive error
-func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error{
+func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
 	if _, ok := h.lockedStorageResponsibility[oldSo.id()]; !ok {
-		h.log.Warn("modifyStorageResponsibility called with an responsibility that is not locked")
+		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
 	}
 
 	var i int
@@ -352,7 +352,7 @@ func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility,
 	var newSo StorageResponsibility
 	var errNew error
 	errDB := func() error {
-		//Get old storage responsibility, return error if not found
+		//Get new storage responsibility, return error if not found
 		newSo, errNew = getStorageResponsibility(h.db, oldSo.id())
 		if errNew != nil {
 			return errNew

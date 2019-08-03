@@ -382,7 +382,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
 				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
@@ -518,14 +518,12 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	switch msg.Code {
 	case storage.HostAckMsg:
 		return
-	case storage.HostCommitFailedMsg:
+	default:
 		hostCommitErr = storage.HostCommitErr
 		_ = contract.RollbackUndoMem(contractHeader)
 
 		_ = sp.SendClientAckMsg()
 		_, _ = sp.ClientWaitContractResp()
-		return hostCommitErr
-	default:
 		return hostCommitErr
 	}
 }
@@ -619,7 +617,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
 				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
@@ -736,14 +734,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	switch msg.Code {
 	case storage.HostAckMsg:
 		return
-	case storage.HostCommitFailedMsg:
+	default:
 		hostCommitErr = storage.HostCommitErr
 		_ = contract.RollbackUndoMem(contractHeader)
 
 		_ = sp.SendClientAckMsg()
 		_, _ = sp.ClientWaitContractResp()
-		return hostCommitErr
-	default:
 		return hostCommitErr
 	}
 }

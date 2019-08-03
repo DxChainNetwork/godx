@@ -233,9 +233,8 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
-			if err != nil || msg.Code != storage.ClientAckMsg {
+			if err != nil {
 				log.Error("storage host failed to get client ack msg", "err", err)
-				clientCommitErr = storage.ClientCommitErr
 				return
 			}
 

@@ -241,7 +241,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
 				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
@@ -297,7 +297,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	if err := msg.Decode(&hostSign); err != nil {
 		hostNegotiateErr = fmt.Errorf("failed to decode host signature: %s", err.Error())
-		return storage.ContractMetaData{}, 	hostNegotiateErr
+		return storage.ContractMetaData{}, hostNegotiateErr
 
 	}
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
@@ -408,7 +408,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	switch msg.Code {
 	case storage.HostAckMsg:
 		return meta, nil
-	case storage.HostCommitFailedMsg:
+	default:
 		hostCommitErr = storage.HostCommitErr
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 
@@ -419,12 +419,10 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		_, _ = sp.ClientWaitContractResp()
 
 		return storage.ContractMetaData{}, hostCommitErr
-	default:
-		return storage.ContractMetaData{}, hostCommitErr
 	}
 }
 
-func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage.ContractID) error{
+func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage.ContractID) error {
 	if c, exist := contractSet.Acquire(id); exist {
 		if err := contractSet.Delete(c); err != nil {
 			return err

@@ -106,7 +106,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 	// 2. After check, send host contract sign to client
 	if err := sp.SendContractCreationHostSign(hostContractSign); err != nil {
-		log.Error("storage host failed to send contract creation host sign","err", err)
+		log.Error("storage host failed to send contract creation host sign", "err", err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	var clientRevisionSign []byte
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
-		log.Error("storage host failed to get client revision sign","err", err)
+		log.Error("storage host failed to get client revision sign", "err", err)
 		return
 	}
 
@@ -156,7 +156,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 
 	if err := sp.SendContractCreationHostRevisionSign(hostRevisionSign); err != nil {
-		log.Error("storage host failed to send contract creation revision sign","err", err)
+		log.Error("storage host failed to send contract creation revision sign", "err", err)
 		return
 	}
 
@@ -204,9 +204,8 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 
 			// wait for client ack msg
 			msg, err = sp.HostWaitContractResp()
-			if err != nil || msg.Code != storage.ClientAckMsg {
+			if err != nil {
 				log.Error("storage host failed to get client ack msg", "err", err)
-				clientCommitErr = storage.ClientCommitErr
 				return
 			}
 

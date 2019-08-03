@@ -30,7 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 
 	"github.com/DxChainNetwork/godx/cmd/utils"
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 )
 
 var bugCommand = cli.Command{

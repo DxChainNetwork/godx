@@ -19,7 +19,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
-	"time"
 )
 
 // checkForContractRenew will loop through all active contracts and filter out those needs to be renewed.
@@ -448,12 +447,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	defer func(sp storage.Peer) {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
-				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
-		} else if hostNegotiateErr != nil {
-			_ = sp.SendClientAckMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg{
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
 				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
 			}
 		}
@@ -603,22 +597,14 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		// wait for host ack msg
 		msg, err = sp.ClientWaitContractResp()
 		if err == nil && msg.Code == storage.HostAckMsg {
-			err = errors.New("failed to insert the contract after announce host",)
+			err = errors.New("failed to insert the contract after announce host")
 		} else if err != nil {
 			err = fmt.Errorf("failed to insert the contract after announce host, but cann't receive host ack msg: %s", err.Error())
 		}
 		return storage.ContractMetaData{}, err
 	}
 
-	if err := sp.SendClientCommitSuccessMsg(); err != nil {
-		// wait for host end that host will read msg timeout
-		select {
-		case <-time.After(1 * time.Minute):
-		}
-
-		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
-		return storage.ContractMetaData{}, err
-	}
+	_ = sp.SendClientCommitSuccessMsg()
 
 	// wait for HostAckMsg until timeout
 	msg, err = sp.ClientWaitContractResp()
@@ -631,20 +617,15 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	switch msg.Code {
 	case storage.HostAckMsg:
 		return contractMetaData, nil
-	case storage.HostCommitFailedMsg:
+	default:
 		hostCommitErr = storage.HostCommitErr
-
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
 		_ = sp.SendClientAckMsg()
+		_, _ = sp.ClientWaitContractResp()
 
-		msg, err = sp.ClientWaitContractResp()
-		if err == nil && msg.Code == storage.HostAckMsg{
-			return storage.ContractMetaData{}, errors.New("host finalize storage responsibility error")
-		}
+		return storage.ContractMetaData{}, hostCommitErr
 	}
-
-	return storage.ContractMetaData{}, errors.New("last msg is not host ack msg")
-
 }
 
 // PubkeyToEnodeID calculate Enode.ContractID, reference:
