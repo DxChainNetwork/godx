@@ -1223,9 +1223,9 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		case role == "all":
 			cfg.StorageClient = true
 			cfg.StorageHost = true
-		case role == "host":
+		case role == "storagehost":
 			cfg.StorageClient = false
-		case role == "client":
+		case role == "storageclient":
 			cfg.StorageHost = false
 		case role == "miner":
 			cfg.StorageClient = false
