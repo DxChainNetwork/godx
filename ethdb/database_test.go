@@ -87,7 +87,7 @@ func TestCreatedb(t *testing.T) {
 	for _, tt := range tmpdbs {
 		db, err := NewLDBDatabase(emptydb, tt.cache, tt.handles)
 		if err != nil {
-			t.Errorf("Handled excpetion, but not in specification")
+			t.Errorf("Handled exception, but not in specification")
 		}
 		if _, err := os.Stat(emptydb); err != nil {
 			t.Errorf("Creation fail")
@@ -342,7 +342,7 @@ func TestPrefixItr(t *testing.T) {
 	itrs := []iterator.Iterator{itrkey, itrpre, itremp, itrnoexist}
 	ans := []map[string]string{anskey, anspre, ansemp, ansnoexist}
 
-	for i, _ := range itrs {
+	for i := range itrs {
 		counter := 0
 		for itrs[i].Next() {
 			if val, ok := ans[i][string(itrs[i].Key())]; ok {

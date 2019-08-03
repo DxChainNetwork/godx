@@ -73,7 +73,7 @@ type (
 		UploadBandwidthPrice   common.BigInt `json:"uploadBandwidthPrice"`
 	}
 
-	// HostIntConfigForDisplay is the host internal config for displayd
+	// HostIntConfigForDisplay is the host internal config for displayed
 	HostIntConfigForDisplay struct {
 		AcceptingContracts   string `json:"acceptingContracts"`
 		MaxDownloadBatchSize string `json:"maxDownloadBatchSize"`

@@ -31,7 +31,7 @@ var (
 	errZeroOutput                              = errors.New("the output of storage contract is less 0")
 	errStorageContractValidOutputSumViolation  = errors.New("storage contract has invalid valid proof output sums")
 	errStorageContractMissedOutputSumViolation = errors.New("storage contract has invalid missed proof output sums")
-	errRevisionOutputSumViolation              = errors.New("the missed proof ouput sum and valid proof output sum equal")
+	errRevisionOutputSumViolation              = errors.New("the missed proof output sum and valid proof output sum equal")
 	errStorageContractWindowEndViolation       = errors.New("storage contract window must end at least one block after it starts")
 	errStorageContractWindowStartViolation     = errors.New("storage contract window must start in the future")
 	errLateRevision                            = errors.New("storage contract revision submitted after deadline")
