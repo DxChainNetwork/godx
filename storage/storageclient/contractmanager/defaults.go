@@ -6,8 +6,9 @@ package contractmanager
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 // persistent related constants

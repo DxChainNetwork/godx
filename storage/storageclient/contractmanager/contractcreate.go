@@ -7,6 +7,7 @@ package contractmanager
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
