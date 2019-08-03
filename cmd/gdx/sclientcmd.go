@@ -182,18 +182,18 @@ included contractID, revisionNumber, hostID, and etc.'`,
 		},
 
 		{
-			Name:      "paymentaddr",
+			Name:      "paymentAddr",
 			Usage:     "Retrieve the account address used for storage service payment",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getPaymentAddress),
 			Description: `
-			gdx sclient paymentaddr
+			gdx sclient paymentAddr
 		
 will display the the account address used for the storage service. Unless user set it specifically,
 the payment address for the storage service will always be the first account address`,
 		},
 		{
-			Name:      "setpaymentaddr",
+			Name:      "setPaymentAddr",
 			Usage:     "Register the account address to be used for the storage services",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setPaymentAddress),
@@ -201,7 +201,7 @@ the payment address for the storage service will always be the first account add
 				paymentAddressFlag,
 			},
 			Description: `
-			gdx sclient setpaymentaddr [--address arg]
+			gdx sclient setPaymentAddr [--address arg]
 		
 is used to register the account address to be used for the storage services. Money spent for the
 file uploading, downloading, storage, and etc. will be deducted from this address. The --address
@@ -209,7 +209,7 @@ flag must be used along with this flag to specify the account address`,
 		},
 
 		{
-			Name:      "setconfig",
+			Name:      "setConfig",
 			Usage:     "Configure the client settings used for contract creation, file upload, download, and etc.",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setClientConfig),
@@ -220,7 +220,7 @@ flag must be used along with this flag to specify the account address`,
 				contractFundFlag,
 			},
 			Description: `
-			gdx sclient setconfig [--period arg] [--host arg] [--renew arg] [--fund arg]
+			gdx sclient setConfig [--period arg] [--host arg] [--renew arg] [--fund arg]
 		
 will configure the client settings used for contract creation, file upload, download, and etc. There are
 multiple flags can be used along with this command to specify the setting:
