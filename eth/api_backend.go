@@ -232,6 +232,6 @@ func (b *EthAPIBackend) SignByNode(hash []byte) ([]byte, error) {
 	return b.eth.SignWithNodeSk(hash)
 }
 
-func (b *EthAPIBackend) GetHostEnodeURL()  string {
+func (b *EthAPIBackend) GetHostEnodeURL() string {
 	return b.eth.GetHostEnodeURL()
 }

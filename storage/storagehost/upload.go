@@ -268,7 +268,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	}
 }
 
-// verifyRevision checks that the revision pays the host correctly, and that
+// VerifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
 func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
@@ -317,13 +317,13 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 
 	// Determine the amount that was transferred from the client.
 	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
-		return fmt.Errorf("client increased its valid proof output: %v", errHighRenterValidOutput)
+		return fmt.Errorf("client increased its valid proof output: %v", errHighClientValidOutput)
 	}
-	fromRenter := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
+	fromClient := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
 	// Verify that enough money was transferred.
-	if fromRenter.Cmp(expectedExchange) < 0 {
-		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromRenter)
-		return ExtendErr(s, errHighRenterValidOutput)
+	if fromClient.Cmp(expectedExchange) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromClient)
+		return ExtendErr(s, errHighClientValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
@@ -333,16 +333,16 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
 
 	// Verify that enough money was transferred.
-	if toHost.Cmp(fromRenter) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+	if toHost.Cmp(fromClient) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromClient, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
 	}
 
-	// If the renter's valid proof output is larger than the renter's missed
-	// proof output, the renter has incentive to see the host fail. Make sure
+	// If the client's valid proof output is larger than the client's missed
+	// proof output, the client has incentive to see the host fail. Make sure
 	// that this incentive is not present.
 	if revision.NewValidProofOutputs[0].Value.Cmp(revision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("client has incentive to see host fail: ", errHighRenterMissedOutput)
+		return ExtendErr("client has incentive to see host fail: ", errHighClientMissedOutput)
 	}
 
 	// Check that the host is not going to be posting more collateral than is

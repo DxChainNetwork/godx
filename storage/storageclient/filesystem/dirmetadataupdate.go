@@ -276,14 +276,16 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 5. If release is needed, Release the transaction
 func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	// fs.tm.Done()
-	defer fs.tm.Done()
+	defer func() {
+		// Set the updateInProgress value to 0, notifying this goroutine is over
+		atomic.StoreUint32(&update.updateInProgress, 0)
+		fs.tm.Done()
+	}()
 
 	// If the error is errStopped, do nothing and simply return
 	if err == errStopped {
 		return
 	}
-	// Set the updateInProgress value to 0, notifying this goroutine is over
-	atomic.StoreUint32(&update.updateInProgress, 0)
 
 	// determine whether release is necessary
 	// release could happen either non err or consecutiveFails reaches the limit
@@ -310,7 +312,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	}
 
 	if err == nil {
-		// no error happend. Continue to update parent
+		// no error happened. Continue to update parent
 		if update.dxPath.IsRoot() {
 			// If root check for repairNeeded and stuckFound, and there is no need to further update parent
 			d, err := fs.dirSet.Open(update.dxPath)

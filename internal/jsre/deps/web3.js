@@ -5636,7 +5636,7 @@ module.exports = Net;
               }),
 
               new Property({
-                 name: 'paymentaddr',
+                 name: 'paymentAddr',
                  getter: 'sclient_paymentAddress'
               }),
 

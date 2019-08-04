@@ -121,8 +121,8 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 
 	// form the contract create parameters
 	params := storage.ContractParams{
-		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		RentPayment:          rentPayment,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -182,12 +182,12 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
-	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
+	rentPayment, funding, clientPaymentAddress, startHeight, endHeight, host := params.RentPayment, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
+	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
+	clientPayout, hostPayout, _, err := ClientPayouts(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
 	if err != nil {
 		err = fmt.Errorf("failed to calculate the client payouts: %s", err.Error())
 		return storage.ContractMetaData{}, err

@@ -19,7 +19,6 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"math/big"
 	"sync"
 	"time"
@@ -28,7 +27,8 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/deckarep/golang-set"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
+	mapset "github.com/deckarep/golang-set"
 )
 
 var (
@@ -135,7 +135,7 @@ func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
 		errMsg:                     make(chan error, 1),
 		contractRevisingOrRenewing: make(chan struct{}, 1),
 		hostConfigRequesting:       make(chan struct{}, 1),
-		checkPeerStopHook:			checkPeerStop,
+		checkPeerStopHook:          checkPeerStop,
 	}
 }
 
@@ -579,7 +579,7 @@ func (ps *peerSet) Close() {
 func checkPeerStop(p *peer) error {
 	select {
 	case <-p.StopChan():
-		return storagemaintenance.ErrProgramExit
+		return coinchargemaintenance.ErrProgramExit
 	default:
 		return nil
 	}

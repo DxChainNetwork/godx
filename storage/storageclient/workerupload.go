@@ -77,7 +77,7 @@ func (w *worker) isReady(uc *unfinishedUploadSegment) bool {
 	defer w.mu.Unlock()
 
 	uploadAbility := false
-	if storage.ENV == storage.Env_Test {
+	if storage.ENV == storage.EnvTest {
 		uploadAbility = true
 	}
 	if meta, ok := w.client.contractManager.RetrieveActiveContract(w.contract.ID); ok {

@@ -266,7 +266,7 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 
 	// WindowStart must be at least postponedExecutionBuffer blocks into the future
 	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
-		h.log.Debug("A renter tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
+		h.log.Debug("A client tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
 		return errEarlyWindow
 	}
 
@@ -418,8 +418,8 @@ func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *
 		return errLongDuration
 	}
 
-	// ValidProofOutputs shoud have 2 outputs (renter + host) and missed
-	// outputs should have 3 (renter + host)
+	// ValidProofOutputs shoud have 2 outputs (client + host) and missed
+	// outputs should have 2 (client + host)
 	if len(sc.ValidProofOutputs) != 2 || len(sc.MissedProofOutputs) != 2 {
 		return errBadContractOutputCounts
 	}

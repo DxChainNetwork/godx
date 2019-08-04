@@ -253,14 +253,14 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Determine the amount that was transferred from the client.
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
-		return ExtendErr("client increased its valid proof output during downloading: ", errHighRenterValidOutput)
+		return ExtendErr("client increased its valid proof output during downloading: ", errHighClientValidOutput)
 	}
 
 	// Verify that enough money was transferred.
 	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
 	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
-		return ExtendErr(s, errHighRenterValidOutput)
+		return ExtendErr(s, errHighClientValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
@@ -277,7 +277,7 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("client has incentive to see host fail during downloading: ", errHighRenterMissedOutput)
+		return ExtendErr("client has incentive to see host fail during downloading: ", errHighClientMissedOutput)
 	}
 
 	// Check that the revision count has increased.

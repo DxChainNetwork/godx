@@ -6,12 +6,12 @@ package eth
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 // TriggerError is used to send the error message to the errMsg channel,
@@ -231,7 +231,7 @@ func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> client waits too long for config response from the host")
 		return
 	case <-p.StopChan():
-		err = storagemaintenance.ErrProgramExit
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }
@@ -247,7 +247,7 @@ func (p *peer) ClientWaitContractResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> client waits too long for contract response from the host")
 		return
 	case <-p.StopChan():
-		err = storagemaintenance.ErrProgramExit
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }
@@ -263,7 +263,7 @@ func (p *peer) HostWaitContractResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> host waits too long for contract response from the host")
 		return
 	case <-p.StopChan():
-		err = storagemaintenance.ErrProgramExit
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }

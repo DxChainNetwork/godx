@@ -237,11 +237,11 @@ func TestSupportedModules(t *testing.T) {
 	}
 	result, err := client.SupportedModules()
 	if err != nil {
-		t.Fatalf("Failed to get availible services supported by the server. Error: %s", err)
+		t.Fatalf("Failed to get available services supported by the server. Error: %s", err)
 	}
 
 	if len(result) != 1 {
-		t.Errorf("Server should have only 1 availible service")
+		t.Errorf("Server should have only 1 available service")
 	}
 
 	if _, ok := result["rpc"]; !ok {

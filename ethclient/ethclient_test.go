@@ -136,7 +136,7 @@ func TestToFilterArg(t *testing.T) {
 	}
 }
 
-// Note: Generally, Ethereum rpc sevice maybe not open to public ! please connect your ethereum node !
+// Note: Generally, Ethereum rpc service maybe not open to public ! please connect your ethereum node !
 
 // example to use ethclient
 func exampleToUseClient() {

@@ -5,18 +5,18 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common/math"
 	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (
-	// PersistHostDir is dir path for storing the host log, json, and ect.
+	// PersistHostDir is dir path for storing the host log, json, and etc.
 	PersistHostDir = "storagehost"
 	// Version is the version of the storage host
 	Version = "1.0"

@@ -376,7 +376,7 @@ func (w *worker) updateWorkerContractID(contractID storage.ContractID) (*storage
 		w.contract = contract
 		w.hostID = contract.EnodeID
 		return &hostInfo, nil
-	} else {
-		return nil, ErrNoContractsWithHost
 	}
+
+	return nil, ErrNoContractsWithHost
 }

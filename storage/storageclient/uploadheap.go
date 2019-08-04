@@ -450,7 +450,7 @@ func (client *StorageClient) uploadOrRepair() {
 		}
 
 	LOOP:
-		if !(storage.ENV == storage.Env_Test) {
+		if !(storage.ENV == storage.EnvTest) {
 			// Return if not online.
 			if !client.blockUntilOnline() {
 				return

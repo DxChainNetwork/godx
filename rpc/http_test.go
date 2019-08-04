@@ -28,7 +28,7 @@ var partialEndPoint = "google.com"
 		2. Header: Accept -- should be application/json
 
 	Cases (in theory, those three cases should make no difference):
-		1. end point with full structure (scheme, host, ect.)
+		1. end point with full structure (scheme, host, etc.)
 		2. end point with nothing inside
 		3. end point with host name only
 */

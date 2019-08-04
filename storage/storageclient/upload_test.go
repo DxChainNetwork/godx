@@ -6,12 +6,6 @@ package storageclient
 
 import (
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"github.com/pborman/uuid"
 	"io"
 	"io/ioutil"
 	"math"
@@ -22,6 +16,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
+	"github.com/pborman/uuid"
 )
 
 // Upload test case has many dependencies modules. Now we test each critical function
@@ -67,7 +68,7 @@ func testUploadDirectory(t *testing.T) {
 
 /***************** Upload Business Logic Test Case For Each Critical Function ***********************/
 func TestDirMetadata(t *testing.T) {
-	storage.ENV = storage.Env_Test
+	storage.ENV = storage.EnvTest
 
 	sct := newStorageClientTester(t)
 	sc := sct.Client
@@ -81,7 +82,7 @@ func TestDirMetadata(t *testing.T) {
 }
 
 func TestDoUpload(t *testing.T) {
-	storage.ENV = storage.Env_Test
+	storage.ENV = storage.EnvTest
 
 	sct := newStorageClientTester(t)
 	sc := sct.Client
@@ -140,7 +141,7 @@ func TestDoUpload(t *testing.T) {
 }
 
 func TestPushFileToSegmentHeap(t *testing.T) {
-	storage.ENV = storage.Env_Test
+	storage.ENV = storage.EnvTest
 
 	sct := newStorageClientTester(t)
 	defer sct.Client.Close()
@@ -185,7 +186,7 @@ func TestRequiredContract(t *testing.T) {
 }
 
 func TestCreatAndAssignToWorkers(t *testing.T) {
-	storage.ENV = storage.Env_Test
+	storage.ENV = storage.EnvTest
 
 	sct := newStorageClientTester(t)
 	defer sct.Client.Close()
@@ -234,7 +235,7 @@ func TestCreatAndAssignToWorkers(t *testing.T) {
 }
 
 func TestRetrieveData(t *testing.T) {
-	storage.ENV = storage.Env_Test
+	storage.ENV = storage.EnvTest
 
 	sct := newStorageClientTester(t)
 	defer sct.Client.Close()
@@ -336,7 +337,7 @@ func TestReadFromLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	buf := NewDownloadBuffer(uint64(fileSize), storage.SectorSize)
+	buf := newDownloadBuffer(uint64(fileSize), storage.SectorSize)
 	sr := io.NewSectionReader(osFile, 0, int64(fileSize))
 	_, err = buf.ReadFrom(sr)
 	if err != nil {

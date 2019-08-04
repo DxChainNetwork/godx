@@ -23,7 +23,7 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 var (
@@ -31,7 +31,7 @@ var (
 	errZeroOutput                              = errors.New("the output of storage contract is less 0")
 	errStorageContractValidOutputSumViolation  = errors.New("storage contract has invalid valid proof output sums")
 	errStorageContractMissedOutputSumViolation = errors.New("storage contract has invalid missed proof output sums")
-	errRevisionOutputSumViolation              = errors.New("the missed proof ouput sum and valid proof output sum equal")
+	errRevisionOutputSumViolation              = errors.New("the missed proof output sum and valid proof output sum equal")
 	errStorageContractWindowEndViolation       = errors.New("storage contract window must end at least one block after it starts")
 	errStorageContractWindowStartViolation     = errors.New("storage contract window must start in the future")
 	errLateRevision                            = errors.New("storage contract revision submitted after deadline")
@@ -44,7 +44,7 @@ var (
 	errUnfinishedStorageContract               = errors.New("storage contract has not yet opened")
 )
 
-// check whether a new StorageContract is valid
+// CheckCreateContract checks whether a new StorageContract is valid
 func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight uint64) error {
 	if sc.ClientCollateral.Value.Sign() <= 0 {
 		return errZeroCollateral
@@ -115,16 +115,16 @@ func CheckCreateContract(state StateDB, sc types.StorageContract, currentHeight 
 	return nil
 }
 
-// check whether a new StorageContractRevision is valid
+// CheckRevisionContract checks whether a new StorageContractRevision is valid
 func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, currentHeight uint64, contractAddr common.Address) error {
 
 	// check whether it has proofed
 	windowEndStr := strconv.FormatUint(scr.NewWindowEnd, 10)
-	statusAddr := common.BytesToAddress([]byte(storagemaintenance.StrPrefixExpSC + windowEndStr))
+	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
 	statusContent := state.GetState(statusAddr, scr.ParentID)
 	flag := statusContent.Bytes()[11:12]
-	if bytes.Equal(flag, storagemaintenance.ProofedStatus) {
+	if bytes.Equal(flag, coinchargemaintenance.ProofedStatus) {
 		return errors.New("can not do contract revision after storage proof")
 	}
 
@@ -162,13 +162,13 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	}
 
 	// retrieve origin storage contract
-	windowStartHash := state.GetState(contractAddr, storagemaintenance.KeyWindowStart)
-	revisionNumHash := state.GetState(contractAddr, storagemaintenance.KeyRevisionNumber)
-	unHash := state.GetState(contractAddr, storagemaintenance.KeyUnlockHash)
-	clientVpoHash := state.GetState(contractAddr, storagemaintenance.KeyClientValidProofOutput)
-	hostVpoHash := state.GetState(contractAddr, storagemaintenance.KeyHostValidProofOutput)
-	clientMpoHash := state.GetState(contractAddr, storagemaintenance.KeyClientMissedProofOutput)
-	hostMpoHash := state.GetState(contractAddr, storagemaintenance.KeyHostMissedProofOutput)
+	windowStartHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowStart)
+	revisionNumHash := state.GetState(contractAddr, coinchargemaintenance.KeyRevisionNumber)
+	unHash := state.GetState(contractAddr, coinchargemaintenance.KeyUnlockHash)
+	clientVpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
+	hostVpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
+	clientMpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput)
+	hostMpoHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput)
 
 	// Check that the height is less than sc.WindowStart - revisions are
 	// not allowed to be submitted once the storage proof window has
@@ -216,7 +216,7 @@ func CheckRevisionContract(state StateDB, scr types.StorageContractRevision, cur
 	return nil
 }
 
-// check whether a new StorageContractRevision is valid
+// CheckMultiSignatures checks whether a new StorageContractRevision is valid
 func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures [][]byte) error {
 	if len(signatures) == 0 {
 		return errors.New("no signatures for verification")
@@ -287,26 +287,26 @@ func CheckMultiSignatures(originalData types.StorageContractRLPHash, signatures 
 	return nil
 }
 
-// check whether a new StorageProof is valid
+// CheckStorageProof checks whether a new StorageProof is valid
 func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint64, statusAddr common.Address, contractAddr common.Address) error {
 
 	// check whether it proofed repeatedly
 	statusContent := state.GetState(statusAddr, sp.ParentID)
 	flag := statusContent.Bytes()[11:12]
-	if bytes.Equal(flag, storagemaintenance.ProofedStatus) {
+	if bytes.Equal(flag, coinchargemaintenance.ProofedStatus) {
 		return errors.New("can not submit storage proof repeatedly")
 	}
 
 	// retrieve the storage contract info
-	windowStartHash := state.GetState(contractAddr, storagemaintenance.KeyWindowStart)
+	windowStartHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowStart)
 	windowStart := new(big.Int).SetBytes(windowStartHash.Bytes()).Uint64()
 
-	windowEndHash := state.GetState(contractAddr, storagemaintenance.KeyWindowEnd)
+	windowEndHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 
-	fileMerkleRoot := state.GetState(contractAddr, storagemaintenance.KeyFileMerkleRoot)
+	fileMerkleRoot := state.GetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot)
 
-	fileSizeHash := state.GetState(contractAddr, storagemaintenance.KeyFileSize)
+	fileSizeHash := state.GetState(contractAddr, coinchargemaintenance.KeyFileSize)
 	fileSize := new(big.Int).SetBytes(fileSizeHash.Bytes()).Uint64()
 
 	if windowStart > currentHeight {
@@ -359,7 +359,7 @@ func CheckStorageProof(state StateDB, sp types.StorageProof, currentHeight uint6
 	return nil
 }
 
-// check whether host has really stored the file
+// VerifySegment checks whether host has really stored the file
 func VerifySegment(segment []byte, hashSet []common.Hash, leaves, segmentIndex uint64, merkleRoot common.Hash) bool {
 
 	// convert base and hashSet to proofSet
@@ -395,7 +395,7 @@ func storageProofSegment(state StateDB, windowStart, fileSize uint64, scID commo
 	return index, nil
 }
 
-// calculate the num of leaves formed by the given file
+// CalculateLeaves calculates the num of leaves formed by the given file
 func CalculateLeaves(fileSize uint64) uint64 {
 	numSegments := fileSize / merkle.LeafSize
 	if fileSize == 0 || fileSize%merkle.LeafSize != 0 {
@@ -404,7 +404,7 @@ func CalculateLeaves(fileSize uint64) uint64 {
 	return numSegments
 }
 
-// verify merkle root of given segment
+// VerifyProof verifys merkle root of given segment
 func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLeaves uint64) bool {
 	hasher := sha256.New()
 
@@ -468,7 +468,7 @@ func VerifyProof(merkleRoot []byte, proofSet [][]byte, proofIndex uint64, numLea
 	return false
 }
 
-// returns the hash of the input data using the specified algorithm.
+// HashSum returns the hash of the input data using the specified algorithm.
 func HashSum(h hash.Hash, data ...[]byte) []byte {
 	h.Reset()
 	for _, d := range data {
