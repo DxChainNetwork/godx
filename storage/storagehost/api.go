@@ -197,7 +197,8 @@ func (h *HostPrivateAPI) SetConfig(config map[string]string) (string, error) {
 	for key, value := range config {
 		callback, exist := hostSetterCallbacks[key]
 		if !exist {
-			return "", fmt.Errorf("unknown config variable")
+			err = fmt.Errorf("unknown config variable")
+			return "", err
 		}
 		if err = callback(h, value); err != nil {
 			return "", err
