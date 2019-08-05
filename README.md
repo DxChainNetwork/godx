@@ -2,7 +2,9 @@
 
 Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) protocol!
 
-[![CircleCI](https://circleci.com/gh/DxChainNetwork/godx.svg?style=svg&circle-token=f2062f8bae0aee80ef408bcfff103e2ab73d8b39)](https://circleci.com/gh/DxChainNetwork/godx) 
+[![CircleCI](https://circleci.com/gh/DxChainNetwork/godx.svg?style=svg&circle-token=f2062f8bae0aee80ef408bcfff103e2ab73d8b39)](https://circleci.com/gh/DxChainNetwork/godx)
+[![Go Report Card](https://goreportcard.com/badge/github.com/DxChainNetwork/godx)](https://goreportcard.com/report/github.com/DxChainNetwork/godx)
+[![Coverage](https://codecov.io/gh/DxChainNetwork/godx/branch/master/graph/badge.svg)](https://codecov.io/gh/DxChainNetwork/godx)
 [![Golang](https://img.shields.io/badge/go-1.11.4-blue.svg)](https://golang.org/dl/)
 [![release](https://img.shields.io/badge/release-v0.8.0-blue)](https://github.com/DxChainNetwork/godx/releases)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
