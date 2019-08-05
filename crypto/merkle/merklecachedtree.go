@@ -5,9 +5,8 @@
 package merkle
 
 import (
+	"errors"
 	"hash"
-
-	"github.com/pkg/errors"
 )
 
 //CachedTree will store the leaf's data data instead of hash

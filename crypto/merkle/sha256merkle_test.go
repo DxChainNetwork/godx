@@ -169,14 +169,11 @@ func TestMerkleDiffProofVerification(t *testing.T) {
 	}
 
 	// verification
-	verified, err := Sha256VerifyDiffProof(rangeSet, uint64(50), proofSet, rootVerify, mr)
+	err = Sha256VerifyDiffProof(rangeSet, uint64(50), proofSet, rootVerify, mr)
 	if err != nil {
 		t.Fatalf("failed to verify the diff proof: %s", err.Error())
 	}
 
-	if !verified {
-		t.Errorf("diff proof is expected to be verified successfully, instead, got failed")
-	}
 
 }
 

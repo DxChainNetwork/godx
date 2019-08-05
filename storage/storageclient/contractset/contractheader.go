@@ -18,10 +18,8 @@ type ContractHeader struct {
 	ID      storage.ContractID
 	EnodeID enode.ID
 
-	// TODO (mzhang): latest contract revision information, sync with HZ Office
 	LatestContractRevision types.StorageContractRevision
 
-	// TODO (mzhang): changed the private key field type, sync with HZ Office
 	// Convert the PrivateKey from string to ecdsa private key
 	// and convert the ecdsa private key to string
 	//

@@ -12,9 +12,23 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 )
 
-// ErrHostBusyHandleReq defines that client sent the contract request too frequently. If this error is occurred
-// the host's evaluation will not be deducted
-var ErrHostBusyHandleReq = errors.New("client must wait until the host finish its's previous request")
+var (
+	// ErrHostBusyHandleReq defines that client sent the contract request too frequently. If this error is occurred
+	// the host's evaluation will not be deducted
+	ErrHostBusyHandleReq = errors.New("client must wait until the host finish its's previous request")
+
+	// ErrClientNegotiate defines that client occurs error while negotiate
+	ErrClientNegotiate = errors.New("client negotiate error")
+
+	// ErrClientCommit defines that client occurs error while commit(finalize)
+	ErrClientCommit = errors.New("client commit error")
+
+	// ErrHostNegotiate defines that client occurs error while negotiate
+	ErrHostNegotiate = errors.New("host negotiate error")
+
+	// ErrHostCommit defines that host occurs error while commit(finalize)
+	ErrHostCommit = errors.New("host commit error")
+)
 
 // Negotiation related messages
 const (
@@ -25,9 +39,10 @@ const (
 	ContractUploadMerkleProofMsg = 0x23
 	ContractUploadRevisionSign   = 0x24
 	ContractDownloadDataMsg      = 0x25
-	NegotiationErrorMsg          = 0x26
-	HostBusyHandleReqMsg         = 0x27
-	HostStopMsg                  = 0x28
+	HostBusyHandleReqMsg         = 0x26
+	HostCommitFailedMsg          = 0x27
+	HostAckMsg                   = 0x28
+	HostNegotiateErrorMsg        = 0x29
 
 	// Host Handle Message Set
 	HostConfigReqMsg                 = 0x30
@@ -36,7 +51,10 @@ const (
 	ContractUploadReqMsg             = 0x33
 	ContractUploadClientRevisionSign = 0x34
 	ContractDownloadReqMsg           = 0x35
-	ClientStopMsg                    = 0x36
+	ClientCommitSuccessMsg           = 0x36
+	ClientCommitFailedMsg            = 0x37
+	ClientAckMsg                     = 0x38
+	ClientNegotiateErrorMsg          = 0x39
 )
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks

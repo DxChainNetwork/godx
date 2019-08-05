@@ -170,7 +170,7 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		// Check whether the config is stored
+		// Check whdx the config is stored
 		hostSettingFile := filepath.Join(dir, HostSettingFile)
 		persist := new(persistence)
 		if err := common.LoadDxJSON(storageHostMeta, hostSettingFile, persist); err != nil {

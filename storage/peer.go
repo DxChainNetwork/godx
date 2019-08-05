@@ -32,10 +32,15 @@ type Peer interface {
 	SendContractUploadClientRevisionSign(revisionSign []byte) error
 	SendUploadHostRevisionSign(revisionSign []byte) error
 	RequestContractDownload(req DownloadRequest) error
-	SendClientRevisionStop() error
-	SendHostRevisionStop() error
 	SendContractDownloadData(resp DownloadResponse) error
 	SendHostBusyHandleRequestErr() error
+	SendClientNegotiateErrorMsg() error
+	SendClientCommitFailedMsg() error
+	SendClientCommitSuccessMsg() error
+	SendHostCommitFailedMsg() error
+	SendClientAckMsg() error
+	SendHostAckMsg() error
+	SendHostNegotiateErrorMsg() error
 	WaitConfigResp() (p2p.Msg, error)
 	ClientWaitContractResp() (msg p2p.Msg, err error)
 	HostWaitContractResp() (msg p2p.Msg, err error)

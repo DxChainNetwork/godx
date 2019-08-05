@@ -42,7 +42,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/discv5"
 	"github.com/DxChainNetwork/godx/params"
-	rpc "github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 

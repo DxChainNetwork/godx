@@ -16,9 +16,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-import React, {Component} from 'react';
-
-import Typography from 'material-ui/Typography';
+import React from 'react';
 import {styles} from '../common';
 
 // multiplier multiplies a number by another.

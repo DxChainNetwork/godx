@@ -21,10 +21,10 @@ import React, {Component} from 'react';
 import withStyles from 'material-ui/styles/withStyles';
 import Typography from 'material-ui/Typography';
 import Grid from 'material-ui/Grid';
-import {ResponsiveContainer, AreaChart, Area, Tooltip} from 'recharts';
+import {Area, AreaChart, ResponsiveContainer, Tooltip} from 'recharts';
 
 import ChartRow from './ChartRow';
-import CustomTooltip, {bytePlotter, bytePerSecPlotter, percentPlotter, multiplier} from './CustomTooltip';
+import CustomTooltip, {bytePerSecPlotter, bytePlotter, multiplier, percentPlotter} from './CustomTooltip';
 import {styles as commonStyles} from '../common';
 import type {General, System} from '../types/content';
 
