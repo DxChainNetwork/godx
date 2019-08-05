@@ -198,10 +198,10 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 			return
 		}
 	} else if msg.Code == storage.ClientCommitFailedMsg {
-		clientCommitErr = storage.ClientCommitErr
+		clientCommitErr = storage.ErrClientCommit
 		return
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
-		clientNegotiateErr = storage.ClientNegotiateErr
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 

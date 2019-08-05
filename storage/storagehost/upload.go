@@ -178,7 +178,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	}
 
 	if msg.Code == storage.ClientNegotiateErrorMsg {
-		clientNegotiateErr = storage.ClientNegotiateErr
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 
@@ -243,10 +243,10 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 			return
 		}
 	} else if msg.Code == storage.ClientCommitFailedMsg {
-		clientCommitErr = storage.ClientCommitErr
+		clientCommitErr = storage.ErrClientCommit
 		return
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
-		clientNegotiateErr = storage.ClientNegotiateErr
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 

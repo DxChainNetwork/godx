@@ -62,7 +62,7 @@ type (
 		Signature            []byte
 	}
 
-	// DownloadRequestSection is a section requested in DownloadRequest.
+	// DownloadRequestSector is a section requested in DownloadRequest.
 	DownloadRequestSector struct {
 		MerkleRoot [32]byte
 		Offset     uint32

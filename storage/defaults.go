@@ -13,21 +13,21 @@ import (
 )
 
 var (
-	// HostBusyHandleReqErr defines that client sent the contract request too frequently. If this error is occurred
+	// ErrHostBusyHandleReq defines that client sent the contract request too frequently. If this error is occurred
 	// the host's evaluation will not be deducted
-	HostBusyHandleReqErr = errors.New("client must wait until the host finish its's previous request")
+	ErrHostBusyHandleReq = errors.New("client must wait until the host finish its's previous request")
 
-	// ClientNegotiateErr defines that client occurs error while negotiate
-	ClientNegotiateErr = errors.New("client negotiate error")
+	// ErrClientNegotiate defines that client occurs error while negotiate
+	ErrClientNegotiate = errors.New("client negotiate error")
 
-	// ClientCommitErr defines that client occurs error while commit(finalize)
-	ClientCommitErr = errors.New("client commit error")
+	// ErrClientCommit defines that client occurs error while commit(finalize)
+	ErrClientCommit = errors.New("client commit error")
 
-	// HostNegotiateErr defines that client occurs error while negotiate
-	HostNegotiateErr = errors.New("host negotiate error")
+	// ErrHostNegotiate defines that client occurs error while negotiate
+	ErrHostNegotiate = errors.New("host negotiate error")
 
-	// HostCommitErr defines that host occurs error while commit(finalize)
-	HostCommitErr = errors.New("host commit error")
+	// ErrHostCommit defines that host occurs error while commit(finalize)
+	ErrHostCommit = errors.New("host commit error")
 )
 
 // Negotiation related messages

@@ -491,12 +491,12 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
@@ -540,7 +540,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
@@ -619,7 +619,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	case storage.HostAckMsg:
 		return contractMetaData, nil
 	default:
-		hostCommitErr = storage.HostCommitErr
+		hostCommitErr = storage.ErrHostCommit
 		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
 
 		_ = sp.SendClientAckMsg()

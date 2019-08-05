@@ -119,7 +119,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	}
 
 	if msg.Code == storage.ClientNegotiateErrorMsg {
-		clientNegotiateErr = storage.ClientNegotiateErr
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 
@@ -214,10 +214,10 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 			return
 		}
 	} else if msg.Code == storage.ClientCommitFailedMsg {
-		clientCommitErr = storage.ClientCommitErr
+		clientCommitErr = storage.ErrClientCommit
 		return
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
-		clientNegotiateErr = storage.ClientNegotiateErr
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 
@@ -226,7 +226,7 @@ func ContractCreateHandler(h *StorageHost, sp storage.Peer, contractCreateReqMsg
 	// set static code earlier than send ack msg prevent host.lock from blocking msg send
 	node := sp.PeerNode()
 	if node == nil {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return
 	}
 	h.ethBackend.SetStatic(node)

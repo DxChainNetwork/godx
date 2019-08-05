@@ -414,11 +414,11 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.HostBusyHandleReqErr
+		return storage.ErrHostBusyHandleReq
 	}
 
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return hostNegotiateErr
 	}
 
@@ -480,7 +480,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	}
 
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return hostNegotiateErr
 	}
 
@@ -520,7 +520,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	case storage.HostAckMsg:
 		return
 	default:
-		hostCommitErr = storage.HostCommitErr
+		hostCommitErr = storage.ErrHostCommit
 		_ = contract.RollbackUndoMem(contractHeader)
 
 		_ = sp.SendClientAckMsg()
@@ -653,12 +653,12 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.HostBusyHandleReqErr
+		return storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it
 	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.HostNegotiateErr
+		hostNegotiateErr = storage.ErrHostNegotiate
 		return hostNegotiateErr
 	}
 
@@ -736,7 +736,7 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	case storage.HostAckMsg:
 		return
 	default:
-		hostCommitErr = storage.HostCommitErr
+		hostCommitErr = storage.ErrHostCommit
 		_ = contract.RollbackUndoMem(contractHeader)
 
 		_ = sp.SendClientAckMsg()
