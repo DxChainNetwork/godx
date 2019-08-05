@@ -51,11 +51,10 @@ func GetDiffStorageProof(limits []SubTreeLimit, h SubtreeRoot, leafNumber uint64
 }
 
 // CheckDiffStorageProof verify that the merkle diff is stored from the specified leaf interval.
-func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []SubTreeLimit, storageProofList [][]byte, root []byte) (bool, error) {
-
+func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits []SubTreeLimit, storageProofList [][]byte, root []byte) error {
 	if !checkLimitList(limits) {
 		log.Error("CheckDiffStorageProof", "err", "the parameter is invalid")
-		return false, errors.New("the parameter is invalid")
+		return errors.New("the parameter is invalid")
 	}
 	tree := NewTree(h)
 	var leafIndex uint64
@@ -73,20 +72,28 @@ func CheckDiffStorageProof(lh LeafRoot, leafNumber uint64, h hash.Hash, limits [
 	}
 	for _, r := range limits {
 		if err := consumeUntil(r.Left); err != nil {
-			return false, err
+			return err
 		}
 		for i := r.Left; i < r.Right; i++ {
 			leafHash, err := lh.GetLeafRoot()
 			if err != nil {
-				return false, err
+				return err
 			}
 			if err := tree.PushSubTree(0, leafHash); err != nil {
 				log.Error("PushSubTree", "err", err)
-				return false, err
+				return err
 			}
 		}
 		leafIndex += r.Right - r.Left
 	}
-	err := consumeUntil(leafNumber)
-	return bytes.Equal(tree.Root(), root), err
+
+	if err := consumeUntil(leafNumber); err != nil {
+		return err
+	}
+
+	if !bytes.Equal(tree.Root(), root) {
+		return errors.New("invalid diff storage proof")
+	}
+
+	return nil
 }

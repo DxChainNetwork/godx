@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-// where to write the downloaded data
+// writeDestination where to write the downloaded data
 type writeDestination interface {
 	WriteAt(data []byte, offset int64) (int, error)
 }
@@ -21,8 +21,8 @@ type downloadBuffer struct {
 	sectorSize uint64
 }
 
-// NewDownloadBuffer create a new downloadBuffer
-func NewDownloadBuffer(length, sectorSize uint64) downloadBuffer {
+// newDownloadBuffer create a new downloadBuffer
+func newDownloadBuffer(length, sectorSize uint64) downloadBuffer {
 	// Completion the length multiple of sector size(4MB)
 	if length%sectorSize != 0 {
 		length += sectorSize - length%sectorSize
@@ -39,7 +39,7 @@ func NewDownloadBuffer(length, sectorSize uint64) downloadBuffer {
 	return ddb
 }
 
-// reads data from a io.Reader until the buffer is full.
+// ReadFrom reads data from a io.Reader until the buffer is full.
 func (dw downloadBuffer) ReadFrom(r io.Reader) (int64, error) {
 	var n int64
 	for len(dw.buf) > 0 {
@@ -60,7 +60,7 @@ func (dw downloadBuffer) ReadFrom(r io.Reader) (int64, error) {
 	return n, nil
 }
 
-// writes the given data to downloadBuffer.
+// WriteAt writes the given data to downloadBuffer.
 func (dw downloadBuffer) WriteAt(data []byte, offset int64) (int, error) {
 	if uint64(len(data))+uint64(offset) > uint64(len(dw.buf))*dw.sectorSize || offset < 0 {
 		return 0, errors.New("write at specified offset exceeds buffer size")
@@ -76,7 +76,7 @@ func (dw downloadBuffer) WriteAt(data []byte, offset int64) (int, error) {
 	return written, nil
 }
 
-// writes to an underlying data stream
+// downloadWriter writes to an underlying data stream
 type downloadWriter struct {
 	closed bool
 	mu     sync.Mutex
@@ -95,12 +95,12 @@ var (
 	errOffsetAlreadyWritten = errors.New("cannot write to that offset in stream, data already written")
 )
 
-// convert an io.Writer into a downloadWriter
+// newDownloadWriter convert an io.Writer into a downloadWriter
 func newDownloadWriter(w io.Writer) *downloadWriter {
 	return &downloadWriter{Writer: w}
 }
 
-// iterator all the write calls, unlock those reached
+// unblockNextWrites iterator all the write calls, unlock those reached
 func (ddw *downloadWriter) unblockNextWrites() {
 	for i, offset := range ddw.writeCalls {
 		if offset <= ddw.progress {
@@ -111,7 +111,7 @@ func (ddw *downloadWriter) unblockNextWrites() {
 	}
 }
 
-// stop all the write calls
+// Close stop all the write calls
 func (ddw *downloadWriter) Close() error {
 	ddw.mu.Lock()
 	if ddw.closed {
@@ -126,7 +126,7 @@ func (ddw *downloadWriter) Close() error {
 	return nil
 }
 
-// write data to stream at given offset
+// WriteAt write data to stream at given offset
 func (ddw *downloadWriter) WriteAt(data []byte, offset int64) (int, error) {
 	write := func() (int, error) {
 		if ddw.closed {

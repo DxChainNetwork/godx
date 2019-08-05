@@ -5,6 +5,7 @@
 package storageclient
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 
-	"github.com/pkg/errors"
 )
 
 var (
@@ -376,7 +376,7 @@ func (w *worker) updateWorkerContractID(contractID storage.ContractID) (*storage
 		w.contract = contract
 		w.hostID = contract.EnodeID
 		return &hostInfo, nil
-	} else {
-		return nil, ErrNoContractsWithHost
 	}
+
+	return nil, ErrNoContractsWithHost
 }

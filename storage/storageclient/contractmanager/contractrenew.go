@@ -8,17 +8,17 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
 
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -311,8 +311,8 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 
 	// form the contract parameters
 	params := storage.ContractParams{
-		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		RentPayment:          rentPayment,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -382,7 +382,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	lastRev := contract.LatestContractRevision
 
 	// Extract vars from params, for convenience
-	allowance, funding, startHeight, endHeight, host := params.Allowance, params.Funding, params.StartHeight, params.EndHeight, params.Host
+	rentPayment, funding, startHeight, endHeight, host := params.RentPayment, params.Funding, params.StartHeight, params.EndHeight, params.Host
 
 	var basePrice, baseCollateral common.BigInt
 	if endHeight+host.WindowSize > lastRev.NewWindowEnd {
@@ -393,8 +393,8 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
-	clientPayout, hostPayout, hostCollateral, err := ClientPayoutsPreTax(host, funding, basePrice, baseCollateral, period, expectedStorage)
+	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
+	clientPayout, hostPayout, hostCollateral, err := ClientPayouts(host, funding, basePrice, baseCollateral, period, expectedStorage)
 	if err != nil {
 		return storage.ContractMetaData{}, err
 	}
@@ -430,16 +430,6 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		},
 	}
 
-	// Increase Successful/Failed interactions accordingly
-	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
-			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
-			err = common.ErrExtend(err, ErrHostFault)
-		} else if err == nil {
-			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
-		}
-	}()
-
 	account := accounts.Account{Address: clientAddr}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
@@ -452,6 +442,28 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		cm.log.Error("contract create failed, failed to set up connection", "err", err.Error())
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection with host failed", err)
 	}
+
+	// Increase Successful/Failed interactions accordingly
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
+	defer func(sp storage.Peer) {
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
+
+		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			cm.b.CheckAndUpdateConnection(sp.PeerNode())
+			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+		}
+
+		if err == nil {
+			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
+		}
+	}(sp)
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
@@ -479,17 +491,17 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
+		hostNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
@@ -511,12 +523,13 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
+		clientNegotiateErr = storagehost.ExtendErr("client sign revision error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
-	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
+		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	var hostRevisionSign []byte
@@ -526,31 +539,35 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
+		hostNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	}
 
 	if _, err := cm.b.SendStorageContractCreateTx(clientAddr, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		clientNegotiateErr = storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		clientNegotiateErr = storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	// wrap some information about this contract
+	storageContractRevision.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(pubKey),
@@ -566,6 +583,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	oldRoots, err := oldContract.MerkleRoots()
 	if err != nil && err != dberrors.ErrNotFound {
+		clientNegotiateErr = err
 		return storage.ContractMetaData{}, err
 	} else if err == dberrors.ErrNotFound {
 		oldRoots = []common.Hash{}
@@ -574,9 +592,41 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 	// store this contract info to client local
 	contractMetaData, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
 	if err != nil {
+		// ignore the send message error
+		_ = sp.SendClientCommitFailedMsg()
+
+		// wait for host ack msg
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			err = errors.New("failed to insert the contract after announce host")
+		} else if err != nil {
+			err = fmt.Errorf("failed to insert the contract after announce host, but cann't receive host ack msg: %s", err.Error())
+		}
 		return storage.ContractMetaData{}, err
 	}
-	return contractMetaData, nil
+
+	_ = sp.SendClientCommitSuccessMsg()
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		return storage.ContractMetaData{}, err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return contractMetaData, nil
+	default:
+		hostCommitErr = storage.ErrHostCommit
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
+		_ = sp.SendClientAckMsg()
+		_, _ = sp.ClientWaitContractResp()
+
+		return storage.ContractMetaData{}, hostCommitErr
+	}
 }
 
 // PubkeyToEnodeID calculate Enode.ContractID, reference:
@@ -589,8 +639,8 @@ func PubkeyToEnodeID(pubkey *ecdsa.PublicKey) enode.ID {
 	return enode.ID(crypto.Keccak256Hash(pubBytes[:]))
 }
 
-// ClientPayoutsPreTax calculate client and host collateral
-func ClientPayoutsPreTax(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
+// ClientPayouts calculate client and host collateral
+func ClientPayouts(host storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseCollateral common.BigInt, period uint64, expectedStorage uint64) (clientPayout common.BigInt, hostPayout common.BigInt, hostCollateral common.BigInt, err error) {
 	// Divide by zero check.
 	if host.StoragePrice.Sign() == 0 {
 		host.StoragePrice = common.NewBigIntUint64(1)

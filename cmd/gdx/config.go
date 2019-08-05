@@ -25,7 +25,7 @@ import (
 	"reflect"
 	"unicode"
 
-	cli "gopkg.in/urfave/cli.v1"
+	"gopkg.in/urfave/cli.v1"
 
 	"github.com/DxChainNetwork/godx/cmd/utils"
 	"github.com/DxChainNetwork/godx/dashboard"

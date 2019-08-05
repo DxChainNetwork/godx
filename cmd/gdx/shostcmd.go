@@ -15,37 +15,37 @@ import (
 
 var (
 	acceptingContractsFlag = cli.StringFlag{
-		Name:  "acceptingcontracts",
+		Name:  "acceptingContracts",
 		Usage: "BOOL - whether the host accepts new contracts",
 	}
 
 	maxDepositFlag = cli.StringFlag{
-		Name:  "maxdeposit",
+		Name:  "maxDeposit",
 		Usage: "CURRENCY - the max deposit for for a single contract",
 	}
 
 	budgetPriceFlag = cli.StringFlag{
-		Name:  "depositbudget",
+		Name:  "depositBudget",
 		Usage: "CURRENCY - the maximum deposit for all contracts",
 	}
 
 	storagePriceFlag = cli.StringFlag{
-		Name:  "storageprice",
+		Name:  "storagePrice",
 		Usage: "CURRENCY - the storage price per block per byte",
 	}
 
 	uploadPriceFlag = cli.StringFlag{
-		Name:  "uploadprice",
+		Name:  "uploadPrice",
 		Usage: "CURRENCY - upload bandwidth price per byte",
 	}
 
 	downloadPriceFlag = cli.StringFlag{
-		Name:  "downloadprice",
+		Name:  "downloadPrice",
 		Usage: "CURRENCY - download bandwidth price per byte",
 	}
 
 	contractPriceFlag = cli.StringFlag{
-		Name:  "contractprice",
+		Name:  "contractPrice",
 		Usage: "CURRENCY - the contract price when creating the contract",
 	}
 
@@ -55,7 +55,7 @@ var (
 	}
 
 	storageDurationFlag = cli.StringFlag{
-		Name:  "maxduration",
+		Name:  "maxDuration",
 		Usage: "DURATION - the max duration for a storage contract",
 	}
 
@@ -70,7 +70,7 @@ var (
 	}
 
 	folderPathFlag = cli.StringFlag{
-		Name:  "folderpath",
+		Name:  "folderPath",
 		Usage: "Path of the folder",
 	}
 )
@@ -97,7 +97,7 @@ and etc.`,
 		},
 
 		{
-			Name:      "setconfig",
+			Name:      "setConfig",
 			Usage:     "Set the storage host configurations",
 			ArgsUsage: "",
 			Flags: []cli.Flag{
@@ -114,10 +114,10 @@ and etc.`,
 
 			Action: utils.MigrateFlags(setHostConfig),
 			Description: `
-			gdx shost setconfig [--acceptingcontracts arg] [--maxdeposit arg] [--depositbudget arg] [--storageprice arg] [--uploadprice arg] [--downloadprice arg] [--contractprice arg] [--deposit arg] [--maxduration arg]
+			gdx shost setConfig [--acceptingContracts arg] [--maxDeposit arg] [--depositBudget arg] [--storagePrice arg] [--uploadPrice arg] [--downloadPrice arg] [--contractPrice arg] [--deposit arg] [--maxDuration arg]
 
 change the storage host configuration. The parameters include but not limited to 
-acceptingcontracts, storageprice, uploadprice, downloadprice, etc. A complete set of 
+acceptingContracts, storagePrice, uploadPrice, downloadPrice, etc. A complete set of 
 configurable parameters please read the list of flags.
 
 The values are associated with units.
@@ -125,9 +125,8 @@ The values are associated with units.
 	CURRENCY:   {"camel", "gcamel", "dx"}
 	DURATION:   {"h", "b", "d", "w", "m", "y"}`,
 		},
-
 		{
-			Name:      "setpaymentaddr",
+			Name:      "setPaymentAddr",
 			Usage:     "Register the account address to be used for the storage services",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(setHostPaymentAddress),
@@ -135,7 +134,7 @@ The values are associated with units.
 				hostPaymentAddressFlag,
 			},
 			Description: `
-			gdx shost setpaymentaddr [--address arg]
+			gdx shost setPaymentAddr [--address arg]
 is used to register the account address to be used for the storage services. Deposit and money spent for host
 announcement will be deducted from this account. Moreover, the profit getting from saving files for storage
 client will be saved into this address as well.`,
@@ -181,7 +180,7 @@ If the host node has higher evaluation, client will automatically create contrac
 		},
 
 		{
-			Name:      "addfolder",
+			Name:      "addFolder",
 			Usage:     "Allocate disk space for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(addFolder),
@@ -190,17 +189,17 @@ If the host node has higher evaluation, client will automatically create contrac
 				folderSizeFlag,
 			},
 			Description: `
-			gdx shost addfolder [--folderpath arg] [--size arg]
+			gdx shost addFolder [--folderPath arg] [--size arg]
 
 will allocate disk space for saving data uploaded by storage client. Physical folder will be created
-under the file path specified using --folderpath. The size must be specified using --size as well.
+under the file path specified using --folderPath. The size must be specified using --size as well.
 
 Here are some supported folder size unit (NOTE: the unit must be specified as well):
 	{"kb", "mb", "gb", "tb", "kib", "mib", "gib", "tib"}`,
 		},
 
 		{
-			Name:      "resizefolder",
+			Name:      "resizeFolder",
 			Usage:     "Resize the disk space allocated for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(resizeFolder),
@@ -209,15 +208,15 @@ Here are some supported folder size unit (NOTE: the unit must be specified as we
 				folderSizeFlag,
 			},
 			Description: `
-			gdx shost resize [--folderpath arg] [--size arg]
+			gdx shost resize [--folderPath arg] [--size arg]
 
 will resize the disk space allocated for saving data uploaded by the storage client. The usage of this
-command is similar to addfolder, where folder size and folder path must be explicitly specified using the 
-flag --folderpath and --size`,
+command is similar to addFolder, where folder size and folder path must be explicitly specified using the 
+flag --folderPath and --size`,
 		},
 
 		{
-			Name:      "deletefolder",
+			Name:      "deleteFolder",
 			Usage:     "Free up the disk space used for saving data uploaded by the storage client",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(deleteFolder),
@@ -225,19 +224,19 @@ flag --folderpath and --size`,
 				folderPathFlag,
 			},
 			Description: `
-			gdx shost deletefolder [--folderpath arg]
+			gdx shost deleteFolder [--folderPath arg]
 
 will free up the disk space used for saving data uploaded by the storage client. The folder path must be
-specified using --folderpath.`,
+specified using --folderPath.`,
 		},
 
 		{
-			Name:      "paymentaddr",
+			Name:      "paymentAddr",
 			Usage:     "Retrieve the account address used for storage service revenue",
 			ArgsUsage: "",
 			Action:    utils.MigrateFlags(getHostPaymentAddress),
 			Description: `
-			gdx shost paymentaddr
+			gdx shost paymentAddr
 
 will display the account address used for the storage service. Unless user set it explicitly, the payment
 address will always be the first account address`,

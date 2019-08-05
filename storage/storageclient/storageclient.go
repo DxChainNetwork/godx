@@ -260,7 +260,7 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	client.persist.MaxDownloadSpeed = setting.MaxDownloadSpeed
 	client.persist.MaxUploadSpeed = setting.MaxUploadSpeed
 	if err = client.saveSettings(); err != nil {
-		err = fmt.Errorf("failed to save the storage client settigns: %s", err.Error())
+		err = fmt.Errorf("failed to save the storage client settings: %s", err.Error())
 		client.lock.Unlock()
 		return
 	}
@@ -301,6 +301,7 @@ func (client *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedL
 	return nil
 }
 
+// Append will send the given data to host and return the merkle root of data
 func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo *storage.HostInfo) (common.Hash, error) {
 	err := client.Write(sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
 	return merkle.Sha256MerkleTreeRoot(data), err
@@ -319,6 +320,7 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 
 	defer scs.Return(contract)
 
+	// old contract header and revision
 	contractHeader := contract.Header()
 	contractRevision := contractHeader.LatestContractRevision
 
@@ -377,18 +379,22 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		req.NewMissedProofValues[i] = o.Value
 	}
 
-	// record the change to this contract, that can allow us to continue this incomplete upload at last time
-	walTxn, err := contract.RecordUploadPreRev(rev, common.Hash{}, storagePrice, bandwidthPrice)
-	if err != nil {
-		log.Error("RecordUploadPreRev Failed", "err", err)
-		return err
-	}
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func() {
-		// record the successful or failed interactions
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
 
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		// we will delete static flag when host negotiate or commit error
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			client.CheckAndUpdateConnection(sp.PeerNode())
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else if err == nil {
+		}
+
+		if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -408,10 +414,16 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.HostBusyHandleReqErr
+		return storage.ErrHostBusyHandleReq
+	}
+
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return hostNegotiateErr
 	}
 
 	if err := msg.Decode(&merkleResp); err != nil {
+		hostNegotiateErr = err
 		return err
 	}
 
@@ -422,22 +434,16 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	leafHashes := merkleResp.OldLeafHashes
 	oldRoot, newRoot := contractRevision.NewFileMerkleRoot, merkleResp.NewMerkleRoot
 
-	verified, err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot)
-	if err != nil {
-		client.log.Error("something wrong for verifying diff proof", "error", err)
-	}
-	if !verified {
+	if err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, oldRoot); err != nil {
+		hostNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for old root, err: %v", err)
 	}
 
 	// and then modify the leaves and verify the new Merkle root
 	leafHashes = ModifyLeaves(leafHashes, actions, numSectors)
 	proofRanges = ModifyProofRanges(proofRanges, actions, numSectors)
-	verified, err = merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot)
-	if err != nil {
-		client.log.Error("something wrong for verifying diff proof", "error", err)
-	}
-	if !verified {
+	if err := merkle.Sha256VerifyDiffProof(proofRanges, numSectors, proofHashes, leafHashes, newRoot); err != nil {
+		hostNegotiateErr = err
 		return fmt.Errorf("invalid merkle proof for new root, err: %v", err)
 	}
 
@@ -450,75 +456,105 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	clientAccount := accounts.Account{Address: clientAddr}
 	clientWallet, err := am.Find(clientAccount)
 	if err != nil {
+		clientNegotiateErr = err
 		return err
 	}
 	// client sign the new revision
 	clientRevisionSign, err := clientWallet.SignHash(clientAccount, rev.RLPHash().Bytes())
 	if err != nil {
+		clientNegotiateErr = err
 		return err
 	}
+
 	// send client sig to host
 	if err := sp.SendContractUploadClientRevisionSign(clientRevisionSign); err != nil {
+		clientNegotiateErr = err
 		return fmt.Errorf("send storage contract upload client revision sign msg failed, err: %v", err)
 	}
+
 	// read the host's signature
 	var hostRevisionSig []byte
 	msg, err = sp.ClientWaitContractResp()
 	if err != nil {
 		return err
 	}
+
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return hostNegotiateErr
+	}
+
 	if err := msg.Decode(&hostRevisionSig); err != nil {
+		hostNegotiateErr = err
 		return err
 	}
+
 	rev.Signatures = [][]byte{clientRevisionSign, hostRevisionSig}
 
 	// commit upload revision
-	err = contract.CommitUpload(walTxn, rev, common.Hash{}, storagePrice, bandwidthPrice)
+	err = contract.CommitRevision(rev, storagePrice, bandwidthPrice)
 	if err != nil {
-		return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		_ = sp.SendClientCommitFailedMsg()
+
+		// wait for host ack msg
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		}
+		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
 	}
-	return nil
+
+	_ = sp.SendClientCommitSuccessMsg()
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		log.Error("contract upload failed when wait for host ACK msg", "err", err.Error())
+
+		_ = contract.RollbackUndoMem(contractHeader)
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		return err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return
+	default:
+		hostCommitErr = storage.ErrHostCommit
+		_ = contract.RollbackUndoMem(contractHeader)
+
+		_ = sp.SendClientAckMsg()
+		_, _ = sp.ClientWaitContractResp()
+		return hostCommitErr
+	}
 }
 
 // Download calls the Read RPC, writing the requested data to w
 // NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
 func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}, hostInfo *storage.HostInfo) (err error) {
-	// reset deadline when finished.
-	// NOTE: if client has download the data, but not sent stopping or completing signal to host,
-	// the conn should be disconnected after 1 hour.
-
 	// sanity check the request.
-	for _, sec := range req.Sections {
-		if uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize {
-			return errors.New("download out boundary of sector")
-		}
-		if req.MerkleProof {
-			if sec.Offset%merkle.LeafSize != 0 || sec.Length%merkle.LeafSize != 0 {
-				return errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
-			}
+	sector := req.Sector
+	if uint64(sector.Offset)+uint64(sector.Length) > storage.SectorSize {
+		return errors.New("download out boundary of sector")
+	}
+	if req.MerkleProof {
+		if sector.Offset%merkle.LeafSize != 0 || sector.Length%merkle.LeafSize != 0 {
+			return errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
 		}
 	}
 
 	// calculate estimated bandwidth
 	var totalLength uint64
-	for _, sec := range req.Sections {
-		totalLength += uint64(sec.Length)
-	}
+	totalLength += uint64(sector.Length)
+
 	var estProofHashes uint64
 	if req.MerkleProof {
-
 		// use the worst-case proof size of 2*tree depth,
 		// which occurs when proving across the two leaves in the center of the tree
 		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
-		estProofHashes = uint64(len(req.Sections) * estHashesPerProof)
+		estProofHashes = uint64(estHashesPerProof)
 	}
 	estBandwidth := totalLength + estProofHashes*uint64(storage.HashSize)
-
-	// calculate sector accesses
-	sectorAccesses := make(map[common.Hash]struct{})
-	for _, sec := range req.Sections {
-		sectorAccesses[sec.MerkleRoot] = struct{}{}
-	}
 
 	// retrieve the last contract revision
 	scs := client.contractManager.GetStorageContractSet()
@@ -529,14 +565,15 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	if !exist {
 		return fmt.Errorf("not exist this contract: %s", contractID.String())
 	}
-
 	defer scs.Return(contract)
+
+	// old contract header and revision
 	contractHeader := contract.Header()
 	lastRevision := contractHeader.LatestContractRevision
 
 	// calculate price
 	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
-	sectorAccessPrice := hostInfo.SectorAccessPrice.MultUint64(uint64(len(sectorAccesses)))
+	sectorAccessPrice := hostInfo.SectorAccessPrice
 
 	price := hostInfo.BaseRPCPrice.Add(bandwidthPrice).Add(sectorAccessPrice)
 	if lastRevision.NewValidProofOutputs[0].Value.Cmp(price.BigIntPtr()) < 0 {
@@ -576,17 +613,24 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		req.NewMissedProofValues[i] = nmpo.Value
 	}
 
-	// record the change to this contract
-	walTxn, err := contract.RecordDownloadPreRev(newRevision, price)
-	if err != nil {
-		return err
-	}
-
 	// record the successful or failed interactions
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
 	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
+				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
+
+		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			client.CheckAndUpdateConnection(sp.PeerNode())
 			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		} else if err == nil {
+		}
+
+		if err == nil {
 			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
 		}
 	}()
@@ -597,134 +641,121 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		return err
 	}
 
-	// spawn a goroutine to handle cancellation
-	doneChan := make(chan struct{})
-	go func() {
-		select {
-		case <-cancel:
-		case <-doneChan:
-		}
-
-		// if negotiation is canceled or done, client should send stop msg to host
-		sp.SendClientRevisionStop()
-	}()
-
-	// read responses
+	// read host data responses
 	var hostSig []byte
-	for _, sec := range req.Sections {
-		var resp storage.DownloadResponse
-		msg, err := sp.ClientWaitContractResp()
-		if err != nil {
-			return err
-		}
 
-		// meaning request was sent too frequently, the host's evaluation
-		// will not be degraded
-		if msg.Code == storage.HostBusyHandleReqMsg {
-			return storage.HostBusyHandleReqErr
-		}
-
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.HostStopMsg {
-			return nil
-		}
-
-		err = msg.Decode(&resp)
-		if err != nil {
-			return err
-		}
-
-		// if host sent data, should validate it
-		if len(resp.Data) > 0 {
-			if len(resp.Data) != int(sec.Length) {
-				return errors.New("host did not send enough sector data")
-			}
-			if req.MerkleProof {
-				proofStart := int(sec.Offset) / merkle.LeafSize
-				proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
-				verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sec.MerkleRoot)
-				if !verified || err != nil {
-					return errors.New("host provided incorrect sector data or Merkle proof")
-				}
-			}
-
-			// write sector data
-			if _, err := w.Write(resp.Data); err != nil {
-				log.Error("Write Buffer", "err", err)
-				return err
-			}
-
-		}
-
-		// if host sent signature, indicate the download complete, should exit the loop
-		if len(resp.Signature) > 0 {
-			hostSig = resp.Signature
-			break
-		}
-	}
-
-	if hostSig == nil {
-		// if we haven't received host signature, just read again
-		var resp storage.DownloadResponse
-		msg, err := sp.ClientWaitContractResp()
-		if err != nil {
-			return err
-		}
-
-		// meaning request was sent too frequently, the host's evaluation
-		// will not be degraded
-		if msg.Code == storage.HostBusyHandleReqMsg {
-			return storage.HostBusyHandleReqErr
-		}
-
-		// if host send some negotiation error, client should handler it
-		if msg.Code == storage.HostStopMsg {
-			return nil
-		}
-
-		err = msg.Decode(&resp)
-		if err != nil {
-			return err
-		}
-
-		hostSig = resp.Signature
-	}
-	newRevision.Signatures = [][]byte{clientSig, hostSig}
-
-	// commit this revision
-	err = contract.CommitDownload(walTxn, newRevision, price)
-	if err != nil {
-		return fmt.Errorf("commit download update the contract header failed, err: %v", err)
-	}
-
-	// after downloading data, client should send negotiation stop msg to host
-	close(doneChan)
-
-	// if client has not received negotiation stop msg from host, should wait for it
+	var resp storage.DownloadResponse
 	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
 		return err
 	}
 
-	// if the last msg is not stop, return err
-	if msg.Code != storage.HostStopMsg {
-		return errors.New("expected 'stop' msg from host, got " + string(msg.Code))
+	// meaning request was sent too frequently, the host's evaluation
+	// will not be degraded
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.ErrHostBusyHandleReq
 	}
 
-	return nil
+	// if host send some negotiation error, client should handler it
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return hostNegotiateErr
+	}
+
+	err = msg.Decode(&resp)
+	if err != nil {
+		hostNegotiateErr = err
+		return err
+	}
+
+	// if host sent data, should validate it
+	if len(resp.Data) > 0 {
+		if len(resp.Data) != int(sector.Length) {
+			err = errors.New("host did not send enough sector data")
+			hostNegotiateErr = err
+			return err
+		}
+
+		if req.MerkleProof {
+			proofStart := int(sector.Offset) / merkle.LeafSize
+			proofEnd := int(sector.Offset+sector.Length) / merkle.LeafSize
+			verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sector.MerkleRoot)
+			if !verified || err != nil {
+				err = errors.New("host provided incorrect sector data or Merkle proof")
+				hostNegotiateErr = err
+				return err
+			}
+		}
+
+		if len(resp.Signature) > 0 {
+			hostSig = resp.Signature
+		} else {
+			err = errors.New("host lost response data signature")
+			hostNegotiateErr = err
+			return err
+		}
+
+		// write sector data
+		if _, err := w.Write(resp.Data); err != nil {
+			log.Error("Write Buffer", "err", err)
+			clientNegotiateErr = err
+			return err
+		}
+	}
+
+	newRevision.Signatures = [][]byte{clientSig, hostSig}
+
+	// commit this revision
+	err = contract.CommitRevision(newRevision, price)
+	if err != nil {
+		if err := sp.SendClientCommitFailedMsg(); err != nil {
+			return err
+		}
+
+		// wait for host ack msg
+		msg, err := sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
+		}
+		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
+	}
+
+	_ = sp.SendClientCommitSuccessMsg()
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		log.Error("contract download failed when wait for host ACK msg", "err", err.Error())
+
+		_ = contract.RollbackUndoMem(contractHeader)
+		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
+		return err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return
+	default:
+		hostCommitErr = storage.ErrHostCommit
+		_ = contract.RollbackUndoMem(contractHeader)
+
+		_ = sp.SendClientAckMsg()
+		_, _ = sp.ClientWaitContractResp()
+		return hostCommitErr
+	}
 }
 
-// calls the Read RPC with a single section and returns the requested data. A Merkle proof is always requested.
+// Download requests for a single section and returns the requested data. A Merkle proof is always requested.
 func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset, length uint32, hostInfo *storage.HostInfo) ([]byte, error) {
 	client.lock.Lock()
 	defer client.lock.Unlock()
 
 	req := storage.DownloadRequest{
-		Sections: []storage.DownloadRequestSection{{
+		Sector: storage.DownloadRequestSector{
 			MerkleRoot: root,
 			Offset:     offset,
 			Length:     length,
-		}},
+		},
 		MerkleProof: true,
 	}
 	var buf bytes.Buffer
@@ -939,9 +970,10 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 	if closer, ok := dw.(io.Closer); err != nil && ok {
 		closeErr := closer.Close()
 		if closeErr != nil {
-			return nil, errors.New(fmt.Sprintf("something wrong with creating download object: %v, destination close error: %v", err, closeErr))
+			return nil, fmt.Errorf("something wrong with creating download object: %v, destination close error: %v", err, closeErr)
+
 		}
-		return nil, errors.New(fmt.Sprintf("get something wrong with creating download object: %v, destination close successfully", err))
+		return nil, fmt.Errorf("get something wrong with creating download object: %v, destination close successfully", err)
 	} else if err != nil {
 		return nil, err
 	}
@@ -960,7 +992,7 @@ func (client *StorageClient) createDownload(p storage.DownloadParameters) (*down
 // NOTE: DownloadSync can directly be accessed to outer request via RPC or IPC ...
 // but can not async download to http response, so DownloadAsync should not open to out.
 
-// performs a file download and blocks until the download is finished.
+// DownloadSync performs a file download and blocks until the download is finished.
 func (client *StorageClient) DownloadSync(p storage.DownloadParameters) error {
 	if err := client.tm.Add(); err != nil {
 		return err
@@ -1063,13 +1095,13 @@ func (client *StorageClient) GetPaymentAddress() (common.Address, error) {
 	return common.Address{}, fmt.Errorf("paymentAddress must be explicitly specified")
 }
 
-// IsContractRevising will be used to check if the contract is currently
+// TryToRenewOrRevise will be used to check if the contract is currently
 // in the middle of the revision
 func (client *StorageClient) TryToRenewOrRevise(hostID enode.ID) bool {
 	return client.ethBackend.TryToRenewOrRevise(hostID)
 }
 
-// RenewDone indicates that the contract finished renewing
+// RevisionOrRenewingDone indicates that the contract finished renewing
 func (client *StorageClient) RevisionOrRenewingDone(hostID enode.ID) {
 	client.ethBackend.RevisionOrRenewingDone(hostID)
 }

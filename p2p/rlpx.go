@@ -160,7 +160,7 @@ func readProtocolHandshake(rw MsgReader, our *protoHandshake) (*protoHandshake, 
 	}
 	if msg.Code == discMsg {
 		// Disconnect before protocol handshake is valid according to the
-		// spec and we send it ourself if the post-handshake checks fail.
+		// spec and we send it if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
 		var reason [1]DiscReason
@@ -523,7 +523,7 @@ func sealEIP8(msg interface{}, h *encHandshake) ([]byte, error) {
 	// pad with random amount of data. the amount needs to be at least 100 bytes to make
 	// the message distinguishable from pre-EIP-8 handshakes.
 	//
-	// append random amount of data (data should all be 0, comming from uninitialized padSpace)
+	// append random amount of data (data should all be 0, coming from uninitialized padSpace)
 	// the amount of data passed in minimum: 100, maximum 300
 	pad := padSpace[:mrand.Intn(len(padSpace)-100)+100]
 	buf.Write(pad)

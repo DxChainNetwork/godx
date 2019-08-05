@@ -204,7 +204,7 @@ func (b *LesApiBackend) ServiceFilter(ctx context.Context, session *bloombits.Ma
 
 // Light mode not supported now. so sign method returns error and
 // host enode url method returns empty string
-func (b *LesApiBackend) SignByNode (hash []byte) ([]byte, error) {
+func (b *LesApiBackend) SignByNode(hash []byte) ([]byte, error) {
 	return nil, errors.New("light mode not supported")
 }
 

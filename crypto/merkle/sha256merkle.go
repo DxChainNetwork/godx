@@ -295,7 +295,7 @@ func Sha256DiffProof(roots []common.Hash, rangeSet []SubTreeLimit, leavesCount u
 
 // Sha256VerifyDiffProof is similar to Sha256VerifySectorRangeProof, the only difference is that this function
 // can provide multiple ranges
-func Sha256VerifyDiffProof(rangeSet []SubTreeLimit, leavesCount uint64, hashProofSet, rootsVerify []common.Hash, merkleRoot common.Hash) (verified bool, err error) {
+func Sha256VerifyDiffProof(rangeSet []SubTreeLimit, leavesCount uint64, hashProofSet, rootsVerify []common.Hash, merkleRoot common.Hash) (err error) {
 	// rangeSet verification
 	if err = rangeSetVerification(rangeSet); err != nil {
 		return
@@ -311,8 +311,8 @@ func Sha256VerifyDiffProof(rangeSet []SubTreeLimit, leavesCount uint64, hashProo
 	} else {
 		m = merkleRoot[:]
 	}
-	verified, err = CheckDiffStorageProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, m)
 
+	err = CheckDiffStorageProof(hasher, leavesCount, sha256.New(), rangeSet, byteProofSet, m)
 	return
 }
 

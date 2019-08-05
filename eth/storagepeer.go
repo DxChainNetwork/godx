@@ -11,6 +11,7 @@ import (
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
 // TriggerError is used to send the error message to the errMsg channel,
@@ -25,95 +26,198 @@ func (p *peer) TriggerError(err error) {
 // SendStorageHostConfig will send the storage host configuration to the client
 // once the host got the request from the storage client
 func (p *peer) SendStorageHostConfig(config storage.HostExtConfig) error {
-	return p2p.Send(p.rw, storage.HostConfigRespMsg, config)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostConfigRespMsg, config)
+	}
+	return err
 }
 
 // RequestStorageHostConfig is used when the client is trying to request host's
 // configuration. The HostConfigReqMsg will be sent to the storage host
 func (p *peer) RequestStorageHostConfig() error {
-	return p2p.Send(p.rw, storage.HostConfigReqMsg, struct{}{})
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostConfigReqMsg, struct{}{})
+	}
+	return err
 }
 
 // RequestContractCreate will be used when the storage client is trying to create
 // the contract with desired storage host. ContractCreateReqMsg will be sent to the
 // storage host
 func (p *peer) RequestContractCreation(req storage.ContractCreateRequest) error {
-	return p2p.Send(p.rw, storage.ContractCreateReqMsg, req)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractCreateReqMsg, req)
+	}
+	return err
 }
 
 // SendContractCreateClientRevisionSig will be used once the storage client drafted and
 // signed a contract revision and requesting the validation and signature from the storage host
 func (p *peer) SendContractCreateClientRevisionSign(revisionSign []byte) error {
-	return p2p.Send(p.rw, storage.ContractCreateClientRevisionSign, revisionSign)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractCreateClientRevisionSign, revisionSign)
+	}
+	return err
 }
 
 // SendContractCreationHostSign will be used once the host received the ContractCreateReqMsg
 // message from the client. The host will validated the contract, sign it, and sent back to
 // the storage client
 func (p *peer) SendContractCreationHostSign(contractSign []byte) error {
-	return p2p.Send(p.rw, storage.ContractCreateHostSign, contractSign)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractCreateHostSign, contractSign)
+	}
+	return err
 }
 
 // SendContractCreationHostRevisionSign will be used once the host received the revised
 // contract from the storage client. Host will validate it, sign it, and send it back
 func (p *peer) SendContractCreationHostRevisionSign(revisionSign []byte) error {
-	return p2p.Send(p.rw, storage.ContractCreateRevisionSign, revisionSign)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractCreateRevisionSign, revisionSign)
+	}
+	return err
 }
 
 // RequestContractUpload is used when the client is trying to upload data
 // to the corresponded storage host. Upload request must be sent to the storage
 // host first
 func (p *peer) RequestContractUpload(req storage.UploadRequest) error {
-	return p2p.Send(p.rw, storage.ContractUploadReqMsg, req)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractUploadReqMsg, req)
+	}
+	return err
 }
 
 // SendContractUploadClientRevisionSign will be sent by the storage client
 // once the client received the merkle proof sent by the storage host
 func (p *peer) SendContractUploadClientRevisionSign(revisionSign []byte) error {
-	return p2p.Send(p.rw, storage.ContractUploadClientRevisionSign, revisionSign)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractUploadClientRevisionSign, revisionSign)
+	}
+	return err
 }
 
 // SendUploadMerkleProof is sent by the storage host to prove that it has the data
 // that storage client needed
 func (p *peer) SendUploadMerkleProof(merkleProof storage.UploadMerkleProof) error {
-	return p2p.Send(p.rw, storage.ContractUploadMerkleProofMsg, merkleProof)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractUploadMerkleProofMsg, merkleProof)
+	}
+	return err
 }
 
 // SendUploadHostRevisionSign will be used once the storage host received the contract upload client
 // revision sign sent by the storage client. Host will validate the revised contract, sign it, and
 // send it back to the storage client
 func (p *peer) SendUploadHostRevisionSign(revisionSign []byte) error {
-	return p2p.Send(p.rw, storage.ContractUploadRevisionSign, revisionSign)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractUploadRevisionSign, revisionSign)
+	}
+	return err
 }
 
 // RequestContractDownload will be used when the storage client wants to download
 // data pieces from the corresponded storage host
 func (p *peer) RequestContractDownload(req storage.DownloadRequest) error {
-	return p2p.Send(p.rw, storage.ContractDownloadReqMsg, req)
-}
-
-// SendClientRevisionStop is sent by the storage client which used to indicate
-// the storage download revision is done
-func (p *peer) SendClientRevisionStop() error {
-	return p2p.Send(p.rw, storage.ClientStopMsg, "client revision stop")
-}
-
-// SendHostRevisionStop is sent by the storage host which used to indicate
-// the storage download revision is done
-func (p *peer) SendHostRevisionStop() error {
-	return p2p.Send(p.rw, storage.HostStopMsg, "host revision stop")
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractDownloadReqMsg, req)
+	}
+	return err
 }
 
 // SendContractDownloadData is sent by the client. Data piece requested by the
 // storage client will be included
 func (p *peer) SendContractDownloadData(resp storage.DownloadResponse) error {
-	return p2p.Send(p.rw, storage.ContractDownloadDataMsg, resp)
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ContractDownloadDataMsg, resp)
+	}
+	return err
 }
 
 // SendHostBusyHandleRequestErr will send a error message to client, stating that
 // the host is currently busy handling the previous error message
 func (p *peer) SendHostBusyHandleRequestErr() error {
-	return p2p.Send(p.rw, storage.HostBusyHandleReqMsg, "error handling")
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostBusyHandleReqMsg, "error handling")
+	}
+	return err
+}
+
+// SendClientNegotiateErrorMsg will send client negotiate error msg
+func (p *peer) SendClientNegotiateErrorMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ClientNegotiateErrorMsg, storage.ErrClientNegotiate.Error())
+	}
+	return err
+}
+
+// SendClientCommitFailedMsg will send a error msg to Host, indicating that client occurs exception
+// when executing 'Commit Action'
+func (p *peer) SendClientCommitFailedMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ClientCommitFailedMsg, storage.ErrClientCommit.Error())
+	}
+	return err
+}
+
+// SendClientCommitSuccessMsg will send a success msg to Host, indicating that client has no error after 'Commit Action'
+func (p *peer) SendClientCommitSuccessMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ClientCommitSuccessMsg, "commit success")
+	}
+	return err
+}
+
+// SendClientCommitSuccessMsg will send host commit failed msg to client
+func (p *peer) SendHostCommitFailedMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostCommitFailedMsg, storage.ErrHostCommit.Error())
+	}
+	return err
+}
+
+func (p *peer) SendClientAckMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.ClientAckMsg, "client ack")
+	}
+	return err
+}
+
+// SendHostAckMsg will send host ack msg to client as the last negotiate msg no matter what success or failed
+func (p *peer) SendHostAckMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostAckMsg, "host ack")
+	}
+	return err
+}
+
+// SendHostNegotiateErrorMsg will send host negotiate error msg
+func (p *peer) SendHostNegotiateErrorMsg() error {
+	var err error
+	if err = p.checkPeerStopHook(p); err == nil {
+		return p2p.Send(p.rw, storage.HostNegotiateErrorMsg, storage.ErrHostNegotiate.Error())
+	}
+	return err
 }
 
 // WaitConfigResp is used by the storage client, waiting from the configuration
@@ -127,7 +231,7 @@ func (p *peer) WaitConfigResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> client waits too long for config response from the host")
 		return
 	case <-p.StopChan():
-		err = errors.New("program exist")
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }
@@ -143,7 +247,7 @@ func (p *peer) ClientWaitContractResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> client waits too long for contract response from the host")
 		return
 	case <-p.StopChan():
-		err = errors.New("program exist")
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }
@@ -159,7 +263,7 @@ func (p *peer) HostWaitContractResp() (msg p2p.Msg, err error) {
 		err = errors.New("timeout -> host waits too long for contract response from the host")
 		return
 	case <-p.StopChan():
-		err = errors.New("program exist")
+		err = coinchargemaintenance.ErrProgramExit
 		return
 	}
 }

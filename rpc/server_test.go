@@ -140,7 +140,7 @@ func TestRegisterName(t *testing.T) {
 	}
 
 	if len(svc.subscriptions) != 0 {
-		t.Errorf("Service: calcualtor. Got subscriptiosn: %d, expected 0",
+		t.Errorf("Service: calculator. Got subscriptiosn: %d, expected 0",
 			len(svc.subscriptions))
 	}
 

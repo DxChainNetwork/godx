@@ -24,7 +24,7 @@ func TestVersionstorage(t *testing.T) {
 	for _, vers := range expected {
 		WriteDatabaseVersion(db, vers)
 		if version := ReadDatabaseVersion(db); *version != vers {
-			t.Fatalf("cannot overwirte the version, " +
+			t.Fatalf("cannot overwrite the version, " +
 				"or read version does not match the write version")
 		}
 	}
@@ -91,7 +91,7 @@ func TestPreimagesStorage(t *testing.T) {
 		common.BytesToHash([]byte("img005")): []byte("test img 005"),
 	}
 	// try to read the empty db, expected nil data
-	for key, _ := range preimages {
+	for key := range preimages {
 		if data := ReadPreimage(db, key); data != nil {
 			t.Errorf("find non existing data in the db")
 		}
@@ -101,7 +101,7 @@ func TestPreimagesStorage(t *testing.T) {
 	// read each imges according to the key
 	for key, val := range preimages {
 		if data := ReadPreimage(db, key); common.BytesToHash(val) != common.BytesToHash(data) {
-			t.Errorf("read data does not match before writting it to db")
+			t.Errorf("read data does not match before writing it to db")
 		}
 	}
 	// test if a value can be override corresponding to a key
@@ -122,7 +122,7 @@ func TestPreimagesStorage(t *testing.T) {
 	// test if the images in the database match the expected value
 	for key, val := range expected {
 		if data := ReadPreimage(db, key); common.BytesToHash(val) != common.BytesToHash(data) {
-			t.Errorf("read data does not match before writting it to db")
+			t.Errorf("read data does not match before writing it to db")
 		}
 	}
 

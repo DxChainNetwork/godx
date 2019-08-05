@@ -5,6 +5,7 @@
 package contractmanager
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/accounts"
@@ -19,6 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
+// prepareCreateContract refers that client will sign some contracts with hosts, which satisfies the upload/download demand
 func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRemainingFund common.BigInt, rentPayment storage.RentPayment) (terminated bool, err error) {
 	// get some random hosts for contract formation
 	randomHosts, err := cm.randomHostsForContractForm(neededContracts)
@@ -119,8 +121,8 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 
 	// form the contract create parameters
 	params := storage.ContractParams{
-		Allowance:            rentPayment,
-		HostEnodeUrl:         host.EnodeURL,
+		RentPayment:          rentPayment,
+		HostEnodeURL:         host.EnodeURL,
 		Funding:              contractFund,
 		StartHeight:          startHeight,
 		EndHeight:            contractEndHeight,
@@ -180,12 +182,12 @@ func (cm *ContractManager) randomHostsForContractForm(neededContracts int) (rand
 // ContractCreate will try to create the contract with the storage host manager provided
 // by the caller
 func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md storage.ContractMetaData, err error) {
-	allowance, funding, clientPaymentAddress, startHeight, endHeight, host := params.Allowance, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
+	rentPayment, funding, clientPaymentAddress, startHeight, endHeight, host := params.RentPayment, params.Funding, params.ClientPaymentAddress, params.StartHeight, params.EndHeight, params.Host
 
 	// Calculate the payouts for the client, host, and whole contract
 	period := endHeight - startHeight
-	expectedStorage := allowance.ExpectedStorage / allowance.StorageHosts
-	clientPayout, hostPayout, _, err := ClientPayoutsPreTax(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
+	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
+	clientPayout, hostPayout, _, err := ClientPayouts(host, funding, common.BigInt0, common.BigInt0, period, expectedStorage)
 	if err != nil {
 		err = fmt.Errorf("failed to calculate the client payouts: %s", err.Error())
 		return storage.ContractMetaData{}, err
@@ -218,15 +220,6 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			{Value: hostPayout.BigIntPtr(), Address: host.PaymentAddress},
 		},
 	}
-	// Increase Successful/Failed interactions accordingly
-	defer func() {
-		if err != nil && err != storage.HostBusyHandleReqErr {
-			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
-			err = common.ErrExtend(err, ErrHostFault)
-		} else if err == nil {
-			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
-		}
-	}()
 
 	//Find the wallet based on the account address
 	account := accounts.Account{Address: clientPaymentAddress}
@@ -238,9 +231,33 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// set up the connection with the storage host and remove the operation once done
 	sp, err := cm.b.SetupConnection(host.EnodeURL)
 	if err != nil {
-		cm.log.Error("contract create failed, failed to set up connection", "err", err.Error())
+		cm.log.Error("contract create failed, failed to set up connection", "err", err)
 		return storage.ContractMetaData{}, storagehost.ExtendErr("setup connection failed while creating the contract", err)
 	}
+
+	// Increase Successful/Failed interactions accordingly
+	// Ignore the send negotiate network error, we expect that client will wait for host
+	// that prevents client from opening another negotiate stage prematurely but receives host busy signal
+	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
+	defer func() {
+		if clientNegotiateErr != nil {
+			_ = sp.SendClientNegotiateErrorMsg()
+			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
+				cm.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
+			}
+		}
+
+		// we will delete static flag when host negotiate or commit error
+		// when host occurs error, we increase failed interactions
+		if hostCommitErr != nil || hostNegotiateErr != nil {
+			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
+			cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		}
+
+		if err == nil {
+			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
+		}
+	}()
 
 	//Sign the hash of the storage contract
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
@@ -256,7 +273,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 	if err := sp.RequestContractCreation(req); err != nil {
 		err = fmt.Errorf("failed to send the contract creation request: %s", err.Error())
-		log.Error("contract create failed", "err", err.Error())
+		log.Error("contract create failed", "err", err)
 		return storage.ContractMetaData{}, err
 	}
 
@@ -270,19 +287,19 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// meaning request was sent too frequently, the host's evaluation
 	// will not be degraded
 	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ContractMetaData{}, storage.HostBusyHandleReqErr
+		return storage.ContractMetaData{}, storage.ErrHostBusyHandleReq
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostSign); err != nil {
-		err = fmt.Errorf("failed to decode host signature: %s", err.Error())
-		return storage.ContractMetaData{}, err
+		hostNegotiateErr = fmt.Errorf("failed to decode host signature: %s", err.Error())
+		return storage.ContractMetaData{}, hostNegotiateErr
+
 	}
 	storageContract.Signatures = [][]byte{clientContractSign, hostSign}
 
@@ -301,11 +318,13 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 	clientRevisionSign, err := wallet.SignHash(account, storageContractRevision.RLPHash().Bytes())
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("client sign revision error", err)
+		clientNegotiateErr = storagehost.ExtendErr("client sign revision error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("send revision sign by client error", err)
+		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
 
 	// wait until response was sent by storage host
@@ -318,31 +337,35 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	}
 
 	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.NegotiationErrorMsg {
-		var negotiationErr error
-		msg.Decode(&negotiationErr)
-		return storage.ContractMetaData{}, negotiationErr
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		hostNegotiateErr = storage.ErrHostNegotiate
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
 	if err := msg.Decode(&hostRevisionSign); err != nil {
-		err = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
-		return storage.ContractMetaData{}, err
+		hostNegotiateErr = fmt.Errorf("failed to decode the hostRevisionSign: %s", err.Error())
+		return storage.ContractMetaData{}, hostNegotiateErr
 	}
 
-	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	scBytes, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
-		err = fmt.Errorf("failed to enocde storageContract: %s", err.Error())
-		return storage.ContractMetaData{}, err
+		clientNegotiateErr = fmt.Errorf("failed to enocde storageContract: %s", err.Error())
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
+
 	if _, err := cm.b.SendStorageContractCreateTx(clientPaymentAddress, scBytes); err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		clientNegotiateErr = storagehost.ExtendErr("Send storage contract creation transaction error", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
+
 	pubKey, err := crypto.UnmarshalPubkey(host.NodePubKey)
 	if err != nil {
-		return storage.ContractMetaData{}, storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		clientNegotiateErr = storagehost.ExtendErr("Failed to convert the NodePubKey", err)
+		return storage.ContractMetaData{}, clientNegotiateErr
 	}
+
 	// wrap some information about this contract
+	storageContractRevision.Signatures = append(storageContractRevision.Signatures, hostRevisionSign)
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(storageContract.ID()),
 		EnodeID:                PubkeyToEnodeID(pubKey),
@@ -358,9 +381,53 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
-		err = fmt.Errorf("failed to insert the contract after created: %s", err.Error())
+		// ignore the send message error the same as negotiate error
+		_ = sp.SendClientCommitFailedMsg()
+
+		// wait for host ack msg
+		msg, err = sp.ClientWaitContractResp()
+		if err == nil && msg.Code == storage.HostAckMsg {
+			err = errors.New("failed to insert the contract after announce host")
+		} else if err != nil {
+			err = fmt.Errorf("failed to insert the contract after announce host, but cann't receive host ack msg: %s", err.Error())
+		}
 		return storage.ContractMetaData{}, err
 	}
-	return meta, nil
 
+	// send the commit success msg if insert contract occurs no error
+	// we ignore any error and then wait the host ack msg
+	_ = sp.SendClientCommitSuccessMsg()
+
+	// wait for HostAckMsg until timeout
+	msg, err = sp.ClientWaitContractResp()
+	if err != nil {
+		log.Error("contract create failed when wait for host ACK msg", "err", err)
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+		return storage.ContractMetaData{}, err
+	}
+
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return meta, nil
+	default:
+		hostCommitErr = storage.ErrHostCommit
+		_ = rollbackContractSet(cm.GetStorageContractSet(), header.ID)
+
+		_ = sp.SendClientAckMsg()
+
+		// client wait for host last ack msg. if timeout or not ack,
+		// client still throw host error. so we ignore any msg content and the return error
+		_, _ = sp.ClientWaitContractResp()
+
+		return storage.ContractMetaData{}, hostCommitErr
+	}
+}
+
+func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage.ContractID) error {
+	if c, exist := contractSet.Acquire(id); exist {
+		if err := contractSet.Delete(c); err != nil {
+			return err
+		}
+	}
+	return nil
 }

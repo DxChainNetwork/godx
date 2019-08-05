@@ -15,85 +15,70 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 // DownloadHandler handles the download negotiation
 func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
-	var downloadErr error
+	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
-		if downloadErr != nil {
-			h.log.Error("data download failed", "err", downloadErr.Error())
-			sp.TriggerError(downloadErr)
+		if clientNegotiateErr != nil || clientCommitErr != nil {
+			_ = sp.SendHostAckMsg()
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendHostNegotiateErrorMsg()
 		}
-
-		// before host download handler return, should send negotiation stop msg to client
-		sp.SendHostRevisionStop()
 	}()
 
 	// read the download request.
 	var req storage.DownloadRequest
 	err := downloadReqMsg.Decode(&req)
 	if err != nil {
-		downloadErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
+		clientNegotiateErr = fmt.Errorf("error decoding the download request message: %s", err.Error())
 		return
 	}
-
-	// as soon as client complete downloading, will send stop msg.
-	stopSignal := make(chan error, 1)
-	go func() {
-		msg, err := sp.HostWaitContractResp()
-		if err != nil {
-			stopSignal <- err
-		} else if msg.Code != storage.ClientStopMsg {
-			stopSignal <- errors.New("expected 'stop' from client, got " + string(msg.Code))
-		} else {
-			stopSignal <- nil
-		}
-	}()
 
 	// get storage responsibility
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, req.StorageContractID)
+	snapshotSo := so
 	h.lock.RUnlock()
 
 	// it is totally fine not getting the storage responsibility
 	if err != nil {
+		hostNegotiateErr = err
 		return
 	}
 
 	// check whether the contract is empty
 	if reflect.DeepEqual(so.OriginStorageContract, types.StorageContract{}) {
-		downloadErr = errors.New("no contract locked")
-		<-stopSignal
+		hostNegotiateErr = errors.New("no contract locked")
 		return
 	}
 
 	settings := h.externalConfig()
-
 	currentRevision := so.StorageContractRevisions[len(so.StorageContractRevisions)-1]
 
 	// Validate the request.
-	for _, sec := range req.Sections {
-		var err error
-		switch {
-		case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
-			err = errors.New("download out boundary of sector")
-		case sec.Length == 0:
-			err = errors.New("length cannot be 0")
-		case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
-			err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
-		case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
-			err = errors.New("the number of valid proof values not match the old")
-		case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
-			err = errors.New("the number of missed proof values not match the old")
-		}
-		if err != nil {
-			downloadErr = fmt.Errorf("download request validation failed: %s", err.Error())
-			return
-		}
+	sec := req.Sector
+	switch {
+	case uint64(sec.Offset)+uint64(sec.Length) > storage.SectorSize:
+		err = errors.New("download out boundary of sector")
+	case sec.Length == 0:
+		err = errors.New("length cannot be 0")
+	case req.MerkleProof && (sec.Offset%storage.SegmentSize != 0 || sec.Length%storage.SegmentSize != 0):
+		err = errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
+	case len(req.NewValidProofValues) != len(currentRevision.NewValidProofOutputs):
+		err = errors.New("the number of valid proof values not match the old")
+	case len(req.NewMissedProofValues) != len(currentRevision.NewMissedProofOutputs):
+		err = errors.New("the number of missed proof values not match the old")
+	}
+	if err != nil {
+		hostNegotiateErr = fmt.Errorf("download request validation failed: %s", err.Error())
+		return
 	}
 
 	// construct the new revision
@@ -117,13 +102,11 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	// calculate expected cost and verify against client's revision
 	var estBandwidth uint64
 	sectorAccesses := make(map[common.Hash]struct{})
-	for _, sec := range req.Sections {
-		// use the worst-case proof size of 2*tree depth (this occurs when
-		// proving across the two leaves in the center of the tree)
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
-		estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
-		sectorAccesses[sec.MerkleRoot] = struct{}{}
-	}
+	// use the worst-case proof size of 2*tree depth (this occurs when
+	// proving across the two leaves in the center of the tree)
+	estHashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
+	estBandwidth += uint64(sec.Length) + uint64(estHashesPerProof*storage.HashSize)
+	sectorAccesses[sec.MerkleRoot] = struct{}{}
 
 	// calculate total cost
 	bandwidthCost := settings.DownloadBandwidthPrice.MultUint64(estBandwidth)
@@ -131,7 +114,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	totalCost := settings.BaseRPCPrice.Add(bandwidthCost).Add(sectorAccessCost)
 	err = verifyPaymentRevision(currentRevision, newRevision, h.blockHeight, totalCost.BigIntPtr())
 	if err != nil {
-		downloadErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("failed to verify the payment revision: %s", err.Error())
 		return
 	}
 
@@ -139,13 +122,13 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		downloadErr = fmt.Errorf("failed to find the account address: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("failed to find the account address: %s", err.Error())
 		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		downloadErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("host failed to sign the revision: %s", err.Error())
 		return
 	}
 
@@ -155,68 +138,71 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
 	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-	h.lock.Lock()
-	err = h.modifyStorageResponsibility(so, nil, nil, nil)
-	h.lock.Unlock()
+
+	// fetch the requested data from host local storage
+	sectorData, err := h.ReadSector(sec.MerkleRoot)
 	if err != nil {
-		downloadErr = fmt.Errorf("host failed to modify the storage responsibility: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("host failed read sector: %s", err.Error())
+		return
+	}
+	data := sectorData[sec.Offset : sec.Offset+sec.Length]
+
+	// construct the Merkle proof, if requested.
+	var proof []common.Hash
+	if req.MerkleProof {
+		proofStart := int(sec.Offset) / merkle.LeafSize
+		proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
+		proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
+		if err != nil {
+			hostNegotiateErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
+			return
+		}
+	}
+
+	// send the response
+	resp := storage.DownloadResponse{
+		Signature:   nil,
+		Data:        data,
+		MerkleProof: proof,
+	}
+
+	resp.Signature = hostSig
+	if err := sp.SendContractDownloadData(resp); err != nil {
+		log.Error("failed to send the contract download data message", "err", err)
 		return
 	}
 
-	// enter response loop
-	for i, sec := range req.Sections {
+	// wait for client commit success msg
+	msg, err := sp.HostWaitContractResp()
+	if err != nil {
+		log.Error("storage host failed to get client commit success msg", "err", err)
+		return
+	}
 
-		// fetch the requested data from host local storage
-		sectorData, err := h.ReadSector(sec.MerkleRoot)
+	if msg.Code == storage.ClientCommitSuccessMsg {
+		h.lock.Lock()
+		err = h.modifyStorageResponsibility(so, nil, nil, nil)
+		h.lock.Unlock()
 		if err != nil {
-			downloadErr = fmt.Errorf("host failed read sector: %s", err.Error())
+			_ = sp.SendHostCommitFailedMsg()
+
+			// wait for client ack msg
+			msg, err = sp.HostWaitContractResp()
+			if err != nil {
+				log.Error("storage host failed to get client ack msg", "err", err)
+				return
+			}
+
+			// host send the last ack msg and return
+			_ = sp.SendHostAckMsg()
 			return
 		}
-		data := sectorData[sec.Offset : sec.Offset+sec.Length]
-
-		// construct the Merkle proof, if requested.
-		var proof []common.Hash
-		if req.MerkleProof {
-			proofStart := int(sec.Offset) / merkle.LeafSize
-			proofEnd := int(sec.Offset+sec.Length) / merkle.LeafSize
-			proof, err = merkle.Sha256RangeProof(sectorData, proofStart, proofEnd)
-			if err != nil {
-				downloadErr = fmt.Errorf("host failed to generate the merkle proof: %s", err.Error())
-				return
-			}
-		}
-
-		// send the response.
-		// if host received a stop signal, or this is the final response, include host's signature in the response.
-		resp := storage.DownloadResponse{
-			Signature:   nil,
-			Data:        data,
-			MerkleProof: proof,
-		}
-
-		select {
-		case err := <-stopSignal:
-			if err != nil {
-				downloadErr = fmt.Errorf("stop signal received: %s", err.Error())
-				return
-			}
-
-			resp.Signature = hostSig
-			if err := sp.SendContractDownloadData(resp); err != nil {
-				downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
-				return
-			}
-		default:
-		}
-
-		if i == len(req.Sections)-1 {
-			resp.Signature = hostSig
-		}
-
-		if err := sp.SendContractDownloadData(resp); err != nil {
-			downloadErr = fmt.Errorf("failed to send the contract download data message: %s", err.Error())
-			return
-		}
+	} else if msg.Code == storage.ClientCommitFailedMsg {
+		clientCommitErr = storage.ErrClientCommit
+		return
+	} else if msg.Code == storage.ClientNegotiateErrorMsg {
+		clientNegotiateErr = storage.ErrClientNegotiate
+		return
 	}
 
 	// In case the user restart the program, the contract create handler will not be
@@ -229,10 +215,12 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 		h.ethBackend.SetStatic(node)
 	}
 
-	// the stop signal must arrive before RPC is complete.
-	downloadErr = <-stopSignal
-
-	return
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
+		_ = h.rollbackStorageResponsibility(snapshotSo, nil, nil, nil)
+		h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+	}
 }
 
 // verifyPaymentRevision verifies that the revision being provided to pay for
@@ -265,14 +253,14 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Determine the amount that was transferred from the client.
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
-		return ExtendErr("client increased its valid proof output during downloading: ", errHighRenterValidOutput)
+		return ExtendErr("client increased its valid proof output during downloading: ", errHighClientValidOutput)
 	}
 
 	// Verify that enough money was transferred.
 	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
 	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
 		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
-		return ExtendErr(s, errHighRenterValidOutput)
+		return ExtendErr(s, errHighClientValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
@@ -289,7 +277,7 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("client has incentive to see host fail during downloading: ", errHighRenterMissedOutput)
+		return ExtendErr("client has incentive to see host fail during downloading: ", errHighClientMissedOutput)
 	}
 
 	// Check that the revision count has increased.

@@ -6,8 +6,6 @@ package filesystem
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -15,12 +13,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 type (
-	// dirTree is the structure for test to record the file structure of renter files
+	// dirTree is the structure for test to record the file structure of client's files
 	dirTree struct {
 		root *dirTreeNode
 

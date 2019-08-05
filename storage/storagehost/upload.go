@@ -13,35 +13,40 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 // UploadHandler handles the upload negotiation
 func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
-	var uploadErr error
+	var hostNegotiateErr, clientNegotiateErr, clientCommitErr error
 
 	defer func() {
-		if uploadErr != nil {
-			h.log.Error("data upload failed", "err", uploadErr.Error())
-			sp.TriggerError(uploadErr)
+		if clientNegotiateErr != nil || clientCommitErr != nil {
+			_ = sp.SendHostAckMsg()
+			h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+		} else if hostNegotiateErr != nil {
+			_ = sp.SendHostNegotiateErrorMsg()
 		}
 	}()
 
 	// Read upload request
 	var uploadRequest storage.UploadRequest
 	if err := uploadReqMsg.Decode(&uploadRequest); err != nil {
-		uploadErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error())
+		clientNegotiateErr = fmt.Errorf("failed to decode the upload request message: %s", err.Error())
 		return
 	}
 
 	// Get revision from storage responsibility
 	h.lock.RLock()
 	so, err := getStorageResponsibility(h.db, uploadRequest.StorageContractID)
+	snapshotSo := so
 	h.lock.RUnlock()
 
 	// it is normal not getting storage responsibility
 	if err != nil {
+		hostNegotiateErr = fmt.Errorf("failed to get storage responsibility: %s", err.Error())
 		return
 	}
 
@@ -54,7 +59,6 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	sectorsChanged := make(map[uint64]struct{})
 
 	var bandwidthRevenue common.BigInt
-	var sectorsRemoved []common.Hash
 	var sectorsGained []common.Hash
 	var gainedSectorData [][]byte
 	for _, action := range uploadRequest.Actions {
@@ -71,7 +75,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 			// Update finances
 			bandwidthRevenue = bandwidthRevenue.Add(settings.UploadBandwidthPrice.MultUint64(storage.SectorSize))
 		default:
-			uploadErr = fmt.Errorf("unknown upload action type: %s", action.Type)
+			hostNegotiateErr = fmt.Errorf("unknown upload action type: %s", action.Type)
 		}
 	}
 
@@ -118,7 +122,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
 	if err := VerifyRevision(&so, &newRevision, currentBlockHeight, newRevenue, newDeposit); err != nil {
-		uploadErr = fmt.Errorf("revision verification failed. contractID: %s, err: %s", newRevision.ParentID.String(), err.Error())
+		hostNegotiateErr = fmt.Errorf("revision verification failed. contractID: %s, err: %s", newRevision.ParentID.String(), err.Error())
 		return
 	}
 	so.SectorRoots, newRoots = newRoots, so.SectorRoots
@@ -147,7 +151,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	// Construct the merkle proof
 	oldHashSet, err := merkle.Sha256DiffProof(so.SectorRoots, proofRanges, oldNumSectors)
 	if err != nil {
-		uploadErr = fmt.Errorf("error construct the merkle proof: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("error construct the merkle proof: %s", err.Error())
 		return
 	}
 
@@ -162,19 +166,24 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
 
 	if err := sp.SendUploadMerkleProof(merkleResp); err != nil {
-		uploadErr = fmt.Errorf("storage host failed to send merkle proof to the storage client: %s", err.Error())
+		log.Error("storage host failed to send merkle proof to the storage client", "err", err)
 		return
 	}
 
 	var clientRevisionSign []byte
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
-		uploadErr = fmt.Errorf("after the merkle proof was sent, failed to get the storage client's response: %s", err.Error())
+		log.Error("after the merkle proof was sent, failed to get the storage client's response", "err", err)
+		return
+	}
+
+	if msg.Code == storage.ClientNegotiateErrorMsg {
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 
 	if err = msg.Decode(&clientRevisionSign); err != nil {
-		uploadErr = fmt.Errorf("failed to decode the client revision sign: %s", err.Error())
+		clientNegotiateErr = fmt.Errorf("failed to decode the client revision sign: %s", err.Error())
 		return
 	}
 
@@ -182,13 +191,13 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)
 	if err != nil {
-		uploadErr = fmt.Errorf("host failed to get the account address: %s", err.Error())
+		hostNegotiateErr = fmt.Errorf("host failed to get the account address: %s", err.Error())
 		return
 	}
 
 	hostSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
 	if err != nil {
-		uploadErr = fmt.Errorf("host failed to sign the new contract revision")
+		hostNegotiateErr = fmt.Errorf("host failed to sign the new contract revision")
 		return
 	}
 
@@ -201,18 +210,43 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	so.PotentialUploadRevenue = so.PotentialUploadRevenue.Add(bandwidthRevenue)
 	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 
-	h.lock.Lock()
-	err = h.modifyStorageResponsibility(so, sectorsRemoved, sectorsGained, gainedSectorData)
-	h.lock.Unlock()
-
-	if err != nil {
-		uploadErr = fmt.Errorf("failed to modify the storage responsibility: %s", err.Error())
+	// send the host revision sign
+	if err := sp.SendUploadHostRevisionSign(hostSig); err != nil {
+		log.Error("failed to send the upload host revision sign", "err", err)
 		return
 	}
 
-	// send the host revision sign
-	if err := sp.SendUploadHostRevisionSign(hostSig); err != nil {
-		uploadErr = fmt.Errorf("failed to send the upload host revision sign: %s", err.Error())
+	// wait for client commit success msg
+	msg, err = sp.HostWaitContractResp()
+	if err != nil {
+		log.Error("storage host failed to get client commit success msg", "err", err)
+		return
+	}
+
+	if msg.Code == storage.ClientCommitSuccessMsg {
+		h.lock.Lock()
+		err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
+		h.lock.Unlock()
+
+		if err != nil {
+			_ = sp.SendHostCommitFailedMsg()
+
+			// wait for client ack msg
+			msg, err = sp.HostWaitContractResp()
+			if err != nil {
+				log.Error("storage host failed to get client ack msg", "err", err)
+				return
+			}
+
+			// host send the last ack msg and return
+			_ = sp.SendHostAckMsg()
+			return
+		}
+	} else if msg.Code == storage.ClientCommitFailedMsg {
+		clientCommitErr = storage.ErrClientCommit
+		return
+	} else if msg.Code == storage.ClientNegotiateErrorMsg {
+		clientNegotiateErr = storage.ErrClientNegotiate
 		return
 	}
 
@@ -225,9 +259,16 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		}
 		h.ethBackend.SetStatic(node)
 	}
+
+	// send host 'ACK' msg to client
+	if err := sp.SendHostAckMsg(); err != nil {
+		log.Error("storage host failed to send host ack msg", "err", err)
+		_ = h.rollbackStorageResponsibility(snapshotSo, sectorsGained, nil, nil)
+		h.ethBackend.CheckAndUpdateConnection(sp.PeerNode())
+	}
 }
 
-// verifyRevision checks that the revision pays the host correctly, and that
+// VerifyRevision checks that the revision pays the host correctly, and that
 // the revision does not attempt any malicious or unexpected changes.
 func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRevision, blockHeight uint64, expectedExchange, expectedCollateral common.BigInt) error {
 	// Check that the revision is well-formed.
@@ -276,13 +317,13 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 
 	// Determine the amount that was transferred from the client.
 	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
-		return fmt.Errorf("client increased its valid proof output: %v", errHighRenterValidOutput)
+		return fmt.Errorf("client increased its valid proof output: %v", errHighClientValidOutput)
 	}
-	fromRenter := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
+	fromClient := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
 	// Verify that enough money was transferred.
-	if fromRenter.Cmp(expectedExchange) < 0 {
-		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromRenter)
-		return ExtendErr(s, errHighRenterValidOutput)
+	if fromClient.Cmp(expectedExchange) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged: ", expectedExchange, fromClient)
+		return ExtendErr(s, errHighClientValidOutput)
 	}
 
 	// Determine the amount of money that was transferred to the host.
@@ -292,16 +333,16 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
 
 	// Verify that enough money was transferred.
-	if toHost.Cmp(fromRenter) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromRenter, toHost)
+	if toHost.Cmp(fromClient) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromClient, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
 	}
 
-	// If the renter's valid proof output is larger than the renter's missed
-	// proof output, the renter has incentive to see the host fail. Make sure
+	// If the client's valid proof output is larger than the client's missed
+	// proof output, the client has incentive to see the host fail. Make sure
 	// that this incentive is not present.
 	if revision.NewValidProofOutputs[0].Value.Cmp(revision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("client has incentive to see host fail: ", errHighRenterMissedOutput)
+		return ExtendErr("client has incentive to see host fail: ", errHighClientMissedOutput)
 	}
 
 	// Check that the host is not going to be posting more collateral than is

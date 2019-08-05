@@ -17,9 +17,9 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 import React, {Component} from 'react';
-import type {ChildrenArray} from 'react';
 
 import Grid from 'material-ui/Grid';
+import type {ChildrenArray} from 'react';
 
 // styles contains the constant styles of the component.
 const styles = {

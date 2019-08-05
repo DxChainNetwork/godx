@@ -6,11 +6,11 @@ package merkle
 
 import (
 	"bytes"
+	"errors"
 	"hash"
 
 	"github.com/DxChainNetwork/godx/log"
 
-	"github.com/pkg/errors"
 )
 
 var (

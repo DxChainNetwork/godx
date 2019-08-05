@@ -33,7 +33,7 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
-	"github.com/DxChainNetwork/godx/storagemaintenance"
+	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 	mapset "github.com/deckarep/golang-set"
 )
 
@@ -956,7 +956,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 
 	// maintenance missed storage proof
 	height := w.current.header.Number.Uint64()
-	storagemaintenance.MaintenanceMissedProof(height, s)
+	coinchargemaintenance.MaintenanceMissedProof(height, s)
 
 	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts)
 	if err != nil {

@@ -16,15 +16,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-import React, {Component} from 'react';
-
-import withStyles from 'material-ui/styles/withStyles';
-
-import Header from './Header';
-import Body from './Body';
-import {MENU} from '../common';
+import React from 'react';
 import type {Content} from '../types/content';
-import {inserter as logInserter} from './Logs';
 
 // deepUpdate updates an object corresponding to the given update data, which has
 // the shape of the same structure as the original object. updater also has the same

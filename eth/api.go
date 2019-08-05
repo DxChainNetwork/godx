@@ -75,6 +75,8 @@ func (api *PublicEthereumAPI) ChainId() hexutil.Uint64 {
 	}
 	return (hexutil.Uint64)(chainID.Uint64())
 }
+
+// Ethereum returns the pointer for current full node object
 func (api *PublicEthereumAPI) Ethereum() *Ethereum {
 	return api.e
 }

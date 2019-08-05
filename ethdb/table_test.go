@@ -17,7 +17,7 @@ func createTable(t *testing.T, dat []struct {
 	}, len(dat))
 	copy(prefixdat, dat)
 	if prefixdat != nil {
-		for i, _ := range prefixdat {
+		for i := range prefixdat {
 			prefixdat[i].key = prefix + prefixdat[i].key
 		}
 	}
@@ -43,7 +43,7 @@ func creatememTable(t *testing.T, size int, dat []struct {
 	}, len(dat))
 	copy(prefixdat, dat)
 	if prefixdat != nil {
-		for i, _ := range prefixdat {
+		for i := range prefixdat {
 			prefixdat[i].key = prefix + prefixdat[i].key
 		}
 	}

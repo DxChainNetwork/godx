@@ -37,18 +37,18 @@ func TestNewRevision(t *testing.T) {
 
 	// check the new revision
 	if newRev.NewValidProofOutputs[0].Value.Int64() != (2000000 - 10000) {
-		t.Errorf("wrong new client valid ouput,wanted %d,getted %d", (2000000 - 10000), newRev.NewValidProofOutputs[0].Value.Int64())
+		t.Errorf("wrong new client valid output,wanted %d,getted %d", (2000000 - 10000), newRev.NewValidProofOutputs[0].Value.Int64())
 	}
 
 	if newRev.NewValidProofOutputs[1].Value.Int64() != (1000000 + 10000) {
-		t.Errorf("wrong new host valid ouput,wanted %d,getted %d", (2000000 + 10000), newRev.NewValidProofOutputs[1].Value.Int64())
+		t.Errorf("wrong new host valid output,wanted %d,getted %d", (2000000 + 10000), newRev.NewValidProofOutputs[1].Value.Int64())
 	}
 
 	if newRev.NewMissedProofOutputs[0].Value.Int64() != (1900000 - 10000) {
-		t.Errorf("wrong new client missed ouput,wanted %d,getted %d", (1900000 - 10000), newRev.NewMissedProofOutputs[0].Value.Int64())
+		t.Errorf("wrong new client missed output,wanted %d,getted %d", (1900000 - 10000), newRev.NewMissedProofOutputs[0].Value.Int64())
 	}
 
 	if newRev.NewMissedProofOutputs[1].Value.Int64() != 1000000 {
-		t.Errorf("wrong new host missed ouput,wanted %d,getted %d", 1000000, newRev.NewMissedProofOutputs[1].Value.Int64())
+		t.Errorf("wrong new host missed output,wanted %d,getted %d", 1000000, newRev.NewMissedProofOutputs[1].Value.Int64())
 	}
 }
