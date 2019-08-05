@@ -224,10 +224,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	}
 
 	if msg.Code == storage.ClientCommitSuccessMsg {
-		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, sectorsGained, gainedSectorData)
-		h.lock.Unlock()
-
 		if err != nil {
 			_ = sp.SendHostCommitFailedMsg()
 

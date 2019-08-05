@@ -229,9 +229,14 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[so.id()]; !ok {
-		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
-	}
+	// Lock the storage responsibility
+	h.checkAndLockStorageResponsibility(so.id())
+	defer func() {
+		h.checkAndUnlockStorageResponsibility(so.id())
+	}()
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	//Need enough time to submit revision
 	if so.expiration()-postponedExecutionBuffer <= h.blockHeight {

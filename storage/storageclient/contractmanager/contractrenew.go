@@ -445,7 +445,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 
 	// Increase Successful/Failed interactions accordingly
 	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
-	defer func(sp storage.Peer) {
+	defer func() {
 		if clientNegotiateErr != nil {
 			_ = sp.SendClientNegotiateErrorMsg()
 			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
@@ -463,7 +463,7 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		if err == nil {
 			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
 		}
-	}(sp)
+	}()
 
 	clientContractSign, err := wallet.SignHash(account, storageContract.RLPHash().Bytes())
 	if err != nil {
