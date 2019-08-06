@@ -296,6 +296,7 @@ func (fs *fileSystem) RandomStuckDirectory() (*dxdir.DirSetEntryWithID, error) {
 }
 
 // OldestLastTimeHealthCheck find the dxpath of the directory with the oldest lastTimeHealthCheck
+// TODO: replace time.Now() with dependency to test this function
 func (fs *fileSystem) OldestLastTimeHealthCheck() (storage.DxPath, time.Time, error) {
 	path := storage.RootDxPath()
 	dir, err := fs.dirSet.Open(path)
