@@ -10,7 +10,6 @@ import (
 	"hash"
 
 	"github.com/DxChainNetwork/godx/log"
-
 )
 
 var (

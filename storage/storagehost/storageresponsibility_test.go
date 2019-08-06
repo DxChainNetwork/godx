@@ -45,7 +45,7 @@ func TestStoreStorageResponsibility(t *testing.T) {
 }
 
 func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
-	db,_ := ethdb.NewLDBDatabase("./db", 16, 16)
+	db, _ := ethdb.NewLDBDatabase("./db", 16, 16)
 	defer db.Close()
 	defer os.RemoveAll("./db")
 
@@ -75,7 +75,6 @@ func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
 	if err := rollbackStorageResponsibility(h, so); err != nil {
 		t.Fatal(err)
 	}
-
 
 	_, err = getStorageResponsibility(h.db, so.id())
 	if err == nil {

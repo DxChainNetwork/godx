@@ -8,8 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -64,7 +65,7 @@ func (c *Contract) UpdateStatus(status storage.ContractStatus) (err error) {
 }
 
 // CommitRevision unify the CommitUpload and CommitDownload signature and use memory snapshot instead of WAL.Transaction log
-func (c *Contract) CommitRevision(signedRevision types.StorageContractRevision,  costs ...common.BigInt) (err error) {
+func (c *Contract) CommitRevision(signedRevision types.StorageContractRevision, costs ...common.BigInt) (err error) {
 	// get the contract header information
 	c.headerLock.Lock()
 	contractHeader := c.header
@@ -84,7 +85,7 @@ func (c *Contract) CommitRevision(signedRevision types.StorageContractRevision, 
 	}
 
 	if err = c.contractHeaderUpdate(contractHeader); err != nil {
-		return fmt.Errorf("during the upload commiting, %s", err.Error())
+		return fmt.Errorf("during the upload committing, %s", err.Error())
 	}
 
 	return
@@ -233,7 +234,7 @@ func (c *Contract) CommitTxns() (err error) {
 }
 
 // RollbackUndoWal will execute rollback from WAL undo record
-func (c *Contract) RollbackUndoWal(t *writeaheadlog.Transaction) (err error)  {
+func (c *Contract) RollbackUndoWal(t *writeaheadlog.Transaction) (err error) {
 	for _, op := range t.Operations {
 		switch op.Name {
 		case dbContractHeader:
@@ -251,7 +252,7 @@ func (c *Contract) RollbackUndoWal(t *writeaheadlog.Transaction) (err error)  {
 }
 
 // RollbackUndoMem will execute rollback from memory undo record
-func (c *Contract) RollbackUndoMem(undoHeader ContractHeader) (err error)  {
+func (c *Contract) RollbackUndoMem(undoHeader ContractHeader) (err error) {
 	if err = c.contractHeaderUpdate(undoHeader); err != nil {
 		return
 	}
