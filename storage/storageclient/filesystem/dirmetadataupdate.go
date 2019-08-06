@@ -75,7 +75,7 @@ type (
 )
 
 // InitAndUpdateDirMetadata create the update intent, and then apply the intent.
-// The actual metadata update is executed in a thread updateDirMetadata
+// The actual metadata update is executed in a thread updateDirMetadata goroutine
 func (fs *fileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	// Initialize the dirMetadataUpdate, that is, recordDirMetadataUpdate
 	txn, err := fs.recordDirMetadataIntent(path)
@@ -93,7 +93,7 @@ func (fs *fileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	return nil
 }
 
-// recordDirMetadataIntent record the dirMetadata intent to the wal
+// recordDirMetadataIntent record and commit the dirMetadata intent to the wal
 func (fs *fileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadlog.Transaction, error) {
 	op, err := createWalOp(path)
 	if err != nil {
@@ -140,20 +140,25 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 	return storage.NewDxPath(s)
 }
 
-// applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a
-// goroutine of calculateMetadataAndApply as necessary.
+// applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a goroutine of
+// calculateMetadataAndApply as necessary. The function holds a key of fs.lock in order
+// to be executed exclusively from cleanUp.
 //  1. If the update already exists in fs.unfinishedUpdates, signal the current update thread
 //     signalStop
-//  2. If there is already an update thread in progress, return
+//  2. Else if there is already an update thread in progress (signaled by
+//     update.updateInProgress == 1), return
 //  3. Else add to fs.tm, update fs.unfinishedUpdates, and start a goroutine to
 //     calculateMetadataAndApply
+//
 // The returned error type is could be two cases:
 //  1. threadmanager already stopped. It would be safe to throw the error during error handling
 //  2. there is already a thread updating the metadata. return errUpdateAlreadyInProgress
-// The function is called in two places:
+//
+// The function is called in three places:
 //  1. A dxfile is updated and the update is bubble to the root
 //  2. A MaintenanceLoop loops over the fs.unfinishedUpdates field for previously failed update.
 //     In this case, walTxn should be nil
+//  3. During initialization, unfinished updates are decoded from wal and this function is called.
 func (fs *fileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadlog.Transaction) (err error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
@@ -206,26 +211,26 @@ func (update *dirMetadataUpdate) signalStop() {
 	}
 }
 
-// calculateMetadataAndApply is the threaded function of calculate the metadata
-// and save to dxdir. This is the core function of this file
+// calculateMetadataAndApply is the threaded function that calculate the metadata
+// and save to dxdir. This is the core function of dirMetadataUpdate
 func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	var err error
 	// Call cleanUp to clean up the update
 	defer func() {
 		update.cleanUp(fs, err)
 	}()
-	// clear the stop channel
+	// Before the update, clear the stop channel
 	select {
 	case <-update.stop:
 	default:
 	}
 
 	for {
-		// store the value of redo as not needed
 		if fs.disrupt("cmaa1") {
 			err = errDisrupted
 			return
 		}
+		// Check whether a new update is called, and check whether the program is stopped
 		select {
 		case <-update.stop:
 			continue
@@ -238,14 +243,18 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
+		// Calculate the metadata
 		var md *dxdir.Metadata
 		md, err = fs.loopDirAndCalculateDirMetadata(update)
+		// If stop signal is found, continue to next loop
 		if err == errInterrupted {
 			continue
 		}
+		// If error happened, return
 		if err != nil {
 			return
 		}
+		// Apply and write the metadata to the dxdir
 		err = fs.applyDxDirMetadata(update.dxPath, md)
 		if err != nil {
 			return
@@ -254,7 +263,9 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
-		// Termination. Only happens when redo value is redoNotNeeded
+		// If stop signal received, continue to next loop;
+		// If StopChan received, continue to cleanUp
+		// If no error happened, hold fs.lock and continue to cleanUp process
 		fs.lock.Lock()
 		select {
 		case <-update.stop:
@@ -313,7 +324,13 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 		}
 
 		defer func() {
-			delete(fs.unfinishedUpdates, update.dxPath)
+			if err != nil {
+				fs.lock.Lock()
+				delete(fs.unfinishedUpdates, update.dxPath)
+				fs.lock.Unlock()
+			} else {
+				delete(fs.unfinishedUpdates, update.dxPath)
+			}
 		}()
 	}
 
