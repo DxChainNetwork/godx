@@ -13,7 +13,9 @@ jobs:
           command: |
             go get -u -v github.com/kardianos/govendor
             govendor sync -v
-      - run: ./go_unit_test.sh
+      - run:
+        command: ./go_unit_test.sh
+        no_output_timeout: 30m
       - run: bash <(curl -s https://codecov.io/bash)
       - run: make
 
