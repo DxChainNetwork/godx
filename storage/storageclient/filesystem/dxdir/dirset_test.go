@@ -5,10 +5,11 @@
 package dxdir
 
 import (
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 var testDirSetDir = tempDir("dirset")

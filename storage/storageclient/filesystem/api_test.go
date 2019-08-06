@@ -5,15 +5,19 @@
 package filesystem
 
 import (
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"math"
+	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
@@ -215,6 +219,39 @@ func TestPublicFileSystemAPI_Delete(t *testing.T) {
 	}
 	if err = fs.checkDxDirMetadata(parDir, expectParDirMd); err != nil {
 		t.Errorf("parent directory metadata not expected: %v", err)
+	}
+}
+
+// TestPublicFileSystemAPI_DetailedFileInfo test PublicFileSystemAPI.DetailedFileInfo
+func TestPublicFileSystemAPI_DetailedFileInfo(t *testing.T) {
+	fs := newEmptyTestFileSystem(t, "", &AlwaysSuccessContractManager{}, newStandardDisrupter())
+	api := NewPublicFileSystemAPI(fs)
+	ck, err := crypto.GenerateCipherKey(crypto.GCMCipherCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := randomDxPath(t, 3)
+	df, err := fs.fileSet.NewRandomDxFile(path, 10, 30, erasurecode.ECTypeStandard, ck, 1<<22*100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get file detailed file info
+	info := api.DetailedFileInfo(path.Path)
+	expectedInfo := storage.FileInfo{
+		DxPath:         path.Path,
+		Status:         statusHealthyStr,
+		SourcePath:     filepath.Join(userHomeDir(), "temp", path.Path),
+		FileSize:       df.FileSize(),
+		Redundancy:     300,
+		StoredOnDisk:   false,
+		UploadProgress: 100,
+	}
+	if err = df.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(info, expectedInfo) {
+		t.Fatalf("file detailed info not expected. \nGot %vExpect %v", spew.Sdump(info), spew.Sdump(expectedInfo))
 	}
 }
 

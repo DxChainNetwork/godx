@@ -5,18 +5,18 @@
 package filesystem
 
 import (
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"math/rand"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 // FileSystem is the interface for fileSystem

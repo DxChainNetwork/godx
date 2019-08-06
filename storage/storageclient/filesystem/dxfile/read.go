@@ -6,12 +6,12 @@ package dxfile
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"io"
 	"os"
 
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // readDxFile create a new DxFile with a random ID, then open and read the dxfile from filepath

@@ -7,11 +7,11 @@ package dxfile
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"time"
 
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // TODO better error handling

@@ -9,15 +9,15 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 type (
@@ -235,4 +235,21 @@ func randomName() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return common.Bytes2Hex(b)
+}
+
+// userHomeDir returns the home directory of user
+func userHomeDir() string {
+	if runtime.GOOS == "windows" {
+		home := os.Getenv("HOMEDRIVE") + os.Getenv("HOMEPATH")
+		if home == "" {
+			home = os.Getenv("USERPROFILE")
+		}
+		return home
+	} else if runtime.GOOS == "linux" {
+		home := os.Getenv("XDG_CONFIG_HOME")
+		if home != "" {
+			return home
+		}
+	}
+	return os.Getenv("HOME")
 }

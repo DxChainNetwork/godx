@@ -75,7 +75,7 @@ type (
 )
 
 // InitAndUpdateDirMetadata create the update intent, and then apply the intent.
-// The actual metadata update is executed in a thread updateDirMetadata
+// The actual metadata update is executed in a thread updateDirMetadata goroutine
 func (fs *fileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	// Initialize the dirMetadataUpdate, that is, recordDirMetadataUpdate
 	txn, err := fs.recordDirMetadataIntent(path)
@@ -93,7 +93,7 @@ func (fs *fileSystem) InitAndUpdateDirMetadata(path storage.DxPath) error {
 	return nil
 }
 
-// recordDirMetadataIntent record the dirMetadata intent to the wal
+// recordDirMetadataIntent record and commit the dirMetadata intent to the wal
 func (fs *fileSystem) recordDirMetadataIntent(path storage.DxPath) (*writeaheadlog.Transaction, error) {
 	op, err := createWalOp(path)
 	if err != nil {
@@ -140,20 +140,25 @@ func decodeWalOp(operation writeaheadlog.Operation) (storage.DxPath, error) {
 	return storage.NewDxPath(s)
 }
 
-// applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a
-// goroutine of calculateMetadataAndApply as necessary.
+// applyDirMetadataUpdate creates a new dirMetadataUpdate and initialize a goroutine of
+// calculateMetadataAndApply as necessary. The function holds a key of fs.lock in order
+// to be executed exclusively from cleanUp.
 //  1. If the update already exists in fs.unfinishedUpdates, signal the current update thread
 //     signalStop
-//  2. If there is already an update thread in progress, return
+//  2. Else if there is already an update thread in progress (signaled by
+//     update.updateInProgress == 1), return
 //  3. Else add to fs.tm, update fs.unfinishedUpdates, and start a goroutine to
 //     calculateMetadataAndApply
+//
 // The returned error type is could be two cases:
 //  1. threadmanager already stopped. It would be safe to throw the error during error handling
 //  2. there is already a thread updating the metadata. return errUpdateAlreadyInProgress
-// The function is called in two places:
+//
+// The function is called in three places:
 //  1. A dxfile is updated and the update is bubble to the root
 //  2. A MaintenanceLoop loops over the fs.unfinishedUpdates field for previously failed update.
 //     In this case, walTxn should be nil
+//  3. During initialization, unfinished updates are decoded from wal and this function is called.
 func (fs *fileSystem) updateDirMetadata(path storage.DxPath, walTxn *writeaheadlog.Transaction) (err error) {
 	fs.lock.Lock()
 	defer fs.lock.Unlock()
@@ -206,26 +211,26 @@ func (update *dirMetadataUpdate) signalStop() {
 	}
 }
 
-// calculateMetadataAndApply is the threaded function of calculate the metadata
-// and save to dxdir. This is the core function of this file
+// calculateMetadataAndApply is the threaded function that calculate the metadata
+// and save to dxdir. This is the core function of dirMetadataUpdate
 func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	var err error
 	// Call cleanUp to clean up the update
 	defer func() {
 		update.cleanUp(fs, err)
 	}()
-	// clear the stop channel
+	// Before the update, clear the stop channel
 	select {
 	case <-update.stop:
 	default:
 	}
 
 	for {
-		// store the value of redo as not needed
 		if fs.disrupt("cmaa1") {
 			err = errDisrupted
 			return
 		}
+		// Check whether a new update is called, and check whether the program is stopped
 		select {
 		case <-update.stop:
 			continue
@@ -238,13 +243,18 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
-		md, err := fs.loopDirAndCalculateDirMetadata(update)
+		// Calculate the metadata
+		var md *dxdir.Metadata
+		md, err = fs.loopDirAndCalculateDirMetadata(update)
+		// If stop signal is found, continue to next loop
 		if err == errInterrupted {
 			continue
 		}
+		// If error happened, return
 		if err != nil {
 			return
 		}
+		// Apply and write the metadata to the dxdir
 		err = fs.applyDxDirMetadata(update.dxPath, md)
 		if err != nil {
 			return
@@ -253,12 +263,21 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
-		// Termination. Only happens when redo value is redoNotNeeded
+		// If stop signal received, continue to next loop;
+		// If StopChan received, continue to cleanUp
+		// If no error happened, hold fs.lock and continue to cleanUp process
+		// Note: this is not a beautiful coding style, but it is necessary to
+		// lock the process prior to cleanUp execution. Else a new update might
+		// be initiated and block cleanUp, which finally cause stop signal is
+		// ignored.
+		fs.lock.Lock()
 		select {
 		case <-update.stop:
+			fs.lock.Unlock()
 			continue
 		case <-fs.tm.StopChan():
 			err = errStopped
+			fs.lock.Unlock()
 			return
 		default:
 		}
@@ -267,66 +286,73 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	return
 }
 
-// cleanUp is the defer function that is called for the goroutine of calculateMetadataAndApply
+// cleanUp is the defer function that is called for the goroutine of calculateMetadataAndApply.
+// currently fs.lock is locked when error is nil; unlocked when error is not nil
 // It do the following:
-// 1. Set the updateInProgress value to 0, notifying this goroutine is over
-// 2. Notify thread manager this goroutine is done.
-// 3. Determine whether release is necessary
-// 4. If release is needed, delete the entry in fs.unfinishedUpdates.
-// 5. If release is needed, Release the transaction
-func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
-	// fs.tm.Done()
+// 1. Determine whether release is necessary
+// 2. If release is needed, delete the entry in fs.unfinishedUpdates.
+// 3. If release is needed, Release the transaction
+// 4. Set the updateInProgress value to 0, notifying this goroutine is over
+// 5. Unlock fs.lock if necessary
+// 6. Notify thread manager this goroutine is done.
+func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, origErr error) {
 	defer func() {
 		// Set the updateInProgress value to 0, notifying this goroutine is over
 		atomic.StoreUint32(&update.updateInProgress, 0)
+		// Unlock fs.lock if fs.lock is locked previously
+		if origErr == nil {
+			fs.lock.Unlock()
+		}
+		// notify the thread manager the work is done
 		fs.tm.Done()
 	}()
 
 	// If the error is errStopped, do nothing and simply return
-	if err == errStopped {
+	if origErr == errStopped {
 		return
 	}
-
-	// determine whether release is necessary
-	// release could happen either non err or consecutiveFails reaches the limit
-	if err != nil {
+	// Calculate consecutive failes
+	if origErr != nil {
 		atomic.AddUint32(&update.consecutiveFails, 1)
 	}
 	fails := atomic.LoadUint32(&update.consecutiveFails)
 
-	release := fails >= numConsecutiveFailRelease || err == nil
-
-	// 3. If no error happened, delete the entry in fs.unfinishedUpdates.
-	// 4. If no error happened, Release the transaction
+	//Determine whether to release the update
+	err := origErr
+	release := fails >= numConsecutiveFailRelease || origErr == nil
 	if release {
+		// release the wal transaction
 		txn := (*writeaheadlog.Transaction)(atomic.LoadPointer(&update.walTxn))
 		if txn != nil {
-			err = common.ErrCompose(err, txn.Release())
+			err = common.ErrCompose(origErr, txn.Release())
 		}
-
-		defer func() {
+		// delete the update from unfinishedUpdates
+		if origErr != nil {
 			fs.lock.Lock()
 			delete(fs.unfinishedUpdates, update.dxPath)
 			fs.lock.Unlock()
-		}()
+		} else {
+			delete(fs.unfinishedUpdates, update.dxPath)
+		}
 	}
 
 	if err == nil {
-		// no error happened. Continue to update parent
+		// If the update is to update the root, do root checks
 		if update.dxPath.IsRoot() {
-			// If root check for repairNeeded and stuckFound, and there is no need to further update parent
 			d, err := fs.dirSet.Open(update.dxPath)
 			if err != nil {
 				fs.logger.Warn("cannot open root directory")
 				return
 			}
 			md := d.Metadata()
+			// Signal repairNeeded as necessary
 			if md.Health < dxfile.RepairHealthThreshold {
 				select {
 				case fs.repairNeeded <- struct{}{}:
 				default:
 				}
 			}
+			// Signal stuckFound as necessary
 			if md.NumStuckSegments > 0 {
 				select {
 				case fs.stuckFound <- struct{}{}:
@@ -334,25 +360,31 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 				}
 			}
 			if err := d.Close(); err != nil {
-				fs.logger.Warn("cannot close root directory", "err", err)
+				fs.logger.Warn("cannot close root directory", "origErr", err)
 			}
 			return
 		}
+		// no error happened. Continue to update parent
 		parent, err := update.dxPath.Parent()
 		if err != nil {
-			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "err", err)
+			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "origErr", err)
 			return
 		}
-		if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
-			fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
-		}
+		// InitAndUpdateDirMetadata will hold the fs.lock. Thus call it with a goroutine to avoid
+		// deadlock
+		go func() {
+			if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
+				fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "origErr", err)
+			}
+		}()
+
 	} else {
 		if release {
 			// released updates failed more than numConsecutiveFailRelease times
-			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "err", err)
+			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "origErr", origErr)
 		} else {
 			// unreleased updates
-			fs.logger.Warn("cannot update the metadata. Try later", "err", err)
+			fs.logger.Warn("cannot update the metadata. Try later", "origErr", origErr)
 		}
 	}
 }

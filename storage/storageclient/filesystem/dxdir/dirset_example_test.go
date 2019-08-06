@@ -6,10 +6,11 @@ package dxdir
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/storage"
 	"path/filepath"
 	"reflect"
+
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 var exampleDirSetDir = tempDir("example")

@@ -7,12 +7,13 @@ package dxdir
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 const threadDepth = 3

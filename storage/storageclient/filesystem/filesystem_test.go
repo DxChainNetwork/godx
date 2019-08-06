@@ -6,17 +6,17 @@ package filesystem
 
 import (
 	"crypto/rand"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 // TestNewFileSystemEmptyStart test the situation of creating a new file system in
@@ -82,7 +82,11 @@ func TestFileSystem_SelectDxFileToFix(t *testing.T) {
 			if err = file.MarkAllHealthySegmentsAsUnstuck(table); err != nil {
 				t.Fatal(err)
 			}
-			if err := fs.InitAndUpdateDirMetadata(file.DxPath()); err != nil {
+			dirPath, err := file.DxPath().Parent()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := fs.InitAndUpdateDirMetadata(dirPath); err != nil {
 				t.Fatal(err)
 			}
 			fHealth, _, _ := file.Health(table)
