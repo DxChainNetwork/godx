@@ -13,12 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func TestPublicFileSystemDebugAPI_CreateRandomFiles(t *testing.T) {
