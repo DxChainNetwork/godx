@@ -194,7 +194,6 @@ func TestContract_CommitUploadAndRollback(t *testing.T) {
 		t.Fatal("origin revision is not equal to revision from database")
 	}
 
-
 	wt, err = contract.UndoRevisionLog(contract.header)
 	if err != nil {
 		t.Fatalf("failed to record the upload pre revision: %s", err.Error())

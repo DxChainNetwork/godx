@@ -174,7 +174,6 @@ func TestMerkleDiffProofVerification(t *testing.T) {
 		t.Fatalf("failed to verify the diff proof: %s", err.Error())
 	}
 
-
 }
 
 /*
