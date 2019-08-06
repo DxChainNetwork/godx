@@ -6,9 +6,7 @@ package filesystem
 
 import (
 	"errors"
-	"math/rand"
 	"sync"
-	"time"
 )
 
 // errDisrupted is the error that happens when disrupted
@@ -42,29 +40,6 @@ type (
 // newStandardDisrupter creates an empty disrupter
 func newStandardDisrupter() *standardDisrupter {
 	d := make(standardDisrupter)
-	return &d
-}
-
-// newRandomDisrupter creates a disrupt that disrupt at keyword at a probability
-// of disruptProb [0, 1]
-func newRandomDisrupter(keyword string, disruptProb float32) *standardDisrupter {
-	d := make(standardDisrupter)
-	d.registerDisruptFunc(keyword, makeRandomDisruptFunc(disruptProb))
-	return &d
-}
-
-// newNormalDisrupter creates a disrupt that always disrupt
-func newNormalDisrupter(keyword string) *standardDisrupter {
-	d := make(standardDisrupter)
-	d.registerDisruptFunc(keyword, makeNormalDisruptFunc())
-	return &d
-}
-
-// newBlockDisrupter creates a disrupt that blocks on input channel, and
-// alway return true after unblock
-func newBlockDisrupter(keyword string, c <-chan struct{}) *standardDisrupter {
-	d := make(standardDisrupter)
-	d.registerDisruptFunc(keyword, makeBlockDisruptFunc(c, makeNormalDisruptFunc()))
 	return &d
 }
 
@@ -121,26 +96,6 @@ func (cd *counterDisrupter) count(s string) int {
 		return 0
 	}
 	return cd.counter[s]
-}
-
-// makeRandomDisruptFunc makes a random disrupt function that will disrupt
-// at the rate of disruptProb
-func makeRandomDisruptFunc(disruptProb float32) disruptFunc {
-	return func() bool {
-		rand.Seed(time.Now().UnixNano())
-		num := rand.Float32()
-		if num < disruptProb {
-			return true
-		}
-		return false
-	}
-}
-
-// makeNormalDisruptFunc creates a disruptFunc that always return true
-func makeNormalDisruptFunc() disruptFunc {
-	return func() bool {
-		return true
-	}
 }
 
 // makeBlockDisruptFunc creates a disruptFunc that will block on the input channel.
