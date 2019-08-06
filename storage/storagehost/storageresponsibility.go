@@ -326,9 +326,14 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 // rollbackStorageResponsibility will rollback storage responsibility after modify when receive error
 func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[oldSo.id()]; !ok {
-		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
-	}
+	// Lock the storage responsibility
+	h.checkAndLockStorageResponsibility(oldSo.id())
+	defer func() {
+		h.checkAndUnlockStorageResponsibility(oldSo.id())
+	}()
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	var i int
 	var err error
