@@ -238,7 +238,8 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			err = errDisrupted
 			return
 		}
-		md, err := fs.loopDirAndCalculateDirMetadata(update)
+		var md *dxdir.Metadata
+		md, err = fs.loopDirAndCalculateDirMetadata(update)
 		if err == errInterrupted {
 			continue
 		}
@@ -254,11 +255,14 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 			return
 		}
 		// Termination. Only happens when redo value is redoNotNeeded
+		fs.lock.Lock()
 		select {
 		case <-update.stop:
+			fs.lock.Unlock()
 			continue
 		case <-fs.tm.StopChan():
 			err = errStopped
+			fs.lock.Unlock()
 			return
 		default:
 		}
@@ -275,10 +279,14 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 4. If release is needed, delete the entry in fs.unfinishedUpdates.
 // 5. If release is needed, Release the transaction
 func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
-	// fs.tm.Done()
 	defer func() {
 		// Set the updateInProgress value to 0, notifying this goroutine is over
 		atomic.StoreUint32(&update.updateInProgress, 0)
+		if err == nil {
+			// In function calculateMetadataAndApply, the lock is only locked when
+			// the update is successful
+			fs.lock.Unlock()
+		}
 		fs.tm.Done()
 	}()
 
@@ -305,9 +313,7 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 		}
 
 		defer func() {
-			fs.lock.Lock()
 			delete(fs.unfinishedUpdates, update.dxPath)
-			fs.lock.Unlock()
 		}()
 	}
 
@@ -343,9 +349,12 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "err", err)
 			return
 		}
-		if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
-			fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
-		}
+		go func() {
+			if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
+				fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
+			}
+		}()
+
 	} else {
 		if release {
 			// released updates failed more than numConsecutiveFailRelease times

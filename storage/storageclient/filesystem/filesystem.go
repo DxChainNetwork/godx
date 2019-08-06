@@ -9,8 +9,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -22,8 +20,10 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxdir"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
@@ -121,7 +121,6 @@ func (fs *fileSystem) Start() error {
 func (fs *fileSystem) Close() error {
 	var fullErr error
 	fs.lock.Lock()
-	defer fs.lock.Unlock()
 	// close wal
 	err := fs.fileWal.Close()
 	if err != nil {
@@ -131,6 +130,7 @@ func (fs *fileSystem) Close() error {
 	if err != nil {
 		fullErr = common.ErrCompose(fullErr, err)
 	}
+	fs.lock.Unlock()
 	return common.ErrCompose(fullErr, fs.tm.Stop())
 }
 
