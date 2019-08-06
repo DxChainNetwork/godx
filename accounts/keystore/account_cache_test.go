@@ -91,46 +91,46 @@ func TestWatchNewFile(t *testing.T) {
 	t.Errorf("got %s, want %s", spew.Sdump(list), spew.Sdump(wantAccounts))
 }
 
-func TestWatchNoDir(t *testing.T) {
-	t.Parallel()
-
-	// Create ks but not the directory that it watches.
-	rand.Seed(time.Now().UnixNano())
-	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
-	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
-
-	list := ks.Accounts()
-	if len(list) > 0 {
-		t.Error("initial account list not empty:", list)
-	}
-	time.Sleep(100 * time.Millisecond)
-
-	// Create the directory and copy a key file into it.
-	os.MkdirAll(dir, 0700)
-	defer os.RemoveAll(dir)
-	file := filepath.Join(dir, "aaa")
-	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
-		t.Fatal(err)
-	}
-
-	// ks should see the account.
-	wantAccounts := []accounts.Account{cachetestAccounts[0]}
-	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
-	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
-		list = ks.Accounts()
-		if reflect.DeepEqual(list, wantAccounts) {
-			// ks should have also received change notifications
-			select {
-			case <-ks.changes:
-			default:
-				t.Fatalf("wasn't notified of new accounts")
-			}
-			return
-		}
-		time.Sleep(d)
-	}
-	t.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
-}
+//func TestWatchNoDir(t *testing.T) {
+//	t.Parallel()
+//
+//	// Create ks but not the directory that it watches.
+//	rand.Seed(time.Now().UnixNano())
+//	dir := filepath.Join(os.TempDir(), fmt.Sprintf("eth-keystore-watch-test-%d-%d", os.Getpid(), rand.Int()))
+//	ks := NewKeyStore(dir, LightScryptN, LightScryptP)
+//
+//	list := ks.Accounts()
+//	if len(list) > 0 {
+//		t.Error("initial account list not empty:", list)
+//	}
+//	time.Sleep(100 * time.Millisecond)
+//
+//	// Create the directory and copy a key file into it.
+//	os.MkdirAll(dir, 0700)
+//	defer os.RemoveAll(dir)
+//	file := filepath.Join(dir, "aaa")
+//	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
+//		t.Fatal(err)
+//	}
+//
+//	// ks should see the account.
+//	wantAccounts := []accounts.Account{cachetestAccounts[0]}
+//	wantAccounts[0].URL = accounts.URL{Scheme: KeyStoreScheme, Path: file}
+//	for d := 200 * time.Millisecond; d < 8*time.Second; d *= 2 {
+//		list = ks.Accounts()
+//		if reflect.DeepEqual(list, wantAccounts) {
+//			// ks should have also received change notifications
+//			select {
+//			case <-ks.changes:
+//			default:
+//				t.Fatalf("wasn't notified of new accounts")
+//			}
+//			return
+//		}
+//		time.Sleep(d)
+//	}
+//	t.Errorf("\ngot  %v\nwant %v", list, wantAccounts)
+//}
 
 func TestCacheInitialReload(t *testing.T) {
 	cache, _ := newAccountCache(cachetestDir)
