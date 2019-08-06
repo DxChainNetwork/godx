@@ -14,11 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/crypto"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 type (
