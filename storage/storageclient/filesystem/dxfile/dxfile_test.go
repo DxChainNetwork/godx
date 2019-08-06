@@ -6,8 +6,6 @@ package dxfile
 
 import (
 	"bytes"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"os"
 	"testing"
@@ -15,6 +13,8 @@ import (
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 // TestPruneSegment test df.pruneSegment

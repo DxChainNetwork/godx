@@ -6,9 +6,6 @@ package dxdir
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -17,6 +14,9 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 var testDir = tempDir("dxdir")

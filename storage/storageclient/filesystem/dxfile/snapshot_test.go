@@ -7,11 +7,12 @@ package dxfile
 import (
 	"bytes"
 	"fmt"
-	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 // TestSnapshotReader test the process of a SnapshotReader

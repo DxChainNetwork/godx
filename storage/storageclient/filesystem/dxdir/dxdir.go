@@ -5,12 +5,13 @@
 package dxdir
 
 import (
-	"github.com/DxChainNetwork/godx/common/math"
-	"github.com/DxChainNetwork/godx/common/writeaheadlog"
-	"github.com/DxChainNetwork/godx/storage"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/common/writeaheadlog"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 const (

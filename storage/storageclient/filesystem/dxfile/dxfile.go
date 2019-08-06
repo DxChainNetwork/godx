@@ -7,7 +7,6 @@ package dxfile
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"math"
 	"os"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
