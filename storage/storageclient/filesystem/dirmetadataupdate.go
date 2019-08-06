@@ -295,12 +295,12 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 4. Set the updateInProgress value to 0, notifying this goroutine is over
 // 5. Unlock fs.lock if necessary
 // 6. Notify thread manager this goroutine is done.
-func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
+func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, origErr error) {
 	defer func() {
 		// Set the updateInProgress value to 0, notifying this goroutine is over
 		atomic.StoreUint32(&update.updateInProgress, 0)
 		// Unlock fs.lock if fs.lock is locked previously
-		if err == nil {
+		if origErr == nil {
 			fs.lock.Unlock()
 		}
 		// notify the thread manager the work is done
@@ -308,25 +308,26 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	}()
 
 	// If the error is errStopped, do nothing and simply return
-	if err == errStopped {
+	if origErr == errStopped {
 		return
 	}
 	// Calculate consecutive failes
-	if err != nil {
+	if origErr != nil {
 		atomic.AddUint32(&update.consecutiveFails, 1)
 	}
 	fails := atomic.LoadUint32(&update.consecutiveFails)
 
 	//Determine whether to release the update
-	release := fails >= numConsecutiveFailRelease || err == nil
+	err := origErr
+	release := fails >= numConsecutiveFailRelease || origErr == nil
 	if release {
 		// release the wal transaction
 		txn := (*writeaheadlog.Transaction)(atomic.LoadPointer(&update.walTxn))
 		if txn != nil {
-			err = common.ErrCompose(err, txn.Release())
+			err = common.ErrCompose(origErr, txn.Release())
 		}
 		// delete the update from unfinishedUpdates
-		if err != nil {
+		if origErr != nil {
 			fs.lock.Lock()
 			delete(fs.unfinishedUpdates, update.dxPath)
 			fs.lock.Unlock()
@@ -359,31 +360,31 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 				}
 			}
 			if err := d.Close(); err != nil {
-				fs.logger.Warn("cannot close root directory", "err", err)
+				fs.logger.Warn("cannot close root directory", "origErr", err)
 			}
 			return
 		}
 		// no error happened. Continue to update parent
 		parent, err := update.dxPath.Parent()
 		if err != nil {
-			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "err", err)
+			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "origErr", err)
 			return
 		}
 		// InitAndUpdateDirMetadata will hold the fs.lock. Thus call it with a goroutine to avoid
 		// deadlock
 		go func() {
 			if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
-				fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
+				fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "origErr", err)
 			}
 		}()
 
 	} else {
 		if release {
 			// released updates failed more than numConsecutiveFailRelease times
-			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "err", err)
+			fs.logger.Error("cannot update the metadata.", "consecutive fails", fails, "origErr", origErr)
 		} else {
 			// unreleased updates
-			fs.logger.Warn("cannot update the metadata. Try later", "err", err)
+			fs.logger.Warn("cannot update the metadata. Try later", "origErr", origErr)
 		}
 	}
 }
