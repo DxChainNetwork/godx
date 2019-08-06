@@ -8,8 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/log"
 	"sync"
+
+	"github.com/DxChainNetwork/godx/log"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
@@ -84,7 +85,7 @@ func (c *Contract) CommitRevision(signedRevision types.StorageContractRevision, 
 	}
 
 	if err = c.contractHeaderUpdate(contractHeader); err != nil {
-		return fmt.Errorf("during the upload commiting, %s", err.Error())
+		return fmt.Errorf("during the upload committing, %s", err.Error())
 	}
 
 	return
