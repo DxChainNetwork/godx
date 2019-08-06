@@ -1,6 +1,15 @@
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
+
 package contractmanager
 
 import (
+	"math/big"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -8,10 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/Pallinder/go-randomdata"
-	"math/big"
-	"os"
-	"testing"
-	"time"
 )
 
 func TestContractManager_ResumeContracts(t *testing.T) {
