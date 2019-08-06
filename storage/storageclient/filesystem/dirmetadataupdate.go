@@ -266,6 +266,10 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 		// If stop signal received, continue to next loop;
 		// If StopChan received, continue to cleanUp
 		// If no error happened, hold fs.lock and continue to cleanUp process
+		// Note: this is not a beautiful coding style, but it is necessary to
+		// lock the process prior to cleanUp execution. Else a new update might
+		// be initiated and block cleanUp, which finally cause stop signal is
+		// ignored.
 		fs.lock.Lock()
 		select {
 		case <-update.stop:
@@ -282,22 +286,24 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 	return
 }
 
-// cleanUp is the defer function that is called for the goroutine of calculateMetadataAndApply
+// cleanUp is the defer function that is called for the goroutine of calculateMetadataAndApply.
+// currently fs.lock is locked when error is nil; unlocked when error is not nil
 // It do the following:
-// 1. Set the updateInProgress value to 0, notifying this goroutine is over
-// 2. Notify thread manager this goroutine is done.
-// 3. Determine whether release is necessary
-// 4. If release is needed, delete the entry in fs.unfinishedUpdates.
-// 5. If release is needed, Release the transaction
+// 1. Determine whether release is necessary
+// 2. If release is needed, delete the entry in fs.unfinishedUpdates.
+// 3. If release is needed, Release the transaction
+// 4. Set the updateInProgress value to 0, notifying this goroutine is over
+// 5. Unlock fs.lock if necessary
+// 6. Notify thread manager this goroutine is done.
 func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	defer func() {
 		// Set the updateInProgress value to 0, notifying this goroutine is over
 		atomic.StoreUint32(&update.updateInProgress, 0)
+		// Unlock fs.lock if fs.lock is locked previously
 		if err == nil {
-			// In function calculateMetadataAndApply, the lock is only locked when
-			// the update is successful
 			fs.lock.Unlock()
 		}
+		// notify the thread manager the work is done
 		fs.tm.Done()
 	}()
 
@@ -305,51 +311,47 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 	if err == errStopped {
 		return
 	}
-
-	// determine whether release is necessary
-	// release could happen either non err or consecutiveFails reaches the limit
+	// Calculate consecutive failes
 	if err != nil {
 		atomic.AddUint32(&update.consecutiveFails, 1)
 	}
 	fails := atomic.LoadUint32(&update.consecutiveFails)
 
+	//Determine whether to release the update
 	release := fails >= numConsecutiveFailRelease || err == nil
-
-	// 3. If no error happened, delete the entry in fs.unfinishedUpdates.
-	// 4. If no error happened, Release the transaction
 	if release {
+		// release the wal transaction
 		txn := (*writeaheadlog.Transaction)(atomic.LoadPointer(&update.walTxn))
 		if txn != nil {
 			err = common.ErrCompose(err, txn.Release())
 		}
-
-		defer func() {
-			if err != nil {
-				fs.lock.Lock()
-				delete(fs.unfinishedUpdates, update.dxPath)
-				fs.lock.Unlock()
-			} else {
-				delete(fs.unfinishedUpdates, update.dxPath)
-			}
-		}()
+		// delete the update from unfinishedUpdates
+		if err != nil {
+			fs.lock.Lock()
+			delete(fs.unfinishedUpdates, update.dxPath)
+			fs.lock.Unlock()
+		} else {
+			delete(fs.unfinishedUpdates, update.dxPath)
+		}
 	}
 
 	if err == nil {
-		// no error happened. Continue to update parent
+		// If the update is to update the root, do root checks
 		if update.dxPath.IsRoot() {
-			// If root check for repairNeeded and stuckFound, and there is no need to further update parent
 			d, err := fs.dirSet.Open(update.dxPath)
 			if err != nil {
 				fs.logger.Warn("cannot open root directory")
 				return
 			}
 			md := d.Metadata()
+			// Signal repairNeeded as necessary
 			if md.Health < dxfile.RepairHealthThreshold {
 				select {
 				case fs.repairNeeded <- struct{}{}:
 				default:
 				}
 			}
+			// Signal stuckFound as necessary
 			if md.NumStuckSegments > 0 {
 				select {
 				case fs.stuckFound <- struct{}{}:
@@ -361,11 +363,14 @@ func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, err error) {
 			}
 			return
 		}
+		// no error happened. Continue to update parent
 		parent, err := update.dxPath.Parent()
 		if err != nil {
 			fs.logger.Warn("cannot create parent directory", "path", update.dxPath.Path, "err", err)
 			return
 		}
+		// InitAndUpdateDirMetadata will hold the fs.lock. Thus call it with a goroutine to avoid
+		// deadlock
 		go func() {
 			if err = fs.InitAndUpdateDirMetadata(parent); err != nil {
 				fs.logger.Warn("cannot update parent directory", "path", update.dxPath.Path, "err", err)
