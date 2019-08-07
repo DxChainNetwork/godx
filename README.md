@@ -10,10 +10,9 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://opensource.org/)
 
-
-
 `gdx` program is built on top of the DxChain protocol. DxChain is a blockchain based P2P network for data storage. The core feature is that user can upload data to the network as storage client or provide data storage service for other peers in the network as a storage host. In addition, DxChain also contains features that are supported by other blockchain, such as distributed ledger and smart contracts.
 
+**NOTE: the `master` branch will always contain the most active code. However, it is not stable.**
 
 **Table of contents:**
 - [Go DX](#go-dx)
