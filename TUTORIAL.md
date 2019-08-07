@@ -1,7 +1,6 @@
 # Go DxChain Tutorial
 
 
-
 **Table of Contents:**
 
 - [Go DxChain Tutorial](#go-dxchain-tutorial)
@@ -86,13 +85,11 @@ To stop mining, simply type the following commands in the `gdx` console.
 
 By paying DX tokens to storage hosts, storage client is able to rent storage space and store files in the DX network safely and securely. When needed, storage client can download those files from the network.
 
-To start the node as a storage client, run the following command in the terminal
+To start the node as a storage client only, run the following command in the terminal
 
 ```shell
-$ gdx --role client
+$ gdx --role storageclient
 ```
-
-**NOTE: a node can either become a storage client or a storage host. To switch between two roles, you must [clean start](#Section-Four-Program-Clean-Start) the node**
 
 ## Storage Client Execution Steps
 
