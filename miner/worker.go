@@ -232,7 +232,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 	return worker
 }
 
-// setEtherbase sets the etherbase used to initialize the block coinbase field.
+// setCoinbase sets the coinbase used to initialize the block coinbase field.
 func (w *worker) setCoinbase(addr common.Address) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -874,7 +874,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
 	if w.isRunning() {
 		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
+			log.Error("Refusing to mine without coinbase")
 			return
 		}
 		header.Coinbase = w.coinbase
