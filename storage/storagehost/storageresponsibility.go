@@ -229,9 +229,12 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[so.id()]; !ok {
-		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
-	}
+	// Lock the storage responsibility
+	h.checkAndLockStorageResponsibility(so.id())
+	defer h.checkAndUnlockStorageResponsibility(so.id())
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	//Need enough time to submit revision
 	if so.expiration()-postponedExecutionBuffer <= h.blockHeight {
@@ -321,9 +324,12 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 
 // rollbackStorageResponsibility will rollback storage responsibility after modify when receive error
 func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
-	if _, ok := h.lockedStorageResponsibility[oldSo.id()]; !ok {
-		h.log.Debug("modifyStorageResponsibility called with an responsibility that is not locked")
-	}
+	// Lock the storage responsibility
+	h.checkAndLockStorageResponsibility(oldSo.id())
+	defer h.checkAndUnlockStorageResponsibility(oldSo.id())
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	var i int
 	var err error
@@ -527,9 +533,7 @@ func (h *StorageHost) resetFinancialMetrics() error {
 func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
-	defer func() {
-		h.checkAndUnlockStorageResponsibility(soid)
-	}()
+	defer h.checkAndUnlockStorageResponsibility(soid)
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
