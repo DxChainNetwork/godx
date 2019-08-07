@@ -278,11 +278,18 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 
-	// commit dpos context
-	_, err := block.DposContext.Commit()
+	// commit dpos context into memory
+	proto, err := block.DposContext.Commit()
 	if err != nil {
 		return nil, err
 	}
+
+	// commit dpos context into disk, and this is the finally commit
+	block.DposContext.DB().Commit(proto.EpochRoot, true)
+	block.DposContext.DB().Commit(proto.CandidateRoot, true)
+	block.DposContext.DB().Commit(proto.DelegateRoot, true)
+	block.DposContext.DB().Commit(proto.MintCntRoot, true)
+	block.DposContext.DB().Commit(proto.VoteRoot, true)
 
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
 	rawdb.WriteBlock(db, block)
