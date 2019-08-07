@@ -13,11 +13,11 @@ Please delete options that are not relevant.
 - [ ] Breaking Change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] Documentation Update
 
-# Testing
+## Testing
 
 Please include the title of the testcase you implemented here.
 
-# Checklist:
+## Checklist:
 
 - [ ] Code must follow the official Go [formmatting guidelines](https://golang.org/doc/effective_go.html#formatting) (i.e. uses [goimports](https://godoc.org/golang.org/x/tools/cmd/goimports))
 - [ ] Code must be well documented, follow the official Go [document guidelines](https://golang.org/doc/effective_go.html#commentary) (i.e. uses [golint](https://github.com/golang/lint))
