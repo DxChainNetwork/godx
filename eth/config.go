@@ -17,8 +17,6 @@
 package eth
 
 import (
-	"github.com/DxChainNetwork/godx/node"
-	"github.com/DxChainNetwork/godx/storage/storageclient"
 	"math/big"
 	"os"
 	"os/user"
@@ -32,7 +30,9 @@ import (
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/eth/downloader"
 	"github.com/DxChainNetwork/godx/eth/gasprice"
+	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/storage/storageclient"
 )
 
 // DefaultConfig contains default settings for use on the Ethereum main net.
@@ -109,7 +109,8 @@ type Config struct {
 	TrieTimeout        time.Duration
 
 	// Mining-related options
-	Etherbase      common.Address `toml:",omitempty"`
+	Validator      common.Address `toml:",omitempty"`
+	Coinbase       common.Address `toml:",omitempty"`
 	MinerNotify    []string       `toml:",omitempty"`
 	MinerExtraData []byte         `toml:",omitempty"`
 	MinerGasFloor  uint64
@@ -117,6 +118,7 @@ type Config struct {
 	MinerGasPrice  *big.Int
 	MinerRecommit  time.Duration
 	MinerNoverify  bool
+	Dpos           bool
 
 	// Ethash options
 	Ethash ethash.Config

@@ -5477,6 +5477,10 @@ var properties = function () {
             getter: 'eth_coinbase'
         }),
         new Property({
+          name: 'validator',
+          getter: 'eth_validator'
+        }),
+        new Property({
             name: 'mining',
             getter: 'eth_mining'
         }),
