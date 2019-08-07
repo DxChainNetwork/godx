@@ -231,9 +231,7 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(so.id())
-	defer func() {
-		h.checkAndUnlockStorageResponsibility(so.id())
-	}()
+	defer h.checkAndUnlockStorageResponsibility(so.id())
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -328,9 +326,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(oldSo.id())
-	defer func() {
-		h.checkAndUnlockStorageResponsibility(oldSo.id())
-	}()
+	defer h.checkAndUnlockStorageResponsibility(oldSo.id())
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -537,9 +533,7 @@ func (h *StorageHost) resetFinancialMetrics() error {
 func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	// Lock the storage responsibility
 	h.checkAndLockStorageResponsibility(soid)
-	defer func() {
-		h.checkAndUnlockStorageResponsibility(soid)
-	}()
+	defer h.checkAndUnlockStorageResponsibility(soid)
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
