@@ -32,6 +32,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
+	"dpos":       Dpos_JS,
 }
 
 const Chequebook_JS = `
@@ -134,6 +135,26 @@ web3._extend({
 			name: 'submitHashRate',
 			call: 'ethash_submitHashRate',
 			params: 2,
+		}),
+	]
+});
+`
+
+const Dpos_JS = `
+web3._extend({
+	property: 'dpos',
+	methods: [
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'dpos_getValidators',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getConfirmedBlockNumber',
+			call: 'dpos_getConfirmedBlockNumber',
+			params: 0,
+			outputFormatter: web3._extend.utils.toBigNumber
 		}),
 	]
 });
