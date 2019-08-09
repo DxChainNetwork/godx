@@ -5,11 +5,12 @@
 package dxfile
 
 import (
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 )
 
 // TestCmpHealth test CmpRepairPriority

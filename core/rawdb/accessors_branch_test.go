@@ -1,12 +1,13 @@
 package rawdb
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 // Create header chains and write into database, check if FindCommonAncestor could give correct outcome
@@ -375,11 +376,11 @@ func testReceiptsRecord(t *testing.T, txs []*types.Transaction, receipts []*type
 }
 
 /**
-testing process function, form up the data in a large scope, but seperate database for each testcase:
+testing process function, form up the data in a large scope, but separate database for each test case:
 1. testRead receipt with no block
 2. testRead receipt when transaction number and receipt number does not match
 3. testRead receipt in general case
-4. testRead transaction (with helper to include the special casese): testReadTransaction
+4. testRead transaction (with helper to include the special cases): testReadTransaction
 */
 func TestTransactionRelated(t *testing.T) {
 
@@ -428,7 +429,7 @@ func TestTransactionRelated(t *testing.T) {
 
 	// general receipts, which match the transaction exactly
 	receipts := []*types.Receipt{receipt1, receipt2, receipt3}
-	// missing receipts, whihc miss match the transaction
+	// missing receipts, which miss match the transaction
 	missreceipts := []*types.Receipt{receipt1, receipt2}
 
 	testReadReceiptNonBlock(t, txs, receipts)

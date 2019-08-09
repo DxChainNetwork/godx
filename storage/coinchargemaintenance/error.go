@@ -8,5 +8,5 @@ import "errors"
 
 var (
 	// ErrProgramExit indicates that the program will exit (Ctrl + c)
-	ErrProgramExit       = errors.New("program exist")
+	ErrProgramExit = errors.New("program exist")
 )

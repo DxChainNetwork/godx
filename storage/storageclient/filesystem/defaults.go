@@ -5,8 +5,9 @@
 package filesystem
 
 import (
-	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 	"time"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
 )
 
 const (

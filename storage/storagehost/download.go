@@ -180,9 +180,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	}
 
 	if msg.Code == storage.ClientCommitSuccessMsg {
-		h.lock.Lock()
 		err = h.modifyStorageResponsibility(so, nil, nil, nil)
-		h.lock.Unlock()
 		if err != nil {
 			_ = sp.SendHostCommitFailedMsg()
 

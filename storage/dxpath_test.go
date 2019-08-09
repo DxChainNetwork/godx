@@ -1,14 +1,13 @@
-/*
- * Copyright 2019 DxChain, All rights reserved.
- * Use of this source code is governed by an Apache
- * License 2.0 that can be found in the LICENSE file.
- */
+// Copyright 2019 DxChain, All rights reserved.
+// Use of this source code is governed by an Apache
+// License 2.0 that can be found in the LICENSE file.
 
 package storage
 
 import (
-	"github.com/DxChainNetwork/godx/rlp"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
 func TestNewDxPath(t *testing.T) {

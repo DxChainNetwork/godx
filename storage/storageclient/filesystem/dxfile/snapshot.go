@@ -6,11 +6,12 @@ package dxfile
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
-	"os"
 )
 
 // Snapshot is the snapshot of a DxFile which contains necessary info for a DxFile.

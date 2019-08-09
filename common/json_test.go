@@ -45,34 +45,6 @@ func TestJSONCompat(t *testing.T) {
 	}
 }
 
-// test concurrent loading / saving errors
-func TestLoadingSavingConcurrent(t *testing.T) {
-	var errHandle = make(chan error)
-
-	go func() {
-		err := SaveDxJSON(metadata, persistFile, testData)
-		if err != nil {
-			errHandle <- err
-		}
-	}()
-
-	go func() {
-		err := LoadDxJSON(metadata, persistFile, testData)
-		if err != nil {
-			errHandle <- err
-		}
-	}()
-
-	select {
-	case err := <-errHandle:
-		if err != ErrFileInUse {
-			t.Fatalf("error: %s \n", err.Error())
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("error: timeout")
-	}
-}
-
 // test hash value unequal error
 func TestCorruptedFile(t *testing.T) {
 	err := LoadDxJSON(metadata, corruptedFile, testData)

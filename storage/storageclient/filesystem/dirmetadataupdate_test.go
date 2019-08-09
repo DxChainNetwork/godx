@@ -696,7 +696,7 @@ func (fs *fileSystem) postTestCheck(t *testing.T, fileWalShouldEmpty bool, updat
 	}()
 	select {
 	case <-c:
-	case <-time.After(time.Second):
+	case <-time.After(1 * time.Second):
 		t.Fatal("Cannot close after certain period")
 	}
 	persistDir := fs.persistDir
