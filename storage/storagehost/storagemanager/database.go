@@ -14,7 +14,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
-
 	"github.com/syndtr/goleveldb/leveldb"
 	dbError "github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/opt"

@@ -18,7 +18,6 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 

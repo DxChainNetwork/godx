@@ -11,13 +11,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DxChainNetwork/godx/common/unit"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -45,7 +43,7 @@ func (sm *storageManager) AddStorageFolder(path string, size uint64) (err error)
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
-	// Change the folderPath to absolute path
+	// Change the folder'Path to absolute path
 	if path, err = absolutePath(path); err != nil {
 		return
 	}
