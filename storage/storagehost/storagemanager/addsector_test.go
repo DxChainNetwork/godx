@@ -262,6 +262,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	errChan := make(chan error, 1)
 	stopChan := time.After(20 * time.Second)
 	for atomic.LoadUint32(&numSectors) < 24 {
+		time.Sleep(100 * time.Millisecond)
 		// fatal err if timeout
 		select {
 		case <-stopChan:
