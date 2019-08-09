@@ -105,7 +105,6 @@ func (sf *storageFolder) load() (err error) {
 
 // freeSectorIndex randomly find a free slot to insert the sector.
 // If cannot find such a slot, return errFolderAlreadyFull
-// Note this function must be called with lock protected
 func (sf *storageFolder) freeSectorIndex() (index uint64, err error) {
 	if sf.storedSectors >= sf.numSectors {
 		return 0, errFolderAlreadyFull
@@ -141,7 +140,6 @@ func (sf *storageFolder) freeSectorIndex() (index uint64, err error) {
 
 // setFreeSectorSlot set the slot specified by the index to free.
 // If the slot is already freed, report an error
-// Note the storage folder must be locked to use this function
 func (sf *storageFolder) setFreeSectorSlot(index uint64) (err error) {
 	usageIndex := index / bitVectorGranularity
 	bitIndex := index % bitVectorGranularity
@@ -156,7 +154,6 @@ func (sf *storageFolder) setFreeSectorSlot(index uint64) (err error) {
 
 // setUsedSectorSlot set the slot specified by the index to used
 // If the slot is already used, report an error
-// Note the storage folder must be locked to use this function
 func (sf *storageFolder) setUsedSectorSlot(index uint64) (err error) {
 	usageIndex := index / bitVectorGranularity
 	bitIndex := index % bitVectorGranularity

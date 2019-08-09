@@ -140,7 +140,6 @@ func (db *database) hasStorageFolder(path string) (exist bool, err error) {
 }
 
 // saveStorageFolder save the storage folder to the database.
-// Note the storage folder should be locked before calling this function
 func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 	// make a new batch
 	batch := db.newBatch()
@@ -155,7 +154,6 @@ func (db *database) saveStorageFolder(sf *storageFolder) (err error) {
 }
 
 // saveStorageFolderToBatch append the save storage folder operations to the batch
-// The storage folder should be locked before calling this function
 func (db *database) saveStorageFolderToBatch(batch *leveldb.Batch, sf *storageFolder) (newBatch *leveldb.Batch, err error) {
 	// write folder data update to batch
 	folderKey := makeFolderKey(sf.path)

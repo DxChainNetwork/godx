@@ -171,7 +171,7 @@ func (update *addStorageFolderUpdate) recordIntent(manager *storageManager) (err
 // For addStorageFolderUpdate, the prepare stage is defined by prepareNormal, prepareUncommitted,
 // prepareUncommitted based on the target.
 func (update *addStorageFolderUpdate) prepare(manager *storageManager, target uint8) (err error) {
-	// In the prepare stage, the folder in the folder manager should be locked and removed.
+	// In the prepare stage, the folder in the folder manager should be removed.
 	// Create the database batch, and write new data or delete data in the database
 	update.batch = manager.db.newBatch()
 	switch target {
@@ -219,7 +219,6 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 		return
 	}
 	// delete folder in memory
-	// The folders is locked before prepare. So it shall be safe to delete the entry
 	delete(manager.folders.sfs, update.path)
 	// If update failed at update stage, revert the memory and commit release the transaction
 	if upErr.prepareErr != nil {
@@ -264,12 +263,11 @@ func (update *addStorageFolderUpdate) release(manager *storageManager, upErr *up
 
 // prepareNormal defines the prepare stage behaviour with the targetNormal.
 // In this scenario,
-// 1. lock the folders and check for whether the folder exist in folders. if exist, return error
-// 2. a new folder should be written to the batch
-// 3. Create a new locked folder and insert to the folder map
-// 4. The underlying transaction is committed.
+// 1. a new folder should be written to the batch
+// 2. Create a new folder and insert to the folder map
+// 3. The underlying transaction is committed.
 func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (err error) {
-	// construct the storage folder, lock the folder and register to manager.folders
+	// construct the storage folder
 	id, err := manager.db.randomFolderID()
 	if err != nil {
 		return fmt.Errorf("cannot create id: %v", err)
@@ -281,7 +279,6 @@ func (update *addStorageFolderUpdate) prepareNormal(manager *storageManager) (er
 		usage:      emptyUsage(update.size),
 		numSectors: sizeToNumSectors(update.size),
 	}
-	// For normal execution, the folders has already been locked. And the folder is also locked.
 	if err = manager.folders.addFolder(sf); err != nil {
 		err = fmt.Errorf("folder cannot register to storageManager: %v", err)
 		return

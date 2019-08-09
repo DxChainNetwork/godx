@@ -17,9 +17,9 @@ type update interface {
 	// the update itself
 	recordIntent(manager *storageManager) error
 
-	// prepare prepare the data and then commit. target is defined at defaults.go
-	// which defines three scenarios this function is called. normal execution /
-	// recover committed txn
+	// prepare prepare the data and then commit wal transaction. target is defined
+	// at defaults.go which defines three scenarios this function is called. normal
+	// execution / recover committed txn
 	prepare(manager *storageManager, target uint8) error
 
 	// process do the actual updates. If any error happened, return

@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -19,7 +20,8 @@ import (
 )
 
 type (
-	// StorageManager is the interface to be provided to upper function calls
+	// StorageManager is the interface to manager storage which will be provided to
+	// upper function calls. Supported methods are mutually exclusive
 	StorageManager interface {
 		Start() error
 		Close() error
@@ -55,10 +57,8 @@ type (
 		wal        *writeaheadlog.Wal
 		tm         *threadmanager.ThreadManager
 
-		// lock is the structure used to separate resize/delete from other function calls.
-		// This is to resolve the dead lock caused from the different sequence of locking
-		// sector and then folder
-		lock common.WPLock
+		// All methods provided are mutually exclusive
+		lock sync.Mutex
 
 		// disruptor is used only for test
 		disruptor *disruptor
@@ -124,15 +124,15 @@ func (sm *storageManager) Start() (err error) {
 		if err != nil {
 			return nil
 		}
-		// This function shall be called with a background thread. Since the error has been
-		// handled in prepareProcessReleaseUpdate, it's safe not to handle the error here.
+		// This function shall be called with a background thread.
 		go func(up update) {
 			sm.lock.Lock()
 			defer func() {
 				sm.lock.Unlock()
 				sm.tm.Done()
 			}()
-
+			// Since the error has been handled in prepareProcessReleaseUpdate, it's safe not to
+			// handle the error here.
 			_ = sm.prepareProcessReleaseUpdate(up, targetRecoverCommitted)
 		}(up)
 	}

@@ -84,8 +84,6 @@ func (update *expandFolderUpdate) recordIntent(manager *storageManager) (err err
 	if err != nil {
 		return
 	}
-	// If recordIntent return error, folder lock will not be released in release function. Release
-	// it right now
 	update.prevNumSectors = update.folder.numSectors
 	// Record the intent to the wal
 	persist := expandFolderUpdatePersist{
@@ -144,7 +142,7 @@ func (update *expandFolderUpdate) prepareNormal(manager *storageManager) (err er
 }
 
 func (update *expandFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
-	// get and lock the folder
+	// get the folder
 	if update.folder, err = manager.folders.get(update.folderPath); err != nil {
 		update.folder = nil
 		return err

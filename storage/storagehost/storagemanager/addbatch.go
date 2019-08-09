@@ -48,10 +48,7 @@ type (
 // storage manager before calling this function. The operation is atomic, that is, if any error
 // happened during the update, all the operation will not be performed.
 //
-// Note:
-//   1. The added sectors must be previously stored in storage manager, else return an error
-//   2. Each two of the added sectors must not share the same root, else the function will
-//      be blocked permanently.
+// Note: The added sectors must be previously stored in storage manager, else return an error
 func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
 	// If no root input, no need to update. Simply return a nil error
 	if len(roots) == 0 {
@@ -164,7 +161,6 @@ func (update *addSectorBatchUpdate) process(manager *storageManager, target uint
 // release is to release the update and do error handling
 // Checks for the existence of all sectors and append to the transaction
 func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	// release all sector locks
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()

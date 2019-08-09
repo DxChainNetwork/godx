@@ -130,7 +130,7 @@ func (update *deleteSectorBatchUpdate) recordIntent(manager *storageManager) (er
 		update.txn = nil
 		return fmt.Errorf("cannot create transaction: %v", err)
 	}
-	// load and lock sectors and folders.
+	// load sectors and folders.
 	if err = update.loadSectorsAndFolders(manager); err != nil {
 		return fmt.Errorf("cannot load sectors and folders: %v", err)
 	}
@@ -207,9 +207,7 @@ func (update *deleteSectorBatchUpdate) prepareNormal(manager *storageManager) (e
 }
 
 // loadSectorsAndFolders load the sectors and folders from database and memory.
-// Also the locks for the sectors and folders are already locked
 func (update *deleteSectorBatchUpdate) loadSectorsAndFolders(manager *storageManager) (err error) {
-	// lock all sectors
 	folderPaths := make([]string, 0)
 	// Get all sectors and get related folder paths
 	for _, id := range update.ids {
@@ -416,7 +414,6 @@ func decodeDeleteSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *dele
 }
 
 func (update *deleteSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
-	// folderPaths are the path to lock together
 	var folderPaths []string
 	for _, op := range update.txn.Operations[1:] {
 		switch op.Name {
@@ -458,7 +455,7 @@ func (update *deleteSectorBatchUpdate) prepareCommitted(manager *storageManager)
 			return
 		}
 	}
-	// Lock and load all folders
+	// load all folders
 	update.folders, err = manager.folders.getFolders(folderPaths)
 	if err != nil {
 		return err

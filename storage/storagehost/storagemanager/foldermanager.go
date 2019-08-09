@@ -52,9 +52,7 @@ func (fm *folderManager) exist(path string) (exist bool) {
 	return
 }
 
-// get get a already locked storage folder specified by path from the folder manager.
-// Please make sure the storage folder is unlocked when finished using.
-// Also make sure the folder manager is locked before calling this function
+// get get a storage folder specified by path from the folder manager.
 func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	sf, exist := fm.sfs[path]
 	if !exist {
@@ -63,8 +61,7 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	return sf, nil
 }
 
-// getFolders return the map from folder id to locked folders
-// folder manager should be locked before use
+// getFolders return the map from folder id to the folders
 func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]*storageFolder, err error) {
 	folders = make(map[folderID]*storageFolder)
 	for _, path := range folderPaths {
@@ -78,7 +75,6 @@ func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]
 }
 
 // delete delete the entry in folder manager
-// Note this function is not thread safe
 func (fm *folderManager) delete(path string) {
 	delete(fm.sfs, path)
 }
@@ -90,8 +86,6 @@ func (fm *folderManager) size() (size int) {
 }
 
 // add add a storageFolder to the folder manager.
-// Note this function is totally not thread safe either for folder manager or the folder itself.
-// Make sure both the folderManager and storageFolder are locked before the function is called
 func (fm *folderManager) addFolder(sf *storageFolder) (err error) {
 	if _, exist := fm.sfs[sf.path]; exist {
 		err = errors.New("path already exist")
@@ -100,9 +94,8 @@ func (fm *folderManager) addFolder(sf *storageFolder) (err error) {
 	return nil
 }
 
-// selectFolderToAdd select a folder to add sector. return a locked storageFolder, the
+// selectFolderToAdd select a folder to add sector. return a storageFolder, the
 // index to insert, and error that happened during execution
-// The function is thread safe to call
 func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, err error) {
 	// Loop over the folder manager to check availability
 	for _, sf = range fm.sfs {
@@ -115,7 +108,7 @@ func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, e
 		} else if err != nil {
 			return nil, 0, err
 		}
-		// return the locked storage folder, the index, and nil error
+		// return the storage folder, the index, and nil error
 		return
 	}
 
@@ -137,7 +130,6 @@ func (fm *folderManager) selectFolderToAddWithRetry(retryTimes int) (sf *storage
 
 // validateShrink validates the shrinkFolderUpdate for whether all the stored sectors
 // could be stored in the folders.
-// The function does not contain any lock operations
 func (fm *folderManager) validateShrink(folderPath string, targetNumSector uint64) (err error) {
 	freeSectors := uint64(0)
 	for path, sf := range fm.sfs {

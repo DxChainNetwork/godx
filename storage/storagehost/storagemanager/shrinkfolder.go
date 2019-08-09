@@ -19,8 +19,8 @@ import (
 
 // shrinkFolderUpdate shrinks the folder to the target size.
 // The processing of shrinkFolderUpdates acquires an exclusive lock from the module,
-// so no worry about locks in this update. The update will relocate the sectors that
-// needs to be relocated because the folder shrinks.
+// The update will relocate the sectors that needs to be relocated because the folder
+// shrinks.
 type (
 	shrinkFolderUpdate struct {
 		folderPath string
