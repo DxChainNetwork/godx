@@ -91,9 +91,6 @@ func TestEmptyStorageManager(t *testing.T) {
 	if sm.folders.size() != 0 {
 		t.Fatalf("folders size not empty: %v", sm.folders.size())
 	}
-	if len(sm.sectorLocks.locks) != 0 {
-		t.Fatalf("sector locks not emmpty: %v", len(sm.sectorLocks.locks))
-	}
 	sm.shutdown(t, 100*time.Millisecond)
 	// Create a new storage manager, which should have the same sectorSalt
 	newsm, err := New(sm.persistDir)
@@ -110,9 +107,6 @@ func TestEmptyStorageManager(t *testing.T) {
 	}
 	if newSM.folders.size() != 0 {
 		t.Fatalf("folders size not empty: %v", newSM.folders.size())
-	}
-	if len(newSM.sectorLocks.locks) != 0 {
-		t.Fatalf("sector locks not emmpty: %v", len(newSM.sectorLocks.locks))
 	}
 }
 
@@ -138,4 +132,3 @@ func randomUint32() uint32 {
 	rand.Read(b)
 	return binary.LittleEndian.Uint32(b)
 }
-

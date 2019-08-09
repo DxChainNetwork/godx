@@ -53,15 +53,13 @@ type (
 //   2. Each two of the added sectors must not share the same root, else the function will
 //      be blocked permanently.
 func (sm *storageManager) AddSectorBatch(roots []common.Hash) (err error) {
-	if err = sm.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer sm.tm.Done()
-
 	// If no root input, no need to update. Simply return a nil error
 	if len(roots) == 0 {
 		return
 	}
+	// Lock the storage Manager
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
 	// create the update and record the intent
 	update := sm.createAddSectorBatchUpdate(roots)
 	if err = update.recordIntent(sm); err != nil {
@@ -105,12 +103,6 @@ func (update *addSectorBatchUpdate) str() (s string) {
 
 // recordIntent records the intent for an addSectorBatch update
 func (update *addSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-		}
-	}()
 	persist := addSectorBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -173,13 +165,6 @@ func (update *addSectorBatchUpdate) process(manager *storageManager, target uint
 // Checks for the existence of all sectors and append to the transaction
 func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
 	// release all sector locks
-	defer func() {
-		// release all locks
-		for _, s := range update.sectors {
-			manager.sectorLocks.unlockSector(s.id)
-		}
-		manager.lock.RUnlock()
-	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -239,12 +224,9 @@ func (update *addSectorBatchUpdate) release(manager *storageManager, upErr *upda
 // prepareNormal prepare for the normal execution
 func (update *addSectorBatchUpdate) prepareNormal(manager *storageManager) (err error) {
 	var once sync.Once
-	// lock all sectors
-	manager.sectorLocks.lockSectors(update.ids)
 	for _, id := range update.ids {
 		s, err := manager.db.getSector(id)
 		if err != nil {
-			manager.sectorLocks.unlockSector(id)
 			return fmt.Errorf("get sector [%x]: %v", id, err)
 		}
 		// increment the count field
@@ -345,13 +327,6 @@ func decodeAddSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *addSect
 		update.sectors = append(update.sectors, s)
 	}
 	return update, nil
-}
-
-// lockResource locks the resource during recover
-func (update *addSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	manager.sectorLocks.lockSectors(update.ids)
-	return
 }
 
 // prepareCommitted prepare for the recovery

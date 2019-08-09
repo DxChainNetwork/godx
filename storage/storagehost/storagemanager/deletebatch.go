@@ -63,14 +63,13 @@ func (sm *storageManager) DeleteSector(root common.Hash) (err error) {
 
 // DeleteSectorBatch delete sectors in batch
 func (sm *storageManager) DeleteSectorBatch(roots []common.Hash) (err error) {
-	if err = sm.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer sm.tm.Done()
-
+	// Check the size of the roots. If 0, return immediately
 	if len(roots) == 0 {
 		return
 	}
+	// Lock the storage manager
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
 	// create the update and record the intent
 	update := sm.createDeleteSectorBatchUpdate(roots)
 	if err = update.recordIntent(sm); err != nil {
@@ -115,12 +114,6 @@ func (update *deleteSectorBatchUpdate) str() (s string) {
 
 // recordIntent record the intent of deleteSectorBatchUpdate
 func (update *deleteSectorBatchUpdate) recordIntent(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-		}
-	}()
 	persist := deleteBatchInitPersist{
 		IDs: update.ids,
 	}
@@ -217,7 +210,6 @@ func (update *deleteSectorBatchUpdate) prepareNormal(manager *storageManager) (e
 // Also the locks for the sectors and folders are already locked
 func (update *deleteSectorBatchUpdate) loadSectorsAndFolders(manager *storageManager) (err error) {
 	// lock all sectors
-	manager.sectorLocks.lockSectors(update.ids)
 	folderPaths := make([]string, 0)
 	// Get all sectors and get related folder paths
 	for _, id := range update.ids {
@@ -324,16 +316,6 @@ func (update *deleteSectorBatchUpdate) processNormal(manager *storageManager) (e
 
 // release release the deleteSectorBatchUpdate.
 func (update *deleteSectorBatchUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	defer func() {
-		// Unlock sectors and folders
-		for _, id := range update.ids {
-			manager.sectorLocks.unlockSector(id)
-		}
-		for _, folder := range update.folders {
-			folder.lock.Unlock()
-		}
-		manager.lock.RUnlock()
-	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -433,19 +415,7 @@ func decodeDeleteSectorBatchUpdate(txn *writeaheadlog.Transaction) (update *dele
 	return
 }
 
-// lockResource loads and locks the sectors and folders used in the udpate
-func (update *deleteSectorBatchUpdate) lockResource(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	// lock all sectors
-	manager.sectorLocks.lockSectors(update.ids)
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-			for _, id := range update.ids {
-				manager.sectorLocks.unlockSector(id)
-			}
-		}
-	}()
+func (update *deleteSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
 	// folderPaths are the path to lock together
 	var folderPaths []string
 	for _, op := range update.txn.Operations[1:] {
@@ -494,10 +464,6 @@ func (update *deleteSectorBatchUpdate) lockResource(manager *storageManager) (er
 		return err
 	}
 	return
-}
-
-func (update *deleteSectorBatchUpdate) prepareCommitted(manager *storageManager) (err error) {
-	return nil
 }
 
 func (update *deleteSectorBatchUpdate) processCommitted(manager *storageManager) (err error) {

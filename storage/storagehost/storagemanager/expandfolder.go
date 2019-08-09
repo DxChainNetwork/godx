@@ -30,8 +30,6 @@ type (
 		txn *writeaheadlog.Transaction
 
 		batch *leveldb.Batch
-
-		unlockWhenRelease bool
 	}
 
 	expandFolderUpdatePersist struct {
@@ -45,11 +43,10 @@ type (
 
 // expandFolder expand the folder to target Num Sectors size
 func (sm *storageManager) expandFolder(folderPath string, size uint64) (err error) {
-	if err = sm.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer sm.tm.Done()
-
+	// keep the storage manager lock until finished
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	// Create and process the request
 	update := sm.createExpandFolderUpdate(folderPath, size)
 	if err = update.recordIntent(sm); err != nil {
 		return
@@ -83,9 +80,7 @@ func (update *expandFolderUpdate) str() (s string) {
 // record intent record the expand folder intent
 func (update *expandFolderUpdate) recordIntent(manager *storageManager) (err error) {
 	// Open the storage folder to get the prevNumSectors
-	manager.folders.lock.RLock()
 	update.folder, err = manager.folders.get(update.folderPath)
-	manager.folders.lock.RUnlock()
 	if err != nil {
 		return
 	}
@@ -149,6 +144,11 @@ func (update *expandFolderUpdate) prepareNormal(manager *storageManager) (err er
 }
 
 func (update *expandFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
+	// get and lock the folder
+	if update.folder, err = manager.folders.get(update.folderPath); err != nil {
+		update.folder = nil
+		return err
+	}
 	return
 }
 
@@ -191,12 +191,6 @@ func (update *expandFolderUpdate) processCommitted(manager *storageManager) (err
 }
 
 func (update *expandFolderUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	defer func() {
-		update.folder.lock.Unlock()
-		if update.unlockWhenRelease {
-			manager.lock.RUnlock()
-		}
-	}()
 	// If no error happened, release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -254,17 +248,6 @@ func decodeExpandFolderUpdate(txn *writeaheadlog.Transaction) (update *expandFol
 		prevNumSectors:   persist.PrevNumSectors,
 		targetNumSectors: persist.TargetNumSectors,
 		txn:              txn,
-	}
-	return
-}
-
-func (update *expandFolderUpdate) lockResource(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	update.unlockWhenRelease = true
-	// get and lock the folder
-	if update.folder, err = manager.folders.get(update.folderPath); err != nil {
-		update.folder = nil
-		return err
 	}
 	return
 }

@@ -15,11 +15,11 @@ import (
 
 //ReadSector read the sector data
 func (sm *storageManager) ReadSector(root common.Hash) (data []byte, err error) {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+
 	// calculate the sector id
 	id := sm.calculateSectorID(root)
-	// lock the sector
-	sm.sectorLocks.lockSector(id)
-	defer sm.sectorLocks.unlockSector(id)
 	// get the sector from database
 	var s *sector
 	s, err = sm.db.getSector(id)
@@ -36,13 +36,10 @@ func (sm *storageManager) ReadSector(root common.Hash) (data []byte, err error) 
 		return nil, fmt.Errorf("db data might be corrupted: %v", err)
 	}
 	// Get the folder from memory
-	sm.folders.lock.RLock()
 	folder, err := sm.folders.get(folderPath)
-	sm.folders.lock.RUnlock()
 	if err != nil {
 		return nil, fmt.Errorf("check folder in memory: %v", err)
 	}
-	defer folder.lock.Unlock()
 	if folder.status == folderUnavailable {
 		return nil, fmt.Errorf("folder status unavailable")
 	}

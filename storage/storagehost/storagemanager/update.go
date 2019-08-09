@@ -10,11 +10,8 @@ import (
 
 // update is the data structure used for all storage manager operations
 type update interface {
-	// str returns a brief string of what the update is doing
+	// str returns a brief instruction of what the update is doing
 	str() string
-
-	// lockResource locks the resources effected by the update in the recovery process
-	lockResource(manager *storageManager) error
 
 	// recordIntent record the intent in the wal, and register the transaction to
 	// the update itself
@@ -61,8 +58,8 @@ func (sm *storageManager) prepareProcessReleaseUpdate(up update, target uint8) (
 	defer func() {
 		if err := up.release(sm, upErr); err != nil {
 			upErr = upErr.setReleaseError(err)
-			sm.logError(up, upErr)
 		}
+		sm.logError(up, upErr)
 		return
 	}()
 	// prepare the update

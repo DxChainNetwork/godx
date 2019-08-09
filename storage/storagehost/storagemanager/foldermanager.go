@@ -7,7 +7,6 @@ package storagemanager
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -15,8 +14,7 @@ import (
 
 // folderManager is the map from folder id to storage folder
 type folderManager struct {
-	sfs  map[string]*storageFolder
-	lock sync.RWMutex
+	sfs map[string]*storageFolder
 }
 
 // loadFolderManager creates a new storage folders from database and open the data files
@@ -41,13 +39,8 @@ func loadFolderManager(db *database) (fm *folderManager, err error) {
 
 // close close all files in the storage folders
 func (fm *folderManager) close() (err error) {
-	fm.lock.Lock()
-	defer fm.lock.Unlock()
-
 	for _, sf := range fm.sfs {
-		sf.lock.Lock()
 		err = common.ErrCompose(err, sf.dataFile.Close())
-		sf.lock.Unlock()
 	}
 	return
 }
@@ -67,36 +60,20 @@ func (fm *folderManager) get(path string) (sf *storageFolder, err error) {
 	if !exist {
 		return nil, errors.New("path not exist")
 	}
-	sf.lock.Lock()
-	return sf, nil
-}
-
-// getWithoutLock get the folder without lock from the folder manager
-func (fm *folderManager) getWithoutLock(path string) (sf *storageFolder, err error) {
-	sf, exist := fm.sfs[path]
-	if !exist {
-		return nil, errors.New("path not exist")
-	}
 	return sf, nil
 }
 
 // getFolders return the map from folder id to locked folders
 // folder manager should be locked before use
 func (fm *folderManager) getFolders(folderPaths []string) (folders map[folderID]*storageFolder, err error) {
-	fm.lock.RLock()
-	var locks []*common.TryLock
 	folders = make(map[folderID]*storageFolder)
 	for _, path := range folderPaths {
 		sf, exist := fm.sfs[path]
 		if !exist {
 			return make(map[folderID]*storageFolder), fmt.Errorf("folder not exist")
 		}
-		locks = append(locks, &sf.lock)
 		folders[sf.id] = sf
 	}
-	fm.lock.RUnlock()
-
-	common.Lock(locks...)
 	return
 }
 
@@ -127,25 +104,15 @@ func (fm *folderManager) addFolder(sf *storageFolder) (err error) {
 // index to insert, and error that happened during execution
 // The function is thread safe to call
 func (fm *folderManager) selectFolderToAdd() (sf *storageFolder, index uint64, err error) {
-	fm.lock.RLock()
-	defer fm.lock.RUnlock()
 	// Loop over the folder manager to check availability
 	for _, sf = range fm.sfs {
-		if locked := sf.lock.TryLock(); !locked {
-			// Some other goroutine is accessing the folder.
-			// Continue to the next folder
-			continue
-		}
 		if sf.status == folderUnavailable {
-			sf.lock.Unlock()
 			continue
 		}
 		index, err = sf.freeSectorIndex()
 		if err == errFolderAlreadyFull {
-			sf.lock.Unlock()
 			continue
 		} else if err != nil {
-			sf.lock.Unlock()
 			return nil, 0, err
 		}
 		// return the locked storage folder, the index, and nil error

@@ -65,11 +65,8 @@ type (
 // AddSector add the sector to host manager
 // whether the data has merkle root root is not validated here, and assumed valid
 func (sm *storageManager) AddSector(root common.Hash, data []byte) (err error) {
-	if err = sm.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer sm.tm.Done()
-
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
 	// validate the add sector request
 	if err = validateAddSector(root, data); err != nil {
 		return fmt.Errorf("validation failed: %v", err)
@@ -124,12 +121,6 @@ func (update *addSectorUpdate) str() (s string) {
 // 1. Create the update
 // 2. write the initial transaction to wal
 func (update *addSectorUpdate) recordIntent(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-		}
-	}()
 	pUpdate := addSectorInitPersist{
 		ID:   update.id,
 		Data: update.data,
@@ -203,13 +194,6 @@ func (update *addSectorUpdate) process(manager *storageManager, target uint8) (e
 
 // release release the update
 func (update *addSectorUpdate) release(manager *storageManager, upErr *updateError) (err error) {
-	defer func() {
-		if update.folder != nil {
-			update.folder.lock.Unlock()
-		}
-		manager.sectorLocks.unlockSector(update.id)
-		manager.lock.RUnlock()
-	}()
 	// If no error happened, simply release the transaction
 	if upErr == nil || upErr.isNil() {
 		err = update.txn.Release()
@@ -285,7 +269,6 @@ func (update *addSectorUpdate) release(manager *storageManager, upErr *updateErr
 // In the prepare stage, find a folder with empty slot to insert the data
 func (update *addSectorUpdate) prepareNormal(manager *storageManager) (err error) {
 	// Try to find the sector in the database. If found, simply increment the count field
-	manager.sectorLocks.lockSector(update.id)
 	s, existErr := manager.db.getSector(update.id)
 	var op writeaheadlog.Operation
 	if existErr != nil && existErr != leveldb.ErrNotFound {
@@ -461,31 +444,16 @@ func decodeAddSectorUpdate(txn *writeaheadlog.Transaction) (update *addSectorUpd
 	return
 }
 
-// lockResource locks the resource during recover
-func (update *addSectorUpdate) lockResource(manager *storageManager) (err error) {
-	manager.lock.RLock()
-	manager.sectorLocks.lockSector(update.id)
-	defer func() {
-		if err != nil {
-			manager.lock.RUnlock()
-			manager.sectorLocks.unlockSector(update.id)
-		}
-	}()
+// prepareCommitted prepare for committed transaction
+func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
 	folderPath, err := manager.db.getFolderPath(update.sector.folderID)
 	if err != nil {
 		return
 	}
-	manager.folders.lock.RLock()
 	update.folder, err = manager.folders.get(folderPath)
-	manager.folders.lock.RUnlock()
 	if err != nil {
 		return err
 	}
-	return
-}
-
-// prepareCommitted prepare for committed transaction
-func (update *addSectorUpdate) prepareCommitted(manager *storageManager) (err error) {
 	return
 }
 

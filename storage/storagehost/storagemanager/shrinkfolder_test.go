@@ -231,7 +231,6 @@ func TestShrinkStorageFolderStopped(t *testing.T) {
 		if err = newSM.Start(); err != nil {
 			t.Fatal(err)
 		}
-		newSM.lock.Lock()
 		// After the shrink, all sectors must still exist
 		for _, expect := range expects {
 			if err := checkSectorExist(expect.root, newSM, expect.data, uint64(expect.count)); err != nil {
@@ -242,8 +241,6 @@ func TestShrinkStorageFolderStopped(t *testing.T) {
 		if err := checkFolderSize(newSM, path, size); err != nil {
 			t.Fatal(err)
 		}
-		newSM.lock.Unlock()
-
 		if err := checkFuncTimeout(time.Second, func() { newSM.lock.Lock(); newSM.lock.Unlock() }); err != nil {
 			t.Fatal(err)
 		}

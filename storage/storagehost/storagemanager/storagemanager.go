@@ -10,7 +10,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -50,9 +49,6 @@ type (
 		// folders is a in-memory map of the folder
 		folders *folderManager
 
-		// sectorLocks is the map from sector id to the sectorLock
-		sectorLocks *sectorLocks
-
 		// utility field
 		log        log.Logger
 		persistDir string
@@ -83,7 +79,6 @@ func newStorageManager(persistDir string, d *disruptor) (sm *storageManager, err
 	if err != nil {
 		return nil, fmt.Errorf("cannot create the storagemanager: %v", err)
 	}
-	sm.sectorLocks = newSectorLocks()
 	sm.log = log.New("module", "storage manager")
 	sm.persistDir = persistDir
 	// Only initialize the WAL in start
@@ -113,12 +108,6 @@ func (sm *storageManager) Start() (err error) {
 	// Create goroutines to process unfinished transactions
 	// The txn should be processed in reverse order (all recovered transactions are to be reverted)
 	for i := len(txns) - 1; i >= 0; i-- {
-		// If the module is stopped, return
-		if sm.stopped() {
-			return nil
-		}
-		// Wait for the last update to lock the corresponding resource
-		<-time.After(20 * time.Millisecond)
 		txn := txns[i]
 		// decode the update
 		up, err := decodeFromTransaction(txn)
@@ -130,21 +119,21 @@ func (sm *storageManager) Start() (err error) {
 			}
 			continue
 		}
-		// start a thread to process
+		// start a thread to process. If cannot be added, module has been stopped. Return nil
 		err = sm.tm.Add()
 		if err != nil {
-			return err
-		}
-		// lock the resource for the update
-		if err = up.lockResource(sm); err != nil {
-			sm.log.Warn("Cannot lock the resource for update", "update", up)
-			continue
+			return nil
 		}
 		// This function shall be called with a background thread. Since the error has been
-		// logged in prepareProcessReleaseUpdate, it's safe not to handle the error here.
+		// handled in prepareProcessReleaseUpdate, it's safe not to handle the error here.
 		go func(up update) {
+			sm.lock.Lock()
+			defer func() {
+				sm.lock.Unlock()
+				sm.tm.Done()
+			}()
+
 			_ = sm.prepareProcessReleaseUpdate(up, targetRecoverCommitted)
-			sm.tm.Done()
 		}(up)
 	}
 	return nil
@@ -185,7 +174,7 @@ func (sm *storageManager) ResizeFolder(folderPath string, size uint64) (err erro
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
-	sf, err := sm.folders.getWithoutLock(folderPath)
+	sf, err := sm.folders.get(folderPath)
 	if err != nil {
 		return err
 	}
@@ -212,7 +201,7 @@ func (sm *storageManager) DeleteFolder(folderPath string) (err error) {
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 
-	sf, err := sm.folders.getWithoutLock(folderPath)
+	sf, err := sm.folders.get(folderPath)
 	if err != nil {
 		return err
 	}
