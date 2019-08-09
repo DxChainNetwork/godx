@@ -58,7 +58,7 @@ type (
 		tm         *threadmanager.ThreadManager
 
 		// All methods provided are mutually exclusive
-		lock sync.Mutex
+		lock sync.RWMutex
 
 		// disruptor is used only for test
 		disruptor *disruptor
@@ -253,8 +253,8 @@ func (sm *storageManager) Folders() []storage.HostFolder {
 
 // AvailableSpace return the host storage space infos
 func (sm *storageManager) AvailableSpace() storage.HostSpace {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
 
 	var totalSectors, usedSectors, freeSectors uint64
 	for _, sf := range sm.folders.sfs {

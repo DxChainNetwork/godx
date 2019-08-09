@@ -15,8 +15,8 @@ import (
 
 //ReadSector read the sector data
 func (sm *storageManager) ReadSector(root common.Hash) (data []byte, err error) {
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
 
 	// calculate the sector id
 	id := sm.calculateSectorID(root)
