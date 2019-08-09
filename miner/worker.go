@@ -526,7 +526,7 @@ func (w *worker) taskLoop() {
 			err := engine.CheckValidator(w.chain.CurrentBlock(), time.Now().Unix())
 			if err != nil {
 				log.Error("failed to mint the block", "error", err)
-				return
+				continue
 			}
 
 			// Reject duplicate sealing work due to resubmitting.
