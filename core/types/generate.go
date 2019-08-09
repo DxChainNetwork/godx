@@ -1,11 +1,12 @@
 package types
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
 	"math/big"
 	"math/rand"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/crypto"
 )
 
 var RandomHash = common.BytesToHash([]byte("random"))
@@ -66,7 +67,7 @@ func MakeRandomLogs(len int, blockNumber uint64, blockHash common.Hash, txHash c
 }
 
 // MakeLogData makes a random log data based on info given.
-// Randomed fields are: Address, topics (with length topicLen), data (with random length).
+// Random fields are: Address, topics (with length topicLen), data (with random length).
 func MakeLogData(blockNumber uint64, blockHash common.Hash, txHash common.Hash, txIndex uint, index uint) *Log {
 	l := Log{}
 	addrBuf := make([]byte, common.AddressLength)

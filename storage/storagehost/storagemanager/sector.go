@@ -9,7 +9,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
-
 	"golang.org/x/crypto/sha3"
 )
 

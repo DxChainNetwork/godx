@@ -6,7 +6,6 @@ package storagemanager
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,6 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
@@ -263,6 +261,7 @@ func TestAddSectorConcurrent(t *testing.T) {
 	errChan := make(chan error, 1)
 	stopChan := time.After(20 * time.Second)
 	for atomic.LoadUint32(&numSectors) < 24 {
+		time.Sleep(100 * time.Millisecond)
 		// fatal err if timeout
 		select {
 		case <-stopChan:
@@ -402,7 +401,7 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 		return fmt.Errorf("folder id to sector id not exist")
 	}
 	// memoryFolder
-	mmFolder, err := sm.folders.getWithoutLock(folderPath)
+	mmFolder, err := sm.folders.get(folderPath)
 	if err != nil {
 		return err
 	}
@@ -423,22 +422,6 @@ func checkSectorExist(root common.Hash, sm *storageManager, data []byte, count u
 	}
 	if !bytes.Equal(data, b) {
 		return fmt.Errorf("data not correctly saved on disk.\n\tGot %x\n\texpect %x", b[0:10], data[0:10])
-	}
-	c := make(chan struct{})
-	go func() {
-		sm.sectorLocks.lockSector(sector.id)
-		defer sm.sectorLocks.unlockSector(sector.id)
-
-		close(c)
-	}()
-	<-time.After(10 * time.Millisecond)
-	select {
-	case <-c:
-	default:
-		err = errors.New("sector still locked")
-	}
-	if err != nil {
-		return
 	}
 	// Lastly, use the ReadSector method to check the data equality
 	b, err = sm.ReadSector(root)

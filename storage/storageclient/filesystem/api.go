@@ -22,7 +22,7 @@ func NewPublicFileSystemDebugAPI(fs *fileSystem) *PublicFileSystemDebugAPI {
 }
 
 // CreateRandomFiles create some random files. This API is only used in tests
-// The randomed file is defined randomly by goDeepRate, goWideRate, maxDepth, and missRate
+// The random file is defined randomly by goDeepRate, goWideRate, maxDepth, and missRate
 // 	goDeepRate is the possibility of when creating a file, it goes deep into
 //  	a subdirectory of the current directory.
 // 	goWideRate is the possibility of when going deep, instead of using an existing

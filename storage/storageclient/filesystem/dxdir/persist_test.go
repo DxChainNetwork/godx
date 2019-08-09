@@ -155,7 +155,7 @@ func randomDxPath(depth int) storage.DxPath {
 	return dp
 }
 
-// randomMetadata creates a total randomed metadata. Note that the DxFile field is not generated
+// randomMetadata creates a total random metadata. Note that the DxFile field is not generated
 // since this field is not updated in the ApplyUpdate functions
 func randomMetadata() *Metadata {
 	return &Metadata{

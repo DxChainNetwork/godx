@@ -61,9 +61,6 @@ func TestExpandFolderNormal(t *testing.T) {
 	if err := checkFuncTimeout(1*time.Second, func() { sm.lock.Lock(); sm.lock.Unlock() }); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkFuncTimeout(1*time.Second, func() { sm.folders.lock.Lock(); sm.folders.lock.Unlock() }); err != nil {
-		t.Fatal(err)
-	}
 	// shutdown the sm and check wal
 	sm.shutdown(t, 100*time.Millisecond)
 	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
@@ -125,9 +122,6 @@ func TestExpandFolderDisrupt(t *testing.T) {
 		}
 		// check locks
 		if err := checkFuncTimeout(1*time.Second, func() { sm.lock.Lock(); sm.lock.Unlock() }); err != nil {
-			t.Fatal(err)
-		}
-		if err := checkFuncTimeout(1*time.Second, func() { sm.folders.lock.Lock(); sm.folders.lock.Unlock() }); err != nil {
 			t.Fatal(err)
 		}
 		// shutdown the sm and check wal
@@ -208,9 +202,6 @@ func TestExpandFolderStop(t *testing.T) {
 		if err := checkFuncTimeout(1*time.Second, func() { newSM.lock.Lock(); newSM.lock.Unlock() }); err != nil {
 			t.Fatal(err)
 		}
-		if err := checkFuncTimeout(1*time.Second, func() { newSM.folders.lock.Lock(); newSM.folders.lock.Unlock() }); err != nil {
-			t.Fatal(err)
-		}
 		// shutdown the sm and check wal
 		newSM.shutdown(t, 100*time.Millisecond)
 		if err := checkWalTxnNum(filepath.Join(newSM.persistDir, walFileName), 0); err != nil {
@@ -223,7 +214,7 @@ func TestExpandFolderStop(t *testing.T) {
 
 func checkFolderSize(sm *storageManager, folderPath string, size uint64) (err error) {
 	// check the memory folder size
-	sf, err := sm.folders.getWithoutLock(folderPath)
+	sf, err := sm.folders.get(folderPath)
 	if err != nil {
 		return err
 	}
@@ -236,9 +227,6 @@ func checkFolderSize(sm *storageManager, folderPath string, size uint64) (err er
 	}
 	if uint64(len(sf.usage)) != usageSize {
 		return fmt.Errorf("memory: usage size not expected. expect %v, got %v", usageSize, len(sf.usage))
-	}
-	if err = checkFuncTimeout(100*time.Millisecond, func() { sf.lock.Lock(); sf.lock.Unlock() }); err != nil {
-		return err
 	}
 	// check the db folder size
 	dbsf, err := sm.db.loadStorageFolder(folderPath)

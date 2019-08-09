@@ -56,10 +56,6 @@ func TestAddStorageFolderNormal(t *testing.T) {
 	if uint64(len(sf.usage)) != expectUsageSize {
 		t.Errorf("usage size unexpected. got %v, expect %v", expectUsageSize, len(sf.usage))
 	}
-	// the storage folder's lock shall be released
-	if TryLocked(sf.lock) {
-		t.Errorf("The storage folder still locked after update")
-	}
 	// Check the database data
 	dbSf, err := sm.db.loadStorageFolder(path)
 	if err != nil {

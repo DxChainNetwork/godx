@@ -13,14 +13,13 @@ import (
 	"github.com/DxChainNetwork/godx/common/writeaheadlog"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // shrinkFolderUpdate shrinks the folder to the target size.
 // The processing of shrinkFolderUpdates acquires an exclusive lock from the module,
-// so no worry about locks in this update. The update will relocate the sectors that
-// needs to be relocated because the folder shrinks.
+// The update will relocate the sectors that needs to be relocated because the folder
+// shrinks.
 type (
 	shrinkFolderUpdate struct {
 		folderPath string
@@ -39,10 +38,6 @@ type (
 
 		// related storage folders as a map
 		folders map[folderID]*storageFolder
-
-		// unlockWhenRelease defines whether to unlock during release.
-		// The release behaviour could differ for normal or recover or delete folder operation
-		unlockWhenRelease bool
 
 		txn   *writeaheadlog.Transaction
 		batch *leveldb.Batch
@@ -69,12 +64,6 @@ type (
 
 // shrinkFolder shrink the folder to the target size
 func (sm *storageManager) shrinkFolder(folderPath string, targetSize uint64) (err error) {
-	// TODO: add size validation
-	if err = sm.tm.Add(); err != nil {
-		return errStopped
-	}
-	defer sm.tm.Done()
-
 	update := createShrinkFolderUpdate(folderPath, targetSize)
 	if err = update.recordIntent(sm); err != nil {
 		return err
@@ -109,15 +98,12 @@ func (update *shrinkFolderUpdate) str() (s string) {
 
 // recordIntent record the intent to shrink the folder
 func (update *shrinkFolderUpdate) recordIntent(manager *storageManager) (err error) {
-	// The shrink is triggered by upper function calls.
-	// The lock logic is done in upper function calls
-
 	// validate the shrink update. Checks for after the shrink, whether the rest of the folders could be stored
 	if err = manager.folders.validateShrink(update.folderPath, update.targetNumSectors); err != nil {
 		return
 	}
 	// get the storage folder from folders
-	update.targetFolder, err = manager.folders.getWithoutLock(update.folderPath)
+	update.targetFolder, err = manager.folders.get(update.folderPath)
 	if err != nil {
 		return err
 	}
@@ -260,9 +246,6 @@ func (update *shrinkFolderUpdate) relocateSector(manager *storageManager, s *sec
 		relocatedFolder = update.targetFolder
 	} else if err == errFolderAlreadyFull {
 		relocatedFolder, index, err = manager.folders.selectFolderToAdd()
-		if relocatedFolder != nil {
-			relocatedFolder.lock.Unlock()
-		}
 		if err != nil {
 			return sectorRelocation{}, err
 		}
@@ -296,7 +279,7 @@ func (update *shrinkFolderUpdate) relocateSector(manager *storageManager, s *sec
 // target folders) to update
 func (update *shrinkFolderUpdate) prepareCommitted(manager *storageManager) (err error) {
 	// load all folders to update
-	sf, err := manager.folders.getWithoutLock(update.folderPath)
+	sf, err := manager.folders.get(update.folderPath)
 	if err != nil {
 		return err
 	}
@@ -307,7 +290,7 @@ func (update *shrinkFolderUpdate) prepareCommitted(manager *storageManager) (err
 		if err != nil {
 			return err
 		}
-		sf, err = manager.folders.getWithoutLock(path)
+		sf, err = manager.folders.get(path)
 		if err != nil {
 			return err
 		}
@@ -368,9 +351,6 @@ func (update *shrinkFolderUpdate) release(manager *storageManager, upErr *update
 	defer func() {
 		if err == nil {
 			update.targetFolder.status = folderAvailable
-		}
-		if update.unlockWhenRelease {
-			manager.lock.Unlock()
 		}
 	}()
 	if upErr == nil || upErr.isNil() {
@@ -472,14 +452,6 @@ func (update *shrinkFolderUpdate) revert(manager *storageManager, memoryOnly boo
 		err = common.ErrCompose(err, newErr)
 		return
 	}
-	return
-}
-
-// lockResource locks the resource for shrinkFolderUpdate during recover
-func (update *shrinkFolderUpdate) lockResource(manager *storageManager) (err error) {
-	manager.lock.Lock()
-	// The update is triggered by recover. Unlock automatically
-	update.unlockWhenRelease = true
 	return
 }
 
