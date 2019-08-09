@@ -82,9 +82,9 @@ func (n *Node) IP() net.IP {
 	var ip net.IP
 	// enr.IP implemented Entry interface
 	n.Load((*enr.IP)(&ip))
-	if ip.IsLoopback() {
-		return httpGetIP()
-	}
+	//if ip.IsLoopback() {
+	//	return httpGetIP()
+	//}
 	return ip
 }
 
