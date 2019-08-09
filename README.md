@@ -954,7 +954,7 @@ Storage Size:
 
 * To form a bug report, [Bug Report Template](./.github/ISSUE_TEMPLATE/bug_report.md) must be followed
 * To request a new feature, [Feature Request Template](./.github/ISSUE_TEMPLATE/feature_request.md) must be followed
-* To submit a pull request, [Pll Request Template](./.github/PULL_REQUEST_TEMPLATE/pull_request_template.md) must be followed
+* To submit a pull request, [Pull Request Template](./.github/PULL_REQUEST_TEMPLATE/pull_request_template.md) must be followed
 
 Contribution is welcome, see [Contributing](./CONTRIBUTING.md) for more details
 
