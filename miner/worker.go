@@ -150,6 +150,7 @@ type worker struct {
 	taskCh             chan *task
 	resultCh           chan *types.Block
 	startCh            chan struct{}
+	firstWorkCh        chan struct{}
 	exitCh             chan struct{}
 	resubmitIntervalCh chan time.Duration
 	resubmitAdjustCh   chan *intervalAdjust
@@ -206,6 +207,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 		resultCh:           make(chan *types.Block, resultQueueSize),
 		exitCh:             make(chan struct{}),
 		startCh:            make(chan struct{}, 1),
+		firstWorkCh:        make(chan struct{}, 1),
 		resubmitIntervalCh: make(chan time.Duration),
 		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
 	}
@@ -227,7 +229,7 @@ func newWorker(config *params.ChainConfig, engine consensus.Engine, eth Backend,
 	go worker.taskLoop()
 
 	// Submit first work to initialize pending state.
-	worker.startCh <- struct{}{}
+	worker.firstWorkCh <- struct{}{}
 
 	return worker
 }
@@ -347,10 +349,26 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	for {
 		select {
-		case <-w.startCh:
+		case <-w.firstWorkCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
+
+		case <-w.startCh:
+			ticker := time.NewTicker(time.Second).C
+			for {
+				select {
+				case now := <-ticker:
+					if !w.isRunning() {
+						return
+					}
+
+					timestamp = now.Unix()
+					commit(false, commitInterruptNewHead)
+				case <-w.exitCh:
+					return
+				}
+			}
 
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
@@ -523,7 +541,7 @@ func (w *worker) taskLoop() {
 			}
 
 			// check validator at now for dpos consensus
-			err := engine.CheckValidator(w.chain.CurrentBlock(), time.Now().Unix())
+			err := engine.CheckValidator(w.chain.CurrentBlock(), task.block.Time().Int64())
 			if err != nil {
 				log.Error("failed to mint the block", "error", err)
 				continue
@@ -630,6 +648,7 @@ func (w *worker) resultLoop() {
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	stateDB, err := w.chain.StateAt(parent.Root())
 	if err != nil {
+		log.Error("failed to retrieve state", "error", err)
 		return err
 	}
 
@@ -637,6 +656,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	chainDB := stateDB.Database().TrieDB().DiskDB().(ethdb.Database)
 	dposContext, err := types.NewDposContextFromProto(chainDB, parent.Header().DposContext)
 	if err != nil {
+		log.Error("failed to create dpos context", "error", err)
 		return err
 	}
 
@@ -899,7 +919,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	// Could potentially happen if starting to mine in an odd state.
 	err := w.makeCurrent(parent, header)
 	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
+		log.Error("Failed to create mining context", "err", err, "parent", parent.Hash().String(), "new_block", header.Number.Int64())
 		return
 	}
 	// Create the current work task and check any fork transitions needed
