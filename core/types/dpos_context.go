@@ -347,6 +347,8 @@ func (dc *DposContext) UnDelegate(delegatorAddr, candidateAddr common.Address) e
 
 // Commit writes the data in 5 tries to db
 func (dc *DposContext) Commit() (*DposContextProto, error) {
+
+	// commit dpos context into memory
 	epochRoot, err := dc.epochTrie.Commit(nil)
 	if err != nil {
 		return nil, err
@@ -368,6 +370,32 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 	}
 
 	mintCntRoot, err := dc.mintCntTrie.Commit(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// commit dpos context into disk, and this is the finally commit
+	err = dc.DB().Commit(epochRoot, false)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dc.DB().Commit(candidateRoot, false)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dc.DB().Commit(delegateRoot, false)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dc.DB().Commit(mintCntRoot, false)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dc.DB().Commit(voteRoot, false)
 	if err != nil {
 		return nil, err
 	}
