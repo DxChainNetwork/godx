@@ -12,6 +12,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/trie"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // API is a user facing RPC API to allow controlling the delegate and voting
@@ -57,6 +58,13 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	if header == nil {
 		header, err = api.dpos.loadConfirmedBlockHeader(api.chain)
 		if err != nil {
+
+			// if it's leveldb.ErrNotFound, indicates that only genesis block in local, and return 0
+			if err == leveldb.ErrNotFound {
+				return new(big.Int).SetInt64(0), nil
+			}
+
+			// other errors, return nil
 			return nil, err
 		}
 	}
