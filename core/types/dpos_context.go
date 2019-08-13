@@ -57,30 +57,30 @@ func NewMintCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 }
 
 // NewDposContext creates DposContext with the given database
-func NewDposContext(db ethdb.Database) (*DposContext, error) {
-	dbWithCache := trie.NewDatabaseWithCache(db, 256)
+func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
+	db := trie.NewDatabase(diskdb)
 
-	epochTrie, err := NewEpochTrie(common.Hash{}, dbWithCache)
+	epochTrie, err := NewEpochTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := NewDelegateTrie(common.Hash{}, dbWithCache)
+	delegateTrie, err := NewDelegateTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := NewVoteTrie(common.Hash{}, dbWithCache)
+	voteTrie, err := NewVoteTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := NewCandidateTrie(common.Hash{}, dbWithCache)
+	candidateTrie, err := NewCandidateTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 
-	mintCntTrie, err := NewMintCntTrie(common.Hash{}, dbWithCache)
+	mintCntTrie, err := NewMintCntTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -91,35 +91,35 @@ func NewDposContext(db ethdb.Database) (*DposContext, error) {
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
-		db:            dbWithCache,
+		db:            db,
 	}, nil
 }
 
 // NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(db ethdb.Database, ctxProto *DposContextProto) (*DposContext, error) {
-	dbWithCache := trie.NewDatabaseWithCache(db, 256)
+func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextProto) (*DposContext, error) {
+	db := trie.NewDatabase(diskdb)
 
-	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, dbWithCache)
+	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, db)
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := NewDelegateTrie(ctxProto.DelegateRoot, dbWithCache)
+	delegateTrie, err := NewDelegateTrie(ctxProto.DelegateRoot, db)
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := NewVoteTrie(ctxProto.VoteRoot, dbWithCache)
+	voteTrie, err := NewVoteTrie(ctxProto.VoteRoot, db)
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := NewCandidateTrie(ctxProto.CandidateRoot, dbWithCache)
+	candidateTrie, err := NewCandidateTrie(ctxProto.CandidateRoot, db)
 	if err != nil {
 		return nil, err
 	}
 
-	mintCntTrie, err := NewMintCntTrie(ctxProto.MintCntRoot, dbWithCache)
+	mintCntTrie, err := NewMintCntTrie(ctxProto.MintCntRoot, db)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func NewDposContextFromProto(db ethdb.Database, ctxProto *DposContextProto) (*Dp
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
 		mintCntTrie:   mintCntTrie,
-		db:            dbWithCache,
+		db:            db,
 	}, nil
 }
 

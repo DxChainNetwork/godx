@@ -355,12 +355,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-w.startCh:
+			clearPending(w.chain.CurrentBlock().NumberU64())
 			ticker := time.NewTicker(time.Second).C
 			for {
 				select {
 				case now := <-ticker:
 					if !w.isRunning() {
-						return
+						break
 					}
 
 					timestamp = now.Unix()
@@ -543,7 +544,9 @@ func (w *worker) taskLoop() {
 			// check validator at now for dpos consensus
 			err := engine.CheckValidator(w.chain.CurrentBlock(), task.block.Time().Int64())
 			if err != nil {
-				log.Error("failed to mint the block", "error", err)
+
+				// TODO: too many logs, so temporarily comment it
+				//log.Error("failed to mint the block", "error", err)
 				continue
 			}
 
