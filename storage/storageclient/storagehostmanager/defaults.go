@@ -4,18 +4,18 @@
 
 package storagehostmanager
 
-import "time"
+import (
+	"time"
+
+	"github.com/DxChainNetwork/godx/common/unit"
+)
 
 // Those values are used to calculate the storage host evaluation
 const (
 	priceFloor                = float64(0.1)
-	depositFloor              = priceFloor * 2
-	depositExponentialSmall   = 4
-	depositExponentialLarge   = 0.5
 	interactionExponentiation = 10
 	priceExponentiationSmall  = 0.75
 	priceExponentiationLarge  = 5
-	minStorage                = uint64(20e9)
 )
 
 // StorageHostManager related constant
@@ -38,6 +38,24 @@ const (
 	minScans          = 12
 
 	maxDowntime = 10 * 24 * time.Hour
+)
+
+// Presence factor related constants
+const (
+	lowValueLimit  = 0.50
+	lowTimeLimit   = 0
+	highValueLimit = 1.00
+	highTimeLimit  = 100 * unit.BlocksPerDay
+)
+
+// Deposit factor related constants
+const (
+	depositBaseDivider float64 = 3
+)
+
+// Storage factor related constants
+const (
+	storageBaseDivider float64 = 10
 )
 
 // historical interaction with host related constants
