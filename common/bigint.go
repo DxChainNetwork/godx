@@ -113,12 +113,6 @@ func (x BigInt) AddUint64(y uint64) (sum BigInt) {
 	return
 }
 
-// AddFloat64 will perform the addition operation for BigInt and float64 data
-func (x BigInt) AddFloat64(y float64) (sum BigInt) {
-	sum = x.Add(NewBigIntFloat64(y))
-	return
-}
-
 // Sub will perform the subtraction operation for BigInt data
 func (x BigInt) Sub(y BigInt) (diff BigInt) {
 	diff.b.Sub(&x.b, &y.b)
@@ -134,12 +128,6 @@ func (x BigInt) SubInt64(y int64) (diff BigInt) {
 // SubUint64 will perform the subtraction operation for BigInt and uint64 data`
 func (x BigInt) SubUint64(y uint64) (diff BigInt) {
 	diff.b.Sub(&x.b, new(big.Int).SetUint64(y))
-	return
-}
-
-// SubFloat64 will perform the subtraction operation for BigInt and float64 data
-func (x BigInt) SubFloat64(y float64) (diff BigInt) {
-	diff = x.Sub(NewBigIntFloat64(y))
 	return
 }
 
