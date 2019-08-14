@@ -355,21 +355,23 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-w.startCh:
-			clearPending(w.chain.CurrentBlock().NumberU64())
-			ticker := time.NewTicker(time.Second).C
-			for {
-				select {
-				case now := <-ticker:
-					if !w.isRunning() {
-						break
-					}
+			go func() {
+				clearPending(w.chain.CurrentBlock().NumberU64())
+				ticker := time.NewTicker(time.Second).C
+				for {
+					select {
+					case now := <-ticker:
+						if !w.isRunning() {
+							break
+						}
 
-					timestamp = now.Unix()
-					commit(false, commitInterruptNewHead)
-				case <-w.exitCh:
-					return
+						timestamp = now.Unix()
+						commit(false, commitInterruptNewHead)
+					case <-w.exitCh:
+						return
+					}
 				}
-			}
+			}()
 
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
