@@ -367,3 +367,22 @@ func TestBigInt_SubFloat64(t *testing.T) {
 		}
 	}
 }
+
+func TestBigInt_MultFloat64(t *testing.T) {
+	tables := []struct {
+		a      float64
+		b      float64
+		result BigInt
+	}{
+		{100, 0, NewBigInt(100 * 0)},
+		{0, 500, NewBigInt(0 * 500)},
+		{100, 50.5, NewBigInt(50.5 * 100)},
+	}
+
+	for _, table := range tables {
+		got := NewBigIntFloat64(table.a).MultFloat64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error MultFloat64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
