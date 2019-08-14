@@ -145,7 +145,7 @@ func TestBigInt_MultInt(t *testing.T) {
 	}
 
 	for _, table := range tables {
-		val := table.a.MultInt(table.b)
+		val := table.a.MultInt64(table.b)
 		if !val.IsEqual(table.result) {
 			t.Errorf("input %v, %v. Expected product %v, got product %v", table.a, table.b,
 				table.result, val)
@@ -250,6 +250,120 @@ func TestBigInt_DivWithFloatResult(t *testing.T) {
 		got := NewBigInt(table.a).DivWithFloatResult(NewBigInt(table.b))
 		if got != table.result {
 			t.Errorf("Division result does not match. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_AddInt64(t *testing.T) {
+	tables := []struct {
+		a      int64
+		b      int64
+		result BigInt
+	}{
+		{1000, 300, NewBigInt(1300)},
+		{-50, -100, NewBigInt(-150)},
+		{0, -100, NewBigInt(-100)},
+	}
+
+	for _, table := range tables {
+		got := NewBigInt(table.a).AddInt64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error AddInt64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_AddUint64(t *testing.T) {
+	tables := []struct {
+		a      uint64
+		b      uint64
+		result BigInt
+	}{
+		{240000, 31000, NewBigInt(240000 + 31000)},
+		{300, 200, NewBigInt(500)},
+		{0, 0, NewBigInt(0)},
+	}
+
+	for _, table := range tables {
+		got := NewBigIntUint64(table.a).AddUint64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error AddUint64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_AddFloat64(t *testing.T) {
+	tables := []struct {
+		a      float64
+		b      float64
+		result BigInt
+	}{
+		{2350.6, 24999.5, NewBigIntFloat64(2350.6).Add(NewBigIntFloat64(24999.5))},
+		{-3560.7, -38958.3, NewBigIntFloat64(-3560.7).Add(NewBigIntFloat64(-38958.3))},
+		{0, 0, NewBigInt(0)},
+	}
+
+	for _, table := range tables {
+		got := NewBigIntFloat64(table.a).AddFloat64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error AddFloat64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_SubInt64(t *testing.T) {
+	tables := []struct {
+		a      int64
+		b      int64
+		result BigInt
+	}{
+		{1000, 300, NewBigInt(1000 - 300)},
+		{-50, -100, NewBigInt(-50 - -100)},
+		{0, -100, NewBigInt(0 - -100)},
+	}
+
+	for _, table := range tables {
+		got := NewBigInt(table.a).SubInt64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error SubInt64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_SubUint64(t *testing.T) {
+	tables := []struct {
+		a      uint64
+		b      uint64
+		result BigInt
+	}{
+		{240000, 31000, NewBigInt(240000 - 31000)},
+		{300, 200, NewBigInt(300 - 200)},
+		{0, 0, NewBigInt(0)},
+	}
+
+	for _, table := range tables {
+		got := NewBigIntUint64(table.a).SubUint64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error SubUint64. Expected %v, got %v", table.result, got)
+		}
+	}
+}
+
+func TestBigInt_SubFloat64(t *testing.T) {
+	tables := []struct {
+		a      float64
+		b      float64
+		result BigInt
+	}{
+		{2350.6, 24999.5, NewBigIntFloat64(2350.6).Sub(NewBigIntFloat64(24999.5))},
+		{-3560.7, -38958.3, NewBigIntFloat64(-3560.7).Sub(NewBigIntFloat64(-38958.3))},
+		{0, 0, NewBigInt(0)},
+	}
+
+	for _, table := range tables {
+		got := NewBigIntFloat64(table.a).SubFloat64(table.b)
+		if !got.IsEqual(table.result) {
+			t.Errorf("error AddFloat64. Expected %v, got %v", table.result, got)
 		}
 	}
 }

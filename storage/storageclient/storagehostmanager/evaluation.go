@@ -118,7 +118,7 @@ func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, re
 	expectedDataStoredTime := expectedDataStored.MultUint64(rent.Period)
 
 	// double the contract price due to one early contract renew (first one)
-	contractPrice := info.ContractPrice.MultInt(2)
+	contractPrice := info.ContractPrice.MultInt64(2)
 	downloadPrice := expectedDataDownload.Mult(info.DownloadBandwidthPrice)
 	uploadPrice := expectedDataUpload.Mult(info.UploadBandwidthPrice)
 	storagePrice := expectedDataStoredTime.Mult(info.StoragePrice)
