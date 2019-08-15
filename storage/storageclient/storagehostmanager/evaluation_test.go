@@ -257,3 +257,47 @@ func TestEvalHostDeposit(t *testing.T) {
 		}
 	}
 }
+
+// TestStorageRemainingFactorCalc test the functionality of storageRemainingFactorCalc
+func TestStorageRemainingFactorCalc(t *testing.T) {
+	expectedStorage := uint64(1e6)
+	tests := []struct {
+		remainingStorage uint64
+		numHosts         uint64
+	}{
+		{1e3, 1},
+		{3.3e3, 3},
+		{3e4, 3},
+		{3e5, 3},
+		{3e6, 3},
+		{3e7, 3},
+		{3e8, 3},
+		{3e9, 3},
+	}
+	var lastResult float64
+	for index, test := range tests {
+		shm := &StorageHostManager{}
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				RemainingStorage: test.remainingStorage,
+			},
+		}
+		settings := storage.RentPayment{
+			ExpectedStorage: expectedStorage,
+			StorageHosts:    test.numHosts,
+		}
+		res := shm.storageRemainingFactorCalc(info, settings)
+		if res < 0 || res >= 1 {
+			t.Errorf("invalid result: %v", res)
+		}
+		if index == 0 {
+			lastResult = res
+			continue
+		}
+		// the res should be incrementing
+		if res < lastResult {
+			t.Errorf("test %d, the factor not incrementing. Got %v, previous %v", index, res, lastResult)
+		}
+		lastResult = res
+	}
+}
