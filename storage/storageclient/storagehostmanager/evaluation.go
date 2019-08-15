@@ -59,6 +59,9 @@ func (shm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent sto
 	// DepositFactor is the function based on ratio between hostDeposit and marketDeposit.
 	// The function is (x/n)/((x/n) + 1) n is the base divider which is float.
 	// The larger the divider, the larger the deposit is to be encouraged
+	if marketDeposit.Cmp(common.BigInt0) == 0 {
+		marketDeposit = common.BigInt1
+	}
 	ratio := hostDeposit.Float64() / marketDeposit.Float64()
 	factor := ratio / (ratio + depositBaseDivider)
 	return factor
@@ -82,31 +85,25 @@ func evalHostMarketDeposit(settings storage.RentPayment, market hostMarket) comm
 
 // evalHostDeposit calculate the host deposit with host info and client rentPayment settings
 func evalHostDeposit(info storage.HostInfo, settings storage.RentPayment) common.BigInt {
-	// Update the rentPayment to non-zeros
-	updateRentPaymentNonZero(&settings)
+	// regulate the rentPayment to non-zeros
+	regulateRentPayment(&settings)
+	// regulate the host info
+	regulateHostInfo(&info)
 
 	// Calculate the contract fund.
 	contractFund := estimateContractFund(settings)
 
 	// Calculate the deposit
-	deposit := contractFund.Sub(info.ContractPrice).Div(info.StoragePrice).Mult(info.Deposit)
-	// If not enough fund, treat as 0
-	if deposit.IsNeg() {
-		deposit = common.BigInt0
+	storageFund := contractFund.Sub(info.ContractPrice)
+	if storageFund.Cmp(common.NewBigIntUint64(0)) < 0 {
+		storageFund = common.BigInt0
 	}
+	deposit := storageFund.Div(info.StoragePrice).Mult(info.Deposit)
 	// If deposit is larger than max deposit, set to max deposit
 	if deposit.Cmp(info.MaxDeposit) > 0 {
 		deposit = info.MaxDeposit
 	}
 	return deposit
-}
-
-// estimateContractFund estimate the contract fund from client settings.
-// Renter fund is split among the hosts and Evaluated as 2/3 of the total fund
-// TODO: implement this function which is used in contract manager, which should be used in
-//       storage client
-func estimateContractFund(settings storage.RentPayment) common.BigInt {
-	return settings.Fund.MultUint64(2).DivUint64(3).DivUint64(settings.StorageHosts)
 }
 
 // storageRemainingFactorCalc calculates the factor value based on the storage remaining, the more storage
@@ -116,12 +113,6 @@ func (shm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo,
 	ratio := float64(info.RemainingStorage) / float64(expectedStoragePerContract(settings))
 	factor := ratio / (ratio + storageBaseDivider)
 	return factor
-}
-
-// expectedStoragePerContract evaluate the storage per contract.
-// TODO: The function should be imported from contract manager
-func expectedStoragePerContract(settings storage.RentPayment) uint64 {
-	return settings.ExpectedStorage * uint64(storage.DefaultNumSectors) / uint64(storage.DefaultMinSectors)
 }
 
 // uptimeFactorCalc will punish the storage host who are frequently been offline
@@ -160,7 +151,9 @@ func (shm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) floa
 // the lower the price is, the higher the storage host evaluation will be
 func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment) float64 {
 	// make sure the rent has non-zero fields
-	updateRentPaymentNonZero(&rent)
+	regulateRentPayment(&rent)
+	// make sure the host info do not have zero or negative fields
+	regulateHostInfo(&info)
 
 	// calculate the host expected price
 	expectedDataDownload := common.NewBigIntUint64(rent.ExpectedDownload).MultUint64(rent.Period).DivUint64(rent.StorageHosts)
@@ -247,8 +240,8 @@ func (shm *StorageHostManager) uptimeEvaluation(info storage.HostInfo) float64 {
 	return math.Pow(uptimeRatio, exp)
 }
 
-// updateRentPaymentNonZero check the rent, and update the zero fields to 1
-func updateRentPaymentNonZero(rent *storage.RentPayment) {
+// regulateRentPayment check the rent, and update the zero fields to 1
+func regulateRentPayment(rent *storage.RentPayment) {
 	if rent.StorageHosts == 0 {
 		rent.StorageHosts = 1
 	}
@@ -267,4 +260,41 @@ func updateRentPaymentNonZero(rent *storage.RentPayment) {
 	if rent.ExpectedRedundancy == 0 {
 		rent.ExpectedRedundancy = 1
 	}
+}
+
+// regulateHostInfo regulate the host info. If it has negative values, change it to 0;
+// If some specified fields (storage price)  have zero values, change it to 1;
+func regulateHostInfo(info *storage.HostInfo) {
+	if info.Deposit.IsNeg() {
+		info.Deposit = common.BigInt0
+	}
+	if info.MaxDeposit.IsNeg() {
+		info.MaxDeposit = common.BigInt0
+	}
+	if info.ContractPrice.IsNeg() {
+		info.ContractPrice = common.BigInt0
+	}
+	if info.DownloadBandwidthPrice.IsNeg() {
+		info.DownloadBandwidthPrice = common.BigInt0
+	}
+	if info.UploadBandwidthPrice.IsNeg() {
+		info.UploadBandwidthPrice = common.BigInt0
+	}
+	if info.StoragePrice.Cmp(common.BigInt0) <= 0 {
+		info.StoragePrice = common.BigInt1
+	}
+}
+
+// estimateContractFund estimate the contract fund from client settings.
+// Renter fund is split among the hosts and Evaluated as 2/3 of the total fund
+// TODO: implement this function which is used in contract manager, which should be used in
+//       storage client
+func estimateContractFund(settings storage.RentPayment) common.BigInt {
+	return settings.Fund.MultUint64(2).DivUint64(3).DivUint64(settings.StorageHosts)
+}
+
+// expectedStoragePerContract evaluate the storage per contract.
+// TODO: The function should be imported from contract manager
+func expectedStoragePerContract(settings storage.RentPayment) uint64 {
+	return settings.ExpectedStorage * uint64(storage.DefaultNumSectors) / uint64(storage.DefaultMinSectors)
 }

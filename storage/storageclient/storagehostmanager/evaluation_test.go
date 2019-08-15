@@ -5,8 +5,9 @@
 package storagehostmanager
 
 import (
-	"fmt"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
 
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/storage"
@@ -72,8 +73,105 @@ func TestIllegalPresenceFactorCalc(t *testing.T) {
 		FirstSeen: firstSeen,
 	}
 	factor := shm.presenceFactorCalc(info)
-	fmt.Println(factor)
 	if firstSeen > blockHeight && factor != 0 {
 		t.Errorf("Illegal input for presence factor calculation does not give 0 factor")
+	}
+}
+
+// TestDepositFactorCalc test the functionality of StorageHostManagerdepositFactorCalc
+func TestDepositFactorCalc(t *testing.T) {
+
+}
+
+// TestEvalHostMarketDeposit test the normal functionality of TestEvalHostMarketDeposit
+func TestEvalHostMarketDeposit(t *testing.T) {
+
+}
+
+// TestEvalHostDeposit test evalHostDeposit
+func TestEvalHostDeposit(t *testing.T) {
+	tests := []struct {
+		contractPrice          common.BigInt
+		fund                   common.BigInt
+		numHosts               uint64
+		storagePrice           common.BigInt
+		depositPrice           common.BigInt
+		MaxDoposit             common.BigInt
+		UploadBandwithPrice    common.BigInt
+		DownloadBandwidthPrice common.BigInt
+		expectedDeposit        common.BigInt
+	}{
+		{
+			// normal case, the maxDeposit is larger than deposit requested
+			contractPrice:   common.NewBigIntUint64(0),
+			fund:            common.NewBigIntUint64(15000),
+			numHosts:        1,
+			storagePrice:    common.NewBigIntUint64(100),
+			depositPrice:    common.NewBigIntUint64(200),
+			MaxDoposit:      common.NewBigIntUint64(30000), // MaxDeposit is enough
+			expectedDeposit: common.NewBigIntUint64(20000),
+		},
+		{
+			// normal case, the maxDeposit is smaller than deposit requested
+			contractPrice:   common.NewBigIntUint64(0),
+			fund:            common.NewBigIntUint64(15000),
+			numHosts:        1,
+			storagePrice:    common.NewBigIntUint64(100),
+			depositPrice:    common.NewBigIntUint64(200),
+			MaxDoposit:      common.NewBigIntUint64(15000), // MaxDeposit is not enough
+			expectedDeposit: common.NewBigIntUint64(15000), // result capped at max dpeposit
+		},
+		{
+			// client fund is not enough to pay the contract price
+			contractPrice:   common.NewBigIntUint64(20000),
+			fund:            common.NewBigIntUint64(15000),
+			numHosts:        1,
+			storagePrice:    common.NewBigIntUint64(100),
+			depositPrice:    common.NewBigIntUint64(200),
+			MaxDoposit:      common.NewBigIntUint64(15000),
+			expectedDeposit: common.BigInt0,
+		},
+		{
+			// numHost set to 0, the settings should be regulated to 1
+			contractPrice:   common.NewBigIntUint64(0),
+			fund:            common.NewBigIntUint64(15000),
+			numHosts:        0,
+			storagePrice:    common.NewBigIntUint64(100),
+			depositPrice:    common.NewBigIntUint64(200),
+			MaxDoposit:      common.NewBigIntUint64(30000), // MaxDeposit is enough
+			expectedDeposit: common.NewBigIntUint64(20000),
+		},
+		{
+			// negative settings
+			contractPrice:          common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			fund:                   common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			numHosts:               0,
+			storagePrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			depositPrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			MaxDoposit:             common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			UploadBandwithPrice:    common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			DownloadBandwidthPrice: common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			expectedDeposit:        common.NewBigIntUint64(0),
+		},
+	}
+	for index, test := range tests {
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				ContractPrice:          test.contractPrice,
+				StoragePrice:           test.storagePrice,
+				Deposit:                test.depositPrice,
+				MaxDeposit:             test.MaxDoposit,
+				UploadBandwidthPrice:   test.UploadBandwithPrice,
+				DownloadBandwidthPrice: test.DownloadBandwidthPrice,
+			},
+		}
+		settings := storage.RentPayment{
+			Fund:         test.fund,
+			StorageHosts: test.numHosts,
+		}
+		res := evalHostDeposit(info, settings)
+		if res.Cmp(test.expectedDeposit) != 0 {
+			t.Errorf("Test %d deposit not expected. Got %v, Expect %v", index, res, test.expectedDeposit)
+		}
 	}
 }
