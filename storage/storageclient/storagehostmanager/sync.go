@@ -5,13 +5,14 @@
 package storagehostmanager
 
 import (
+	"time"
+
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"time"
 )
 
 // subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
@@ -103,6 +104,7 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 		// if not existed before, modify the FirstSeen and insert into storage host manager,
 		// start the scan loop
 		info.FirstSeen = shm.blockHeight
+		interactionInitiate(&info)
 		if err := shm.insert(info); err != nil {
 			shm.log.Error("unable to insert the storage host information", "err", err.Error())
 		}

@@ -53,14 +53,13 @@ const (
 	depositBaseDivider float64 = 3
 )
 
-// Storage factor related constants
+// storage factor related constants
 const (
 	storageBaseDivider float64 = 10
 )
 
-// historical interaction with host related constants
+// interaction related fields
 const (
-	historicInteractionDecay      = 0.9995
-	historicInteractionDecayLimit = 500
-	recentInteractionWeightLimit  = 0.01
+	initialSuccessfulInteractionFactor = 10
+	initialFailedInteractionFactor     = 0
 )

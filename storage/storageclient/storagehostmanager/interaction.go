@@ -4,6 +4,8 @@
 
 package storagehostmanager
 
+import "github.com/DxChainNetwork/godx/storage"
+
 // InteractionType is the code for interactions
 type InteractionType uint8
 
@@ -30,6 +32,7 @@ const (
 )
 
 var (
+	// interactionTypeToNameDict is the mapping from type to name string
 	interactionTypeToNameDict = map[InteractionType]string{
 		InteractionGetConfig:      "host config scan",
 		InteractionCreateContract: "create contract",
@@ -38,12 +41,22 @@ var (
 		InteractionDownload:       "download",
 	}
 
+	// interactionNameToTypeDict is the mapping from name string to type
 	interactionNameToTypeDict = map[string]InteractionType{
 		"host config scan": InteractionGetConfig,
 		"create contract":  InteractionCreateContract,
 		"renew contract":   InteractionRenewContract,
 		"upload":           InteractionUpload,
 		"download":         InteractionDownload,
+	}
+
+	// interactonWeight is the mapping from interaction type to weight
+	interactonWeight = map[InteractionType]float64{
+		InteractionGetConfig:      1,
+		InteractionCreateContract: 2,
+		InteractionRenewContract:  2,
+		InteractionUpload:         5,
+		InteractionDownload:       10,
 	}
 )
 
@@ -61,4 +74,21 @@ func InteractionNameToType(name string) InteractionType {
 		return InteractionInvalid
 	}
 	return interactionNameToTypeDict[name]
+}
+
+// interactionWeight return the weight of the interaction type
+func interactionWeight(it InteractionType) float64 {
+	if weight, exist := interactonWeight[it]; exist {
+		return weight
+	}
+	return 0
+}
+
+// interactionInitiate initiate the interaction related fields, which gives the interaction factors
+// an initial value.
+func interactionInitiate(info *storage.HostInfo) {
+	if info.SuccessfulInteractionFactor == 0 && info.FailedInteractionFactor == 0 {
+		info.SuccessfulInteractionFactor = initialSuccessfulInteractionFactor
+		info.FailedInteractionFactor = initialFailedInteractionFactor
+	}
 }
