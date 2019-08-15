@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/rlp"
@@ -151,6 +152,11 @@ func (x BigInt) MultUint64(y uint64) (prod BigInt) {
 
 // MultFloat64 will perform the multiplication operation between BigInt data and float64 data
 func (x BigInt) MultFloat64(y float64) (prod BigInt) {
+	// check if y is not a number, multiplication by 1
+	if math.IsNaN(y) {
+		y = 1
+	}
+
 	xRat := new(big.Rat).SetInt(&x.b)
 	yRat := new(big.Rat).SetFloat64(y)
 	ratProd := new(big.Rat).Mul(xRat, yRat)

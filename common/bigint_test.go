@@ -5,6 +5,7 @@
 package common
 
 import (
+	"math"
 	"testing"
 )
 
@@ -339,6 +340,7 @@ func TestBigInt_MultFloat64(t *testing.T) {
 		{100, 0, NewBigInt(100 * 0)},
 		{0, 500, NewBigInt(0 * 500)},
 		{100, 50.5, NewBigInt(50.5 * 100)},
+		{100, math.NaN(), NewBigInt(100)},
 	}
 
 	for _, table := range tables {
