@@ -611,16 +611,6 @@ func (s *PublicBlockChainAPI) GetFileContractByBlockHash(ctx context.Context, bl
 	return nil, err
 }
 
-// GetFileContractByBlockNumber get block information from the height of the block
-// and return all transactions related to the file contract on the block.
-func (s *PublicBlockChainAPI) GetFileContractByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
-	block, err := s.b.BlockByNumber(ctx, blockNr)
-	if block != nil {
-		return blockToFileContract(block)
-	}
-	return nil, err
-}
-
 func blockToFileContract(block *types.Block) (map[string]interface{}, error) {
 	fields := make(map[string]interface{})
 	precompiled := vm.PrecompiledEVMFileContracts
