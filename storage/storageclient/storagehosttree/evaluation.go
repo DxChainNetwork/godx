@@ -89,7 +89,7 @@ func conversionRate(eval, evalAll common.BigInt) float64 {
 	}
 
 	// evaluation increment
-	eval = eval.MultInt(50)
+	eval = eval.MultInt64(50)
 
 	// return ratio
 	return eval.DivWithFloatResult(evalAll)
