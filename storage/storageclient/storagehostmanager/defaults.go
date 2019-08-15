@@ -48,7 +48,7 @@ const (
 	highTimeLimit  = 100 * unit.BlocksPerDay
 )
 
-// Deposit factor related constants
+// deposit factor related constants
 const (
 	depositBaseDivider float64 = 3
 )

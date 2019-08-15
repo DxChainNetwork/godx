@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
-
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -80,12 +79,95 @@ func TestIllegalPresenceFactorCalc(t *testing.T) {
 
 // TestDepositFactorCalc test the functionality of StorageHostManagerdepositFactorCalc
 func TestDepositFactorCalc(t *testing.T) {
-
+	tests := []struct {
+		ratio float64
+	}{
+		{0},
+		{0.001},
+		{0.01},
+		{0.1},
+		{1},
+		{10},
+		{100},
+		{1000},
+	}
+	var lastResult float64
+	for index, test := range tests {
+		shm := &StorageHostManager{}
+		rent := storage.RentPayment{
+			Fund:         common.NewBigIntUint64(10000000),
+			StorageHosts: 1,
+		}
+		marketDeposit := common.NewBigIntUint64(10000)
+		storagePrice := common.NewBigIntUint64(5000)
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				StoragePrice: storagePrice,
+				Deposit:      marketDeposit.MultFloat64(test.ratio),
+				MaxDeposit:   common.NewBigIntUint64(math.MaxUint64),
+			},
+		}
+		market := &fakeHostMarket{
+			storagePrice: storagePrice,
+			deposit:      marketDeposit,
+			maxDeposit:   common.NewBigIntUint64(math.MaxUint64),
+		}
+		res := shm.depositFactorCalc(info, rent, market)
+		// Check the result is within range [0, 1)
+		if res < 0 || res >= 1 {
+			t.Errorf("Test %d illegal factor. Got %v", index, res)
+		}
+		// Check whether the result is larger than last result
+		if index == 0 {
+			lastResult = 0
+			continue
+		}
+		if res <= lastResult {
+			t.Errorf("Test %d not incrementing. Got %v, Last %v", index, res, lastResult)
+		}
+		lastResult = res
+	}
 }
 
 // TestEvalHostMarketDeposit test the normal functionality of TestEvalHostMarketDeposit
 func TestEvalHostMarketDeposit(t *testing.T) {
+	tests := []struct {
+		contractPrice common.BigInt
+		storagePrice  common.BigInt
+		deposit       common.BigInt
+		maxDeposit    common.BigInt
 
+		fund     common.BigInt
+		numHosts uint64
+
+		expectedDeposit common.BigInt
+	}{
+		{
+			contractPrice:   common.NewBigIntUint64(0),
+			storagePrice:    common.NewBigIntUint64(100),
+			deposit:         common.NewBigIntUint64(200),
+			maxDeposit:      common.NewBigIntUint64(30000),
+			fund:            common.NewBigIntUint64(15000),
+			numHosts:        1,
+			expectedDeposit: common.NewBigIntUint64(20000),
+		},
+	}
+	for index, test := range tests {
+		market := &fakeHostMarket{
+			contractPrice: test.contractPrice,
+			storagePrice:  test.storagePrice,
+			deposit:       test.deposit,
+			maxDeposit:    test.maxDeposit,
+		}
+		settings := storage.RentPayment{
+			Fund:         test.fund,
+			StorageHosts: test.numHosts,
+		}
+		res := evalHostMarketDeposit(settings, market)
+		if res.Cmp(test.expectedDeposit) != 0 {
+			t.Errorf("test %d deposit not expected. Got %v, Expect %v", index, res, test.expectedDeposit)
+		}
+	}
 }
 
 // TestEvalHostDeposit test evalHostDeposit
@@ -96,9 +178,9 @@ func TestEvalHostDeposit(t *testing.T) {
 		numHosts               uint64
 		storagePrice           common.BigInt
 		depositPrice           common.BigInt
-		MaxDoposit             common.BigInt
-		UploadBandwithPrice    common.BigInt
-		DownloadBandwidthPrice common.BigInt
+		maxDoposit             common.BigInt
+		uploadBandwithPrice    common.BigInt
+		downloadBandwidthPrice common.BigInt
 		expectedDeposit        common.BigInt
 	}{
 		{
@@ -108,7 +190,17 @@ func TestEvalHostDeposit(t *testing.T) {
 			numHosts:        1,
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
-			MaxDoposit:      common.NewBigIntUint64(30000), // MaxDeposit is enough
+			maxDoposit:      common.NewBigIntUint64(30000), // maxDeposit is enough
+			expectedDeposit: common.NewBigIntUint64(20000),
+		},
+		{
+			// normal case, multiple hosts
+			contractPrice:   common.NewBigIntUint64(0),
+			fund:            common.NewBigIntUint64(45000),
+			numHosts:        3,
+			storagePrice:    common.NewBigIntUint64(100),
+			depositPrice:    common.NewBigIntUint64(200),
+			maxDoposit:      common.NewBigIntUint64(30000), // maxDeposit is enough
 			expectedDeposit: common.NewBigIntUint64(20000),
 		},
 		{
@@ -118,7 +210,7 @@ func TestEvalHostDeposit(t *testing.T) {
 			numHosts:        1,
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
-			MaxDoposit:      common.NewBigIntUint64(15000), // MaxDeposit is not enough
+			maxDoposit:      common.NewBigIntUint64(15000), // maxDeposit is not enough
 			expectedDeposit: common.NewBigIntUint64(15000), // result capped at max dpeposit
 		},
 		{
@@ -128,29 +220,19 @@ func TestEvalHostDeposit(t *testing.T) {
 			numHosts:        1,
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
-			MaxDoposit:      common.NewBigIntUint64(15000),
+			maxDoposit:      common.NewBigIntUint64(15000),
 			expectedDeposit: common.BigInt0,
 		},
 		{
-			// numHost set to 0, the settings should be regulated to 1
-			contractPrice:   common.NewBigIntUint64(0),
-			fund:            common.NewBigIntUint64(15000),
-			numHosts:        0,
-			storagePrice:    common.NewBigIntUint64(100),
-			depositPrice:    common.NewBigIntUint64(200),
-			MaxDoposit:      common.NewBigIntUint64(30000), // MaxDeposit is enough
-			expectedDeposit: common.NewBigIntUint64(20000),
-		},
-		{
-			// negative settings
+			// negative and zero settings
 			contractPrice:          common.BigInt0.Sub(common.NewBigIntUint64(100)),
 			fund:                   common.BigInt0.Sub(common.NewBigIntUint64(100)),
 			numHosts:               0,
 			storagePrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
 			depositPrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			MaxDoposit:             common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			UploadBandwithPrice:    common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			DownloadBandwidthPrice: common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			maxDoposit:             common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			uploadBandwithPrice:    common.BigInt0.Sub(common.NewBigIntUint64(100)),
+			downloadBandwidthPrice: common.BigInt0.Sub(common.NewBigIntUint64(100)),
 			expectedDeposit:        common.NewBigIntUint64(0),
 		},
 	}
@@ -160,9 +242,9 @@ func TestEvalHostDeposit(t *testing.T) {
 				ContractPrice:          test.contractPrice,
 				StoragePrice:           test.storagePrice,
 				Deposit:                test.depositPrice,
-				MaxDeposit:             test.MaxDoposit,
-				UploadBandwidthPrice:   test.UploadBandwithPrice,
-				DownloadBandwidthPrice: test.DownloadBandwidthPrice,
+				MaxDeposit:             test.maxDoposit,
+				UploadBandwidthPrice:   test.uploadBandwithPrice,
+				DownloadBandwidthPrice: test.downloadBandwidthPrice,
 			},
 		}
 		settings := storage.RentPayment{

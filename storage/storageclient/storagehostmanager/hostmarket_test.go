@@ -12,35 +12,35 @@ import (
 
 // fakeHostMarket is a fake host market that implement hostMarket
 type fakeHostMarket struct {
-	ContractPrice common.BigInt
-	StoragePrice  common.BigInt
-	UploadPrice   common.BigInt
-	DownloadPrice common.BigInt
-	Deposit       common.BigInt
-	MaxDeposit    common.BigInt
+	contractPrice common.BigInt
+	storagePrice  common.BigInt
+	uploadPrice   common.BigInt
+	downloadPrice common.BigInt
+	deposit       common.BigInt
+	maxDeposit    common.BigInt
 }
 
 // GetMarketPrice return the price for the fake host manager
 func (hm *fakeHostMarket) GetMarketPrice() MarketPrice {
 	return MarketPrice{
-		ContractPrice: common.BigInt0,
-		StoragePrice:  common.BigInt0,
-		UploadPrice:   common.BigInt0,
-		DownloadPrice: common.BigInt0,
-		Deposit:       common.BigInt0,
-		MaxDeposit:    common.BigInt0,
+		ContractPrice: hm.contractPrice,
+		StoragePrice:  hm.storagePrice,
+		UploadPrice:   hm.uploadPrice,
+		DownloadPrice: hm.downloadPrice,
+		Deposit:       hm.deposit,
+		MaxDeposit:    hm.maxDeposit,
 	}
 }
 
 // getFakeMarketPrice return a prototype of a fakeHostMarket for testing.
 // The maxDeposit is capped at 1 sector to be stored in one day based on the deposit.
-func getFakeMarketPrice() *fakeHostMarket {
+func getFakeHostMarket() *fakeHostMarket {
 	return &fakeHostMarket{
-		ContractPrice: common.NewBigIntUint64(100),
-		StoragePrice:  common.NewBigIntUint64(100),
-		UploadPrice:   common.NewBigIntUint64(100),
-		DownloadPrice: common.NewBigIntUint64(100),
-		Deposit:       common.NewBigIntUint64(100),
-		MaxDeposit:    common.NewBigIntUint64(storage.SectorSize * 3 * unit.BlocksPerDay * 100),
+		contractPrice: common.NewBigIntUint64(100),
+		storagePrice:  common.NewBigIntUint64(100),
+		uploadPrice:   common.NewBigIntUint64(100),
+		downloadPrice: common.NewBigIntUint64(100),
+		deposit:       common.NewBigIntUint64(100),
+		maxDeposit:    common.NewBigIntUint64(storage.SectorSize * 3 * unit.BlocksPerDay * 100),
 	}
 }
