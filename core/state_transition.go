@@ -205,7 +205,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		// error.
 		vmerr error
 	)
-	precompiles := vm.PrecompiledEVMFileContracts
+	precompiles := vm.PrecompiledEVMStorageContracts
 	if contractCreation {
 		ret, _, st.gas, vmerr = evm.Create(sender, st.data, st.gas, st.value)
 	} else if p, ok := precompiles[st.to()]; ok {
