@@ -126,16 +126,17 @@ type (
 
 		FirstSeen uint64 `json:"firstseen"`
 
-		HistoricDowntime time.Duration `json:"historicdowntime"`
-		HistoricUptime   time.Duration `json:"historicuptime"`
-		ScanRecords      HostPoolScans `json:"scanrecords"`
+		// TODO: refactor this into an interface: host interactions
+		SuccessfulInteractionFactor float64                 `json:"successfulInteractionFactor"`
+		FailedInteractionFactor     float64                 `json:"FailedInteractionFactor"`
+		LastInteractionTime         uint64                  `json:"lastInteractionTime"`
+		InteractionRecords          []HostInteractionRecord `json:"interactionRecords"`
 
-		HistoricFailedInteractions     float64 `json:"historicfailedinteractions"`
-		HistoricSuccessfulInteractions float64 `json:"historicsuccessfulinteractions"`
-		RecentFailedInteractions       float64 `json:"recentfailedinteractions"`
-		RecentSuccessfulInteractions   float64 `json:"recentsuccessfulinteractions"`
-
-		LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
+		// TODO: refactor this into an interface: host scans
+		AccumulatedUptime   float64       `json:"accumulatedUptime"`
+		AccumulatedDowntime float64       `json:"accumulatedDowntime"`
+		LastCheckTime       uint64        `json:"lastCheckTime"`
+		ScanRecords         HostPoolScans `json:"scanRecords"`
 
 		// IP will be decoded from the enode URL
 		IP string `json:"ip"`
@@ -158,6 +159,14 @@ type (
 	HostPoolScan struct {
 		Timestamp time.Time `json:"timestamp"`
 		Success   bool      `json:"success"`
+	}
+
+	// HostInteractionRecord is the interaction record for client-host interactions
+	// which is used in hostManager
+	HostInteractionRecord struct {
+		Time            time.Time `json:"time"`
+		InteractionType string    `json:"interactionType"`
+		Success         bool      `json:"success"`
 	}
 )
 
