@@ -321,6 +321,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		clientNegotiateErr = storagehost.ExtendErr("client sign revision error", err)
 		return storage.ContractMetaData{}, clientNegotiateErr
 	}
+
 	storageContractRevision.Signatures = [][]byte{clientRevisionSign}
 	if err := sp.SendContractCreateClientRevisionSign(clientRevisionSign); err != nil {
 		clientNegotiateErr = storagehost.ExtendErr("send revision sign by client error", err)
@@ -378,6 +379,7 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 			RenewAbility:  true,
 		},
 	}
+
 	// store this contract info to client local
 	meta, err := cm.GetStorageContractSet().InsertContract(header, nil)
 	if err != nil {
@@ -421,13 +423,4 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 
 		return storage.ContractMetaData{}, hostCommitErr
 	}
-}
-
-func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage.ContractID) error {
-	if c, exist := contractSet.Acquire(id); exist {
-		if err := contractSet.Delete(c); err != nil {
-			return err
-		}
-	}
-	return nil
 }
