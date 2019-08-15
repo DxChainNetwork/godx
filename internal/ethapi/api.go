@@ -601,6 +601,51 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, blockHash comm
 	return nil, err
 }
 
+// GetFileContractByBlockHash get block information from the hash of the block
+// and return all transactions related to the file contract on the block.
+func (s *PublicBlockChainAPI) GetFileContractByBlockHash(ctx context.Context, blockHash common.Hash) (map[string]interface{}, error) {
+	block, err := s.b.GetBlock(ctx, blockHash)
+	if block != nil {
+		return blockToFileContract(block)
+	}
+	return nil, err
+}
+
+// GetFileContractByBlockNumber get block information from the height of the block
+// and return all transactions related to the file contract on the block.
+func (s *PublicBlockChainAPI) GetFileContractByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) (map[string]interface{}, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNr)
+	if block != nil {
+		return blockToFileContract(block)
+	}
+	return nil, err
+}
+
+func blockToFileContract(block *types.Block) (map[string]interface{}, error) {
+	fields := make(map[string]interface{})
+	precompiled := vm.PrecompiledEVMFileContracts
+	txs := block.Transactions()
+	for _, tx := range txs {
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.ContractCreateTransaction:
+			fields[tx.Hash().String()] = vm.ContractCreateTransaction
+		case vm.CommitRevisionTransaction:
+			fields[tx.Hash().String()] = vm.CommitRevisionTransaction
+		case vm.StorageProofTransaction:
+			fields[tx.Hash().String()] = vm.StorageProofTransaction
+		case vm.HostAnnounceTransaction:
+			fields[tx.Hash().String()] = vm.HostAnnounceTransaction
+		default:
+			continue
+		}
+	}
+	return fields, nil
+}
+
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (map[string]interface{}, error) {
@@ -1103,6 +1148,70 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	}
 	// Transaction unknown, return as such
 	return nil
+}
+
+// GetFileContractByTransactionHash returns the transaction for the given hash
+func (s *PublicTransactionPoolAPI) GetFileContractByTransactionHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	// Try to return an already finalized transaction
+	if tx, _, _, _ := rawdb.ReadTransaction(s.b.ChainDb(), hash); tx != nil {
+		return transactionToFileContract(tx)
+	}
+	// No finalized transaction, try to retrieve it from the pool
+	if tx := s.b.GetPoolTransaction(hash); tx != nil {
+		return transactionToFileContract(tx)
+	}
+	// Transaction unknown, return as such
+	return nil, errors.New("transaction unknown")
+}
+
+// transactionToFileContract return file contract info.
+func transactionToFileContract(transaction *types.Transaction) (map[string]interface{}, error) {
+	precompiled := vm.PrecompiledEVMFileContracts
+	p, ok := precompiled[*transaction.To()]
+	if !ok {
+		return nil, errors.New("not a document contract related transaction")
+	}
+
+	fields := make(map[string]interface{})
+	switch p {
+	case vm.ContractCreateTransaction:
+		fields[transaction.Hash().String()] = vm.ContractCreateTransaction
+		var sc types.StorageContract
+		err := rlp.DecodeBytes(transaction.Data(), &sc)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = sc.RLPHash()
+		fields["FileContract"] = sc
+	case vm.CommitRevisionTransaction:
+		fields[transaction.Hash().String()] = vm.CommitRevisionTransaction
+		var scr types.StorageContractRevision
+		err := rlp.DecodeBytes(transaction.Data(), &scr)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = scr.ParentID
+		fields["FileContractRevision"] = scr
+	case vm.StorageProofTransaction:
+		fields[transaction.Hash().String()] = vm.StorageProofTransaction
+		var spf types.StorageProof
+		err := rlp.DecodeBytes(transaction.Data(), &spf)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = spf.ParentID
+		fields["FileContractStorageProof"] = spf
+	case vm.HostAnnounceTransaction:
+		fields[transaction.Hash().String()] = vm.HostAnnounceTransaction
+		var ha types.HostAnnouncement
+		err := rlp.DecodeBytes(transaction.Data(), &ha)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["HostAnnouncement"] = ha
+	default:
+	}
+	return fields, nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.
