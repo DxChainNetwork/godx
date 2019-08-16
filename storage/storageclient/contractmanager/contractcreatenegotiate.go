@@ -19,58 +19,67 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// ContractCreateNegotiate will try to create the contract with storage host. Client will draft a storage contract
+// and negotiate with storage host
+// 1. draft the storage contract
+// 2. negotiate the drafted storage contract
+// 3. negotiate the storage contract revision
+// 4. send the storage contract create transaction, once the storage contract revision negotiation succeed
+// 5. commit the contract information, send success message to storage host, and handle host's response
 func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams) (storage.ContractMetaData, error) {
-	hostInfo, funding, paymentAddress := params.Host, params.Funding, params.ClientPaymentAddress
+	// extract needed variables from the contract parameters
+	hostInfo, paymentAddress := params.Host, params.ClientPaymentAddress
 
 	// form unlock condition
 	uc := formUnlockCondition(paymentAddress, hostInfo.PaymentAddress)
 
-	// draft the storage contract
-	storageContract, err := draftStorageContract(hostInfo, params.RentPayment, funding, params.StartHeight, params.EndHeight, paymentAddress, uc)
+	// 1. draft the storage contract
+	storageContract, err := draftStorageContract(hostInfo, params.RentPayment, params.Funding, params.StartHeight, params.EndHeight, paymentAddress, uc)
 	if err != nil {
-		return storage.ContractMetaData{}, fmt.Errorf("contract create negotiation failed: %s", err.Error())
+		cm.log.Error("contract create negotiation failed: failed to draft the storage contract", "err", err.Error())
+		return storage.ContractMetaData{}, err
 	}
 
-	// find the wallet based on the account address
+	// find the wallet based on the account address, the information is needed
+	// to sign the storage contract and storage contract revision
 	account := accounts.Account{Address: paymentAddress}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
 		cm.log.Error("contract create negotiation failed: failed to find the account address", "err", err.Error(), "address", paymentAddress)
-		return storage.ContractMetaData{}, fmt.Errorf("contract create negotiation failed, failed to find the account address: %s", err.Error())
+		return storage.ContractMetaData{}, err
 	}
 
 	// set up the connection
-	// NOTE: after set up the connection, all errors will be returned as the original error message
 	sp, err := cm.b.SetupConnection(hostInfo.EnodeURL)
 	if err != nil {
 		cm.log.Error("contract create negotiation failed: failed to set up the connection", "err", err.Error())
 		return storage.ContractMetaData{}, fmt.Errorf("contract create negotiation failed: %s", err.Error())
 	}
 
-	// TODO (mzhang): defer handle the negotiation error
+	// handleErr will handle the errors occurred in the negotiation process
+	defer cm.handleNegotiationErr(err, hostInfo.EnodeID, sp)
 
-	// draft storage contract negotiation
+	// 2. draft storage contract negotiation
 	if storageContract, err = draftStorageContractNegotiate(sp, account, wallet, storageContract); err != nil {
 		cm.log.Error("contract create negotiation failed: failed to negotiate the drafted storage contract", "err", err.Error())
 		return storage.ContractMetaData{}, err
 	}
 
-	// storage contract revision negotiate
+	// 3. storage contract revision negotiate
 	storageContractRevision, err := storageContractRevisionNegotiate(sp, storageContract, uc, account, wallet)
 	if err != nil {
 		cm.log.Error("contract create negotiation failed: failed to negotiate the storage contract revision", "err", err.Error())
 		return storage.ContractMetaData{}, err
 	}
 
-	// send the storage contract create transaction
+	// 4. send the storage contract create transaction
 	if err := sendStorageContractCreateTx(storageContract, paymentAddress, cm.b); err != nil {
 		cm.log.Error("contract create negotiation failed: failed to send the storage contract create transaction", "err", err.Error())
 		return storage.ContractMetaData{}, err
 	}
 
-	// commit the contract information, send success message to host, and handle host's response
+	// 5. commit the contract information, send success message to host, and handle host's response
 	return cm.clientStorageContractCommit(sp, hostInfo.EnodeID, params.StartHeight, params.Funding, hostInfo.ContractPrice, storageContract.ID(), storageContractRevision)
-
 }
 
 // clientNegotiateCommit will form and save the contract information persistently
@@ -106,6 +115,41 @@ func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID 
 	}
 
 	return meta, nil
+}
+
+// Special Types Error:
+// 1. ErrClientNegotiate   ->  send negotiation failed message, wait response
+// 2. ErrClientCommit      ->  send commit failed message, wait response
+// 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
+// 4. ErrHostNegotiate     ->  punish host, check and update the connection
+func (cm *ContractManager) handleNegotiationErr(err error, hostID enode.ID, sp storage.Peer) {
+	// if no error, reward the host and return directly
+	if err == nil {
+		cm.hostManager.IncrementSuccessfulInteractions(hostID)
+		return
+	}
+
+	// otherwise, based on the error type, handle it differently
+	switch {
+	case common.ErrContains(err, storage.ErrClientNegotiate):
+		_ = sp.SendClientNegotiateErrorMsg()
+	case common.ErrContains(err, storage.ErrClientCommit):
+		_ = sp.SendClientCommitFailedMsg()
+	case common.ErrContains(err, storage.ErrHostNegotiate):
+		cm.hostManager.IncrementFailedInteractions(hostID)
+		cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		return
+	case common.ErrContains(err, storage.ErrHostCommit):
+		cm.hostManager.IncrementFailedInteractions(hostID)
+		cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		_ = sp.SendClientAckMsg()
+	}
+
+	// wait until host sent back ACK message
+	if msg, respErr := sp.ClientWaitContractResp(); respErr != nil || msg.Code != storage.HostAckMsg {
+		cm.log.Error("handleNegotiateErr error", "type", err, "err", respErr, "msgCode", msg.Code)
+	}
+
 }
 
 func sendSuccessMsgAndHandleResp(sp storage.Peer, contractSet *contractset.StorageContractSet, contractID storage.ContractID) error {
@@ -219,6 +263,7 @@ func storageContractRevisionNegotiate(sp storage.Peer, storageContract types.Sto
 
 // sendStorageContractCreateTx will encode the storage contract and send it as the transaction
 // error belongs to storage client negotiate error
+// Error belongs to clientNegotiationError
 func sendStorageContractCreateTx(storageContract types.StorageContract, clientPaymentAddress common.Address, b storage.ClientBackend) error {
 	// rlp encode the storage contract
 	scEncode, err := rlp.EncodeToBytes(storageContract)
@@ -283,6 +328,7 @@ func formAndSendContractCreateRequest(sp storage.Peer, storageContract types.Sto
 
 // waitAndHandleHostResp will wait the host response from the storage host
 // check the response and handle it accordingly
+// Error belongs to hostNegotiationError
 func waitAndHandleHostResp(sp storage.Peer) (hostSign []byte, err error) {
 	// wait until the message was sent by the storage host
 	msg, err := sp.ClientWaitContractResp()
@@ -312,7 +358,7 @@ func waitAndHandleHostResp(sp storage.Peer) (hostSign []byte, err error) {
 }
 
 // signedClientContract will create signed version of the storage contract by storage client
-// Error belongs to client negotiate error
+// Error belongs to clientNegotiationError
 func signedClientContract(wallet accounts.Wallet, account accounts.Account, storageContractHash []byte) ([]byte, error) {
 	// storage client sign the storage contract
 	signedContract, err := wallet.SignHash(account, storageContractHash)
