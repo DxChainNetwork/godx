@@ -614,7 +614,7 @@ func (s *PublicBlockChainAPI) GetStorageContractByBlockHash(ctx context.Context,
 // blockToStorageContract return all transactions related to the storage contract on the block.
 func blockToStorageContract(block *types.Block) (map[string]interface{}, error) {
 	fields := make(map[string]interface{})
-	precompiled := vm.PrecompiledEVMFileContracts
+	precompiled := vm.PrecompiledEVMStorageContracts
 	txs := block.Transactions()
 	for _, tx := range txs {
 		p, ok := precompiled[*tx.To()]
@@ -1157,7 +1157,7 @@ func (s *PublicTransactionPoolAPI) GetStorageContractByTransactionHash(ctx conte
 
 // transactionToStorageContract return storage contract info.
 func transactionToStorageContract(transaction *types.Transaction) (map[string]interface{}, error) {
-	precompiled := vm.PrecompiledEVMFileContracts
+	precompiled := vm.PrecompiledEVMStorageContracts
 	p, ok := precompiled[*transaction.To()]
 	if !ok {
 		return nil, errors.New("not a document contract related transaction")
