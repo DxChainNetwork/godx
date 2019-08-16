@@ -1,0 +1,20 @@
+"Storage Contract Manager Settings"
+"1.0"
+"0xf453b6b724915e9e42c3eef95ed61c7c0f28ca1cce003ce59e74dad1c5f7123b"
+{
+	"rentPayment": {
+		"fund": 0,
+		"storagehosts": 0,
+		"period": 0,
+		"renewwindow": 0,
+		"expectedstorage": 0,
+		"expectedupload": 0,
+		"expecteddownload": 0,
+		"expectedredundancy": 0
+	},
+	"blockheight": 0,
+	"currentperiod": 0,
+	"expiredcontracts": null,
+	"renewedfrom": {},
+	"renewedto": {}
+}

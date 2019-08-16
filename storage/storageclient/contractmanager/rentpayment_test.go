@@ -5,11 +5,12 @@
 package contractmanager
 
 import (
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	"testing"
-	"time"
 )
 
 var rentPaymentTest = storage.RentPayment{
@@ -25,13 +26,10 @@ var rentPaymentTest = storage.RentPayment{
 
 func TestContractManager_SetRentPayment(t *testing.T) {
 	// create new contract manager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
-
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// set the block height for contract expiration
 	cm.blockHeight = 100

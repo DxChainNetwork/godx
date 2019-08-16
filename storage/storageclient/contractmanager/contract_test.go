@@ -6,7 +6,6 @@ package contractmanager
 
 import (
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -21,7 +20,7 @@ import (
 
 func TestContractManager_ResumeContracts(t *testing.T) {
 	// create new contract manager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -31,10 +30,6 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	var canceledContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
@@ -75,7 +70,7 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 }
 
 func TestContractManager_MaintainExpiration(t *testing.T) {
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -87,10 +82,6 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// create and insert expired contracts
 	var expiredContracts []contractset.ContractHeader
@@ -158,7 +149,7 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 }
 
 func TestContractManager_RemoveDuplications(t *testing.T) {
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -170,10 +161,6 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// start to generate data
 	var enodeIDList []enode.ID
@@ -296,7 +283,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 }
 
 func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -308,10 +295,6 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// create and insert expired contracts
 	var expiredContracts []contractset.ContractHeader
@@ -358,7 +341,7 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 
 func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	// create and initialize new contractManager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -370,9 +353,6 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// generate earlier IP changed contract and hosts
 	var ipList []string
@@ -444,7 +424,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 
 func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 	// create and initialize new contractManager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -454,9 +434,6 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 	if testing.Short() {
 		amount = 10
 	}
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// create and insert the canceled contract
 	var canceledContractIDs []storage.ContractID
@@ -493,7 +470,7 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 
 func TestContractManager_checkContractStatus(t *testing.T) {
 	// create new contract manager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -505,9 +482,6 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 	if testing.Short() {
 		amount = 1
 	}
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// base line for the storage host evaluation
 	baseline := common.NewBigIntFloat64(10)
@@ -557,7 +531,7 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 
 func TestContractManager_MaintainContractStatus(t *testing.T) {
 	// create new contract manager
-	cm, err := createNewContractManager()
+	cm, err := NewFakeContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -569,9 +543,6 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 	if testing.Short() {
 		amount = 1
 	}
-	defer os.RemoveAll("test")
-	defer cm.activeContracts.Close()
-	defer cm.activeContracts.EmptyDB()
 
 	// insert contract, host does not exist
 	var hostNotExistsContract []storage.ContractMetaData
@@ -633,7 +604,7 @@ func TestContractManager_MaintainContractStatus(t *testing.T) {
 }
 
 /*
- _____  _____  _______      __  _______ ______          ______ _    _ _   _  _____ _______ _____ ____  _   _
+_____  _____  _______      __  _______ ______          ______ _    _ _   _  _____ _______ _____ ____  _   _
 |  __ \|  __ \|_   _\ \    / /\|__   __|  ____|        |  ____| |  | | \ | |/ ____|__   __|_   _/ __ \| \ | |
 | |__) | |__) | | |  \ \  / /  \  | |  | |__           | |__  | |  | |  \| | |       | |    | || |  | |  \| |
 |  ___/|  _  /  | |   \ \/ / /\ \ | |  |  __|          |  __| | |  | | . ` | |       | |    | || |  | | . ` |
