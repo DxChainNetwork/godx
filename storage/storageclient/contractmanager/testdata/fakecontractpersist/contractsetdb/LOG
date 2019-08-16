@@ -1,23 +1,11 @@
 =============== Aug 16, 2019 (PDT) ===============
-11:38:52.849063 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-11:38:52.849639 db@open opening
-11:38:52.851701 version@stat F·[] S·0B[] Sc·[]
-11:38:52.851998 db@janitor F·2 G·0
-11:38:52.852024 db@open done T·2.369884ms
-11:38:53.073475 memdb@flush N·8570 S·3MiB
-11:38:53.086802 memdb@flush created L0@3 N·8570 S·1MiB "\x006\x86..der,v1310":"\xfe\x99s..ots,v2345"
-11:38:53.086838 version@stat F·[1] S·1MiB[1MiB] Sc·[0.25]
-11:38:53.087042 memdb@flush committed F·1 T·13.525546ms
-11:38:53.087353 journal@remove removed @1
-11:38:53.265813 memdb@flush N·8572 S·3MiB
-11:38:53.278801 memdb@flush created L0@5 N·8572 S·1MiB "\x00\x17\x8d..der,v14059":"\xff\xd5b..ots,v10166"
-11:38:53.278837 version@stat F·[2] S·2MiB[2MiB] Sc·[0.50]
-11:38:53.278997 memdb@flush committed F·1 T·13.146779ms
-11:38:53.279324 journal@remove removed @2
-11:38:53.305634 table@compaction L0·2 -> L1·0 S·2MiB Q·18794
-11:38:53.329314 table@build created L1@6 N·2995 S·2MiB "\x00\x17\x8d..der,v14059":"\xf4\x1e\xd6..der,v1068"
-11:38:53.330684 table@build created L1@7 N·123 S·85KiB "\xf4\x1e\xd6..ots,v1078":"\xff\xd5b..ots,v10175"
-11:38:53.330725 version@stat F·[0 2] S·2MiB[0B 2MiB] Sc·[0.00 0.02]
-11:38:53.330966 table@compaction committed F~ S-810KiB Ke·0 D·14024 T·25.284518ms
-11:38:53.331143 table@remove removed @5
-11:38:53.331299 table@remove removed @3
+12:21:23.242171 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:21:23.244010 db@open opening
+12:21:23.244273 version@stat F·[] S·0B[] Sc·[]
+12:21:23.244519 db@janitor F·2 G·0
+12:21:23.244545 db@open done T·517.22µs
+12:21:23.429093 memdb@flush N·8571 S·3MiB
+12:21:23.443210 memdb@flush created L0@3 N·8571 S·1MiB "\x00T\xa6..der,v1211":"\xfe\xbb\xf6..ots,v6712"
+12:21:23.443247 version@stat F·[1] S·1MiB[1MiB] Sc·[0.25]
+12:21:23.443454 memdb@flush committed F·1 T·14.297373ms
+12:21:23.443848 journal@remove removed @1

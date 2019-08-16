@@ -15,7 +15,7 @@ import (
 const fakeContractManagerPersist = "testdata/fakecontractpersist"
 
 // NewFakeContractManager will create and initialize a new fake contract manager
-func NewFakeContractManager() (*ContractManager, error) {
+func NewFakeContractManager(b storage.ContractManagerBackend) (*ContractManager, error) {
 	// clear the previously saved data before initialization
 	clearOldData()
 
@@ -32,7 +32,7 @@ func NewFakeContractManager() (*ContractManager, error) {
 	}
 
 	// start the contract manager
-	if err := cm.Start(&storage.FakeClientBackend{}); err != nil {
+	if err := cm.Start(b); err != nil {
 		return nil, fmt.Errorf("failed to create the contract manager: %s", err.Error())
 	}
 

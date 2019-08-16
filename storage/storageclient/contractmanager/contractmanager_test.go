@@ -9,7 +9,7 @@ import (
 )
 
 func TestContractManager_Start(t *testing.T) {
-	if _, err := NewFakeContractManager(); err != nil {
+	if _, err := NewFakeContractManager(positiveTestBackend); err != nil {
 		t.Fatalf("contract manater start test failed: %s", err.Error())
 	}
 }

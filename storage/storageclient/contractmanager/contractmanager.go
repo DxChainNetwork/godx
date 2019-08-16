@@ -19,8 +19,8 @@ import (
 // ContractManager is a data structure that is used to keep track of all contracts, including
 // both signed contracts and expired contracts
 type ContractManager struct {
-	// storage client backend
-	b storage.ClientBackend
+	// contract manager backend
+	b storage.ContractManagerBackend
 
 	// persistent directory
 	persistDir string
@@ -99,7 +99,7 @@ func New(persistDir string, hm *storagehostmanager.StorageHostManager) (cm *Cont
 
 // Start will start the contract manager by loading the prior settings, subscribe the the block
 // chain change event, save the settings, and set rentPayment payment for storage host manager
-func (cm *ContractManager) Start(b storage.ClientBackend) (err error) {
+func (cm *ContractManager) Start(b storage.ContractManagerBackend) (err error) {
 	// initialize client backend
 	cm.b = b
 

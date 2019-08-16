@@ -264,7 +264,7 @@ func storageContractRevisionNegotiate(sp storage.Peer, storageContract types.Sto
 // sendStorageContractCreateTx will encode the storage contract and send it as the transaction
 // error belongs to storage client negotiate error
 // Error belongs to clientNegotiationError
-func sendStorageContractCreateTx(storageContract types.StorageContract, clientPaymentAddress common.Address, b storage.ClientBackend) error {
+func sendStorageContractCreateTx(storageContract types.StorageContract, clientPaymentAddress common.Address, b storage.ContractManagerBackend) error {
 	// rlp encode the storage contract
 	scEncode, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {

@@ -65,6 +65,20 @@ type ClientBackend interface {
 	SelfEnodeURL() string
 }
 
+// ContractManagerBackend is a subset of the ClientBackend, used to provide eth method
+// for contract manager
+type ContractManagerBackend interface {
+	Syncing() bool
+	CheckAndUpdateConnection(peerNode *enode.Node)
+	GetPaymentAddress() (common.Address, error)
+	AccountManager() *accounts.Manager
+	SetupConnection(enodeURL string) (Peer, error)
+	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
+	TryToRenewOrRevise(hostID enode.ID) bool
+	RevisionOrRenewingDone(hostID enode.ID)
+	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
+}
+
 // DownloadParameters is the parameters to download from outer request
 type DownloadParameters struct {
 	RemoteFilePath   string

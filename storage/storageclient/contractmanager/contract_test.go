@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -18,9 +20,13 @@ import (
 	"github.com/Pallinder/go-randomdata"
 )
 
+var positiveTestBackend = &simulation.FakeContractManagerBackend{
+	TestType: true,
+}
+
 func TestContractManager_ResumeContracts(t *testing.T) {
 	// create new contract manager
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -70,7 +76,7 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 }
 
 func TestContractManager_MaintainExpiration(t *testing.T) {
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -149,7 +155,7 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 }
 
 func TestContractManager_RemoveDuplications(t *testing.T) {
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -283,7 +289,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 }
 
 func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -341,7 +347,7 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 
 func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	// create and initialize new contractManager
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -424,7 +430,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 
 func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 	// create and initialize new contractManager
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -470,7 +476,7 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 
 func TestContractManager_checkContractStatus(t *testing.T) {
 	// create new contract manager
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
@@ -531,7 +537,7 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 
 func TestContractManager_MaintainContractStatus(t *testing.T) {
 	// create new contract manager
-	cm, err := NewFakeContractManager()
+	cm, err := NewFakeContractManager(positiveTestBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
