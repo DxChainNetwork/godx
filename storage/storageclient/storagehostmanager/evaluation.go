@@ -141,10 +141,8 @@ func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
 // interactionFactorCalc calculates the factor value based on the historical success interactions
 // and failed interactions. More success interactions will cause higher evaluation
 func (shm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float64 {
-	hs := info.HistoricSuccessfulInteractions + 30
-	hf := info.HistoricFailedInteractions + 1
-	ratio := hs / (hs + hf)
-	return math.Pow(ratio, interactionExponentiation)
+	successRatio := info.SuccessfulInteractionFactor / (info.SuccessfulInteractionFactor + info.FailedInteractionFactor)
+	return math.Pow(successRatio, interactionExponentialIndex)
 }
 
 // contractPriceFactorCalc calculates the factor value based on the contract price that storage host requested

@@ -4,7 +4,15 @@
 
 package storagehostmanager
 
-import "github.com/DxChainNetwork/godx/storage"
+import (
+	"fmt"
+	"math"
+	"time"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
+
+	"github.com/DxChainNetwork/godx/storage"
+)
 
 // InteractionType is the code for interactions
 type InteractionType uint8
@@ -90,5 +98,79 @@ func interactionInitiate(info *storage.HostInfo) {
 	if info.SuccessfulInteractionFactor == 0 && info.FailedInteractionFactor == 0 {
 		info.SuccessfulInteractionFactor = initialSuccessfulInteractionFactor
 		info.FailedInteractionFactor = initialFailedInteractionFactor
+		info.LastInteractionTime = uint64(time.Now().Unix())
 	}
+}
+
+// IncrementSuccessfulInteractions will update storage host's interactions factors
+func (shm *StorageHostManager) IncrementSuccessfulInteractions(id enode.ID, interactionType InteractionType) {
+	if err := shm.updateInteraction(id, interactionType, true); err != nil {
+		shm.log.Warn("Increment successful interactions", "err", err)
+		return
+	}
+	return
+}
+
+// IncrementFailedInteractions will update storage host's interactions factors
+func (shm *StorageHostManager) IncrementFailedInteractions(id enode.ID, interactionType InteractionType) {
+	if err := shm.updateInteraction(id, interactionType, false); err != nil {
+		shm.log.Warn("Increment failed interactions", "err", err)
+		return
+	}
+	return
+}
+
+// updateInteraction update the host info with the give id, interaction type ,and whether successful or not
+func (shm *StorageHostManager) updateInteraction(id enode.ID, interactionType InteractionType, success bool) error {
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	// get the storage host
+	info, exist := shm.storageHostTree.RetrieveHostInfo(id)
+	if !exist {
+		return fmt.Errorf("failed to retrive host info [%v]", id)
+	}
+	info = calcInteractionUpdate(info, interactionType, success, uint64(time.Now().Unix()))
+
+	if err := shm.storageHostTree.HostInfoUpdate(info); err != nil {
+		return fmt.Errorf("failed to update host info: %v", err)
+	}
+	return nil
+}
+
+// calcInteractionUpdate update the host info with the give interaction type and whether the interaction
+// is successful
+func calcInteractionUpdate(info storage.HostInfo, interactionType InteractionType, success bool, now uint64) storage.HostInfo {
+	// Calculate the weight for the interaction
+	weight := interactionWeight(interactionType)
+	// Apply the decay the host info
+	processDecay(&info, now)
+	if success {
+		updateSuccessfulInteraction(&info, weight)
+	} else {
+		updateFailedInteraction(&info, weight)
+	}
+	return info
+}
+
+// processDecay calculate and apply the decay factor to the interaction factors
+func processDecay(info *storage.HostInfo, now uint64) {
+	// Calculate the decay factor
+	timePassed := now - info.LastInteractionTime
+	decay := math.Pow(interactionDecay, float64(timePassed))
+
+	// Apply the decay
+	info.SuccessfulInteractionFactor *= decay
+	info.FailedInteractionFactor *= decay
+	info.LastInteractionTime = now
+}
+
+// updateSuccessfulInteraction update the successful factor based on weight
+func updateSuccessfulInteraction(info *storage.HostInfo, weight float64) {
+	info.SuccessfulInteractionFactor += weight
+}
+
+// updateFailedInteraction update the
+func updateFailedInteraction(info *storage.HostInfo, weight float64) {
+	info.FailedInteractionFactor += weight
 }

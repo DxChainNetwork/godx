@@ -60,6 +60,8 @@ const (
 
 // interaction related fields
 const (
-	initialSuccessfulInteractionFactor = 10
-	initialFailedInteractionFactor     = 0
+	initialSuccessfulInteractionFactor         = 10
+	initialFailedInteractionFactor             = 0
+	interactionDecay                   float64 = 0.999999
+	interactionExponentialIndex                = 4
 )
