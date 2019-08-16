@@ -12,10 +12,9 @@ import (
 
 // Those values are used to calculate the storage host evaluation
 const (
-	priceFloor                = float64(0.1)
-	interactionExponentiation = 10
-	priceExponentiationSmall  = 0.75
-	priceExponentiationLarge  = 5
+	priceFloor               = float64(0.1)
+	priceExponentiationSmall = 0.75
+	priceExponentiationLarge = 5
 )
 
 // StorageHostManager related constant
