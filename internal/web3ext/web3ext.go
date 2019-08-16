@@ -487,13 +487,13 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getFileContractByBlockHash',
-			call: 'eth_getFileContractByBlockHash',
+			name: 'getStorageContractByBlockHash',
+			call: 'eth_getStorageContractByBlockHash',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'getFileContractByTransactionHash',
-			call: 'eth_getFileContractByTransactionHash',
+			name: 'getStorageContractByTransactionHash',
+			call: 'eth_getStorageContractByTransactionHash',
 			params: 1
 		}),
 		new web3._extend.Method({
