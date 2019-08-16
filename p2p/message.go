@@ -49,10 +49,6 @@ type Msg struct {
 //
 // For the decoding rules, please see package rlp.
 func (msg Msg) Decode(val interface{}) error {
-
-	if msg.Code == 0x20 {
-	}
-
 	s := rlp.NewStream(msg.Payload, uint64(msg.Size))
 	if err := s.Decode(val); err != nil {
 		return newPeerError(errInvalidMsg, "(code %x) (size %d) %v", msg.Code, msg.Size, err)
