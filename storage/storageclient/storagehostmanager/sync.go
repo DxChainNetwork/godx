@@ -104,7 +104,10 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 		// if not existed before, modify the FirstSeen and insert into storage host manager,
 		// start the scan loop
 		info.FirstSeen = shm.blockHeight
+		// Initiate the uptime and interaction related fields
+		uptimeInitiate(&info)
 		interactionInitiate(&info)
+
 		if err := shm.insert(info); err != nil {
 			shm.log.Error("unable to insert the storage host information", "err", err.Error())
 		}

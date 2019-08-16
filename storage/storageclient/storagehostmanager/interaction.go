@@ -150,6 +150,7 @@ func calcInteractionUpdate(info storage.HostInfo, interactionType InteractionTyp
 	} else {
 		updateFailedInteraction(&info, weight)
 	}
+	updateInteractionRecord(&info, interactionType, success, now)
 	return info
 }
 
@@ -163,6 +164,20 @@ func processDecay(info *storage.HostInfo, now uint64) {
 	info.SuccessfulInteractionFactor *= decay
 	info.FailedInteractionFactor *= decay
 	info.LastInteractionTime = now
+}
+
+// updateInteractionRecord add the current interaction record to the host info
+// If the host info has already got 10 or more records, only keep the most recent 10 records
+func updateInteractionRecord(info *storage.HostInfo, interactionType InteractionType, success bool,
+	now uint64) {
+	info.InteractionRecords = append(info.InteractionRecords, storage.HostInteractionRecord{
+		Time:            time.Unix(int64(now), 0),
+		InteractionType: InteractionTypeToName(interactionType),
+		Success:         success,
+	})
+	if len(info.InteractionRecords) > maxNumInteractionRecord {
+		info.InteractionRecords = info.InteractionRecords[len(info.InteractionRecords)-maxNumInteractionRecord:]
+	}
 }
 
 // updateSuccessfulInteraction update the successful factor based on weight

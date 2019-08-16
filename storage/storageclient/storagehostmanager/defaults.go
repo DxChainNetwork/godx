@@ -63,4 +63,17 @@ const (
 	initialFailedInteractionFactor             = 0
 	interactionDecay                   float64 = 0.999999
 	interactionExponentialIndex                = 4
+	maxNumInteractionRecord                    = 10
+)
+
+// uptime related fields
+const (
+	initialAccumulatedUptime   = 21600
+	initialAccumulatedDowntime = 0
+	uptimeDecay                = 0.999999
+	uptimeExponentialIndex     = 4
+
+	// If the host has an uptime rate as 0.98, it has full score in uptimeFactor
+	uptimeCap               = 0.98
+	uptimeMaxNumScanRecords = 5
 )

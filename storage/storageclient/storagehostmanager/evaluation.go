@@ -83,6 +83,18 @@ func (shm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) floa
 	return math.Pow(successRatio, interactionExponentialIndex)
 }
 
+// uptimeFactorCalc will punish the storage host who are frequently been offline
+func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
+	// Calculate the uptime ratio
+	upRate := getHostUpRate(info)
+	// upRate 0.98 is 1
+	allowedDegration := float64(1 - uptimeCap)
+	upRate = math.Min(upRate+allowedDegration, 1)
+	// Returned factor is fourth the power of upRate
+	upTimeFactor := math.Pow(upRate, uptimeExponentialIndex)
+	return upTimeFactor
+}
+
 // contractPriceFactorCalc calculates the factor value based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
 func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
@@ -104,29 +116,6 @@ func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, re
 		return 10
 	} else {
 		return 1 / ratio
-	}
-}
-
-// uptimeFactorCalc will punish the storage host who are frequently been offline
-func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
-	switch length := len(info.ScanRecords); length {
-	case 0:
-		return 0.25
-	case 1:
-		if info.ScanRecords[0].Success {
-			return 0.75
-		}
-		return 0.25
-	case 2:
-		if info.ScanRecords[0].Success && info.ScanRecords[1].Success {
-			return 0.85
-		}
-		if info.ScanRecords[0].Success || info.ScanRecords[1].Success {
-			return 0.50
-		}
-		return 0.05
-	default:
-		return shm.uptimeEvaluation(info)
 	}
 }
 
