@@ -13,7 +13,8 @@ import (
 )
 
 type FakeContractManagerBackend struct {
-	TestType bool
+	TestTypePositive bool
+	MsgType          uint64
 }
 
 func (fc *FakeContractManagerBackend) Syncing() bool {
@@ -27,11 +28,11 @@ func (fc *FakeContractManagerBackend) GetPaymentAddress() (common.Address, error
 }
 
 func (fc *FakeContractManagerBackend) AccountManager() storage.ClientAccountManager {
-	return nil
+	return &FakeAccountManager{}
 }
 
 func (fc *FakeContractManagerBackend) SetupConnection(enodeURL string) (storage.Peer, error) {
-	return nil, nil
+	return &FakeStoragePeer{TestTypePositive: fc.TestTypePositive, MsgType: fc.MsgType}, nil
 }
 
 func (fc *FakeContractManagerBackend) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {

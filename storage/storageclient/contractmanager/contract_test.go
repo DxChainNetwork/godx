@@ -21,7 +21,7 @@ import (
 )
 
 var positiveTestBackend = &simulation.FakeContractManagerBackend{
-	TestType: true,
+	TestTypePositive: true,
 }
 
 func TestContractManager_ResumeContracts(t *testing.T) {

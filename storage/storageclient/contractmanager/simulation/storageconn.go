@@ -15,12 +15,12 @@ import (
 // FakeStoragePeer contains the testType that will be used to simulate the
 // the storage connection
 type FakeStoragePeer struct {
-	TestType string
-	MsgType  uint64
+	TestTypePositive bool
+	MsgType          uint64
 }
 
 func (fs *FakeStoragePeer) ClientWaitContractResp() (p2p.Msg, error) {
-	if fs.TestType == "negative" {
+	if !fs.TestTypePositive {
 		return p2p.Msg{}, fmt.Errorf("client failed to get response from the storage host")
 	}
 
@@ -34,7 +34,7 @@ func (fs *FakeStoragePeer) ClientWaitContractResp() (p2p.Msg, error) {
 }
 
 func (fs *FakeStoragePeer) HostWaitContractResp() (p2p.Msg, error) {
-	if fs.TestType == "negative" {
+	if !fs.TestTypePositive {
 		return p2p.Msg{}, fmt.Errorf("host failed to get response from the storage client")
 	}
 
@@ -48,7 +48,7 @@ func (fs *FakeStoragePeer) HostWaitContractResp() (p2p.Msg, error) {
 }
 
 func (fs *FakeStoragePeer) WaitConfigResp() (p2p.Msg, error) {
-	if fs.TestType == "negative" {
+	if !fs.TestTypePositive {
 		return p2p.Msg{}, fmt.Errorf("failed to wait for the config requese from the storage host")
 	}
 
@@ -64,7 +64,7 @@ func (fs *FakeStoragePeer) WaitConfigResp() (p2p.Msg, error) {
 // ===== ==== ===== ===== CLIENT CONTRACT CREATE RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) RequestContractCreation(req storage.ContractCreateRequest) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -72,7 +72,7 @@ func (fs *FakeStoragePeer) RequestContractCreation(req storage.ContractCreateReq
 }
 
 func (fs *FakeStoragePeer) SendContractCreateClientRevisionSign(revisionSign []byte) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -80,7 +80,7 @@ func (fs *FakeStoragePeer) SendContractCreateClientRevisionSign(revisionSign []b
 }
 
 func (fs *FakeStoragePeer) SendClientNegotiateErrorMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (fs *FakeStoragePeer) SendClientNegotiateErrorMsg() error {
 }
 
 func (fs *FakeStoragePeer) SendClientCommitFailedMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -96,7 +96,7 @@ func (fs *FakeStoragePeer) SendClientCommitFailedMsg() error {
 }
 
 func (fs *FakeStoragePeer) SendClientAckMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -111,7 +111,7 @@ func (fs *FakeStoragePeer) PeerNode() *enode.Node {
 }
 
 func (fs *FakeStoragePeer) SendClientCommitSuccessMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -121,14 +121,14 @@ func (fs *FakeStoragePeer) SendClientCommitSuccessMsg() error {
 // ===== ==== ===== ===== HOST CONTRACT CREATE RELATED METHOD ==== ==== ==== ====
 
 func (fs *FakeStoragePeer) SendContractCreationHostSign(contractSign []byte) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 	return fmt.Errorf("failed to send contract creation host sign")
 }
 
 func (fs *FakeStoragePeer) SendContractCreationHostRevisionSign(revisionSign []byte) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -138,7 +138,7 @@ func (fs *FakeStoragePeer) SendContractCreationHostRevisionSign(revisionSign []b
 // ===== ==== ===== ===== CLIENT UPLOAD RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) RequestContractUpload(req storage.UploadRequest) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -146,7 +146,7 @@ func (fs *FakeStoragePeer) RequestContractUpload(req storage.UploadRequest) erro
 }
 
 func (fs *FakeStoragePeer) SendContractUploadClientRevisionSign(revisionSign []byte) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -156,7 +156,7 @@ func (fs *FakeStoragePeer) SendContractUploadClientRevisionSign(revisionSign []b
 // ===== ==== ===== ===== HOST UPLOAD RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) SendUploadMerkleProof(merkleProof storage.UploadMerkleProof) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -164,7 +164,7 @@ func (fs *FakeStoragePeer) SendUploadMerkleProof(merkleProof storage.UploadMerkl
 }
 
 func (fs *FakeStoragePeer) SendUploadHostRevisionSign(revisionSign []byte) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -174,7 +174,7 @@ func (fs *FakeStoragePeer) SendUploadHostRevisionSign(revisionSign []byte) error
 // ===== ==== ===== ===== CLIENT DOWNLOAD RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) RequestContractDownload(req storage.DownloadRequest) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 	return fmt.Errorf("failed to request contract dowload operation")
@@ -183,7 +183,7 @@ func (fs *FakeStoragePeer) RequestContractDownload(req storage.DownloadRequest) 
 // ===== ==== ===== ===== HOST DOWNLOAD RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) SendContractDownloadData(resp storage.DownloadResponse) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 	return fmt.Errorf("failed to send contract download data")
@@ -192,7 +192,7 @@ func (fs *FakeStoragePeer) SendContractDownloadData(resp storage.DownloadRespons
 // ===== ==== ===== ===== OTHER HOSTS METHODS ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) SendHostCommitFailedMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -200,7 +200,7 @@ func (fs *FakeStoragePeer) SendHostCommitFailedMsg() error {
 }
 
 func (fs *FakeStoragePeer) SendHostAckMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -208,7 +208,7 @@ func (fs *FakeStoragePeer) SendHostAckMsg() error {
 }
 
 func (fs *FakeStoragePeer) SendHostNegotiateErrorMsg() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -220,7 +220,7 @@ func (fs *FakeStoragePeer) SendHostNegotiateErrorMsg() error {
 func (fs *FakeStoragePeer) TriggerError(error) {}
 
 func (fs *FakeStoragePeer) SendStorageHostConfig(config storage.HostExtConfig) error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -228,7 +228,7 @@ func (fs *FakeStoragePeer) SendStorageHostConfig(config storage.HostExtConfig) e
 }
 
 func (fs *FakeStoragePeer) RequestStorageHostConfig() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -236,14 +236,14 @@ func (fs *FakeStoragePeer) RequestStorageHostConfig() error {
 }
 
 func (fs *FakeStoragePeer) SendHostBusyHandleRequestErr() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 	return fmt.Errorf("failed to send host busy handle request error message")
 }
 
 func (fs *FakeStoragePeer) TryToRenewOrRevise() bool {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return false
 	}
 
@@ -253,7 +253,7 @@ func (fs *FakeStoragePeer) TryToRenewOrRevise() bool {
 func (fs *FakeStoragePeer) RevisionOrRenewingDone() {}
 
 func (fs *FakeStoragePeer) TryRequestHostConfig() error {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return nil
 	}
 
@@ -262,7 +262,7 @@ func (fs *FakeStoragePeer) TryRequestHostConfig() error {
 
 func (fs *FakeStoragePeer) RequestHostConfigDone() {}
 func (fs *FakeStoragePeer) IsStaticConn() bool {
-	if fs.TestType == "positive" {
+	if fs.TestTypePositive {
 		return true
 	}
 
