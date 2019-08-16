@@ -5,7 +5,6 @@
 package simulation
 
 import (
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/event"
@@ -27,7 +26,7 @@ func (fc *FakeContractManagerBackend) GetPaymentAddress() (common.Address, error
 	return common.Address{}, nil
 }
 
-func (fc *FakeContractManagerBackend) AccountManager() *accounts.Manager {
+func (fc *FakeContractManagerBackend) AccountManager() storage.ClientAccountManager {
 	return nil
 }
 

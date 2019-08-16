@@ -50,7 +50,7 @@ type ClientBackend interface {
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
 	GetTxByBlockHash(blockHash common.Hash) (types.Transactions, error)
 	SetupConnection(enodeURL string) (Peer, error)
-	AccountManager() *accounts.Manager
+	AccountManager() ClientAccountManager
 	ChainConfig() *params.ChainConfig
 	CurrentBlock() *types.Block
 	SendTx(ctx context.Context, signedTx *types.Transaction) error
@@ -71,12 +71,17 @@ type ContractManagerBackend interface {
 	Syncing() bool
 	CheckAndUpdateConnection(peerNode *enode.Node)
 	GetPaymentAddress() (common.Address, error)
-	AccountManager() *accounts.Manager
+	AccountManager() ClientAccountManager
 	SetupConnection(enodeURL string) (Peer, error)
 	SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error)
 	TryToRenewOrRevise(hostID enode.ID) bool
 	RevisionOrRenewingDone(hostID enode.ID)
 	SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription
+}
+
+// ClientAccountManager
+type ClientAccountManager interface {
+	Find(accounts.Account) (accounts.Wallet, error)
 }
 
 // DownloadParameters is the parameters to download from outer request

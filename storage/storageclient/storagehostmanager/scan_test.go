@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -170,7 +169,7 @@ func (st *storageClientBackendTestData) GetPoolNonce(ctx context.Context, addr c
 	return 0, nil
 }
 
-func (st *storageClientBackendTestData) AccountManager() *accounts.Manager {
+func (st *storageClientBackendTestData) AccountManager() storage.ClientAccountManager {
 	return nil
 }
 

@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -154,7 +153,7 @@ func (client *StorageClient) SetupConnection(enodeURL string) (storage.Peer, err
 
 // AccountManager will be used to acquire the account manager object which will be
 // used to sign the contract, find the account address, and etc.
-func (client *StorageClient) AccountManager() *accounts.Manager {
+func (client *StorageClient) AccountManager() storage.ClientAccountManager {
 	return client.ethBackend.AccountManager()
 }
 

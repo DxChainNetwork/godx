@@ -8,7 +8,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -46,7 +45,7 @@ func (fc *FakeClientBackend) SetupConnection(enodeURL string) (Peer, error) {
 	return nil, nil
 }
 
-func (fc *FakeClientBackend) AccountManager() *accounts.Manager {
+func (fc *FakeClientBackend) AccountManager() ClientAccountManager {
 	return nil
 }
 
