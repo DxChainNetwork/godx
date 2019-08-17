@@ -8,11 +8,10 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
 )
 
-// NOTE: the purpose of this test case is not to find errors, it is just used to
+// NOTE: the purpose of this test case is not to locate errors, it is just used to
 // see if the faked data works as expected
 func TestContractManager_ContractCreateNegotiate(t *testing.T) {
 	var negotiateTestBackend = &simulation.FakeContractManagerBackend{
