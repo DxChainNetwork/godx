@@ -219,8 +219,6 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	blockHeight := shm.blockHeight
 	shm.lock.RUnlock()
 
-	hostHistoricInteractionsUpdate(info, blockHeight)
-
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)
 	if err == storage.ErrRequestingHostConfig {

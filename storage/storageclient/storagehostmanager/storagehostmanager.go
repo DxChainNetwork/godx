@@ -190,7 +190,6 @@ func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInf
 	// update host historical interaction record before returning
 	shm.lock.Lock()
 	hi.Filtered = whitelist != exist
-	hostHistoricInteractionsUpdate(&hi, shm.blockHeight)
 	shm.lock.Unlock()
 
 	return

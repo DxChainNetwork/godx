@@ -77,3 +77,9 @@ const (
 	uptimeCap               = 0.98
 	uptimeMaxNumScanRecords = 5
 )
+
+// host manager remove criteria
+const (
+	critIntercept  = 0.30
+	critRemoveBase = unit.BlocksPerDay * 3
+)
