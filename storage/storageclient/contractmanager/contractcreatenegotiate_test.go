@@ -5,13 +5,12 @@
 package contractmanager
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
 )
 
-// NOTE: the purpose of this test case is not to locate errors, it is just used to
-// see if the faked data works as expected
 func TestContractManager_ContractCreateNegotiate(t *testing.T) {
 	var negotiateTestBackend = simulation.NewFakeContractManagerBackend()
 
@@ -21,8 +20,18 @@ func TestContractManager_ContractCreateNegotiate(t *testing.T) {
 		t.Fatalf("failed to fake the contract manager: %s", err.Error())
 	}
 
-	_, err = cm.ContractCreateNegotiate(params)
+	meta, err := cm.ContractCreateNegotiate(params)
 	if err != nil {
 		t.Fatalf("contract create negotiation failed: %s", err.Error())
+	}
+
+	// check the meta data
+	rmeta, exist := cm.RetrieveActiveContract(meta.ID)
+	if !exist {
+		t.Fatalf("based on the contract ID returned from the contract create negotiate function, failed to get the contract information from database")
+	}
+
+	if !reflect.DeepEqual(rmeta, meta) {
+		t.Fatalf("the contract received is not equivlent to the contract saved in db")
 	}
 }

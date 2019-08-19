@@ -33,7 +33,7 @@ func NewFakeStoragePeer() *FakeStoragePeer {
 	return &FakeStoragePeer{
 		steps:   make(map[uint64]struct{}),
 		sendMsg: make(map[uint64]struct{}),
-		msg:     make(chan p2p.Msg),
+		msg:     make(chan p2p.Msg, 1),
 	}
 }
 

@@ -36,6 +36,7 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	// 1. draft the storage contract
 	storageContract, err := draftStorageContract(hostInfo, params.RentPayment, params.Funding, params.StartHeight, params.EndHeight, paymentAddress, uc)
 	if err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to draft the storage contract", "err", err.Error())
 		return
 	}
@@ -45,6 +46,7 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	account := accounts.Account{Address: paymentAddress}
 	wallet, err := cm.b.AccountManager().Find(account)
 	if err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to find the account address", "err", err.Error(), "address", paymentAddress)
 		return
 	}
@@ -52,15 +54,17 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	// set up the connection
 	sp, err := cm.b.SetupConnection(hostInfo.EnodeURL)
 	if err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to set up the connection", "err", err.Error())
 		return
 	}
 
 	// handleErr will handle the errors occurred in the negotiation process
-	defer cm.handleNegotiationErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer cm.handleNegotiationErr(negotiateErr, hostInfo.EnodeID, sp)
 
 	// 2. draft storage contract negotiation
 	if storageContract, err = draftStorageContractNegotiate(sp, account, wallet, storageContract); err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to negotiate the drafted storage contract", "err", err.Error())
 		return
 	}
@@ -68,18 +72,21 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	// 3. storage contract revision negotiate
 	storageContractRevision, err := storageContractRevisionNegotiate(sp, storageContract, uc, account, wallet)
 	if err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to negotiate the storage contract revision", "err", err.Error())
 		return
 	}
 
 	// 4. send the storage contract create transaction
 	if err := sendStorageContractCreateTx(storageContract, paymentAddress, cm.b); err != nil {
+		negotiateErr = err
 		cm.log.Error("contract create negotiation failed: failed to send the storage contract create transaction", "err", err.Error())
 		return
 	}
 
 	// 5. commit the contract information, send success message to host, and handle host's response
-	return cm.clientStorageContractCommit(sp, hostInfo.EnodeID, params.StartHeight, params.Funding, hostInfo.ContractPrice, storageContract.ID(), storageContractRevision)
+	meta, negotiateErr = cm.clientStorageContractCommit(sp, hostInfo.EnodeID, params.StartHeight, params.Funding, hostInfo.ContractPrice, storageContract.ID(), storageContractRevision)
+	return
 }
 
 // clientNegotiateCommit will form and save the contract information persistently
@@ -121,7 +128,7 @@ func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID 
 // 2. ErrClientCommit      ->  send commit failed message, wait response
 // 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
 // 4. ErrHostNegotiate     ->  punish host, check and update the connection
-func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp storage.Peer) {
+func (cm *ContractManager) handleNegotiationErr(err error, hostID enode.ID, sp storage.Peer) {
 	// if no error, reward the host and return directly
 	if err == nil {
 		cm.hostManager.IncrementSuccessfulInteractions(hostID)
@@ -130,15 +137,15 @@ func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp 
 
 	// otherwise, based on the error type, handle it differently
 	switch {
-	case common.ErrContains(*err, storage.ErrClientNegotiate):
+	case common.ErrContains(err, storage.ErrClientNegotiate):
 		_ = sp.SendClientNegotiateErrorMsg()
-	case common.ErrContains(*err, storage.ErrClientCommit):
+	case common.ErrContains(err, storage.ErrClientCommit):
 		_ = sp.SendClientCommitFailedMsg()
-	case common.ErrContains(*err, storage.ErrHostNegotiate):
+	case common.ErrContains(err, storage.ErrHostNegotiate):
 		cm.hostManager.IncrementFailedInteractions(hostID)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		return
-	case common.ErrContains(*err, storage.ErrHostCommit):
+	case common.ErrContains(err, storage.ErrHostCommit):
 		cm.hostManager.IncrementFailedInteractions(hostID)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		_ = sp.SendClientAckMsg()
