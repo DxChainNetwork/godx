@@ -215,6 +215,13 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyStorageContractTransaction(sender, p, st.data, st.gas)
 	} else if p, ok := vm.PrecompiledDPoSContracts[st.to()]; ok {
+
+		// check dpos tx filed
+		vmerr = CheckDposOperationTx(st.msg)
+		if vmerr != nil {
+			return nil, 0, false, vmerr
+		}
+
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyDposTransaction(p, st.dposContext, st.msg.From(), st.data, st.gas)
 	} else {
@@ -257,4 +264,40 @@ func (st *StateTransition) refundGas() {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
+}
+
+// TODO: not completed yet
+// CheckDposOperationTx checks the dpos transaction's filed
+func CheckDposOperationTx(msg Message) error {
+	switch *msg.To() {
+
+	// check ApplyCandidate tx
+	case common.BytesToAddress([]byte{13}):
+		if msg.Value().Uint64() == 0 {
+			return errors.New("applying for candidate must specify none negative deposit value")
+		}
+
+		if msg.Data() != nil {
+			return errors.New("payload must be empty when tx is not binary")
+		}
+		return nil
+
+	// check CancleCandidate tx
+	case common.BytesToAddress([]byte{14}):
+		return nil
+
+	// check Vote tx
+	case common.BytesToAddress([]byte{15}):
+		return nil
+
+	// check ModifyVote tx
+	case common.BytesToAddress([]byte{16}):
+		return nil
+
+	// check CancleVote tx
+	case common.BytesToAddress([]byte{17}):
+		return nil
+	default:
+		return nil
+	}
 }
