@@ -495,6 +495,7 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	}
 }
 
+// TODO: not completed yet
 // ApplyDposTransaction handlers all dpos consensus txs
 func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
 	switch txType {

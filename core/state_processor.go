@@ -97,12 +97,6 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, coinbase *com
 		return nil, 0, err
 	}
 
-	// validate the tx filed
-	err = tx.Validate()
-	if err != nil {
-		return nil, 0, err
-	}
-
 	// Create a new context to be used in the EVM environment
 	context := NewEVMContext(msg, header, bc, coinbase)
 	// Create a new environment which holds all relevant information

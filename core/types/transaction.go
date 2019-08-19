@@ -350,22 +350,6 @@ func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
 }
 
-// Validate checks the dpos transaction's filed
-func (tx *Transaction) Validate() error {
-	//if tx.Type() != Binary {
-	//	if tx.Value().Uint64() != 0 {
-	//		return errors.New("value must be 0 when tx is not binary")
-	//	}
-	//	if tx.To() == nil && tx.Type() != LoginCandidate && tx.Type() != LogoutCandidate {
-	//		return errors.New("recipient was required when tx is Delegate or UnDelegate")
-	//	}
-	//	if tx.Data() != nil {
-	//		return errors.New("payload must be empty when tx is not binary")
-	//	}
-	//}
-	return nil
-}
-
 // Transactions is a Transaction slice type for basic sorting.
 type Transactions []*Transaction
 
