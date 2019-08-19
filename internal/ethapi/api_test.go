@@ -5,21 +5,21 @@ import (
 	"net"
 	"testing"
 
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rlp"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
-func Test_blockToStorageContract(t *testing.T) {
+func TestBlockToStorageContract(t *testing.T) {
 	txs := make([]*types.Transaction, 0)
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{10}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("contractCreate")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{11}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("CommitRevision")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{12}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("StorageProof")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{9}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("HostAnnounce")))
-	hearder := &types.Header{
+	header := &types.Header{
 		ParentHash: common.HexToHash("abcdef"),
 		UncleHash:  types.CalcUncleHash(nil),
 		Coinbase:   common.HexToAddress("01238abcdd"),
@@ -35,21 +35,44 @@ func Test_blockToStorageContract(t *testing.T) {
 		MixDigest:  crypto.Keccak256Hash(nil),
 		Nonce:      types.EncodeNonce(uint64(1)),
 	}
-	block := types.NewBlock(hearder, txs, nil, nil)
-	_, err := blockToStorageContract(block)
+	block := types.NewBlock(header, txs, nil, nil)
+	result, err := blockToStorageContract(block)
 	if err != nil {
 		t.Error(err)
+	} else {
+		if len(result) != 4 {
+			t.Error("failed to find the transaction on the block")
+		}
+		//Check if the data returned is accurate
+		for index, tx := range txs {
+			switch index {
+			case 0:
+				if result[tx.Hash().String()] != vm.ContractCreateTransaction {
+					t.Error("here should be ContractCreateTransaction")
+				}
+			case 1:
+				if result[tx.Hash().String()] != vm.CommitRevisionTransaction {
+					t.Error("here should be CommitRevisionTransaction")
+				}
+			case 2:
+				if result[tx.Hash().String()] != vm.StorageProofTransaction {
+					t.Error("here should be StorageProofTransaction")
+				}
+			case 3:
+				if result[tx.Hash().String()] != vm.HostAnnounceTransaction {
+					t.Error("here should be HostAnnounceTransaction")
+				}
+			}
+		}
 	}
 }
 
-func Test_transactionToStorageContract(t *testing.T) {
+func TestTransactionToStorageContract(t *testing.T) {
 	txs := make([]*types.Transaction, 0)
-
 	prvKeyHost, err := crypto.GenerateKey()
 	if err != nil {
 		t.Errorf("failed to generate public/private key pairs for storage host: %v", err)
 	}
-
 	prvKeyClient, err := crypto.GenerateKey()
 	if err != nil {
 		t.Errorf("failed to generate public/private key pairs for storage client: %v", err)
@@ -58,6 +81,7 @@ func Test_transactionToStorageContract(t *testing.T) {
 		PaymentAddresses:   []common.Address{crypto.PubkeyToAddress(prvKeyClient.PublicKey), crypto.PubkeyToAddress(prvKeyHost.PublicKey)},
 		SignaturesRequired: 2,
 	}
+	//constructing a create storageContract transaction
 	sc := types.StorageContract{
 		FileSize:       2048,
 		FileMerkleRoot: common.HexToHash("0x51da85b8a745b0e2cf3bcd4cae108ad42f0dac49124419736e1bac49c2d44cd7"),
@@ -88,10 +112,10 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	scRlp, err := rlp.EncodeToBytes(sc)
 	if err != nil {
-		t.Error("StorageContract rlp err", err)
+		t.Error("StorageContract rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{10}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), scRlp))
-
+	//constructing a commit storageContractRevision transaction
 	scr := types.StorageContractRevision{
 		ParentID: sc.ID(),
 		UnlockConditions: types.UnlockConditions{
@@ -118,10 +142,10 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	scrRlp, err := rlp.EncodeToBytes(scr)
 	if err != nil {
-		t.Error("StorageContractRevision rlp err", err)
+		t.Error("StorageContractRevision rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{11}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), scrRlp))
-
+	//constructing a commit storageProof transaction
 	spf := types.StorageProof{
 		ParentID: sc.RLPHash(),
 		Segment:  [64]byte{},
@@ -133,26 +157,64 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	spfRlp, err := rlp.EncodeToBytes(spf)
 	if err != nil {
-		t.Error("StorageProof rlp err", err)
+		t.Error("StorageProof rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{12}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), spfRlp))
-
 	hostNode := enode.NewV4(&prvKeyHost.PublicKey, net.IP{127, 0, 0, 1}, int(8888), int(8888))
-	// test host announce signature(only one signature)
+	// constructing a hostAnnounce transaction
 	ha := types.HostAnnouncement{
 		NetAddress: hostNode.String(),
 		Signature:  []byte("0x78469416"),
 	}
 	haRlp, err := rlp.EncodeToBytes(ha)
 	if err != nil {
-		t.Error("HostAnnouncement rlp err", err)
+		t.Error("HostAnnouncement rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{9}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), haRlp))
-
-	for _, tx := range txs {
-		_, err := transactionToStorageContract(tx)
+	for index, tx := range txs {
+		result, err := transactionToStorageContract(tx)
 		if err != nil {
-			t.Error("transactionToStorageContract err :", err)
+			t.Error("transactionToStorageContract err:", err)
+		} else {
+			//Check if the data returned is accurate
+			switch index {
+			case 0:
+				if result[tx.Hash().String()] != vm.ContractCreateTransaction {
+					t.Error("here should be ContractCreateTransaction")
+				} else {
+					_, ok := result["StorageContract"]
+					if !ok {
+						t.Error("storageContract failed to assign value")
+					}
+				}
+			case 1:
+				if result[tx.Hash().String()] != vm.CommitRevisionTransaction {
+					t.Error("here should be CommitRevisionTransaction")
+				} else {
+					_, ok := result["StorageContractRevision"]
+					if !ok {
+						t.Error("StorageContractRevision failed to assign value")
+					}
+				}
+			case 2:
+				if result[tx.Hash().String()] != vm.StorageProofTransaction {
+					t.Error("here should be StorageProofTransaction")
+				} else {
+					_, ok := result["StorageContractStorageProof"]
+					if !ok {
+						t.Error("StorageContractStorageProof failed to assign value")
+					}
+				}
+			case 3:
+				if result[tx.Hash().String()] != vm.HostAnnounceTransaction {
+					t.Error("here should be HostAnnounceTransaction")
+				} else {
+					_, ok := result["HostAnnouncement"]
+					if !ok {
+						t.Error("HostAnnouncement failed to assign value")
+					}
+				}
+			}
 		}
 	}
 

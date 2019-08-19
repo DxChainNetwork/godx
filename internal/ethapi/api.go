@@ -1160,7 +1160,7 @@ func transactionToStorageContract(transaction *types.Transaction) (map[string]in
 	precompiled := vm.PrecompiledEVMStorageContracts
 	p, ok := precompiled[*transaction.To()]
 	if !ok {
-		return nil, errors.New("not a document contract related transaction")
+		return nil, errors.New("not a storage contract related transaction")
 	}
 
 	fields := make(map[string]interface{})

@@ -47,8 +47,8 @@ type StorageContract struct {
 	HostCollateral   DxcoinCollateral `json:"host_deposit"`
 
 	// temporary book while file upload and download
-	ValidProofOutputs  []DxcoinCharge `json:"validproofrefund"`
-	MissedProofOutputs []DxcoinCharge `json:"missedproofrefund"`
+	ValidProofOutputs  []DxcoinCharge `json:"validproofpayback"`
+	MissedProofOutputs []DxcoinCharge `json:"missedproofpayback"`
 
 	// lock the client and host for this storage contract
 	UnlockHash     common.Hash `json:"unlockhash"`
@@ -64,8 +64,8 @@ type StorageContractRevision struct {
 	NewFileMerkleRoot     common.Hash      `json:"newfilemerkleroot"`
 	NewWindowStart        uint64           `json:"newwindowstart"`
 	NewWindowEnd          uint64           `json:"newwindowend"`
-	NewValidProofOutputs  []DxcoinCharge   `json:"newvalidproofrefund"`
-	NewMissedProofOutputs []DxcoinCharge   `json:"newmissedproofrefund"`
+	NewValidProofOutputs  []DxcoinCharge   `json:"newvalidproofpayback"`
+	NewMissedProofOutputs []DxcoinCharge   `json:"newmissedproofpayback"`
 	NewUnlockHash         common.Hash      `json:"newunlockhash"`
 	Signatures            [][]byte
 }
