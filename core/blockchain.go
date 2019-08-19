@@ -957,7 +957,7 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	rawdb.WriteBlock(bc.db, block)
 
 	// commit dpos context to local db
-	_, err = block.DposContext.Commit()
+	_, err = block.DposCtx().Commit()
 	if err != nil {
 		return NonStatTy, err
 	}
@@ -1217,10 +1217,11 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 
 		// construct dpos context from parent's dpos context root
-		block.DposContext, err = types.NewDposContextFromProto(bc.db, parent.Header().DposContext)
+		dposCtx, err := types.NewDposContextFromProto(bc.db, parent.Header().DposContext)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}
+		block.SetDposCtx(dposCtx)
 
 		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {

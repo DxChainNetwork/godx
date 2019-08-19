@@ -265,7 +265,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	statedb.Database().TrieDB().Commit(root, true)
 
 	block := types.NewBlock(head, nil, nil, nil)
-	block.DposContext = dposContext
+	block.SetDposCtx(dposContext)
 
 	return block
 }
@@ -279,7 +279,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 
 	// commit dpos context into memory
-	_, err := block.DposContext.Commit()
+	_, err := block.DposCtx().Commit()
 	if err != nil {
 		return nil, err
 	}

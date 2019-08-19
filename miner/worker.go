@@ -1017,7 +1017,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	}
 
 	// fill up dpos context to new block
-	block.DposContext = w.current.dposContext
+	block.SetDposCtx(w.current.dposContext)
 
 	if w.isRunning() {
 		if interval != nil {
