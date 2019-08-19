@@ -5,15 +5,14 @@ import (
 	"net"
 	"testing"
 
-	"github.com/DxChainNetwork/godx/p2p/enode"
-	"github.com/DxChainNetwork/godx/rlp"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/rlp"
 )
 
-func Test_blockToStorageContract(t *testing.T) {
+func TestBlockToStorageContract(t *testing.T) {
 	txs := make([]*types.Transaction, 0)
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{10}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("contractCreate")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{11}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("CommitRevision")))
@@ -42,7 +41,7 @@ func Test_blockToStorageContract(t *testing.T) {
 	}
 }
 
-func Test_transactionToStorageContract(t *testing.T) {
+func TestTransactionToStorageContract(t *testing.T) {
 	txs := make([]*types.Transaction, 0)
 
 	prvKeyHost, err := crypto.GenerateKey()
@@ -88,7 +87,7 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	scRlp, err := rlp.EncodeToBytes(sc)
 	if err != nil {
-		t.Error("StorageContract rlp err", err)
+		t.Error("StorageContract rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{10}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), scRlp))
 
@@ -118,7 +117,7 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	scrRlp, err := rlp.EncodeToBytes(scr)
 	if err != nil {
-		t.Error("StorageContractRevision rlp err", err)
+		t.Error("StorageContractRevision rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{11}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), scrRlp))
 
@@ -133,7 +132,7 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	spfRlp, err := rlp.EncodeToBytes(spf)
 	if err != nil {
-		t.Error("StorageProof rlp err", err)
+		t.Error("StorageProof rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{12}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), spfRlp))
 
@@ -145,14 +144,14 @@ func Test_transactionToStorageContract(t *testing.T) {
 	}
 	haRlp, err := rlp.EncodeToBytes(ha)
 	if err != nil {
-		t.Error("HostAnnouncement rlp err", err)
+		t.Error("HostAnnouncement rlp err:", err)
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{9}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), haRlp))
 
 	for _, tx := range txs {
 		_, err := transactionToStorageContract(tx)
 		if err != nil {
-			t.Error("transactionToStorageContract err :", err)
+			t.Error("transactionToStorageContract err:", err)
 		}
 	}
 
