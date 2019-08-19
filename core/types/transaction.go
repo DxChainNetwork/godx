@@ -38,27 +38,6 @@ var (
 
 var _ = (*txdataMarshaling)(nil)
 
-// TxType defines transaction type
-type TxType uint8
-
-const (
-
-	// Binary is the tx type of transferring or contract creation
-	Binary TxType = iota
-
-	// LoginCandidate is the tx type of applying for candidate
-	LoginCandidate
-
-	// LogoutCandidate is the tx type of quiting for candidate
-	LogoutCandidate
-
-	// Delegate is the tx type of voting a candidate
-	Delegate
-
-	// UnDelegate is the tx type of suppressing a candidate
-	UnDelegate
-)
-
 type Transaction struct {
 	data txdata
 	// caches
@@ -68,7 +47,6 @@ type Transaction struct {
 }
 
 type txdata struct {
-	Type         TxType          `json:"type" gencodec:"required"`
 	AccountNonce uint64          `json:"nonce"    gencodec:"required"`
 	Price        *big.Int        `json:"gasPrice" gencodec:"required"`
 	GasLimit     uint64          `json:"gas"      gencodec:"required"`
@@ -91,32 +69,27 @@ type txdataMarshaling struct {
 	GasLimit     hexutil.Uint64
 	Amount       *hexutil.Big
 	Payload      hexutil.Bytes
-	Type         TxType
 	V            *hexutil.Big
 	R            *hexutil.Big
 	S            *hexutil.Big
 }
 
 // NewContractCreation create a new transaction.
-func NewTransaction(txType TxType, nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	if txType != Binary && (to == common.Address{}) {
-		return newTransaction(txType, nonce, nil, amount, gasLimit, gasPrice, data)
-	}
-	return newTransaction(txType, nonce, &to, amount, gasLimit, gasPrice, data)
+func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+	return newTransaction(nonce, &to, amount, gasLimit, gasPrice, data)
 }
 
 // NewContractCreation create a new contract transaction.
 // When a new contract is created, the to address is nil.
 func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return newTransaction(Binary, nonce, nil, amount, gasLimit, gasPrice, data)
+	return newTransaction(nonce, nil, amount, gasLimit, gasPrice, data)
 }
 
-func newTransaction(txType TxType, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func newTransaction(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
 	if len(data) > 0 {
 		data = common.CopyBytes(data)
 	}
 	d := txdata{
-		Type:         txType,
 		AccountNonce: nonce,
 		Recipient:    to,
 		Payload:      data,
@@ -298,7 +271,6 @@ func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.data.Pri
 func (tx *Transaction) Value() *big.Int    { return new(big.Int).Set(tx.data.Amount) }
 func (tx *Transaction) Nonce() uint64      { return tx.data.AccountNonce }
 func (tx *Transaction) CheckNonce() bool   { return true }
-func (tx *Transaction) Type() TxType       { return tx.data.Type }
 
 // To returns the recipient address of the transaction.
 // It returns nil if the transaction is a contract creation.
@@ -347,7 +319,6 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 		amount:     tx.data.Amount,
 		data:       tx.data.Payload,
 		checkNonce: true,
-		txType:     tx.data.Type,
 	}
 
 	var err error
@@ -379,19 +350,19 @@ func (tx *Transaction) RawSignatureValues() (*big.Int, *big.Int, *big.Int) {
 	return tx.data.V, tx.data.R, tx.data.S
 }
 
-// Validate checks the transaction's filed
+// Validate checks the dpos transaction's filed
 func (tx *Transaction) Validate() error {
-	if tx.Type() != Binary {
-		if tx.Value().Uint64() != 0 {
-			return errors.New("value must be 0 when tx is not binary")
-		}
-		if tx.To() == nil && tx.Type() != LoginCandidate && tx.Type() != LogoutCandidate {
-			return errors.New("recipient was required when tx is Delegate or UnDelegate")
-		}
-		if tx.Data() != nil {
-			return errors.New("payload must be empty when tx is not binary")
-		}
-	}
+	//if tx.Type() != Binary {
+	//	if tx.Value().Uint64() != 0 {
+	//		return errors.New("value must be 0 when tx is not binary")
+	//	}
+	//	if tx.To() == nil && tx.Type() != LoginCandidate && tx.Type() != LogoutCandidate {
+	//		return errors.New("recipient was required when tx is Delegate or UnDelegate")
+	//	}
+	//	if tx.Data() != nil {
+	//		return errors.New("payload must be empty when tx is not binary")
+	//	}
+	//}
 	return nil
 }
 
@@ -537,7 +508,6 @@ type Message struct {
 	gasPrice   *big.Int
 	data       []byte
 	checkNonce bool
-	txType     TxType
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, checkNonce bool) Message {
@@ -561,4 +531,3 @@ func (m Message) Gas() uint64          { return m.gasLimit }
 func (m Message) Nonce() uint64        { return m.nonce }
 func (m Message) Data() []byte         { return m.data }
 func (m Message) CheckNonce() bool     { return m.checkNonce }
-func (m Message) Type() TxType         { return m.txType }

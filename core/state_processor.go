@@ -17,8 +17,6 @@
 package core
 
 import (
-	"errors"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/misc"
@@ -111,17 +109,9 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, coinbase *com
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, statedb, config, cfg)
 	// Apply the transaction to the current state (included in the env)
-	_, gas, failed, err := ApplyMessage(vmenv, msg, gp)
+	_, gas, failed, err := ApplyMessage(vmenv, msg, gp, dposContext)
 	if err != nil {
 		return nil, 0, err
-	}
-
-	// if this is a dpos operation tx, apply dpos message
-	if msg.Type() != types.Binary {
-		err = applyDposMessage(dposContext, msg)
-		if err != nil {
-			return nil, 0, err
-		}
 	}
 
 	// Update the state with pending changes
@@ -147,20 +137,4 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, coinbase *com
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 
 	return receipt, gas, err
-}
-
-func applyDposMessage(dposContext *types.DposContext, msg types.Message) error {
-	switch msg.Type() {
-	case types.LoginCandidate:
-		dposContext.BecomeCandidate(msg.From())
-	case types.LogoutCandidate:
-		dposContext.KickoutCandidate(msg.From())
-	case types.Delegate:
-		dposContext.Delegate(msg.From(), *(msg.To()))
-	case types.UnDelegate:
-		dposContext.UnDelegate(msg.From(), *(msg.To()))
-	default:
-		return errors.New("invalid dpos operation tx type")
-	}
-	return nil
 }

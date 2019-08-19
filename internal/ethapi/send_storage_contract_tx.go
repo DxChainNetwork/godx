@@ -173,5 +173,5 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Back
 		return nil, errors.New(`storage contract tx without to or input`)
 	}
 
-	return types.NewTransaction(types.Binary, uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
 }
