@@ -22,6 +22,7 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
@@ -49,15 +50,16 @@ The state transitioning model does all the necessary work to work out a valid ne
 6) Derive new state root
 */
 type StateTransition struct {
-	gp         *GasPool
-	msg        Message
-	gas        uint64
-	gasPrice   *big.Int
-	initialGas uint64
-	value      *big.Int
-	data       []byte
-	state      vm.StateDB
-	evm        *vm.EVM
+	gp          *GasPool
+	msg         Message
+	gas         uint64
+	gasPrice    *big.Int
+	initialGas  uint64
+	value       *big.Int
+	data        []byte
+	state       vm.StateDB
+	evm         *vm.EVM
+	dposContext *types.DposContext
 }
 
 // Message represents a message sent to a contract.
@@ -109,15 +111,16 @@ func IntrinsicGas(data []byte, contractCreation, homestead bool) (uint64, error)
 }
 
 // NewStateTransition initialises and returns a new state transition object.
-func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition {
+func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool, dposContext *types.DposContext) *StateTransition {
 	return &StateTransition{
-		gp:       gp,
-		evm:      evm,
-		msg:      msg,
-		gasPrice: msg.GasPrice(),
-		value:    msg.Value(),
-		data:     msg.Data(),
-		state:    evm.StateDB,
+		gp:          gp,
+		evm:         evm,
+		msg:         msg,
+		gasPrice:    msg.GasPrice(),
+		value:       msg.Value(),
+		data:        msg.Data(),
+		state:       evm.StateDB,
+		dposContext: dposContext,
 	}
 }
 
@@ -128,8 +131,8 @@ func NewStateTransition(evm *vm.EVM, msg Message, gp *GasPool) *StateTransition 
 // the gas used (which includes gas refunds) and an error if it failed. An error always
 // indicates a core error meaning that the message would always fail for that particular
 // state and would never be accepted within a block.
-func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool) ([]byte, uint64, bool, error) {
-	return NewStateTransition(evm, msg, gp).TransitionDb()
+func ApplyMessage(evm *vm.EVM, msg Message, gp *GasPool, dposContext *types.DposContext) ([]byte, uint64, bool, error) {
+	return NewStateTransition(evm, msg, gp, dposContext).TransitionDb()
 }
 
 // to returns the recipient of the message.
@@ -211,6 +214,9 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	} else if p, ok := vm.PrecompiledStorageContracts[st.to()]; ok {
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyStorageContractTransaction(sender, p, st.data, st.gas)
+	} else if p, ok := vm.PrecompiledDPoSContracts[st.to()]; ok {
+		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
+		ret, st.gas, vmerr = evm.ApplyDposTransaction(p, st.dposContext, st.msg.From(), st.data, st.gas)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)

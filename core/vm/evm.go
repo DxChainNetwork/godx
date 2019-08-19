@@ -39,6 +39,7 @@ var (
 	emptyCodeHash = crypto.Keccak256Hash(nil)
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
+	errUnknownDposOperationTx   = errors.New("unknown dpos operation tx")
 )
 
 type (
@@ -491,6 +492,28 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 		return evm.StorageProofTx(caller, data, gas)
 	default:
 		return nil, gas, errUnknownStorageContractTx
+	}
+}
+
+// ApplyDposTransaction handlers all dpos consensus txs
+func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	switch txType {
+	case ApplyCandidate:
+		dposContext.BecomeCandidate(from)
+		return nil, gas, nil
+	case CancleCandidate:
+		dposContext.KickoutCandidate(from)
+		return nil, gas, nil
+	case Vote:
+		dposContext.Delegate(from, common.Address{})
+		return nil, gas, nil
+	case ModifyVote:
+		dposContext.UnDelegate(from, common.Address{})
+		return nil, gas, nil
+	case CancleVote:
+		return nil, gas, nil
+	default:
+		return nil, gas, errUnknownDposOperationTx
 	}
 }
 
