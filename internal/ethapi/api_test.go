@@ -5,6 +5,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/DxChainNetwork/godx/core/vm"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -18,7 +20,7 @@ func TestBlockToStorageContract(t *testing.T) {
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{11}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("CommitRevision")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{12}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("StorageProof")))
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{9}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), []byte("HostAnnounce")))
-	hearder := &types.Header{
+	header := &types.Header{
 		ParentHash: common.HexToHash("abcdef"),
 		UncleHash:  types.CalcUncleHash(nil),
 		Coinbase:   common.HexToAddress("01238abcdd"),
@@ -34,10 +36,34 @@ func TestBlockToStorageContract(t *testing.T) {
 		MixDigest:  crypto.Keccak256Hash(nil),
 		Nonce:      types.EncodeNonce(uint64(1)),
 	}
-	block := types.NewBlock(hearder, txs, nil, nil)
-	_, err := blockToStorageContract(block)
+	block := types.NewBlock(header, txs, nil, nil)
+	result, err := blockToStorageContract(block)
 	if err != nil {
 		t.Error(err)
+	} else {
+		if len(result) != 4 {
+			t.Error("failed to find the transaction on the block")
+		}
+		for index, tx := range txs {
+			switch index {
+			case 0:
+				if result[tx.Hash().String()] != vm.ContractCreateTransaction {
+					t.Error("here should be ContractCreateTransaction")
+				}
+			case 1:
+				if result[tx.Hash().String()] != vm.CommitRevisionTransaction {
+					t.Error("here should be CommitRevisionTransaction")
+				}
+			case 2:
+				if result[tx.Hash().String()] != vm.StorageProofTransaction {
+					t.Error("here should be StorageProofTransaction")
+				}
+			case 3:
+				if result[tx.Hash().String()] != vm.HostAnnounceTransaction {
+					t.Error("here should be HostAnnounceTransaction")
+				}
+			}
+		}
 	}
 }
 
@@ -148,10 +174,49 @@ func TestTransactionToStorageContract(t *testing.T) {
 	}
 	txs = append(txs, types.NewTransaction(0, common.BytesToAddress([]byte{9}), new(big.Int).SetInt64(1), 0, new(big.Int).SetInt64(1), haRlp))
 
-	for _, tx := range txs {
-		_, err := transactionToStorageContract(tx)
+	for index, tx := range txs {
+		result, err := transactionToStorageContract(tx)
 		if err != nil {
 			t.Error("transactionToStorageContract err:", err)
+		} else {
+			switch index {
+			case 0:
+				if result[tx.Hash().String()] != vm.ContractCreateTransaction {
+					t.Error("here should be ContractCreateTransaction")
+				} else {
+					_, ok := result["StorageContract"]
+					if !ok {
+						t.Error("storageContract failed to assign value")
+					}
+				}
+			case 1:
+				if result[tx.Hash().String()] != vm.CommitRevisionTransaction {
+					t.Error("here should be CommitRevisionTransaction")
+				} else {
+					_, ok := result["StorageContractRevision"]
+					if !ok {
+						t.Error("StorageContractRevision failed to assign value")
+					}
+				}
+			case 2:
+				if result[tx.Hash().String()] != vm.StorageProofTransaction {
+					t.Error("here should be StorageProofTransaction")
+				} else {
+					_, ok := result["StorageContractStorageProof"]
+					if !ok {
+						t.Error("StorageContractStorageProof failed to assign value")
+					}
+				}
+			case 3:
+				if result[tx.Hash().String()] != vm.HostAnnounceTransaction {
+					t.Error("here should be HostAnnounceTransaction")
+				} else {
+					_, ok := result["HostAnnouncement"]
+					if !ok {
+						t.Error("HostAnnouncement failed to assign value")
+					}
+				}
+			}
 		}
 	}
 
