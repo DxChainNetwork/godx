@@ -290,6 +290,9 @@ type Block struct {
 	uncles       []*Header
 	transactions Transactions
 
+	// dpos consensus context
+	dposContext *DposContext
+
 	// caches
 	hash atomic.Value
 	size atomic.Value
@@ -302,8 +305,6 @@ type Block struct {
 	// inter-peer block relay.
 	ReceivedAt   time.Time
 	ReceivedFrom interface{}
-
-	DposContext *DposContext
 }
 
 // DeprecatedTd is an old relic for extracting the TD of a block. It is in the
@@ -472,7 +473,7 @@ func (b *Block) ReceiptHash() common.Hash  { return b.header.ReceiptHash }
 func (b *Block) UncleHash() common.Hash    { return b.header.UncleHash }
 func (b *Block) Extra() []byte             { return common.CopyBytes(b.header.Extra) }
 func (b *Block) Validator() common.Address { return b.header.Validator }
-func (b *Block) DposCtx() *DposContext     { return b.DposContext }
+func (b *Block) DposCtx() *DposContext     { return b.dposContext }
 
 func (b *Block) Header() *Header { return CopyHeader(b.header) }
 
@@ -502,6 +503,10 @@ func CalcUncleHash(uncles []*Header) common.Hash {
 	return rlpHash(uncles)
 }
 
+func (b *Block) SetDposCtx(dposCtx *DposContext) {
+	b.dposContext = dposCtx
+}
+
 // WithSeal returns a new block with the data from b but the header replaced with
 // the sealed one.
 func (b *Block) WithSeal(header *Header) *Block {
@@ -511,7 +516,7 @@ func (b *Block) WithSeal(header *Header) *Block {
 		header:       &cpy,
 		transactions: b.transactions,
 		uncles:       b.uncles,
-		DposContext:  b.DposContext,
+		dposContext:  b.dposContext,
 	}
 }
 
