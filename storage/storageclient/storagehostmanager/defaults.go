@@ -10,13 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/common/unit"
 )
 
-// Those values are used to calculate the storage host evaluation
-const (
-	priceFloor               = float64(0.1)
-	priceExponentiationSmall = 0.75
-	priceExponentiationLarge = 5
-)
-
 // StorageHostManager related constant
 const (
 	saveFrequency                    = 2 * time.Minute
@@ -32,11 +25,11 @@ const (
 	scanQuantity            = 2500
 	maxScanSleep            = 6 * time.Hour
 	minScanSleep            = time.Hour + time.Minute*30
+	maxWorkersAllowed       = 80
+)
 
-	maxWorkersAllowed = 80
-	minScans          = 12
-
-	maxDowntime = 10 * 24 * time.Hour
+const (
+	scoreDefaultBase = 1000
 )
 
 // Presence factor related constants

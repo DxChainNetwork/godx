@@ -12,6 +12,7 @@ import (
 // price, and deposit price. Note the hostMarket should have a caching method.
 type hostMarket interface {
 	GetMarketPrice() MarketPrice
+	GetBlockNumber() uint64
 }
 
 // MarketPrice is the market price metrics from hostMarket
@@ -35,4 +36,9 @@ func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
 		Deposit:       common.BigInt0,
 		MaxDeposit:    common.BigInt0,
 	}
+}
+
+// GetBlockNumber get the current block number from storage host manager
+func (shm *StorageHostManager) GetBlockNumber() uint64 {
+	return shm.blockHeight
 }

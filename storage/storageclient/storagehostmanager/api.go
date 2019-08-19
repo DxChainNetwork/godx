@@ -60,18 +60,7 @@ func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo 
 // StorageHostRanks will return the storage host rankings based on their evaluations. The
 // higher the evaluation is, the higher order it will be placed
 func (api *PublicStorageHostManagerAPI) StorageHostRanks() (rankings []StorageHostRank) {
-	allHosts := api.shm.storageHostTree.All()
-	// based on the host information, calculate the evaluation
-	for _, host := range allHosts {
-		eval := api.shm.evalFunc(host)
-
-		rankings = append(rankings, StorageHostRank{
-			EvaluationDetail: eval.EvaluationDetail(eval.Evaluation(), false, false),
-			EnodeID:          host.EnodeID.String(),
-		})
-	}
-
-	return
+	return api.shm.StorageHostRanks()
 }
 
 // FilterMode will return the current storage host manager filter mode setting

@@ -9,34 +9,118 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
-// calculateEvaluationFunc will generate the function that returns the storage host evaluation
-// for each factor
-func (shm *StorageHostManager) calculateEvaluationFunc(rent storage.RentPayment) storagehosttree.EvaluationFunc {
-	return func(info storage.HostInfo) storagehosttree.HostEvaluation {
-		return storagehosttree.EvaluationCriteria{
-			PresenceFactor:         shm.presenceFactorCalc(info),
-			DepositFactor:          shm.depositFactorCalc(info, rent, shm),
-			InteractionFactor:      shm.interactionFactorCalc(info),
-			ContractPriceFactor:    shm.contractPriceFactorCalc(info, rent),
-			StorageRemainingFactor: shm.storageRemainingFactorCalc(info, rent),
-			UptimeFactor:           shm.uptimeFactorCalc(info),
-		}
+// HostEvaluator defines an interface that include methods that used to calculate
+// the storage host Evaluate and EvaluateDetail
+type HostEvaluator interface {
+	EvaluateDetail(info storage.HostInfo) EvaluationDetail
+	Evaluate(info storage.HostInfo) int64
+}
+
+// EvaluationDetail contains the detailed storage host evaluation factors
+type EvaluationDetail struct {
+	Evaluation int64 `json:"evaluation"`
+
+	PresenceScore         float64 `json:"presence_score"`
+	DepositScore          float64 `json:"deposit_score"`
+	InteractionScore      float64 `json:"interaction_score"`
+	ContractPriceScore    float64 `json:"contract_price_score"`
+	StorageRemainingScore float64 `json:"storage_remaining_score"`
+	UptimeScore           float64 `json:"uptime_score"`
+}
+
+type (
+	// defaultEvaluator is the default host evaluation rules.
+	defaultEvaluator struct {
+		market hostMarket
+		rent   storage.RentPayment
+	}
+
+	// defaultEvaluationScores contains the default criteria of host evaluation, which contains
+	// six scores: presenceScore, DepositFactor, ContractPriceFactor, StorageRemainingFactor,
+	// InteractionFactor and UptimeFactor.
+	defaultEvaluationScores struct {
+		presenceScore         float64
+		depositScore          float64
+		contractPriceScore    float64
+		storageRemainingScore float64
+		interactionScore      float64
+		uptimeScore           float64
+	}
+)
+
+// newDefaultEvaluator creates a new defaultEvaluator based on give storageHostManager and
+// rentPayment
+func newDefaultEvaluator(shm *StorageHostManager, rent storage.RentPayment) *defaultEvaluator {
+	return &defaultEvaluator{
+		market: shm,
+		rent:   rent,
 	}
 }
 
-// presenceFactorCalc calculates the factor value based on the existence of the
+// Evaluate evaluate the host info, and return the final score.
+func (de *defaultEvaluator) Evaluate(info storage.HostInfo) int64 {
+	// Calculate the scores of the host info
+	scs := de.calcScores(info)
+	// Based on scores, calculate the final score
+	return de.calcFinalScore(scs)
+}
+
+// EvaluateDetail evaluate the host info, and return the final score with the score details
+func (de *defaultEvaluator) EvaluateDetail(info storage.HostInfo) EvaluationDetail {
+	// Calculate the scores
+	scs := de.calcScores(info)
+	// Calculate the final score
+	sc := de.calcFinalScore(scs)
+	// Return the final score with the score details
+	return EvaluationDetail{
+		Evaluation:            sc,
+		PresenceScore:         scs.presenceScore,
+		DepositScore:          scs.depositScore,
+		InteractionScore:      scs.interactionScore,
+		ContractPriceScore:    scs.contractPriceScore,
+		StorageRemainingScore: scs.storageRemainingScore,
+		UptimeScore:           scs.uptimeScore,
+	}
+}
+
+// calcScores calculate the defaultEvaluationScores for the given host info
+func (de *defaultEvaluator) calcScores(info storage.HostInfo) *defaultEvaluationScores {
+	m, r := de.market, de.rent
+	scores := &defaultEvaluationScores{
+		presenceScore:         presenceScoreCalc(info, m),
+		depositScore:          depositScoreCalc(info, r, m),
+		contractPriceScore:    contractPriceScoreCalc(info, r, m),
+		storageRemainingScore: storageRemainingScoreCalc(info, r),
+		interactionScore:      interactionScoreCalc(info),
+		uptimeScore:           uptimeScoreCalc(info),
+	}
+	return scores
+}
+
+// calcFinalScore calculate the final store based on the score board
+func (de *defaultEvaluator) calcFinalScore(scores *defaultEvaluationScores) int64 {
+	total := scores.presenceScore * scores.depositScore * scores.contractPriceScore *
+		scores.storageRemainingScore * scores.interactionScore * scores.uptimeScore
+	total *= scoreDefaultBase
+	if total < 1 {
+		total = 1
+	}
+	return int64(total)
+}
+
+// presenceScoreCalc calculates the score based on the existence of the
 // storage host. The earlier it was discovered, the presence factor will be higher
 // The factor is linear to the presence duration, capped at lowValueLimit on lowTimeLimit,
 // and highValueLimit on highTimeLimit.
-func (shm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64 {
+func presenceScoreCalc(info storage.HostInfo, market hostMarket) float64 {
 	// If first seen is larger than current block height, return 0
-	if shm.blockHeight < info.FirstSeen {
+	blockNumber := market.GetBlockNumber()
+	if blockNumber < info.FirstSeen {
 		return 0
 	}
-	presence := shm.blockHeight - info.FirstSeen
+	presence := blockNumber - info.FirstSeen
 
 	if presence <= lowTimeLimit {
 		return lowValueLimit
@@ -48,9 +132,9 @@ func (shm *StorageHostManager) presenceFactorCalc(info storage.HostInfo) float64
 	}
 }
 
-// depositFactorCalc calculates the factor value based on the storage host's deposit setting. The higher
+// depositScoreCalc calculates the score based on the storage host's deposit setting. The higher
 // the deposit is, the higher evaluation it will get
-func (shm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
+func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
 	// Evaluate the deposit of the host
 	hostDeposit := evalHostDeposit(info, rent)
 	// Evaluate the deposit of the market
@@ -67,24 +151,24 @@ func (shm *StorageHostManager) depositFactorCalc(info storage.HostInfo, rent sto
 	return factor
 }
 
-// storageRemainingFactorCalc calculates the factor value based on the storage remaining, the more storage
+// storageRemainingScoreCalc calculates the score based on the storage remaining, the more storage
 // space the storage host remained, higher evaluation it will got. The baseline for storage is set to
 // required storage * storageBaseDivider
-func (shm *StorageHostManager) storageRemainingFactorCalc(info storage.HostInfo, settings storage.RentPayment) float64 {
+func storageRemainingScoreCalc(info storage.HostInfo, settings storage.RentPayment) float64 {
 	ratio := float64(info.RemainingStorage) / float64(expectedStoragePerContract(settings))
 	factor := ratio / (ratio + storageBaseDivider)
 	return factor
 }
 
-// interactionFactorCalc calculates the factor value based on the historical success interactions
+// interactionScoreCalc calculates the score based on the historical success interactions
 // and failed interactions. More success interactions will cause higher evaluation
-func (shm *StorageHostManager) interactionFactorCalc(info storage.HostInfo) float64 {
+func interactionScoreCalc(info storage.HostInfo) float64 {
 	successRatio := info.SuccessfulInteractionFactor / (info.SuccessfulInteractionFactor + info.FailedInteractionFactor)
 	return math.Pow(successRatio, interactionExponentialIndex)
 }
 
-// uptimeFactorCalc will punish the storage host who are frequently been offline
-func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
+// uptimeScoreCalc calculate the score based on historical uptime ratio
+func uptimeScoreCalc(info storage.HostInfo) float64 {
 	// Calculate the uptime ratio
 	upRate := getHostUpRate(info)
 	// upRate 0.98 is 1
@@ -95,9 +179,9 @@ func (shm *StorageHostManager) uptimeFactorCalc(info storage.HostInfo) float64 {
 	return upTimeFactor
 }
 
-// contractPriceFactorCalc calculates the factor value based on the contract price that storage host requested
+// contractPriceScoreCalc calculates the score based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
-func (shm *StorageHostManager) contractPriceFactorCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
+func contractPriceScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
 	// regulate host info and rent payment
 	regulateHostInfo(&info)
 	regulateRentPayment(&rent)

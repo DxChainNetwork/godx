@@ -36,7 +36,7 @@ func TestPresenceFactorCalc(t *testing.T) {
 		info := storage.HostInfo{
 			FirstSeen: firstSeen,
 		}
-		factor := shm.presenceFactorCalc(info)
+		factor := shm.presenceScoreCalc(info)
 		if test.presence <= lowTimeLimit {
 			if factor != lowValueLimit {
 				t.Errorf("low limit test failed")
@@ -51,8 +51,8 @@ func TestPresenceFactorCalc(t *testing.T) {
 			if test.presence == 0 || test.presence == math.MaxUint64 {
 				continue
 			}
-			factorSmaller := shm.presenceFactorCalc(storage.HostInfo{FirstSeen: firstSeen + 1})
-			factorLarger := shm.presenceFactorCalc(storage.HostInfo{FirstSeen: firstSeen - 1})
+			factorSmaller := shm.presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen + 1})
+			factorLarger := shm.presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen - 1})
 			if factorSmaller >= factor || factor >= factorLarger {
 				t.Errorf("Near range %d the factor not incrementing", test.presence)
 			}
@@ -71,7 +71,7 @@ func TestIllegalPresenceFactorCalc(t *testing.T) {
 	info := storage.HostInfo{
 		FirstSeen: firstSeen,
 	}
-	factor := shm.presenceFactorCalc(info)
+	factor := shm.presenceScoreCalc(info)
 	if firstSeen > blockHeight && factor != 0 {
 		t.Errorf("Illegal input for presence factor calculation does not give 0 factor")
 	}
@@ -112,7 +112,7 @@ func TestDepositFactorCalc(t *testing.T) {
 			deposit:      marketDeposit,
 			maxDeposit:   common.NewBigIntUint64(math.MaxUint64),
 		}
-		res := shm.depositFactorCalc(info, rent, market)
+		res := shm.depositScoreCalc(info, rent, market)
 		// Check the result is within range [0, 1)
 		if res < 0 || res >= 1 {
 			t.Errorf("Test %d illegal factor. Got %v", index, res)
@@ -258,7 +258,7 @@ func TestEvalHostDeposit(t *testing.T) {
 	}
 }
 
-// TestStorageRemainingFactorCalc test the functionality of storageRemainingFactorCalc
+// TestStorageRemainingFactorCalc test the functionality of storageRemainingScoreCalc
 func TestStorageRemainingFactorCalc(t *testing.T) {
 	expectedStorage := uint64(1e6)
 	tests := []struct {
@@ -286,7 +286,7 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 			ExpectedStorage: expectedStorage,
 			StorageHosts:    test.numHosts,
 		}
-		res := shm.storageRemainingFactorCalc(info, settings)
+		res := shm.storageRemainingScoreCalc(info, settings)
 		if res < 0 || res >= 1 {
 			t.Errorf("invalid result: %v", res)
 		}

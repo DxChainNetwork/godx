@@ -13,14 +13,13 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 	"github.com/Pallinder/go-randomdata"
 )
 
 // StorageHostRank will be used to show the rankings of the storage host
 // learnt by the storage client
 type StorageHostRank struct {
-	storagehosttree.EvaluationDetail
+	EvaluationDetail
 	EnodeID string
 }
 
@@ -124,9 +123,7 @@ func hostInfoGeneratorHighEvaluation(id enode.ID) storage.HostInfo {
 				Success:   true,
 			},
 		},
-		HistoricSuccessfulInteractions: 500,
-		HistoricFailedInteractions:     0,
-		FirstSeen:                      0,
+		FirstSeen: 0,
 	}
 }
 
@@ -145,12 +142,10 @@ func hostInfoGeneratorLowEvaluation(id enode.ID) storage.HostInfo {
 			SectorAccessPrice:      common.NewBigInt(1000 * 20003e10),
 			RemainingStorage:       1,
 		},
-		IP:                             ip,
-		EnodeID:                        id,
-		EnodeURL:                       fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
-		HistoricSuccessfulInteractions: 0,
-		HistoricFailedInteractions:     500,
-		FirstSeen:                      0,
+		IP:        ip,
+		EnodeID:   id,
+		EnodeURL:  fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
+		FirstSeen: 0,
 	}
 }
 

@@ -63,7 +63,7 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, hostInfo []enode.ID)
 	isWhitelist := fm == WhitelistFilter
 
 	// initialize filtered tree
-	shm.filteredTree = storagehosttree.New(shm.evalFunc)
+	shm.filteredTree = storagehosttree.New(shm.hostEvaluator)
 	shm.filteredHosts = make(map[enode.ID]struct{})
 	shm.filterMode = fm
 

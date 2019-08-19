@@ -5,7 +5,6 @@
 package storagehosttree
 
 import (
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -24,14 +23,14 @@ type node struct {
 
 	// total evaluation of the storage hosts, including the sum of all its' child's
 	// evaluation and the evaluation of node it self
-	evalTotal common.BigInt
+	evalTotal int64
 	entry     *nodeEntry
 }
 
 // nodeEntry is the information stored in a storage host tree node
 type nodeEntry struct {
 	storage.HostInfo
-	eval common.BigInt
+	eval int64
 }
 
 // nodeEntries defines a collection of node entry that implemented the sorting methods
@@ -39,8 +38,10 @@ type nodeEntry struct {
 type nodeEntries []nodeEntry
 
 // the storage host with higher weight will placed in the front of the list
-func (ne nodeEntries) Len() int           { return len(ne) }
-func (ne nodeEntries) Less(i, j int) bool { return ne[i].eval.Cmp(ne[j].eval) > 0 }
+func (ne nodeEntries) Len() int { return len(ne) }
+
+// TODO: check with mzhang whether this is less than or larger than
+func (ne nodeEntries) Less(i, j int) bool { return ne[i].eval < ne[j].eval }
 func (ne nodeEntries) Swap(i, j int)      { ne[i], ne[j] = ne[j], ne[i] }
 
 // newNode will create and initialize a new node object, which will be inserted into
@@ -58,11 +59,11 @@ func newNode(parent *node, entry *nodeEntry) *node {
 // nodeRemove will not remove the actual node from the tree
 // instead, it update the evaluation, and occupied status
 func (n *node) nodeRemove() {
-	n.evalTotal = n.evalTotal.Sub(n.entry.eval)
+	n.evalTotal = n.evalTotal - n.entry.eval
 	n.occupied = false
 	parent := n.parent
 	for parent != nil {
-		parent.evalTotal = parent.evalTotal.Sub(n.entry.eval)
+		parent.evalTotal = parent.evalTotal - n.entry.eval
 		parent = parent.parent
 	}
 }
@@ -81,7 +82,7 @@ func (n *node) nodeInsert(entry *nodeEntry) (nodesAdded int, nodeInserted *node)
 	}
 
 	// 2. add all child evaluation
-	n.evalTotal = n.evalTotal.Add(entry.eval)
+	n.evalTotal = n.evalTotal + entry.eval
 
 	// 3. check if the node is occupied
 	if !n.occupied {
@@ -115,18 +116,18 @@ func (n *node) nodeInsert(entry *nodeEntry) (nodesAdded int, nodeInserted *node)
 }
 
 // nodeWithEval will retrieve node with the specific evaluation
-func (n *node) nodeWithEval(eval common.BigInt) (*node, error) {
-	if eval.Cmp(n.evalTotal) > 0 {
+func (n *node) nodeWithEval(eval int64) (*node, error) {
+	if eval > n.evalTotal {
 		return nil, ErrEvaluationTooLarge
 	}
 
 	if n.left != nil {
-		if eval.Cmp(n.left.evalTotal) < 0 {
+		if eval < n.left.evalTotal {
 			return n.left.nodeWithEval(eval)
 		}
-		eval = eval.Sub(n.left.evalTotal)
+		eval = eval - n.left.evalTotal
 	}
-	if n.right != nil && eval.Cmp(n.right.evalTotal) < 0 {
+	if n.right != nil && eval < n.right.evalTotal {
 		return n.right.nodeWithEval(eval)
 	}
 

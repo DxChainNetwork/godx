@@ -204,20 +204,14 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 
 	// get the IP network and check if it is changed
 	// this is needed because the storage host can change its settings directly
-	ipnet, err := storagehosttree.IPNetwork(hi.IP)
+	ipNet, err := storagehosttree.IPNetwork(hi.IP)
 
-	if err == nil && ipnet.String() != hi.IPNetwork {
-		hi.IPNetwork = ipnet.String()
+	if err == nil && ipNet.String() != hi.IPNetwork {
+		hi.IPNetwork = ipNet.String()
 		hi.LastIPNetWorkChange = time.Now()
 	} else if err != nil {
 		shm.log.Error("failed to get the IP network information", "err", err.Error())
 	}
-
-	// update the historical interactions
-	shm.lock.RLock()
-	info := &hi
-	blockHeight := shm.blockHeight
-	shm.lock.RUnlock()
 
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)

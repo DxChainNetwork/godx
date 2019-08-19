@@ -27,7 +27,7 @@ type StorageHostManager struct {
 	eth storage.EthBackend
 
 	rent            storage.RentPayment
-	evalFunc        storagehosttree.EvaluationFunc
+	hostEvaluator   HostEvaluator
 	storageHostTree *storagehosttree.StorageHostTree
 
 	// ip violation check
@@ -67,8 +67,8 @@ func New(persistDir string) *StorageHostManager {
 		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
-	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
-	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
+	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
+	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
 	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
@@ -151,12 +151,12 @@ func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err err
 	shm.rent = rent
 
 	// update the storage host evaluation function
-	evalFunc := shm.calculateEvaluationFunc(rent)
-	shm.evalFunc = evalFunc
+	hostEvaluator := newDefaultEvaluator(shm, rent)
+	shm.hostEvaluator = hostEvaluator
 
 	// update the storage host tree and filtered tree evaluation func
-	err = shm.storageHostTree.SetEvaluationFunc(evalFunc)
-	err = common.ErrCompose(err, shm.filteredTree.SetEvaluationFunc(evalFunc))
+	err = shm.storageHostTree.SetEvaluator(hostEvaluator)
+	err = common.ErrCompose(err, shm.filteredTree.SetEvaluator(hostEvaluator))
 
 	return
 }
@@ -279,27 +279,13 @@ func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlack
 }
 
 // Evaluation will calculate and return the evaluation of a single storage host
-func (shm *StorageHostManager) Evaluation(host storage.HostInfo) (eval common.BigInt) {
-	return shm.evalFunc(host).Evaluation()
+func (shm *StorageHostManager) Evaluation(host storage.HostInfo) uint64 {
+	return shm.hostEvaluator.Evaluate(host)
 }
 
 // EvaluationDetail will calculate and return the evaluation detail of a single storage host
-func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) (detail storagehosttree.EvaluationDetail) {
-	// retrieve all active storage hosts
-	activeHosts := shm.ActiveStorageHosts()
-
-	// get the total evaluation
-	shm.lock.Lock()
-	defer shm.lock.Unlock()
-
-	totalEval := common.BigInt0
-	for _, activeHost := range activeHosts {
-		totalEval = totalEval.Add(shm.evalFunc(activeHost).Evaluation())
-	}
-
-	// compute the evaluation detail
-	detail = shm.evalFunc(host).EvaluationDetail(totalEval, false, false)
-	return
+func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) EvaluationDetail {
+	return shm.hostEvaluator.EvaluateDetail(host)
 }
 
 // AllHosts will return all available storage hosts
@@ -316,17 +302,15 @@ func (shm *StorageHostManager) StorageHostRanks() (rankings []StorageHostRank) {
 	defer shm.lock.RUnlock()
 
 	allHosts := shm.storageHostTree.All()
-
 	// based on the host information, calculate the evaluation
 	for _, host := range allHosts {
-		eval := shm.evalFunc(host)
+		evalDetail := shm.hostEvaluator.EvaluateDetail(host)
 
 		rankings = append(rankings, StorageHostRank{
-			EvaluationDetail: eval.EvaluationDetail(eval.Evaluation(), false, false),
+			EvaluationDetail: evalDetail,
 			EnodeID:          host.EnodeID.String(),
 		})
 	}
-
 	return
 }
 
