@@ -5,6 +5,8 @@
 package simulation
 
 import (
+	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/event"
@@ -13,8 +15,15 @@ import (
 )
 
 type FakeContractManagerBackend struct {
-	TestTypePositive bool
-	MsgType          uint64
+	steps   map[uint64]struct{}
+	sendMsg map[uint64]struct{}
+}
+
+func NewFakeContractManagerBackend() *FakeContractManagerBackend {
+	return &FakeContractManagerBackend{
+		steps:   make(map[uint64]struct{}),
+		sendMsg: make(map[uint64]struct{}),
+	}
 }
 
 func (fc *FakeContractManagerBackend) Syncing() bool {
@@ -32,7 +41,16 @@ func (fc *FakeContractManagerBackend) AccountManager() storage.ClientAccountMana
 }
 
 func (fc *FakeContractManagerBackend) SetupConnection(enodeURL string) (storage.Peer, error) {
-	return &FakeStoragePeer{TestTypePositive: fc.TestTypePositive, MsgType: fc.MsgType}, nil
+	// simulate the situation on failed to set up the storage connection
+	if _, exist := fc.steps[FakeSetUpConnectionFailed]; exist {
+		return nil, fmt.Errorf("storage client failed to setup the storage connection")
+	}
+
+	// create a fake storage peer used for simulating the storage connection
+	fs := NewFakeStoragePeer()
+	fs.SetSendMsg(fc.sendMsg)
+	fs.SetTestSteps(fs.steps)
+	return fs, nil
 }
 
 func (fc *FakeContractManagerBackend) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {

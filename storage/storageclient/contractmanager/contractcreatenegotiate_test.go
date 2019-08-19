@@ -7,17 +7,13 @@ package contractmanager
 import (
 	"testing"
 
-	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
 )
 
 // NOTE: the purpose of this test case is not to locate errors, it is just used to
 // see if the faked data works as expected
 func TestContractManager_ContractCreateNegotiate(t *testing.T) {
-	var negotiateTestBackend = &simulation.FakeContractManagerBackend{
-		TestTypePositive: true,
-		MsgType:          storage.HostAckMsg,
-	}
+	var negotiateTestBackend = simulation.NewFakeContractManagerBackend()
 
 	params := simulation.ContractParamsGenerator()
 	cm, err := NewFakeContractManager(negotiateTestBackend)

@@ -1,6 +1,11 @@
-=============== Aug 16, 2019 (PDT) ===============
-17:05:21.677235 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-17:05:21.678261 db@open opening
-17:05:21.678951 version@stat F·[] S·0B[] Sc·[]
-17:05:21.679213 db@janitor F·2 G·0
-17:05:21.679245 db@open done T·965.707µs
+=============== Aug 19, 2019 (PDT) ===============
+15:41:54.082440 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+15:41:54.083035 db@open opening
+15:41:54.083229 version@stat F·[] S·0B[] Sc·[]
+15:41:54.083494 db@janitor F·2 G·0
+15:41:54.083516 db@open done T·467.882µs
+15:41:54.260508 memdb@flush N·8571 S·3MiB
+15:41:54.273790 memdb@flush created L0@3 N·8571 S·1MiB "\x00_$..der,v2861":"\xff\xe8\xa5..ots,v3742"
+15:41:54.273826 version@stat F·[1] S·1MiB[1MiB] Sc·[0.25]
+15:41:54.274030 memdb@flush committed F·1 T·13.482301ms
+15:41:54.274319 journal@remove removed @1

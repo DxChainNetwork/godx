@@ -26,7 +26,7 @@ var rentPaymentTest = storage.RentPayment{
 
 func TestContractManager_SetRentPayment(t *testing.T) {
 	// create new contract manager
-	cm, err := NewFakeContractManager(positiveTestBackend)
+	cm, err := NewFakeContractManager(testContractManagerBackend)
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
 	}
