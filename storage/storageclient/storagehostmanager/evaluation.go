@@ -50,9 +50,19 @@ type (
 	}
 )
 
+var (
+	// ErasureCoding related settings. Default to param values defined in storage module,
+	// the value will only be changed in test cases
+	defaultNumSectors = storage.DefaultNumSectors
+	defaultMinSectors = storage.DefaultMinSectors
+)
+
 // newDefaultEvaluator creates a new defaultEvaluator based on give storageHostManager and
 // rentPayment
 func newDefaultEvaluator(shm *StorageHostManager, rent storage.RentPayment) *defaultEvaluator {
+	// regulate rent payment
+	regulateRentPayment(&rent)
+
 	return &defaultEvaluator{
 		market: shm,
 		rent:   rent,
@@ -61,6 +71,9 @@ func newDefaultEvaluator(shm *StorageHostManager, rent storage.RentPayment) *def
 
 // Evaluate evaluate the host info, and return the final score.
 func (de *defaultEvaluator) Evaluate(info storage.HostInfo) int64 {
+	// TODO: test the functionality of regulate
+	// regulate host info
+	regulateHostInfo(&info)
 	// Calculate the scores of the host info
 	scs := de.calcScores(info)
 	// Based on scores, calculate the final score
@@ -104,8 +117,8 @@ func (de *defaultEvaluator) calcFinalScore(scores *defaultEvaluationScores) int6
 	total := scores.presenceScore * scores.depositScore * scores.contractPriceScore *
 		scores.storageRemainingScore * scores.interactionScore * scores.uptimeScore
 	total *= scoreDefaultBase
-	if total < 1 {
-		total = 1
+	if total < minScore {
+		total = minScore
 	}
 	return int64(total)
 }
@@ -182,10 +195,6 @@ func uptimeScoreCalc(info storage.HostInfo) float64 {
 // contractPriceScoreCalc calculates the score based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
 func contractPriceScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
-	// regulate host info and rent payment
-	regulateHostInfo(&info)
-	regulateRentPayment(&rent)
-
 	// Evaluate the cost of host and market
 	hostContractCost := evalContractCost(info, rent)
 	marketContractCost := evalMarketContractCost(market, rent)
@@ -332,7 +341,7 @@ func estimateContractFund(settings storage.RentPayment) common.BigInt {
 // expectedStoragePerContract evaluate the storage per contract.
 // TODO: The function should be imported from contract manager
 func expectedStoragePerContract(settings storage.RentPayment) uint64 {
-	return settings.ExpectedStorage * uint64(storage.DefaultNumSectors) / uint64(storage.DefaultMinSectors) / uint64(settings.StorageHosts)
+	return settings.ExpectedStorage * uint64(defaultNumSectors) / uint64(defaultMinSectors) / uint64(settings.StorageHosts)
 }
 
 // expectedUploadSizePerContract evaluate the expected upload size per contract

@@ -79,7 +79,7 @@ func TestStorageHostManager_ScanValidation(t *testing.T) {
 	info1 := hostInfoGenerator()
 	info2 := info1
 	shm.scanLookup[info1.EnodeID] = struct{}{}
-	shm.scanValidation(info2)
+	shm.startScanning(info2)
 	go func() {
 		time.Sleep(1 * time.Second)
 		t.Fatalf("the read lock failed to release, and the function scan validation should return immediately")

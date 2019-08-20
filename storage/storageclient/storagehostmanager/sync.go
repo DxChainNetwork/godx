@@ -113,7 +113,7 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 		}
 
 		// start the scan
-		shm.scanValidation(info)
+		shm.startScanning(info)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 	}
 
 	// start the scan
-	shm.scanValidation(oldInfo)
+	shm.startScanning(oldInfo)
 }
 
 // parseHostAnnouncement will parse the storage host announcement into storage.HostInfo type

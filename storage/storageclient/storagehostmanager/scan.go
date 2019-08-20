@@ -26,20 +26,17 @@ func (shm *StorageHostManager) scan() {
 	if err := shm.waitSync(); err != nil {
 		return
 	}
-
 	// get all storage hosts who have not been scanned before or no historical information
 	allStorageHosts := shm.storageHostTree.All()
 	for _, host := range allStorageHosts {
 		if len(host.ScanRecords) == 0 {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 	}
-
 	// indicate the initial scan is finished
 	if err := shm.waitScanFinish(); err != nil {
 		return
 	}
-
 	shm.lock.Lock()
 	shm.initialScan = true
 	shm.lock.Unlock()
@@ -78,11 +75,11 @@ func (shm *StorageHostManager) autoScan() {
 		// queued for scan, online storage host has higher
 		// priority to be scanned than offline storage host
 		for _, host := range onlineHosts {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 
 		for _, host := range offlineHosts {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 
 		// sleep for a random amount of time, then schedule scan again
@@ -99,8 +96,9 @@ func (shm *StorageHostManager) autoScan() {
 	}
 }
 
-// scanValidation will scan the storage host added
-func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
+// startScanning will first check whether the scan for the host info is needed. If needed, start a goroutine
+// to scan the storage host added
+func (shm *StorageHostManager) startScanning(hi storage.HostInfo) {
 	shm.log.Debug("Started Scan Validation")
 
 	// verify if the storage host is already in scan pool

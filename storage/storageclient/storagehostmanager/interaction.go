@@ -73,7 +73,7 @@ func InteractionTypeToName(it InteractionType) string {
 	if _, exist := interactionTypeToNameDict[it]; !exist {
 		return ""
 	}
-	return InteractionTypeToName(it)
+	return interactionTypeToNameDict[it]
 }
 
 // InteractionNameToType translate the human readable interaction name to type

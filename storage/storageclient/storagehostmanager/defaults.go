@@ -30,6 +30,7 @@ const (
 
 const (
 	scoreDefaultBase = 1000
+	minScore         = 1
 )
 
 // Presence factor related constants

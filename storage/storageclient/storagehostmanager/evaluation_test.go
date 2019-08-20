@@ -12,7 +12,31 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-func TestPresenceFactorCalc(t *testing.T) {
+func init() {
+	// initialize the erasure coding related params
+	defaultNumSectors = 2
+	defaultMinSectors = 1
+}
+
+// TestDefaultEvaluator_calFinalScore test defaultEvaluator.calcFinalScore
+func TestDefaultEvaluator_calFinalScore(t *testing.T) {
+	tests := []struct {
+		scs    defaultEvaluationScores
+		expect int64
+	}{
+		{scs: defaultEvaluationScores{1, 1, 1, 1, 1, 1}, expect: scoreDefaultBase},
+		{scs: defaultEvaluationScores{0, 0, 0, 0, 0, 0}, expect: minScore},
+	}
+	for i, test := range tests {
+		de := &defaultEvaluator{}
+		sc := de.calcFinalScore(&test.scs)
+		if sc != test.expect {
+			t.Errorf("Test %v: unexpected score. Got %v, Expect %v", i, sc, test.expect)
+		}
+	}
+}
+
+func TestPresenceScoreCalc(t *testing.T) {
 	tests := []struct {
 		presence uint64
 	}{
@@ -62,7 +86,7 @@ func TestPresenceFactorCalc(t *testing.T) {
 
 // TestIllegalPresenceFactorCalc test the illegal case of host manager's blockHeight is smaller
 // than the first seen, which should yield a factor of 0
-func TestIllegalPresenceFactorCalc(t *testing.T) {
+func TestIllegalPresenceScoreCalc(t *testing.T) {
 	firstSeen := uint64(30)
 	blockHeight := uint64(10)
 	hm := &fakeHostMarket{
@@ -78,7 +102,7 @@ func TestIllegalPresenceFactorCalc(t *testing.T) {
 }
 
 // TestDepositFactorCalc test the functionality of StorageHostManagerdepositFactorCalc
-func TestDepositFactorCalc(t *testing.T) {
+func TestDepositScoreCalc(t *testing.T) {
 	tests := []struct {
 		ratio float64
 	}{
@@ -189,7 +213,7 @@ func TestEvalHostDeposit(t *testing.T) {
 			numHosts:        1,
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
-			maxDoposit:      common.NewBigIntUint64(30000), // maxDeposit is enough
+			maxDoposit:      common.NewBigIntUint64(30000),
 			expectedDeposit: common.NewBigIntUint64(20000),
 		},
 		{
@@ -199,7 +223,7 @@ func TestEvalHostDeposit(t *testing.T) {
 			numHosts:        3,
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
-			maxDoposit:      common.NewBigIntUint64(30000), // maxDeposit is enough
+			maxDoposit:      common.NewBigIntUint64(30000),
 			expectedDeposit: common.NewBigIntUint64(20000),
 		},
 		{
@@ -210,7 +234,7 @@ func TestEvalHostDeposit(t *testing.T) {
 			storagePrice:    common.NewBigIntUint64(100),
 			depositPrice:    common.NewBigIntUint64(200),
 			maxDoposit:      common.NewBigIntUint64(15000), // maxDeposit is not enough
-			expectedDeposit: common.NewBigIntUint64(15000), // result capped at max dpeposit
+			expectedDeposit: common.NewBigIntUint64(15000), // result capped at max deposit
 		},
 		{
 			// client fund is not enough to pay the contract price
@@ -221,18 +245,6 @@ func TestEvalHostDeposit(t *testing.T) {
 			depositPrice:    common.NewBigIntUint64(200),
 			maxDoposit:      common.NewBigIntUint64(15000),
 			expectedDeposit: common.BigInt0,
-		},
-		{
-			// negative and zero settings
-			contractPrice:          common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			fund:                   common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			numHosts:               0,
-			storagePrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			depositPrice:           common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			maxDoposit:             common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			uploadBandwithPrice:    common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			downloadBandwidthPrice: common.BigInt0.Sub(common.NewBigIntUint64(100)),
-			expectedDeposit:        common.NewBigIntUint64(0),
 		},
 	}
 	for index, test := range tests {
@@ -298,4 +310,148 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 		}
 		lastResult = res
 	}
+}
+
+// TestStorageRemainingScoreCalc test the functionality of storageRemainingScoreCalc.
+// The returned score should be within range [0, 1), and increment as remaining storage increases
+func TestStorageRemainingScoreCalc(t *testing.T) {
+	baseStorage := uint64(10000000000)
+	tests := []struct {
+		remainingStorage uint64
+		expectedStorage  uint64
+		numHosts         uint64
+	}{
+		{0, baseStorage, 1},
+		{uint64(0.1 * float64(baseStorage)), baseStorage, 1},
+		{uint64(0.5 * float64(baseStorage)), baseStorage, 1},
+		{baseStorage, baseStorage * 30, 30},
+		{baseStorage * 3, baseStorage, 1},
+		{10 * baseStorage, baseStorage, 1},
+		{30 * baseStorage, baseStorage, 1},
+		{100 * baseStorage, baseStorage, 1},
+	}
+	type scoreRecord struct{ ratio, sc float64 }
+	var results []scoreRecord
+	for _, test := range tests {
+		ratio := float64(test.remainingStorage) * float64(test.numHosts) * float64(defaultMinSectors) /
+			float64(defaultNumSectors) / float64(test.expectedStorage)
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				RemainingStorage: test.remainingStorage,
+			},
+		}
+		settings := storage.RentPayment{
+			ExpectedStorage: test.expectedStorage,
+			StorageHosts:    test.numHosts,
+		}
+		sc := storageRemainingScoreCalc(info, settings)
+		// Check whether the score is within range 0 to 1
+		if sc < 0 || sc >= 1 {
+			t.Fatalf("unexpected score %v. Not within range [0, 1)", sc)
+		}
+		// Add the result to results
+		results = append(results, scoreRecord{ratio, sc})
+
+		if test.remainingStorage == 0 {
+			continue
+		}
+		// Check whether the score in incrementing with the remaining storage
+		const decrementRatio = 0.99
+		const incrementRatio = 1.01
+		lowInfo := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				RemainingStorage: uint64(float64(test.remainingStorage) * decrementRatio),
+			},
+		}
+		highInfo := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				RemainingStorage: uint64(float64(test.remainingStorage) * incrementRatio),
+			},
+		}
+		lowSc := storageRemainingScoreCalc(lowInfo, settings)
+		highSc := storageRemainingScoreCalc(highInfo, settings)
+
+		if sc <= lowSc || sc >= highSc {
+			t.Fatalf("In ratio %v, score not incrementing: %v -> %v -> %v", ratio, lowSc, sc, highSc)
+		}
+	}
+	// Display the result
+	for _, result := range results {
+		t.Logf("At remainingStorage / expectedStorage ratio %7.4f, got score %7.4f", result.ratio, result.sc)
+	}
+}
+
+// TestEvalContractCost test the functionality of evalContractCost
+func TestEvalContractCost(t *testing.T) {
+	tests := []struct {
+		contractPrice    common.BigInt
+		storagePrice     common.BigInt
+		uploadPrice      common.BigInt
+		downloadPrice    common.BigInt
+		numHosts         uint64
+		period           uint64
+		expectedUpload   uint64
+		expectedDownload uint64
+		expectedStorage  uint64
+		expectedCost     common.BigInt
+	}{
+		{
+			contractPrice: common.NewBigInt(1),
+			numHosts:      1,
+			expectedCost:  common.NewBigInt(2),
+		},
+		{
+			storagePrice:    common.NewBigInt(10),
+			numHosts:        1,
+			period:          10,
+			expectedStorage: 5,
+			expectedCost:    common.NewBigInt(1000),
+		},
+		{
+			uploadPrice:    common.NewBigInt(100),
+			numHosts:       1,
+			expectedUpload: 10,
+			expectedCost:   common.NewBigInt(1000),
+		},
+		{
+			downloadPrice:    common.NewBigInt(100),
+			numHosts:         1,
+			expectedDownload: 10,
+			expectedCost:     common.NewBigInt(1000),
+		},
+		{
+			contractPrice:    common.NewBigInt(1),
+			storagePrice:     common.NewBigInt(10),
+			uploadPrice:      common.NewBigInt(100),
+			downloadPrice:    common.NewBigInt(100),
+			numHosts:         1,
+			period:           10,
+			expectedUpload:   10,
+			expectedDownload: 10,
+			expectedStorage:  5,
+			expectedCost:     common.NewBigInt(3002),
+		},
+	}
+	for i, test := range tests {
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				ContractPrice:          test.contractPrice,
+				StoragePrice:           test.storagePrice,
+				UploadBandwidthPrice:   test.uploadPrice,
+				DownloadBandwidthPrice: test.downloadPrice,
+			},
+		}
+		rent := storage.RentPayment{
+			StorageHosts:     test.numHosts,
+			Period:           test.period,
+			ExpectedStorage:  test.expectedStorage,
+			ExpectedDownload: test.expectedDownload,
+			ExpectedUpload:   test.expectedUpload,
+		}
+		cost := evalContractCost(info, rent)
+		if cost.Cmp(test.expectedCost) != 0 {
+			t.Errorf("Test %v: cost not expected. Got %v, Expect %v", i, cost, test.expectedCost)
+		}
+	}
+
 }

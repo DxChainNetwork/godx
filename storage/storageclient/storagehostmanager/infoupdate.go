@@ -13,9 +13,6 @@ import (
 // hostConfigUpdate calculate the try to update the host config wight the host info.
 // It will update the uptime fields as well as the interaction fields.
 func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, err error) error {
-	shm.lock.Lock()
-	defer shm.lock.Unlock()
-
 	// if error happens due to the backend is not online, directly return
 	if err != nil && !shm.b.Online() {
 		return nil
@@ -41,7 +38,8 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, err error) 
 	}
 }
 
-// whetherRemoveHost decide whether to remove the host from host manager with the given host info
+// whetherRemoveHost decide whether to remove the host from host manager with the given host info.
+// The decision is made upon whether the uprate is above the a certain criteria
 func whetherRemoveHost(info storage.HostInfo, currentBlockHeight uint64) bool {
 	upRate := getHostUpRate(info)
 	criteria := calcHostRemoveCriteria(info, currentBlockHeight)

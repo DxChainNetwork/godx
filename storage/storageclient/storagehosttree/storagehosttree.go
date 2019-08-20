@@ -204,6 +204,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 
 	// 1. handle addrBlacklist
 	for _, enodeID := range addrBlacklist {
+		// TODO: test the functionality of blacklist
 		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
@@ -213,6 +214,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 
 	// 2. handle blacklist
 	for _, enodeID := range blacklist {
+		// TODO: test the functionality of blacklist
 		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
