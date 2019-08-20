@@ -233,3 +233,18 @@ func (cm *ContractManager) HostHealthMap() (infoTable storage.HostHealthInfoTabl
 
 	return
 }
+
+// isOffline will check if a storage host is online or not based on the number of scanRecords
+// and the successful rate of the records
+func isOffline(host storage.HostInfo) (offline bool) {
+	if len(host.ScanRecords) < 1 {
+		return true
+	}
+
+	if len(host.ScanRecords) == 1 {
+		return !host.ScanRecords[0].Success
+	}
+
+	offline = !(host.ScanRecords[len(host.ScanRecords)-1].Success || host.ScanRecords[len(host.ScanRecords)-2].Success)
+	return
+}

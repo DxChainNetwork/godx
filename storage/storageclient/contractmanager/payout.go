@@ -13,19 +13,19 @@ import (
 )
 
 // calculatePayouts calculates both storage client and storage host payouts
-func calculatePayouts(contractPrice common.BigInt, funding common.BigInt, basePrice common.BigInt, storagePrice common.BigInt, deposit common.BigInt, maxDeposit common.BigInt, baseDeposit common.BigInt, startHeight uint64, endHeight uint64, rentPayment storage.RentPayment) (clientPayout common.BigInt, hostPayout common.BigInt, err error) {
+func calculatePayoutsAndHostDeposit(hostInfo storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseDeposit common.BigInt, startHeight uint64, endHeight uint64, rentPayment storage.RentPayment) (clientPayout common.BigInt, hostPayout common.BigInt, hostDeposit common.BigInt, err error) {
 	// calculate the period and expectedStorage
 	period := endHeight - startHeight
 	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts
 
 	// calculate the client payout
-	if clientPayout, err = calculateClientPayout(contractPrice, funding, basePrice); err != nil {
+	if clientPayout, err = calculateClientPayout(hostInfo.ContractPrice, funding, basePrice); err != nil {
 		return
 	}
 
 	// calculate the host payout
-	hostDeposit := calculateHostDeposit(clientPayout, storagePrice, deposit, maxDeposit, baseDeposit, period, expectedStorage)
-	hostPayout = calculateHostPayout(hostDeposit, contractPrice, basePrice)
+	hostDeposit = calculateHostDeposit(clientPayout, hostInfo.StoragePrice, hostInfo.Deposit, hostInfo.MaxDeposit, baseDeposit, period, expectedStorage)
+	hostPayout = calculateHostPayout(hostDeposit, hostInfo.ContractPrice, basePrice)
 	return
 }
 
