@@ -312,7 +312,10 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 	scs := client.contractManager.GetStorageContractSet()
 
 	// Find the contractID formed by this host
-	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contractID, exist := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	if !exist {
+		return fmt.Errorf("contract cannot be found using the provided host information")
+	}
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
 		return fmt.Errorf("contract does not exist: %s", contractID.String())
@@ -560,7 +563,10 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 	scs := client.contractManager.GetStorageContractSet()
 
 	// find the contractID formed by this host
-	contractID := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	contractID, exist := scs.GetContractIDByHostID(hostInfo.EnodeID)
+	if !exist {
+		return fmt.Errorf("the contract cannot be found with the provided hostID")
+	}
 	contract, exist := scs.Acquire(contractID)
 	if !exist {
 		return fmt.Errorf("not exist this contract: %s", contractID.String())

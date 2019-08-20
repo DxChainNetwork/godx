@@ -370,7 +370,11 @@ func (w *worker) updateWorkerContractID(contractID storage.ContractID) (*storage
 	}
 
 	scs := cm.GetStorageContractSet()
-	renewContractID := scs.GetContractIDByHostID(w.hostID)
+	renewContractID, exist := scs.GetContractIDByHostID(w.hostID)
+	if !exist {
+		return nil, ErrNoContractsWithHost
+	}
+
 	if contract, exist := cm.RetrieveActiveContract(renewContractID); exist {
 		w.contract = contract
 		w.hostID = contract.EnodeID

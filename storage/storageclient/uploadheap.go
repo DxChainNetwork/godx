@@ -194,7 +194,10 @@ func (client *StorageClient) createUnfinishedSegments(entry *dxfile.FileSetEntry
 		}
 		for sectorIndex, sectorSet := range sectors {
 			for _, sector := range sectorSet {
-				contractID := client.contractManager.GetStorageContractSet().GetContractIDByHostID(sector.HostID)
+				contractID, exist := client.contractManager.GetStorageContractSet().GetContractIDByHostID(sector.HostID)
+				if !exist {
+					continue
+				}
 				if meta, ok := client.contractManager.GetStorageContractSet().RetrieveContractMetaData(contractID); !ok || !meta.Status.RenewAbility {
 					continue
 				}

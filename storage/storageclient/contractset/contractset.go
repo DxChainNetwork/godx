@@ -290,8 +290,9 @@ func (scs *StorageContractSet) Contracts() map[storage.ContractID]*Contract {
 }
 
 // GetContractIDByHostID will retrieve the contractID based on the hostID provided
-func (scs *StorageContractSet) GetContractIDByHostID(hostID enode.ID) storage.ContractID {
+func (scs *StorageContractSet) GetContractIDByHostID(hostID enode.ID) (storage.ContractID, bool) {
 	scs.lock.Lock()
 	defer scs.lock.Unlock()
-	return scs.hostToContractID[hostID]
+	id, exist := scs.hostToContractID[hostID]
+	return id, exist
 }
