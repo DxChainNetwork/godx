@@ -8,11 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
-
 	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 )
 
 func TestContractManager_ContractCreateNegotiate(t *testing.T) {
