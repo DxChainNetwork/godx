@@ -87,7 +87,7 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 	}
 
 	// insert node and update the hostPool
-	_, node := n.nodeInsert(entry)
+	_, node := t.root.nodeInsert(entry)
 	t.hostPool[hi.EnodeID] = node
 
 	return nil

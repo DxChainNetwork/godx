@@ -232,7 +232,7 @@ func TestStorageHostTree_SelectRandomSize(t *testing.T) {
 		expectedNum      int
 	}{
 		{3, 3},
-		{10, 6},
+		{10, 5},
 	}
 	for _, test := range tests {
 		fe := newFakeEvaluator(hostDataSet)
@@ -334,6 +334,10 @@ func treeConsistenceValidation(n *node) error {
 
 func compareEval(n *node) error {
 	org := n.entry.eval
+	if !n.occupied {
+		org = 0
+	}
+
 	if n.left != nil && n.right != nil {
 		sum := n.left.evalTotal + n.right.evalTotal
 		sum = org + sum
