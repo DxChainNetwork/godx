@@ -234,6 +234,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 		}
 
 		randEval := r.Int63n(t.root.evalTotal)
+
 		node, err := t.root.nodeWithEval(randEval)
 
 		// TODO (mzhang): better error handling

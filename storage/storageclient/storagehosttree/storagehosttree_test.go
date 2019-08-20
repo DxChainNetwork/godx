@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -26,30 +27,30 @@ type (
 
 var (
 	hostDataSet = map[enode.ID]hostInfo{
-		enode.HexID("0x1"): {"99.0.86.9", 1},
-		enode.HexID("0x2"): {"104.143.92.125", 2},
-		enode.HexID("0x3"): {"104.237.91.15", 3},
-		enode.HexID("0x4"): {"185.192.69.89", 4},
-		enode.HexID("0x5"): {"104.238.46.146", 5},
-		enode.HexID("0x6"): {"104.238.46.156", 6},
+		enode.ID([32]byte{1}): {"99.0.86.9", 1},
+		enode.ID([32]byte{2}): {"104.143.92.125", 2},
+		enode.ID([32]byte{3}): {"104.237.91.15", 3},
+		enode.ID([32]byte{4}): {"185.192.69.89", 4},
+		enode.ID([32]byte{5}): {"104.238.46.146", 5},
+		enode.ID([32]byte{6}): {"104.238.46.156", 6},
 	}
 
 	hostDataSet2 = map[enode.ID]hostInfo{
-		enode.HexID("0x1"): {"99.0.86.9", 1},
-		enode.HexID("0x2"): {"104.143.92.125", 1},
-		enode.HexID("0x3"): {"104.237.91.15", 1},
-		enode.HexID("0x4"): {"185.192.69.89", 1},
-		enode.HexID("0x5"): {"104.238.46.146", 1},
-		enode.HexID("0x6"): {"104.238.46.156", 1},
+		enode.ID([32]byte{1}): {"99.0.86.9", 1},
+		enode.ID([32]byte{2}): {"104.143.92.125", 1},
+		enode.ID([32]byte{3}): {"104.237.91.15", 1},
+		enode.ID([32]byte{4}): {"185.192.69.89", 1},
+		enode.ID([32]byte{5}): {"104.238.46.146", 1},
+		enode.ID([32]byte{6}): {"104.238.46.156", 1},
 	}
 
 	hostDataSet3 = map[enode.ID]hostInfo{
-		enode.HexID("0x1"): {"99.0.86.9", 0},
-		enode.HexID("0x2"): {"104.143.92.125", 0},
-		enode.HexID("0x3"): {"104.237.91.15", 0},
-		enode.HexID("0x4"): {"185.192.69.89", 0},
-		enode.HexID("0x5"): {"104.238.46.146", 0},
-		enode.HexID("0x6"): {"104.238.46.156", 1},
+		enode.ID([32]byte{1}): {"99.0.86.9", 0},
+		enode.ID([32]byte{2}): {"104.143.92.125", 0},
+		enode.ID([32]byte{3}): {"104.237.91.15", 0},
+		enode.ID([32]byte{4}): {"185.192.69.89", 0},
+		enode.ID([32]byte{5}): {"104.238.46.146", 0},
+		enode.ID([32]byte{6}): {"104.238.46.156", 1},
 	}
 )
 
@@ -116,7 +117,7 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 		t.Fatalf("error newNode test tree: %v", err)
 	}
 	// pick the node to modify. Archive the oldNode entry
-	id := enode.HexID("0x1")
+	id := enode.ID([32]byte{1})
 	ptr, exists := tree.hostPool[id]
 	if !exists {
 		t.Fatalf("error: host does not exist")
@@ -171,7 +172,7 @@ func TestStorageHostTree_Remove(t *testing.T) {
 		t.Fatalf("error new test tree: %v", err)
 	}
 
-	idToRemove := enode.HexID("0x1")
+	idToRemove := enode.ID([32]byte{1})
 	if err = tree.Remove(idToRemove); err != nil {
 		t.Fatalf("error: %s", err.Error())
 	}
@@ -185,7 +186,7 @@ func TestStorageHostTree_Remove(t *testing.T) {
 
 func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
 	// Define the constants to be used in this test
-	notExistID := enode.HexID("0x12345")
+	notExistID := enode.ID([32]byte{10})
 
 	fe := newFakeEvaluator(hostDataSet)
 	tree, err := newTestStorageHostTree(fe)
@@ -223,16 +224,61 @@ func TestStorageHostTree_SetEvaluationFunc(t *testing.T) {
 	}
 }
 
-func TestStorageHostTree_SelectRandom(t *testing.T) {
-	fe := newFakeEvaluator(hostDataSet)
+// TestStorageHostTree_SelectRandomNumber test the number of host returned by SelectRandom:
+// 1. The number to select is smaller than host number, selected host number should be num to select
+// 2. The number to select is larger than host number, selected host number should be total number of hosts
+func TestStorageHostTree_SelectRandomSize(t *testing.T) {
+	tests := []struct {
+		numHostsToSelect int
+		expectedNum      int
+	}{
+		{3, 3},
+		{10, 6},
+	}
+	for _, test := range tests {
+		fe := newFakeEvaluator(hostDataSet)
+		tree, err := newTestStorageHostTree(fe)
+		if err != nil {
+			t.Fatalf("error new test tree: %v", err)
+		}
+		infos := tree.SelectRandom(test.numHostsToSelect, nil, nil)
+		if len(infos) != test.expectedNum {
+			t.Errorf("info size not expected. Got %v, Expect %v", len(infos), test.expectedNum)
+		}
+	}
+}
+
+// TestStorageHostTree_SelectRandomWeight test whether the select random is based on the weight.
+// Use an input with one host with weight 1 and rest with weight 0. The host with weight 1 should
+// be always selected.
+func TestStorageHostTree_SelectRandomWeight(t *testing.T) {
+	data := hostDataSet3
+	// Check whether the input dataset has the expected property
+	var selectedID enode.ID
+	var selectedInfo hostInfo
+	for id, info := range data {
+		if info.eval != 0 {
+			emptyHostInfo := hostInfo{}
+			if selectedID != enode.ID([32]byte{}) || selectedInfo != emptyHostInfo {
+				t.Fatal("invalid input data")
+			}
+			selectedID = id
+			selectedInfo = info
+		}
+	}
+	fe := newFakeEvaluator(hostDataSet3)
 	tree, err := newTestStorageHostTree(fe)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
-
-	infos := tree.SelectRandom(10, nil, nil)
-	if len(infos) != 0 {
-		t.Errorf("the returned host information should be none, because scans all failed")
+	for i := 0; i != 10; i++ {
+		infos := tree.SelectRandom(1, nil, nil)
+		if len(infos) != 1 {
+			t.Fatalf("unexpected selected host info size. Expect %v, Got %v", 1, len(infos))
+		}
+		if infos[0].EnodeID != selectedID {
+			t.Errorf("Unexpected node to be selected. Expect %v, Got %v", infos[0].EnodeID, selectedID)
+		}
 	}
 }
 
@@ -243,6 +289,10 @@ func createHostInfo(ip string, id enode.ID, accept bool) storage.HostInfo {
 		},
 		IP:      ip,
 		EnodeID: id,
+		ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+			Timestamp: time.Now(),
+			Success:   true,
+		}},
 	}
 }
 
@@ -256,6 +306,7 @@ func treeValidation(root *node, expectedRootTotal int64) error {
 	if root.evalTotal != expectedRootTotal {
 		return fmt.Errorf("root total not expected. Got %v, Expect %v", root.evalTotal, expectedRootTotal)
 	}
+	return nil
 }
 
 // treeConsistenceValidation checks whether the tree is consistence in weight.
