@@ -26,6 +26,18 @@ func NewFakeContractManagerBackend() *FakeContractManagerBackend {
 	}
 }
 
+func (fc *FakeContractManagerBackend) SetSteps(steps map[uint64]struct{}) {
+	fc.steps = steps
+}
+
+func (fc *FakeContractManagerBackend) SetSendMsg(msgCodes []uint64) {
+	for _, msgCode := range msgCodes {
+		fc.sendMsg[msgCode] = struct{}{}
+	}
+}
+
+// ===== ===== ===== BACKEND METHODS ===== ===== =====
+
 func (fc *FakeContractManagerBackend) Syncing() bool {
 	return false
 }

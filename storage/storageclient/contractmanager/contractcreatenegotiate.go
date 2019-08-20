@@ -60,7 +60,7 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	}
 
 	// handleErr will handle the errors occurred in the negotiation process
-	defer cm.handleNegotiationErr(negotiateErr, hostInfo.EnodeID, sp)
+	defer cm.handleNegotiationErr(&negotiateErr, hostInfo.EnodeID, sp)
 
 	// 2. draft storage contract negotiation
 	if storageContract, err = draftStorageContractNegotiate(sp, account, wallet, storageContract); err != nil {
@@ -128,7 +128,7 @@ func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID 
 // 2. ErrClientCommit      ->  send commit failed message, wait response
 // 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
 // 4. ErrHostNegotiate     ->  punish host, check and update the connection
-func (cm *ContractManager) handleNegotiationErr(err error, hostID enode.ID, sp storage.Peer) {
+func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp storage.Peer) {
 	// if no error, reward the host and return directly
 	if err == nil {
 		cm.hostManager.IncrementSuccessfulInteractions(hostID)
@@ -137,15 +137,15 @@ func (cm *ContractManager) handleNegotiationErr(err error, hostID enode.ID, sp s
 
 	// otherwise, based on the error type, handle it differently
 	switch {
-	case common.ErrContains(err, storage.ErrClientNegotiate):
+	case common.ErrContains(*err, storage.ErrClientNegotiate):
 		_ = sp.SendClientNegotiateErrorMsg()
-	case common.ErrContains(err, storage.ErrClientCommit):
+	case common.ErrContains(*err, storage.ErrClientCommit):
 		_ = sp.SendClientCommitFailedMsg()
-	case common.ErrContains(err, storage.ErrHostNegotiate):
+	case common.ErrContains(*err, storage.ErrHostNegotiate):
 		cm.hostManager.IncrementFailedInteractions(hostID)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		return
-	case common.ErrContains(err, storage.ErrHostCommit):
+	case common.ErrContains(*err, storage.ErrHostCommit):
 		cm.hostManager.IncrementFailedInteractions(hostID)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		_ = sp.SendClientAckMsg()

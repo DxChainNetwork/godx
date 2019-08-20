@@ -8,6 +8,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+
+	"github.com/DxChainNetwork/godx/storage"
+
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
 )
 
@@ -34,4 +38,51 @@ func TestContractManager_ContractCreateNegotiate(t *testing.T) {
 	if !reflect.DeepEqual(rmeta, meta) {
 		t.Fatalf("the contract received is not equivlent to the contract saved in db")
 	}
+}
+
+func TestContractManager_HostFailedToCommit(t *testing.T) {
+	// set up storage connection for roll back operation
+	negotiationMsg := []uint64{simulation.FakeClientCommitSuccessFailed}
+	var negotiateTestBackend = simulation.NewFakeContractManagerBackend()
+	negotiateTestBackend.SetSendMsg(negotiationMsg)
+
+	// create a fake contract manager
+	cm, err := NewFakeContractManager(negotiateTestBackend)
+	if err != nil {
+		t.Fatalf("failed to fake the contract manager: %s", err.Error())
+	}
+
+	// create contract parameter and insert host information
+	params := simulation.ContractParamsGenerator()
+	originalFailedInteraction := params.Host.RecentFailedInteractions
+	if err := insertStorageHostInfo(cm, params.Host); err != nil {
+		t.Fatalf("failed to insert host information: %s", err.Error())
+	}
+
+	// call the ContractCreteNegotiate
+	meta, err := cm.ContractCreateNegotiate(params)
+	if err != storage.ErrHostCommit {
+		t.Fatalf("error: expected error to be %s, got %s", storage.ErrHostCommit.Error(), err.Error())
+	}
+
+	// check to see if the contract is saved in the db
+	if _, exist := cm.RetrieveActiveContract(meta.ID); exist {
+		t.Fatalf("rollback failed: expected the contract is not saved in the database persistently")
+	}
+
+	// check if the failed interaction is increased
+	updatedInfo, exist := cm.hostManager.RetrieveHostInfo(params.Host.EnodeID)
+	if !exist {
+		t.Fatalf("failed to get the storage host information")
+	}
+
+	if updatedInfo.RecentFailedInteractions-originalFailedInteraction != 1 {
+		t.Fatalf("failed to increase the host's failed interaction after got host commit error -> original: %v, updated: %v",
+			originalFailedInteraction, updatedInfo.RecentFailedInteractions)
+	}
+}
+
+func insertStorageHostInfo(cm *ContractManager, hostInfo storage.HostInfo) error {
+	testDebug := storagehostmanager.NewPublicStorageClientDebugAPI(cm.hostManager)
+	return testDebug.InsertGivenHostInfo(hostInfo)
 }

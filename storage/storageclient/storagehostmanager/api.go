@@ -162,6 +162,10 @@ func (api *PublicHostManagerDebugAPI) InsertHostInfo(amount int) string {
 	return fmt.Sprintf("Successfully inserted %v Storage Host Information", amount)
 }
 
+func (api *PublicHostManagerDebugAPI) InsertGivenHostInfo(hi storage.HostInfo) error {
+	return api.shm.insert(hi)
+}
+
 // InsertActiveHostInfo will insert active host information into the storage host tree
 // all host information are generated randomly. NOTE: if the information is not checked
 // immediately, those active hosts will became inactive because of failing to establish
