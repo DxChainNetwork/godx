@@ -12,6 +12,7 @@ import (
 
 // fakeHostMarket is a fake host market that implement hostMarket
 type fakeHostMarket struct {
+	blockNumber   uint64
 	contractPrice common.BigInt
 	storagePrice  common.BigInt
 	uploadPrice   common.BigInt
@@ -43,4 +44,9 @@ func getFakeHostMarket() *fakeHostMarket {
 		deposit:       common.NewBigIntUint64(100),
 		maxDeposit:    common.NewBigIntUint64(storage.SectorSize * 3 * unit.BlocksPerDay * 100),
 	}
+}
+
+// GetBlockNumber return the block number of the fake host market
+func (hm *fakeHostMarket) GetBlockNumber() uint64 {
+	return hm.blockNumber
 }

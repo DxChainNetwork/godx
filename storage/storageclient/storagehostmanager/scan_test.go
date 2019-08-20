@@ -108,8 +108,8 @@ func newHostManagerTestData() *StorageHostManager {
 		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
-	shm.evalFunc = shm.calculateEvaluationFunc(shm.rent)
-	shm.storageHostTree = storagehosttree.New(shm.evalFunc)
+	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
+	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
 	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 

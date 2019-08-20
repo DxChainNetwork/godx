@@ -30,31 +30,31 @@ func TestPresenceFactorCalc(t *testing.T) {
 	for _, test := range tests {
 		// first Seen must not be 0
 		firstSeen := uint64(10)
-		shm := &StorageHostManager{
-			blockHeight: test.presence + firstSeen,
+		hm := &fakeHostMarket{
+			blockNumber: test.presence + firstSeen,
 		}
 		info := storage.HostInfo{
 			FirstSeen: firstSeen,
 		}
-		factor := shm.presenceScoreCalc(info)
+		score := presenceScoreCalc(info, hm)
 		if test.presence <= lowTimeLimit {
-			if factor != lowValueLimit {
+			if score != lowValueLimit {
 				t.Errorf("low limit test failed")
 			}
 		} else if test.presence >= highTimeLimit {
-			if factor != highValueLimit {
+			if score != highValueLimit {
 				t.Errorf("high limit test failed")
 			}
 		} else {
 			// Calculate the value before and after the limit, and check whether the
-			// factor is incrementing
+			// score is incrementing
 			if test.presence == 0 || test.presence == math.MaxUint64 {
 				continue
 			}
-			factorSmaller := shm.presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen + 1})
-			factorLarger := shm.presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen - 1})
-			if factorSmaller >= factor || factor >= factorLarger {
-				t.Errorf("Near range %d the factor not incrementing", test.presence)
+			factorSmaller := presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen + 1}, hm)
+			factorLarger := presenceScoreCalc(storage.HostInfo{FirstSeen: firstSeen - 1}, hm)
+			if factorSmaller >= score || score >= factorLarger {
+				t.Errorf("Near range %d the score not incrementing", test.presence)
 			}
 		}
 	}
@@ -65,14 +65,14 @@ func TestPresenceFactorCalc(t *testing.T) {
 func TestIllegalPresenceFactorCalc(t *testing.T) {
 	firstSeen := uint64(30)
 	blockHeight := uint64(10)
-	shm := &StorageHostManager{
-		blockHeight: blockHeight,
+	hm := &fakeHostMarket{
+		blockNumber: blockHeight,
 	}
 	info := storage.HostInfo{
 		FirstSeen: firstSeen,
 	}
-	factor := shm.presenceScoreCalc(info)
-	if firstSeen > blockHeight && factor != 0 {
+	score := presenceScoreCalc(info, hm)
+	if firstSeen > blockHeight && score != 0 {
 		t.Errorf("Illegal input for presence factor calculation does not give 0 factor")
 	}
 }
@@ -93,7 +93,6 @@ func TestDepositFactorCalc(t *testing.T) {
 	}
 	var lastResult float64
 	for index, test := range tests {
-		shm := &StorageHostManager{}
 		rent := storage.RentPayment{
 			Fund:         common.NewBigIntUint64(10000000),
 			StorageHosts: 1,
@@ -112,7 +111,7 @@ func TestDepositFactorCalc(t *testing.T) {
 			deposit:      marketDeposit,
 			maxDeposit:   common.NewBigIntUint64(math.MaxUint64),
 		}
-		res := shm.depositScoreCalc(info, rent, market)
+		res := depositScoreCalc(info, rent, market)
 		// Check the result is within range [0, 1)
 		if res < 0 || res >= 1 {
 			t.Errorf("Test %d illegal factor. Got %v", index, res)
@@ -276,7 +275,6 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 	}
 	var lastResult float64
 	for index, test := range tests {
-		shm := &StorageHostManager{}
 		info := storage.HostInfo{
 			HostExtConfig: storage.HostExtConfig{
 				RemainingStorage: test.remainingStorage,
@@ -286,7 +284,7 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 			ExpectedStorage: expectedStorage,
 			StorageHosts:    test.numHosts,
 		}
-		res := shm.storageRemainingScoreCalc(info, settings)
+		res := storageRemainingScoreCalc(info, settings)
 		if res < 0 || res >= 1 {
 			t.Errorf("invalid result: %v", res)
 		}

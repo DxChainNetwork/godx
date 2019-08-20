@@ -342,13 +342,11 @@ func compareEval(n *node) error {
 		sum := n.left.evalTotal + n.right.evalTotal
 		sum = org + sum
 		if n.evalTotal != sum {
-			fmt.Println("111")
 			return fmt.Errorf("error: parent evaluation should be sum of the children's evaluation. Expect %v, Got %v", sum, n.evalTotal)
 		}
 	} else if n.right == nil {
 		sum := org + n.left.evalTotal
 		if n.evalTotal != sum {
-			fmt.Println("222")
 			return fmt.Errorf("error: parent evaluation should be sum of the children's evaluation. Expect %v, Got %v", sum, n.evalTotal)
 		}
 	}

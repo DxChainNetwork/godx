@@ -450,7 +450,7 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 	minEval = cm.hostManager.Evaluation(hosts[0])
 	for i := 1; i < len(hosts); i++ {
 		eval := cm.hostManager.Evaluation(hosts[i])
-		if eval.Cmp(minEval) < 0 {
+		if eval < minEval {
 			minEval = eval
 		}
 	}
