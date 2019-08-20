@@ -43,8 +43,8 @@ const (
 )
 
 var (
-	frontierBlockReward  *big.Int = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-	byzantiumBlockReward *big.Int = big.NewInt(3e+18) // Block reward in wei for successfully mining a block upward from Byzantium
+	frontierBlockReward = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
+	byzantiumBlockReward = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
 
 	timeOfFirstBlock = int64(0)
 
@@ -360,25 +360,53 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 	return nil
 }
 
-// AccumulateRewards add the block award to coinbase
-func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+// accumulateRewards add the block award to Coinbase of validator
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, dposContext *types.DposContext) {
 	// Select the correct block reward based on chain progression
 	blockReward := frontierBlockReward
 	if config.IsByzantium(header.Number) {
 		blockReward = byzantiumBlockReward
 	}
-	// Accumulate the rewards for the miner and any included uncles
-	reward := new(big.Int).Set(blockReward)
-	state.AddBalance(header.Coinbase, reward)
+
+	// TODO get vote count by vote trie
+	voteCount := common.NewBigInt(1000)
+	if voteCount.Cmp(common.BigInt0) <= 0 {
+		state.AddBalance(header.Coinbase, blockReward)
+		return
+	}
+
+	// TODO get ratio of reward between delegate and voters
+	rewardRatio := 0.3
+	delegatorReward := common.NewBigInt(blockReward.Int64()).MultFloat64(rewardRatio)
+	assignedReward := common.Big0
+
+	delegateTrie := dposContext.DelegateTrie()
+	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Coinbase.Bytes()))
+	for delegatorIterator.Next() {
+		delegator := common.BytesToAddress(delegatorIterator.Value)
+
+		// TODO get the votes of delegator to vote for delegate
+		vote := common.NewBigInt(1)
+
+		// calculate reward of each delegator due to it's vote(stake) percent
+		percentReward := delegatorReward.Mult(vote).Div(voteCount).BigIntPtr()
+		state.AddBalance(delegator, percentReward)
+
+		// add percentReward to assignedReward
+		assignedReward.Add(assignedReward, percentReward)
+	}
+
+	// accumulate the rest rewards for the validator
+	delegateReward := new(big.Int).Sub(blockReward, assignedReward)
+	state.AddBalance(header.Coinbase, delegateReward)
 }
 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
+	accumulateRewards(chain.Config(), state, header, dposContext)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
 		stateDB:     state,

@@ -6,13 +6,15 @@ package dpos
 
 import (
 	"encoding/binary"
+	"math/big"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/trie"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -63,9 +65,9 @@ func mockNewDposContext(db ethdb.Database) *types.DposContext {
 	for j := 0; j < len(MockEpochValidators); j++ {
 		delegator = common.HexToAddress(MockEpochValidators[j]).Bytes()
 		candidate = common.HexToAddress(MockEpochValidators[j]).Bytes()
-		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), candidate)
+		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
 		dposContext.CandidateTrie().TryUpdate(candidate, candidate)
-		dposContext.VoteTrie().TryUpdate(candidate, candidate)
+		dposContext.VoteTrie().TryUpdate(delegator, candidate)
 	}
 
 	return dposContext
@@ -126,4 +128,22 @@ func TestUpdateMintCnt(t *testing.T) {
 	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
+}
+
+func TestAccumulateRewards(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	dposContext := mockNewDposContext(db)
+
+	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	validator := common.HexToAddress(MockEpochValidators[0])
+
+	// Frontier
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
+
+	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
+
+	balance := stateDB.GetBalance(validator)
+	if balance.Uint64() <= 0 {
+		t.Fatalf("reward not assigned to address: %v", validator)
+	}
 }
