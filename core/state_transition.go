@@ -223,7 +223,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		}
 
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
-		ret, st.gas, vmerr = evm.ApplyDposTransaction(p, st.dposContext, st.msg.From(), st.data, st.gas)
+		ret, st.gas, vmerr = evm.ApplyDposTransaction(p, st.dposContext, st.msg.From(), st.data, st.gas, st.value)
 	} else {
 		// Increment the nonce for the next transaction
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
