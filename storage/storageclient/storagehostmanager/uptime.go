@@ -67,4 +67,5 @@ func applyNewHostInfoToStoredHostInfo(new, stored storage.HostInfo) storage.Host
 	stored.HostExtConfig = new.HostExtConfig
 	stored.IPNetwork = new.IPNetwork
 	stored.LastIPNetWorkChange = new.LastIPNetWorkChange
+	return stored
 }

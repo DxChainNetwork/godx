@@ -171,11 +171,6 @@ func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) 
 // RetrieveHostInfo will acquire the storage host information based on the enode ID provided.
 // Before returning the storage host information, the settings will be validated first
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
-	shm.lock.RLock()
-	whitelist := shm.filterMode == WhitelistFilter
-	filteredHosts := shm.filteredHosts
-	shm.lock.RUnlock()
-
 	// get the storage host information
 	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
 		return
@@ -185,7 +180,11 @@ func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInf
 	// if WhitelistFilter and the host is stored inside the filtered host, meaning not filtered
 	// if WhitelistFilter but host is not stored in the filtered host, FILTERED, the storage client
 	// cannot sign contract with it
+	shm.lock.RLock()
+	whitelist := shm.filterMode == WhitelistFilter
+	filteredHosts := shm.filteredHosts
 	_, exist := filteredHosts[hi.EnodeID]
+	shm.lock.RUnlock()
 
 	// update host historical interaction record before returning
 	shm.lock.Lock()
@@ -279,7 +278,7 @@ func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlack
 }
 
 // Evaluation will calculate and return the evaluation of a single storage host
-func (shm *StorageHostManager) Evaluation(host storage.HostInfo) uint64 {
+func (shm *StorageHostManager) Evaluation(host storage.HostInfo) int64 {
 	return shm.hostEvaluator.Evaluate(host)
 }
 
