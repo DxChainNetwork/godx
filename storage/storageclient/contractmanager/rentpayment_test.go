@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
@@ -44,8 +46,8 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 	// create and insert expired contracts
 	var expiredContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		expiredContract := randomContractGenerator(cm.blockHeight / 2)
-		_, err := cm.activeContracts.InsertContract(expiredContract, randomRootsGenerator(10))
+		expiredContract := simulation.ContractGenerator(cm.blockHeight / 2)
+		_, err := cm.activeContracts.InsertContract(expiredContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}

@@ -6,8 +6,12 @@ package simulation
 
 import (
 	"fmt"
+	"math/big"
 	"math/rand"
 	"time"
+
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 
 	"github.com/Pallinder/go-randomdata"
 
@@ -15,6 +19,46 @@ import (
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
+
+// randomContractGenerator will randomly generate a storage contract
+func ContractGenerator(contractEndHeight uint64) (ch contractset.ContractHeader) {
+	clientAddress := AddressGenerator()
+	hostAddress := AddressGenerator()
+	// generate the private key
+	ch = contractset.ContractHeader{
+		ID:      ContractIDGenerator(),
+		EnodeID: EnodeIDGenerator(),
+		LatestContractRevision: types.StorageContractRevision{
+			NewWindowStart:    contractEndHeight,
+			ParentID:          HashGenerator(),
+			NewRevisionNumber: 15,
+			NewValidProofOutputs: []types.DxcoinCharge{
+				{clientAddress, big.NewInt(100000)},
+				{hostAddress, big.NewInt(100000)},
+			},
+			UnlockConditions: types.UnlockConditions{
+				PaymentAddresses: []common.Address{
+					clientAddress,
+					hostAddress,
+				},
+			},
+		},
+		PrivateKey:   "12345678910",
+		StartHeight:  100,
+		DownloadCost: common.RandomBigInt(),
+		UploadCost:   common.RandomBigInt(),
+		TotalCost:    common.RandomBigInt(),
+		StorageCost:  common.RandomBigInt(),
+		GasFee:       common.RandomBigInt(),
+		ContractFee:  common.RandomBigInt(),
+		Status: storage.ContractStatus{
+			UploadAbility: true,
+			RenewAbility:  true,
+			Canceled:      false,
+		},
+	}
+	return
+}
 
 func ContractParamsGenerator() storage.ContractParams {
 	hostInfo := HostInfoGenerator()
@@ -70,6 +114,32 @@ func HostInfoGenerator() storage.HostInfo {
 // EnodeIDGenerator will randomly generate enodeID
 func EnodeIDGenerator() (id enode.ID) {
 	_, _ = rand.Read(id[:])
+	return
+}
+
+// randomRootsGenerator will randomly generate merkle roots for the storage contract
+func RootsGenerator(rootCount int) (roots []common.Hash) {
+	for i := 0; i < rootCount; i++ {
+		roots = append(roots, HashGenerator())
+	}
+	return
+}
+
+// randomAddressGenerator will randomly generate some addresses used for DxcoinCharge
+func AddressGenerator() (a common.Address) {
+	rand.Read(a[:])
+	return
+}
+
+// storageContractIDGenerator will randomly generate storage contract id
+func ContractIDGenerator() (id storage.ContractID) {
+	rand.Read(id[:])
+	return
+}
+
+// randomHashGenerator will randomly generate common.Hash value
+func HashGenerator() (h common.Hash) {
+	rand.Read(h[:])
 	return
 }
 

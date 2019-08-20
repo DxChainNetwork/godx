@@ -38,7 +38,7 @@ func TestContractManager_ResumeContracts(t *testing.T) {
 	var canceledContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
 		canceledContract := randomCanceledContractGenerator()
-		_, err := cm.activeContracts.InsertContract(canceledContract, randomRootsGenerator(10))
+		_, err := cm.activeContracts.InsertContract(canceledContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -90,8 +90,8 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 	// create and insert expired contracts
 	var expiredContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		expiredContract := randomContractGenerator(cm.blockHeight / 2)
-		_, err := cm.activeContracts.InsertContract(expiredContract, randomRootsGenerator(10))
+		expiredContract := simulation.ContractGenerator(cm.blockHeight / 2)
+		_, err := cm.activeContracts.InsertContract(expiredContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -100,20 +100,20 @@ func TestContractManager_MaintainExpiration(t *testing.T) {
 	// create renew contracts
 	var renewedContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		renewedContract := randomContractGenerator(cm.blockHeight * 2)
-		_, err := cm.activeContracts.InsertContract(renewedContract, randomRootsGenerator(10))
+		renewedContract := simulation.ContractGenerator(cm.blockHeight * 2)
+		_, err := cm.activeContracts.InsertContract(renewedContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
-		cm.renewedTo[renewedContract.ID] = storageContractIDGenerator()
+		cm.renewedTo[renewedContract.ID] = simulation.ContractIDGenerator()
 		renewedContracts = append(renewedContracts, renewedContract)
 	}
 
 	// create active contracts
 	var activeContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		activeContract := randomContractGenerator(cm.blockHeight * 2)
-		_, err := cm.activeContracts.InsertContract(activeContract, randomRootsGenerator(10))
+		activeContract := simulation.ContractGenerator(cm.blockHeight * 2)
+		_, err := cm.activeContracts.InsertContract(activeContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -171,12 +171,12 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 	var oldestContractSet = make(map[enode.ID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
 		// generate old contracts
-		enodeID := randomEnodeIDGenerator()
+		enodeID := simulation.EnodeIDGenerator()
 		enodeIDList = append(enodeIDList, enodeID)
 		oldContract := randomDuplicateContractGenerator(200, enodeID)
 
 		// insert old contract
-		_, err := cm.activeContracts.InsertContract(oldContract, randomRootsGenerator(10))
+		_, err := cm.activeContracts.InsertContract(oldContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -192,7 +192,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		oldContract := randomDuplicateContractGenerator(300, enodeIDList[i])
 
 		// insert old contract
-		_, err := cm.activeContracts.InsertContract(oldContract, randomRootsGenerator(10))
+		_, err := cm.activeContracts.InsertContract(oldContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -207,7 +207,7 @@ func TestContractManager_RemoveDuplications(t *testing.T) {
 		newestContract := randomDuplicateContractGenerator(600, enodeIDList[i])
 
 		// insert newest contract
-		_, err := cm.activeContracts.InsertContract(newestContract, randomRootsGenerator(10))
+		_, err := cm.activeContracts.InsertContract(newestContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -303,8 +303,8 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 	// create and insert expired contracts
 	var expiredContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		expiredContract := randomContractGenerator(cm.blockHeight / 2)
-		_, err := cm.activeContracts.InsertContract(expiredContract, randomRootsGenerator(10))
+		expiredContract := simulation.ContractGenerator(cm.blockHeight / 2)
+		_, err := cm.activeContracts.InsertContract(expiredContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -314,8 +314,8 @@ func TestContractManager_MaintainHostToContractIDMapping(t *testing.T) {
 	// create active contracts
 	var activeContracts []contractset.ContractHeader
 	for i := 0; i < amount; i++ {
-		activeContract := randomContractGenerator(cm.blockHeight * 2)
-		_, err := cm.activeContracts.InsertContract(activeContract, randomRootsGenerator(10))
+		activeContract := simulation.ContractGenerator(cm.blockHeight * 2)
+		_, err := cm.activeContracts.InsertContract(activeContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -362,7 +362,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	var ipList []string
 	var contracts = make(map[storage.ContractID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
-		enodeID := randomEnodeIDGenerator()
+		enodeID := simulation.EnodeIDGenerator()
 		ip := randomdata.IpV4Address()
 
 		// insert storage host first
@@ -372,7 +372,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 
 		// insert the contract for the storage host
 		contract := randomContractWithEnodeID(enodeID)
-		if _, err := cm.activeContracts.InsertContract(contract, randomRootsGenerator(10)); err != nil {
+		if _, err := cm.activeContracts.InsertContract(contract, simulation.RootsGenerator(10)); err != nil {
 			t.Fatalf("failed to insert the contract: %s", err.Error())
 		}
 
@@ -384,7 +384,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 	// generate filtered contracts
 	var filteredContracts = make(map[storage.ContractID]contractset.ContractHeader)
 	for i := 0; i < amount; i++ {
-		enodeID := randomEnodeIDGenerator()
+		enodeID := simulation.EnodeIDGenerator()
 
 		// insert storage host first
 		if err := insertHost(cm, ipList[i], enodeID, time.Now().Add(time.Hour)); err != nil {
@@ -397,7 +397,7 @@ func TestContractManager_removeHostWithDuplicateNetworkAddress(t *testing.T) {
 			delete(contracts, contract.ID)
 		}
 
-		if _, err := cm.activeContracts.InsertContract(contract, randomRootsGenerator(10)); err != nil {
+		if _, err := cm.activeContracts.InsertContract(contract, simulation.RootsGenerator(10)); err != nil {
 			t.Fatalf("failed to insert filtered contract: %s", err.Error())
 		}
 
@@ -443,7 +443,7 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 	var canceledContractIDs []storage.ContractID
 	for i := 0; i < amount; i++ {
 		canceledContract := randomCanceledContractGenerator()
-		_, err := cm.activeContracts.InsertContract(canceledContract, randomRootsGenerator(10))
+		_, err := cm.activeContracts.InsertContract(canceledContract, simulation.RootsGenerator(10))
 		if err != nil {
 			t.Fatalf("failed to insert contract: %s", err.Error())
 		}
@@ -620,8 +620,8 @@ _____  _____  _______      __  _______ ______          ______ _    _ _   _  ____
 func insertHostDoesNotExistContract(cm *ContractManager, amount int) (hostNotExistsContract []storage.ContractMetaData, err error) {
 	var meta storage.ContractMetaData
 	for i := 0; i < amount; i++ {
-		contract := randomContractGenerator(cm.blockHeight / 2)
-		meta, err = cm.activeContracts.InsertContract(contract, randomRootsGenerator(10))
+		contract := simulation.ContractGenerator(cm.blockHeight / 2)
+		meta, err = cm.activeContracts.InsertContract(contract, simulation.RootsGenerator(10))
 		if err != nil {
 			return
 		}
@@ -634,7 +634,7 @@ func insertHostDoesNotExistContract(cm *ContractManager, amount int) (hostNotExi
 func insertHighEvalContract(cm *ContractManager, amount int) (highEvalContracts []storage.ContractMetaData, err error) {
 	var meta storage.ContractMetaData
 	for i := 0; i < amount; i++ {
-		enodeID := randomEnodeIDGenerator()
+		enodeID := simulation.EnodeIDGenerator()
 		contract := randomContractWithEnodeID(enodeID)
 
 		// insert storage host first
@@ -643,7 +643,7 @@ func insertHighEvalContract(cm *ContractManager, amount int) (highEvalContracts 
 		}
 
 		// then, insert the contract
-		meta, err = cm.activeContracts.InsertContract(contract, randomRootsGenerator(10))
+		meta, err = cm.activeContracts.InsertContract(contract, simulation.RootsGenerator(10))
 		if err != nil {
 			return
 		}
@@ -657,7 +657,7 @@ func insertHighEvalContract(cm *ContractManager, amount int) (highEvalContracts 
 
 func insertLowEvalContract(cm *ContractManager, amount int) (lowEvalContracts []storage.ContractMetaData, err error) {
 	for i := 0; i < amount; i++ {
-		enodeID := randomEnodeIDGenerator()
+		enodeID := simulation.EnodeIDGenerator()
 		contract := randomContractWithEnodeID(enodeID)
 
 		// insert the storage host first
@@ -667,7 +667,7 @@ func insertLowEvalContract(cm *ContractManager, amount int) (lowEvalContracts []
 
 		// then, insert the contract
 		var meta storage.ContractMetaData
-		meta, err = cm.activeContracts.InsertContract(contract, randomRootsGenerator(10))
+		meta, err = cm.activeContracts.InsertContract(contract, simulation.RootsGenerator(10))
 		if err != nil {
 			return
 		}
@@ -690,26 +690,29 @@ func checkCanceled(cm *ContractManager, contracts map[storage.ContractID]contrac
 }
 
 func randomContractWithEnodeID(id enode.ID) (ch contractset.ContractHeader) {
-	ch = randomContractGenerator(100)
+	ch = simulation.ContractGenerator(100)
 	ch.EnodeID = id
 	return
 }
 
 func randomDuplicateContractGenerator(contractStartHeight uint64, id enode.ID) (ch contractset.ContractHeader) {
-	// generate the private key
+	clientAddress := simulation.AddressGenerator()
+	hostAddress := simulation.AddressGenerator()
+
 	ch = contractset.ContractHeader{
-		ID:      storageContractIDGenerator(),
+		ID:      simulation.ContractIDGenerator(),
 		EnodeID: id,
 		LatestContractRevision: types.StorageContractRevision{
-			ParentID:          randomHashGenerator(),
+			ParentID:          simulation.HashGenerator(),
 			NewRevisionNumber: 15,
 			NewValidProofOutputs: []types.DxcoinCharge{
-				{randomAddressGenerator(), big.NewInt(0)},
+				{clientAddress, big.NewInt(0)},
+				{hostAddress, big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
 				PaymentAddresses: []common.Address{
-					randomAddressGenerator(),
-					randomAddressGenerator(),
+					clientAddress,
+					hostAddress,
 				},
 			},
 		},
@@ -742,20 +745,24 @@ func insertHostLowEval(cm *ContractManager, id enode.ID) (err error) {
 }
 
 func randomCanceledContractGenerator() (ch contractset.ContractHeader) {
+	clientAddress := simulation.AddressGenerator()
+	hostAddress := simulation.AddressGenerator()
+
 	// generate the private key
 	ch = contractset.ContractHeader{
-		ID:      storageContractIDGenerator(),
-		EnodeID: randomEnodeIDGenerator(),
+		ID:      simulation.ContractIDGenerator(),
+		EnodeID: simulation.EnodeIDGenerator(),
 		LatestContractRevision: types.StorageContractRevision{
-			ParentID:          randomHashGenerator(),
+			ParentID:          simulation.HashGenerator(),
 			NewRevisionNumber: 15,
 			NewValidProofOutputs: []types.DxcoinCharge{
-				{randomAddressGenerator(), big.NewInt(0)},
+				{clientAddress, big.NewInt(0)},
+				{hostAddress, big.NewInt(0)},
 			},
 			UnlockConditions: types.UnlockConditions{
 				PaymentAddresses: []common.Address{
-					randomAddressGenerator(),
-					randomAddressGenerator(),
+					clientAddress,
+					hostAddress,
 				},
 			},
 		},
