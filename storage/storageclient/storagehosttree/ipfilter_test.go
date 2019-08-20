@@ -7,8 +7,6 @@ package storagehosttree
 import (
 	"math/rand"
 	"testing"
-
-	"github.com/DxChainNetwork/godx/p2p/enode"
 )
 
 var ips = []string{
@@ -19,8 +17,6 @@ var ips = []string{
 	"104.238.46.146",
 	"104.238.46.156",
 }
-
-var EnodeID = []enode.ID{}
 
 var filter = NewFilter()
 
@@ -55,10 +51,4 @@ func generageRandomByteArray() [32]byte {
 	var result [32]byte
 	copy(result[:], id[:32])
 	return result
-}
-
-func EnodeIDGenerater() {
-	for i := 0; i < 6; i++ {
-		EnodeID = append(EnodeID, generageRandomByteArray())
-	}
 }
