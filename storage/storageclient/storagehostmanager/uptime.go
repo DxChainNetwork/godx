@@ -14,15 +14,16 @@ import (
 // uptimeInitiate initiate the uptime related fields for host info
 func uptimeInitiate(info *storage.HostInfo) {
 	if info.AccumulatedUptime == 0 && info.AccumulatedDowntime == 0 {
-		return
+		info.AccumulatedUptime = initialAccumulatedUptime
+		info.AccumulatedDowntime = initialAccumulatedDowntime
+		info.LastCheckTime = uint64(time.Now().Unix())
 	}
-	info.AccumulatedUptime = initialAccumulatedUptime
-	info.AccumulatedDowntime = initialAccumulatedDowntime
-	info.LastCheckTime = uint64(time.Now().Unix())
 }
 
 // getHostUpRate get the uptime rate of a host
 func getHostUpRate(info storage.HostInfo) float64 {
+	// If the host is not initialized to uptime, initialize it
+	uptimeInitiate(&info)
 	return info.AccumulatedUptime / (info.AccumulatedUptime + info.AccumulatedDowntime)
 }
 

@@ -18,6 +18,83 @@ func init() {
 	defaultMinSectors = 1
 }
 
+// TestNewDefaultEvaluator test the functionality of newDefaultEvaluator
+func TestNewDefaultEvaluator(t *testing.T) {
+	shm := &StorageHostManager{}
+	rent := storage.RentPayment{
+		StorageHosts:       0,
+		Period:             0,
+		RenewWindow:        0,
+		ExpectedStorage:    0,
+		ExpectedUpload:     0,
+		ExpectedDownload:   0,
+		ExpectedRedundancy: 0,
+	}
+	de := newDefaultEvaluator(shm, rent)
+	if de.rent.StorageHosts == 0 {
+		t.Errorf("zero storage host is not corrected")
+	}
+	if de.rent.Period == 0 {
+		t.Errorf("zero period is not corrected")
+	}
+	if de.rent.ExpectedUpload == 0 {
+		t.Errorf("zero expected upload is not corrected")
+	}
+	if de.rent.ExpectedDownload == 0 {
+		t.Errorf("zero expected download is not corrected")
+	}
+	if de.rent.ExpectedStorage == 0 {
+		t.Errorf("zero expected storage is not corrected")
+	}
+	if de.rent.ExpectedRedundancy == 0 {
+		t.Errorf("zero expectedRedundancy is not corrected")
+	}
+}
+
+// TestEvaluateNegative test the the condition of zero or negative settings and check whether it might
+// result in panic condition
+func TestDefaultEvaluator_EvaluateDetailNegative(t *testing.T) {
+	// Zeros in rent payment
+	rent := storage.RentPayment{}
+	// Negative settings in host info
+	info := storage.HostInfo{
+		HostExtConfig: storage.HostExtConfig{
+			Deposit:                common.NewBigInt(-100),
+			MaxDeposit:             common.NewBigInt(-100),
+			ContractPrice:          common.NewBigInt(-100),
+			DownloadBandwidthPrice: common.NewBigInt(-100),
+			StoragePrice:           common.NewBigInt(-100),
+			UploadBandwidthPrice:   common.NewBigInt(-100),
+		},
+		FirstSeen: 100,
+	}
+	shm := &StorageHostManager{}
+	// Evaluate the details of the corner cases. The function shall never panic
+	detail := newDefaultEvaluator(shm, rent).EvaluateDetail(info)
+	// Check the result of the details. The scores should all be zero
+	if detail.Evaluation < 0 {
+		t.Errorf("evaluation is negative: %v", detail.Evaluation)
+	}
+	if detail.PresenceScore < 0 {
+		t.Errorf("presence score is negative: %v", detail.PresenceScore)
+	}
+	if detail.DepositScore < 0 {
+		t.Errorf("deposit score is negative: %v", detail.DepositScore)
+	}
+	if detail.InteractionScore < 0 {
+		t.Errorf("interaction score is negative: %v", detail.InteractionScore)
+	}
+	if detail.ContractPriceScore < 0 {
+		t.Errorf("contract price score is negative: %v", detail.ContractPriceScore)
+	}
+	if detail.StorageRemainingScore < 0 {
+		t.Errorf("storage remaining score is negative: %v", detail.StorageRemainingScore)
+	}
+	if detail.UptimeScore < 0 {
+		t.Errorf("uptime score is negative: %v", detail.UptimeScore)
+	}
+}
+
 // TestDefaultEvaluator_calFinalScore test defaultEvaluator.calcFinalScore
 func TestDefaultEvaluator_calFinalScore(t *testing.T) {
 	tests := []struct {
@@ -115,7 +192,8 @@ func TestDepositScoreCalc(t *testing.T) {
 		{100},
 		{1000},
 	}
-	var lastResult float64
+	type record struct{ ratio, sc float64 }
+	var results []record
 	for index, test := range tests {
 		rent := storage.RentPayment{
 			Fund:         common.NewBigIntUint64(10000000),
@@ -140,15 +218,17 @@ func TestDepositScoreCalc(t *testing.T) {
 		if res < 0 || res >= 1 {
 			t.Errorf("Test %d illegal factor. Got %v", index, res)
 		}
-		// Check whether the result is larger than last result
-		if index == 0 {
-			lastResult = 0
-			continue
+		results = append(results, record{test.ratio, res})
+	}
+	for i := 0; i != len(results)-1; i++ {
+		if results[i].sc >= results[i+1].sc {
+			t.Fatalf("score not incrementing. [%v: %v] -> [%v: %v]", results[i].ratio, results[i].sc,
+				results[i+1].ratio, results[i+1].sc)
 		}
-		if res <= lastResult {
-			t.Errorf("Test %d not incrementing. Got %v, Last %v", index, res, lastResult)
-		}
-		lastResult = res
+	}
+	// Display the results
+	for _, result := range results {
+		t.Logf("At storage ratio %7.4f, got score %7.4f", result.ratio, result.sc)
 	}
 }
 
@@ -276,6 +356,7 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 		remainingStorage uint64
 		numHosts         uint64
 	}{
+		{0, 1},
 		{1e3, 1},
 		{3.3e3, 3},
 		{3e4, 3},
@@ -285,8 +366,12 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 		{3e8, 3},
 		{3e9, 3},
 	}
-	var lastResult float64
-	for index, test := range tests {
+	type record struct {
+		ratio float64
+		sc    float64
+	}
+	var results []record
+	for _, test := range tests {
 		info := storage.HostInfo{
 			HostExtConfig: storage.HostExtConfig{
 				RemainingStorage: test.remainingStorage,
@@ -296,19 +381,22 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 			ExpectedStorage: expectedStorage,
 			StorageHosts:    test.numHosts,
 		}
+		ratio := float64(test.remainingStorage) / float64(expectedStoragePerContract(settings))
 		res := storageRemainingScoreCalc(info, settings)
 		if res < 0 || res >= 1 {
 			t.Errorf("invalid result: %v", res)
 		}
-		if index == 0 {
-			lastResult = res
-			continue
+		results = append(results, record{ratio, res})
+	}
+	for i := 0; i != len(results)-1; i++ {
+		if results[i].sc >= results[i+1].sc {
+			t.Fatalf("score not incrementing. [%v: %v] -> [%v: %v]", results[i].ratio, results[i].sc,
+				results[i+1].ratio, results[i+1].sc)
 		}
-		// the res should be incrementing
-		if res < lastResult {
-			t.Errorf("test %d, the factor not incrementing. Got %v, previous %v", index, res, lastResult)
-		}
-		lastResult = res
+	}
+	// Display the results
+	for _, result := range results {
+		t.Logf("At storage ratio %7.4f, got score %7.4f", result.ratio, result.sc)
 	}
 }
 
@@ -351,31 +439,13 @@ func TestStorageRemainingScoreCalc(t *testing.T) {
 		}
 		// Add the result to results
 		results = append(results, scoreRecord{ratio, sc})
-
-		if test.remainingStorage == 0 {
-			continue
-		}
-		// Check whether the score in incrementing with the remaining storage
-		const decrementRatio = 0.99
-		const incrementRatio = 1.01
-		lowInfo := storage.HostInfo{
-			HostExtConfig: storage.HostExtConfig{
-				RemainingStorage: uint64(float64(test.remainingStorage) * decrementRatio),
-			},
-		}
-		highInfo := storage.HostInfo{
-			HostExtConfig: storage.HostExtConfig{
-				RemainingStorage: uint64(float64(test.remainingStorage) * incrementRatio),
-			},
-		}
-		lowSc := storageRemainingScoreCalc(lowInfo, settings)
-		highSc := storageRemainingScoreCalc(highInfo, settings)
-
-		if sc <= lowSc || sc >= highSc {
-			t.Fatalf("In ratio %v, score not incrementing: %v -> %v -> %v", ratio, lowSc, sc, highSc)
+	}
+	// Test whether the result is incrementing
+	for i := 0; i != len(results)-1; i++ {
+		if results[i].sc >= results[i+1].sc {
+			t.Fatalf("score not incrementing. [%v: %v] -> [%v: %v]", results[i].ratio, results[i].sc, results[i+1].ratio, results[i+1].sc)
 		}
 	}
-	// Display the result
 	for _, result := range results {
 		t.Logf("At remainingStorage / expectedStorage ratio %7.4f, got score %7.4f", result.ratio, result.sc)
 	}
@@ -453,5 +523,99 @@ func TestEvalContractCost(t *testing.T) {
 			t.Errorf("Test %v: cost not expected. Got %v, Expect %v", i, cost, test.expectedCost)
 		}
 	}
+}
 
+// TestInteractionScoreCalc test the functionality of interactionScoreCalc
+func TestInteractionScoreCalc(t *testing.T) {
+	baseTotalFactor := float64(1000)
+	tests := []struct {
+		successToFailedRatio float64
+	}{
+		{0.01}, {0.1}, {1}, {2}, {3}, {5}, {10}, {100},
+	}
+	type record struct{ ratio, sc float64 }
+	var results []record
+	for i, test := range tests {
+		successFactor := baseTotalFactor / (1 + test.successToFailedRatio) * test.successToFailedRatio
+		failedFactor := baseTotalFactor / (1 + test.successToFailedRatio)
+		info := storage.HostInfo{
+			SuccessfulInteractionFactor: successFactor,
+			FailedInteractionFactor:     failedFactor,
+		}
+		res := interactionScoreCalc(info)
+		if res < 0 || res > 1 {
+			t.Fatalf("Test %v: invalid interaction score: %v", i, res)
+		}
+		results = append(results, record{test.successToFailedRatio, res})
+	}
+	// Test whether the result is incrementing
+	for i := 0; i != len(results)-1; i++ {
+		if results[i].sc >= results[i+1].sc {
+			t.Fatalf("score not incrementing. [%v: %v] -> [%v: %v]", results[i].ratio, results[i].sc, results[i+1].ratio, results[i+1].sc)
+		}
+	}
+	for _, result := range results {
+		t.Logf("At remainingStorage / expectedStorage ratio %7.2f, got score %7.4f", result.ratio, result.sc)
+	}
+}
+
+// TestInteractionScoreCorner test the corner case for interaction score calculation
+func TestInteractionScoreCorner(t *testing.T) {
+	info := storage.HostInfo{}
+	// The calculation shall not panic for this corner case
+	res := interactionScoreCalc(info)
+	expect := float64(1)
+	if res != expect {
+		t.Errorf("interaction score not expected. Got %v, Expect %v", res, expect)
+	}
+}
+
+// TestUptimeScoreCalc test uptimeScoreCalc
+func TestUptimeScoreCalc(t *testing.T) {
+	baseTotalFactor := float64(1000)
+	tests := []struct {
+		upToDownRatio float64
+	}{
+		{0.01}, {0.1}, {1}, {2}, {3}, {5}, {10}, {100},
+	}
+	type record struct{ ratio, sc float64 }
+	var results []record
+	for i, test := range tests {
+		upFactor := baseTotalFactor / (1 + test.upToDownRatio) * test.upToDownRatio
+		downFactor := baseTotalFactor / (1 + test.upToDownRatio)
+		info := storage.HostInfo{
+			AccumulatedUptime:   upFactor,
+			AccumulatedDowntime: downFactor,
+		}
+		res := uptimeScoreCalc(info)
+		if res < 0 || res > 1 {
+			t.Fatalf("Test %v: invalid interaction score: %v", i, res)
+		}
+		if test.upToDownRatio/(test.upToDownRatio+1) >= uptimeCap {
+			if res != 1 {
+				t.Fatalf("Test %v: uptime ratio larger than cap, score not 1: %v", i, res)
+			}
+		}
+		results = append(results, record{test.upToDownRatio, res})
+	}
+	// Test whether the result is incrementing
+	for i := 0; i != len(results)-1; i++ {
+		if results[i].sc > results[i+1].sc {
+			t.Fatalf("score not incrementing. [%v: %v] -> [%v: %v]", results[i].ratio, results[i].sc, results[i+1].ratio, results[i+1].sc)
+		}
+	}
+	for _, result := range results {
+		t.Logf("At remainingStorage / expectedStorage ratio %7.2f, got score %7.4f", result.ratio, result.sc)
+	}
+}
+
+// TestUptimeScoreCalcCorner test the corner case for uptimeScoreCalc
+func TestUptimeScoreCalcCorner(t *testing.T) {
+	info := storage.HostInfo{}
+	// The calculation shall not panic for this corner case
+	res := uptimeScoreCalc(info)
+	expect := float64(1)
+	if res != expect {
+		t.Errorf("uptime score not expected. Got %v, Expect %v", res, expect)
+	}
 }

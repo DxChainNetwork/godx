@@ -71,7 +71,6 @@ func newDefaultEvaluator(shm *StorageHostManager, rent storage.RentPayment) *def
 
 // Evaluate evaluate the host info, and return the final score.
 func (de *defaultEvaluator) Evaluate(info storage.HostInfo) int64 {
-	// TODO: test the functionality of regulate
 	// regulate host info
 	regulateHostInfo(&info)
 	// Calculate the scores of the host info
@@ -164,34 +163,6 @@ func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market ho
 	return factor
 }
 
-// storageRemainingScoreCalc calculates the score based on the storage remaining, the more storage
-// space the storage host remained, higher evaluation it will got. The baseline for storage is set to
-// required storage * storageBaseDivider
-func storageRemainingScoreCalc(info storage.HostInfo, settings storage.RentPayment) float64 {
-	ratio := float64(info.RemainingStorage) / float64(expectedStoragePerContract(settings))
-	factor := ratio / (ratio + storageBaseDivider)
-	return factor
-}
-
-// interactionScoreCalc calculates the score based on the historical success interactions
-// and failed interactions. More success interactions will cause higher evaluation
-func interactionScoreCalc(info storage.HostInfo) float64 {
-	successRatio := info.SuccessfulInteractionFactor / (info.SuccessfulInteractionFactor + info.FailedInteractionFactor)
-	return math.Pow(successRatio, interactionExponentialIndex)
-}
-
-// uptimeScoreCalc calculate the score based on historical uptime ratio
-func uptimeScoreCalc(info storage.HostInfo) float64 {
-	// Calculate the uptime ratio
-	upRate := getHostUpRate(info)
-	// upRate 0.98 is 1
-	allowedDegration := float64(1 - uptimeCap)
-	upRate = math.Min(upRate+allowedDegration, 1)
-	// Returned factor is fourth the power of upRate
-	upTimeFactor := math.Pow(upRate, uptimeExponentialIndex)
-	return upTimeFactor
-}
-
 // contractPriceScoreCalc calculates the score based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
 func contractPriceScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
@@ -212,13 +183,39 @@ func contractPriceScoreCalc(info storage.HostInfo, rent storage.RentPayment, mar
 	}
 }
 
+// storageRemainingScoreCalc calculates the score based on the storage remaining, the more storage
+// space the storage host remained, higher evaluation it will got. The baseline for storage is set to
+// required storage * storageBaseDivider
+func storageRemainingScoreCalc(info storage.HostInfo, settings storage.RentPayment) float64 {
+	ratio := float64(info.RemainingStorage) / float64(expectedStoragePerContract(settings))
+	factor := ratio / (ratio + storageBaseDivider)
+	return factor
+}
+
+// interactionScoreCalc calculates the score based on the historical success interactions
+// and failed interactions. More success interactions will cause higher evaluation
+func interactionScoreCalc(info storage.HostInfo) float64 {
+	// Call initiate. If the info is not initialized for interaction, initialize it
+	interactionInitiate(&info)
+	successRatio := info.SuccessfulInteractionFactor / (info.SuccessfulInteractionFactor + info.FailedInteractionFactor)
+
+	return math.Pow(successRatio, interactionExponentialIndex)
+}
+
+// uptimeScoreCalc calculate the score based on historical uptime ratio
+func uptimeScoreCalc(info storage.HostInfo) float64 {
+	// Calculate the uptime ratio
+	upRate := getHostUpRate(info)
+	// upRate 0.98 is 1
+	allowedDegradation := float64(1 - uptimeCap)
+	upRate = math.Min(upRate+allowedDegradation, 1)
+	// Returned factor is fourth the power of upRate
+	upTimeFactor := math.Pow(upRate, uptimeExponentialIndex)
+	return upTimeFactor
+}
+
 // evalHostDeposit calculate the host deposit with host info and client rentPayment settings
 func evalHostDeposit(info storage.HostInfo, settings storage.RentPayment) common.BigInt {
-	// regulate the rentPayment to non-zeros
-	regulateRentPayment(&settings)
-	// regulate the host info
-	regulateHostInfo(&info)
-
 	// Calculate the contract fund.
 	contractFund := estimateContractFund(settings)
 
