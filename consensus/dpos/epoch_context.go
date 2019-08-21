@@ -202,33 +202,46 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return err
 		}
 
-		candidates := sortableAddresses{}
-		for candidate, cnt := range votes {
-			candidates = append(candidates, &sortableAddress{candidate, cnt})
-		}
-		if len(candidates) < safeSize {
-			return errors.New("too few candidates")
-		}
-		sort.Sort(candidates)
-		if len(candidates) > maxValidatorSize {
-			candidates = candidates[:maxValidatorSize]
+		// calculate the vote weight proportion based on the vote weight
+		totalScores := new(big.Int).SetInt64(0)
+		voteProportions := sortableVoteProportions{}
+		for _, score := range votes {
+			totalScores.Add(totalScores, score)
 		}
 
-		// shuffle candidates
+		for candidateAddr, score := range votes {
+			voteProportion := &sortableVoteProportion{
+				address:    candidateAddr,
+				proportion: float64(score.Int64()) / float64(totalScores.Int64()),
+			}
+			voteProportions = append(voteProportions, voteProportion)
+		}
+
+		// sort by asc
+		sort.Sort(voteProportions)
+		if len(voteProportions) < safeSize {
+			return errors.New("too few candidates")
+		}
+
+		// make random seed
 		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i
 		r := rand.New(rand.NewSource(seed))
-		for i := len(candidates) - 1; i > 0; i-- {
+
+		// Lucky Turntable election
+		result := LuckyTurntable(voteProportions, seed)
+
+		// shuffle candidates
+		for i := len(result) - 1; i > 0; i-- {
 			j := int(r.Int31n(int32(i + 1)))
-			candidates[i], candidates[j] = candidates[j], candidates[i]
-		}
-		sortedValidators := make([]common.Address, 0)
-		for _, candidate := range candidates {
-			sortedValidators = append(sortedValidators, candidate.address)
+			result[i], result[j] = result[j], result[i]
 		}
 
 		epochTrie, _ := types.NewEpochTrie(common.Hash{}, ec.DposContext.DB())
 		ec.DposContext.SetEpoch(epochTrie)
-		ec.DposContext.SetValidators(sortedValidators)
+		err = ec.DposContext.SetValidators(result)
+		if err != nil {
+			return err
+		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 	return nil
@@ -255,4 +268,83 @@ func (p sortableAddresses) Less(i, j int) bool {
 func BytesToFloat64(bytes []byte) float64 {
 	bits := binary.BigEndian.Uint64(bytes)
 	return math.Float64frombits(bits)
+}
+
+// LuckyTurntable elects some validators with random seed
+func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []common.Address {
+
+	// if total candidates less than maxValidatorSize, directly return all
+	if len(voteProportions) <= maxValidatorSize {
+		return voteProportions.ListAddresses()
+	}
+
+	// if total candidates more than maxValidatorSize, election from them
+	result := make([]common.Address, 0)
+	r := rand.New(rand.NewSource(seed))
+	for j := 0; j < maxValidatorSize; j++ {
+		selection := r.Float64()
+		sumProp := float64(0)
+		for i, _ := range voteProportions {
+			sumProp += voteProportions[i].proportion
+			if selection <= sumProp {
+
+				// Lucky one
+				result = append(result, voteProportions[i].address)
+
+				// remove the elected one from current candidate list
+				preVoteProportions := voteProportions[:i]
+				sufVoteProportions := sortableVoteProportions{}
+				if i != len(voteProportions)-1 {
+					sufVoteProportions = voteProportions[(i + 1):]
+				}
+				voteProportions = sortableVoteProportions{}
+				voteProportions = append(voteProportions, preVoteProportions[:]...)
+				if len(sufVoteProportions) > 0 {
+					voteProportions = append(voteProportions, sufVoteProportions[:]...)
+				}
+
+				// calculate the vote weight proportion of the left candidate
+				totoalPros := float64(0)
+				for _, pro := range voteProportions {
+					totoalPros += pro.proportion
+				}
+
+				for _, pro := range voteProportions {
+					pro.proportion = pro.proportion / totoalPros
+				}
+
+				// sort by asc
+				sort.Sort(voteProportions)
+				break
+			}
+		}
+	}
+	return result
+}
+
+type sortableVoteProportion struct {
+	address    common.Address
+	proportion float64
+}
+
+type sortableVoteProportions []*sortableVoteProportion
+
+func (p sortableVoteProportions) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+func (p sortableVoteProportions) Len() int      { return len(p) }
+func (p sortableVoteProportions) Less(i, j int) bool {
+	if p[i].proportion < p[j].proportion {
+		return true
+	} else if p[i].proportion > p[j].proportion {
+		return false
+	} else {
+		return p[i].address.String() < p[j].address.String()
+	}
+}
+
+func (p sortableVoteProportions) ListAddresses() []common.Address {
+	result := make([]common.Address, 0)
+	for _, votePro := range p {
+		result = append(result, votePro.address)
+	}
+	return result
 }
