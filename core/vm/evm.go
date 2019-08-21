@@ -207,14 +207,9 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	//The pledge asset of candidate will not be used.
 	if fa := evm.StateDB.GetState(caller.Address(), common.BytesToHash([]byte("FrozenAssets"))); fa != (common.Hash{}) {
 		balance := evm.StateDB.GetBalance(caller.Address())
-		if value.Cmp(new(big.Int).Sub(balance, fa.Big())) < 0 {
+		if value.Cmp(new(big.Int).Sub(balance, fa.Big())) > 0 {
 			return nil, gas, ErrFrozenAssetsCannotBeUsed
 		}
-	}
-
-	//Cancellation of the pledge asset after canceling the cancellation period after becoming a candidate, can be used after thawing.
-	if tp := evm.StateDB.GetState(caller.Address(), common.BytesToHash([]byte("ThawingPeriod"))); evm.Context.BlockNumber.Cmp(tp.Big()) < 0 {
-		return nil, gas, ErrAssetsStillFrozen
 	}
 
 	var (
@@ -552,7 +547,6 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, data []byte, gas uint64
 	if err != nil {
 		return nil, gas, err
 	}
-	evm.StateDB.SetState(caller, common.BytesToHash([]byte("FrozenAssets")), common.Hash{})
 	tp := common.BigToHash(new(big.Int).SetUint64(evm.Context.BlockNumber.Uint64() + params.ThawingPeriod))
 	evm.StateDB.SetState(caller, common.BytesToHash([]byte("ThawingPeriod")), tp)
 	return nil, gas, nil
