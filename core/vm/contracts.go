@@ -48,17 +48,14 @@ const (
 	// ApplyCandidate is the tx type of applying for candidate
 	ApplyCandidate = "ApplyCandidate"
 
-	// CancleCandidate is the tx type of cancling being candidate
-	CancleCandidate = "CancleCandidate"
+	// CancelCandidate is the tx type of canceling being candidate
+	CancelCandidate = "CancelCandidate"
 
 	// Vote is the tx type of voting some candidates
 	Vote = "Vote"
 
-	// ModifyVote is the tx type of modifying some vote
-	ModifyVote = "ModifyVote"
-
-	// CancleVote is the tx type of cancling all vote
-	CancleVote = "CancleVote"
+	// CancelVote is the tx type of canceling all vote
+	CancelVote = "CancelVote"
 )
 
 // PrecompiledStorageContracts currently contains the transaction types required for four storage contracts
@@ -72,10 +69,9 @@ var PrecompiledStorageContracts = map[common.Address]string{
 // PrecompiledDPoSContracts contains some tx types required for DPoS consensus
 var PrecompiledDPoSContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{13}): ApplyCandidate,
-	common.BytesToAddress([]byte{14}): CancleCandidate,
+	common.BytesToAddress([]byte{14}): CancelCandidate,
 	common.BytesToAddress([]byte{15}): Vote,
-	common.BytesToAddress([]byte{16}): ModifyVote,
-	common.BytesToAddress([]byte{17}): CancleVote,
+	common.BytesToAddress([]byte{16}): CancelVote,
 }
 
 type PrecompiledContract interface {

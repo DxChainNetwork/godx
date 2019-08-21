@@ -19,6 +19,7 @@ package vm
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 	"strconv"
 	"sync/atomic"
@@ -33,6 +34,10 @@ import (
 	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
 )
 
+const (
+	MaxVoteCount = 30
+)
+
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
 // deployed contract addresses (relevant after the account abstraction).
 var (
@@ -40,6 +45,10 @@ var (
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
 	errUnknownDposOperationTx   = errors.New("unknown dpos operation tx")
+
+	prefixThawingAddr = "thawing_"
+	keyVoteDeposit    = common.BytesToHash([]byte("vote-deposit"))
+	thawingFlag       = common.BytesToHash([]byte("thawing"))
 )
 
 type (
@@ -497,22 +506,18 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 
 // TODO: not completed yet
 // ApplyDposTransaction handlers all dpos consensus txs
-func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	switch txType {
 	case ApplyCandidate:
 		dposContext.BecomeCandidate(from)
 		return nil, gas, nil
-	case CancleCandidate:
+	case CancelCandidate:
 		dposContext.KickoutCandidate(from)
 		return nil, gas, nil
 	case Vote:
-		dposContext.Delegate(from, common.Address{})
-		return nil, gas, nil
-	case ModifyVote:
-		dposContext.UnDelegate(from, common.Address{})
-		return nil, gas, nil
-	case CancleVote:
-		return nil, gas, nil
+		return evm.VoteTx(from, dposContext, data, gas, value)
+	case CancelVote:
+		return evm.CancelVoteTx(from, dposContext, gas)
 	default:
 		return nil, gas, errUnknownDposOperationTx
 	}
@@ -757,4 +762,68 @@ func Uint64ToBytes(i uint64) []byte {
 	var buf = make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, i)
 	return buf
+}
+
+// VoteTx handles a new vote to some candidates that will remove last vote records
+func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
+	log.Info("enter vote tx executing ... ")
+	var (
+		candidateList []common.Address
+		stateDB       = evm.StateDB
+	)
+
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
+	errDec, _ := resultDec[0].(error)
+	if errDec != nil {
+		return nil, gasRemainDec, errDec
+	}
+
+	// limit the max vote count to 30
+	if len(candidateList) > MaxVoteCount {
+		return nil, gasRemainDec, fmt.Errorf("actually vote %d candidates, beyond the max size 30", len(candidateList))
+	}
+
+	// TODO: how many gas should we spend ?
+	// record vote data
+	dposSnapshot := dposCtx.Snapshot()
+	successCount, err := dposCtx.Vote(from, candidateList)
+	if err != nil {
+		dposCtx.RevertToSnapShot(dposSnapshot)
+		return nil, gasRemainDec, err
+	}
+
+	// if successfully record voting, then store deposit
+	stateDB.SetState(from, keyVoteDeposit, common.BytesToHash(value.Bytes()))
+
+	log.Info("vote tx execution done", "vote_count", successCount)
+	return nil, gasRemainDec, nil
+}
+
+// CancelVoteTx handles a cancel vote tx that will remove all vote records
+func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
+	log.Info("enter cancel vote tx executing ... ")
+	// remove all vote record from dpos context
+	dposSnapshot := dposCtx.Snapshot()
+	err := dposCtx.CancelVote(from)
+	if err != nil {
+		dposCtx.RevertToSnapShot(dposSnapshot)
+		return nil, gas, err
+	}
+
+	// if successfully above, then mark from as that will be thawed in next epoch
+	stateDB := evm.StateDB
+
+	// create thawing address
+	currentEpochID := evm.Time.Uint64() / uint64(86400)
+	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		stateDB.CreateAccount(thawingAddress)
+	}
+
+	// set thawing flag for from address
+	stateDB.SetState(thawingAddress, common.BytesToHash(from.Bytes()), thawingFlag)
+
+	log.Info("cancel vote tx execution done")
+	return nil, gas, nil
 }
