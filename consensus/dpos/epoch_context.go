@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -56,8 +57,28 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 				score = new(big.Int)
 			}
 			delegatorAddr := common.BytesToAddress(delegator)
-			weight := statedb.GetBalance(delegatorAddr)
-			score.Add(score, weight)
+
+			// retrieve the vote deposit of delegator
+			emptyHash := common.Hash{}
+			voteDepositHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("vote-deposit")))
+			if voteDepositHash == emptyHash {
+				log.Error("no vote deposit", "delegator", delegatorAddr.String())
+				continue
+			}
+			voteDeposit := binary.BigEndian.Uint64(voteDepositHash.Bytes())
+
+			// retrieve the real vote weight ratio of delegator
+			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("real-vote-weight-ratio")))
+			if realVoteWeightRatioHash == emptyHash {
+				log.Error("no real vote weight ratio", "delegator", delegatorAddr.String())
+				continue
+			}
+			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes())
+
+			// calculate the real vote weight of delegator
+			realVoteWeight := float64(voteDeposit) * realVoteWeightRatio
+			score.Add(score, common.NewBigIntFloat64(realVoteWeight).BigIntPtr())
+
 			votes[candidateAddr] = score
 			existDelegator = delegateIterator.Next()
 		}
@@ -174,10 +195,13 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 				return err
 			}
 		}
+
+		// calculate the actual result of the vote based on the attenuation
 		votes, err := ec.countVotes()
 		if err != nil {
 			return err
 		}
+
 		candidates := sortableAddresses{}
 		for candidate, cnt := range votes {
 			candidates = append(candidates, &sortableAddress{candidate, cnt})
@@ -226,4 +250,9 @@ func (p sortableAddresses) Less(i, j int) bool {
 	} else {
 		return p[i].address.String() < p[j].address.String()
 	}
+}
+
+func BytesToFloat64(bytes []byte) float64 {
+	bits := binary.BigEndian.Uint64(bytes)
+	return math.Float64frombits(bits)
 }
