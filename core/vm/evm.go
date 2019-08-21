@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"strconv"
 	"sync/atomic"
@@ -46,9 +47,14 @@ var (
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
 	errUnknownDposOperationTx   = errors.New("unknown dpos operation tx")
 
-	prefixThawingAddr = "thawing_"
-	keyVoteDeposit    = common.BytesToHash([]byte("vote-deposit"))
-	thawingFlag       = common.BytesToHash([]byte("thawing"))
+	prefixThawingAddr        = "thawing_"
+	keyVoteDeposit           = common.BytesToHash([]byte("vote-deposit"))
+	thawingFlag              = common.BytesToHash([]byte("thawing"))
+	keyLastVoteTime          = common.BytesToHash([]byte("last-vote-time"))
+	keyRealVoteWeightRatio   = common.BytesToHash([]byte("real-vote-weight-ratio"))
+	minVoteWeightRatio       = 0.5
+	attenuationRatioPerEpoch = 0.98
+	emptyHash                = common.Hash{}
 )
 
 type (
@@ -839,6 +845,34 @@ func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []b
 	// if successfully record voting, then store deposit
 	stateDB.SetState(from, keyVoteDeposit, common.BytesToHash(value.Bytes()))
 
+	// check last vote time and calculate the real vote weight ratio
+	realVoteWeightRatio := float64(1)
+	now := uint64(time.Now().Unix())
+	lastVoteTimeHash := stateDB.GetState(from, keyLastVoteTime)
+	if lastVoteTimeHash != emptyHash {
+		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
+
+		// how many epochs has passed from lastVoteTime to now
+		epochPassed := (now - lastVoteTime) / uint64(86400)
+
+		// the real vote weight ratio
+		for i := uint64(0); i < epochPassed; i++ {
+			realVoteWeightRatio *= attenuationRatioPerEpoch
+		}
+
+		if realVoteWeightRatio < minVoteWeightRatio {
+			realVoteWeightRatio = minVoteWeightRatio
+		}
+	}
+
+	// record the real vote weight ratio
+	realVoteWeightRatioBytes := Float64ToBytes(realVoteWeightRatio)
+	stateDB.SetState(from, keyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
+
+	// record the new vote time
+	nowBytes := Uint64ToBytes(now)
+	stateDB.SetState(from, keyLastVoteTime, common.BytesToHash(nowBytes))
+
 	log.Info("vote tx execution done", "vote_count", successCount)
 	return nil, gasRemainDec, nil
 }
@@ -870,4 +904,11 @@ func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, ga
 
 	log.Info("cancel vote tx execution done")
 	return nil, gas, nil
+}
+
+func Float64ToBytes(f float64) []byte {
+	bits := math.Float64bits(f)
+	bytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(bytes, bits)
+	return bytes
 }
