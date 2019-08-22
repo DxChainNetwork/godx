@@ -159,6 +159,7 @@ func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market ho
 	// The larger the divider, the larger the deposit is to be encouraged
 	if marketDeposit.Cmp(common.BigInt0) == 0 {
 		marketDeposit = common.BigInt1
+
 	}
 	ratio := hostDeposit.Float64() / marketDeposit.Float64()
 	factor := ratio / (ratio + depositBaseDivider)
@@ -255,7 +256,7 @@ func evalHostMarketDeposit(settings storage.RentPayment, market hostMarket) comm
 // of contract price, storage price, upload price and download price
 func evalContractCost(info storage.HostInfo, settings storage.RentPayment) common.BigInt {
 	// Calculate the contract price
-	contractPrice := info.ContractPrice.MultInt(2)
+	contractPrice := info.ContractPrice.MultUint64(2)
 	// Calculate the storage price
 	storagePrice := info.StoragePrice.MultUint64(settings.Period).MultUint64(expectedStoragePerContract(settings))
 	// Calculate the upload price

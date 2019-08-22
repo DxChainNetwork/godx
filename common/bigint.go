@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/rlp"
@@ -40,9 +41,9 @@ func NewBigIntUint64(x uint64) BigInt {
 
 // NewBigIntFloat64 will be used to convert the float64 data type into BigInt data type
 func NewBigIntFloat64(x float64) BigInt {
-	v := uint64(x)
+	v := int64(x)
 	return BigInt{
-		b: *new(big.Int).SetUint64(v),
+		b: *big.NewInt(v),
 	}
 }
 
@@ -101,9 +102,33 @@ func (x BigInt) Add(y BigInt) (sum BigInt) {
 	return
 }
 
+// AddInt64 will perform the addition operation for BigInt and int64 data
+func (x BigInt) AddInt64(y int64) (sum BigInt) {
+	sum.b.Add(&x.b, big.NewInt(y))
+	return
+}
+
+// AddUint64 will perform the addition operation for BigInt and uint64 data
+func (x BigInt) AddUint64(y uint64) (sum BigInt) {
+	sum.b.Add(&x.b, new(big.Int).SetUint64(y))
+	return
+}
+
 // Sub will perform the subtraction operation for BigInt data
 func (x BigInt) Sub(y BigInt) (diff BigInt) {
 	diff.b.Sub(&x.b, &y.b)
+	return
+}
+
+// SubInt64 will perform the subtraction operation for BigInt and int64 data
+func (x BigInt) SubInt64(y int64) (diff BigInt) {
+	diff.b.Sub(&x.b, big.NewInt(y))
+	return
+}
+
+// SubUint64 will perform the subtraction operation for BigInt and uint64 data`
+func (x BigInt) SubUint64(y uint64) (diff BigInt) {
+	diff.b.Sub(&x.b, new(big.Int).SetUint64(y))
 	return
 }
 
@@ -114,7 +139,7 @@ func (x BigInt) Mult(y BigInt) (prod BigInt) {
 }
 
 // MultInt will perform the multiplication operation between BigInt data and int64 data
-func (x BigInt) MultInt(y int64) (prod BigInt) {
+func (x BigInt) MultInt64(y int64) (prod BigInt) {
 	prod.b.Mul(&x.b, big.NewInt(y))
 	return
 }
@@ -127,6 +152,11 @@ func (x BigInt) MultUint64(y uint64) (prod BigInt) {
 
 // MultFloat64 will perform the multiplication operation between BigInt data and float64 data
 func (x BigInt) MultFloat64(y float64) (prod BigInt) {
+	// check if y is not a number, multiplication by 1
+	if math.IsNaN(y) {
+		y = 1
+	}
+
 	xRat := new(big.Rat).SetInt(&x.b)
 	yRat := new(big.Rat).SetFloat64(y)
 	ratProd := new(big.Rat).Mul(xRat, yRat)
