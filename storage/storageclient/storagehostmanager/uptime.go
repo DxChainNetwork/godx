@@ -30,7 +30,7 @@ func getHostUpRate(info storage.HostInfo) float64 {
 // calcUptimeUpdate calculate the Uptime update for the host info
 func calcUptimeUpdate(info storage.HostInfo, success bool, now uint64) storage.HostInfo {
 	// Calculate the decay form time
-	timePassed := now - info.LastInteractionTime
+	timePassed := now - info.LastCheckTime
 	decay := math.Pow(uptimeDecay, float64(timePassed))
 
 	// Apply the decay
