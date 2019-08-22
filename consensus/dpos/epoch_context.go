@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"math/rand"
 	"sort"
+	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -183,6 +184,19 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	genesisEpoch := genesis.Time.Int64() / epochInterval
 	prevEpoch := parent.Time.Int64() / epochInterval
 	currentEpoch := ec.TimeStamp / epochInterval
+
+	// TODO: 有可能既是candidate，又给他人或者自己投票，所以还需要解冻candidate质押
+
+	// iterator whole thawing account trie, and thawing the deposit of every delegator
+	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
+	thawingAddress := common.BytesToAddress([]byte("thawing_" + epochIDStr))
+	ec.stateDB.Exist(thawingAddress)
+	thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
+	it := trie.NewIterator(thawingTrie.NodeIterator(nil))
+	for it.Next() {
+		delegator := common.BytesToAddress(it.Key)
+		ec.stateDB.SetState(delegator, common.BytesToHash([]byte("vote-deposit")), common.Hash{})
+	}
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
