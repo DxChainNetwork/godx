@@ -292,6 +292,7 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 			return errors.New("payload must not be empty for vote tx")
 		}
 
+		// TODO: 有可能既是candidate，又给他人或者自己投票，所以需要检查下是否有candidate抵押
 		balOfFrom := evm.StateDB.GetBalance(msg.From())
 		if msg.Value().Sign() <= 0 || msg.Value().Cmp(balOfFrom) > 0 {
 			return errors.New("invalid deposit value for vote tx")

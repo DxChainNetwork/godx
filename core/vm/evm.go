@@ -842,6 +842,7 @@ func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []b
 		return nil, gasRemainDec, err
 	}
 
+	// TODO: 考虑同时作为candidate和delegator，所以投票质押需要判断下候选人质押的金额
 	// if successfully record voting, then store deposit
 	stateDB.SetState(from, keyVoteDeposit, common.BytesToHash(value.Bytes()))
 
