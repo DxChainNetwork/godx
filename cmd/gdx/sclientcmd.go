@@ -871,10 +871,10 @@ func hostRankingTable(rankings []storagehostmanager.StorageHostRank) *tablewrite
 		"InteractionFactor", "PriceFactor", "RemainingStorageFactor", "UptimeFactor"})
 
 	for _, rank := range rankings {
-		dataEntry := []string{rank.EnodeID, rank.Evaluation.String(), floatToString(rank.PresenceFactor),
-			floatToString(rank.DepositFactor),
-			floatToString(rank.InteractionFactor), floatToString(rank.ContractPriceFactor),
-			floatToString(rank.StorageRemainingFactor), floatToString(rank.UptimeFactor)}
+		dataEntry := []string{rank.EnodeID, int64ToString(rank.Evaluation), floatToString(rank.PresenceScore),
+			floatToString(rank.DepositScore),
+			floatToString(rank.InteractionScore), floatToString(rank.ContractPriceScore),
+			floatToString(rank.StorageRemainingScore), floatToString(rank.UptimeScore)}
 
 		formattedData = append(formattedData, dataEntry)
 	}
@@ -888,6 +888,10 @@ func hostRankingTable(rankings []storagehostmanager.StorageHostRank) *tablewrite
 }
 
 func floatToString(val float64) string {
+	return fmt.Sprintf("%v", val)
+}
+
+func int64ToString(val int64) string {
 	return fmt.Sprintf("%v", val)
 }
 
