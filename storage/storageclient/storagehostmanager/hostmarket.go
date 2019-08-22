@@ -29,12 +29,12 @@ type MarketPrice struct {
 // TODO: implement this
 func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
 	return MarketPrice{
-		ContractPrice: common.BigInt0,
-		StoragePrice:  common.BigInt0,
-		UploadPrice:   common.BigInt0,
-		DownloadPrice: common.BigInt0,
-		Deposit:       common.BigInt0,
-		MaxDeposit:    common.BigInt0,
+		ContractPrice: common.NewBigInt(1000),
+		StoragePrice:  common.NewBigInt(1000),
+		UploadPrice:   common.NewBigInt(1000),
+		DownloadPrice: common.NewBigInt(1000),
+		Deposit:       common.NewBigInt(1000),
+		MaxDeposit:    common.NewBigInt(10000000),
 	}
 }
 

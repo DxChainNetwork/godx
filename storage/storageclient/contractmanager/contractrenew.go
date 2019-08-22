@@ -18,6 +18,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
@@ -457,11 +458,11 @@ func (cm *ContractManager) ContractRenew(oldContract *contractset.Contract, para
 		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			cm.b.CheckAndUpdateConnection(sp.PeerNode())
-			cm.hostManager.IncrementFailedInteractions(contract.EnodeID)
+			cm.hostManager.IncrementFailedInteractions(contract.EnodeID, storagehostmanager.InteractionRenewContract)
 		}
 
 		if err == nil {
-			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID)
+			cm.hostManager.IncrementSuccessfulInteractions(contract.EnodeID, storagehostmanager.InteractionRenewContract)
 		}
 	}()
 

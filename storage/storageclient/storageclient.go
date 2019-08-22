@@ -391,11 +391,11 @@ func (client *StorageClient) Write(sp storage.Peer, actions []storage.UploadActi
 		// we will delete static flag when host negotiate or commit error
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			client.CheckAndUpdateConnection(sp.PeerNode())
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID, storagehostmanager.InteractionUpload)
 		}
 
 		if err == nil {
-			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID, storagehostmanager.InteractionUpload)
 		}
 	}()
 
@@ -627,11 +627,11 @@ func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.Down
 		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
 			client.CheckAndUpdateConnection(sp.PeerNode())
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
+			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID, storagehostmanager.InteractionDownload)
 		}
 
 		if err == nil {
-			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
+			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID, storagehostmanager.InteractionDownload)
 		}
 	}()
 

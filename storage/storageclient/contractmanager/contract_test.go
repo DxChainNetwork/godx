@@ -493,6 +493,7 @@ func TestContractManager_markNewlyFormedContractStats(t *testing.T) {
 
 func TestContractManager_checkContractStatus(t *testing.T) {
 	// create new contract manager
+	// TODO: create the contract manager with market info
 	cm, err := createNewContractManager()
 	if err != nil {
 		t.Fatalf("failed to create contract manager: %s", err.Error())
@@ -510,7 +511,7 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 	defer cm.activeContracts.EmptyDB()
 
 	// base line for the storage host evaluation
-	baseline := common.NewBigIntFloat64(10)
+	baseline := int64(10)
 
 	// insert contract, host does not exist
 	var hostNotExistsContract []storage.ContractMetaData

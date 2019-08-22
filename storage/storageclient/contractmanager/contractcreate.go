@@ -17,6 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -250,12 +251,12 @@ func (cm *ContractManager) ContractCreate(params storage.ContractParams) (md sto
 		// we will delete static flag when host negotiate or commit error
 		// when host occurs error, we increase failed interactions
 		if hostCommitErr != nil || hostNegotiateErr != nil {
-			cm.hostManager.IncrementFailedInteractions(host.EnodeID)
+			cm.hostManager.IncrementFailedInteractions(host.EnodeID, storagehostmanager.InteractionCreateContract)
 			cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		}
 
 		if err == nil {
-			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID)
+			cm.hostManager.IncrementSuccessfulInteractions(host.EnodeID, storagehostmanager.InteractionCreateContract)
 		}
 	}()
 

@@ -18,7 +18,7 @@ type HostEvaluator interface {
 	Evaluate(info storage.HostInfo) int64
 }
 
-// EvaluationDetail contains the detailed storage host evaluation factors
+// EvaluateDetail contains the detailed storage host evaluation factors
 type EvaluationDetail struct {
 	Evaluation int64 `json:"evaluation"`
 

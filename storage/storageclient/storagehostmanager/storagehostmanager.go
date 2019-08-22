@@ -277,13 +277,13 @@ func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlack
 	return
 }
 
-// Evaluation will calculate and return the evaluation of a single storage host
-func (shm *StorageHostManager) Evaluation(host storage.HostInfo) int64 {
+// Evaluate will calculate and return the evaluation of a single storage host
+func (shm *StorageHostManager) Evaluate(host storage.HostInfo) int64 {
 	return shm.hostEvaluator.Evaluate(host)
 }
 
-// EvaluationDetail will calculate and return the evaluation detail of a single storage host
-func (shm *StorageHostManager) EvaluationDetail(host storage.HostInfo) EvaluationDetail {
+// EvaluateDetail will calculate and return the evaluation detail of a single storage host
+func (shm *StorageHostManager) EvaluateDetail(host storage.HostInfo) EvaluationDetail {
 	return shm.hostEvaluator.EvaluateDetail(host)
 }
 

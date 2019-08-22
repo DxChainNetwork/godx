@@ -27,7 +27,7 @@ const (
 	// divided by the calculated min evaluation, which
 	// is used to determine if the contract should be
 	// prohibited to upload and renew
-	evalFactor                         = uint64(100)
+	evalFactor                         = int64(5)
 	minClientBalanceUploadThreshold    = float64(0.05)
 	minContractPaymentRenewalThreshold = float64(0.06)
 	minContractPaymentFactor           = float64(0.15)
