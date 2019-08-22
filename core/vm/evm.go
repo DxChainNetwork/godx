@@ -538,6 +538,16 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 		return nil, gas, err
 	}
 	evm.StateDB.SetState(caller, common.BytesToHash([]byte("FrozenAssets")), common.BigToHash(value))
+	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
+	if len(data) != 0 {
+		rr := struct {
+			RewardRatio uint8
+		}{}
+		err := rlp.DecodeBytes(data, &rr)
+		if err == nil && rr.RewardRatio <= 100 {
+			evm.StateDB.SetState(caller, common.BytesToHash([]byte("RewardRatio")), common.BytesToHash(data))
+		}
+	}
 	return nil, gas, nil
 }
 
