@@ -225,7 +225,7 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	defer shm.lock.Unlock()
 
 	// update the host information
-	shm.hostInfoUpdate(hi, err)
+	shm.hostInfoUpdate(hi, shm.b, err)
 
 	shm.log.Debug("Storage Host Information Updated", "enodeID", hi.EnodeID)
 }

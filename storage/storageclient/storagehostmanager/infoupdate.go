@@ -10,11 +10,16 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+// onlineBackend is the backend that gets whether the backend is online or not
+type onlineBackend interface {
+	Online() bool
+}
+
 // hostConfigUpdate calculate the try to update the host config wight the host info.
 // It will update the uptime fields as well as the interaction fields.
-func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, err error) error {
+func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBackend, err error) error {
 	// if error happens due to the backend is not online, directly return
-	if err != nil && !shm.b.Online() {
+	if err != nil && !b.Online() {
 		return nil
 	}
 	// get the host info from the tree
@@ -44,9 +49,9 @@ func whetherRemoveHost(info storage.HostInfo, currentBlockHeight uint64) bool {
 	upRate := getHostUpRate(info)
 	criteria := calcHostRemoveCriteria(info, currentBlockHeight)
 	if upRate > criteria {
-		return true
-	} else {
 		return false
+	} else {
+		return true
 	}
 }
 

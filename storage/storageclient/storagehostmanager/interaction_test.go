@@ -6,6 +6,11 @@ package storagehostmanager
 
 import (
 	"testing"
+	"time"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
 
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -89,5 +94,80 @@ func TestInteractionInitiate(t *testing.T) {
 		if info.FailedInteractionFactor != test.expectedFailed {
 			t.Errorf("failed interaction not expected")
 		}
+	}
+}
+
+func TestUpdateInteractionRecord(t *testing.T) {
+	tests := []struct {
+		recordSize int
+	}{
+		{0}, {1}, {maxNumInteractionRecord},
+	}
+	for _, test := range tests {
+		info := storage.HostInfo{}
+		for i := 0; i != test.recordSize; i++ {
+			info.InteractionRecords = append(info.InteractionRecords, storage.HostInteractionRecord{
+				Time:            time.Unix(0, 0),
+				InteractionType: "test interaction",
+				Success:         true,
+			})
+		}
+		updateInteractionRecord(&info, InteractionGetConfig, true, 0)
+		size := len(info.InteractionRecords)
+		if test.recordSize >= maxNumInteractionRecord {
+			if size != maxNumInteractionRecord {
+				t.Errorf("after update, interaction record size not expected. Got %v, Expect %v", size, maxNumInteractionRecord)
+			}
+		} else {
+			if size != test.recordSize+1 {
+				t.Errorf("after update, interaction record size not expected. Got %v, Expect %v", size, test.recordSize+1)
+			}
+		}
+	}
+}
+
+// TestStorageHostManager_IncrementSuccessfulInteractions test StorageHostManager.IncrementSuccessfulInteractions
+func TestStorageHostManager_IncrementSuccessfulInteractions(t *testing.T) {
+	enodeID := enode.ID{1, 2, 3, 4}
+	info := storage.HostInfo{EnodeID: enodeID, SuccessfulInteractionFactor: 10, FailedInteractionFactor: 10}
+	shm := &StorageHostManager{}
+	shm.hostEvaluator = newDefaultEvaluator(shm, storage.RentPayment{})
+	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
+	if err := shm.storageHostTree.Insert(info); err != nil {
+		t.Fatal("cannot insert into the storage host tree: ", err)
+	}
+	prevSc := interactionScoreCalc(info)
+
+	shm.IncrementSuccessfulInteractions(enodeID, InteractionGetConfig)
+	newInfo, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
+	if !exist {
+		t.Fatalf("node %v not exist", enodeID)
+	}
+	newSc := interactionScoreCalc(newInfo)
+	if prevSc >= newSc {
+		t.Errorf("After success update, interaction not increasing: %v -> %v", prevSc, newSc)
+	}
+}
+
+// TestStorageHostManager_IncrementFailedInteractions test StorageHostManager.IncrementSuccessfulInteractions
+func TestStorageHostManager_IncrementFailedInteractions(t *testing.T) {
+	enodeID := enode.ID{1, 2, 3, 4}
+	info := storage.HostInfo{EnodeID: enodeID, SuccessfulInteractionFactor: 10, FailedInteractionFactor: 10}
+	shm := &StorageHostManager{}
+	shm.hostEvaluator = newDefaultEvaluator(shm, storage.RentPayment{})
+	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
+	if err := shm.storageHostTree.Insert(info); err != nil {
+		t.Fatal("cannot insert into the storage host tree: ", err)
+	}
+	prevSc := interactionScoreCalc(info)
+
+	shm.IncrementFailedInteractions(enodeID, InteractionGetConfig)
+	newInfo, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
+	if !exist {
+		t.Fatalf("node %v not exist", enodeID)
+	}
+	newSc := interactionScoreCalc(newInfo)
+	if prevSc <= newSc {
+		t.Errorf("After success update, interaction not increasing: %v -> %v", prevSc, newSc)
 	}
 }

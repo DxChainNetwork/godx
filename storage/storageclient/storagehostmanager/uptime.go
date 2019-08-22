@@ -40,7 +40,7 @@ func calcUptimeUpdate(info storage.HostInfo, success bool, now uint64) storage.H
 
 	// Calculate the accumulated time with decay factor
 	// The amount is defined by integral of decayFactor^x * dx
-	timeIncrease := (1 - decay) / math.Log(uptimeDecay)
+	timeIncrease := (decay - 1) / math.Log(uptimeDecay)
 	if success {
 		info.AccumulatedUptime += timeIncrease
 	} else {
