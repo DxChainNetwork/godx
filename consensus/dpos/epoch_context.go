@@ -61,16 +61,20 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			// retrieve the vote deposit of delegator
 			emptyHash := common.Hash{}
 			voteDepositHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("vote-deposit")))
+
+			// maybe current is genesis, has no vote before
 			if voteDepositHash == emptyHash {
-				log.Error("no vote deposit", "delegator", delegatorAddr.String())
+				existDelegator = delegateIterator.Next()
 				continue
 			}
 			voteDeposit := binary.BigEndian.Uint64(voteDepositHash.Bytes())
 
 			// retrieve the real vote weight ratio of delegator
 			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("real-vote-weight-ratio")))
+
+			// maybe current is genesis, has no vote before
 			if realVoteWeightRatioHash == emptyHash {
-				log.Error("no real vote weight ratio", "delegator", delegatorAddr.String())
+				existDelegator = delegateIterator.Next()
 				continue
 			}
 			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes())
@@ -200,6 +204,11 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		votes, err := ec.countVotes()
 		if err != nil {
 			return err
+		}
+
+		// maybe current is genesis, so has no vote on chain, just return
+		if len(votes) == 0 {
+			return nil
 		}
 
 		// calculate the vote weight proportion based on the vote weight
