@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/p2p/enode"
-
 	"github.com/DxChainNetwork/godx/storage"
 )
 

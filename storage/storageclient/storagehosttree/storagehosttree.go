@@ -152,7 +152,7 @@ func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, 
 	return node.entry.HostInfo, true
 }
 
-// SetEvaluationFunc will re-assign evaluation function for calculating
+// SetEvaluator will re-assign evaluation function for calculating
 // storage host evaluation.
 func (t *StorageHostTree) SetEvaluator(evaluator Evaluator) error {
 	t.lock.Lock()

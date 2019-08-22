@@ -38,9 +38,8 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	}
 	if exist {
 		return shm.modify(info)
-	} else {
-		return shm.insert(info)
 	}
+	return shm.insert(info)
 }
 
 // whetherRemoveHost decide whether to remove the host from host manager with the given host info.
@@ -50,9 +49,8 @@ func whetherRemoveHost(info storage.HostInfo, currentBlockHeight uint64) bool {
 	criteria := calcHostRemoveCriteria(info, currentBlockHeight)
 	if upRate > criteria {
 		return false
-	} else {
-		return true
 	}
+	return true
 }
 
 // calcHostRemoveCriteria calculate the criteria for removing a host

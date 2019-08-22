@@ -8,11 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-
 	"github.com/DxChainNetwork/godx/p2p/enode"
-
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
 func TestInteractionName(t *testing.T) {

@@ -18,7 +18,7 @@ type HostEvaluator interface {
 	Evaluate(info storage.HostInfo) int64
 }
 
-// EvaluateDetail contains the detailed storage host evaluation factors
+// EvaluationDetail contains the detailed storage host evaluation factors
 type EvaluationDetail struct {
 	Evaluation int64 `json:"evaluation"`
 
@@ -181,9 +181,8 @@ func contractCostScoreCalc(info storage.HostInfo, rent storage.RentPayment, mark
 	// If ratio is smaller than 0.1, the factor has value 10; Else the factor has value 1/x
 	if ratio <= 0.1 {
 		return 10
-	} else {
-		return 1 / ratio
 	}
+	return 1 / ratio
 }
 
 // storageRemainingScoreCalc calculates the score based on the storage remaining, the more storage

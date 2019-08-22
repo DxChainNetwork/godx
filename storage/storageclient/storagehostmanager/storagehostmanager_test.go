@@ -6,14 +6,14 @@ package storagehostmanager
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/Pallinder/go-randomdata"
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
+	"github.com/Pallinder/go-randomdata"
 )
 
 var shmtest1 = New("test")
