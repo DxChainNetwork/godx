@@ -81,6 +81,8 @@ func (de *defaultEvaluator) Evaluate(info storage.HostInfo) int64 {
 
 // EvaluateDetail evaluate the host info, and return the final score with the score details
 func (de *defaultEvaluator) EvaluateDetail(info storage.HostInfo) EvaluationDetail {
+	// regulate host info
+	regulateHostInfo(&info)
 	// Calculate the scores
 	scs := de.calcScores(info)
 	// Calculate the final score
@@ -103,7 +105,7 @@ func (de *defaultEvaluator) calcScores(info storage.HostInfo) *defaultEvaluation
 	scores := &defaultEvaluationScores{
 		presenceScore:         presenceScoreCalc(info, m),
 		depositScore:          depositScoreCalc(info, r, m),
-		contractPriceScore:    contractPriceScoreCalc(info, r, m),
+		contractPriceScore:    contractCostScoreCalc(info, r, m),
 		storageRemainingScore: storageRemainingScoreCalc(info, r),
 		interactionScore:      interactionScoreCalc(info),
 		uptimeScore:           uptimeScoreCalc(info),
@@ -163,9 +165,9 @@ func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market ho
 	return factor
 }
 
-// contractPriceScoreCalc calculates the score based on the contract price that storage host requested
+// contractCostScoreCalc calculates the score based on the contract price that storage host requested
 // the lower the price is, the higher the storage host evaluation will be
-func contractPriceScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
+func contractCostScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
 	// Evaluate the cost of host and market
 	hostContractCost := evalContractCost(info, rent)
 	marketContractCost := evalMarketContractCost(market, rent)

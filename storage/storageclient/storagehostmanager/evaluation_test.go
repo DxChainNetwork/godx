@@ -400,6 +400,32 @@ func TestStorageRemainingFactorCalc(t *testing.T) {
 	}
 }
 
+func TestContractCostScoreCalc(t *testing.T) {
+	tests := []struct {
+		priceRatio float64
+	}{
+		{0.01}, {0.1}, {1}, {2}, {3}, {5}, {10}, {100},
+	}
+	for i, test := range tests {
+		// The price ratio is obtained by setting the contract price only
+		marketContractPrice := common.NewBigInt(1e6)
+		hostContractPrice := marketContractPrice.MultFloat64(test.priceRatio)
+		m := &fakeHostMarket{contractPrice: marketContractPrice}
+		info := storage.HostInfo{
+			HostExtConfig: storage.HostExtConfig{
+				ContractPrice: hostContractPrice,
+			},
+		}
+		rent := storage.RentPayment{
+			StorageHosts: 1,
+		}
+		res := contractCostScoreCalc(info, rent, m)
+		if res > 10 || res < 0 {
+			t.Fatalf("Test %v: invalid score: %v", i, res)
+		}
+	}
+}
+
 // TestStorageRemainingScoreCalc test the functionality of storageRemainingScoreCalc.
 // The returned score should be within range [0, 1), and increment as remaining storage increases
 func TestStorageRemainingScoreCalc(t *testing.T) {
