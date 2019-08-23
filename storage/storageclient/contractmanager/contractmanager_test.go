@@ -66,7 +66,6 @@ var testRentPayment = storage.RentPayment{
 	Fund:         common.NewBigIntUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615),
 	StorageHosts: 50,
 	Period:       3 * unit.BlocksPerMonth,
-	RenewWindow:  unit.BlocksPerMonth,
 
 	ExpectedStorage:    1e12,                                // 1 TB
 	ExpectedUpload:     uint64(200e9) / unit.BlocksPerMonth, // 200 GB per month

@@ -507,7 +507,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// check if the contract should be renewed, if so, mark the contract upload ability to be false
 	cm.lock.RLock()
 	blockHeight := cm.blockHeight
-	renewWindow := cm.rentPayment.RenewWindow
+	renewWindow := storage.RenewWindow
 	period := cm.rentPayment.Period
 	cm.lock.RUnlock()
 

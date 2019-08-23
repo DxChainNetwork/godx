@@ -222,9 +222,6 @@ func clientSettingValidation(key string, prevSetting storage.ClientSetting, curr
 	case "period":
 		valid = currentSetting.RentPayment.Period == prevSetting.RentPayment.Period
 		return
-	case "renew":
-		valid = currentSetting.RentPayment.RenewWindow == prevSetting.RentPayment.RenewWindow
-		return
 	case "storage":
 		valid = currentSetting.RentPayment.ExpectedStorage == prevSetting.RentPayment.ExpectedStorage
 		return

@@ -6,6 +6,7 @@ package storageclient
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -104,7 +105,6 @@ func formatRentPayment(rent storage.RentPayment) (formatted storage.RentPaymentA
 	formatted.Fund = unit.FormatCurrency(rent.Fund)
 	formatted.StorageHosts = formatHosts(rent.StorageHosts)
 	formatted.Period = unit.FormatTime(rent.Period)
-	formatted.RenewWindow = unit.FormatTime(rent.RenewWindow)
 	formatted.ExpectedStorage = unit.FormatStorage(rent.ExpectedStorage, true)
 	formatted.ExpectedUpload = unit.FormatStorage(rent.ExpectedUpload, false)
 	formatted.ExpectedDownload = unit.FormatStorage(rent.ExpectedDownload, false)

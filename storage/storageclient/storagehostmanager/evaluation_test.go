@@ -24,7 +24,6 @@ func TestNewDefaultEvaluator(t *testing.T) {
 	rent := storage.RentPayment{
 		StorageHosts:       0,
 		Period:             0,
-		RenewWindow:        0,
 		ExpectedStorage:    0,
 		ExpectedUpload:     0,
 		ExpectedDownload:   0,

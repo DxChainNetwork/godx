@@ -5,18 +5,19 @@
 package contractmanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 )
 
 var rentPaymentTest = storage.RentPayment{
 	Fund:               common.NewBigInt(1000000),
 	StorageHosts:       3,
-	Period:             10,
-	RenewWindow:        5,
+	Period:             unit.BlocksPerDay,
 	ExpectedStorage:    100,
 	ExpectedUpload:     100,
 	ExpectedDownload:   100,

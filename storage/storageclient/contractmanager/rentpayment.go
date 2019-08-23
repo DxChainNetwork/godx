@@ -7,8 +7,9 @@ package contractmanager
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"reflect"
+
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // SetRentPayment will set the rent payment to the value passed in by the user
@@ -46,7 +47,7 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 	if reflect.DeepEqual(oldRent, storage.RentPayment{}) {
 		// update the current period
 		cm.lock.Lock()
-		cm.currentPeriod = cm.blockHeight - rent.RenewWindow
+		cm.currentPeriod = cm.blockHeight - storage.RenewWindow
 		cm.lock.Unlock()
 
 		// reuse the active canceled contracts
@@ -100,8 +101,6 @@ func RentPaymentValidation(rent storage.RentPayment) (err error) {
 		return errors.New("amount of storage hosts cannot be set to 0")
 	case rent.Period == 0:
 		return errors.New("storage period cannot be set to 0")
-	case rent.RenewWindow == 0:
-		return errors.New("renew window cannot be set to 0")
 	case rent.ExpectedStorage == 0:
 		return errors.New("expected storage cannot be set to 0")
 	case rent.ExpectedUpload == 0:
@@ -110,7 +109,7 @@ func RentPaymentValidation(rent storage.RentPayment) (err error) {
 		return errors.New("expectedDownload cannot be set to 0")
 	case rent.ExpectedRedundancy == 0:
 		return errors.New("expectedRedundancy cannot be set to 0")
-	case rent.RenewWindow > rent.Period:
+	case storage.RenewWindow > rent.Period:
 		return errors.New("renew window cannot be larger than the period")
 	default:
 		return

@@ -59,6 +59,10 @@ const (
 	ClientNegotiateErrorMsg          = 0x39
 )
 
+const (
+	RenewWindow = 12 * unit.BlocksPerHour
+)
+
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
 // can be generated in an hour
 var (
@@ -71,7 +75,6 @@ var (
 		Fund:         common.PtrBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)).MultInt64(1e4),
 		StorageHosts: 3,
 		Period:       3 * unit.BlocksPerDay,
-		RenewWindow:  12 * unit.BlocksPerHour,
 
 		// TODO: remove these fields
 		ExpectedStorage:    1e12,                                // 1 TB

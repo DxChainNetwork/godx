@@ -38,6 +38,9 @@ const (
 	prefixStorageResponsibility = "StorageResponsibility-"
 	//prefixHeight db prefix for task
 	prefixHeight = "height-"
+
+	//Total time to sign the contract
+	postponedExecutionBuffer = 12 * unit.BlocksPerHour
 )
 
 var (
@@ -72,9 +75,6 @@ var (
 
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
-
-	//Total time to sign the contract
-	postponedExecutionBuffer = unit.BlocksPerDay
 )
 
 // init set the initial value for sector height

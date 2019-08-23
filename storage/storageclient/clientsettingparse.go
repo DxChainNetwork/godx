@@ -49,15 +49,6 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 			}
 			clientSetting.RentPayment.Period = period
 
-		case key == "renew":
-			var renew uint64
-			renew, err = unit.ParseTime(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the renew value: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.RenewWindow = renew
-
 		case key == "storage":
 			var expectedStorage uint64
 			expectedStorage, err = unit.ParseStorage(value)
@@ -186,10 +177,6 @@ func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.
 
 	if setting.RentPayment.Period == 0 {
 		setting.RentPayment.Period = storage.DefaultRentPayment.Period
-	}
-
-	if setting.RentPayment.RenewWindow == 0 {
-		setting.RentPayment.RenewWindow = storage.DefaultRentPayment.RenewWindow
 	}
 
 	if setting.RentPayment.ExpectedStorage == 0 {
