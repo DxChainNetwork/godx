@@ -16,7 +16,7 @@ type onlineBackend interface {
 	Online() bool
 }
 
-// hostConfigUpdate calculate the try to update the host config wight the host info.
+// hostInfoUpdate try to update the host config info.
 // It will update the uptime fields as well as the interaction fields.
 func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBackend, err error) error {
 	// if error happens due to the backend is not online, directly return
