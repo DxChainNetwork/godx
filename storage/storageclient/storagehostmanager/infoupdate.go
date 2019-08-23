@@ -36,7 +36,7 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	// Check whether to remove the host
 	remove := whetherRemoveHost(info, shm.blockHeight)
 	if remove {
-		return shm.remove(storedInfo.EnodeID)
+		return shm.remove(info.EnodeID)
 	}
 	if exist {
 		return shm.modify(info)
