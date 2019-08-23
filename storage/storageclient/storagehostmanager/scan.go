@@ -99,7 +99,7 @@ func (shm *StorageHostManager) autoScan() {
 // startScanning will first check whether the scan for the host info is needed. If needed, start a goroutine
 // to scan the storage host added
 func (shm *StorageHostManager) startScanning(hi storage.HostInfo) {
-	shm.log.Debug("Started Scan Validation")
+	shm.log.Debug("Started Scan")
 
 	// verify if the storage host is already in scan pool
 	shm.lock.Lock()
