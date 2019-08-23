@@ -57,7 +57,7 @@ const (
 	initialFailedInteractionFactor             = 0
 	interactionDecay                   float64 = 0.999999
 	interactionExponentialIndex                = 4
-	maxNumInteractionRecord                    = 10
+	maxNumInteractionRecord                    = 30
 )
 
 // uptime related fields
@@ -69,7 +69,7 @@ const (
 
 	// If the host has an uptime rate as 0.98, it has full score in uptimeFactor
 	uptimeCap               = 0.98
-	uptimeMaxNumScanRecords = 5
+	uptimeMaxNumScanRecords = 20
 )
 
 // host manager remove criteria
