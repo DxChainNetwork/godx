@@ -487,6 +487,16 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getStorageContractByBlockHash',
+			call: 'eth_getStorageContractByBlockHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getStorageContractByTransactionHash',
+			call: 'eth_getStorageContractByTransactionHash',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'getRawTransactionFromBlock',
 			call: function(args) {
 				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getRawTransactionByBlockHashAndIndex' : 'eth_getRawTransactionByBlockNumberAndIndex';
