@@ -133,16 +133,16 @@ type (
 		InteractionRecords          []HostInteractionRecord `json:"interactionRecords"`
 
 		// TODO: refactor this into an interface: host scans
-		AccumulatedUptime   float64       `json:"accumulatedUptime"`
-		AccumulatedDowntime float64       `json:"accumulatedDowntime"`
-		LastCheckTime       uint64        `json:"lastCheckTime"`
-		ScanRecords         HostPoolScans `json:"scanRecords"`
+		AccumulatedUptime   float64       `json:"accumulated_uptime"`
+		AccumulatedDowntime float64       `json:"accumulated_downtime"`
+		LastCheckTime       uint64        `json:"last_check_time"`
+		ScanRecords         HostPoolScans `json:"scan_records"`
 
 		// IP will be decoded from the enode URL
 		IP string `json:"ip"`
 
-		IPNetwork           string    `json:"ipnetwork"`
-		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
+		IPNetwork           string    `json:"ip_network"`
+		LastIPNetWorkChange time.Time `json:"last_ipnetwork_change"`
 
 		EnodeID    enode.ID `json:"enodeid"`
 		EnodeURL   string   `json:"enodeurl"`
@@ -184,18 +184,18 @@ type ContractParams struct {
 // RentPayment stores the StorageClient payment settings for renting the storage space from the host
 type RentPayment struct {
 	Fund         common.BigInt `json:"fund"`
-	StorageHosts uint64        `json:"storagehosts"`
+	StorageHosts uint64        `json:"storage_hosts"`
 	Period       uint64        `json:"period"`
-	RenewWindow  uint64        `json:"renewwindow"`
+	RenewWindow  uint64        `json:"renew_window"`
 
 	// ExpectedStorage is amount of data expected to be stored
-	ExpectedStorage uint64 `json:"expectedstorage"`
+	ExpectedStorage uint64 `json:"expected_storage"`
 	// ExpectedUpload is expected amount of data upload before redundancy / block
-	ExpectedUpload uint64 `json:"expectedupload"`
+	ExpectedUpload uint64 `json:"expected_upload"`
 	// ExpectedDownload is expected amount of data downloaded / block
-	ExpectedDownload uint64 `json:"expecteddownload"`
+	ExpectedDownload uint64 `json:"expected_download"`
 	// ExpectedRedundancy is the average redundancy of files uploaded
-	ExpectedRedundancy float64 `json:"expectedredundancy"`
+	ExpectedRedundancy float64 `json:"expected_redundancy"`
 }
 
 // ClientSetting defines the settings that client used to create contract with other peers,
