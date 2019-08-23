@@ -38,10 +38,8 @@ type nodeEntry struct {
 type nodeEntries []nodeEntry
 
 // the storage host with higher weight will placed in the front of the list
-func (ne nodeEntries) Len() int { return len(ne) }
-
-// TODO: check with mzhang whether this is less than or larger than
-func (ne nodeEntries) Less(i, j int) bool { return ne[i].eval < ne[j].eval }
+func (ne nodeEntries) Len() int           { return len(ne) }
+func (ne nodeEntries) Less(i, j int) bool { return ne[i].eval > ne[j].eval }
 func (ne nodeEntries) Swap(i, j int)      { ne[i], ne[j] = ne[j], ne[i] }
 
 // newNode will create and initialize a new node object, which will be inserted into
