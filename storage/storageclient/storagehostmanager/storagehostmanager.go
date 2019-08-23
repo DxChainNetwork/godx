@@ -282,11 +282,6 @@ func (shm *StorageHostManager) Evaluate(host storage.HostInfo) int64 {
 	return shm.hostEvaluator.Evaluate(host)
 }
 
-// EvaluateDetail will calculate and return the evaluation detail of a single storage host
-func (shm *StorageHostManager) EvaluateDetail(host storage.HostInfo) EvaluationDetail {
-	return shm.hostEvaluator.EvaluateDetail(host)
-}
-
 // AllHosts will return all available storage hosts
 func (shm *StorageHostManager) AllHosts() []storage.HostInfo {
 	shm.lock.RLock()
