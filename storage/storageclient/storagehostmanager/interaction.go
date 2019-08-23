@@ -61,7 +61,7 @@ var (
 	interactonWeight = map[InteractionType]float64{
 		InteractionGetConfig:      1,
 		InteractionCreateContract: 2,
-		InteractionRenewContract:  2,
+		InteractionRenewContract:  5,
 		InteractionUpload:         5,
 		InteractionDownload:       10,
 	}
