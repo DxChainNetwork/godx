@@ -164,6 +164,20 @@ func (x BigInt) MultFloat64(y float64) (prod BigInt) {
 	return
 }
 
+// MulWithFloatResult will perform the multiplication operation between BigInt data and float64 data
+// and the result type is the rat
+func (x BigInt) MulWithFloatResult(y float64) (prod *big.Rat) {
+	// check if y is not a number, multiplication by 1
+	if math.IsNaN(y) {
+		y = 1
+	}
+
+	xRat := new(big.Rat).SetInt(&x.b)
+	yRat := new(big.Rat).SetFloat64(y)
+	prod = new(big.Rat).Mul(xRat, yRat)
+	return
+}
+
 // Div will perform the division operation between BigInt data
 func (x BigInt) Div(y BigInt) (quotient BigInt) {
 	// denominator cannot be 0

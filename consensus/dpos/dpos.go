@@ -49,6 +49,10 @@ var (
 	timeOfFirstBlock = int64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
+
+	// defaultRewardRatio is the default ratio of candidate share ratio with delegators belonged to it
+	defaultRewardRatio = common.NewBigInt(30)
+	baseRewardDenominator = common.NewBigInt(100)
 )
 
 var (
@@ -369,15 +373,16 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// TODO get vote count by vote trie
-	voteCount := common.NewBigInt(1000)
+	voteCount := common.NewBigInt(35)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return
 	}
+	voteCountRat := new(big.Rat).SetInt(voteCount.BigIntPtr())
 
 	// TODO get ratio of reward between delegate and voters
-	rewardRatio := 0.3
-	delegatorReward := common.NewBigInt(blockReward.Int64()).MultFloat64(rewardRatio)
+	rewardRatio := defaultRewardRatio
+	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatio).DivWithFloatResult(baseRewardDenominator)
 	assignedReward := common.Big0
 
 	delegateTrie := dposContext.DelegateTrie()
@@ -386,13 +391,14 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 
 		// TODO get the votes of delegator to vote for delegate
-		vote := common.NewBigInt(1)
+		vote := common.NewBigInt(3)
 
 		// calculate reward of each delegator due to it's vote(stake) percent
-		percentReward := delegatorReward.Mult(vote).Div(voteCount).BigIntPtr()
-		state.AddBalance(delegator, percentReward)
+		x := vote.MulWithFloatResult(delegatorReward)
+		x.Quo(x, voteCountRat)
+		percentReward :=new(big.Int).Div(x.Num(), x.Denom())
 
-		// add percentReward to assignedReward
+		state.AddBalance(delegator, percentReward)
 		assignedReward.Add(assignedReward, percentReward)
 	}
 
