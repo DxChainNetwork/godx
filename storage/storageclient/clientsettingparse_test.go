@@ -6,12 +6,13 @@ package storageclient
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/unit"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 func TestStorageClient_ParseClientSetting(t *testing.T) {
@@ -77,14 +78,14 @@ func TestParseExpectedUpload(t *testing.T) {
 		dataSize string
 		parsed   uint64
 	}{
-		{"256b", 256 / storage.BlocksPerMonth},
-		{"1000 b", 1000 / storage.BlocksPerMonth},
-		{"431 KB", 431 * 1e3 / storage.BlocksPerMonth},
-		{"486 mB", 486 * 1e6 / storage.BlocksPerMonth},
-		{"1025 gb", 1025 * 1e9 / storage.BlocksPerMonth},
-		{"3 tB", 3 * 1e12 / storage.BlocksPerMonth},
-		{"431 mib", 431 * 1 << 20 / storage.BlocksPerMonth},
-		{"572 tib", 572 * 1 << 40 / storage.BlocksPerMonth},
+		{"256b", 256 / unit.BlocksPerMonth},
+		{"1000 b", 1000 / unit.BlocksPerMonth},
+		{"431 KB", 431 * 1e3 / unit.BlocksPerMonth},
+		{"486 mB", 486 * 1e6 / unit.BlocksPerMonth},
+		{"1025 gb", 1025 * 1e9 / unit.BlocksPerMonth},
+		{"3 tB", 3 * 1e12 / unit.BlocksPerMonth},
+		{"431 mib", 431 * 1 << 20 / unit.BlocksPerMonth},
+		{"572 tib", 572 * 1 << 40 / unit.BlocksPerMonth},
 	}
 
 	for _, table := range tables {

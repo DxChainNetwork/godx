@@ -7,6 +7,8 @@ package storagehost
 import (
 	"strconv"
 
+	"github.com/DxChainNetwork/godx/common/unit"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -48,10 +50,10 @@ var (
 	}
 
 	// persistence default value
-	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
-	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
-	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
-	defaultWindowSize           = 5 * storage.BlockPerHour  // 5 hours
+	defaultMaxDuration          = unit.BlocksPerDay * 30 // 30 days
+	defaultMaxDownloadBatchSize = 17 * (1 << 20)         // 17 MB
+	defaultMaxReviseBatchSize   = 17 * (1 << 20)         // 17 MB
+	defaultWindowSize           = 5 * unit.BlocksPerHour // 5 hours
 
 	// deposit defaults value
 	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
@@ -72,7 +74,7 @@ var (
 	emptyStorageContract = types.StorageContract{}
 
 	//Total time to sign the contract
-	postponedExecutionBuffer = storage.BlocksPerDay
+	postponedExecutionBuffer = unit.BlocksPerDay
 )
 
 // init set the initial value for sector height

@@ -23,7 +23,7 @@ func ParseTime(str string) (parsed uint64, err error) {
 	switch {
 	case unit == "h":
 		// convert the time hour to number of blocks
-		return ParseUint64(str, BlockPerHour, "h")
+		return ParseUint64(str, BlocksPerHour, "h")
 	case unit == "b":
 		// return the number of blocks directly
 		return ParseUint64(str, 1, "b")
@@ -64,11 +64,11 @@ func FormatTime(time uint64) (formatted string) {
 	case time%BlocksPerDay == 0:
 		formatted = fmt.Sprintf("%v Day(s)", time/BlocksPerDay)
 		return
-	case time%BlockPerHour == 0:
-		formatted = fmt.Sprintf("%v Hour(s)", time/BlockPerHour)
+	case time%BlocksPerHour == 0:
+		formatted = fmt.Sprintf("%v Hour(s)", time/BlocksPerHour)
 		return
 	default:
-		formatted = fmt.Sprintf("%v Minute(s)", float64(time)/float64(BlockPerMin))
+		formatted = fmt.Sprintf("%v Minute(s)", float64(time)/float64(BlocksPerMin))
 		return
 	}
 }

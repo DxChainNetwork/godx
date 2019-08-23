@@ -6,10 +6,11 @@ package storageclient
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
-	"strconv"
 )
 
 // parseClientSetting will take client settings in a map format, where both key and value are strings. Then, those value will be parsed
@@ -147,7 +148,7 @@ func parseExpectedUpload(upload string) (parsed uint64, err error) {
 	}
 
 	// in terms of bytes / month
-	parsed = parsed / storage.BlocksPerMonth
+	parsed = parsed / unit.BlocksPerMonth
 	return
 }
 
@@ -158,7 +159,7 @@ func parseExpectedDownload(download string) (parsed uint64, err error) {
 	}
 
 	// in terms of bytes / month
-	parsed = parsed / storage.BlocksPerMonth
+	parsed = parsed / unit.BlocksPerMonth
 	return
 }
 
