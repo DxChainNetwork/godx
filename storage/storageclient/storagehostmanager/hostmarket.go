@@ -5,7 +5,10 @@
 package storagehostmanager
 
 import (
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/math"
 )
 
 // hostMarket provides methods to evaluate the storage price, upload price, download
@@ -25,16 +28,18 @@ type MarketPrice struct {
 	MaxDeposit    common.BigInt
 }
 
-// GetMarketPrice return the market price for evaluation based on host entries
+// GetMarketPrice return the market price for evaluation based on host entries.
+// Currently, the returned market price is hard coded host default settings.
+// Will be updated later.
 // TODO: implement this
 func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
 	return MarketPrice{
-		ContractPrice: common.NewBigInt(1000),
-		StoragePrice:  common.NewBigInt(1000),
-		UploadPrice:   common.NewBigInt(1000),
-		DownloadPrice: common.NewBigInt(1000),
-		Deposit:       common.NewBigInt(1000),
-		MaxDeposit:    common.NewBigInt(10000000),
+		ContractPrice: common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))),
+		StoragePrice:  common.PtrBigInt(math.BigPow(10, 3)),
+		UploadPrice:   common.PtrBigInt(math.BigPow(10, 7)),
+		DownloadPrice: common.PtrBigInt(math.BigPow(10, 8)),
+		Deposit:       common.PtrBigInt(math.BigPow(10, 3)),
+		MaxDeposit:    common.PtrBigInt(math.BigPow(10, 20)),
 	}
 }
 
