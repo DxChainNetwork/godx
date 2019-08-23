@@ -5,7 +5,6 @@
 package storagehost
 
 import (
-	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -60,12 +59,14 @@ var (
 	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
 
 	// prices
-	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
-	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
-	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
-	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
-	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
-	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
+	// TODO: remove these two fields when the two prices are removed from negotiation
+	defaultBaseRPCPrice      = common.PtrBigInt(math.BigPow(10, 11))
+	defaultSectorAccessPrice = common.PtrBigInt(math.BigPow(10, 13))
+
+	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 4)).MultInt64(5)
+	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 8)).MultInt64(5)
+	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 9)).MultInt64(5)
+	defaultContractPrice          = common.NewBigInt(1e2)
 
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
