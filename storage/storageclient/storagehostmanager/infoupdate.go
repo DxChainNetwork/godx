@@ -28,7 +28,7 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	if !exist {
 		return fmt.Errorf("host info %v not exist in tree", info.EnodeID)
 	}
-	info = applyNewHostInfoToStoredHostInfo(info, storedInfo)
+	info = applyInfoToStoredHostInfo(info, storedInfo)
 	success := err == nil
 	info = calcUptimeUpdate(info, success, uint64(time.Now().Unix()))
 	info = calcInteractionUpdate(info, InteractionGetConfig, success, uint64(time.Now().Unix()))

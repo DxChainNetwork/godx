@@ -62,9 +62,9 @@ func updateScanRecord(info *storage.HostInfo, success bool, now uint64) {
 	}
 }
 
-// applyNewHostInfoToStoredHostInfo apply the new host config to stored host info.
+// applyInfoToStoredHostInfo apply the new host config to stored host info.
 // Only necessary fields are updated
-func applyNewHostInfoToStoredHostInfo(new, stored storage.HostInfo) storage.HostInfo {
+func applyInfoToStoredHostInfo(new, stored storage.HostInfo) storage.HostInfo {
 	stored.HostExtConfig = new.HostExtConfig
 	stored.IPNetwork = new.IPNetwork
 	stored.LastIPNetWorkChange = new.LastIPNetWorkChange
