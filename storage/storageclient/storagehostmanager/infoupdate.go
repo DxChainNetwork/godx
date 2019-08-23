@@ -5,6 +5,7 @@
 package storagehostmanager
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DxChainNetwork/godx/storage"
@@ -24,9 +25,10 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	}
 	// get the host info from the tree
 	storedInfo, exist := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
-	if exist {
-		info = applyNewHostInfoToStoredHostInfo(info, storedInfo)
+	if !exist {
+		return fmt.Errorf("host info %v not exist in tree", info.EnodeID)
 	}
+	info = applyNewHostInfoToStoredHostInfo(info, storedInfo)
 	success := err == nil
 	info = calcUptimeUpdate(info, success, uint64(time.Now().Unix()))
 	info = calcInteractionUpdate(info, InteractionGetConfig, success, uint64(time.Now().Unix()))
