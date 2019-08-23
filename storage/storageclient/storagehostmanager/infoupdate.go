@@ -38,10 +38,7 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	if remove {
 		return shm.remove(info.EnodeID)
 	}
-	if exist {
-		return shm.modify(info)
-	}
-	return shm.insert(info)
+	return shm.modify(info)
 }
 
 // whetherRemoveHost decide whether to remove the host from host manager with the given host info.
