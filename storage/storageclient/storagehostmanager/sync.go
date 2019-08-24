@@ -110,6 +110,7 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 
 		if err := shm.insert(info); err != nil {
 			shm.log.Error("unable to insert the storage host information", "err", err.Error())
+			return
 		}
 
 		// start the scan
