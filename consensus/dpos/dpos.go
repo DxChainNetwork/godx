@@ -378,11 +378,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		state.AddBalance(header.Coinbase, blockReward)
 		return
 	}
-	voteCountRat := new(big.Rat).SetInt(voteCount.BigIntPtr())
 
 	// TODO get ratio of reward between delegate and voters
 	rewardRatio := defaultRewardRatio
-	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatio).DivWithFloatResult(baseRewardDenominator)
+	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatio).Div(baseRewardDenominator)
 	assignedReward := common.Big0
 
 	delegateTrie := dposContext.DelegateTrie()
@@ -394,9 +393,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		vote := common.NewBigInt(3)
 
 		// calculate reward of each delegator due to it's vote(stake) percent
-		x := vote.MulWithFloatResult(delegatorReward)
-		x.Quo(x, voteCountRat)
-		percentReward :=new(big.Int).Div(x.Num(), x.Denom())
+		percentReward := vote.Mult(delegatorReward).Div(voteCount).BigIntPtr()
 
 		state.AddBalance(delegator, percentReward)
 		assignedReward.Add(assignedReward, percentReward)
