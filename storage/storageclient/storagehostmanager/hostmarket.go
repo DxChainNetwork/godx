@@ -42,11 +42,3 @@ func (shm *StorageHostManager) getMarketPrice() MarketPrice {
 		MaxDeposit:    common.PtrBigInt(math.BigPow(10, 20)),
 	}
 }
-
-// getBlockHeight get the current block number from storage host manager
-func (shm *StorageHostManager) getBlockHeight() uint64 {
-	shm.blockHeightLock.RLock()
-	defer shm.blockHeightLock.RUnlock()
-
-	return shm.blockHeight
-}

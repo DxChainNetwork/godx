@@ -358,6 +358,14 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 	return err
 }
 
+// getBlockHeight get the current block number from storage host manager
+func (shm *StorageHostManager) getBlockHeight() uint64 {
+	shm.blockHeightLock.RLock()
+	defer shm.blockHeightLock.RUnlock()
+
+	return shm.blockHeight
+}
+
 // setBlockHeight set storage host manager's block number to the target val
 func (shm *StorageHostManager) setBlockHeight(val uint64) {
 	shm.blockHeightLock.Lock()
