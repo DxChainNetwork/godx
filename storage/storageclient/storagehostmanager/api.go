@@ -134,7 +134,7 @@ func (api *PublicHostManagerDebugAPI) Syncing() bool {
 // storage host manager data structure. If everything function correctly, the
 // block height it returned should be same as the blockheight it synced
 func (api *PublicHostManagerDebugAPI) BlockHeight() uint64 {
-	return api.shm.blockHeight
+	return api.shm.getBlockHeight()
 }
 
 // InsertHostInfo will insert host information into the storage host tree

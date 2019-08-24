@@ -53,7 +53,9 @@ type StorageHostManager struct {
 	filteredHosts map[enode.ID]struct{}
 	filteredTree  *storagehosttree.StorageHostTree
 
-	blockHeight uint64
+	// blockHeight and its lock
+	blockHeight     uint64
+	blockHeightLock sync.RWMutex
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
@@ -354,4 +356,28 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
+}
+
+// setBlockHeight set storage host manager's block number to the target val
+func (shm *StorageHostManager) setBlockHeight(val uint64) {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight = val
+}
+
+// incrementBlockHeight increment the block height by 1
+func (shm *StorageHostManager) incrementBlockHeight() {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight++
+}
+
+// decrementBlockHeight decrement the block height by 1
+func (shm *StorageHostManager) decrementBlockHeight() {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight--
 }

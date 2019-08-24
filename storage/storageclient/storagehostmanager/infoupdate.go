@@ -34,7 +34,7 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	info = calcInteractionUpdate(info, InteractionGetConfig, success, uint64(time.Now().Unix()))
 
 	// Check whether to remove the host
-	remove := whetherRemoveHost(info, shm.blockHeight)
+	remove := whetherRemoveHost(info, shm.getBlockHeight())
 	if remove {
 		return shm.remove(info.EnodeID)
 	}

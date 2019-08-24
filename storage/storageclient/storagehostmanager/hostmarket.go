@@ -14,8 +14,8 @@ import (
 // hostMarket provides methods to evaluate the storage price, upload price, download
 // price, and deposit price. Note the hostMarket should have a caching method.
 type hostMarket interface {
-	GetMarketPrice() MarketPrice
-	GetBlockNumber() uint64
+	getMarketPrice() MarketPrice
+	getBlockHeight() uint64
 }
 
 // MarketPrice is the market price metrics from hostMarket
@@ -28,11 +28,11 @@ type MarketPrice struct {
 	MaxDeposit    common.BigInt
 }
 
-// GetMarketPrice return the market price for evaluation based on host entries.
+// getMarketPrice return the market price for evaluation based on host entries.
 // Currently, the returned market price is hard coded host default settings.
 // Will be updated later.
 // TODO: implement this
-func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
+func (shm *StorageHostManager) getMarketPrice() MarketPrice {
 	return MarketPrice{
 		ContractPrice: common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))),
 		StoragePrice:  common.PtrBigInt(math.BigPow(10, 3)),
@@ -43,7 +43,10 @@ func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
 	}
 }
 
-// GetBlockNumber get the current block number from storage host manager
-func (shm *StorageHostManager) GetBlockNumber() uint64 {
+// getBlockHeight get the current block number from storage host manager
+func (shm *StorageHostManager) getBlockHeight() uint64 {
+	shm.blockHeightLock.RLock()
+	defer shm.blockHeightLock.RUnlock()
+
 	return shm.blockHeight
 }
