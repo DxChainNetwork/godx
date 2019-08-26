@@ -308,15 +308,6 @@ func (h *StorageHost) setMaxReviseBatchSize(val uint64) error {
 	return h.syncConfig()
 }
 
-// setWindowSize set the WindowSize
-func (h *StorageHost) setWindowSize(val uint64) error {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	h.config.WindowSize = val
-	return h.syncConfig()
-}
-
 // setPaymentAddress set the account to the address
 func (h *StorageHost) setPaymentAddress(addr common.Address) error {
 	account := accounts.Account{Address: addr}

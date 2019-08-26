@@ -60,6 +60,7 @@ const (
 )
 
 const (
+	// RenewWindow is the window for storage contract renew for storage client
 	RenewWindow = 12 * unit.BlocksPerHour
 )
 

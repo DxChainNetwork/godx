@@ -41,6 +41,9 @@ const (
 
 	//Total time to sign the contract
 	postponedExecutionBuffer = 12 * unit.BlocksPerHour
+
+	// ProofWindowSize is the window for storage host to submit a storage proof
+	proofWindowSize = 12 * unit.BlocksPerHour
 )
 
 var (
@@ -56,7 +59,6 @@ var (
 	defaultMaxDuration          = unit.BlocksPerDay * 30 // 30 days
 	defaultMaxDownloadBatchSize = 17 * (1 << 20)         // 17 MB
 	defaultMaxReviseBatchSize   = 17 * (1 << 20)         // 17 MB
-	defaultWindowSize           = 5 * unit.BlocksPerHour // 5 hours
 
 	// deposit defaults value
 	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
@@ -98,7 +100,7 @@ func defaultConfig() storage.HostIntConfig {
 		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
 		MaxDuration:          uint64(defaultMaxDuration),
 		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
-		WindowSize:           uint64(defaultWindowSize),
+		WindowSize:           uint64(proofWindowSize),
 
 		Deposit:       defaultDeposit,
 		DepositBudget: defaultDepositBudget,

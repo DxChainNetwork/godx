@@ -42,11 +42,6 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 			storage.HostIntConfig{MaxReviseBatchSize: uint64(mustParseStorage("1kb"))},
 			nil,
 		},
-		"windowSize": {
-			map[string]string{"windowSize": "1b"},
-			storage.HostIntConfig{WindowSize: uint64(mustParseTime("1b"))},
-			nil,
-		},
 		"paymentAddress": {
 			map[string]string{"paymentAddress": "0x1"},
 			storage.HostIntConfig{},

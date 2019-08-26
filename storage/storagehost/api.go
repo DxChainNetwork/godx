@@ -166,7 +166,6 @@ var hostSetterCallbacks = map[string]func(*HostPrivateAPI, string) error{
 	"maxDownloadBatchSize":   (*HostPrivateAPI).setMaxDownloadBatchSize,
 	"maxDuration":            (*HostPrivateAPI).setMaxDuration,
 	"maxReviseBatchSize":     (*HostPrivateAPI).setMaxReviseBatchSize,
-	"windowSize":             (*HostPrivateAPI).setWindowSize,
 	"paymentAddress":         (*HostPrivateAPI).setPaymentAddress,
 	"deposit":                (*HostPrivateAPI).setDeposit,
 	"depositBudget":          (*HostPrivateAPI).setDepositBudget,
