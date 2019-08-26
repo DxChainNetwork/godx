@@ -332,6 +332,6 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 		return nil
 
 	default:
-		return nil
+		return errors.New("invalid dpos precompiled address")
 	}
 }
