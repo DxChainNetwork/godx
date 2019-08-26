@@ -204,6 +204,14 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	//The pledge asset of candidate will not be used.
+	if fa := evm.StateDB.GetState(caller.Address(), common.BytesToHash([]byte("FrozenAssets"))); fa != (common.Hash{}) {
+		balance := evm.StateDB.GetBalance(caller.Address())
+		if value.Cmp(new(big.Int).Sub(balance, fa.Big())) > 0 {
+			return nil, gas, ErrFrozenAssetsCannotBeUsed
+		}
+	}
+
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -497,14 +505,12 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 
 // TODO: not completed yet
 // ApplyDposTransaction handlers all dpos consensus txs
-func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	switch txType {
 	case ApplyCandidate:
-		dposContext.BecomeCandidate(from)
-		return nil, gas, nil
+		return evm.CandidateTx(from, data, gas, value, dposContext)
 	case CancleCandidate:
-		dposContext.KickoutCandidate(from)
-		return nil, gas, nil
+		return evm.CandidateCancelTx(from, data, gas, dposContext)
 	case Vote:
 		dposContext.Delegate(from, common.Address{})
 		return nil, gas, nil
@@ -516,6 +522,44 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 	default:
 		return nil, gas, errUnknownDposOperationTx
 	}
+}
+
+// CandidateTx campaign becomes a candidate and pledges part of the assets.
+func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
+	balance := evm.StateDB.GetBalance(caller)
+	if value.Cmp(params.FrozenAssets) < 0 || balance.Cmp(value) < 0 {
+		return nil, gas, errors.New("you must have enough assets to become a candidate")
+	}
+	if evm.StateDB.GetState(caller, common.BytesToHash([]byte("FrozenAssets"))) != (common.Hash{}) {
+		return nil, gas, errors.New("cannot submit the transaction repeatedly")
+	}
+	err := dposContext.BecomeCandidate(caller)
+	if err != nil {
+		return nil, gas, err
+	}
+	evm.StateDB.SetState(caller, common.BytesToHash([]byte("FrozenAssets")), common.BigToHash(value))
+	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
+	if len(data) != 0 {
+		rr := struct {
+			RewardRatio uint8
+		}{}
+		err := rlp.DecodeBytes(data, &rr)
+		if err == nil && rr.RewardRatio <= 100 {
+			evm.StateDB.SetState(caller, common.BytesToHash([]byte("RewardRatio")), common.BytesToHash(data))
+		}
+	}
+	return nil, gas, nil
+}
+
+// CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
+func (evm *EVM) CandidateCancelTx(caller common.Address, data []byte, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
+	err := dposContext.KickoutCandidate(caller)
+	if err != nil {
+		return nil, gas, err
+	}
+	tp := common.BigToHash(new(big.Int).SetUint64(evm.Context.BlockNumber.Uint64() + params.ThawingPeriod))
+	evm.StateDB.SetState(caller, common.BytesToHash([]byte("ThawingPeriod")), tp)
+	return nil, gas, nil
 }
 
 // HostAnnounceTx host declares its own information on the chain
