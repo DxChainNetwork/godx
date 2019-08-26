@@ -528,10 +528,10 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
 	balance := evm.StateDB.GetBalance(caller)
 	if value.Cmp(params.FrozenAssets) < 0 || balance.Cmp(value) < 0 {
-		return nil, gas, errors.New("you must have enough assets to become a candidate")
+		return nil, gas, errInsufficientMortgageAssets
 	}
 	if evm.StateDB.GetState(caller, common.BytesToHash([]byte("FrozenAssets"))) != (common.Hash{}) {
-		return nil, gas, errors.New("cannot submit the transaction repeatedly")
+		return nil, gas, errDuplicateCandidateTx
 	}
 	err := dposContext.BecomeCandidate(caller)
 	if err != nil {

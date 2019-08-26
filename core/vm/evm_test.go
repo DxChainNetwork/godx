@@ -47,6 +47,94 @@ type PrivkeyAddress struct {
 	Address common.Address
 }
 
+func TestEVM_CandidateTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Error("mockEvmAndState err:", err)
+	}
+	db := ethdb.NewMemDatabase()
+
+	//mock dposContext
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Error("NewDposContext err:", err)
+	}
+
+	tests := []struct {
+		from  common.Address
+		data  []byte
+		value *big.Int
+		gas   uint64
+		want  error
+	}{
+		{
+			from:  pas[0].Address,
+			data:  nil,
+			value: new(big.Int).SetUint64(1000),
+			gas:   10000,
+			want:  errInsufficientMortgageAssets,
+		},
+		{
+			from:  pas[0].Address,
+			want:  nil,
+			data:  nil,
+			gas:   10000,
+			value: new(big.Int).SetUint64(100000),
+		},
+		{
+			from:  pas[0].Address,
+			want:  errDuplicateCandidateTx,
+			data:  nil,
+			gas:   10000,
+			value: new(big.Int).SetUint64(100000),
+		},
+	}
+
+	for _, test := range tests {
+		_, _, err := evm.CandidateTx(test.from, test.data, test.gas, test.value, dposContext)
+		if err != test.want {
+			t.Error("CandidateTx err:", err)
+		}
+	}
+}
+
+func TestEVM_CandidateCancelTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Error("mockEvmAndState err:", err)
+	}
+	db := ethdb.NewMemDatabase()
+
+	//mock dposContext
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Error("NewDposContext err:", err)
+	}
+
+	tests := []struct {
+		from common.Address
+		data []byte
+		gas  uint64
+		want error
+	}{
+		{
+			from: pas[0].Address,
+			data: nil,
+			gas:  10000,
+			want: nil,
+		},
+	}
+
+	for _, test := range tests {
+		_, _, err := evm.CandidateCancelTx(test.from, test.data, test.gas, dposContext)
+		if err != test.want {
+			t.Error("CandidateTx err:", err)
+		}
+	}
+}
+
 func TestEVM_HostAnnounceTx(t *testing.T) {
 
 	// generate pub\priv key
