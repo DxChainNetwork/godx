@@ -217,7 +217,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 	} else if p, ok := vm.PrecompiledDPoSContracts[st.to()]; ok {
 
 		// check dpos tx filed
-		vmerr = CheckDposOperationTx(st.msg)
+		vmerr = CheckDposOperationTx(st.evm, st.msg)
 		if vmerr != nil {
 			return nil, 0, false, vmerr
 		}
@@ -268,7 +268,7 @@ func (st *StateTransition) gasUsed() uint64 {
 
 // TODO: not completed yet
 // CheckDposOperationTx checks the dpos transaction's filed
-func CheckDposOperationTx(msg Message) error {
+func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 	switch *msg.To() {
 
 	// check ApplyCandidate tx
@@ -282,21 +282,28 @@ func CheckDposOperationTx(msg Message) error {
 		}
 		return nil
 
-	// check CancleCandidate tx
+	// check CancelCandidate tx
 	case common.BytesToAddress([]byte{14}):
 		return nil
 
 	// check Vote tx
 	case common.BytesToAddress([]byte{15}):
+		if msg.Data() == nil {
+			return errors.New("payload must not be empty for vote tx")
+		}
+
+		// TODO: 有可能既是candidate，又给他人或者自己投票，所以需要检查下是否有candidate抵押
+		balOfFrom := evm.StateDB.GetBalance(msg.From())
+		if msg.Value().Sign() <= 0 || msg.Value().Cmp(balOfFrom) > 0 {
+			return errors.New("invalid deposit value for vote tx")
+		}
+
 		return nil
 
-	// check ModifyVote tx
+	// check CancelVote tx
 	case common.BytesToAddress([]byte{16}):
 		return nil
 
-	// check CancleVote tx
-	case common.BytesToAddress([]byte{17}):
-		return nil
 	default:
 		return nil
 	}

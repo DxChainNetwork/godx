@@ -5,15 +5,14 @@
 package types
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
-
 	"golang.org/x/crypto/sha3"
 )
 
@@ -256,20 +255,47 @@ func (dc *DposContext) KickoutCandidate(candidateAddr common.Address) error {
 			}
 		}
 
-		v, err := dc.voteTrie.TryGet(delegator)
+		votedCandidateBytes, err := dc.voteTrie.TryGet(delegator)
 		if err != nil {
 			if _, ok := err.(*trie.MissingNodeError); !ok {
 				return err
 			}
 		}
 
-		if err == nil && bytes.Equal(v, candidate) {
-			err = dc.voteTrie.TryDelete(delegator)
-			if err != nil {
-				if _, ok := err.(*trie.MissingNodeError); !ok {
-					return err
-				}
+		if votedCandidateBytes == nil {
+			return fmt.Errorf("no any voted candiate for %s", common.BytesToAddress(delegator).String())
+		}
+
+		votedCandidates := make([]common.Address, 0)
+		err = rlp.DecodeBytes(votedCandidateBytes, &votedCandidates)
+		if err != nil {
+			return fmt.Errorf("failed to rlp decode candidate bytes for voteTrie,error: %v", err)
+		}
+
+		// remove the given candidate from the vote records of delegator
+		index := 0
+		for i, votedCandidate := range votedCandidates {
+			if votedCandidate == candidateAddr {
+				index = i
+				break
 			}
+		}
+		pre := votedCandidates[:index]
+		suf := make([]common.Address, 0)
+		if index != len(votedCandidates)-1 {
+			suf = votedCandidates[index+1:]
+		}
+		candidatesAfterRemove := make([]common.Address, 0)
+		candidatesAfterRemove = append(candidatesAfterRemove, pre...)
+		candidatesAfterRemove = append(candidatesAfterRemove, suf...)
+
+		value, err := rlp.EncodeToBytes(candidatesAfterRemove)
+		if err != nil {
+			return fmt.Errorf("failed to rlp encode candidate bytes for voteTrie,error: %v", err)
+		}
+		err = dc.voteTrie.TryUpdate(delegator, value)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -282,67 +308,125 @@ func (dc *DposContext) BecomeCandidate(candidateAddr common.Address) error {
 	return dc.candidateTrie.TryUpdate(candidate, candidate)
 }
 
-// Delegate will store the delegation record
-func (dc *DposContext) Delegate(delegatorAddr, candidateAddr common.Address) error {
-	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
+// Vote will store the vote record
+func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common.Address) (int, error) {
+	delegator := delegatorAddr.Bytes()
+	successVoted := make([]common.Address, 0)
 
-	// the given candidate must have been candidate
-	candidateInTrie, err := dc.candidateTrie.TryGet(candidate)
-	if err != nil {
-		return err
-	}
-
-	if candidateInTrie == nil {
-		return errors.New("invalid candidate to delegate")
-	}
-
-	// delete old candidate if exists
-	oldCandidate, err := dc.voteTrie.TryGet(delegator)
+	oldCandidateBytes, err := dc.voteTrie.TryGet(delegator)
 	if err != nil {
 		if _, ok := err.(*trie.MissingNodeError); !ok {
-			return err
+			return 0, fmt.Errorf("failed to retrieve from voteTrie,err: %v", err)
 		}
 	}
 
-	if oldCandidate != nil {
-		dc.delegateTrie.Delete(append(oldCandidate, delegator...))
+	// if voted before, then delete old vote record
+	if oldCandidateBytes != nil {
+		err = dc.voteTrie.TryDelete(delegator)
+		if err != nil {
+			if _, ok := err.(*trie.MissingNodeError); !ok {
+				return 0, fmt.Errorf("failed to delete old votes from voteTrie,err: %v", err)
+			}
+		}
+
+		oldCandidateList := make([]common.Address, 0)
+		err = rlp.DecodeBytes(oldCandidateBytes, &oldCandidateList)
+		if err != nil {
+			return 0, fmt.Errorf("failed to rlp decode old candidate bytes,err: %v", err)
+		}
+
+		for _, oldCandidate := range oldCandidateList {
+			err = dc.delegateTrie.TryDelete(append(oldCandidate.Bytes(), delegator...))
+			if err != nil {
+				if _, ok := err.(*trie.MissingNodeError); !ok {
+					return 0, fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
+				}
+			}
+		}
 	}
 
-	if err = dc.delegateTrie.TryUpdate(append(candidate, delegator...), delegator); err != nil {
-		return err
+	for _, candidateAddr := range candidateList {
+		candidate := candidateAddr.Bytes()
+
+		// the given candidate must have been candidate
+		candidateInTrie, err := dc.candidateTrie.TryGet(candidate)
+		if err != nil {
+			if _, ok := err.(*trie.MissingNodeError); ok {
+				log.Error("no this candidate on chain", "candidate", candidateAddr.String())
+				continue
+			} else {
+				return 0, fmt.Errorf("failed to retrieve from candidateTrie,err: %v", err)
+			}
+		}
+
+		if candidateInTrie == nil {
+			log.Error("voted to a invalid candidate", "candidate", candidateAddr.String())
+			continue
+		}
+
+		err = dc.delegateTrie.TryUpdate(append(candidate, delegator...), delegator)
+		if err != nil {
+			log.Error("failed to update a new vote to delegateTrie", "error", err)
+			continue
+		}
+
+		// successfully vote a candidate, then add it
+		successVoted = append(successVoted, candidateAddr)
 	}
 
-	return dc.voteTrie.TryUpdate(delegator, candidate)
+	// store all successful voted candidate
+	if len(successVoted) != 0 {
+		votedCandidateBytes, err := rlp.EncodeToBytes(successVoted)
+		if err != nil {
+			return 0, fmt.Errorf("failed to rlp encode voted candidates,err: %v", err)
+		}
+
+		err = dc.voteTrie.TryUpdate(delegator, votedCandidateBytes)
+		if err != nil {
+			return 0, fmt.Errorf("failed to update new vote to voteTrie,err: %v", err)
+		}
+		return len(successVoted), nil
+	}
+
+	return 0, errors.New("failed to vote all candidates")
 }
 
-// UnDelegate will will remove the delegation record
-func (dc *DposContext) UnDelegate(delegatorAddr, candidateAddr common.Address) error {
-	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
+// CancelVote will remove all vote records
+func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
+	delegator := delegatorAddr.Bytes()
 
-	// the candidate must be candidate
-	candidateInTrie, err := dc.candidateTrie.TryGet(candidate)
+	oldCandidateBytes, err := dc.voteTrie.TryGet(delegator)
 	if err != nil {
-		return err
+		if _, ok := err.(*trie.MissingNodeError); !ok {
+			return fmt.Errorf("failed to retrieve from voteTrie,err: %v", err)
+		}
 	}
 
-	if candidateInTrie == nil {
-		return errors.New("invalid candidate to undelegate")
+	if oldCandidateBytes == nil {
+		return fmt.Errorf("no vote records on chain for %s", delegatorAddr.String())
 	}
 
-	oldCandidate, err := dc.voteTrie.TryGet(delegator)
+	oldCandidateList := make([]common.Address, 0)
+	err = rlp.DecodeBytes(oldCandidateBytes, &oldCandidateList)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to rlp decode old candidate bytes,err: %v", err)
 	}
 
-	if !bytes.Equal(candidate, oldCandidate) {
-		return errors.New("mismatch candidate to undelegate")
+	// delete all vote records from delegateTrie
+	for _, oldCandidate := range oldCandidateList {
+		err = dc.delegateTrie.TryDelete(append(oldCandidate.Bytes(), delegator...))
+		if err != nil {
+			return fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
+		}
 	}
 
-	if err = dc.delegateTrie.TryDelete(append(candidate, delegator...)); err != nil {
-		return err
+	// delete vote records from voteTrie
+	err = dc.voteTrie.TryDelete(delegator)
+	if err != nil {
+		return fmt.Errorf("failed to delete old votes from voteTrie,err: %v", err)
 	}
 
-	return dc.voteTrie.TryDelete(delegator)
+	return nil
 }
 
 // Commit writes the data in 5 tries to db
