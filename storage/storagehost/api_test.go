@@ -118,7 +118,6 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 				"maxDownloadBatchSize":   "10mb",
 				"maxDuration":            "1d",
 				"maxReviseBatchSize":     "10mb",
-				"windowSize":             "12h",
 				"deposit":                "1000camel",
 				"depositBudget":          "100dx",
 				"maxDeposit":             "10000camel",
@@ -134,7 +133,6 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 				MaxDownloadBatchSize:   uint64(mustParseStorage("10mb")),
 				MaxDuration:            uint64(mustParseTime("1d")),
 				MaxReviseBatchSize:     uint64(mustParseStorage("10mb")),
-				WindowSize:             uint64(mustParseTime("12h")),
 				Deposit:                mustParseCurrency("1000camel"),
 				DepositBudget:          mustParseCurrency("100dx"),
 				MaxDeposit:             mustParseCurrency("10000camel"),
@@ -184,15 +182,6 @@ func TestHostPrivateAPI_SetConfig(t *testing.T) {
 // mustParseCurrency parse the string to currency. If an error happens, panic.
 func mustParseCurrency(str string) common.BigInt {
 	parsed, err := unit.ParseCurrency(str)
-	if err != nil {
-		panic(err)
-	}
-	return parsed
-}
-
-// mustParseSpeed parse the string to speed. If an error happens, panic.
-func mustParseSpeed(str string) int64 {
-	parsed, err := unit.ParseSpeed(str)
 	if err != nil {
 		panic(err)
 	}

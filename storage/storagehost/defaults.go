@@ -36,6 +36,7 @@ const (
 
 	//prefixStorageResponsibility db prefix for StorageResponsibility
 	prefixStorageResponsibility = "StorageResponsibility-"
+
 	//prefixHeight db prefix for task
 	prefixHeight = "height-"
 
