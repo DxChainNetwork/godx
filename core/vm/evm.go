@@ -49,7 +49,8 @@ var (
 
 	prefixThawingAddr        = "thawing_"
 	keyVoteDeposit           = common.BytesToHash([]byte("vote-deposit"))
-	thawingFlag              = common.BytesToHash([]byte("thawing"))
+	keyCandidateDeposit      = common.BytesToHash([]byte("candidate-deposit"))
+	keyRewardRatio           = common.BytesToHash([]byte("reward-ratio"))
 	keyLastVoteTime          = common.BytesToHash([]byte("last-vote-time"))
 	keyRealVoteWeightRatio   = common.BytesToHash([]byte("real-vote-weight-ratio"))
 	minVoteWeightRatio       = 0.5
@@ -518,14 +519,13 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 	}
 }
 
-// TODO: not completed yet
 // ApplyDposTransaction handlers all dpos consensus txs
 func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
 	switch txType {
 	case ApplyCandidate:
 		return evm.CandidateTx(from, data, gas, value, dposContext)
 	case CancelCandidate:
-		return evm.CandidateCancelTx(from, data, gas, dposContext)
+		return evm.CandidateCancelTx(from, gas, dposContext)
 	case Vote:
 		return evm.VoteTx(from, dposContext, data, gas, value)
 	case CancelVote:
@@ -533,44 +533,6 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 	default:
 		return nil, gas, errUnknownDposOperationTx
 	}
-}
-
-// CandidateTx campaign becomes a candidate and pledges part of the assets.
-func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
-	balance := evm.StateDB.GetBalance(caller)
-	if value.Cmp(params.FrozenAssets) < 0 || balance.Cmp(value) < 0 {
-		return nil, gas, errors.New("you must have enough assets to become a candidate")
-	}
-	if evm.StateDB.GetState(caller, common.BytesToHash([]byte("FrozenAssets"))) != (common.Hash{}) {
-		return nil, gas, errors.New("cannot submit the transaction repeatedly")
-	}
-	err := dposContext.BecomeCandidate(caller)
-	if err != nil {
-		return nil, gas, err
-	}
-	evm.StateDB.SetState(caller, common.BytesToHash([]byte("FrozenAssets")), common.BigToHash(value))
-	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
-	if len(data) != 0 {
-		rr := struct {
-			RewardRatio uint8
-		}{}
-		err := rlp.DecodeBytes(data, &rr)
-		if err == nil && rr.RewardRatio <= 100 {
-			evm.StateDB.SetState(caller, common.BytesToHash([]byte("RewardRatio")), common.BytesToHash(data))
-		}
-	}
-	return nil, gas, nil
-}
-
-// CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
-func (evm *EVM) CandidateCancelTx(caller common.Address, data []byte, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
-	err := dposContext.KickoutCandidate(caller)
-	if err != nil {
-		return nil, gas, err
-	}
-	tp := common.BigToHash(new(big.Int).SetUint64(evm.Context.BlockNumber.Uint64() + params.ThawingPeriod))
-	evm.StateDB.SetState(caller, common.BytesToHash([]byte("ThawingPeriod")), tp)
-	return nil, gas, nil
 }
 
 // HostAnnounceTx host declares its own information on the chain
@@ -814,8 +776,72 @@ func Uint64ToBytes(i uint64) []byte {
 	return buf
 }
 
+// CandidateTx campaign becomes a candidate and pledges part of the assets.
+func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
+	log.Info("enter candidate tx executing ... ")
+	stateDB := evm.StateDB
+	depositHash := stateDB.GetState(caller, keyCandidateDeposit)
+	if depositHash != emptyHash {
+		return nil, gas, errors.New("cannot submit application candidate tx repeatedly")
+	}
+
+	dposSnapshot := dposContext.Snapshot()
+	err := dposContext.BecomeCandidate(caller)
+	if err != nil {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, err
+	}
+
+	// if successfully applying candidate, then store deposit
+	stateDB.SetState(caller, keyCandidateDeposit, common.BigToHash(value))
+
+	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
+	if len(data) != 0 {
+		rr := types.CandidateInfo{}
+		err := rlp.DecodeBytes(data, &rr)
+		if err != nil {
+			return nil, gas, err
+		}
+
+		if rr.RewardRatio <= 100 {
+			stateDB.SetState(caller, keyRewardRatio, common.BytesToHash(data))
+		}
+	}
+
+	log.Info("candidate tx execution done")
+	return nil, gas, nil
+}
+
+// CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
+func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
+	log.Info("enter cancel candidate tx executing ... ")
+	dposSnapshot := dposContext.Snapshot()
+	err := dposContext.KickoutCandidate(caller)
+	if err != nil {
+		dposContext.RevertToSnapShot(dposSnapshot)
+		return nil, gas, err
+	}
+
+	// create thawing address: "thawing_" + currentEpochID
+	stateDB := evm.StateDB
+	currentEpochID := evm.Time.Uint64() / uint64(86400)
+	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		stateDB.CreateAccount(thawingAddress)
+	}
+
+	// set thawing flag for from address: "candidate_thawing_" + from ==> from
+	prefix := "candidate_thawing_"
+	key := prefix + caller.String()
+	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
+
+	log.Info("cancel candidate tx execution done")
+	return nil, gas, nil
+}
+
 // VoteTx handles a new vote to some candidates that will remove last vote records
-func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
+func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
 	log.Info("enter vote tx executing ... ")
 	var (
 		candidateList []common.Address
@@ -836,20 +862,19 @@ func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []b
 	// TODO: how many gas should we spend ?
 	// record vote data
 	dposSnapshot := dposCtx.Snapshot()
-	successCount, err := dposCtx.Vote(from, candidateList)
+	successCount, err := dposCtx.Vote(caller, candidateList)
 	if err != nil {
 		dposCtx.RevertToSnapShot(dposSnapshot)
 		return nil, gasRemainDec, err
 	}
 
-	// TODO: 考虑同时作为candidate和delegator，所以投票质押需要判断下候选人质押的金额
 	// if successfully record voting, then store deposit
-	stateDB.SetState(from, keyVoteDeposit, common.BytesToHash(value.Bytes()))
+	stateDB.SetState(caller, keyVoteDeposit, common.BigToHash(value))
 
 	// check last vote time and calculate the real vote weight ratio
 	realVoteWeightRatio := float64(1)
 	now := uint64(time.Now().Unix())
-	lastVoteTimeHash := stateDB.GetState(from, keyLastVoteTime)
+	lastVoteTimeHash := stateDB.GetState(caller, keyLastVoteTime)
 	if lastVoteTimeHash != emptyHash {
 		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
 
@@ -868,22 +893,22 @@ func (evm *EVM) VoteTx(from common.Address, dposCtx *types.DposContext, data []b
 
 	// record the real vote weight ratio
 	realVoteWeightRatioBytes := Float64ToBytes(realVoteWeightRatio)
-	stateDB.SetState(from, keyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
+	stateDB.SetState(caller, keyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
 
 	// record the new vote time
 	nowBytes := Uint64ToBytes(now)
-	stateDB.SetState(from, keyLastVoteTime, common.BytesToHash(nowBytes))
+	stateDB.SetState(caller, keyLastVoteTime, common.BytesToHash(nowBytes))
 
 	log.Info("vote tx execution done", "vote_count", successCount)
 	return nil, gasRemainDec, nil
 }
 
 // CancelVoteTx handles a cancel vote tx that will remove all vote records
-func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
+func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
 	log.Info("enter cancel vote tx executing ... ")
 	// remove all vote record from dpos context
 	dposSnapshot := dposCtx.Snapshot()
-	err := dposCtx.CancelVote(from)
+	err := dposCtx.CancelVote(caller)
 	if err != nil {
 		dposCtx.RevertToSnapShot(dposSnapshot)
 		return nil, gas, err
@@ -892,7 +917,7 @@ func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, ga
 	// if successfully above, then mark from as that will be thawed in next epoch
 	stateDB := evm.StateDB
 
-	// create thawing address
+	// create thawing address: "thawing_" + currentEpochID
 	currentEpochID := evm.Time.Uint64() / uint64(86400)
 	epochIDStr := strconv.FormatUint(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
@@ -900,8 +925,10 @@ func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, ga
 		stateDB.CreateAccount(thawingAddress)
 	}
 
-	// set thawing flag for from address
-	stateDB.SetState(thawingAddress, common.BytesToHash(from.Bytes()), thawingFlag)
+	// set thawing flag for from address: "vote_thawing_" + from ==> from
+	prefix := "vote_thawing_"
+	key := prefix + caller.String()
+	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
 
 	log.Info("cancel vote tx execution done")
 	return nil, gas, nil

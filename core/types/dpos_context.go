@@ -528,3 +528,8 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 	dc.epochTrie.Update(key, validatorsRLP)
 	return nil
 }
+
+//CandidateInfo additional relevant data when sending the candidateTx.
+type CandidateInfo struct {
+	RewardRatio uint8 `json:"rewardRatio"`
+}
