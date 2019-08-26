@@ -234,6 +234,13 @@ func (cm *ContractManager) HostHealthMap() (infoTable storage.HostHealthInfoTabl
 	return
 }
 
+// GetBlockHeight will return the current block height
+func (cm *ContractManager) GetBlockHeight() uint64 {
+	cm.lock.RLock()
+	defer cm.lock.RUnlock()
+	return cm.blockHeight
+}
+
 // isOffline will check if a storage host is online or not based on the number of scanRecords
 // and the successful rate of the records
 func isOffline(host storage.HostInfo) (offline bool) {

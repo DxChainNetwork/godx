@@ -6,7 +6,11 @@ package contractmanager
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
+	"sort"
+
+	"github.com/DxChainNetwork/godx/crypto/merkle"
 
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -34,7 +38,7 @@ func draftStorageContractNegotiate(sp storage.Peer, account accounts.Account, wa
 	}
 
 	// wait and handle the storage host response
-	hostSignedContract, err := waitAndHandleHostResp(sp)
+	hostSignedContract, err := waitAndHandleHostSignResp(sp)
 	if err != nil {
 		return types.StorageContract{}, err
 	}
@@ -61,7 +65,7 @@ func storageContractRevisionNegotiate(sp storage.Peer, storageContract types.Sto
 	}
 
 	// wait for host's response
-	hostRevisionSign, err := waitAndHandleHostResp(sp)
+	hostRevisionSign, err := waitAndHandleHostSignResp(sp)
 	if err != nil {
 		return types.StorageContractRevision{}, err
 	}
@@ -233,10 +237,10 @@ func formAndSendContractCreateRequest(sp storage.Peer, storageContract types.Sto
 	return nil
 }
 
-// waitAndHandleHostResp will wait the host response from the storage host
+// waitAndHandleHostSignResp will wait the host response from the storage host
 // check the response and handle it accordingly
 // Error belongs to hostNegotiationError
-func waitAndHandleHostResp(sp storage.Peer) (hostSign []byte, err error) {
+func waitAndHandleHostSignResp(sp storage.Peer) (hostSign []byte, err error) {
 	// wait until the message was sent by the storage host
 	msg, err := sp.ClientWaitContractResp()
 	if err != nil {
@@ -309,4 +313,94 @@ func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage
 		}
 	}
 	return nil
+}
+
+func newContractRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
+	rev := current
+
+	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
+	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 2)
+
+	for i, v := range current.NewValidProofOutputs {
+		rev.NewValidProofOutputs[i] = types.DxcoinCharge{
+			Address: v.Address,
+			Value:   big.NewInt(v.Value.Int64()),
+		}
+	}
+
+	for i, v := range current.NewMissedProofOutputs {
+		rev.NewMissedProofOutputs[i] = types.DxcoinCharge{
+			Address: v.Address,
+			Value:   big.NewInt(v.Value.Int64()),
+		}
+	}
+
+	// move valid payout from client to host
+	rev.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
+	rev.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
+
+	// move missed payout from client to void, mean that will burn missed payout of client
+	rev.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
+
+	// increment revision number
+	rev.NewRevisionNumber++
+
+	return rev
+}
+
+// CalculateProofRanges will calculate the proof ranges which is used to verify a
+// pre-modification Merkle diff proof for the specified actions.
+func calculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkle.SubTreeLimit {
+	newNumSectors := oldNumSectors
+	sectorsChanged := make(map[uint64]struct{})
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			sectorsChanged[newNumSectors] = struct{}{}
+			newNumSectors++
+		}
+	}
+
+	oldRanges := make([]merkle.SubTreeLimit, 0, len(sectorsChanged))
+	for sectorNum := range sectorsChanged {
+		if sectorNum < oldNumSectors {
+			oldRanges = append(oldRanges, merkle.SubTreeLimit{
+				Left:  sectorNum,
+				Right: sectorNum + 1,
+			})
+		}
+	}
+	sort.Slice(oldRanges, func(i, j int) bool {
+		return oldRanges[i].Left < oldRanges[j].Left
+	})
+
+	return oldRanges
+}
+
+// ModifyProofRanges will modify the proof ranges produced by calculateProofRanges
+// to verify a post-modification Merkle diff proof for the specified actions.
+func modifyProofRanges(proofRanges []merkle.SubTreeLimit, actions []storage.UploadAction, numSectors uint64) []merkle.SubTreeLimit {
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			proofRanges = append(proofRanges, merkle.SubTreeLimit{
+				Left:  numSectors,
+				Right: numSectors + 1,
+			})
+			numSectors++
+		}
+	}
+	return proofRanges
+}
+
+// ModifyLeaves will modify the leaf hashes of a Merkle diff proof to verify a
+// post-modification Merkle diff proof for the specified actions.
+func modifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
+	for _, action := range actions {
+		switch action.Type {
+		case storage.UploadActionAppend:
+			leafHashes = append(leafHashes, merkle.Sha256MerkleTreeRoot(action.Data))
+		}
+	}
+	return leafHashes
 }

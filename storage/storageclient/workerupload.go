@@ -116,7 +116,7 @@ func (w *worker) upload(uc *unfinishedUploadSegment, sectorIndex uint64) error {
 	}
 
 	// upload segment to host
-	root, err := w.client.Append(sp, uc.physicalSegmentData[sectorIndex], hostInfo)
+	root, err := w.client.Append(sp, uc.physicalSegmentData[sectorIndex], *hostInfo)
 	if err != nil {
 		w.client.log.Error("Worker failed to upload", "err", err)
 		w.uploadFailed(uc, sectorIndex)
