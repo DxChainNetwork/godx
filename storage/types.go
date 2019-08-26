@@ -186,7 +186,6 @@ type RentPayment struct {
 	Fund         common.BigInt `json:"fund"`
 	StorageHosts uint64        `json:"storagehosts"`
 	Period       uint64        `json:"period"`
-	RenewWindow  uint64        `json:"renewwindow"`
 
 	// ExpectedStorage is amount of data expected to be stored
 	ExpectedStorage uint64 `json:"expectedstorage"`
