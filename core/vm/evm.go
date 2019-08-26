@@ -36,6 +36,8 @@ import (
 )
 
 const (
+
+	// MaxVoteCount defines the max number of voted candidate by a delegator
 	MaxVoteCount = 30
 )
 
@@ -863,6 +865,7 @@ func (evm *EVM) CancelVoteTx(from common.Address, dposCtx *types.DposContext, ga
 	return nil, gas, nil
 }
 
+// Float64ToBytes convert float64 to []byte
 func Float64ToBytes(f float64) []byte {
 	bits := math.Float64bits(f)
 	bytes := make([]byte, 8)
