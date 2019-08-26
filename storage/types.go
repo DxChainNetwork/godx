@@ -126,22 +126,23 @@ type (
 
 		FirstSeen uint64 `json:"firstseen"`
 
-		HistoricDowntime time.Duration `json:"historicdowntime"`
-		HistoricUptime   time.Duration `json:"historicuptime"`
-		ScanRecords      HostPoolScans `json:"scanrecords"`
+		// TODO: refactor this into an interface: host interactions
+		SuccessfulInteractionFactor float64                 `json:"successfulInteractionFactor"`
+		FailedInteractionFactor     float64                 `json:"FailedInteractionFactor"`
+		LastInteractionTime         uint64                  `json:"lastInteractionTime"`
+		InteractionRecords          []HostInteractionRecord `json:"interactionRecords"`
 
-		HistoricFailedInteractions     float64 `json:"historicfailedinteractions"`
-		HistoricSuccessfulInteractions float64 `json:"historicsuccessfulinteractions"`
-		RecentFailedInteractions       float64 `json:"recentfailedinteractions"`
-		RecentSuccessfulInteractions   float64 `json:"recentsuccessfulinteractions"`
-
-		LastHistoricUpdate uint64 `json:"lasthistoricupdate"`
+		// TODO: refactor this into an interface: host scans
+		AccumulatedUptime   float64       `json:"accumulated_uptime"`
+		AccumulatedDowntime float64       `json:"accumulated_downtime"`
+		LastCheckTime       uint64        `json:"last_check_time"`
+		ScanRecords         HostPoolScans `json:"scan_records"`
 
 		// IP will be decoded from the enode URL
 		IP string `json:"ip"`
 
-		IPNetwork           string    `json:"ipnetwork"`
-		LastIPNetWorkChange time.Time `json:"lastipnetworkchange"`
+		IPNetwork           string    `json:"ip_network"`
+		LastIPNetWorkChange time.Time `json:"last_ipnetwork_change"`
 
 		EnodeID    enode.ID `json:"enodeid"`
 		EnodeURL   string   `json:"enodeurl"`
@@ -159,6 +160,14 @@ type (
 		Timestamp time.Time `json:"timestamp"`
 		Success   bool      `json:"success"`
 	}
+
+	// HostInteractionRecord is the interaction record for client-host interactions
+	// which is used in hostManager
+	HostInteractionRecord struct {
+		Time            time.Time `json:"time"`
+		InteractionType string    `json:"interactionType"`
+		Success         bool      `json:"success"`
+	}
 )
 
 // ContractParams is the drafted contract sent by the storage client.
@@ -175,28 +184,28 @@ type ContractParams struct {
 // RentPayment stores the StorageClient payment settings for renting the storage space from the host
 type RentPayment struct {
 	Fund         common.BigInt `json:"fund"`
-	StorageHosts uint64        `json:"storagehosts"`
+	StorageHosts uint64        `json:"storageHosts"`
 	Period       uint64        `json:"period"`
-	RenewWindow  uint64        `json:"renewwindow"`
+	RenewWindow  uint64        `json:"renewWindow"`
 
 	// ExpectedStorage is amount of data expected to be stored
-	ExpectedStorage uint64 `json:"expectedstorage"`
+	ExpectedStorage uint64 `json:"expectedStorage"`
 	// ExpectedUpload is expected amount of data upload before redundancy / block
-	ExpectedUpload uint64 `json:"expectedupload"`
+	ExpectedUpload uint64 `json:"expectedUpload"`
 	// ExpectedDownload is expected amount of data downloaded / block
-	ExpectedDownload uint64 `json:"expecteddownload"`
+	ExpectedDownload uint64 `json:"expectedDownload"`
 	// ExpectedRedundancy is the average redundancy of files uploaded
-	ExpectedRedundancy float64 `json:"expectedredundancy"`
+	ExpectedRedundancy float64 `json:"expectedRedundancy"`
 }
 
 // ClientSetting defines the settings that client used to create contract with other peers,
 // where EnableIPViolation specifies if the host with same network IP addresses will be filtered
 // out or not
 type ClientSetting struct {
-	RentPayment       RentPayment `json:"rentpayment"`
-	EnableIPViolation bool        `json:"enableipviolation"`
-	MaxUploadSpeed    int64       `json:"maxuploadspeed"`
-	MaxDownloadSpeed  int64       `json:"maxdownloadspeed"`
+	RentPayment       RentPayment `json:"rentPayment"`
+	EnableIPViolation bool        `json:"enableIPViolation"`
+	MaxUploadSpeed    int64       `json:"maxUploadSpeed"`
+	MaxDownloadSpeed  int64       `json:"maxDownloadSpeed"`
 }
 
 type (
@@ -266,16 +275,16 @@ type (
 	// period cycle. It includes cost for all contracts
 	PeriodCost struct {
 		// ContractFees = ContractFee + GasFee
-		ContractFees     common.BigInt `json:"contractfees"`
-		UploadCost       common.BigInt `json:"uploadcost"`
-		DownloadCost     common.BigInt `json:"downloadcost"`
-		StorageCost      common.BigInt `json:"storagecost"`
-		PrevContractCost common.BigInt `json:"prevcontractcost"`
+		ContractFees     common.BigInt `json:"contractFees"`
+		UploadCost       common.BigInt `json:"uploadCost"`
+		DownloadCost     common.BigInt `json:"downloadCost"`
+		StorageCost      common.BigInt `json:"storageCost"`
+		PrevContractCost common.BigInt `json:"prevContractCost"`
 
-		ContractFund             common.BigInt `json:"contractfund"`
-		UnspentFund              common.BigInt `json:"unspentfund"`
-		WithheldFund             common.BigInt `json:"withheadfund"`
-		WithheldFundReleaseBlock uint64        `json:"withheldfundreleaseblock"`
+		ContractFund             common.BigInt `json:"contractFund"`
+		UnspentFund              common.BigInt `json:"unspentFund"`
+		WithheldFund             common.BigInt `json:"withheldFund"`
+		WithheldFundReleaseBlock uint64        `json:"withheldFundReleaseBlock"`
 	}
 )
 
@@ -309,49 +318,49 @@ type (
 
 	// UploadFileInfo provides information about a file
 	UploadFileInfo struct {
-		AccessTime       time.Time `json:"accesstime"`
+		AccessTime       time.Time `json:"accessTime"`
 		Available        bool      `json:"available"`
-		ChangeTime       time.Time `json:"changetime"`
-		CipherType       string    `json:"ciphertype"`
-		CreateTime       time.Time `json:"createtime"`
+		ChangeTime       time.Time `json:"changeTime"`
+		CipherType       string    `json:"cipherType"`
+		CreateTime       time.Time `json:"createTime"`
 		Expiration       uint64    `json:"expiration"`
-		FileSize         uint64    `json:"filesize"`
+		FileSize         uint64    `json:"fileSize"`
 		Health           float64   `json:"health"`
-		LocalPath        string    `json:"localpath"`
-		MaxHealth        float64   `json:"maxhealth"`
-		MaxHealthPercent float64   `json:"maxhealthpercent"`
-		ModTime          time.Time `json:"modtime"`
-		NumStuckChunks   uint64    `json:"numstuckchunks"`
-		OnDisk           bool      `json:"ondisk"`
+		LocalPath        string    `json:"localPath"`
+		MaxHealth        float64   `json:"maxHealth"`
+		MaxHealthPercent float64   `json:"maxHealthPercent"`
+		ModTime          time.Time `json:"modTime"`
+		NumStuckChunks   uint64    `json:"numStuckChunks"`
+		OnDisk           bool      `json:"onDisk"`
 		Recoverable      bool      `json:"recoverable"`
 		Redundancy       float64   `json:"redundancy"`
 		Renewing         bool      `json:"renewing"`
 		DxPath           string    `json:"dxpath"`
 		Stuck            bool      `json:"stuck"`
-		StuckHealth      float64   `json:"stuckhealth"`
-		UploadedBytes    uint64    `json:"uploadedbytes"`
-		UploadProgress   float64   `json:"uploadprogress"`
+		StuckHealth      float64   `json:"stuckHealth"`
+		UploadedBytes    uint64    `json:"uploadedBytes"`
+		UploadProgress   float64   `json:"uploadProgress"`
 	}
 
 	// DirectoryInfo provides information about a dxdir
 	DirectoryInfo struct {
-		NumFiles uint64 `json:"num_files"`
+		NumFiles uint64 `json:"numFiles"`
 
-		TotalSize uint64 `json:"total_size"`
+		TotalSize uint64 `json:"totalSize"`
 
 		Health uint32 `json:"health"`
 
-		StuckHealth uint32 `json:"stuck_health"`
+		StuckHealth uint32 `json:"stuckHealth"`
 
-		MinRedundancy uint32 `json:"min_redundancy"`
+		MinRedundancy uint32 `json:"minRedundancy"`
 
-		TimeLastHealthCheck time.Time `json:"time_last_health_check"`
+		TimeLastHealthCheck time.Time `json:"timeLastHealthCheck"`
 
-		TimeModify time.Time `json:"time_modify"`
+		TimeModify time.Time `json:"timeModify"`
 
-		NumStuckSegments uint32 `json:"num_stuck_segments"`
+		NumStuckSegments uint32 `json:"numStuckSegments"`
 
-		DxPath DxPath `json:"dx_path"`
+		DxPath DxPath `json:"dxPath"`
 	}
 
 	// HostHealthInfo is the file structure used for DxFile health update.
@@ -370,11 +379,11 @@ type (
 	FileInfo struct {
 		DxPath         string  `json:"dxpath"`
 		Status         string  `json:"status"`
-		SourcePath     string  `json:"sourcepath"`
-		FileSize       uint64  `json:"filesize"`
+		SourcePath     string  `json:"sourcePath"`
+		FileSize       uint64  `json:"fileSize"`
 		Redundancy     uint32  `json:"redundancy"`
-		StoredOnDisk   bool    `json:"storedondisk"`
-		UploadProgress float64 `json:"uploadprogress"`
+		StoredOnDisk   bool    `json:"storedOnDisk"`
+		UploadProgress float64 `json:"uploadProgress"`
 	}
 
 	// FileBriefInfo is the brief info about a DxFile

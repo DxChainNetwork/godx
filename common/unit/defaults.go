@@ -6,7 +6,7 @@ package unit
 
 // The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
 // can be generated in an hour
-var (
+const (
 	BlockPerMin    = uint64(4)
 	BlockPerHour   = uint64(240)
 	BlocksPerDay   = 24 * BlockPerHour

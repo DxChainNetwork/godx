@@ -17,15 +17,16 @@
 package core
 
 import (
+	"math/big"
+	"reflect"
+	"testing"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"reflect"
-	"testing"
 
 	"github.com/davecgh/go-spew/spew"
 )
@@ -33,11 +34,11 @@ import (
 func TestDefaultGenesisBlock(t *testing.T) {
 	block := DefaultGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.MainnetGenesisHash {
-		t.Errorf("wrong mainnet genesis hash, got %v, want %v", block.Hash(), params.MainnetGenesisHash)
+		t.Errorf("wrong mainnet genesis hash, got %x, want %x", block.Hash(), params.MainnetGenesisHash)
 	}
 	block = DefaultTestnetGenesisBlock().ToBlock(nil)
 	if block.Hash() != params.TestnetGenesisHash {
-		t.Errorf("wrong testnet genesis hash, got %v, want %v", block.Hash(), params.TestnetGenesisHash)
+		t.Errorf("wrong testnet genesis hash, got %x, want %x", block.Hash(), params.TestnetGenesisHash)
 	}
 }
 

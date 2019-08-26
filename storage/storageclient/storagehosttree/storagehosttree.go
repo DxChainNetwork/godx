@@ -5,31 +5,35 @@
 package storagehosttree
 
 import (
+	"math/rand"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+var r = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 // StorageHostTree defined a binary tree structure that used to store all
 // storage host information found by the storage client
 type StorageHostTree struct {
-	root     *node
-	hostPool map[enode.ID]*node
-	evalFunc EvaluationFunc
-	lock     sync.Mutex
+	root      *node
+	hostPool  map[enode.ID]*node
+	evaluator Evaluator
+	lock      sync.Mutex
 }
 
 // New will initialize the StorageHostTree object
-func New(ef EvaluationFunc) *StorageHostTree {
+func New(evaluator Evaluator) *StorageHostTree {
 	return &StorageHostTree{
 		hostPool: make(map[enode.ID]*node),
 		root: &node{
 			count: 1,
 		},
-		evalFunc: ef,
+		evaluator: evaluator,
 	}
 }
 
@@ -46,7 +50,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo) error {
 	// nodeEntry
 	entry := &nodeEntry{
 		HostInfo: hi,
-		eval:     t.evalFunc(hi).Evaluation(),
+		eval:     t.evaluator.Evaluate(hi),
 	}
 
 	// validation: check if the storagehost exists already
@@ -79,18 +83,18 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo) error {
 
 	entry := &nodeEntry{
 		HostInfo: hi,
-		eval:     t.evalFunc(hi).Evaluation(),
+		eval:     t.evaluator.Evaluate(hi),
 	}
 
 	// insert node and update the hostPool
-	_, node := n.nodeInsert(entry)
+	_, node := t.root.nodeInsert(entry)
 	t.hostPool[hi.EnodeID] = node
 
 	return nil
 }
 
 // Remove will remove the node from the hostPool as well as
-// making the node unocuppied, updating the evaluation
+// making the node not occupied, updating the evaluation
 func (t *StorageHostTree) Remove(enodeID enode.ID) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -148,15 +152,15 @@ func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, 
 	return node.entry.HostInfo, true
 }
 
-// SetEvaluationFunc will re-assign evaluation function for calculating
+// SetEvaluator will re-assign evaluation function for calculating
 // storage host evaluation.
-func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
+func (t *StorageHostTree) SetEvaluator(evaluator Evaluator) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	// if there is no host exist, set the function and return directly
 	if len(t.hostPool) == 0 {
-		t.evalFunc = ef
+		t.evaluator = evaluator
 		return nil
 	}
 
@@ -167,7 +171,7 @@ func (t *StorageHostTree) SetEvaluationFunc(ef EvaluationFunc) error {
 		count: 1,
 	}
 	t.hostPool = make(map[enode.ID]*node)
-	t.evalFunc = ef
+	t.evaluator = evaluator
 
 	// re-insert the host information
 	var errs error
@@ -200,6 +204,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 
 	// 1. handle addrBlacklist
 	for _, enodeID := range addrBlacklist {
+		// TODO: test the functionality of blacklist
 		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
@@ -209,6 +214,7 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 
 	// 2. handle blacklist
 	for _, enodeID := range blacklist {
+		// TODO: test the functionality of blacklist
 		node, exists := t.hostPool[enodeID]
 		if !exists {
 			continue
@@ -225,15 +231,12 @@ func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []en
 	for len(t.hostPool) > 0 && len(storageHosts) < needed {
 		// in case the evaluation is negative, the random will return error
 		// however, this should never happen
-		if t.root.evalTotal.IsNeg() {
+		if t.root.evalTotal < 0 {
 			break
 		}
 
-		randEval, err := common.RandomBigIntRange(t.root.evalTotal)
+		randEval := r.Int63n(t.root.evalTotal)
 
-		if err != nil {
-			break
-		}
 		node, err := t.root.nodeWithEval(randEval)
 
 		// TODO (mzhang): better error handling

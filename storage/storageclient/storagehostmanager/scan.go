@@ -26,20 +26,17 @@ func (shm *StorageHostManager) scan() {
 	if err := shm.waitSync(); err != nil {
 		return
 	}
-
 	// get all storage hosts who have not been scanned before or no historical information
 	allStorageHosts := shm.storageHostTree.All()
 	for _, host := range allStorageHosts {
 		if len(host.ScanRecords) == 0 {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 	}
-
 	// indicate the initial scan is finished
 	if err := shm.waitScanFinish(); err != nil {
 		return
 	}
-
 	shm.lock.Lock()
 	shm.initialScan = true
 	shm.lock.Unlock()
@@ -78,11 +75,11 @@ func (shm *StorageHostManager) autoScan() {
 		// queued for scan, online storage host has higher
 		// priority to be scanned than offline storage host
 		for _, host := range onlineHosts {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 
 		for _, host := range offlineHosts {
-			shm.scanValidation(host)
+			shm.startScanning(host)
 		}
 
 		// sleep for a random amount of time, then schedule scan again
@@ -99,9 +96,10 @@ func (shm *StorageHostManager) autoScan() {
 	}
 }
 
-// scanValidation will scan the storage host added
-func (shm *StorageHostManager) scanValidation(hi storage.HostInfo) {
-	shm.log.Debug("Started Scan Validation")
+// startScanning will first check whether the scan for the host info is needed. If needed, start a goroutine
+// to scan the storage host added
+func (shm *StorageHostManager) startScanning(hi storage.HostInfo) {
+	shm.log.Debug("Started Scan")
 
 	// verify if the storage host is already in scan pool
 	shm.lock.Lock()
@@ -204,22 +202,14 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 
 	// get the IP network and check if it is changed
 	// this is needed because the storage host can change its settings directly
-	ipnet, err := storagehosttree.IPNetwork(hi.IP)
+	ipNet, err := storagehosttree.IPNetwork(hi.IP)
 
-	if err == nil && ipnet.String() != hi.IPNetwork {
-		hi.IPNetwork = ipnet.String()
+	if err == nil && ipNet.String() != hi.IPNetwork {
+		hi.IPNetwork = ipNet.String()
 		hi.LastIPNetWorkChange = time.Now()
 	} else if err != nil {
 		shm.log.Error("failed to get the IP network information", "err", err.Error())
 	}
-
-	// update the historical interactions
-	shm.lock.RLock()
-	info := &hi
-	blockHeight := shm.blockHeight
-	shm.lock.RUnlock()
-
-	hostHistoricInteractionsUpdate(info, blockHeight)
 
 	// retrieve storage host external settings
 	hostConfig, err := shm.retrieveHostConfig(hi)
@@ -235,8 +225,11 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	defer shm.lock.Unlock()
 
 	// update the host information
-	shm.hostInfoUpdate(hi, err)
-
+	err = shm.hostInfoUpdate(hi, shm.b, err)
+	if err != nil {
+		shm.log.Warn("Storage Host Information Update error", "enodeID", hi.EnodeID, "err", err)
+		return
+	}
 	shm.log.Debug("Storage Host Information Updated", "enodeID", hi.EnodeID)
 }
 

@@ -4,45 +4,116 @@
 
 package storagehostmanager
 
-import "testing"
+import (
+	"errors"
+	"testing"
 
-func TestStorageHostManager_IncrementSuccessfulInteractions(t *testing.T) {
-	shm := newHostManagerTestData()
-	hi := hostInfoGenerator()
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
+)
 
-	if err := shm.insert(hi); err != nil {
-		t.Fatalf("failed to insert data into the storage host tree")
-	}
+// fakeOnlineBackend is the fake backend used for testing in hostInfoUpdate
+type fakeOnlineBackend struct{}
 
-	shm.IncrementSuccessfulInteractions(hi.EnodeID)
-	hiUpdated, exists := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
-	if !exists {
-		t.Fatalf("failed to retrieve the storage host information with id %s", hi.EnodeID)
-	}
-
-	if hiUpdated.RecentSuccessfulInteractions != hi.RecentSuccessfulInteractions+1 {
-		t.Errorf("failed to increament the recent successful interactions, expected %v, got %v",
-			hiUpdated.RecentSuccessfulInteractions, hi.RecentSuccessfulInteractions+1)
-	}
-
+// Online method of the fakeOnlineBackend always returns true
+func (fob *fakeOnlineBackend) Online() bool {
+	return true
 }
 
-func TestStorageHostManager_IncrementFailedInteractions(t *testing.T) {
-	shm := newHostManagerTestData()
-	hi := hostInfoGenerator()
+// fakeOfflineBackend is the fake backend used for testing in hostInfoUpdate
+type fakeOfflineBackend struct{}
 
-	if err := shm.insert(hi); err != nil {
-		t.Fatalf("failed to insert data into the storage host tree")
+// Online method of the fakeOfflineBackend always return false
+func (fob *fakeOfflineBackend) Online() bool {
+	return false
+}
+
+// TestStorageHostManager_hostInfoUpdate_modify test the scenario of modifying the host info
+// in the storage host manager
+func TestStorageHostManager_hostInfoUpdate_modify(t *testing.T) {
+	enodeID := enode.ID{1, 2, 3, 4}
+	shm := &StorageHostManager{blockHeight: 1000000}
+	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
+	shm.hostEvaluator = evaluator
+	shm.storageHostTree = storagehosttree.New(evaluator)
+
+	if err := shm.storageHostTree.Insert(storage.HostInfo{EnodeID: enodeID}); err != nil {
+		t.Fatalf("cannot insert the host info")
 	}
 
-	shm.IncrementFailedInteractions(hi.EnodeID)
-	hiUpdated, exists := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
+	info := storage.HostInfo{
+		HostExtConfig: storage.HostExtConfig{
+			AcceptingContracts: true,
+		},
+		EnodeID:             enodeID,
+		FirstSeen:           0,
+		AccumulatedUptime:   30,
+		AccumulatedDowntime: 0,
+	}
+	if err := shm.hostInfoUpdate(info, &fakeOnlineBackend{}, nil); err != nil {
+		t.Fatalf("cannot update the host info: %v", err)
+	}
+	info, exists := shm.RetrieveHostInfo(enodeID)
 	if !exists {
-		t.Fatalf("failed to retrieve the storage host information with id %s", hi.EnodeID)
+		t.Fatalf("after host info update, does not insert")
+	}
+	if !info.AcceptingContracts {
+		t.Fatalf("info update does not have accepting contracts true")
+	}
+}
+
+// TestStorageHostManager_hostInfoUpdate_remove test the scenario of removing the host info
+// from the storage host manager
+func TestStorageHostManager_hostInfoUpdate_remove(t *testing.T) {
+	enodeID := enode.ID{1, 2, 3, 4}
+	shm := &StorageHostManager{blockHeight: 1000000}
+	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
+	shm.hostEvaluator = evaluator
+	shm.storageHostTree = storagehosttree.New(evaluator)
+
+	info := storage.HostInfo{EnodeID: enodeID, FirstSeen: 0, AccumulatedUptime: 30, AccumulatedDowntime: 0}
+	if err := shm.storageHostTree.Insert(info); err != nil {
+		t.Fatalf("cannot insert into the storageHostTree: %v", err)
+	}
+	newInfo := storage.HostInfo{EnodeID: enodeID}
+	if err := shm.hostInfoUpdate(newInfo, &fakeOnlineBackend{}, errors.New("")); err != nil {
+		t.Fatalf("cannot update the host info: %v", err)
+	}
+	// the host should be removed from the storage host tree
+	if _, exists := shm.RetrieveHostInfo(enodeID); exists {
+		t.Fatalf("host info exist in storage host tree after update")
+	}
+}
+
+// TestStorageHostManager_hostInfoUpdate_offline test the scenario of offline and returning an error.
+// No update is expected.
+func TestStorageHostManager_hostInfoUpdate_offline(t *testing.T) {
+	enodeID := enode.ID{1, 2, 3, 4}
+	shm := &StorageHostManager{blockHeight: 1000000}
+	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
+	shm.hostEvaluator = evaluator
+	shm.storageHostTree = storagehosttree.New(evaluator)
+
+	info := storage.HostInfo{EnodeID: enodeID, FirstSeen: 0, AccumulatedUptime: 30, AccumulatedDowntime: 0}
+	if err := shm.storageHostTree.Insert(info); err != nil {
+		t.Fatalf("cannot insert into the storageHostTree: %v", err)
 	}
 
-	if hiUpdated.RecentFailedInteractions != hi.RecentFailedInteractions+1 {
-		t.Errorf("failed to increament the recent failed interactions, expected %v, got %v",
-			hiUpdated.RecentFailedInteractions, hi.RecentFailedInteractions+1)
+	newInfo := storage.HostInfo{
+		HostExtConfig: storage.HostExtConfig{
+			AcceptingContracts: true,
+		},
+		EnodeID:             enodeID,
+		FirstSeen:           0,
+		AccumulatedUptime:   30,
+		AccumulatedDowntime: 0,
+	}
+	if err := shm.hostInfoUpdate(newInfo, &fakeOfflineBackend{}, errors.New("")); err != nil {
+		t.Fatalf("cannot update the host info: %v", err)
+	}
+	_, exists := shm.RetrieveHostInfo(enodeID)
+	if !exists {
+		t.Fatalf("offline backend shall not remove the host")
 	}
 }

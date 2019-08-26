@@ -312,7 +312,7 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   3141592,
 		Difficulty: big.NewInt(1048576),
 		Alloc: map[common.Address]GenesisAccount{
-			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
 		},
 	}
 }
