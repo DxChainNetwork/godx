@@ -5,6 +5,7 @@
 package dpos
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -185,8 +186,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	prevEpoch := parent.Time.Int64() / epochInterval
 	currentEpoch := ec.TimeStamp / epochInterval
 
-	// TODO: 有可能既是candidate，又给他人或者自己投票，所以还需要解冻candidate质押
-
 	// iterator whole thawing account trie, and thawing the deposit of every delegator
 	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
 	thawingAddress := common.BytesToAddress([]byte("thawing_" + epochIDStr))
@@ -194,8 +193,23 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
 	it := trie.NewIterator(thawingTrie.NodeIterator(nil))
 	for it.Next() {
-		delegator := common.BytesToAddress(it.Key)
-		ec.stateDB.SetState(delegator, common.BytesToHash([]byte("vote-deposit")), common.Hash{})
+		addr := it.Value
+		if bytes.Equal(addr, (common.Hash{}).Bytes()) {
+			continue
+		}
+
+		keyCandidateThawing := "candidate_thawing_" + common.BytesToAddress(addr).String()
+		keyVoteThawing := "vote_thawing_" + common.BytesToAddress(addr).String()
+
+		// thawing the candidate deposit
+		if bytes.Equal(it.Key, []byte(keyCandidateThawing)) {
+			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyCandidateThawing)), common.Hash{})
+		}
+
+		// thawing the vote deposit
+		if bytes.Equal(it.Key, []byte(keyVoteThawing)) {
+			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyVoteThawing)), common.Hash{})
+		}
 	}
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
