@@ -409,6 +409,18 @@ type (
 	}
 )
 
+type (
+	// MarketPrice is the market price metrics from HostMarket
+	MarketPrice struct {
+		ContractPrice common.BigInt
+		StoragePrice  common.BigInt
+		UploadPrice   common.BigInt
+		DownloadPrice common.BigInt
+		Deposit       common.BigInt
+		MaxDeposit    common.BigInt
+	}
+)
+
 const (
 	// SectorSize is 4 MB
 	SectorSize = uint64(1 << 22)

@@ -49,42 +49,6 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 			}
 			clientSetting.RentPayment.Period = period
 
-		case key == "storage":
-			var expectedStorage uint64
-			expectedStorage, err = unit.ParseStorage(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected storage: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedStorage = expectedStorage
-
-		case key == "upload":
-			var expectedUpload uint64
-			expectedUpload, err = parseExpectedUpload(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected upload: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedUpload = expectedUpload
-
-		case key == "download":
-			var expectedDownload uint64
-			expectedDownload, err = parseExpectedDownload(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected download: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedDownload = expectedDownload
-
-		case key == "redundancy":
-			var redundancy float64
-			redundancy, err = parseExpectedRedundancy(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the redundancy: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedRedundancy = redundancy
-
 		case key == "violation":
 			var status bool
 			status, err = unit.ParseBool(value)

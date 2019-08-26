@@ -311,10 +311,10 @@ func randRentPaymentGenerator() (rentPayment storage.RentPayment) {
 		Fund:               common.RandomBigInt(),
 		StorageHosts:       randUint64(),
 		Period:             randUint64(),
-		ExpectedStorage:    randUint64(),
-		ExpectedUpload:     randUint64(),
-		ExpectedDownload:   randUint64(),
-		ExpectedRedundancy: randFloat64(),
+		ExpectedStorage:    0,
+		ExpectedUpload:     0,
+		ExpectedDownload:   0,
+		ExpectedRedundancy: 0,
 	}
 
 	return

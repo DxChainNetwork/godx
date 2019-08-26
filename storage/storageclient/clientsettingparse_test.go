@@ -181,14 +181,6 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 			value = rand.Uint64()
 			granularity = unit.TimeUnit[rand.Intn(len(unit.TimeUnit))]
 			break
-		case key == "storage" || key == "upload" || key == "download":
-			value = rand.Uint64()
-			granularity = unit.DataSizeUnit[rand.Intn(len(unit.DataSizeUnit))]
-			break
-		case key == "redundancy":
-			value = rand.Float64()
-			granularity = ""
-			break
 		case key == "violation":
 			value = rand.Intn(2) == 0
 			granularity = ""

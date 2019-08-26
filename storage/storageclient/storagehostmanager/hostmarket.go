@@ -6,29 +6,20 @@ package storagehostmanager
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
-// hostMarket provides methods to evaluate the storage price, upload price, download
-// price, and deposit price. Note the hostMarket should have a caching method.
-type hostMarket interface {
-	GetMarketPrice() MarketPrice
+// HostMarket provides methods to evaluate the storage price, upload price, download
+// price, and deposit price. Note the HostMarket should have a caching method.
+type HostMarket interface {
+	GetMarketPrice() storage.MarketPrice
 	GetBlockNumber() uint64
-}
-
-// MarketPrice is the market price metrics from hostMarket
-type MarketPrice struct {
-	ContractPrice common.BigInt
-	StoragePrice  common.BigInt
-	UploadPrice   common.BigInt
-	DownloadPrice common.BigInt
-	Deposit       common.BigInt
-	MaxDeposit    common.BigInt
 }
 
 // GetMarketPrice return the market price for evaluation based on host entries
 // TODO: implement this
-func (shm *StorageHostManager) GetMarketPrice() MarketPrice {
-	return MarketPrice{
+func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
+	return storage.MarketPrice{
 		ContractPrice: common.NewBigInt(1000),
 		StoragePrice:  common.NewBigInt(1000),
 		UploadPrice:   common.NewBigInt(1000),

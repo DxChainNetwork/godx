@@ -10,7 +10,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// fakeHostMarket is a fake host market that implement hostMarket
+// fakeHostMarket is a fake host market that implement HostMarket
 type fakeHostMarket struct {
 	blockNumber   uint64
 	contractPrice common.BigInt
@@ -22,8 +22,8 @@ type fakeHostMarket struct {
 }
 
 // GetMarketPrice return the price for the fake host manager
-func (hm *fakeHostMarket) GetMarketPrice() MarketPrice {
-	return MarketPrice{
+func (hm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
+	return storage.MarketPrice{
 		ContractPrice: hm.contractPrice,
 		StoragePrice:  hm.storagePrice,
 		UploadPrice:   hm.uploadPrice,

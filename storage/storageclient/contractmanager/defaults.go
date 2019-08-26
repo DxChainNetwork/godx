@@ -37,6 +37,15 @@ const (
 	consecutiveRenewFailsBeforeReplacement = 12
 )
 
+// rentPayment related constants
+const (
+	// rent payment size ratios. The contract fund are split according to these ratio
+	// params.
+	storageSizeRatio  float64 = 1
+	uploadSizeRatio   float64 = 1
+	downloadSizeRatio float64 = 1
+)
+
 // variables below are used to calculate the maxHostStoragePrice and maxHostDeposit, which set
 // a limitation to storage host's configuration
 var (
