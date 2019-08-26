@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 
@@ -266,24 +267,41 @@ func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
 }
 
-// TODO: not completed yet
 // CheckDposOperationTx checks the dpos transaction's filed
 func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
+	stateDB := evm.StateDB
+	balance := stateDB.GetBalance(msg.From())
+	emptyHash := common.Hash{}
 	switch *msg.To() {
 
 	// check ApplyCandidate tx
 	case common.BytesToAddress([]byte{13}):
-		if msg.Value().Uint64() == 0 {
-			return errors.New("applying for candidate must specify none negative deposit value")
+
+		// check the balance that must more than the threshold of 1000000 DX,
+		// which can stop flooding of applying candidate
+		if balance.Cmp(new(big.Int).SetInt64(1e18)) <= 0 {
+			return errors.New("no the qualification to be a candidate for low balance")
 		}
 
-		if msg.Data() != nil {
-			return errors.New("payload must be empty when tx is not binary")
+		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
+		voteDeposit := int64(0)
+		voteDepositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("vote-deposit")))
+		if voteDepositHash != emptyHash {
+			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
 		}
+
+		if msg.Value().Sign() <= 0 || msg.Value().Int64() > balance.Int64()-voteDeposit {
+			return errors.New("no the qualification to be a candidate for not specifying fit deposit value")
+		}
+
 		return nil
 
 	// check CancelCandidate tx
 	case common.BytesToAddress([]byte{14}):
+		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("candidate-deposit")))
+		if depositHash == emptyHash {
+			return fmt.Errorf("%s has not become candidate yet,so can not submit cancel candidate tx", msg.From().String())
+		}
 		return nil
 
 	// check Vote tx
@@ -292,9 +310,14 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 			return errors.New("payload must not be empty for vote tx")
 		}
 
-		// TODO: 有可能既是candidate，又给他人或者自己投票，所以需要检查下是否有candidate抵押
-		balOfFrom := evm.StateDB.GetBalance(msg.From())
-		if msg.Value().Sign() <= 0 || msg.Value().Cmp(balOfFrom) > 0 {
+		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
+		deposit := int64(0)
+		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("candidate-deposit")))
+		if depositHash != emptyHash {
+			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
+		}
+
+		if msg.Value().Sign() <= 0 || msg.Value().Int64() > balance.Int64()-deposit {
 			return errors.New("invalid deposit value for vote tx")
 		}
 
@@ -302,6 +325,10 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 	// check CancelVote tx
 	case common.BytesToAddress([]byte{16}):
+		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("vote-deposit")))
+		if depositHash == emptyHash {
+			return fmt.Errorf("%s has not voted yet,so can not submit cancel vote tx", msg.From().String())
+		}
 		return nil
 
 	default:
