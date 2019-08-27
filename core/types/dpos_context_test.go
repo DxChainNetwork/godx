@@ -71,7 +71,8 @@ func TestDposContextKickoutCandidate(t *testing.T) {
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
-		assert.Nil(t, dposContext.Delegate(candidate, candidate))
+		_, err := dposContext.Vote(candidate, candidates)
+		assert.Nil(t, err)
 	}
 
 	kickIdx := 1
@@ -102,7 +103,7 @@ func TestDposContextKickoutCandidate(t *testing.T) {
 	}
 }
 
-func TestDposContextDelegateAndUnDelegate(t *testing.T) {
+func TestDposContextVoteAndCancelVote(t *testing.T) {
 	candidate := addresses[0]
 	newCandidate := addresses[1]
 	delegator := addresses[2]
@@ -112,16 +113,19 @@ func TestDposContextDelegateAndUnDelegate(t *testing.T) {
 	assert.Nil(t, dposContext.BecomeCandidate(candidate))
 	assert.Nil(t, dposContext.BecomeCandidate(newCandidate))
 
-	// delegator delegate to not exist candidate
+	// delegator vote to not exist candidate
 	candidateIter := trie.NewIterator(dposContext.candidateTrie.NodeIterator(nil))
 	candidateMap := map[string]bool{}
 	for candidateIter.Next() {
 		candidateMap[string(candidateIter.Value)] = true
 	}
-	assert.NotNil(t, dposContext.Delegate(delegator, notExistAddress))
 
-	// delegator delegate to old candidate
-	assert.Nil(t, dposContext.Delegate(delegator, candidate))
+	_, err = dposContext.Vote(delegator, []common.Address{notExistAddress})
+	assert.NotNil(t, err)
+
+	// delegator vote to old candidate
+	_, err = dposContext.Vote(delegator, []common.Address{candidate})
+	assert.Nil(t, err)
 	delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
 	if assert.True(t, delegateIter.Next()) {
 		assert.Equal(t, append(delegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
@@ -134,8 +138,9 @@ func TestDposContextDelegateAndUnDelegate(t *testing.T) {
 		assert.Equal(t, candidate, common.BytesToAddress(voteIter.Value))
 	}
 
-	// delegator delegate to new candidate
-	assert.Nil(t, dposContext.Delegate(delegator, newCandidate))
+	// delegator vote to new candidate
+	_, err = dposContext.Vote(delegator, []common.Address{newCandidate})
+	assert.Nil(t, err)
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
 	assert.False(t, delegateIter.Next())
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
@@ -150,14 +155,11 @@ func TestDposContextDelegateAndUnDelegate(t *testing.T) {
 		assert.Equal(t, newCandidate, common.BytesToAddress(voteIter.Value))
 	}
 
-	// delegator undelegate to not exist candidate
-	assert.NotNil(t, dposContext.UnDelegate(notExistAddress, candidate))
+	// a not exist delegator cancel vote record
+	assert.NotNil(t, dposContext.CancelVote(notExistAddress))
 
-	// delegator undelegate to old candidate
-	assert.NotNil(t, dposContext.UnDelegate(delegator, candidate))
-
-	// delegator undelegate to new candidate
-	assert.Nil(t, dposContext.UnDelegate(delegator, newCandidate))
+	// delegator cancel all vote record
+	assert.Nil(t, dposContext.CancelVote(delegator))
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
 	assert.False(t, delegateIter.Next())
 	voteIter = trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))
