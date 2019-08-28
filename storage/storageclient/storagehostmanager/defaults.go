@@ -137,3 +137,16 @@ const (
 	// parameter, the slower the criteria function approaching asymptote y = 1.
 	critRemoveBase = unit.BlocksPerDay * 3
 )
+
+// host market related constants
+const (
+	// priceUpdateInterval is the time to be passed before the host market price shall be
+	// updated.
+	priceUpdateInterval = 1 * time.Hour
+
+	// floorRatio is the ratio below which the price does not count for the average
+	floorRatio float64 = 0.2
+
+	// ceilRatio is the ratio of total where the highest price does not count for the average
+	ceilRatio float64 = 0.2
+)

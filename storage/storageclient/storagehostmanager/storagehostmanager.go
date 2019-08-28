@@ -56,6 +56,9 @@ type StorageHostManager struct {
 	// blockHeight and its lock
 	blockHeight     uint64
 	blockHeightLock sync.RWMutex
+
+	// host market pricing cache
+	cachedPrices cachedPrices
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
