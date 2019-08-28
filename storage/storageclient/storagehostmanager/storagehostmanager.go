@@ -53,7 +53,9 @@ type StorageHostManager struct {
 	filteredHosts map[enode.ID]struct{}
 	filteredTree  *storagehosttree.StorageHostTree
 
-	blockHeight uint64
+	// blockHeight and its lock
+	blockHeight     uint64
+	blockHeightLock sync.RWMutex
 }
 
 // New will initialize HostPoolManager, making the host pool stay updated
@@ -282,11 +284,6 @@ func (shm *StorageHostManager) Evaluate(host storage.HostInfo) int64 {
 	return shm.hostEvaluator.Evaluate(host)
 }
 
-// EvaluateDetail will calculate and return the evaluation detail of a single storage host
-func (shm *StorageHostManager) EvaluateDetail(host storage.HostInfo) EvaluationDetail {
-	return shm.hostEvaluator.EvaluateDetail(host)
-}
-
 // AllHosts will return all available storage hosts
 func (shm *StorageHostManager) AllHosts() []storage.HostInfo {
 	shm.lock.RLock()
@@ -359,4 +356,36 @@ func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
 		}
 	}
 	return err
+}
+
+// getBlockHeight get the current block number from storage host manager
+func (shm *StorageHostManager) getBlockHeight() uint64 {
+	shm.blockHeightLock.RLock()
+	defer shm.blockHeightLock.RUnlock()
+
+	return shm.blockHeight
+}
+
+// setBlockHeight set storage host manager's block number to the target val
+func (shm *StorageHostManager) setBlockHeight(val uint64) {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight = val
+}
+
+// incrementBlockHeight increment the block height by 1
+func (shm *StorageHostManager) incrementBlockHeight() {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight++
+}
+
+// decrementBlockHeight decrement the block height by 1
+func (shm *StorageHostManager) decrementBlockHeight() {
+	shm.blockHeightLock.Lock()
+	defer shm.blockHeightLock.Unlock()
+
+	shm.blockHeight--
 }

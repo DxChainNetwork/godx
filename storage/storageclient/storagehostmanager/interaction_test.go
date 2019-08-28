@@ -25,7 +25,7 @@ func TestInteractionName(t *testing.T) {
 		{InteractionDownload, "download"},
 	}
 	for index, test := range tests {
-		name := InteractionTypeToName(test.it)
+		name := test.it.String()
 		if name != test.name {
 			t.Errorf("test %d interaction name not expected. Got %v, Expect %v", index, name, test.name)
 		}
@@ -41,10 +41,10 @@ func TestInteractionNameInvalid(t *testing.T) {
 	if InteractionNameToType(invalidName) != InteractionInvalid {
 		t.Errorf("invalid name does not yield expected result")
 	}
-	if InteractionTypeToName(InteractionInvalid) != "" {
+	if InteractionInvalid.String() != "" {
 		t.Errorf("invalid type does not yield empty name")
 	}
-	if InteractionTypeToName(InteractionType(100)) != "" {
+	if (InteractionType(100)).String() != "" {
 		t.Errorf("invalid type does not yield empty name")
 	}
 }
@@ -57,7 +57,7 @@ func TestInteractionWeight(t *testing.T) {
 		{InteractionInvalid, 0},
 		{InteractionGetConfig, 1},
 		{InteractionCreateContract, 2},
-		{InteractionRenewContract, 2},
+		{InteractionRenewContract, 5},
 		{InteractionUpload, 5},
 		{InteractionDownload, 10},
 	}

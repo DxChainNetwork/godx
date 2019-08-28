@@ -454,7 +454,7 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 		}
 	}
 
-	// divided by 100
+	// divided by 5
 	minEval = minEval / evalFactor
 	return
 }

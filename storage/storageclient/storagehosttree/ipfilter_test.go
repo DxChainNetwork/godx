@@ -5,7 +5,6 @@
 package storagehosttree
 
 import (
-	"math/rand"
 	"testing"
 )
 
@@ -43,12 +42,4 @@ func TestFilter_Reset(t *testing.T) {
 			t.Errorf("error: the ip address %s should not be filtered", ip)
 		}
 	}
-}
-
-func generageRandomByteArray() [32]byte {
-	id := make([]byte, 32)
-	rand.Read(id)
-	var result [32]byte
-	copy(result[:], id[:32])
-	return result
 }

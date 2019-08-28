@@ -61,14 +61,14 @@ var (
 	interactonWeight = map[InteractionType]float64{
 		InteractionGetConfig:      1,
 		InteractionCreateContract: 2,
-		InteractionRenewContract:  2,
+		InteractionRenewContract:  5,
 		InteractionUpload:         5,
 		InteractionDownload:       10,
 	}
 )
 
-// InteractionTypeToName translate the name of the interaction type to human readable name
-func InteractionTypeToName(it InteractionType) string {
+// String return the string representation of the InteractionType
+func (it InteractionType) String() string {
 	if _, exist := interactionTypeToNameDict[it]; !exist {
 		return ""
 	}
@@ -171,7 +171,7 @@ func updateInteractionRecord(info *storage.HostInfo, interactionType Interaction
 	now uint64) {
 	info.InteractionRecords = append(info.InteractionRecords, storage.HostInteractionRecord{
 		Time:            time.Unix(int64(now), 0),
-		InteractionType: InteractionTypeToName(interactionType),
+		InteractionType: interactionType.String(),
 		Success:         success,
 	})
 	if len(info.InteractionRecords) > maxNumInteractionRecord {

@@ -130,7 +130,7 @@ func (de *defaultEvaluator) calcFinalScore(scores *defaultEvaluationScores) int6
 // and highValueLimit on highTimeLimit.
 func presenceScoreCalc(info storage.HostInfo, market HostMarket) float64 {
 	// If first seen is larger than current block height, return 0
-	blockNumber := market.GetBlockNumber()
+	blockNumber := market.getBlockHeight()
 	if blockNumber < info.FirstSeen {
 		return 0
 	}
@@ -237,7 +237,7 @@ func evalHostDeposit(info storage.HostInfo, settings storage.RentPayment) common
 // evalHostMarketDeposit evaluate the deposit based on market evaluate price
 func evalHostMarketDeposit(settings storage.RentPayment, market HostMarket) common.BigInt {
 	// Evaluate host deposit for market price
-	marketPrice := market.GetMarketPrice()
+	marketPrice := market.getMarketPrice()
 	// Make the host info with necessary info from market price
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
@@ -271,7 +271,7 @@ func evalContractCost(info storage.HostInfo, settings storage.RentPayment) commo
 // evalMarketContractCost evaluate the market contract price cost
 func evalMarketContractCost(market HostMarket, settings storage.RentPayment) common.BigInt {
 	// Get the price from market
-	marketPrice := market.GetMarketPrice()
+	marketPrice := market.getMarketPrice()
 
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{

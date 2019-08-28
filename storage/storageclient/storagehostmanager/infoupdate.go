@@ -5,6 +5,7 @@
 package storagehostmanager
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/DxChainNetwork/godx/storage"
@@ -15,7 +16,7 @@ type onlineBackend interface {
 	Online() bool
 }
 
-// hostConfigUpdate calculate the try to update the host config wight the host info.
+// hostInfoUpdate try to update the host config info.
 // It will update the uptime fields as well as the interaction fields.
 func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBackend, err error) error {
 	// if error happens due to the backend is not online, directly return
@@ -24,22 +25,20 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 	}
 	// get the host info from the tree
 	storedInfo, exist := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
-	if exist {
-		info = applyNewHostInfoToStoredHostInfo(info, storedInfo)
+	if !exist {
+		return fmt.Errorf("host info %v not exist in tree", info.EnodeID)
 	}
+	info = applyInfoToStoredHostInfo(info, storedInfo)
 	success := err == nil
 	info = calcUptimeUpdate(info, success, uint64(time.Now().Unix()))
 	info = calcInteractionUpdate(info, InteractionGetConfig, success, uint64(time.Now().Unix()))
 
 	// Check whether to remove the host
-	remove := whetherRemoveHost(info, shm.blockHeight)
+	remove := whetherRemoveHost(info, shm.getBlockHeight())
 	if remove {
-		return shm.remove(storedInfo.EnodeID)
+		return shm.remove(info.EnodeID)
 	}
-	if exist {
-		return shm.modify(info)
-	}
-	return shm.insert(info)
+	return shm.modify(info)
 }
 
 // whetherRemoveHost decide whether to remove the host from host manager with the given host info.

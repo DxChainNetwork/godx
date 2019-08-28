@@ -46,16 +46,16 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	// update the block height
 	shm.lock.Lock()
 	for i := 0; i < revert; i++ {
-		shm.blockHeight--
-		if shm.blockHeight < 0 {
+		shm.decrementBlockHeight()
+		if shm.getBlockHeight() < 0 {
 			shm.log.Error("the block height stores in StorageHostManager should be positive")
-			shm.blockHeight = 0
+			shm.setBlockHeight(0)
 			break
 		}
 	}
 
 	for i := 0; i < apply; i++ {
-		shm.blockHeight++
+		shm.incrementBlockHeight()
 	}
 	shm.lock.Unlock()
 
@@ -103,13 +103,14 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 	if !exists {
 		// if not existed before, modify the FirstSeen and insert into storage host manager,
 		// start the scan loop
-		info.FirstSeen = shm.blockHeight
+		info.FirstSeen = shm.getBlockHeight()
 		// Initiate the uptime and interaction related fields
 		uptimeInitiate(&info)
 		interactionInitiate(&info)
 
 		if err := shm.insert(info); err != nil {
 			shm.log.Error("unable to insert the storage host information", "err", err.Error())
+			return
 		}
 
 		// start the scan

@@ -29,36 +29,6 @@ func (fob *fakeOfflineBackend) Online() bool {
 	return false
 }
 
-// TestStorageHostManager_hostInfoUpdate_insert test the scenario of inserting the host info
-// into the storage host manager
-func TestStorageHostManager_hostInfoUpdate_insert(t *testing.T) {
-	enodeID := enode.ID{1, 2, 3, 4}
-	shm := &StorageHostManager{blockHeight: 1000000}
-	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
-	shm.hostEvaluator = evaluator
-	shm.storageHostTree = storagehosttree.New(evaluator)
-
-	info := storage.HostInfo{
-		HostExtConfig: storage.HostExtConfig{
-			AcceptingContracts: true,
-		},
-		EnodeID:             enodeID,
-		FirstSeen:           0,
-		AccumulatedUptime:   30,
-		AccumulatedDowntime: 0,
-	}
-	if err := shm.hostInfoUpdate(info, &fakeOnlineBackend{}, nil); err != nil {
-		t.Fatalf("cannot update the host info: %v", err)
-	}
-	info, exists := shm.RetrieveHostInfo(enodeID)
-	if !exists {
-		t.Fatalf("after host info update, does not insert")
-	}
-	if !info.AcceptingContracts {
-		t.Fatalf("info update does not have accepting contracts true")
-	}
-}
-
 // TestStorageHostManager_hostInfoUpdate_modify test the scenario of modifying the host info
 // in the storage host manager
 func TestStorageHostManager_hostInfoUpdate_modify(t *testing.T) {

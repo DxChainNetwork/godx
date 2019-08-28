@@ -99,7 +99,7 @@ func (shm *StorageHostManager) autoScan() {
 // startScanning will first check whether the scan for the host info is needed. If needed, start a goroutine
 // to scan the storage host added
 func (shm *StorageHostManager) startScanning(hi storage.HostInfo) {
-	shm.log.Debug("Started Scan Validation")
+	shm.log.Debug("Started Scan")
 
 	// verify if the storage host is already in scan pool
 	shm.lock.Lock()
@@ -225,8 +225,11 @@ func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
 	defer shm.lock.Unlock()
 
 	// update the host information
-	shm.hostInfoUpdate(hi, shm.b, err)
-
+	err = shm.hostInfoUpdate(hi, shm.b, err)
+	if err != nil {
+		shm.log.Warn("Storage Host Information Update error", "enodeID", hi.EnodeID, "err", err)
+		return
+	}
 	shm.log.Debug("Storage Host Information Updated", "enodeID", hi.EnodeID)
 }
 

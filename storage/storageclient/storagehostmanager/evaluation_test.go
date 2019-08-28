@@ -131,7 +131,7 @@ func TestPresenceScoreCalc(t *testing.T) {
 		// first Seen must not be 0
 		firstSeen := uint64(10)
 		hm := &fakeHostMarket{
-			blockNumber: test.presence + firstSeen,
+			blockHeight: test.presence + firstSeen,
 		}
 		info := storage.HostInfo{
 			FirstSeen: firstSeen,
@@ -166,7 +166,7 @@ func TestIllegalPresenceScoreCalc(t *testing.T) {
 	firstSeen := uint64(30)
 	blockHeight := uint64(10)
 	hm := &fakeHostMarket{
-		blockNumber: blockHeight,
+		blockHeight: blockHeight,
 	}
 	info := storage.HostInfo{
 		FirstSeen: firstSeen,
