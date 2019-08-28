@@ -17,6 +17,14 @@ const (
 	FakeContractCreateRevisionHostTooBusy = 0x05
 
 	FakeClientCommitSuccessFailed = 0x06
+
+	FakeUploadRequestSendFailed  = 0x07
+	FakeUploadRequestFailed      = 0x08
+	FakeUploadRequestHostTooBusy = 0x09
+
+	FakeUploadRevisionSignSendFailed  = 0x0A
+	FakeUploadRevisionSignFailed      = 0x0B
+	FakeUploadRevisionSignHostTooBusy = 0x0C
 )
 
 // Pre-define test case steps to make sure if it should be failed or success

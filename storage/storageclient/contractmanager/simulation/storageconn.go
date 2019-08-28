@@ -190,11 +190,49 @@ func (fs *FakeStoragePeer) SendContractCreationHostRevisionSign(revisionSign []b
 // ===== ==== ===== ===== CLIENT UPLOAD RELATED METHOD ===== ==== ===== =====
 
 func (fs *FakeStoragePeer) RequestContractUpload(req storage.UploadRequest) error {
-	return nil
+	// simulate the client failed to send the contract upload request
+	if _, exist := fs.sendMsg[FakeUploadRequestSendFailed]; exist {
+		return fmt.Errorf("error sending the upload request")
+	}
+
+	// simulate the upload request negotiation error
+	if _, exist := fs.sendMsg[FakeUploadRequestFailed]; exist {
+		msg, _ := NewFakeResponseMsg(storage.HostNegotiateErrorMsg, []byte(""))
+		return fs.FakeSendMsg(msg)
+	}
+
+	// simulate the host is too busy to handle the request
+	if _, exist := fs.sendMsg[FakeUploadRequestHostTooBusy]; exist {
+		msg, _ := NewFakeResponseMsg(storage.HostBusyHandleReqMsg, []byte(""))
+		return fs.FakeSendMsg(msg)
+	}
+
+	// otherwise, simulate the negotiation success situation
+	msg, _ := NewFakeResponseMsg(storage.ContractUploadMerkleProofMsg, storage.UploadMerkleProof{})
+	return fs.FakeSendMsg(msg)
 }
 
 func (fs *FakeStoragePeer) SendContractUploadClientRevisionSign(revisionSign []byte) error {
-	return nil
+	// simulate the client failed to send contract upload revision sign
+	if _, exist := fs.sendMsg[FakeUploadRevisionSignSendFailed]; exist {
+		return fmt.Errorf("error sending contract upload client revision sign")
+	}
+
+	// simulate the upload client revision sign negotiation error
+	if _, exist := fs.sendMsg[FakeUploadRevisionSignFailed]; exist {
+		msg, _ := NewFakeResponseMsg(storage.HostNegotiateErrorMsg, []byte(""))
+		return fs.FakeSendMsg(msg)
+	}
+
+	// simulate the host is too busy to handle the request
+	if _, exist := fs.sendMsg[FakeUploadRevisionSignHostTooBusy]; exist {
+		msg, _ := NewFakeResponseMsg(storage.HostBusyHandleReqMsg, []byte(""))
+		return fs.FakeSendMsg(msg)
+	}
+
+	// otherwise, simulate the negotiation success
+	msg, _ := NewFakeResponseMsg(storage.ContractUploadRevisionSign, []byte("HOST SIGNED CONTRACT REVISION"))
+	return fs.FakeSendMsg(msg)
 }
 
 // ===== ==== ===== ===== HOST UPLOAD RELATED METHOD ===== ==== ===== =====

@@ -66,7 +66,7 @@ func ContractParamsGenerator() storage.ContractParams {
 	return storage.ContractParams{
 		RentPayment:          RentPaymentGenerator(),
 		HostEnodeURL:         hostInfo.EnodeURL,
-		Funding:              common.RandomBigInt().Add(hostInfo.ContractPrice),
+		Funding:              common.RandomBigInt().MultUint64(100000000000000000),
 		StartHeight:          startHeight,
 		EndHeight:            startHeight + randUint64(),
 		ClientPaymentAddress: common.Address{},
@@ -111,6 +111,21 @@ func HostInfoGenerator() storage.HostInfo {
 	}
 }
 
+// UploadActionsGenerator will randomly generate a list of storage uploadActions
+func UploadActionsGenerator(amount int, actionType string) (uploadActions []storage.UploadAction) {
+	for i := 0; i < amount; i++ {
+		action := storage.UploadAction{
+			Type: actionType,
+			A:    0,
+			B:    0,
+			Data: []byte{},
+		}
+
+		uploadActions = append(uploadActions, action)
+	}
+	return
+}
+
 // EnodeIDGenerator will randomly generate enodeID
 func EnodeIDGenerator() (id enode.ID) {
 	_, _ = rand.Read(id[:])
@@ -140,6 +155,12 @@ func ContractIDGenerator() (id storage.ContractID) {
 // randomHashGenerator will randomly generate common.Hash value
 func HashGenerator() (h common.Hash) {
 	rand.Read(h[:])
+	return
+}
+
+// randByteSlice will generate a random byte slice
+func randByteSlice() (byteSlice []byte) {
+	rand.Read(byteSlice[:])
 	return
 }
 
