@@ -35,6 +35,7 @@ const (
 
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
+	extraRatio                             = 0.02
 )
 
 // variables below are used to calculate the maxHostStoragePrice and maxHostDeposit, which set

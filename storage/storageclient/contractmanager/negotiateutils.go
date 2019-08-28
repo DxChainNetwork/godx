@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/DxChainNetwork/godx/p2p"
+
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
@@ -249,13 +251,7 @@ func waitAndHandleHostSignResp(sp storage.Peer) (hostSign []byte, err error) {
 	}
 
 	// check error message code
-	if msg.Code == storage.HostBusyHandleReqMsg {
-		err = storage.ErrHostBusyHandleReq
-		return
-	}
-
-	if msg.Code == storage.HostNegotiateErrorMsg {
-		err = storage.ErrHostNegotiate
+	if err = hostRespMsgCodeValidation(msg); err != nil {
 		return
 	}
 
@@ -266,6 +262,21 @@ func waitAndHandleHostSignResp(sp storage.Peer) (hostSign []byte, err error) {
 	}
 
 	return
+}
+
+// hostRespMsgCodeValidation will validate the host response message code
+func hostRespMsgCodeValidation(msg p2p.Msg) error {
+	// check if the msg code is HostBusyHandleReqMsg
+	if msg.Code == storage.HostBusyHandleReqMsg {
+		return storage.ErrHostBusyHandleReq
+	}
+
+	// check if the msg code is negotiation error
+	if msg.Code == storage.HostNegotiateErrorMsg {
+		return storage.ErrHostNegotiate
+	}
+
+	return nil
 }
 
 // signedClientContract will create signed version of the storage contract by storage client
@@ -346,6 +357,41 @@ func newContractRevision(current types.StorageContractRevision, cost *big.Int) t
 	rev.NewRevisionNumber++
 
 	return rev
+}
+
+// storageContractRevisionCommit will commit the storage upload contract revision
+func storageContractRevisionCommit(sp storage.Peer, contractRevision types.StorageContractRevision, contract *contractset.Contract, prices ...common.BigInt) error {
+	// commit the upload contract revision
+	unCommitContractHeader := contract.Header()
+	if err := contract.CommitRevision(contractRevision, prices...); err != nil {
+		err = fmt.Errorf("client failed to commit the contract revision while uploading/downloading: %s", err.Error())
+		return common.ErrCompose(storage.ErrClientCommit, err)
+	}
+	return sendAndHandleClientCommitSuccessMsg(sp, contract, unCommitContractHeader)
+
+}
+
+// sendAndHandleClientCommitSuccessMsg will send the message to storage host which indicates that
+// storageClient has successfully committed the upload storage revision
+func sendAndHandleClientCommitSuccessMsg(sp storage.Peer, contract *contractset.Contract, contractHeader contractset.ContractHeader) error {
+	// client send the commit success message
+	_ = sp.SendClientCommitSuccessMsg()
+
+	// wait for host acknowledgement message until timeout
+	msg, err := sp.ClientWaitContractResp()
+	if err != nil {
+		_ = contract.RollbackUndoMem(contractHeader)
+		return fmt.Errorf("after client commit success message was sent, failed to get message from host: %s", err.Error())
+	}
+
+	// handle the message based on its' code
+	switch msg.Code {
+	case storage.HostAckMsg:
+		return nil
+	default:
+		_ = contract.RollbackUndoMem(contractHeader)
+		return storage.ErrHostCommit
+	}
 }
 
 // CalculateProofRanges will calculate the proof ranges which is used to verify a

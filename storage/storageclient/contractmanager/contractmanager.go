@@ -241,6 +241,29 @@ func (cm *ContractManager) GetBlockHeight() uint64 {
 	return cm.blockHeight
 }
 
+// GetContractBasedOnHostID will return the contract information based on provided hostID
+func (cm *ContractManager) GetContractBasedOnHostID(hostID enode.ID) (*contractset.Contract, error) {
+	// get the contractID based on the hostID
+	contractID, exist := cm.activeContracts.GetContractIDByHostID(hostID)
+	if !exist {
+		return nil, fmt.Errorf("contract does not exist based on the hostID provided")
+	}
+
+	// get the contract based on the contractID
+	contract, exist := cm.activeContracts.Acquire(contractID)
+	if !exist {
+		return nil, fmt.Errorf("contract does not exist based on the contractID provided")
+	}
+
+	return contract, nil
+}
+
+// contractReturn will return the contract back to the active contract
+// list. the error will be ignored
+func (cm *ContractManager) ContractReturn(c *contractset.Contract) {
+	_ = cm.activeContracts.Return(c)
+}
+
 // isOffline will check if a storage host is online or not based on the number of scanRecords
 // and the successful rate of the records
 func isOffline(host storage.HostInfo) (offline bool) {

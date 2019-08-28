@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
-	"math/bits"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -18,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -307,225 +304,6 @@ func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo stora
 	return merkle.Sha256MerkleTreeRoot(data), err
 }
 
-// Download calls the Read RPC, writing the requested data to w
-// NOTE: The RPC can be cancelled (with a granularity of one section) via the cancel channel.
-func (client *StorageClient) Read(sp storage.Peer, w io.Writer, req storage.DownloadRequest, cancel <-chan struct{}, hostInfo *storage.HostInfo) (err error) {
-	// sanity check the request.
-	sector := req.Sector
-	if uint64(sector.Offset)+uint64(sector.Length) > storage.SectorSize {
-		return errors.New("download out boundary of sector")
-	}
-	if req.MerkleProof {
-		if sector.Offset%merkle.LeafSize != 0 || sector.Length%merkle.LeafSize != 0 {
-			return errors.New("offset and length must be multiples of SegmentSize when requesting a Merkle proof")
-		}
-	}
-
-	// calculate estimated bandwidth
-	var totalLength uint64
-	totalLength += uint64(sector.Length)
-
-	var estProofHashes uint64
-	if req.MerkleProof {
-		// use the worst-case proof size of 2*tree depth,
-		// which occurs when proving across the two leaves in the center of the tree
-		estHashesPerProof := 2 * bits.Len64(storage.SectorSize/storage.SegmentSize)
-		estProofHashes = uint64(estHashesPerProof)
-	}
-	estBandwidth := totalLength + estProofHashes*uint64(storage.HashSize)
-
-	// retrieve the last contract revision
-	scs := client.contractManager.GetStorageContractSet()
-
-	// find the contractID formed by this host
-	contractID, exist := scs.GetContractIDByHostID(hostInfo.EnodeID)
-	if !exist {
-		return fmt.Errorf("the contract cannot be found with the provided hostID")
-	}
-	contract, exist := scs.Acquire(contractID)
-	if !exist {
-		return fmt.Errorf("not exist this contract: %s", contractID.String())
-	}
-	defer scs.Return(contract)
-
-	// old contract header and revision
-	contractHeader := contract.Header()
-	lastRevision := contractHeader.LatestContractRevision
-
-	// calculate price
-	bandwidthPrice := hostInfo.DownloadBandwidthPrice.MultUint64(estBandwidth)
-	sectorAccessPrice := hostInfo.SectorAccessPrice
-
-	price := hostInfo.BaseRPCPrice.Add(bandwidthPrice).Add(sectorAccessPrice)
-	if lastRevision.NewValidProofOutputs[0].Value.Cmp(price.BigIntPtr()) < 0 {
-		return errors.New("client funds not enough to support download")
-	}
-
-	// increase the price fluctuation by 0.2% to mitigate small errors, like different block height
-	price = price.MultFloat64(1 + extraRatio)
-
-	// create the download revision and sign it
-	newRevision := NewRevision(lastRevision, price.BigIntPtr())
-
-	// client sign the revision
-	am := client.ethBackend.AccountManager()
-	account := accounts.Account{Address: newRevision.NewValidProofOutputs[0].Address}
-	wallet, err := am.Find(account)
-	if err != nil {
-		return err
-	}
-
-	clientSig, err := wallet.SignHash(account, newRevision.RLPHash().Bytes())
-	if err != nil {
-		return err
-	}
-
-	req.Signature = clientSig[:]
-	req.StorageContractID = newRevision.ParentID
-	req.NewRevisionNumber = newRevision.NewRevisionNumber
-
-	req.NewValidProofValues = make([]*big.Int, len(newRevision.NewValidProofOutputs))
-	for i, nvpo := range newRevision.NewValidProofOutputs {
-		req.NewValidProofValues[i] = nvpo.Value
-	}
-
-	req.NewMissedProofValues = make([]*big.Int, len(newRevision.NewMissedProofOutputs))
-	for i, nmpo := range newRevision.NewMissedProofOutputs {
-		req.NewMissedProofValues[i] = nmpo.Value
-	}
-
-	// record the successful or failed interactions
-	var clientNegotiateErr, hostNegotiateErr, hostCommitErr error
-	defer func() {
-		if clientNegotiateErr != nil {
-			_ = sp.SendClientNegotiateErrorMsg()
-			if msg, err := sp.ClientWaitContractResp(); err != nil || msg.Code != storage.HostAckMsg {
-				client.log.Error("Client receive host ack msg failed or msg.code is not host ack", "err", err)
-			}
-		}
-
-		// we will delete static flag when host negotiate or commit error
-		// when host occurs error, we increase failed interactions
-		if hostCommitErr != nil || hostNegotiateErr != nil {
-			client.CheckAndUpdateConnection(sp.PeerNode())
-			client.storageHostManager.IncrementFailedInteractions(hostInfo.EnodeID)
-		}
-
-		if err == nil {
-			client.storageHostManager.IncrementSuccessfulInteractions(hostInfo.EnodeID)
-		}
-	}()
-
-	// send download request
-	err = sp.RequestContractDownload(req)
-	if err != nil {
-		return err
-	}
-
-	// read host data responses
-	var hostSig []byte
-
-	var resp storage.DownloadResponse
-	msg, err := sp.ClientWaitContractResp()
-	if err != nil {
-		return err
-	}
-
-	// meaning request was sent too frequently, the host's evaluation
-	// will not be degraded
-	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.ErrHostBusyHandleReq
-	}
-
-	// if host send some negotiation error, client should handler it
-	if msg.Code == storage.HostNegotiateErrorMsg {
-		hostNegotiateErr = storage.ErrHostNegotiate
-		return hostNegotiateErr
-	}
-
-	err = msg.Decode(&resp)
-	if err != nil {
-		hostNegotiateErr = err
-		return err
-	}
-
-	// if host sent data, should validate it
-	if len(resp.Data) > 0 {
-		if len(resp.Data) != int(sector.Length) {
-			err = errors.New("host did not send enough sector data")
-			hostNegotiateErr = err
-			return err
-		}
-
-		if req.MerkleProof {
-			proofStart := int(sector.Offset) / merkle.LeafSize
-			proofEnd := int(sector.Offset+sector.Length) / merkle.LeafSize
-			verified, err := merkle.Sha256VerifyRangeProof(resp.Data, resp.MerkleProof, proofStart, proofEnd, sector.MerkleRoot)
-			if !verified || err != nil {
-				err = errors.New("host provided incorrect sector data or Merkle proof")
-				hostNegotiateErr = err
-				return err
-			}
-		}
-
-		if len(resp.Signature) > 0 {
-			hostSig = resp.Signature
-		} else {
-			err = errors.New("host lost response data signature")
-			hostNegotiateErr = err
-			return err
-		}
-
-		// write sector data
-		if _, err := w.Write(resp.Data); err != nil {
-			log.Error("Write Buffer", "err", err)
-			clientNegotiateErr = err
-			return err
-		}
-	}
-
-	newRevision.Signatures = [][]byte{clientSig, hostSig}
-
-	// commit this revision
-	err = contract.CommitRevision(newRevision, price)
-	if err != nil {
-		if err := sp.SendClientCommitFailedMsg(); err != nil {
-			return err
-		}
-
-		// wait for host ack msg
-		msg, err := sp.ClientWaitContractResp()
-		if err == nil && msg.Code == storage.HostAckMsg {
-			return fmt.Errorf("commitUpload update contract header failed, err: %v", err)
-		}
-		return fmt.Errorf("commitUpload failed, but don't wait for host ack msg, err: %v", err)
-	}
-
-	_ = sp.SendClientCommitSuccessMsg()
-
-	// wait for HostAckMsg until timeout
-	msg, err = sp.ClientWaitContractResp()
-	if err != nil {
-		log.Error("contract download failed when wait for host ACK msg", "err", err.Error())
-
-		_ = contract.RollbackUndoMem(contractHeader)
-		err = fmt.Errorf("failed to read host ACK message, error: %s", err.Error())
-		return err
-	}
-
-	switch msg.Code {
-	case storage.HostAckMsg:
-		return
-	default:
-		hostCommitErr = storage.ErrHostCommit
-		_ = contract.RollbackUndoMem(contractHeader)
-
-		_ = sp.SendClientAckMsg()
-		_, _ = sp.ClientWaitContractResp()
-		return hostCommitErr
-	}
-}
-
 // Download requests for a single section and returns the requested data. A Merkle proof is always requested.
 func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset, length uint32, hostInfo *storage.HostInfo) ([]byte, error) {
 	client.lock.Lock()
@@ -540,7 +318,7 @@ func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset,
 		MerkleProof: true,
 	}
 	var buf bytes.Buffer
-	err := client.Read(sp, &buf, req, nil, hostInfo)
+	err := client.contractManager.DownloadNegotiate(sp, &buf, req, *hostInfo)
 	time.Sleep(1 * time.Second)
 
 	return buf.Bytes(), err

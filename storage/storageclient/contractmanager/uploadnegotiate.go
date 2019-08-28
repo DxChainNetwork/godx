@@ -16,23 +16,19 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 
-	"github.com/DxChainNetwork/godx/p2p/enode"
-
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-
 	"github.com/DxChainNetwork/godx/storage"
 )
 
 func (cm *ContractManager) UploadNegotiate(sp storage.Peer, actions []storage.UploadAction, hostInfo storage.HostInfo) (negotiateErr error) {
 	// get the contract based on hostID, return at the end
-	contract, err := cm.getContractBasedOnHostID(hostInfo.EnodeID)
+	contract, err := cm.GetContractBasedOnHostID(hostInfo.EnodeID)
 	if err != nil {
-		cm.log.Error("upload negotiation failed, failed to get the contract", "err", err.Error())
+		cm.log.Error("Client upload negotiation failed, failed to get the contract", "err", err.Error())
 		return fmt.Errorf("upload neogtiation failed, failed to get the contract: %s", err.Error())
 	}
 
 	// return the contract at the end
-	defer cm.contractReturn(contract)
+	defer cm.ContractReturn(contract)
 
 	// form the new upload contract revision
 	currentBlockHeight := cm.GetBlockHeight()
@@ -75,23 +71,6 @@ func (cm *ContractManager) UploadNegotiate(sp storage.Peer, actions []storage.Up
 	// storage client commit the storage contract revision
 	negotiateErr = storageContractRevisionCommit(sp, uploadRevision, contract, storagePrice, bandwidthPrice)
 	return
-}
-
-// getContractBasedOnHostID will return the contract information based on provided hostID
-func (cm *ContractManager) getContractBasedOnHostID(hostID enode.ID) (*contractset.Contract, error) {
-	// get the contractID based on the hostID
-	contractID, exist := cm.activeContracts.GetContractIDByHostID(hostID)
-	if !exist {
-		return nil, fmt.Errorf("contract does not exist based on the hostID provided")
-	}
-
-	// get the contract based on the contractID
-	contract, exist := cm.activeContracts.Acquire(contractID)
-	if !exist {
-		return nil, fmt.Errorf("contract does not exist based on the contractID provided")
-	}
-
-	return contract, nil
 }
 
 // formUploadContractRevision will calculate the necessary prices and form a new upload contract revision
@@ -151,41 +130,6 @@ func uploadContractRevisionNegotiation(sp storage.Peer, uploadRevision types.Sto
 	return uploadRevision, nil
 }
 
-// storageContractRevisionCommit will commit the storage upload contract revision
-func storageContractRevisionCommit(sp storage.Peer, uploadRevision types.StorageContractRevision, contract *contractset.Contract, storagePrice, bandwidthPrice common.BigInt) error {
-	// commit the upload contract revision
-	unCommitContractHeader := contract.Header()
-	if err := contract.CommitRevision(uploadRevision, storagePrice, bandwidthPrice); err != nil {
-		err = fmt.Errorf("client failed to commit the upload contract revision: %s", err.Error())
-		return common.ErrCompose(storage.ErrClientCommit, err)
-	}
-	return sendAndHandleClientCommitSuccessMsg(sp, contract, unCommitContractHeader)
-
-}
-
-// sendAndHandleClientCommitSuccessMsg will send the message to storage host which indicates that
-// storageClient has successfully committed the upload storage revision
-func sendAndHandleClientCommitSuccessMsg(sp storage.Peer, contract *contractset.Contract, contractHeader contractset.ContractHeader) error {
-	// client send the commit success message
-	_ = sp.SendClientCommitSuccessMsg()
-
-	// wait for host acknowledgement message until timeout
-	msg, err := sp.ClientWaitContractResp()
-	if err != nil {
-		_ = contract.RollbackUndoMem(contractHeader)
-		return fmt.Errorf("after client commit success message was sent, failed to get message from host: %s", err.Error())
-	}
-
-	// handle the message based on its' code
-	switch msg.Code {
-	case storage.HostAckMsg:
-		return nil
-	default:
-		_ = contract.RollbackUndoMem(contractHeader)
-		return storage.ErrHostCommit
-	}
-}
-
 // clientSignUploadContractRevision will sign the upload storage contract revision by storage client
 func clientSignUploadContractRevision(uploadRevision types.StorageContractRevision, am storage.ClientAccountManager) ([]byte, error) {
 	// get the storage client's account and wallet
@@ -243,14 +187,11 @@ func waitAndParseUploadMerkleProofResp(sp storage.Peer) (storage.UploadMerklePro
 	}
 
 	// check the error message code
-	if msg.Code == storage.HostBusyHandleReqMsg {
-		return storage.UploadMerkleProof{}, storage.ErrHostBusyHandleReq
+	if err := hostRespMsgCodeValidation(msg); err != nil {
+		return storage.UploadMerkleProof{}, err
 	}
 
-	if msg.Code == storage.HostNegotiateErrorMsg {
-		return storage.UploadMerkleProof{}, storage.ErrHostNegotiate
-	}
-
+	// decode the message
 	if err := msg.Decode(&merkleProof); err != nil {
 		return storage.UploadMerkleProof{}, common.ErrCompose(storage.ErrHostNegotiate, err)
 	}
@@ -323,10 +264,4 @@ func contractRevisionPaybackValidation(contractRevision types.StorageContractRev
 	}
 
 	return nil
-}
-
-// contractReturn will return the contract back to the active contract
-// list. the error will be ignored
-func (cm *ContractManager) contractReturn(c *contractset.Contract) {
-	_ = cm.activeContracts.Return(c)
 }
