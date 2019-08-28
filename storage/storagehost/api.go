@@ -207,7 +207,12 @@ func (h *HostPrivateAPI) SetConfig(config map[string]string) (string, error) {
 	if err = h.storageHost.syncConfig(); err != nil {
 		return "", err
 	}
-	return "Successfully set the host config", nil
+	return `Successfully set the host config. Next please use 
+
+	shost.announce()
+
+to broadcast the config changes.
+`, nil
 }
 
 // setAcceptingContracts set host AcceptingContracts to val specified by valStr
