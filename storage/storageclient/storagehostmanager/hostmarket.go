@@ -12,11 +12,11 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// HostMarket provides methods to evaluate the storage price, upload price, download
-// price, and deposit price. Note the HostMarket should have a caching method.
-type HostMarket interface {
+// hostMarket provides methods to evaluate the storage price, upload price, download
+// price, and deposit price. Note the hostMarket should have a caching method.
+type hostMarket interface {
 	GetMarketPrice() storage.MarketPrice
-	GetBlockNumber() uint64
+	getBlockHeight() uint64
 }
 
 // GetMarketPrice return the market price for evaluation based on host entries

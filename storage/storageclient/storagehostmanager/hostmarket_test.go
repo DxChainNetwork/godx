@@ -9,7 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// fakeHostMarket is a fake host market that implement HostMarket
+// fakeHostMarket is a fake host market that implement hostMarket
 type fakeHostMarket struct {
 	blockHeight   uint64
 	contractPrice common.BigInt
