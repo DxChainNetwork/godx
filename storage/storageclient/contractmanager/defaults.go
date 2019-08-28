@@ -33,6 +33,11 @@ const (
 	minContractPaymentFactor           = float64(0.15)
 	maturityDelay                      = uint64(5)
 
+	// minContractSectorRenewThreshold is the minimum sectors storage + upload
+	// + download that a contract fund should support. If cannot, the contract
+	// should be renewed.
+	minContractSectorRenewThreshold = uint64(3)
+
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
 )

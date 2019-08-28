@@ -63,7 +63,7 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment, market hostM
 	if reflect.DeepEqual(oldRent, storage.RentPayment{}) {
 		// update the current period
 		cm.lock.Lock()
-		cm.currentPeriod = cm.blockHeight - storage.RenewWindow
+		cm.currentPeriod = cm.blockHeight
 		cm.lock.Unlock()
 
 		// reuse the active canceled contracts
