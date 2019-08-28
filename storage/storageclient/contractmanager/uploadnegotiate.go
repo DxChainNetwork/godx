@@ -193,6 +193,7 @@ func waitAndParseUploadMerkleProofResp(sp storage.Peer) (storage.UploadMerklePro
 
 	// decode the message
 	if err := msg.Decode(&merkleProof); err != nil {
+		err = fmt.Errorf("failed to decode the merkle proof: %s", err.Error())
 		return storage.UploadMerkleProof{}, common.ErrCompose(storage.ErrHostNegotiate, err)
 	}
 
@@ -235,6 +236,7 @@ func calculatePricesAndNewFileSize(contractRevision types.StorageContractRevisio
 		switch action.Type {
 		case storage.UploadActionAppend:
 			bandwidthPrice = bandwidthPrice.Add(sectorBandwidthPrice)
+			newFileSize += storage.SectorSize
 		}
 	}
 	if newFileSize > contractRevision.NewFileSize {
