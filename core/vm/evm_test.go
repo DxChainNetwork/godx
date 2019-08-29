@@ -47,6 +47,139 @@ type PrivkeyAddress struct {
 	Address common.Address
 }
 
+func TestEVM_CandidateTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatal("mockEvmAndState err:", err)
+	}
+
+	//mock dposContext
+	db := ethdb.NewMemDatabase()
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatal("NewDposContext err:", err)
+	}
+
+	tests := []struct {
+		from            common.Address
+		wantErr         error
+		wantGas         uint64
+		wantDeposit     *big.Int
+		wantRewardRatio []byte
+		wantCandidate   common.Address
+		data            []byte
+		gas             uint64
+		value           *big.Int
+	}{
+		{
+			from:            pas[0].Address,
+			wantErr:         nil,
+			wantGas:         60000,
+			wantDeposit:     new(big.Int).SetUint64(10000),
+			wantRewardRatio: []byte("0x50"),
+			wantCandidate:   pas[0].Address,
+			data:            []byte("0x50"),
+			gas:             100000,
+			value:           new(big.Int).SetUint64(10000),
+		},
+		{
+			from:            pas[0].Address,
+			wantErr:         errDuplicateCandidateTx,
+			wantGas:         100000,
+			wantDeposit:     new(big.Int).SetUint64(10000),
+			wantRewardRatio: []byte("0x50"),
+			wantCandidate:   pas[0].Address,
+			data:            []byte("0x99"),
+			gas:             100000,
+			value:           new(big.Int).SetUint64(20000),
+		},
+	}
+	for _, test := range tests {
+		_, gas, err := evm.CandidateTx(test.from, test.data, test.gas, test.value, dposContext)
+		if err != test.wantErr {
+			t.Fatal("CandidateTx err:", err)
+		} else if gas != test.wantGas {
+			t.Error("gas error:", gas)
+		} else if rewardRatio := evm.StateDB.GetState(test.from, keyRewardRatio); rewardRatio != common.BytesToHash(test.wantRewardRatio) {
+			t.Error("rewardRatio err:", rewardRatio)
+		} else if deposit := evm.StateDB.GetState(test.from, keyCandidateDeposit); deposit != common.BigToHash(test.wantDeposit) {
+			t.Error("candidateDeposit err:", deposit)
+		}
+
+		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
+		if err != nil {
+			t.Error("CandidateTrie err:", err)
+		}
+		if common.BytesToAddress(data) != test.wantCandidate {
+			t.Error("CandidateTrie data", data)
+		}
+	}
+
+}
+
+func TestEVM_CandidateCancelTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatal("mockEvmAndState err:", err)
+	}
+	evm.Context.Time = new(big.Int).SetUint64(86400)
+
+	//mock dposContext
+	db := ethdb.NewMemDatabase()
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatal("NewDposContext err:", err)
+	}
+
+	currentEpochID := evm.Time.Uint64() / uint64(86400)
+	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+
+	tests := []struct {
+		from                 common.Address
+		wantErr              error
+		wantGas              uint64
+		wantCandidateThawing common.Hash
+		wantCandidate        common.Address
+		gas                  uint64
+		thawingAddress       common.Address
+		keyCandidateThawing  string
+	}{
+		{
+			from:                 pas[0].Address,
+			wantErr:              nil,
+			wantGas:              80000,
+			wantCandidateThawing: common.BytesToHash(pas[0].Address.Bytes()),
+			wantCandidate:        common.Address{},
+			gas:                  100000,
+			thawingAddress:       thawingAddress,
+			keyCandidateThawing:  "candidate_thawing_" + pas[0].Address.String(),
+		},
+	}
+
+	for _, test := range tests {
+		_, gas, err := evm.CandidateCancelTx(test.from, test.gas, dposContext)
+		if err != test.wantErr {
+			t.Fatal("CandidateCancelTx err:", err)
+		} else if gas != test.wantGas {
+			t.Error("gas err:", gas)
+		}
+		candidateThawing := evm.StateDB.GetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)))
+		if candidateThawing != test.wantCandidateThawing {
+			t.Error("candidateThawing err:", candidateThawing)
+		}
+		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
+		if err != nil {
+			t.Error("CandidateTrie err:", err)
+		}
+		if common.BytesToAddress(data) != test.wantCandidate {
+			t.Error("CandidateTrie data", data)
+		}
+	}
+}
+
 func TestEVM_HostAnnounceTx(t *testing.T) {
 
 	// generate pub\priv key

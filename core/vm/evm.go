@@ -780,11 +780,14 @@ func Uint64ToBytes(i uint64) []byte {
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
 	log.Info("enter candidate tx executing ... ")
 	stateDB := evm.StateDB
+
+	//cannot submit the transaction repeatedly
 	depositHash := stateDB.GetState(caller, keyCandidateDeposit)
 	if depositHash != emptyHash {
-		return nil, gas, errors.New("cannot submit application candidate tx repeatedly")
+		return nil, gas, errDuplicateCandidateTx
 	}
 
+	//exception will cause the database to roll back
 	dposSnapshot := dposContext.Snapshot()
 	err := dposContext.BecomeCandidate(caller)
 	if err != nil {
@@ -792,24 +795,17 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 		return nil, gas, err
 	}
 
-	// if successfully applying candidate, then store deposit
-	stateDB.SetState(caller, keyCandidateDeposit, common.BigToHash(value))
-
-	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
-	if len(data) != 0 {
-		rr := types.CandidateInfo{}
-		err := rlp.DecodeBytes(data, &rr)
-		if err != nil {
-			return nil, gas, err
-		}
-
-		if rr.RewardRatio <= 100 {
-			stateDB.SetState(caller, keyRewardRatio, common.BytesToHash(data))
-		}
+	//store user pledge assets and reward ratio
+	if result, gasRemain := setStateGas(gas, 2); result {
+		// if the user customizes the RewardRatio, then the RewardRatio must be within 100%.
+		stateDB.SetState(caller, keyRewardRatio, common.BytesToHash(data))
+		// if successfully applying candidate, then store deposit
+		stateDB.SetState(caller, keyCandidateDeposit, common.BigToHash(value))
+		return nil, gasRemain, nil
+	} else {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, ErrOutOfGas
 	}
-
-	log.Info("candidate tx execution done")
-	return nil, gas, nil
 }
 
 // CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
@@ -832,12 +828,15 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	}
 
 	// set thawing flag for from address: "candidate_thawing_" + from ==> from
-	prefix := "candidate_thawing_"
-	key := prefix + caller.String()
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
-
-	log.Info("cancel candidate tx execution done")
-	return nil, gas, nil
+	if result, gasRemain := setStateGas(gas, 1); result {
+		prefix := "candidate_thawing_"
+		key := prefix + caller.String()
+		stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
+		return nil, gasRemain, nil
+	} else {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, ErrOutOfGas
+	}
 }
 
 // VoteTx handles a new vote to some candidates that will remove last vote records
