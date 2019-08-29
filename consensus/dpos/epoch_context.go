@@ -197,22 +197,33 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	it := trie.NewIterator(thawingTrie.NodeIterator(nil))
 	for it.Next() {
-		addr := it.Value
-		if bytes.Equal(addr, (common.Hash{}).Bytes()) {
+		thawingDeposit := it.Value
+		if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
 			continue
 		}
 
-		keyCandidateThawing := "candidate_thawing_" + common.BytesToAddress(addr).String()
-		keyVoteThawing := "vote_thawing_" + common.BytesToAddress(addr).String()
+		prefixCandidate := "candidate_thawing_"
+		prefixVote := "vote_thawing_"
 
 		// if candidate deposit thawing flag exists, then thawing it
-		if bytes.Equal(it.Key, []byte(keyCandidateThawing)) {
-			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyCandidateThawing)), common.Hash{})
+		if len(prefixCandidate)+len(common.Hash{}.String()) == len(it.Key) {
+
+			// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
+			ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
 		}
 
 		// if vote deposit thawing flag exists, then thawing it
-		if bytes.Equal(it.Key, []byte(keyVoteThawing)) {
-			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyVoteThawing)), common.Hash{})
+		if len(prefixVote)+len(common.Hash{}.String()) == len(it.Key) {
+			addr := string(it.Key[len(prefixVote):])
+			currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), common.BytesToHash([]byte("vote-deposit")))
+
+			// if current vote deposit more than thawing deposit, directly skip, not thawing
+			if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
+				continue
+			}
+
+			// else, thawing the difference of deposit
+			ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
 		}
 	}
 

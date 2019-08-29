@@ -829,7 +829,8 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 
 	prefix := "candidate_thawing_"
 	key := prefix + caller.String()
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
+	deposit := stateDB.GetState(caller, keyCandidateDeposit)
+	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
 	log.Info("Cancel candidate tx execution done")
 	return nil, gasRemain, nil
@@ -923,7 +924,8 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	// set thawing flag for from address: "vote_thawing_" + from ==> from
 	prefix := "vote_thawing_"
 	key := prefix + caller.String()
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), common.BytesToHash(caller.Bytes()))
+	deposit := stateDB.GetState(caller, keyVoteDeposit)
+	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
 	log.Info("Cancel vote tx execution done")
 	return nil, gas, nil
