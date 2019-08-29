@@ -331,6 +331,8 @@ func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []commo
 				// Lucky one
 				result = append(result, voteProportions[i].address)
 
+				// NOTE: It's indeed that we should remove the elected one, because maybe there are some same vote proportion.
+				// When removed one of the same vote proportion, the left can be elected with greater probability.
 				// remove the elected one from current candidate list
 				preVoteProportions := voteProportions[:i]
 				sufVoteProportions := sortableVoteProportions{}
