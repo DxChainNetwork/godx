@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"math"
 	"math/big"
 	"strconv"
@@ -46,16 +47,6 @@ var (
 
 	errUnknownStorageContractTx = errors.New("unknown storage contract tx")
 	errUnknownDposOperationTx   = errors.New("unknown dpos operation tx")
-
-	prefixThawingAddr        = "thawing_"
-	keyVoteDeposit           = common.BytesToHash([]byte("vote-deposit"))
-	keyCandidateDeposit      = common.BytesToHash([]byte("candidate-deposit"))
-	keyRewardRatio           = common.BytesToHash([]byte("reward-ratio"))
-	keyLastVoteTime          = common.BytesToHash([]byte("last-vote-time"))
-	keyRealVoteWeightRatio   = common.BytesToHash([]byte("real-vote-weight-ratio"))
-	minVoteWeightRatio       = 0.5
-	attenuationRatioPerEpoch = 0.98
-	emptyHash                = common.Hash{}
 )
 
 type (
@@ -780,8 +771,8 @@ func Uint64ToBytes(i uint64) []byte {
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
 	log.Info("enter candidate tx executing ... ")
 	stateDB := evm.StateDB
-	depositHash := stateDB.GetState(caller, keyCandidateDeposit)
-	if depositHash != emptyHash {
+	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
+	if depositHash != dpos.EmptyHash {
 		return nil, gas, errors.New("cannot submit application candidate tx repeatedly")
 	}
 
@@ -792,21 +783,11 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 		return nil, gas, err
 	}
 
-	// if successfully applying candidate, then store deposit
-	stateDB.SetState(caller, keyCandidateDeposit, common.BigToHash(value))
+	// If successfully applying candidate, then store deposit
+	stateDB.SetState(caller, dpos.KeyCandidateDeposit, common.BigToHash(value))
 
 	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
-	if len(data) != 0 {
-		rr := types.CandidateInfo{}
-		err := rlp.DecodeBytes(data, &rr)
-		if err != nil {
-			return nil, gas, err
-		}
-
-		if rr.RewardRatio <= 100 {
-			stateDB.SetState(caller, keyRewardRatio, common.BytesToHash(data))
-		}
-	}
+	stateDB.SetState(caller, dpos.KeyRewardRatioNumerator, common.BytesToHash(data))
 
 	log.Info("candidate tx execution done")
 	return nil, gas, nil
@@ -826,7 +807,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	stateDB := evm.StateDB
 	currentEpochID := evm.Time.Uint64() / uint64(86400)
 	epochIDStr := strconv.FormatUint(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
 	}
@@ -869,13 +850,13 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	}
 
 	// if successfully record voting, then store deposit
-	stateDB.SetState(caller, keyVoteDeposit, common.BigToHash(value))
+	stateDB.SetState(caller, dpos.KeyVoteDeposit, common.BigToHash(value))
 
 	// check last vote time and calculate the real vote weight ratio
 	realVoteWeightRatio := float64(1)
 	now := uint64(time.Now().Unix())
-	lastVoteTimeHash := stateDB.GetState(caller, keyLastVoteTime)
-	if lastVoteTimeHash != emptyHash {
+	lastVoteTimeHash := stateDB.GetState(caller, dpos.KeyLastVoteTime)
+	if lastVoteTimeHash != dpos.EmptyHash {
 		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
 
 		// how many epochs has passed from lastVoteTime to now
@@ -883,21 +864,21 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 
 		// the real vote weight ratio
 		for i := uint64(0); i < epochPassed; i++ {
-			realVoteWeightRatio *= attenuationRatioPerEpoch
+			realVoteWeightRatio *= dpos.AttenuationRatioPerEpoch
 		}
 
-		if realVoteWeightRatio < minVoteWeightRatio {
-			realVoteWeightRatio = minVoteWeightRatio
+		if realVoteWeightRatio < dpos.MinVoteWeightRatio {
+			realVoteWeightRatio = dpos.MinVoteWeightRatio
 		}
 	}
 
 	// record the real vote weight ratio
 	realVoteWeightRatioBytes := Float64ToBytes(realVoteWeightRatio)
-	stateDB.SetState(caller, keyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
+	stateDB.SetState(caller, dpos.KeyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
 
 	// record the new vote time
 	nowBytes := Uint64ToBytes(now)
-	stateDB.SetState(caller, keyLastVoteTime, common.BytesToHash(nowBytes))
+	stateDB.SetState(caller, dpos.KeyLastVoteTime, common.BytesToHash(nowBytes))
 
 	log.Info("vote tx execution done", "vote_count", successCount)
 	return nil, gasRemainDec, nil
@@ -920,7 +901,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	// create thawing address: "thawing_" + currentEpochID
 	currentEpochID := evm.Time.Uint64() / uint64(86400)
 	epochIDStr := strconv.FormatUint(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
 	}
