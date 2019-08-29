@@ -180,6 +180,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	genesisEpoch := genesis.Time.Int64() / epochInterval
 	prevEpoch := parent.Time.Int64() / epochInterval
 	currentEpoch := ec.TimeStamp / epochInterval
+
+	// if current block does not reach new epoch, directly return
 	if prevEpoch == currentEpoch {
 		return nil
 	}
@@ -203,12 +205,12 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		keyCandidateThawing := "candidate_thawing_" + common.BytesToAddress(addr).String()
 		keyVoteThawing := "vote_thawing_" + common.BytesToAddress(addr).String()
 
-		// thawing the candidate deposit
+		// if candidate deposit thawing flag exists, then thawing it
 		if bytes.Equal(it.Key, []byte(keyCandidateThawing)) {
 			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyCandidateThawing)), common.Hash{})
 		}
 
-		// thawing the vote deposit
+		// if vote deposit thawing flag exists, then thawing it
 		if bytes.Equal(it.Key, []byte(keyVoteThawing)) {
 			ec.stateDB.SetState(thawingAddress, common.BytesToHash([]byte(keyVoteThawing)), common.Hash{})
 		}
@@ -222,7 +224,10 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
 	iter := trie.NewIterator(ec.DposContext.MintCntTrie().PrefixIterator(prevEpochBytes))
+
+	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
+
 		// if prevEpoch is not genesis, kickout not active candidate
 		if !prevEpochIsGenesis && iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
