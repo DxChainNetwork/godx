@@ -31,4 +31,5 @@ var (
 	ErrAssetsStillFrozen          = errors.New("freezing assets has not yet been lifted")
 	errInsufficientMortgageAssets = errors.New("you must have enough assets to become a candidate")
 	errDuplicateCandidateTx       = errors.New("cannot submit the transaction repeatedly")
+	errRewardRatio                = errors.New("then the RewardRatio must be within 100%")
 )

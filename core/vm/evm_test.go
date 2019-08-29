@@ -51,7 +51,7 @@ func TestEVM_CandidateTx(t *testing.T) {
 	// mock evm
 	evm, _, pas, err := mockEvmAndState(100)
 	if err != nil {
-		t.Error("mockEvmAndState err:", err)
+		t.Fatal("mockEvmAndState err:", err)
 	}
 	db := ethdb.NewMemDatabase()
 
@@ -63,17 +63,17 @@ func TestEVM_CandidateTx(t *testing.T) {
 
 	tests := []struct {
 		from  common.Address
-		data  []byte
-		value *big.Int
-		gas   uint64
 		want  error
+		data  []byte
+		gas   uint64
+		value *big.Int
 	}{
 		{
 			from:  pas[0].Address,
-			data:  nil,
-			value: new(big.Int).SetUint64(1000),
-			gas:   10000,
 			want:  errInsufficientMortgageAssets,
+			data:  nil,
+			gas:   10000,
+			value: new(big.Int).SetUint64(1000),
 		},
 		{
 			from:  pas[0].Address,

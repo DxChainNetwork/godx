@@ -530,33 +530,41 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 	if value.Cmp(params.FrozenAssets) < 0 || balance.Cmp(value) < 0 {
 		return nil, gas, errInsufficientMortgageAssets
 	}
-	if evm.StateDB.GetState(caller, common.BytesToHash([]byte("FrozenAssets"))) != (common.Hash{}) {
+	if evm.StateDB.GetState(caller, common.BytesToHash([]byte(FrozenAssets))) != (common.Hash{}) {
 		return nil, gas, errDuplicateCandidateTx
 	}
+	dposSnapshot := dposContext.Snapshot()
 	err := dposContext.BecomeCandidate(caller)
 	if err != nil {
+		dposContext.RevertToSnapShot(dposSnapshot)
 		return nil, gas, err
 	}
-	evm.StateDB.SetState(caller, common.BytesToHash([]byte("FrozenAssets")), common.BigToHash(value))
 	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
 	if len(data) != 0 {
-		rr := types.CandidateInfo{}
-		err := rlp.DecodeBytes(data, &rr)
+		rr := CandidateInfo{}
+		gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &rr)
+		err, _ := resultDecode[0].(error)
 		if err == nil && rr.RewardRatio <= 100 {
-			evm.StateDB.SetState(caller, common.BytesToHash([]byte("RewardRatio")), common.BytesToHash(data))
+			gas = gasDecode
+			evm.StateDB.SetState(caller, common.BytesToHash([]byte(RewardRatio)), common.BytesToHash(data))
+		} else {
+			dposContext.RevertToSnapShot(dposSnapshot)
+			return nil, gasDecode, errRewardRatio
 		}
 	}
+	evm.StateDB.SetState(caller, common.BytesToHash([]byte(FrozenAssets)), common.BigToHash(value))
 	return nil, gas, nil
 }
 
 // CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
 func (evm *EVM) CandidateCancelTx(caller common.Address, data []byte, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
+	dposSnapshot := dposContext.Snapshot()
 	err := dposContext.KickoutCandidate(caller)
 	if err != nil {
+		dposContext.RevertToSnapShot(dposSnapshot)
 		return nil, gas, err
 	}
-	tp := common.BigToHash(new(big.Int).SetUint64(evm.Context.BlockNumber.Uint64() + params.ThawingPeriod))
-	evm.StateDB.SetState(caller, common.BytesToHash([]byte("ThawingPeriod")), tp)
+	evm.StateDB.SetState(caller, common.BytesToHash([]byte(ThawingPeriod)), common.BigToHash(evm.BlockNumber))
 	return nil, gas, nil
 }
 
