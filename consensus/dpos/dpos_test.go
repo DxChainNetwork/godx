@@ -151,6 +151,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	var rewardRatioNumerator uint8 = 50
 	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
+	stateDbCopy := stateDB.Copy()
 
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
@@ -159,6 +160,8 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
+	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
+
 
 	validatorBalance := stateDB.GetBalance(validator)
 	if validatorBalance.Cmp(expectedValidatorReward) != 0 {
@@ -170,5 +173,14 @@ func TestAccumulateRewards(t *testing.T) {
 		if delegatorBalance.Cmp(expectedDelegatorReward[i]) != 0 {
 			t.Fatalf("delegator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
 		}
+	}
+
+	// mock block sync
+	headerCopy := header
+	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, dposContext)
+	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
+
+	if header.Root.String() != headerCopy.Root.String() {
+		t.Fatalf("block sync state root not equal, one: %s, another: %s", header.Root.String(), headerCopy.Root.String())
 	}
 }

@@ -425,7 +425,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	assignedReward := new(big.Int).SetInt64(0)
 
 	delegateTrie := dposContext.DelegateTrie()
-	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Coinbase.Bytes()))
+	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
 	for delegatorIterator.Next() {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 
