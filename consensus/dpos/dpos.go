@@ -43,7 +43,7 @@ const (
 )
 
 var (
-	frontierBlockReward = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
+	frontierBlockReward  = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
 	byzantiumBlockReward = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
 
 	timeOfFirstBlock = int64(0)
@@ -51,7 +51,7 @@ var (
 	confirmedBlockHead = []byte("confirmed-block-head")
 
 	// defaultRewardRatio is the default ratio of candidate share ratio with delegators belonged to it
-	defaultRewardRatio = common.NewBigInt(30)
+	defaultRewardRatio    = common.NewBigInt(30)
 	baseRewardDenominator = common.NewBigInt(100)
 )
 
@@ -382,7 +382,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// TODO get ratio of reward between delegate and voters
 	rewardRatio := defaultRewardRatio
 	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatio).Div(baseRewardDenominator)
-	assignedReward := common.Big0
+	assignedReward := new(big.Int).SetInt64(0)
 
 	delegateTrie := dposContext.DelegateTrie()
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Coinbase.Bytes()))
