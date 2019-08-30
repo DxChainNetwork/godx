@@ -35,7 +35,7 @@ func New() *StorageHostTree {
 }
 
 // Insert will insert the StorageHost information into StorageHostTree
-func (t *StorageHostTree) Insert(hi storage.HostInfo, eval float64) error {
+func (t *StorageHostTree) Insert(hi storage.HostInfo, eval int64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	return t.insert(hi, eval)
@@ -43,7 +43,7 @@ func (t *StorageHostTree) Insert(hi storage.HostInfo, eval float64) error {
 
 // insert will format the storage host information into nodeEntry data type
 // and then insert to the tree and update the host pool
-func (t *StorageHostTree) insert(hi storage.HostInfo, eval float64) error {
+func (t *StorageHostTree) insert(hi storage.HostInfo, eval int64) error {
 	// nodeEntry
 	entry := &nodeEntry{
 		HostInfo: hi,
@@ -65,7 +65,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo, eval float64) error {
 }
 
 // HostInfoUpdate updates the host information in in the tree based on the enode ID
-func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo, eval float64) error {
+func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 

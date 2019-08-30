@@ -19,13 +19,11 @@ type (
 		eval int64
 	}
 
-	fakeEvaluator struct {
-		evalMap map[enode.ID]int64
-	}
+	dataSet map[enode.ID]hostInfo
 )
 
 var (
-	hostDataSet = map[enode.ID]hostInfo{
+	hostDataSet = dataSet{
 		enode.ID([32]byte{1}): {"99.0.86.9", 1},
 		enode.ID([32]byte{2}): {"104.143.92.125", 2},
 		enode.ID([32]byte{3}): {"104.237.91.15", 3},
@@ -34,7 +32,7 @@ var (
 		enode.ID([32]byte{6}): {"104.238.46.156", 6},
 	}
 
-	hostDataSet2 = map[enode.ID]hostInfo{
+	hostDataSet2 = dataSet{
 		enode.ID([32]byte{1}): {"99.0.86.9", 1},
 		enode.ID([32]byte{2}): {"104.143.92.125", 1},
 		enode.ID([32]byte{3}): {"104.237.91.15", 1},
@@ -43,7 +41,7 @@ var (
 		enode.ID([32]byte{6}): {"104.238.46.156", 1},
 	}
 
-	hostDataSet3 = map[enode.ID]hostInfo{
+	hostDataSet3 = dataSet{
 		enode.ID([32]byte{1}): {"99.0.86.9", 0},
 		enode.ID([32]byte{2}): {"104.143.92.125", 0},
 		enode.ID([32]byte{3}): {"104.237.91.15", 0},
@@ -53,39 +51,21 @@ var (
 	}
 )
 
-// newFakeEvaluator returns a new fakeEvaluator with evaluated weight given by ips.
-func newFakeEvaluator(dataSet map[enode.ID]hostInfo) *fakeEvaluator {
-	evalMap := make(map[enode.ID]int64)
-	for id, info := range dataSet {
-		evalMap[id] = info.eval
+// totalWeight return the total eval weight of the dataset
+func (ds dataSet) totalWeight() int64 {
+	var total int64
+	for _, info := range ds {
+		total += info.eval
 	}
-	return &fakeEvaluator{
-		evalMap: evalMap,
-	}
-}
-
-func (fe *fakeEvaluator) Evaluate(info storage.HostInfo) int64 {
-	if weight, exist := fe.evalMap[info.EnodeID]; exist {
-		return weight
-	}
-	return int64(0)
-}
-
-// totalWeight return the total weight in the eval map
-func (fe *fakeEvaluator) totalWeight() int64 {
-	res := int64(0)
-	for _, weight := range fe.evalMap {
-		res += weight
-	}
-	return res
+	return total
 }
 
 // newTestStorageHostTree returns a new tree with evaluator with some entries already inserted
-func newTestStorageHostTree(evaluator Evaluator) (*StorageHostTree, error) {
-	tree := New(evaluator)
-	for id, info := range hostDataSet {
+func newTestStorageHostTree(data dataSet) (*StorageHostTree, error) {
+	tree := New()
+	for id, info := range data {
 		hostInfo := createHostInfo(info.ip, id, true)
-		if err := tree.Insert(hostInfo); err != nil {
+		if err := tree.Insert(hostInfo, info.eval); err != nil {
 			return nil, err
 		}
 	}
@@ -93,8 +73,8 @@ func newTestStorageHostTree(evaluator Evaluator) (*StorageHostTree, error) {
 }
 
 func TestStorageHostTree_Insert(t *testing.T) {
-	fe := newFakeEvaluator(hostDataSet)
-	tree, err := newTestStorageHostTree(fe)
+	data := hostDataSet
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
@@ -103,15 +83,15 @@ func TestStorageHostTree_Insert(t *testing.T) {
 			len(ips), len(tree.hostPool))
 	}
 
-	err = treeValidation(tree.root, fe.totalWeight())
+	err = treeValidation(tree.root, data.totalWeight())
 	if err != nil {
 		t.Errorf("evaluation verification failed: %s", err.Error())
 	}
 }
 
 func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
-	fe := newFakeEvaluator(hostDataSet)
-	tree, err := newTestStorageHostTree(fe)
+	data := hostDataSet
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error newNode test tree: %v", err)
 	}
@@ -125,7 +105,7 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 	// Update the IP address
 	newIP := "104.238.46.129"
 	hostInfo := createHostInfo(newIP, id, true)
-	err = tree.HostInfoUpdate(hostInfo)
+	err = tree.HostInfoUpdate(hostInfo, data[oldNode.entry.EnodeID].eval)
 	if err != nil {
 		t.Fatalf("error: failed to update the storage host information %s", err.Error())
 	}
@@ -135,19 +115,20 @@ func TestStorageHostTree_HostInfoUpdate(t *testing.T) {
 		t.Errorf("error: the ip address should be updated. expected: %s, got %s",
 			newIP, oldNode.entry.IP)
 	}
-	if err = treeValidation(tree.root, fe.totalWeight()); err != nil {
+	if err = treeValidation(tree.root, data.totalWeight()); err != nil {
 		t.Errorf("evaluation verification failed: %s", err.Error())
 	}
 }
 
 func TestStorageHostTree_All(t *testing.T) {
-	tree, err := newTestStorageHostTree(newFakeEvaluator(hostDataSet))
+	data := hostDataSet
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
 	// Test all function
 	storageHosts := tree.All()
-	if len(storageHosts) != len(hostDataSet) {
+	if len(storageHosts) != len(data) {
 		t.Errorf("insufficient amount of storage hosts, expected %d, got %d",
 			len(storageHosts), len(ips))
 	}
@@ -165,8 +146,8 @@ func TestStorageHostTree_All(t *testing.T) {
 }
 
 func TestStorageHostTree_Remove(t *testing.T) {
-	fe := newFakeEvaluator(hostDataSet)
-	tree, err := newTestStorageHostTree(fe)
+	data := hostDataSet
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
@@ -178,7 +159,7 @@ func TestStorageHostTree_Remove(t *testing.T) {
 	if _, exists := tree.hostPool[idToRemove]; exists {
 		t.Errorf("failed to remove the node from the tree, the node still exists")
 	}
-	if err = treeValidation(tree.root, fe.totalWeight()-hostDataSet[idToRemove].eval); err != nil {
+	if err = treeValidation(tree.root, data.totalWeight()-data[idToRemove].eval); err != nil {
 		t.Fatalf("After remove, tree not valid: %v", err)
 	}
 }
@@ -187,8 +168,8 @@ func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
 	// Define the constants to be used in this test
 	notExistID := enode.ID([32]byte{10})
 
-	fe := newFakeEvaluator(hostDataSet)
-	tree, err := newTestStorageHostTree(fe)
+	data := hostDataSet
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
@@ -204,25 +185,6 @@ func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
 	}
 }
 
-func TestStorageHostTree_SetEvaluationFunc(t *testing.T) {
-	fe := newFakeEvaluator(hostDataSet)
-	tree, err := newTestStorageHostTree(fe)
-	if err != nil {
-		t.Fatalf("error new test tree: %v", err)
-	}
-
-	fe2 := newFakeEvaluator(hostDataSet2)
-	err = tree.SetEvaluator(fe2)
-	if err != nil {
-		t.Errorf("failed to set new evaluation function")
-	}
-
-	err = treeValidation(tree.root, fe2.totalWeight())
-	if err != nil {
-		t.Errorf("evaluation verification failed: %s", err.Error())
-	}
-}
-
 // TestStorageHostTree_SelectRandomNumber test the number of host returned by SelectRandom:
 // 1. The number to select is smaller than host number, selected host number should be num to select
 // 2. The number to select is larger than host number, selected host number should be total number of hosts
@@ -235,8 +197,8 @@ func TestStorageHostTree_SelectRandomSize(t *testing.T) {
 		{10, 5},
 	}
 	for _, test := range tests {
-		fe := newFakeEvaluator(hostDataSet)
-		tree, err := newTestStorageHostTree(fe)
+		data := hostDataSet
+		tree, err := newTestStorageHostTree(data)
 		if err != nil {
 			t.Fatalf("error new test tree: %v", err)
 		}
@@ -265,8 +227,7 @@ func TestStorageHostTree_SelectRandomWeight(t *testing.T) {
 			selectedInfo = info
 		}
 	}
-	fe := newFakeEvaluator(hostDataSet3)
-	tree, err := newTestStorageHostTree(fe)
+	tree, err := newTestStorageHostTree(data)
 	if err != nil {
 		t.Fatalf("error new test tree: %v", err)
 	}
