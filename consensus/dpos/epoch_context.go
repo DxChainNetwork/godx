@@ -185,12 +185,19 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	genesisEpoch := genesis.Time.Int64() / epochInterval
 	prevEpoch := parent.Time.Int64() / epochInterval
 	currentEpoch := ec.TimeStamp / epochInterval
+	if prevEpoch == currentEpoch {
+		return nil
+	}
 
 	// iterator whole thawing account trie, and thawing the deposit of every delegator
 	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
 	thawingAddress := common.BytesToAddress([]byte("thawing_" + epochIDStr))
 	ec.stateDB.Exist(thawingAddress)
 	thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
+	if thawingTrie == nil {
+		return nil
+	}
+
 	it := trie.NewIterator(thawingTrie.NodeIterator(nil))
 	for it.Next() {
 		addr := it.Value
