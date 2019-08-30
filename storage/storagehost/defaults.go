@@ -7,10 +7,8 @@ package storagehost
 import (
 	"strconv"
 
-	"github.com/DxChainNetwork/godx/common/unit"
-
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
@@ -56,26 +54,6 @@ var (
 		Version: "V1.0",
 	}
 
-	// persistence default value
-	defaultMaxDuration          = unit.BlocksPerDay * 30 // 30 days
-	defaultMaxDownloadBatchSize = 17 * (1 << 20)         // 17 MB
-	defaultMaxReviseBatchSize   = 17 * (1 << 20)         // 17 MB
-
-	// deposit defaults value
-	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
-	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
-	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
-
-	// prices
-	// TODO: remove these two fields when the two prices are removed from negotiation
-	defaultBaseRPCPrice      = common.PtrBigInt(math.BigPow(10, 11))
-	defaultSectorAccessPrice = common.PtrBigInt(math.BigPow(10, 13))
-
-	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 4)).MultInt64(5)
-	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 8)).MultInt64(5)
-	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 9)).MultInt64(5)
-	defaultContractPrice          = common.NewBigInt(1e2)
-
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
 )
@@ -98,21 +76,21 @@ func calculateSectorHeight() uint64 {
 // it is the first time use the host service, or cannot find the setting file
 func defaultConfig() storage.HostIntConfig {
 	return storage.HostIntConfig{
-		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
-		MaxDuration:          uint64(defaultMaxDuration),
-		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
-		WindowSize:           uint64(proofWindowSize),
+		MaxDownloadBatchSize: uint64(storage.DefaultMaxDownloadBatchSize),
+		MaxDuration:          uint64(storage.DefaultMaxDuration),
+		MaxReviseBatchSize:   uint64(storage.DefaultMaxReviseBatchSize),
+		WindowSize:           uint64(storage.ProofWindowSize),
 
-		Deposit:       defaultDeposit,
-		DepositBudget: defaultDepositBudget,
-		MaxDeposit:    defaultMaxDeposit,
+		Deposit:       storage.DefaultDeposit,
+		DepositBudget: storage.DefaultDepositBudget,
+		MaxDeposit:    storage.DefaultMaxDeposit,
 
-		BaseRPCPrice:           defaultBaseRPCPrice,
-		ContractPrice:          defaultContractPrice,
-		DownloadBandwidthPrice: defaultDownloadBandwidthPrice,
-		SectorAccessPrice:      defaultSectorAccessPrice,
-		StoragePrice:           defaultStoragePrice,
-		UploadBandwidthPrice:   defaultUploadBandwidthPrice,
+		BaseRPCPrice:           storage.DefaultBaseRPCPrice,
+		ContractPrice:          storage.DefaultContractPrice,
+		DownloadBandwidthPrice: storage.DefaultDownloadBandwidthPrice,
+		SectorAccessPrice:      storage.DefaultSectorAccessPrice,
+		StoragePrice:           storage.DefaultStoragePrice,
+		UploadBandwidthPrice:   storage.DefaultUploadBandwidthPrice,
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // StorageHostManager related constant
@@ -150,3 +151,12 @@ const (
 	// ceilRatio is the ratio of total where the highest price does not count for the average
 	ceilRatio float64 = 0.2
 )
+
+var defaultMarketPrice = storage.MarketPrice{
+	ContractPrice: storage.DefaultContractPrice,
+	StoragePrice:  storage.DefaultStoragePrice,
+	UploadPrice:   storage.DefaultUploadBandwidthPrice,
+	DownloadPrice: storage.DefaultDownloadBandwidthPrice,
+	Deposit:       storage.DefaultDeposit,
+	MaxDeposit:    storage.DefaultMaxDeposit,
+}

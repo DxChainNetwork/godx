@@ -6,6 +6,7 @@ package storagehostmanager
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"sort"
@@ -73,7 +74,7 @@ func New(persistDir string) *StorageHostManager {
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
-	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
+	shm.storageHostTree = storagehosttree.New()
 	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 
@@ -141,35 +142,53 @@ func (shm *StorageHostManager) ActiveStorageHosts() (activeStorageHosts []storag
 	return
 }
 
-// SetRentPayment will modify the rent payment and update the storage host
-// evaluation function
+// SetRentPayment will modify the rent payment and update the host evaluations in storage host
+// tree as well as filtered tree
 func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err error) {
 	shm.lock.Lock()
 	defer shm.lock.Unlock()
-
 	// during initialization, the value might be empty
 	if reflect.DeepEqual(rent, storage.RentPayment{}) {
 		rent = storage.DefaultRentPayment
 	}
-
 	// update the rent
 	shm.rent = rent
-
-	// update the storage host evaluation function
+	// update the host evaluator
 	hostEvaluator := newDefaultEvaluator(shm, rent)
 	shm.hostEvaluator = hostEvaluator
+	// Update the storage host tree and filtered tree
+	if err = shm.evaluateHostTree(shm.storageHostTree); err != nil {
+		return fmt.Errorf("cannot update the host tree: %v", err)
+	}
+	if err = shm.evaluateHostTree(shm.filteredTree); err != nil {
+		return fmt.Errorf("cannot update the filtered host tree: %v", err)
+	}
+	return nil
+}
 
-	// update the storage host tree and filtered tree evaluation func
-	err = shm.storageHostTree.SetEvaluator(hostEvaluator)
-	err = common.ErrCompose(err, shm.filteredTree.SetEvaluator(hostEvaluator))
-
-	return
+// evaluateHostTrees evaluate all nodes in host tree and update
+func (shm *StorageHostManager) evaluateHostTree(tree *storagehosttree.StorageHostTree) (err error) {
+	nodes := tree.All()
+	for _, hi := range nodes {
+		eval := shm.hostEvaluator.Evaluate(hi)
+		err := tree.HostInfoUpdate(hi, eval)
+		if err == storagehosttree.ErrHostNotExists {
+			// If error is storagehosttree.ErrHostNotExists, meaning the host node is removed during
+			// the update by some other goroutines. Ignore the error and continue to next loop
+			continue
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RetrieveRentPayment will return the current rent payment settings for storage host manager
 func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) {
 	shm.lock.RLock()
 	defer shm.lock.RUnlock()
+
 	return shm.rent
 }
 
@@ -315,8 +334,10 @@ func (shm *StorageHostManager) StorageHostRanks() (rankings []StorageHostRank) {
 
 // insert will insert host information into the storageHostTree
 func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
+	// evaluate the host info
+	eval := shm.hostEvaluator.Evaluate(hi)
 	// insert the host information into the storage host tree
-	err := shm.storageHostTree.Insert(hi)
+	err := shm.storageHostTree.Insert(hi, eval)
 
 	// check if the host information contained in the filtered host
 	shm.lock.RLock()
@@ -325,7 +346,7 @@ func (shm *StorageHostManager) insert(hi storage.HostInfo) error {
 
 	// if the filter mode is the whitelist, add the one into filtered host tree
 	if exists && shm.filterMode == WhitelistFilter {
-		errF := shm.filteredTree.Insert(hi)
+		errF := shm.filteredTree.Insert(hi, eval)
 		if errF != nil && errF != storagehosttree.ErrHostExists {
 			err = common.ErrCompose(err, errF)
 		}
@@ -349,11 +370,14 @@ func (shm *StorageHostManager) remove(enodeid enode.ID) error {
 
 // modify will modify the host information from the StorageHostTree
 func (shm *StorageHostManager) modify(hi storage.HostInfo) error {
-	err := shm.storageHostTree.HostInfoUpdate(hi)
+	// Evaluate the host info and update
+	eval := shm.hostEvaluator.Evaluate(hi)
+	err := shm.storageHostTree.HostInfoUpdate(hi, eval)
+
 	_, exists := shm.filteredHosts[hi.EnodeID]
 
 	if exists && shm.filterMode == WhitelistFilter {
-		errF := shm.filteredTree.HostInfoUpdate(hi)
+		errF := shm.filteredTree.HostInfoUpdate(hi, eval)
 		if errF != nil && errF != storagehosttree.ErrHostNotExists {
 			err = common.ErrCompose(err, errF)
 		}

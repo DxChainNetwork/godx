@@ -9,9 +9,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/DxChainNetwork/godx/common/unit"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/common/unit"
 )
 
 var (
@@ -83,4 +83,32 @@ var (
 		ExpectedDownload:   uint64(100e9) / unit.BlocksPerMonth, // 100 GB per month
 		ExpectedRedundancy: 2.0,
 	}
+)
+
+// Default host settings
+var (
+	// persistence default value
+	DefaultMaxDuration          = unit.BlocksPerDay * 30 // 30 days
+	DefaultMaxDownloadBatchSize = 17 * (1 << 20)         // 17 MB
+	DefaultMaxReviseBatchSize   = 17 * (1 << 20)         // 17 MB
+
+	// deposit defaults value
+	DefaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
+	DefaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
+	DefaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
+
+	// prices
+	// TODO: remove these two fields when the two prices are removed from negotiation
+	DefaultBaseRPCPrice      = common.PtrBigInt(math.BigPow(10, 11))
+	DefaultSectorAccessPrice = common.PtrBigInt(math.BigPow(10, 13))
+
+	DefaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 4)).MultInt64(5)
+	DefaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 8)).MultInt64(5)
+	DefaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 9)).MultInt64(5)
+	DefaultContractPrice          = common.NewBigInt(1e2)
+)
+
+const (
+	// ProofWindowSize is the window for storage host to submit a storage proof
+	ProofWindowSize = 12 * unit.BlocksPerHour
 )

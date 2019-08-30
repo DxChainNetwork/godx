@@ -109,7 +109,7 @@ func newHostManagerTestData() *StorageHostManager {
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
-	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
+	shm.storageHostTree = storagehosttree.New()
 	shm.filteredTree = shm.storageHostTree
 	shm.log = log.New()
 

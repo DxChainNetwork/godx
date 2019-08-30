@@ -5,9 +5,10 @@
 package storagehost
 
 import (
+	"path/filepath"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
-	"path/filepath"
 )
 
 // the fields that need to write into the jason file

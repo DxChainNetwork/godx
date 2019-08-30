@@ -38,6 +38,16 @@ func (shm *StorageHostManager) scan() {
 		return
 	}
 	shm.lock.Lock()
+	// If the previous initial scan is false, the hosts's scores are all evaluated based on default
+	// market price. These evaluations need to be updates.
+	if shm.initialScan {
+		if err := shm.evaluateHostTree(shm.storageHostTree); err != nil {
+			shm.log.Warn("Failed to evaluate the host tree: %v", err)
+		}
+		if err := shm.evaluateHostTree(shm.filteredTree); err != nil {
+			shm.log.Warn("Failed to evaluate the filtered tree: %v", err)
+		}
+	}
 	shm.initialScan = true
 	shm.lock.Unlock()
 

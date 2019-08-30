@@ -5,12 +5,13 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 func TestStoreStorageResponsibility(t *testing.T) {
