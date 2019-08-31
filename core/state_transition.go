@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/log"
@@ -284,7 +285,7 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
 		voteDeposit := int64(0)
-		voteDepositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("vote-deposit")))
+		voteDepositHash := stateDB.GetState(msg.From(), dpos.KeyVoteDeposit)
 		if voteDepositHash != emptyHash {
 			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
 		}
@@ -297,7 +298,7 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 	// check CancelCandidate tx
 	case common.BytesToAddress([]byte{14}):
-		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("candidate-deposit")))
+		depositHash := stateDB.GetState(msg.From(), dpos.KeyCandidateDeposit)
 		if depositHash == emptyHash {
 			return fmt.Errorf("%s has not become candidate yet,so can not submit cancel candidate tx", msg.From().String())
 		}
@@ -311,7 +312,7 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
 		deposit := int64(0)
-		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("candidate-deposit")))
+		depositHash := stateDB.GetState(msg.From(), dpos.KeyCandidateDeposit)
 		if depositHash != emptyHash {
 			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
 		}
@@ -324,7 +325,7 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 	// check CancelVote tx
 	case common.BytesToAddress([]byte{16}):
-		depositHash := stateDB.GetState(msg.From(), common.BytesToHash([]byte("vote-deposit")))
+		depositHash := stateDB.GetState(msg.From(), dpos.KeyVoteDeposit)
 		if depositHash == emptyHash {
 			return fmt.Errorf("%s has not voted yet,so can not submit cancel vote tx", msg.From().String())
 		}

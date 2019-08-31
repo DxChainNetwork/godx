@@ -37,13 +37,13 @@ func TestLookupValidator(t *testing.T) {
 	}
 
 	for i, expected := range validators {
-		got, _ := mockEpochContext.lookupValidator(int64(i) * blockInterval)
+		got, _ := mockEpochContext.lookupValidator(int64(i) * BlockInterval)
 		if got != expected {
 			t.Errorf("Failed to test lookup validator, %s was expected but got %s", expected.String(), got.String())
 		}
 	}
 
-	_, err = mockEpochContext.lookupValidator(blockInterval - 1)
+	_, err = mockEpochContext.lookupValidator(BlockInterval - 1)
 	if err != ErrInvalidMintBlockTime {
 		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", ErrInvalidMintBlockTime, err)
 	}
@@ -102,13 +102,13 @@ func Test_CountVotes(t *testing.T) {
 
 		// set vote deposit
 		deposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
-		stateDB.SetState(addr, common.BytesToHash([]byte("vote-deposit")), common.BytesToHash(deposit.Bytes()))
+		stateDB.SetState(addr, KeyVoteDeposit, common.BytesToHash(deposit.Bytes()))
 
 		ratio := float64(1.0)
 		bits := math.Float64bits(ratio)
 		ratioBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, common.BytesToHash([]byte("real-vote-weight-ratio")), common.BytesToHash(ratioBytes))
+		stateDB.SetState(addr, KeyRealVoteWeightRatio, common.BytesToHash(ratioBytes))
 		_, err = stateDB.Commit(false)
 		if err != nil {
 			t.Fatalf("Failed to commit state,error: %v", err)
@@ -135,7 +135,7 @@ func Test_CountVotes(t *testing.T) {
 		bits := math.Float64bits(ratio)
 		ratioBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, common.BytesToHash([]byte("real-vote-weight-ratio")), common.BytesToHash(ratioBytes))
+		stateDB.SetState(addr, KeyRealVoteWeightRatio, common.BytesToHash(ratioBytes))
 	}
 	votes, err = epochContext.countVotes()
 	if err != nil {
@@ -156,7 +156,7 @@ func TestLuckyTurntable(t *testing.T) {
 	// test 1: candidates less than maxValidatorSize
 	// mock some vote proportion
 	voteProportions := make(sortableVoteProportions, 0)
-	for i := 0; i < maxValidatorSize-1; i++ {
+	for i := 0; i < MaxValidatorSize-1; i++ {
 		str := strconv.FormatUint(uint64(i+1), 10)
 		voteProportion := sortableVoteProportion{
 			address:    common.HexToAddress("0x" + str),
@@ -172,8 +172,8 @@ func TestLuckyTurntable(t *testing.T) {
 	result := LuckyTurntable(voteProportions, seed)
 
 	// check result
-	if len(result) != maxValidatorSize-1 {
-		t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", maxValidatorSize-1, len(result))
+	if len(result) != MaxValidatorSize-1 {
+		t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize-1, len(result))
 	}
 
 	for i, addr := range result {
@@ -185,8 +185,8 @@ func TestLuckyTurntable(t *testing.T) {
 
 	// test 2: candidates more than maxValidatorSize
 	// add another maxValidatorSize-1 candidates
-	for i := 0; i < maxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+maxValidatorSize-1), 10)
+	for i := 0; i < MaxValidatorSize-1; i++ {
+		str := strconv.FormatUint(uint64(i+MaxValidatorSize-1), 10)
 		voteProportion := sortableVoteProportion{
 			address:    common.HexToAddress("0x" + str),
 			proportion: float64(i+1) / 10,
@@ -199,7 +199,7 @@ func TestLuckyTurntable(t *testing.T) {
 	}
 
 	result = LuckyTurntable(voteProportions, seed)
-	if len(result) != maxValidatorSize {
-		t.Errorf("candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", maxValidatorSize, len(result))
+	if len(result) != MaxValidatorSize {
+		t.Errorf("candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize, len(result))
 	}
 }

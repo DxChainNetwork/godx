@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -40,7 +41,7 @@ func TestCheckDposOperationTx(t *testing.T) {
 	}
 
 	// check cancel candidate tx
-	evm.StateDB.SetState(addr, common.BytesToHash([]byte("candidate-deposit")), common.BytesToHash([]byte{0x34}))
+	evm.StateDB.SetState(addr, dpos.KeyCandidateDeposit, common.BytesToHash([]byte{0x34}))
 	candidateCancelMsg, err := mockMessage(common.BytesToAddress([]byte{14}), signer, prvkey, nil)
 	if err != nil {
 		t.Errorf("failed to mock candidate cancel tx message,error: %v", err)
@@ -63,7 +64,7 @@ func TestCheckDposOperationTx(t *testing.T) {
 	}
 
 	// check cancel vote tx
-	evm.StateDB.SetState(addr, common.BytesToHash([]byte("vote-deposit")), common.BytesToHash([]byte{0x78}))
+	evm.StateDB.SetState(addr, dpos.KeyVoteDeposit, common.BytesToHash([]byte{0x78}))
 	voteCancelMsg, err := mockMessage(common.BytesToAddress([]byte{16}), signer, prvkey, []byte{0x56})
 	if err != nil {
 		t.Errorf("failed to mock cancel vote tx message,error: %v", err)

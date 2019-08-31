@@ -56,7 +56,7 @@ func mockNewDposContext(db ethdb.Database) *types.DposContext {
 		addresses []common.Address
 	)
 
-	for i := 0; i < maxValidatorSize; i++ {
+	for i := 0; i < MaxValidatorSize; i++ {
 		addresses = append(addresses, common.HexToAddress(MockEpochValidators[i]))
 	}
 
@@ -103,35 +103,35 @@ func TestUpdateMintCnt(t *testing.T) {
 	dposContext := mockNewDposContext(db)
 
 	// new block still in the same epoch with current block, but newMiner is the first time to mint in the epoch
-	lastTime := int64(epochInterval)
+	lastTime := int64(EpochInterval)
 
 	miner := common.HexToAddress("0xab")
-	blockTime := int64(epochInterval + blockInterval)
+	blockTime := int64(EpochInterval + BlockInterval)
 
-	beforeUpdateCnt := getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	beforeUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	updateMintCnt(lastTime, blockTime, miner, dposContext)
-	afterUpdateCnt := getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 
 	// new block still in the same epoch with current block, and newMiner has mint block before in the epoch
-	setMintCntTrie(blockTime/epochInterval, miner, dposContext.MintCntTrie(), int64(1))
+	setMintCntTrie(blockTime/EpochInterval, miner, dposContext.MintCntTrie(), int64(1))
 
-	blockTime = epochInterval + blockInterval*4
+	blockTime = EpochInterval + BlockInterval*4
 
 	// currentBlock has recorded the count for the newMiner before UpdateMintCnt
-	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	updateMintCnt(lastTime, blockTime, miner, dposContext)
-	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(1), beforeUpdateCnt)
 	assert.Equal(t, int64(2), afterUpdateCnt)
 
 	// new block come to a new epoch
-	blockTime = epochInterval * 2
+	blockTime = EpochInterval * 2
 
-	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	updateMintCnt(lastTime, blockTime, miner, dposContext)
-	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 }
@@ -161,7 +161,6 @@ func TestAccumulateRewards(t *testing.T) {
 	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
-
 
 	validatorBalance := stateDB.GetBalance(validator)
 	if validatorBalance.Cmp(expectedValidatorReward) != 0 {

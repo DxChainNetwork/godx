@@ -98,12 +98,12 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		return errors.New("no validator could be kickout")
 	}
 
-	epochDuration := epochInterval
+	epochDuration := EpochInterval
 	// First epoch duration may lt epoch interval,
 	// while the first block time wouldn't always align with epoch interval,
 	// so caculate the first epoch duartion with first block time instead of epoch interval,
 	// prevent the validators were kickout incorrectly.
-	if ec.TimeStamp-timeOfFirstBlock < epochInterval {
+	if ec.TimeStamp-timeOfFirstBlock < EpochInterval {
 		epochDuration = ec.TimeStamp - timeOfFirstBlock
 	}
 
@@ -116,7 +116,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		if cntBytes := ec.DposContext.MintCntTrie().Get(key); cntBytes != nil {
 			cnt = int64(binary.BigEndian.Uint64(cntBytes))
 		}
-		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
+		if cnt < epochDuration/BlockInterval/MaxValidatorSize/2 {
 			// not active validators need kickout
 			needKickoutValidators = append(needKickoutValidators, &sortableAddress{validator, big.NewInt(cnt)})
 		}
@@ -132,14 +132,14 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
 	for iter.Next() {
 		candidateCount++
-		if candidateCount >= needKickoutValidatorCnt+safeSize {
+		if candidateCount >= needKickoutValidatorCnt+SafeSize {
 			break
 		}
 	}
 
 	for i, validator := range needKickoutValidators {
 		// ensure candidate count greater than or equal to safeSize
-		if candidateCount <= safeSize {
+		if candidateCount <= SafeSize {
 			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
@@ -157,11 +157,11 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 // lookupValidator try to find a validator at the time of now in current epoch
 func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, err error) {
 	validator = common.Address{}
-	offset := now % epochInterval
-	if offset%blockInterval != 0 {
+	offset := now % EpochInterval
+	if offset%BlockInterval != 0 {
 		return common.Address{}, ErrInvalidMintBlockTime
 	}
-	offset /= blockInterval
+	offset /= BlockInterval
 
 	validators, err := ec.DposContext.GetValidators()
 	if err != nil {
@@ -177,9 +177,9 @@ func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, er
 
 // tryElect will process election at the beginning of current epoch
 func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
-	genesisEpoch := genesis.Time.Int64() / epochInterval
-	prevEpoch := parent.Time.Int64() / epochInterval
-	currentEpoch := ec.TimeStamp / epochInterval
+	genesisEpoch := genesis.Time.Int64() / EpochInterval
+	prevEpoch := parent.Time.Int64() / EpochInterval
+	currentEpoch := ec.TimeStamp / EpochInterval
 
 	// if current block does not reach new epoch, directly return
 	if prevEpoch == currentEpoch {
@@ -188,7 +188,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	// iterator whole thawing account trie, and thawing the deposit of every delegator
 	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
-	thawingAddress := common.BytesToAddress([]byte("thawing_" + epochIDStr))
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
 	ec.stateDB.Exist(thawingAddress)
 	thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
 	if thawingTrie == nil {
@@ -202,20 +202,17 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			continue
 		}
 
-		prefixCandidate := "candidate_thawing_"
-		prefixVote := "vote_thawing_"
-
 		// if candidate deposit thawing flag exists, then thawing it
-		if len(prefixCandidate)+len(common.Hash{}.String()) == len(it.Key) {
+		if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
 
 			// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
 			ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
 		}
 
 		// if vote deposit thawing flag exists, then thawing it
-		if len(prefixVote)+len(common.Hash{}.String()) == len(it.Key) {
-			addr := string(it.Key[len(prefixVote):])
-			currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), common.BytesToHash([]byte("vote-deposit")))
+		if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
+			addr := string(it.Key[len(PrefixVoteThawing):])
+			currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
 
 			// if current vote deposit more than thawing deposit, directly skip, not thawing
 			if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
@@ -274,7 +271,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 		// sort by asc
 		sort.Sort(voteProportions)
-		if len(voteProportions) < safeSize {
+		if len(voteProportions) < SafeSize {
 			return errors.New("too few candidates")
 		}
 
@@ -330,14 +327,14 @@ func BytesToFloat64(bytes []byte) float64 {
 func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []common.Address {
 
 	// if total candidates less than maxValidatorSize, directly return all
-	if len(voteProportions) <= maxValidatorSize {
+	if len(voteProportions) <= MaxValidatorSize {
 		return voteProportions.ListAddresses()
 	}
 
 	// if total candidates more than maxValidatorSize, election from them
 	result := make([]common.Address, 0)
 	r := rand.New(rand.NewSource(seed))
-	for j := 0; j < maxValidatorSize; j++ {
+	for j := 0; j < MaxValidatorSize; j++ {
 		selection := r.Float64()
 		sumProp := float64(0)
 		for i := range voteProportions {

@@ -772,7 +772,7 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 	log.Info("Enter candidate tx executing ... ")
 	stateDB := evm.StateDB
 	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
-	if depositHash != dpos.EmptyHash {
+	if depositHash != (common.Hash{}) {
 		return nil, gas, errDuplicateCandidateTx
 	}
 
@@ -812,8 +812,8 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 
 	// create thawing address: "thawing_" + currentEpochID
 	stateDB := evm.StateDB
-	currentEpochID := evm.Time.Uint64() / uint64(86400)
-	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
@@ -826,8 +826,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 		return nil, gas, ErrOutOfGas
 	}
 
-	prefix := "candidate_thawing_"
-	key := prefix + caller.String()
+	key := dpos.PrefixCandidateThawing + caller.String()
 	deposit := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
@@ -870,11 +869,11 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	realVoteWeightRatio := float64(1)
 	now := uint64(time.Now().Unix())
 	lastVoteTimeHash := stateDB.GetState(caller, dpos.KeyLastVoteTime)
-	if lastVoteTimeHash != dpos.EmptyHash {
+	if lastVoteTimeHash != (common.Hash{}) {
 		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
 
 		// how many epochs has passed from lastVoteTime to now
-		epochPassed := (now - lastVoteTime) / uint64(86400)
+		epochPassed := (now - lastVoteTime) / uint64(dpos.EpochInterval)
 
 		// the real vote weight ratio
 		for i := uint64(0); i < epochPassed; i++ {
@@ -913,16 +912,15 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	stateDB := evm.StateDB
 
 	// create thawing address: "thawing_" + currentEpochID
-	currentEpochID := evm.Time.Uint64() / uint64(86400)
-	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
 	}
 
 	// set thawing flag for from address: "vote_thawing_" + from ==> from
-	prefix := "vote_thawing_"
-	key := prefix + caller.String()
+	key := dpos.PrefixVoteThawing + caller.String()
 	deposit := stateDB.GetState(caller, dpos.KeyVoteDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 

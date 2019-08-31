@@ -134,8 +134,8 @@ func TestEVM_CandidateCancelTx(t *testing.T) {
 		t.Fatal("NewDposContext err:", err)
 	}
 
-	currentEpochID := evm.Time.Uint64() / uint64(86400)
-	epochIDStr := strconv.FormatUint(currentEpochID, 10)
+	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 
 	tests := []struct {
@@ -156,7 +156,7 @@ func TestEVM_CandidateCancelTx(t *testing.T) {
 			wantCandidate:        common.Address{},
 			gas:                  100000,
 			thawingAddress:       thawingAddress,
-			keyCandidateThawing:  "candidate_thawing_" + pas[0].Address.String(),
+			keyCandidateThawing:  dpos.PrefixCandidateThawing + pas[0].Address.String(),
 		},
 	}
 

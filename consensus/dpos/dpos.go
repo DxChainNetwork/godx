@@ -35,11 +35,11 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	blockInterval    = int64(10)
-	epochInterval    = int64(86400)
-	maxValidatorSize = 5
-	safeSize         = maxValidatorSize*2/3 + 1
-	consensusSize    = maxValidatorSize*2/3 + 1
+	BlockInterval    = int64(10)
+	EpochInterval    = int64(86400)
+	MaxValidatorSize = 5
+	SafeSize         = MaxValidatorSize*2/3 + 1
+	ConsensusSize    = MaxValidatorSize*2/3 + 1
 )
 
 var (
@@ -67,6 +67,12 @@ var (
 
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
+
+	// PrefixCandidateThawing is the prefix thawing string of candidate thawing key
+	PrefixCandidateThawing = "candidate_thawing_"
+
+	// PrefixVoteThawing is the prefix thawing string of vote thawing key
+	PrefixVoteThawing = "vote_thawing_"
 
 	// EmptyHash is the empty hash for judgement of empty value
 	EmptyHash = common.Hash{}
@@ -233,7 +239,7 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time.Uint64()+uint64(blockInterval) > header.Time.Uint64() {
+	if parent.Time.Uint64()+uint64(BlockInterval) > header.Time.Uint64() {
 		return ErrInvalidTimestamp
 	}
 	return nil
@@ -331,7 +337,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-		curEpoch := curHeader.Time.Int64() / epochInterval
+		curEpoch := curHeader.Time.Int64() / EpochInterval
 		if curEpoch != epoch {
 			epoch = curEpoch
 			validatorMap = make(map[common.Address]bool)
@@ -339,12 +345,12 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 		// fast return
 		// if block number difference less consensusSize-witnessNum
 		// there is no need to check block is confirmed
-		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(consensusSize-len(validatorMap)) {
+		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
 			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
 			return nil
 		}
 		validatorMap[curHeader.Validator] = true
-		if len(validatorMap) >= consensusSize {
+		if len(validatorMap) >= ConsensusSize {
 			d.confirmedBlockHeader = curHeader
 			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
 				return err
@@ -590,23 +596,23 @@ func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, er
 
 // PrevSlot calculate the last block time
 func PrevSlot(now int64) int64 {
-	return int64((now-1)/blockInterval) * blockInterval
+	return int64((now-1)/BlockInterval) * BlockInterval
 }
 
 // NextSlot calculate the next block time
 func NextSlot(now int64) int64 {
-	return int64((now+blockInterval-1)/blockInterval) * blockInterval
+	return int64((now+BlockInterval-1)/BlockInterval) * BlockInterval
 }
 
 // updateMintCnt update counts in mintCntTrie for the miner of newBlock
 func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) {
 	currentMintCntTrie := dposContext.MintCntTrie()
-	currentEpoch := parentBlockTime / epochInterval
+	currentEpoch := parentBlockTime / EpochInterval
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
 
 	cnt := int64(1)
-	newEpoch := currentBlockTime / epochInterval
+	newEpoch := currentBlockTime / EpochInterval
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
 		iter := trie.NewIterator(currentMintCntTrie.NodeIterator(currentEpochBytes))
