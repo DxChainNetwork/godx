@@ -353,7 +353,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
 				return err
 			}
-			log.Debug("dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
+			log.Debug("Dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
 			return nil
 		}
 		curHeader = chain.GetHeaderByHash(curHeader.ParentHash)

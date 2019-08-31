@@ -352,7 +352,7 @@ func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common
 		candidateInTrie, err := dc.candidateTrie.TryGet(candidate)
 		if err != nil {
 			if _, ok := err.(*trie.MissingNodeError); ok {
-				log.Error("no this candidate on chain", "candidate", candidateAddr.String())
+				log.Error("No this candidate on chain", "candidate", candidateAddr.String())
 				continue
 			} else {
 				return 0, fmt.Errorf("failed to retrieve from candidateTrie,err: %v", err)
@@ -360,13 +360,13 @@ func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common
 		}
 
 		if candidateInTrie == nil {
-			log.Error("voted to a invalid candidate", "candidate", candidateAddr.String())
+			log.Error("Voted to a invalid candidate", "candidate", candidateAddr.String())
 			continue
 		}
 
 		err = dc.delegateTrie.TryUpdate(append(candidate, delegator...), delegator)
 		if err != nil {
-			log.Error("failed to update a new vote to delegateTrie", "error", err)
+			log.Error("Failed to update a new vote to delegateTrie", "error", err)
 			continue
 		}
 

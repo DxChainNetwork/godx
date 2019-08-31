@@ -42,21 +42,19 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	if !existCandidate {
 		return votes, errors.New("no candidates")
 	}
+
+	// iterator all candidate's vote record
 	for existCandidate {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
 		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
-		existDelegator := delegateIterator.Next()
-		if !existDelegator {
-			votes[candidateAddr] = new(big.Int)
-			existCandidate = iterCandidate.Next()
-			continue
-		}
-		for existDelegator {
+
+		// iterator all vote to the geiven candidateAddr, and count the total actual vote weight
+		for delegateIterator.Next() {
 			delegator := delegateIterator.Value
-			score, ok := votes[candidateAddr]
+			voteWeight, ok := votes[candidateAddr]
 			if !ok {
-				score = new(big.Int)
+				voteWeight = new(big.Int).SetInt64(0)
 			}
 			delegatorAddr := common.BytesToAddress(delegator)
 
@@ -65,27 +63,25 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 
 			// maybe current is genesis, has no vote before
 			if voteDepositHash == EmptyHash {
-				existDelegator = delegateIterator.Next()
 				continue
 			}
-			voteDeposit := binary.BigEndian.Uint64(voteDepositHash.Bytes())
+			voteDeposit := new(big.Int).SetBytes(voteDepositHash.Bytes())
 
 			// retrieve the real vote weight ratio of delegator
 			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyRealVoteWeightRatio)
 
 			// maybe current is genesis, has no vote before
 			if realVoteWeightRatioHash == EmptyHash {
-				existDelegator = delegateIterator.Next()
 				continue
 			}
-			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes())
+
+			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
+			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes()[24:])
 
 			// calculate the real vote weight of delegator
-			realVoteWeight := float64(voteDeposit) * realVoteWeightRatio
-			score.Add(score, common.NewBigIntFloat64(realVoteWeight).BigIntPtr())
-
-			votes[candidateAddr] = score
-			existDelegator = delegateIterator.Next()
+			realVoteWeight := float64(voteDeposit.Int64()) * realVoteWeightRatio
+			voteWeight.Add(voteWeight, common.NewBigIntFloat64(realVoteWeight).BigIntPtr())
+			votes[candidateAddr] = voteWeight
 		}
 		existCandidate = iterCandidate.Next()
 	}
@@ -246,16 +242,16 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 
 		// calculate the vote weight proportion based on the vote weight
-		totalScores := new(big.Int).SetInt64(0)
+		totalVotes := new(big.Int).SetInt64(0)
 		voteProportions := sortableVoteProportions{}
-		for _, score := range votes {
-			totalScores.Add(totalScores, score)
+		for _, vote := range votes {
+			totalVotes.Add(totalVotes, vote)
 		}
 
-		for candidateAddr, score := range votes {
+		for candidateAddr, vote := range votes {
 			voteProportion := &sortableVoteProportion{
 				address:    candidateAddr,
-				proportion: float64(score.Int64()) / float64(totalScores.Int64()),
+				proportion: float64(vote.Int64()) / float64(totalVotes.Int64()),
 			}
 			voteProportions = append(voteProportions, voteProportion)
 		}
@@ -308,6 +304,7 @@ func (p sortableAddresses) Less(i, j int) bool {
 	}
 }
 
+// BytesToFloat64 converts []byte to float64
 func BytesToFloat64(bytes []byte) float64 {
 	bits := binary.BigEndian.Uint64(bytes)
 	return math.Float64frombits(bits)
@@ -327,7 +324,7 @@ func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []commo
 	for j := 0; j < maxValidatorSize; j++ {
 		selection := r.Float64()
 		sumProp := float64(0)
-		for i, _ := range voteProportions {
+		for i := range voteProportions {
 			sumProp += voteProportions[i].proportion
 			if selection <= sumProp {
 
