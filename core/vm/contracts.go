@@ -44,8 +44,8 @@ const (
 	StorageProofTransaction = "StorageProof"
 )
 
-//PrecompiledEVMStorageContracts currently contains the transaction types required for four storage contracts
-var PrecompiledEVMStorageContracts = map[common.Address]string{
+// PrecompiledStorageContracts currently contains the transaction types required for four storage contracts
+var PrecompiledStorageContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
 	common.BytesToAddress([]byte{10}): ContractCreateTransaction,
 	common.BytesToAddress([]byte{11}): CommitRevisionTransaction,

@@ -1038,9 +1038,8 @@ func (client *StorageClient) DownloadAsync(p storage.DownloadParameters) error {
 
 // GetHostAnnouncementWithBlockHash will get the HostAnnouncements and block height through the hash of the block
 func (client *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.Hash) (hostAnnouncements []types.HostAnnouncement, number uint64, errGet error) {
-	precompiled := vm.PrecompiledEVMStorageContracts
+	precompiled := vm.PrecompiledStorageContracts
 	block, err := client.ethBackend.GetBlockByHash(blockHash)
-
 	if err != nil {
 		errGet = err
 		return
