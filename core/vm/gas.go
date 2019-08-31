@@ -66,14 +66,13 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	return callCost.Uint64(), nil
 }
 
-//setStateGas the cost of gas will be paid if no storage operation is performed in the state tree.
-func setStateGas(gas uint64, number uint64) (bool, uint64) {
-	gasUsed := params.SstoreSetGas * number
-	if gas >= gasUsed {
-		gas -= gasUsed
-		return true, gas
+//DeductGas deduct the cost gas from current remain gas
+func DeductGas(gasRemain, gasUsed uint64) (bool, uint64) {
+	if gasRemain >= gasUsed {
+		gasRemain -= gasUsed
+		return true, gasRemain
 	}
-	return false, gas
+	return false, gasRemain
 }
 
 // RemainGas calculate the gas of storage contract execution

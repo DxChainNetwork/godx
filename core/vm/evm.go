@@ -784,17 +784,18 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 		return nil, gas, err
 	}
 
-	//store user pledge assets and reward ratio
-	result, gasRemain := setStateGas(gas, 2)
-	if !result {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
-		return nil, gas, ErrOutOfGas
-	}
 	// If successfully applying candidate, then store deposit
 	stateDB.SetState(caller, dpos.KeyCandidateDeposit, common.BigToHash(value))
 
 	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
 	stateDB.SetState(caller, dpos.KeyRewardRatioNumerator, common.BytesToHash(data))
+
+	// defines that dposCtx.BecomeCandidate and SetState all cost params.SstoreSetGas
+	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*3)
+	if !ok {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, ErrOutOfGas
+	}
 
 	log.Info("Candidate tx execution done")
 	return nil, gasRemain, nil
@@ -820,15 +821,16 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	}
 
 	// set thawing flag for from address: "candidate_thawing_" + from ==> from
-	result, gasRemain := setStateGas(gas, 1)
-	if !result {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
-		return nil, gas, ErrOutOfGas
-	}
-
 	key := dpos.PrefixCandidateThawing + caller.String()
 	deposit := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
+
+	// defines that dposCtx.KickoutCandidate and SetState all cost params.SstoreSetGas
+	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
+	if !ok {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, ErrOutOfGas
+	}
 
 	log.Info("Cancel candidate tx execution done")
 	return nil, gasRemain, nil
@@ -853,7 +855,6 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		return nil, gasRemainDec, fmt.Errorf("actually vote %d candidates, beyond the max size 30", len(candidateList))
 	}
 
-	// TODO: how many gas should we spend ?
 	// record vote data
 	dposSnapshot := dposCtx.Snapshot()
 	successCount, err := dposCtx.Vote(caller, candidateList)
@@ -893,8 +894,15 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	nowBytes := Uint64ToBytes(now)
 	stateDB.SetState(caller, dpos.KeyLastVoteTime, common.BytesToHash(nowBytes))
 
+	// defines that dposCtx.Vote and SetState all cost params.SstoreSetGas
+	ok, gasRemain := DeductGas(gasRemainDec, params.SstoreSetGas*4)
+	if !ok {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gasRemainDec, ErrOutOfGas
+	}
+
 	log.Info("Vote tx execution done", "vote_count", successCount)
-	return nil, gasRemainDec, nil
+	return nil, gasRemain, nil
 }
 
 // CancelVoteTx handles a cancel vote tx that will remove all vote records
@@ -924,8 +932,15 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	deposit := stateDB.GetState(caller, dpos.KeyVoteDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
+	// defines that dposCtx.CancelVote and SetState all cost params.SstoreSetGas
+	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
+	if !ok {
+		dposSnapshot.RevertToSnapShot(dposSnapshot)
+		return nil, gas, ErrOutOfGas
+	}
+
 	log.Info("Cancel vote tx execution done")
-	return nil, gas, nil
+	return nil, gasRemain, nil
 }
 
 func Float64ToBytes(f float64) []byte {
