@@ -28,7 +28,5 @@ var (
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
 	ErrFrozenAssetsCannotBeUsed = errors.New("frozen assets cannot be used")
-	ErrAssetsStillFrozen        = errors.New("freezing assets has not yet been lifted")
 	errDuplicateCandidateTx     = errors.New("cannot submit the transaction repeatedly")
-	errRewardRatio              = errors.New("then the RewardRatio must be within 100%")
 )

@@ -32,6 +32,14 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
+
+	// dpos related parameters
+
+	// defines the minimum deposit of candidate
+	minDeposit = big.NewInt(1e18)
+
+	// defines the minimum balance of candidate
+	candidateThreshold = big.NewInt(1e18)
 )
 
 /*
@@ -277,9 +285,9 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 	// check ApplyCandidate tx
 	case common.BytesToAddress([]byte{13}):
 
-		// check the balance that must more than the threshold of 1000000 DX,
+		// to be a candidate need minimum balance of candidateThreshold,
 		// which can stop flooding of applying candidate
-		if balance.Cmp(new(big.Int).SetInt64(1e18)) <= 0 {
+		if balance.Cmp(candidateThreshold) < 0 {
 			return errors.New("no the qualification to be a candidate for low balance")
 		}
 
@@ -292,6 +300,11 @@ func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
 
 		if msg.Value().Sign() <= 0 || msg.Value().Int64() > balance.Int64()-voteDeposit {
 			return errors.New("no the qualification to be a candidate for not specifying fit deposit value")
+		}
+
+		// check the deposit value which must more than minDeposit
+		if msg.Value().Cmp(minDeposit) < 0 {
+			return errors.New("no the qualification to be a candidate for too small deposit value")
 		}
 
 		return nil

@@ -97,8 +97,4 @@ var (
 	GenesisDifficulty      = big.NewInt(131072) // Difficulty of the Genesis block.
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
-
-	// dpos related parameters
-	FrozenAssets  = big.NewInt(10000) //Campaign becomes a candidate and needs to freeze some assets
-	ThawingPeriod = uint64(17280)     //Cancellation of the asset requires a period of asset thawing
 )
