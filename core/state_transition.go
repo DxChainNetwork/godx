@@ -216,8 +216,7 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyStorageContractTransaction(sender, p, st.data, st.gas)
 	} else if p, ok := vm.PrecompiledDPoSContracts[st.to()]; ok {
-
-		// check dpos tx filed
+		// check dpos tx failed
 		vmerr = CheckDposOperationTx(st.evm, st.msg)
 		if vmerr != nil {
 			return nil, 0, false, vmerr

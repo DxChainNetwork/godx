@@ -51,9 +51,9 @@ func mockNewDposContext(db ethdb.Database) *types.DposContext {
 	}
 
 	var (
-		delegator = []byte{}
-		candidate = []byte{}
-		addresses = []common.Address{}
+		delegator []byte
+		candidate []byte
+		addresses []common.Address
 	)
 
 	for i := 0; i < maxValidatorSize; i++ {
@@ -63,11 +63,17 @@ func mockNewDposContext(db ethdb.Database) *types.DposContext {
 	dposContext.SetValidators(addresses)
 
 	for j := 0; j < len(MockEpochValidators); j++ {
-		delegator = common.HexToAddress(MockEpochValidators[j]).Bytes()
+		delegator = common.HexToAddress(MockEpochValidators[(j+1)%len(MockEpochValidators)]).Bytes()
+
 		candidate = common.HexToAddress(MockEpochValidators[j]).Bytes()
 		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
-		dposContext.CandidateTrie().TryUpdate(candidate, candidate)
 		dposContext.VoteTrie().TryUpdate(delegator, candidate)
+
+		delegator = common.HexToAddress(MockEpochValidators[(j+2)%len(MockEpochValidators)]).Bytes()
+		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
+		dposContext.VoteTrie().TryUpdate(delegator, candidate)
+
+		dposContext.CandidateTrie().TryUpdate(candidate, candidate)
 	}
 
 	return dposContext
@@ -135,15 +141,34 @@ func TestAccumulateRewards(t *testing.T) {
 	dposContext := mockNewDposContext(db)
 
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
-	validator := common.HexToAddress(MockEpochValidators[0])
 
-	// Frontier
+	// set validator reward ratio
+	validator := common.HexToAddress(MockEpochValidators[1])
+	delegators := []common.Address{common.HexToAddress(MockEpochValidators[2]), common.HexToAddress(MockEpochValidators[3])}
+	for i := 0; i < len(delegators); i++ {
+		stateDB.SetState(delegators[i], KeyVoteDeposit, common.BigToHash(big.NewInt(113)))
+	}
+
+	var rewardRatioNumerator uint8 = 50
+	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
+
+	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
+	expectedDelegatorReward := []*big.Int{big.NewInt(12712817820445511), big.NewInt(12712817820445511)}
+	expectedValidatorReward := big.NewInt(2974574364359108978)
 
+	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
 
-	balance := stateDB.GetBalance(validator)
-	if balance.Uint64() <= 0 {
-		t.Fatalf("reward not assigned to address: %v", validator)
+	validatorBalance := stateDB.GetBalance(validator)
+	if validatorBalance.Cmp(expectedValidatorReward) != 0 {
+		t.Fatalf("validator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
+	}
+
+	for i := 0; i < len(expectedDelegatorReward); i++ {
+		delegatorBalance := stateDB.GetBalance(delegators[i])
+		if delegatorBalance.Cmp(expectedDelegatorReward[i]) != 0 {
+			t.Fatalf("delegator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
+		}
 	}
 }

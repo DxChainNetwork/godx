@@ -61,21 +61,20 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			delegatorAddr := common.BytesToAddress(delegator)
 
 			// retrieve the vote deposit of delegator
-			emptyHash := common.Hash{}
-			voteDepositHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("vote-deposit")))
+			voteDepositHash := statedb.GetState(delegatorAddr, KeyVoteDeposit)
 
 			// maybe current is genesis, has no vote before
-			if voteDepositHash == emptyHash {
+			if voteDepositHash == EmptyHash {
 				existDelegator = delegateIterator.Next()
 				continue
 			}
 			voteDeposit := binary.BigEndian.Uint64(voteDepositHash.Bytes())
 
 			// retrieve the real vote weight ratio of delegator
-			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, common.BytesToHash([]byte("real-vote-weight-ratio")))
+			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyRealVoteWeightRatio)
 
 			// maybe current is genesis, has no vote before
-			if realVoteWeightRatioHash == emptyHash {
+			if realVoteWeightRatioHash == EmptyHash {
 				existDelegator = delegateIterator.Next()
 				continue
 			}

@@ -43,8 +43,40 @@ const (
 )
 
 var (
-	frontierBlockReward  = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
-	byzantiumBlockReward = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
+
+	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
+	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
+
+	// KeyVoteDeposit is the key of vote deposit
+	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
+
+	// KeyRealVoteWeightRatio is the weight ratio of vote
+	KeyRealVoteWeightRatio = common.BytesToHash([]byte("real-vote-weight-ratio"))
+
+	// KeyCandidateDeposit is the key of candidate deposit
+	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
+
+	// KeyLastVoteTime is the key of last vote time
+	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
+
+	// MinVoteWeightRatio is the minimum vote weight ration
+	MinVoteWeightRatio = 0.5
+
+	// AttenuationRatioPerEpoch is the ratio of attenuation per epoch
+	AttenuationRatioPerEpoch = 0.98
+
+	// PrefixThawingAddr is the prefix thawing string of frozen account
+	PrefixThawingAddr = "thawing_"
+
+	// EmptyHash is the empty hash for judgement of empty value
+	EmptyHash = common.Hash{}
+
+	// RewardRatioDenominator is the max value of reward ratio
+	RewardRatioDenominator uint8 = 100
+
+	frontierBlockReward       = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
+	byzantiumBlockReward      = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
+	constantinopleBlockReward = big.NewInt(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
 
 	timeOfFirstBlock = int64(0)
 
@@ -53,6 +85,9 @@ var (
 	// defaultRewardRatio is the default ratio of candidate share ratio with delegators belonged to it
 	defaultRewardRatio    = common.NewBigInt(30)
 	baseRewardDenominator = common.NewBigInt(100)
+
+	// MockVoteCount is the mock value of vote count for test. It will be removed later
+	MockVoteCount = common.NewBigInt(13333)
 )
 
 var (
@@ -371,17 +406,22 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsByzantium(header.Number) {
 		blockReward = byzantiumBlockReward
 	}
+	if config.IsConstantinople(header.Number) {
+		blockReward = constantinopleBlockReward
+	}
 
 	// TODO get vote count by vote trie
-	voteCount := common.NewBigInt(35)
+	voteCount := MockVoteCount
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return
 	}
 
-	// TODO get ratio of reward between delegate and voters
-	rewardRatio := defaultRewardRatio
-	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatio).Div(baseRewardDenominator)
+	// get ratio of reward between validator and its delegators
+	h := state.GetState(header.Validator, KeyRewardRatioNumerator)
+	rewardRatioNumerator := hashToRewardRatioNumerator(h)
+	rewardDenominator := common.NewBigIntUint64(uint64(RewardRatioDenominator))
+	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatioNumerator).Div(rewardDenominator)
 	assignedReward := new(big.Int).SetInt64(0)
 
 	delegateTrie := dposContext.DelegateTrie()
@@ -389,8 +429,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for delegatorIterator.Next() {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 
-		// TODO get the votes of delegator to vote for delegate
-		vote := common.NewBigInt(3)
+		// get the votes of delegator to vote for delegate
+		vb := state.GetState(delegator, KeyVoteDeposit)
+		vote := common.NewBigInt(vb.Big().Int64())
 
 		// calculate reward of each delegator due to it's vote(stake) percent
 		percentReward := vote.Mult(delegatorReward).Div(voteCount).BigIntPtr()
@@ -400,8 +441,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// accumulate the rest rewards for the validator
-	delegateReward := new(big.Int).Sub(blockReward, assignedReward)
-	state.AddBalance(header.Coinbase, delegateReward)
+	validatorReward := new(big.Int).Sub(blockReward, assignedReward)
+	state.AddBalance(header.Coinbase, validatorReward)
 }
 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
@@ -590,4 +631,10 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
 	dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+}
+
+// hashToRewardRatioNumerator return the customized block reward ratio numerator
+func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
+	v := h.Bytes()
+	return common.NewBigIntUint64(uint64(v[len(v)-1]))
 }
