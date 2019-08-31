@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -101,9 +102,9 @@ func TestEVM_CandidateTx(t *testing.T) {
 			t.Fatal("CandidateTx err:", err)
 		} else if gas != test.wantGas {
 			t.Error("gas error:", gas)
-		} else if rewardRatio := evm.StateDB.GetState(test.from, keyRewardRatio); rewardRatio != common.BytesToHash(test.wantRewardRatio) {
+		} else if rewardRatio := evm.StateDB.GetState(test.from, dpos.KeyRewardRatioNumerator); rewardRatio != common.BytesToHash(test.wantRewardRatio) {
 			t.Error("rewardRatio err:", rewardRatio)
-		} else if deposit := evm.StateDB.GetState(test.from, keyCandidateDeposit); deposit != common.BigToHash(test.wantDeposit) {
+		} else if deposit := evm.StateDB.GetState(test.from, dpos.KeyCandidateDeposit); deposit != common.BigToHash(test.wantDeposit) {
 			t.Error("candidateDeposit err:", deposit)
 		}
 
@@ -135,7 +136,7 @@ func TestEVM_CandidateCancelTx(t *testing.T) {
 
 	currentEpochID := evm.Time.Uint64() / uint64(86400)
 	epochIDStr := strconv.FormatUint(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(prefixThawingAddr + epochIDStr))
+	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 
 	tests := []struct {
 		from                 common.Address

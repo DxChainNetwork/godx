@@ -17,6 +17,10 @@
 package miner
 
 import (
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core"
@@ -26,9 +30,6 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"testing"
-	"time"
 )
 
 var (
@@ -123,7 +124,7 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	backend := newTestWorkerBackend(t, chainConfig, engine, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second, params.GenesisGasLimit, params.GenesisGasLimit, nil)
-	w.setEtherbase(testBankAddress)
+	w.setCoinbase(testBankAddress)
 	return w, backend
 }
 

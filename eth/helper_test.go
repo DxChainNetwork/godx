@@ -3,7 +3,6 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
-	"github.com/DxChainNetwork/godx/node"
 	"io/ioutil"
 	"math/big"
 	"sort"
@@ -19,6 +18,7 @@ import (
 	"github.com/DxChainNetwork/godx/eth/downloader"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/node"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
@@ -55,8 +55,8 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		return nil, nil, err
 	}
 	ethConf := &Config{
-		Genesis:   core.DeveloperGenesisBlock(15, common.Address{}),
-		Etherbase: common.HexToAddress("0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"),
+		Genesis:  core.DeveloperGenesisBlock(15, common.Address{}),
+		Coinbase: common.HexToAddress("0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"),
 		Ethash: ethash.Config{
 			PowMode: ethash.ModeTest,
 		},
