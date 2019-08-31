@@ -82,10 +82,6 @@ var (
 
 	confirmedBlockHead = []byte("confirmed-block-head")
 
-	// defaultRewardRatio is the default ratio of candidate share ratio with delegators belonged to it
-	defaultRewardRatio    = common.NewBigInt(30)
-	baseRewardDenominator = common.NewBigInt(100)
-
 	// MockVoteCount is the mock value of vote count for test. It will be removed later
 	MockVoteCount = common.NewBigInt(13333)
 )

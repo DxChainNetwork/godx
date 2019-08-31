@@ -26,9 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -829,7 +828,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 
 	prefix := "candidate_thawing_"
 	key := prefix + caller.String()
-	deposit := stateDB.GetState(caller, keyCandidateDeposit)
+	deposit := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
 	log.Info("Cancel candidate tx execution done")
@@ -924,7 +923,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	// set thawing flag for from address: "vote_thawing_" + from ==> from
 	prefix := "vote_thawing_"
 	key := prefix + caller.String()
-	deposit := stateDB.GetState(caller, keyVoteDeposit)
+	deposit := stateDB.GetState(caller, dpos.KeyVoteDeposit)
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 
 	log.Info("Cancel vote tx execution done")
