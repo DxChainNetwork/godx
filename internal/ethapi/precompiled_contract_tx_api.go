@@ -16,6 +16,11 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
+const (
+	StorageContractTxGas = 90000
+	DposTxGas            = 1000000
+)
+
 // PrivateStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
 type PrivateStorageContractTxAPI struct {
 	b         Backend
@@ -50,7 +55,10 @@ func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) 
 	to.SetBytes([]byte{9})
 
 	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, payload)
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, payload, nil, StorageContractTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, psc.b, psc.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -62,7 +70,10 @@ func (psc *PrivateStorageContractTxAPI) SendContractCreateTX(from common.Address
 	to := common.Address{}
 	to.SetBytes([]byte{10})
 	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, input)
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, input, nil, StorageContractTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, psc.b, psc.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -74,7 +85,10 @@ func (psc *PrivateStorageContractTxAPI) SendContractRevisionTX(from common.Addre
 	to := common.Address{}
 	to.SetBytes([]byte{11})
 	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, input)
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, input, nil, StorageContractTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, psc.b, psc.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -86,25 +100,21 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 	to := common.Address{}
 	to.SetBytes([]byte{12})
 	ctx := context.Background()
-	txHash, err := sendStorageContractTX(ctx, psc.b, psc.nonceLock, from, to, input)
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, input, nil, StorageContractTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, psc.b, psc.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
 	return txHash, nil
 }
 
-// send storage contract tx，only need from、to、input（rlp encoded）
+// sendPrecompiledContractTx send precompiled contract tx，mostly need from、to、value、input（rlp encoded）
 //
-// NOTE: this is general func, you can construct different args to send 4 type txs, like host announce、form contract、contract revision、storage proof.
-// Actually, it need to set different SendStorageContractTxArgs, like from、to、input
-func sendStorageContractTX(ctx context.Context, b Backend, nonceLock *AddrLocker, from, to common.Address, input []byte) (common.Hash, error) {
-
-	// construct args
-	args := SendStorageContractTxArgs{
-		From: from,
-		To:   to,
-	}
-	args.Input = (*hexutil.Bytes)(&input)
+// NOTE: this is general func, you can construct different args to send detailed tx, like host announce、form contract、contract revision、storage proof.
+// Actually, it need to set different PrecompiledContractTxArgs, like from、to、value、input
+func sendPrecompiledContractTx(ctx context.Context, b Backend, nonceLock *AddrLocker, args *PrecompiledContractTxArgs) (common.Hash, error) {
 
 	// find the account of the address from
 	account := accounts.Account{Address: args.From}
@@ -117,7 +127,7 @@ func sendStorageContractTX(ctx context.Context, b Backend, nonceLock *AddrLocker
 	defer nonceLock.UnlockAddr(args.From)
 
 	// construct tx
-	tx, err := args.setDefaultsTX(ctx, b)
+	tx, err := args.NewPrecompiledContractTx(ctx, b)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -142,21 +152,19 @@ func sendStorageContractTX(ctx context.Context, b Backend, nonceLock *AddrLocker
 	return signed.Hash(), nil
 }
 
-// SendTxArgs represents the arguments to submit a new transaction into the transaction pool.
-type SendStorageContractTxArgs struct {
+// PrecompiledContractTxArgs represents the arguments to submit a precompiled contract tx into the transaction pool.
+type PrecompiledContractTxArgs struct {
 	From     common.Address  `json:"from"`
 	To       common.Address  `json:"to"`
 	Gas      *hexutil.Uint64 `json:"gas"`
+	Value    *hexutil.Big    `json:"value"`
 	GasPrice *hexutil.Big    `json:"gasPrice"`
 	Nonce    *hexutil.Uint64 `json:"nonce"`
 	Input    *hexutil.Bytes  `json:"input"`
 }
 
-// construct tx with args
-func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Backend) (*types.Transaction, error) {
-	args.Gas = new(hexutil.Uint64)
-	*(*uint64)(args.Gas) = 90000
-
+// NewPrecompiledContractTx construct precompiled contract tx with args
+func (args *PrecompiledContractTxArgs) NewPrecompiledContractTx(ctx context.Context, b Backend) (*types.Transaction, error) {
 	price, err := b.SuggestPrice(ctx)
 	if err != nil {
 		return nil, err
@@ -174,4 +182,23 @@ func (args *SendStorageContractTxArgs) setDefaultsTX(ctx context.Context, b Back
 	}
 
 	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+}
+
+// NewPrecompiledContractTxArgs construct precompiled contract tx args
+func NewPrecompiledContractTxArgs(from, to common.Address, input []byte, value *big.Int, gas uint64) *PrecompiledContractTxArgs {
+	args := &PrecompiledContractTxArgs{
+		From: from,
+		To:   to,
+	}
+	args.Input = (*hexutil.Bytes)(&input)
+
+	args.Gas = new(hexutil.Uint64)
+	*(*uint64)(args.Gas) = gas
+
+	if value == nil {
+		args.Value = new(hexutil.Big)
+	} else {
+		args.Value = (*hexutil.Big)(value)
+	}
+	return args
 }
