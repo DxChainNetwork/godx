@@ -21,7 +21,7 @@ const (
 	DposTxGas            = 1000000
 )
 
-// PrivateStorageContractTxAPI exposes the SendHostAnnounceTx methods for the RPC interface
+// PrivateStorageContractTxAPI exposes the storage contract tx methods for the RPC interface
 type PrivateStorageContractTxAPI struct {
 	b         Backend
 	nonceLock *AddrLocker
@@ -32,7 +32,7 @@ func NewPrivateStorageContractTxAPI(b Backend, nonceLock *AddrLocker) *PrivateSt
 	return &PrivateStorageContractTxAPI{b, nonceLock}
 }
 
-// send host announce tx, only for outer request, need to open cmd and RPC API
+// SendHostAnnounceTX submit a host announce tx to txpool, only for outer request, need to open cmd and RPC API
 func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) (common.Hash, error) {
 	hostEnodeURL := psc.b.GetHostEnodeURL()
 	hostAnnouncement := types.HostAnnouncement{
@@ -65,7 +65,7 @@ func (psc *PrivateStorageContractTxAPI) SendHostAnnounceTX(from common.Address) 
 	return txHash, nil
 }
 
-// send form contract tx, generally triggered in ContractCreate, not for outer request
+// SendContractCreateTX submit a storage contract creation tx, generally triggered in ContractCreate, not for outer request
 func (psc *PrivateStorageContractTxAPI) SendContractCreateTX(from common.Address, input []byte) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{10})
@@ -80,7 +80,7 @@ func (psc *PrivateStorageContractTxAPI) SendContractCreateTX(from common.Address
 	return txHash, nil
 }
 
-// send contract revision tx, only triggered when host received consensus change, not for outer request
+// SendContractRevisionTX submit a storage contract revision tx, only triggered when host received consensus change, not for outer request
 func (psc *PrivateStorageContractTxAPI) SendContractRevisionTX(from common.Address, input []byte) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{11})
@@ -95,7 +95,7 @@ func (psc *PrivateStorageContractTxAPI) SendContractRevisionTX(from common.Addre
 	return txHash, nil
 }
 
-// send storage proof tx, only triggered when host received consensus change, not for outer request
+// SendStorageProofTX submit a storage proof tx, only triggered when host received consensus change, not for outer request
 func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, input []byte) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{12})
@@ -104,6 +104,77 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, input, nil, StorageContractTxGas)
 	txHash, err := sendPrecompiledContractTx(ctx, psc.b, psc.nonceLock, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// PublicDposTxAPI exposes the dpos tx methods for the RPC interface
+type PublicDposTxAPI struct {
+	b         Backend
+	nonceLock *AddrLocker
+}
+
+// NewPublicDposTxAPI construct a PublicDposTxAPI object
+func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
+	return &PublicDposTxAPI{b, nonceLock}
+}
+
+// SendApplyCandidateTx submit a apply candidate tx
+func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+	to := common.Address{}
+	to.SetBytes([]byte{13})
+	ctx := context.Background()
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// SendCancelCandidateTx submit a cancel candidate tx
+func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
+	to := common.Address{}
+	to.SetBytes([]byte{14})
+	ctx := context.Background()
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// SendVoteTx submit a vote tx
+func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+	to := common.Address{}
+	to.SetBytes([]byte{15})
+	ctx := context.Background()
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return txHash, nil
+}
+
+// SendCancelVoteTx submit a cancel vote tx
+func (dpos *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
+	to := common.Address{}
+	to.SetBytes([]byte{16})
+	ctx := context.Background()
+
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
+	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -177,8 +248,8 @@ func (args *PrecompiledContractTxArgs) NewPrecompiledContractTx(ctx context.Cont
 	}
 	args.Nonce = (*hexutil.Uint64)(&nonce)
 
-	if args.To == (common.Address{}) || args.Input == nil {
-		return nil, errors.New(`storage contract tx without to or input`)
+	if args.To == (common.Address{}) {
+		return nil, errors.New(`precompile contract tx without to`)
 	}
 
 	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
@@ -190,15 +261,21 @@ func NewPrecompiledContractTxArgs(from, to common.Address, input []byte, value *
 		From: from,
 		To:   to,
 	}
-	args.Input = (*hexutil.Bytes)(&input)
+
+	if input != nil {
+		args.Input = (*hexutil.Bytes)(&input)
+	} else {
+		args.Input = new(hexutil.Bytes)
+	}
 
 	args.Gas = new(hexutil.Uint64)
 	*(*uint64)(args.Gas) = gas
 
-	if value == nil {
-		args.Value = new(hexutil.Big)
-	} else {
+	if value != nil {
 		args.Value = (*hexutil.Big)(value)
+	} else {
+		args.Value = new(hexutil.Big)
 	}
+
 	return args
 }
