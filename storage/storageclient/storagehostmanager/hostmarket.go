@@ -24,6 +24,7 @@ type hostMarket interface {
 
 // GetMarketPrice will return the market price. It will first try to get the value from
 // cached prices. If cached prices need to be updated, prices are calculated and returned.
+// Note that the function need to be protected by shm.lock for shm.initialScan field.
 func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
 	// If the initial scan has not finished, return the default host market price
 	// Since the shm has been locked when evaluating the host score, no lock is needed
@@ -127,10 +128,12 @@ func getAverage(hostInfos priceGetterSorter) common.BigInt {
 	highIndex := length - int(math.Floor(float64(hostInfos.Len())*ceilRatio))
 
 	sum := common.BigInt0
+	if highIndex == lowIndex {
+		return common.BigInt0
+	}
 	for i := lowIndex; i != highIndex; i++ {
 		sum = sum.Add(hostInfos.getPrice(i))
 	}
-
 	average := sum.DivUint64(uint64(highIndex - lowIndex))
 	return average
 }
