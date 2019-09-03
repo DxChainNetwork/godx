@@ -232,7 +232,7 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if existingRevision.NewWindowStart-postponedExecutionBuffer <= blockHeight {
+	if existingRevision.NewWindowStart-PostponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 

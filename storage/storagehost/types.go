@@ -110,7 +110,7 @@ var (
 	// errMaxCollateralReached is returned if a file contract is provided which
 	// would require the host to supply more collateral than the host allows
 	// per file contract.
-	errMaxCollateralReached = errors.New("file contract proposal expects the host to pay more than the maximum allowed collateral")
+	errMaxCollateralReached = errors.New("storage contract proposal expects the host to pay more than the maximum allowed collateral")
 
 	errEmptyOriginStorageContract = errors.New("storage contract has no storage responsibility")
 	errEmptyRevisionSet           = errors.New("take the last revision ")

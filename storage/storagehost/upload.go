@@ -276,7 +276,7 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 
 	// Check that the time to finalize and submit the file contract revision
 	// has not already passed.
-	if so.expiration()-postponedExecutionBuffer <= blockHeight {
+	if so.expiration()-PostponedExecutionBuffer <= blockHeight {
 		return errLateRevision
 	}
 

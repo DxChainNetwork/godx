@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -264,9 +265,9 @@ func verifyStorageContract(h *StorageHost, sc *types.StorageContract, clientPK *
 		return errBadFileMerkleRoot
 	}
 
-	// WindowStart must be at least postponedExecutionBuffer blocks into the future
-	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
-		h.log.Debug("A client tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the postponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, postponedExecutionBuffer, sc.WindowStart, blockHeight+postponedExecutionBuffer)
+	// WindowStart must be at least PostponedExecutionBuffer blocks into the future
+	if sc.WindowStart <= blockHeight+PostponedExecutionBuffer {
+		h.log.Debug("A client tried to form a contract that had a window start which was too soon. The contract started at %v, the current height is %v, the PostponedExecutionBuffer is %v, and the comparison was %v <= %v\n", sc.WindowStart, blockHeight, PostponedExecutionBuffer, sc.WindowStart, blockHeight+PostponedExecutionBuffer)
 		return errEarlyWindow
 	}
 
@@ -396,15 +397,15 @@ func verifyRenewedContract(h *StorageHost, sc *types.StorageContract, clientPK *
 	externalConfig := h.externalConfig()
 
 	// check that the file size and merkle root whether match the previous.
-	if sc.FileSize != so.fileSize() {
+	if sc.FileSize != so.FileSize() {
 		return errBadFileSize
 	}
-	if sc.FileMerkleRoot != so.merkleRoot() {
+	if sc.FileMerkleRoot != so.MerkleRoot() {
 		return errBadFileMerkleRoot
 	}
 
 	// WindowStart must be at least revisionSubmissionBuffer blocks into the future
-	if sc.WindowStart <= blockHeight+postponedExecutionBuffer {
+	if sc.WindowStart <= blockHeight+PostponedExecutionBuffer {
 		return errEarlyWindow
 	}
 

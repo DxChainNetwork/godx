@@ -60,7 +60,7 @@ func (so *StorageResponsibility) expiration() uint64 {
 	return so.OriginStorageContract.WindowStart
 }
 
-func (so *StorageResponsibility) fileSize() uint64 {
+func (so *StorageResponsibility) FileSize() uint64 {
 	//If there is revision, return NewFileSize
 	if len(so.StorageContractRevisions) > 0 {
 		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileSize
@@ -85,7 +85,7 @@ func (so *StorageResponsibility) isSane() error {
 	return nil
 }
 
-func (so *StorageResponsibility) merkleRoot() common.Hash {
+func (so *StorageResponsibility) MerkleRoot() common.Hash {
 	//If there is revision, return NewFileMerkleRoot
 	if len(so.StorageContractRevisions) > 0 {
 		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileMerkleRoot
@@ -160,7 +160,7 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 	defer h.lock.Unlock()
 	err := func() error {
 		// Submit revision time exceeds storage responsibility expiration time
-		if h.blockHeight+postponedExecutionBuffer >= so.expiration() {
+		if h.blockHeight+PostponedExecutionBuffer >= so.expiration() {
 			h.log.Warn("responsibilityFailed to submit revision in storage responsibility due date")
 			return errNotAllowed
 		}
@@ -212,8 +212,8 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 	errContractCreateDoubleTime := h.queueTaskItem(h.blockHeight+postponedExecution*2, so.id())
 
 	//insert the check revision task in the task queue.
-	errRevision := h.queueTaskItem(so.expiration()-postponedExecutionBuffer, so.id())
-	errRevisionDoubleTime := h.queueTaskItem(so.expiration()-postponedExecutionBuffer+postponedExecution, so.id())
+	errRevision := h.queueTaskItem(so.expiration()-PostponedExecutionBuffer, so.id())
+	errRevisionDoubleTime := h.queueTaskItem(so.expiration()-PostponedExecutionBuffer+postponedExecution, so.id())
 
 	//insert the check proof task in the task queue.
 	errProof := h.queueTaskItem(so.expiration()+postponedExecution, so.id())
@@ -237,7 +237,7 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	defer h.lock.Unlock()
 
 	//Need enough time to submit revision
-	if so.expiration()-postponedExecutionBuffer <= h.blockHeight {
+	if so.expiration()-PostponedExecutionBuffer <= h.blockHeight {
 		return errNotAllowed
 	}
 
@@ -569,7 +569,7 @@ func (h *StorageHost) handleTaskItem(soid common.Hash) {
 	}
 
 	//If revision meets the condition, a revision transaction will be submitted.
-	if !so.StorageRevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-postponedExecutionBuffer {
+	if !so.StorageRevisionConfirmed && len(so.StorageContractRevisions) > 0 && h.blockHeight >= so.expiration()-PostponedExecutionBuffer {
 		if h.blockHeight > so.expiration() {
 			h.log.Info("If the storage contract has expired and the revision transaction has not been confirmed, delete the storage responsibility", "id", so.id().String())
 			err := h.removeStorageResponsibility(so, responsibilityRejected)

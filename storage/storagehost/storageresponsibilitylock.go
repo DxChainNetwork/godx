@@ -16,12 +16,12 @@ var (
 )
 
 //If not locked, create a new one
-func (h *StorageHost) checkAndLockStorageResponsibility(soid common.Hash) {
+func (h *StorageHost) checkAndLockStorageResponsibility(srID common.Hash) {
 	h.lock.Lock()
-	tl, exists := h.lockedStorageResponsibility[soid]
+	tl, exists := h.lockedStorageResponsibility[srID]
 	if !exists {
 		tl = new(TryMutex)
-		h.lockedStorageResponsibility[soid] = tl
+		h.lockedStorageResponsibility[srID] = tl
 	}
 	h.lock.Unlock()
 
@@ -29,13 +29,13 @@ func (h *StorageHost) checkAndLockStorageResponsibility(soid common.Hash) {
 }
 
 //Try to lock this storage obligation
-func (h *StorageHost) checkAndTryLockStorageResponsibility(soid common.Hash, timeout time.Duration) error {
+func (h *StorageHost) checkAndTryLockStorageResponsibility(srID common.Hash, timeout time.Duration) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
-	tl, exists := h.lockedStorageResponsibility[soid]
+	tl, exists := h.lockedStorageResponsibility[srID]
 	if !exists {
 		tl = new(TryMutex)
-		h.lockedStorageResponsibility[soid] = tl
+		h.lockedStorageResponsibility[srID] = tl
 	}
 
 	if tl.TryLockTimed(timeout) {
@@ -45,11 +45,11 @@ func (h *StorageHost) checkAndTryLockStorageResponsibility(soid common.Hash, tim
 }
 
 //If it exists, unlock it
-func (h *StorageHost) checkAndUnlockStorageResponsibility(soid common.Hash) {
+func (h *StorageHost) checkAndUnlockStorageResponsibility(srID common.Hash) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	tl, exists := h.lockedStorageResponsibility[soid]
+	tl, exists := h.lockedStorageResponsibility[srID]
 	if !exists {
 		return
 	}
@@ -57,9 +57,9 @@ func (h *StorageHost) checkAndUnlockStorageResponsibility(soid common.Hash) {
 
 }
 
-func (h *StorageHost) deleteLockedStorageResponsibility(soID common.Hash) {
+func (h *StorageHost) deleteLockedStorageResponsibility(srID common.Hash) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	delete(h.lockedStorageResponsibility, soID)
+	delete(h.lockedStorageResponsibility, srID)
 }
