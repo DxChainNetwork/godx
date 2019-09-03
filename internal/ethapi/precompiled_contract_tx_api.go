@@ -12,8 +12,22 @@ import (
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/rpc"
+)
+
+var (
+	// dpos related parameters
+
+	// defines the minimum deposit of candidate
+	minDeposit = big.NewInt(1e18)
+
+	// defines the minimum balance of candidate
+	candidateThreshold = big.NewInt(1e18)
 )
 
 const (
@@ -129,6 +143,18 @@ func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, data []by
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+
+	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// check dpos tx
+	err = CheckDposOperationTx(stateDB, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
@@ -144,6 +170,18 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
+
+	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// check dpos tx
+	err = CheckDposOperationTx(stateDB, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
@@ -159,6 +197,18 @@ func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, data []byte, value 
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+
+	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// check dpos tx
+	err = CheckDposOperationTx(stateDB, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
@@ -174,6 +224,18 @@ func (dpos *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash,
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
+
+	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// check dpos tx
+	err = CheckDposOperationTx(stateDB, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
@@ -278,4 +340,79 @@ func NewPrecompiledContractTxArgs(from, to common.Address, input []byte, value *
 	}
 
 	return args
+}
+
+// CheckDposOperationTx checks the dpos transaction's filed
+func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArgs) error {
+	balance := stateDB.GetBalance(args.From)
+	emptyHash := common.Hash{}
+	switch args.To {
+
+	// check ApplyCandidate tx
+	case common.BytesToAddress([]byte{13}):
+
+		// to be a candidate need minimum balance of candidateThreshold,
+		// which can stop flooding of applying candidate
+		if balance.Cmp(candidateThreshold) < 0 {
+			return ErrBalanceNotEnoughCandidateThreshold
+		}
+
+		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
+		voteDeposit := int64(0)
+		voteDepositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
+		if voteDepositHash != emptyHash {
+			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
+		}
+
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-voteDeposit {
+			return ErrDepositValueNotSuitable
+		}
+
+		// check the deposit value which must more than minDeposit
+		if args.Value.ToInt().Cmp(minDeposit) < 0 {
+			return ErrCandidateDepositTooLow
+		}
+
+		return nil
+
+	// check CancelCandidate tx
+	case common.BytesToAddress([]byte{14}):
+		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
+		if depositHash == emptyHash {
+			log.Error("has not become candidate yet,so can not submit cancel candidate tx", "address", args.From.String())
+			return ErrNotCandidate
+		}
+		return nil
+
+	// check Vote tx
+	case common.BytesToAddress([]byte{15}):
+		if args.Input == nil {
+			return ErrEmptyInput
+		}
+
+		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
+		deposit := int64(0)
+		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
+		if depositHash != emptyHash {
+			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
+		}
+
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-deposit {
+			return ErrDepositValueNotSuitable
+		}
+
+		return nil
+
+	// check CancelVote tx
+	case common.BytesToAddress([]byte{16}):
+		depositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
+		if depositHash == emptyHash {
+			log.Error("has not voted before,so can not submit cancel vote tx", "address", args.From.String())
+			return ErrHasNotVote
+		}
+		return nil
+
+	default:
+		return ErrUnknownPrecompileContractAddress
+	}
 }

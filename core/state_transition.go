@@ -18,12 +18,10 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/log"
@@ -32,14 +30,6 @@ import (
 
 var (
 	errInsufficientBalanceForGas = errors.New("insufficient balance to pay for gas")
-
-	// dpos related parameters
-
-	// defines the minimum deposit of candidate
-	minDeposit = big.NewInt(1e18)
-
-	// defines the minimum balance of candidate
-	candidateThreshold = big.NewInt(1e18)
 )
 
 /*
@@ -225,12 +215,6 @@ func (st *StateTransition) TransitionDb() (ret []byte, usedGas uint64, failed bo
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyStorageContractTransaction(sender, p, st.data, st.gas)
 	} else if p, ok := vm.PrecompiledDPoSContracts[st.to()]; ok {
-		// check dpos tx failed
-		vmerr = CheckDposOperationTx(st.evm, st.msg)
-		if vmerr != nil {
-			return nil, 0, false, vmerr
-		}
-
 		st.state.SetNonce(msg.From(), st.state.GetNonce(sender.Address())+1)
 		ret, st.gas, vmerr = evm.ApplyDposTransaction(p, st.dposContext, st.msg.From(), st.data, st.gas, st.value)
 	} else {
@@ -273,78 +257,4 @@ func (st *StateTransition) refundGas() {
 // gasUsed returns the amount of gas used up by the state transition.
 func (st *StateTransition) gasUsed() uint64 {
 	return st.initialGas - st.gas
-}
-
-// CheckDposOperationTx checks the dpos transaction's filed
-func CheckDposOperationTx(evm *vm.EVM, msg Message) error {
-	stateDB := evm.StateDB
-	balance := stateDB.GetBalance(msg.From())
-	emptyHash := common.Hash{}
-	switch *msg.To() {
-
-	// check ApplyCandidate tx
-	case common.BytesToAddress([]byte{13}):
-
-		// to be a candidate need minimum balance of candidateThreshold,
-		// which can stop flooding of applying candidate
-		if balance.Cmp(candidateThreshold) < 0 {
-			return errors.New("no the qualification to be a candidate for low balance")
-		}
-
-		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
-		voteDeposit := int64(0)
-		voteDepositHash := stateDB.GetState(msg.From(), dpos.KeyVoteDeposit)
-		if voteDepositHash != emptyHash {
-			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
-		}
-
-		if msg.Value().Sign() <= 0 || msg.Value().Int64() > balance.Int64()-voteDeposit {
-			return errors.New("no the qualification to be a candidate for not specifying fit deposit value")
-		}
-
-		// check the deposit value which must more than minDeposit
-		if msg.Value().Cmp(minDeposit) < 0 {
-			return errors.New("no the qualification to be a candidate for too small deposit value")
-		}
-
-		return nil
-
-	// check CancelCandidate tx
-	case common.BytesToAddress([]byte{14}):
-		depositHash := stateDB.GetState(msg.From(), dpos.KeyCandidateDeposit)
-		if depositHash == emptyHash {
-			return fmt.Errorf("%s has not become candidate yet,so can not submit cancel candidate tx", msg.From().String())
-		}
-		return nil
-
-	// check Vote tx
-	case common.BytesToAddress([]byte{15}):
-		if msg.Data() == nil {
-			return errors.New("payload must not be empty for vote tx")
-		}
-
-		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
-		deposit := int64(0)
-		depositHash := stateDB.GetState(msg.From(), dpos.KeyCandidateDeposit)
-		if depositHash != emptyHash {
-			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
-		}
-
-		if msg.Value().Sign() <= 0 || msg.Value().Int64() > balance.Int64()-deposit {
-			return errors.New("invalid deposit value for vote tx")
-		}
-
-		return nil
-
-	// check CancelVote tx
-	case common.BytesToAddress([]byte{16}):
-		depositHash := stateDB.GetState(msg.From(), dpos.KeyVoteDeposit)
-		if depositHash == emptyHash {
-			return fmt.Errorf("%s has not voted yet,so can not submit cancel vote tx", msg.From().String())
-		}
-		return nil
-
-	default:
-		return errors.New("invalid dpos precompiled address")
-	}
 }
