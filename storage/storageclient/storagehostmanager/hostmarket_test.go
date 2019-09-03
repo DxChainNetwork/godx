@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/p2p/enode"
+
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -41,6 +43,96 @@ func (hm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
 // getBlockHeight return the block number of the fake host market
 func (hm *fakeHostMarket) getBlockHeight() uint64 {
 	return hm.blockHeight
+}
+
+// fakeHostTree is the fake implementation of StorageHostTree for testing purpose.
+// Currently, only the All method is used for testing. Add more functionality as
+// needed.
+type fakeHostTree struct {
+	infos []storage.HostInfo
+}
+
+func (t *fakeHostTree) Insert(hi storage.HostInfo, eval int64) error         { return nil }
+func (t *fakeHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error { return nil }
+func (t *fakeHostTree) Remove(enodeID enode.ID) error                        { return nil }
+func (t *fakeHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
+	return storage.HostInfo{}, false
+}
+func (t *fakeHostTree) SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo {
+	return []storage.HostInfo{}
+}
+func (t *fakeHostTree) All() []storage.HostInfo { return t.infos }
+
+// newFakeHostTree returns a new fake host tree with the give host infos
+func newFakeHostTree(infos []storage.HostInfo) *fakeHostTree {
+	return &fakeHostTree{infos}
+}
+
+// TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.GetMarketPrice
+func TestStorageHostManager_GetMarketPrice(t *testing.T) {
+	tests := []struct {
+		shm           *StorageHostManager
+		expectedPrice storage.MarketPrice
+	}{
+		{
+			shm: &StorageHostManager{
+				initialScan:     false,
+				storageHostTree: newFakeHostTree([]storage.HostInfo{}),
+			},
+			expectedPrice: defaultMarketPrice,
+		},
+		{
+			// Need update
+			shm: &StorageHostManager{
+				initialScan: true,
+				cachedPrices: cachedPrices{
+					prices:         storage.MarketPrice{},
+					timeLastUpdate: time.Now().AddDate(-1, 0, 0),
+				},
+				storageHostTree: newFakeHostTree(makeHostInfos()),
+			},
+			expectedPrice: storage.MarketPrice{
+				ContractPrice: common.NewBigInt(2),
+				StoragePrice:  common.NewBigInt(2),
+				UploadPrice:   common.NewBigInt(2),
+				DownloadPrice: common.NewBigInt(2),
+				Deposit:       common.NewBigInt(2),
+				MaxDeposit:    common.NewBigInt(2),
+			},
+		},
+		{
+			// No need update
+			shm: &StorageHostManager{
+				initialScan: true,
+				cachedPrices: cachedPrices{
+					prices: storage.MarketPrice{
+						ContractPrice: common.NewBigInt(2),
+						StoragePrice:  common.NewBigInt(2),
+						UploadPrice:   common.NewBigInt(2),
+						DownloadPrice: common.NewBigInt(2),
+						Deposit:       common.NewBigInt(2),
+						MaxDeposit:    common.NewBigInt(2),
+					},
+					timeLastUpdate: time.Now(),
+				},
+				storageHostTree: newFakeHostTree([]storage.HostInfo{}),
+			},
+			expectedPrice: storage.MarketPrice{
+				ContractPrice: common.NewBigInt(2),
+				StoragePrice:  common.NewBigInt(2),
+				UploadPrice:   common.NewBigInt(2),
+				DownloadPrice: common.NewBigInt(2),
+				Deposit:       common.NewBigInt(2),
+				MaxDeposit:    common.NewBigInt(2),
+			},
+		},
+	}
+	for i, test := range tests {
+		marketPrice := test.shm.GetMarketPrice()
+		if !reflect.DeepEqual(marketPrice, test.expectedPrice) {
+			t.Errorf("Test %d: \n\tGot %+v\n\tExpect %+v", i, marketPrice, test.expectedPrice)
+		}
+	}
 }
 
 // TestEmptyCalculateMarketPrice test the functionality of calculateMarketPrice when the active
@@ -98,99 +190,99 @@ func TestGetAverage(t *testing.T) {
 		expect common.BigInt
 	}{
 		{
-			hostInfosByContractPrice(makeHostInfos()),
+			hostInfosByContractPrice(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByContractPrice(makeShortHostInfos(0)),
+			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByContractPrice(makeShortHostInfos(1)),
+			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByContractPrice(makeShortHostInfos(2)),
+			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByStoragePrice(makeHostInfos()),
+			hostInfosByStoragePrice(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByStoragePrice(makeShortHostInfos(0)),
+			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByStoragePrice(makeShortHostInfos(1)),
+			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByStoragePrice(makeShortHostInfos(2)),
+			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByUploadPrice(makeHostInfos()),
+			hostInfosByUploadPrice(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByUploadPrice(makeShortHostInfos(0)),
+			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByUploadPrice(makeShortHostInfos(1)),
+			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByUploadPrice(makeShortHostInfos(2)),
+			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDownloadPrice(makeHostInfos()),
+			hostInfosByDownloadPrice(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDownloadPrice(makeShortHostInfos(0)),
+			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByDownloadPrice(makeShortHostInfos(1)),
+			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDownloadPrice(makeShortHostInfos(2)),
+			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDeposit(makeHostInfos()),
+			hostInfosByDeposit(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDeposit(makeShortHostInfos(0)),
+			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByDeposit(makeShortHostInfos(1)),
+			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByDeposit(makeShortHostInfos(2)),
+			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByMaxDeposit(makeHostInfos()),
+			hostInfosByMaxDeposit(hostInfoListToPtrList(makeHostInfos())),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByMaxDeposit(makeShortHostInfos(0)),
+			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(0))),
 			common.NewBigInt(0),
 		},
 		{
-			hostInfosByMaxDeposit(makeShortHostInfos(1)),
+			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(1))),
 			common.NewBigInt(2),
 		},
 		{
-			hostInfosByMaxDeposit(makeShortHostInfos(2)),
+			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(2))),
 			common.NewBigInt(2),
 		},
 	}
@@ -206,10 +298,11 @@ func TestGetAverage(t *testing.T) {
 // value, one abnormally low value. The expected result of the getAveragePrice is 2.
 // If the value of floorRatio and ceilRatio are to be changed, the values here might need to
 // be changed
-func makeHostInfos() []*storage.HostInfo {
-	return []*storage.HostInfo{
+func makeHostInfos() []storage.HostInfo {
+	return []storage.HostInfo{
 		{
 			HostExtConfig: storage.HostExtConfig{
+				AcceptingContracts:     true,
 				ContractPrice:          common.NewBigInt(100000),
 				StoragePrice:           common.NewBigInt(100000),
 				UploadBandwidthPrice:   common.NewBigInt(100000),
@@ -217,9 +310,14 @@ func makeHostInfos() []*storage.HostInfo {
 				Deposit:                common.NewBigInt(100000),
 				MaxDeposit:             common.NewBigInt(100000),
 			},
+			ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+				Timestamp: time.Now(),
+				Success:   true,
+			}},
 		},
 		{
 			HostExtConfig: storage.HostExtConfig{
+				AcceptingContracts:     true,
 				ContractPrice:          common.NewBigInt(-200000),
 				StoragePrice:           common.NewBigInt(-200000),
 				UploadBandwidthPrice:   common.NewBigInt(-200000),
@@ -227,9 +325,14 @@ func makeHostInfos() []*storage.HostInfo {
 				Deposit:                common.NewBigInt(-200000),
 				MaxDeposit:             common.NewBigInt(-200000),
 			},
+			ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+				Timestamp: time.Now(),
+				Success:   true,
+			}},
 		},
 		{
 			HostExtConfig: storage.HostExtConfig{
+				AcceptingContracts:     true,
 				ContractPrice:          common.NewBigInt(1),
 				StoragePrice:           common.NewBigInt(1),
 				UploadBandwidthPrice:   common.NewBigInt(1),
@@ -237,9 +340,14 @@ func makeHostInfos() []*storage.HostInfo {
 				Deposit:                common.NewBigInt(1),
 				MaxDeposit:             common.NewBigInt(1),
 			},
+			ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+				Timestamp: time.Now(),
+				Success:   true,
+			}},
 		},
 		{
 			HostExtConfig: storage.HostExtConfig{
+				AcceptingContracts:     true,
 				ContractPrice:          common.NewBigInt(2),
 				StoragePrice:           common.NewBigInt(2),
 				UploadBandwidthPrice:   common.NewBigInt(2),
@@ -247,9 +355,14 @@ func makeHostInfos() []*storage.HostInfo {
 				Deposit:                common.NewBigInt(2),
 				MaxDeposit:             common.NewBigInt(2),
 			},
+			ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+				Timestamp: time.Now(),
+				Success:   true,
+			}},
 		},
 		{
 			HostExtConfig: storage.HostExtConfig{
+				AcceptingContracts:     true,
 				ContractPrice:          common.NewBigInt(3),
 				StoragePrice:           common.NewBigInt(3),
 				UploadBandwidthPrice:   common.NewBigInt(3),
@@ -257,15 +370,20 @@ func makeHostInfos() []*storage.HostInfo {
 				Deposit:                common.NewBigInt(3),
 				MaxDeposit:             common.NewBigInt(3),
 			},
+			ScanRecords: storage.HostPoolScans{storage.HostPoolScan{
+				Timestamp: time.Now(),
+				Success:   true,
+			}},
 		},
 	}
 }
 
 // makeShortHostInfos makes a list of HostInfo. Note the returned value all points to the same
 // HostInfo
-func makeShortHostInfos(size int) []*storage.HostInfo {
-	info := &storage.HostInfo{
+func makeShortHostInfos(size int) []storage.HostInfo {
+	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
+			AcceptingContracts:     true,
 			ContractPrice:          common.NewBigInt(2),
 			StoragePrice:           common.NewBigInt(2),
 			UploadBandwidthPrice:   common.NewBigInt(2),
@@ -274,7 +392,7 @@ func makeShortHostInfos(size int) []*storage.HostInfo {
 			MaxDeposit:             common.NewBigInt(2),
 		},
 	}
-	res := make([]*storage.HostInfo, size)
+	res := make([]storage.HostInfo, size)
 	for i := 0; i != size; i++ {
 		res[i] = info
 	}

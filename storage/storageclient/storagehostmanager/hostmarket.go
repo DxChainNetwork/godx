@@ -63,9 +63,13 @@ func (shm *StorageHostManager) calculateMarketPrice() storage.MarketPrice {
 
 // hostInfoListToPtrList change a list of hostInfo to a list of hostInfo pointers
 func hostInfoListToPtrList(infos []storage.HostInfo) []*storage.HostInfo {
-	var ptrs []*storage.HostInfo
-	for _, info := range infos {
-		ptrs = append(ptrs, &info)
+	ptrs := make([]*storage.HostInfo, len(infos))
+	// copy the pointer to the pointer list. The pointer value to be appended need
+	// to be declared within the loop. More details please visit this blog:
+	// https://medium.com/codezillas/uh-ohs-in-go-slice-of-pointers-c0a30669feee
+	for i, info := range infos {
+		infoCopy := info
+		ptrs[i] = &infoCopy
 	}
 	return ptrs
 }
