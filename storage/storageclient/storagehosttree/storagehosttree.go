@@ -18,15 +18,15 @@ var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 // StorageHostTree defined a binary tree structure that used to store all
 // storage host information found by the storage client
-type StorageHostTree struct {
+type storageHostTree struct {
 	root     *node
 	hostPool map[enode.ID]*node
 	lock     sync.Mutex
 }
 
 // New will initialize the StorageHostTree object
-func New() *StorageHostTree {
-	return &StorageHostTree{
+func New() StorageHostTree {
+	return &storageHostTree{
 		hostPool: make(map[enode.ID]*node),
 		root: &node{
 			count: 1,
@@ -35,7 +35,7 @@ func New() *StorageHostTree {
 }
 
 // Insert will insert the StorageHost information into StorageHostTree
-func (t *StorageHostTree) Insert(hi storage.HostInfo, eval int64) error {
+func (t *storageHostTree) Insert(hi storage.HostInfo, eval int64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	return t.insert(hi, eval)
@@ -43,7 +43,7 @@ func (t *StorageHostTree) Insert(hi storage.HostInfo, eval int64) error {
 
 // insert will format the storage host information into nodeEntry data type
 // and then insert to the tree and update the host pool
-func (t *StorageHostTree) insert(hi storage.HostInfo, eval int64) error {
+func (t *storageHostTree) insert(hi storage.HostInfo, eval int64) error {
 	// nodeEntry
 	entry := &nodeEntry{
 		HostInfo: hi,
@@ -65,7 +65,7 @@ func (t *StorageHostTree) insert(hi storage.HostInfo, eval int64) error {
 }
 
 // HostInfoUpdate updates the host information in in the tree based on the enode ID
-func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error {
+func (t *storageHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -92,7 +92,7 @@ func (t *StorageHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error 
 
 // Remove will remove the node from the hostPool as well as
 // making the node not occupied, updating the evaluation
-func (t *StorageHostTree) Remove(enodeID enode.ID) error {
+func (t *storageHostTree) Remove(enodeID enode.ID) error {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -109,7 +109,7 @@ func (t *StorageHostTree) Remove(enodeID enode.ID) error {
 }
 
 // All will retrieve all host information stored in the tree
-func (t *StorageHostTree) All() []storage.HostInfo {
+func (t *storageHostTree) All() []storage.HostInfo {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -117,7 +117,7 @@ func (t *StorageHostTree) All() []storage.HostInfo {
 }
 
 // all will retrieve, sort, and return all host information stored in the tree
-func (t *StorageHostTree) all() (his []storage.HostInfo) {
+func (t *storageHostTree) all() (his []storage.HostInfo) {
 	// collect all node entries
 	var entries []nodeEntry
 	for _, node := range t.hostPool {
@@ -137,7 +137,7 @@ func (t *StorageHostTree) all() (his []storage.HostInfo) {
 
 // RetrieveHostInfo will get storage host information from the tree based on the
 // enode ID
-func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
+func (t *storageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
@@ -148,39 +148,6 @@ func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, 
 
 	return node.entry.HostInfo, true
 }
-
-// TODO: implement the setEvaluator logic in upper function calls
-// SetEvaluator will re-assign evaluation function for calculating
-// storage host evaluation.
-//func (t *StorageHostTree) SetEvaluator(evaluator Evaluator) error {
-//	t.lock.Lock()
-//	defer t.lock.Unlock()
-//
-//	// if there is no host exist, set the function and return directly
-//	if len(t.hostPool) == 0 {
-//		t.evaluator = evaluator
-//		return nil
-//	}
-//
-//	// if not, get all hosts information and reset the tree
-//	hostInfos := t.all()
-//
-//	t.root = &node{
-//		count: 1,
-//	}
-//	t.hostPool = make(map[enode.ID]*node)
-//	t.evaluator = evaluator
-//
-//	// re-insert the host information
-//	var errs error
-//	for _, hostInfo := range hostInfos {
-//		err := t.insert(hostInfo)
-//		if err != nil {
-//			errs = common.ErrCompose(errs, err)
-//		}
-//	}
-//	return errs
-//}
 
 // SelectRandom will randomly select nodes from the storage host tree based
 // on their evaluation. For any storage host's enode ID contained in the blacklist,
@@ -193,7 +160,7 @@ func (t *StorageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, 
 //      4. restore storage host tree structure
 // NOTE: the number of storage hosts information got may not satisfy the number of storage host
 // information needed.
-func (t *StorageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo {
+func (t *storageHostTree) SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 

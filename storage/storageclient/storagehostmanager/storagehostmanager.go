@@ -29,7 +29,7 @@ type StorageHostManager struct {
 
 	rent            storage.RentPayment
 	hostEvaluator   HostEvaluator
-	storageHostTree *storagehosttree.StorageHostTree
+	storageHostTree storagehosttree.StorageHostTree
 
 	// ip violation check
 	ipViolationCheck bool
@@ -52,7 +52,7 @@ type StorageHostManager struct {
 	// filter mode related
 	filterMode    FilterMode
 	filteredHosts map[enode.ID]struct{}
-	filteredTree  *storagehosttree.StorageHostTree
+	filteredTree  storagehosttree.StorageHostTree
 
 	// blockHeight and its lock
 	blockHeight     uint64
@@ -167,7 +167,7 @@ func (shm *StorageHostManager) SetRentPayment(rent storage.RentPayment) (err err
 }
 
 // evaluateHostTrees evaluate all nodes in host tree and update
-func (shm *StorageHostManager) evaluateHostTree(tree *storagehosttree.StorageHostTree) (err error) {
+func (shm *StorageHostManager) evaluateHostTree(tree storagehosttree.StorageHostTree) (err error) {
 	nodes := tree.All()
 	for _, hi := range nodes {
 		eval := shm.hostEvaluator.Evaluate(hi)

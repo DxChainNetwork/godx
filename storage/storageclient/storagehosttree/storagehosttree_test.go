@@ -61,8 +61,8 @@ func (ds dataSet) totalWeight() int64 {
 }
 
 // newTestStorageHostTree returns a new tree with evaluator with some entries already inserted
-func newTestStorageHostTree(data dataSet) (*StorageHostTree, error) {
-	tree := New()
+func newTestStorageHostTree(data dataSet) (*storageHostTree, error) {
+	tree := new()
 	for id, info := range data {
 		hostInfo := createHostInfo(info.ip, id, true)
 		if err := tree.Insert(hostInfo, info.eval); err != nil {
@@ -313,4 +313,14 @@ func compareEval(n *node) error {
 	}
 
 	return nil
+}
+
+// new will initialize the StorageHostTree object
+func new() *storageHostTree {
+	return &storageHostTree{
+		hostPool: make(map[enode.ID]*node),
+		root: &node{
+			count: 1,
+		},
+	}
 }
