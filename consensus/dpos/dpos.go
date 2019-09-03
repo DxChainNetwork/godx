@@ -59,6 +59,9 @@ var (
 	// KeyLastVoteTime is the key of last vote time
 	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
 
+	// KeyTotalVoteWeight is the key of total vote weight for every candidate
+	KeyTotalVoteWeight = common.BytesToHash([]byte("total-vote-weight"))
+
 	// MinVoteWeightRatio is the minimum vote weight ration
 	MinVoteWeightRatio = 0.5
 
@@ -412,8 +415,8 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = constantinopleBlockReward
 	}
 
-	// TODO get vote count by vote trie
-	voteCount := MockVoteCount
+	// retrieve the total vote weight of header's validator
+	voteCount := common.NewBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big().Int64())
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return
@@ -435,8 +438,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		vb := state.GetState(delegator, KeyVoteDeposit)
 		vote := common.NewBigInt(vb.Big().Int64())
 
+		// retrieve the real vote weight ratio,and calculate the real vote weight of delegator
+		realVoteWeight := float64(0)
+		realVoteWeightRatioHash := state.GetState(delegator, KeyRealVoteWeightRatio)
+		if realVoteWeightRatioHash != EmptyHash {
+			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
+			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes()[24:])
+			realVoteWeight = float64(vote.BigIntPtr().Int64()) * realVoteWeightRatio
+		}
+
 		// calculate reward of each delegator due to it's vote(stake) percent
-		percentReward := vote.Mult(delegatorReward).Div(voteCount).BigIntPtr()
+		percentReward := common.NewBigIntFloat64(realVoteWeight).Mult(delegatorReward).Div(voteCount).BigIntPtr()
 
 		state.AddBalance(delegator, percentReward)
 		assignedReward.Add(assignedReward, percentReward)
