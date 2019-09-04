@@ -35,10 +35,6 @@ var (
 	// provides the wrong parent id during a file contract revision.
 	errBadParentID = ErrorRevision("responsibilityRejected for bad parent id")
 
-	// errBadPayoutUnlockHashes is returned if the client incorrectly sets the
-	// payout unlock hashes during contract formation.
-	errBadPayoutUnlockHashes = ErrorRevision("responsibilityRejected for bad unlock hashes in the payout")
-
 	// errBadRevisionNumber number is returned if the client incorrectly
 	// download and does not increase the revision number during a file
 	// contract revision.
@@ -61,10 +57,6 @@ var (
 	// window start during a file contract revision.
 	errBadWindowStart = ErrorRevision("responsibilityRejected for bad new window start")
 
-	// errEarlyWindow is returned if the file contract provided by the client
-	// has a storage proof window that is starting too near in the future.
-	errEarlyWindow = ErrorRevision("responsibilityRejected for a window that starts too soon")
-
 	// errHighClientMissedOutput is returned if the client incorrectly download
 	// and deducts an insufficient amount from the client missed outputs during
 	// a file contract revision.
@@ -81,36 +73,9 @@ var (
 	// will not accept revisions once the window start is too close.
 	errLateRevision = ErrorRevision("client is requesting revision after the revision deadline")
 
-	// errLongDuration is returned if the client proposes a file contract with
-	// an expiration that is too far into the future according to the host's
-	// settings.
-	errLongDuration = ErrorRevision("client proposed a file contract with a too-long duration")
-
-	// errLowHostMissedOutput is returned if the client incorrectly updates the
-	// host missed proof output during a file contract revision.
-	errLowHostMissedOutput = ErrorRevision("responsibilityRejected for low paying host missed output")
-
 	// errLowHostValidOutput is returned if the client incorrectly updates the
 	// host valid proof output during a file contract revision.
 	errLowHostValidOutput = ErrorRevision("responsibilityRejected for low paying host valid output")
-
-	// errMismatchedHostPayouts is returned if the client incorrectly sets the
-	// host valid and missed payouts to different values during contract
-	// formation.
-	errMismatchedHostPayouts = ErrorRevision("responsibilityRejected because host valid and missed payouts are not the same value")
-
-	// errSmallWindow is returned if the client suggests a storage proof window
-	// that is too small.
-	errSmallWindow = ErrorRevision("responsibilityRejected for small window size")
-
-	// errCollateralBudgetExceeded is returned if the host does not have enough
-	// room in the collateral budget to accept a particular file contract.
-	errCollateralBudgetExceeded = errors.New("host has reached its collateral budget and cannot accept the file contract")
-
-	// errMaxCollateralReached is returned if a file contract is provided which
-	// would require the host to supply more collateral than the host allows
-	// per file contract.
-	errMaxCollateralReached = errors.New("storage contract proposal expects the host to pay more than the maximum allowed collateral")
 
 	errEmptyOriginStorageContract = errors.New("storage contract has no storage responsibility")
 	errEmptyRevisionSet           = errors.New("take the last revision ")

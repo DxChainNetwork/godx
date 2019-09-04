@@ -5,12 +5,13 @@
 package storagehost
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 func TestStoreStorageResponsibility(t *testing.T) {
@@ -59,7 +60,7 @@ func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
 			WindowEnd:      1440000,
 		},
 	}
-	if err := finalizeStorageResponsibility(h, so); err != nil {
+	if err := h.FinalizeStorageResponsibility(so); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +73,7 @@ func TestFinalizeAndRollbackStorageResponsibility(t *testing.T) {
 		t.Fatal("origin storage responsibility is not equal to responsibility from database")
 	}
 
-	if err := rollbackStorageResponsibility(h, so); err != nil {
+	if err := h.RollBackStorageResponsibility(so); err != nil {
 		t.Fatal(err)
 	}
 
