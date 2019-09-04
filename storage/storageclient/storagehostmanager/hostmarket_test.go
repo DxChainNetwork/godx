@@ -76,15 +76,15 @@ func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 	}{
 		{
 			shm: &StorageHostManager{
-				initialScan:     false,
-				storageHostTree: newFakeHostTree([]storage.HostInfo{}),
+				initialScanFinished: false,
+				storageHostTree:     newFakeHostTree([]storage.HostInfo{}),
 			},
 			expectedPrice: defaultMarketPrice,
 		},
 		{
 			// Need update
 			shm: &StorageHostManager{
-				initialScan: true,
+				initialScanFinished: true,
 				cachedPrices: cachedPrices{
 					prices:         storage.MarketPrice{},
 					timeLastUpdate: time.Now().AddDate(-1, 0, 0),
@@ -103,7 +103,7 @@ func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 		{
 			// No need update
 			shm: &StorageHostManager{
-				initialScan: true,
+				initialScanFinished: true,
 				cachedPrices: cachedPrices{
 					prices: storage.MarketPrice{
 						ContractPrice: common.NewBigInt(2),

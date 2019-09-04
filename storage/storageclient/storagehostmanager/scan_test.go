@@ -38,7 +38,7 @@ func TestStorageHostManager_Scan(t *testing.T) {
 
 	for {
 		shm.lock.Lock()
-		is := shm.initialScan
+		is := shm.initialScanFinished
 		shm.lock.Unlock()
 
 		if is {
@@ -102,10 +102,11 @@ type storageClientBackendTestData struct{}
 
 func newHostManagerTestData() *StorageHostManager {
 	shm := &StorageHostManager{
-		b:             &storageClientBackendTestData{},
-		rent:          storage.DefaultRentPayment,
-		scanLookup:    make(map[enode.ID]struct{}),
-		filteredHosts: make(map[enode.ID]struct{}),
+		b:                   &storageClientBackendTestData{},
+		rent:                storage.DefaultRentPayment,
+		scanLookup:          make(map[enode.ID]struct{}),
+		filteredHosts:       make(map[enode.ID]struct{}),
+		initialScanFinished: make(chan struct{}),
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)

@@ -24,12 +24,12 @@ type hostMarket interface {
 
 // GetMarketPrice will return the market price. It will first try to get the value from
 // cached prices. If cached prices need to be updated, prices are calculated and returned.
-// Note that the function need to be protected by shm.lock for shm.initialScan field.
+// Note that the function need to be protected by shm.lock for shm.initialScanFinished field.
 func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
 	// If the initial scan has not finished, return the default host market price
 	// Since the shm has been locked when evaluating the host score, no lock is needed
 	// here.
-	if !shm.initialScan {
+	if !shm.isInitialScanFinished() {
 		return defaultMarketPrice
 	}
 	if shm.cachedPrices.isUpdateNeeded() {

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -35,11 +36,11 @@ type StorageHostManager struct {
 	ipViolationCheck bool
 
 	// maintenance related
-	initialScan     bool
-	scanWaitList    []storage.HostInfo
-	scanLookup      map[enode.ID]struct{}
-	scanWait        bool
-	scanningWorkers int
+	initialScanFinished chan struct{}
+	scanWaitList        []storage.HostInfo
+	scanLookup          map[enode.ID]struct{}
+	scanWait            bool
+	scanningWorkers     int
 
 	// persistent directory
 	persistDir string
@@ -66,11 +67,12 @@ type StorageHostManager struct {
 func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		persistDir:    persistDir,
-		rent:          storage.DefaultRentPayment,
-		scanLookup:    make(map[enode.ID]struct{}),
-		filterMode:    DisableFilter,
-		filteredHosts: make(map[enode.ID]struct{}),
+		persistDir:          persistDir,
+		rent:                storage.DefaultRentPayment,
+		scanLookup:          make(map[enode.ID]struct{}),
+		filterMode:          DisableFilter,
+		filteredHosts:       make(map[enode.ID]struct{}),
+		initialScanFinished: make(chan struct{}),
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
@@ -281,7 +283,7 @@ func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHo
 //  2. addrBlacklist represents for any storage host whose network address is caontine
 func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlacklist []enode.ID) (infos []storage.HostInfo, err error) {
 	shm.lock.RLock()
-	initScan := shm.initialScan
+	initScan := shm.initialScanFinished
 	ipCheck := shm.ipViolationCheck
 	shm.lock.RUnlock()
 
@@ -415,4 +417,38 @@ func (shm *StorageHostManager) decrementBlockHeight() {
 	defer shm.blockHeightLock.Unlock()
 
 	shm.blockHeight--
+}
+
+// isInitialScanFinished return whether the initial scan has been finished
+func (shm *StorageHostManager) isInitialScanFinished() bool {
+	select {
+	case <-shm.initialScanFinished:
+		return true
+	default:
+	}
+	return false
+}
+
+// finishInitialScan close the channel initialScanFinished to denote that the initial scan is
+// finished
+func (shm *StorageHostManager) finishInitialScan() {
+	// check whether the channel has already been closed
+	select {
+	case <-shm.initialScanFinished:
+		// closing a closed channel will cause panic. Directly return to avoid panic
+		return
+	default:
+	}
+	close(shm.initialScanFinished)
+}
+
+// waitUntilInitialScanFinished will wait until the initial scan is finished or
+// the timeout has been expired.
+func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
+	select {
+	case <-time.After(duration):
+		return fmt.Errorf("after %v, initial scan not finished", duration)
+	case <-shm.initialScanFinished:
+	}
+	return nil
 }
