@@ -6,6 +6,7 @@ package hostnegotiation
 
 import (
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
@@ -29,4 +30,19 @@ func renewBaseDeposit(sr storagehost.StorageResponsibility, windowEnd, fileSize 
 
 	// calculate the contract renew deposit
 	return deposit.MultUint64(fileSize).MultUint64(timeExtension)
+}
+
+func calcStorageRevenueAndNewDeposit(nd *uploadNegotiationData, sr storagehost.StorageResponsibility, blockHeight uint64, storagePrice, deposit common.BigInt) {
+	if len(nd.newRoots) > len(sr.SectorRoots) {
+		dataAdded := storage.SectorSize * uint64(len(nd.newRoots)-len(sr.SectorRoots))
+		blocksRemaining := sr.ProofDeadline() - blockHeight
+		dataBlocks := common.NewBigIntUint64(blocksRemaining).Mult(common.NewBigIntUint64(dataAdded))
+		nd.storageRevenue = dataBlocks.Mult(storagePrice)
+		nd.newDeposit = dataBlocks.Mult(deposit)
+	}
+}
+
+func calcHostRevenue(nd *uploadNegotiationData, sr storagehost.StorageResponsibility, blockHeight uint64, hostConfig storage.HostIntConfig) common.BigInt {
+	calcStorageRevenueAndNewDeposit(nd, sr, blockHeight, hostConfig.StoragePrice, hostConfig.Deposit)
+	return nd.storageRevenue.Add(nd.bandwidthRevenue).Add(hostConfig.BaseRPCPrice)
 }

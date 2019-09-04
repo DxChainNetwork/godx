@@ -33,15 +33,24 @@ type NegotiationProtocol interface {
 	RollBackConnectionType(sp storage.Peer)
 }
 
-type contractNegotiation struct {
+type contractNegotiationData struct {
 	clientPubKey *ecdsa.PublicKey
 	hostPubKey   *ecdsa.PublicKey
 	account      accounts.Account
 	wallet       accounts.Wallet
 }
 
-type uploadNegotiation struct {
+type uploadNegotiationData struct {
+	srSnapshot       storagehost.StorageResponsibility
+	newRoots         []common.Hash
+	sectorsChanged   map[uint64]struct{}
+	bandwidthRevenue common.BigInt
+	sectorGained     []common.Hash
+	gainedSectorData [][]byte
+	storageRevenue   common.BigInt
+	newDeposit       common.BigInt
+	newMerkleRoot    common.Hash
 }
 
-type downloadNegotiation struct {
+type downloadNegotiationData struct {
 }

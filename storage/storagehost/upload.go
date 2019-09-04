@@ -118,6 +118,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		}
 	}
 
+	// TODO: put the revenue and other calculation here
 	// Verify the new revision
 	newRevenue := storageRevenue.Add(bandwidthRevenue).Add(settings.BaseRPCPrice)
 
@@ -300,9 +301,7 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	if oldFCR.NewRevisionNumber >= revision.NewRevisionNumber {
 		return errBadRevisionNumber
 	}
-	if revision.NewFileSize != uint64(len(so.SectorRoots))*storage.SectorSize {
-		return errBadFileSize
-	}
+
 	if oldFCR.NewWindowStart != revision.NewWindowStart {
 		return errBadWindowStart
 	}
@@ -314,9 +313,7 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	}
 
 	// Determine the amount that was transferred from the client.
-	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
-		return fmt.Errorf("client increased its valid proof output: %v", errHighClientValidOutput)
-	}
+
 	fromClient := common.NewBigInt(oldFCR.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(revision.NewValidProofOutputs[0].Value.Int64()))
 	// Verify that enough money was transferred.
 	if fromClient.Cmp(expectedExchange) < 0 {
@@ -325,9 +322,7 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	}
 
 	// Determine the amount of money that was transferred to the host.
-	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
-		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
-	}
+
 	toHost := common.NewBigInt(revision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(oldFCR.NewValidProofOutputs[1].Value.Int64()))
 
 	// Verify that enough money was transferred.
@@ -336,11 +331,20 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 		return ExtendErr(s, errLowHostValidOutput)
 	}
 
+
 	// If the client's valid proof output is larger than the client's missed
 	// proof output, the client has incentive to see the host fail. Make sure
 	// that this incentive is not present.
 	if revision.NewValidProofOutputs[0].Value.Cmp(revision.NewMissedProofOutputs[0].Value) > 0 {
 		return ExtendErr("client has incentive to see host fail: ", errHighClientMissedOutput)
+	}
+
+	if revision.NewValidProofOutputs[0].Value.Cmp(oldFCR.NewValidProofOutputs[0].Value) > 0 {
+		return fmt.Errorf("client increased its valid proof output: %v", errHighClientValidOutput)
+	}
+
+	if oldFCR.NewValidProofOutputs[1].Value.Cmp(revision.NewValidProofOutputs[1].Value) > 0 {
+		return ExtendErr("host valid proof output was decreased: ", errLowHostValidOutput)
 	}
 
 	// Check that the host is not going to be posting more collateral than is
@@ -355,13 +359,17 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 	//}
 
 	// Check that the revision count has increased.
-	if revision.NewRevisionNumber <= oldFCR.NewRevisionNumber {
-		return errBadRevisionNumber
-	}
+	//if revision.NewRevisionNumber <= oldFCR.NewRevisionNumber {
+	//	return errBadRevisionNumber
+	//}
 
 	// The Merkle root is checked last because it is the most expensive check.
 	if revision.NewFileMerkleRoot != merkle.Sha256CachedTreeRoot(so.SectorRoots, sectorHeight) {
 		return errBadFileMerkleRoot
+	}
+
+	if revision.NewFileSize != uint64(len(so.SectorRoots))*storage.SectorSize {
+		return errBadFileSize
 	}
 
 	return nil

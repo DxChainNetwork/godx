@@ -23,7 +23,7 @@ import (
 
 func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var negotiateErr error
-	var negotiationData contractNegotiation
+	var nd contractNegotiationData
 	defer handleNegotiationErr(&negotiateErr, sp, np)
 
 	// check if the contract is accepted, if not, make the error
@@ -35,14 +35,14 @@ func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contrac
 	}
 
 	// decode and validate storage contract create request
-	req, err := decodeAndValidateReq(np, contractCreateReqMsg, &negotiationData)
+	req, err := decodeAndValidateReq(np, contractCreateReqMsg, &nd)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// storage host sign and update the storage contract
-	sc, err := signAndValidateContract(&negotiationData, req, np)
+	sc, err := signAndValidateContract(&nd, req, np)
 	if err != nil {
 		negotiateErr = err
 		return
@@ -55,14 +55,14 @@ func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contrac
 		return
 	}
 
-	if err := contractRevisionNegotiation(np, sp, sc, negotiationData, clientRevisionSign, req); err != nil {
+	if err := contractRevisionNegotiation(np, sp, sc, nd, clientRevisionSign, req); err != nil {
 		negotiateErr = err
 		return
 	}
 }
 
 // decodeAndValidateReq will decode and validate the contract create request
-func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, negotiationData *contractNegotiation) (storage.ContractCreateRequest, error) {
+func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, nd *contractNegotiationData) (storage.ContractCreateRequest, error) {
 	// decode the contract create request, if failed, the error
 	// should be categorized as client's error
 	var req storage.ContractCreateRequest
@@ -77,7 +77,7 @@ func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, 
 		err = fmt.Errorf("failed to recover the client's public key from the signature")
 		return storage.ContractCreateRequest{}, common.ErrCompose(storage.ErrClientNegotiate, err)
 	}
-	negotiationData.clientPubKey = clientPubKey
+	nd.clientPubKey = clientPubKey
 
 	// balance verification
 	hostAddress := req.StorageContract.ValidProofOutputs[1].Address
@@ -86,8 +86,8 @@ func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, 
 		return storage.ContractCreateRequest{}, err
 	}
 
-	// validate the host address and update the negotiationData
-	if err := hostAddressValidation(hostAddress, negotiationData, np); err != nil {
+	// validate the host address and update the nd
+	if err := hostAddressValidation(hostAddress, nd, np); err != nil {
 		return storage.ContractCreateRequest{}, err
 	}
 
@@ -96,13 +96,13 @@ func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, 
 
 // signAndValidateContract will have the contract signed by the storage contract, update the contract
 // and then perform a bunch of validation on the updated contract
-func signAndValidateContract(negotiationData *contractNegotiation, req storage.ContractCreateRequest, np NegotiationProtocol) (types.StorageContract, error) {
+func signAndValidateContract(nd *contractNegotiationData, req storage.ContractCreateRequest, np NegotiationProtocol) (types.StorageContract, error) {
 	// extract data
 	sc := req.StorageContract
 	clientSign := req.Sign
 
 	// storage host sign the storage contract
-	hostSign, err := hostSignedContract(negotiationData.account, negotiationData.wallet, sc.RLPHash().Bytes())
+	hostSign, err := hostSignedContract(nd.account, nd.wallet, sc.RLPHash().Bytes())
 	if err != nil {
 		err = fmt.Errorf("failed to sign and update the contract: %s", err.Error())
 		return types.StorageContract{}, err
@@ -115,12 +115,12 @@ func signAndValidateContract(negotiationData *contractNegotiation, req storage.C
 		return types.StorageContract{}, err
 	}
 
-	// update the negotiationData
-	negotiationData.hostPubKey = hostPubKey
+	// update the nd
+	nd.hostPubKey = hostPubKey
 	sc.Signatures = [][]byte{clientSign, hostSign}
 
 	// validate the storage contract
-	if err := contractValidation(np, req, sc, negotiationData.hostPubKey, negotiationData.clientPubKey); err != nil {
+	if err := contractValidation(np, req, sc, nd.hostPubKey, nd.clientPubKey); err != nil {
 		err = fmt.Errorf("contract validation failed: %s", err.Error())
 		return types.StorageContract{}, err
 	}
@@ -141,10 +141,10 @@ func contractCreateNegotiation(sp storage.Peer, sc types.StorageContract) ([]byt
 	return waitAndHandleClientRevSignResp(sp)
 }
 
-func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc types.StorageContract, negotiationData contractNegotiation, clientRevSign []byte, req storage.ContractCreateRequest) error {
+func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc types.StorageContract, nd contractNegotiationData, clientRevSign []byte, req storage.ContractCreateRequest) error {
 	// construct and update the storage contract revision
-	contractRev := constructContractRevision(sc, negotiationData.clientPubKey, negotiationData.hostPubKey)
-	updatedContractRev, err := signAndUpdateContractRevision(contractRev, negotiationData, clientRevSign)
+	contractRev := constructContractRevision(sc, nd.clientPubKey, nd.hostPubKey)
+	updatedContractRev, err := signAndUpdateContractRevision(contractRev, nd, clientRevSign)
 	if err != nil {
 		return err
 	}
@@ -308,9 +308,9 @@ func updateHostContractRecord(sp storage.Peer, np NegotiationProtocol, contractI
 	return nil
 }
 
-func signAndUpdateContractRevision(contractRevision types.StorageContractRevision, negotiationData contractNegotiation, clientRevisionSign []byte) (types.StorageContractRevision, error) {
+func signAndUpdateContractRevision(contractRevision types.StorageContractRevision, nd contractNegotiationData, clientRevisionSign []byte) (types.StorageContractRevision, error) {
 	// get the host revision sign
-	hostRevisionSign, err := hostSignedContract(negotiationData.account, negotiationData.wallet, contractRevision.RLPHash().Bytes())
+	hostRevisionSign, err := hostSignedContract(nd.account, nd.wallet, contractRevision.RLPHash().Bytes())
 	if err != nil {
 		return types.StorageContractRevision{}, err
 	}

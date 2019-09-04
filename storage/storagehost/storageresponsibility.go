@@ -51,80 +51,85 @@ type (
 	}
 )
 
+// Expiration return the contract expired block height
+func (sr *StorageResponsibility) Expiration() uint64 {
+	return sr.expiration()
+}
+
 //Returns expired block number
-func (so *StorageResponsibility) expiration() uint64 {
+func (sr *StorageResponsibility) expiration() uint64 {
 	//If there is revision, return NewWindowStart
-	if len(so.StorageContractRevisions) > 0 {
-		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewWindowStart
+	if len(sr.StorageContractRevisions) > 0 {
+		return sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewWindowStart
 	}
-	return so.OriginStorageContract.WindowStart
+	return sr.OriginStorageContract.WindowStart
 }
 
-func (so *StorageResponsibility) FileSize() uint64 {
+func (sr *StorageResponsibility) FileSize() uint64 {
 	//If there is revision, return NewFileSize
-	if len(so.StorageContractRevisions) > 0 {
-		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileSize
+	if len(sr.StorageContractRevisions) > 0 {
+		return sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewFileSize
 	}
-	return so.OriginStorageContract.FileSize
+	return sr.OriginStorageContract.FileSize
 }
 
-func (so *StorageResponsibility) id() (scid common.Hash) {
-	return so.OriginStorageContract.RLPHash()
+func (sr *StorageResponsibility) id() (scid common.Hash) {
+	return sr.OriginStorageContract.RLPHash()
 }
 
 //Check this storage responsibility
-func (so *StorageResponsibility) isSane() error {
-	if reflect.DeepEqual(so.OriginStorageContract, emptyStorageContract) {
+func (sr *StorageResponsibility) isSane() error {
+	if reflect.DeepEqual(sr.OriginStorageContract, emptyStorageContract) {
 		return errEmptyOriginStorageContract
 	}
 
-	if len(so.StorageContractRevisions) == 0 {
+	if len(sr.StorageContractRevisions) == 0 {
 		return errEmptyRevisionSet
 	}
 
 	return nil
 }
 
-func (so *StorageResponsibility) MerkleRoot() common.Hash {
+func (sr *StorageResponsibility) MerkleRoot() common.Hash {
 	//If there is revision, return NewFileMerkleRoot
-	if len(so.StorageContractRevisions) > 0 {
-		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewFileMerkleRoot
+	if len(sr.StorageContractRevisions) > 0 {
+		return sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewFileMerkleRoot
 	}
-	return so.OriginStorageContract.FileMerkleRoot
+	return sr.OriginStorageContract.FileMerkleRoot
 }
 
-func (so *StorageResponsibility) payouts() ([]types.DxcoinCharge, []types.DxcoinCharge) {
+func (sr *StorageResponsibility) payouts() ([]types.DxcoinCharge, []types.DxcoinCharge) {
 	validProofOutputs := make([]types.DxcoinCharge, 2)
 	missedProofOutputs := make([]types.DxcoinCharge, 2)
 	//If there is revision, return NewValidProofOutputs and NewMissedProofOutputs
-	if len(so.StorageContractRevisions) > 0 {
-		copy(validProofOutputs, so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewValidProofOutputs)
-		copy(missedProofOutputs, so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewMissedProofOutputs)
+	if len(sr.StorageContractRevisions) > 0 {
+		copy(validProofOutputs, sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewValidProofOutputs)
+		copy(missedProofOutputs, sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewMissedProofOutputs)
 		return validProofOutputs, missedProofOutputs
 	}
-	validProofOutputs = so.OriginStorageContract.ValidProofOutputs
-	missedProofOutputs = so.OriginStorageContract.MissedProofOutputs
+	validProofOutputs = sr.OriginStorageContract.ValidProofOutputs
+	missedProofOutputs = sr.OriginStorageContract.MissedProofOutputs
 	return validProofOutputs, missedProofOutputs
 }
 
 // ProofDeadline calculates the block number that the proof must submit
-func (so *StorageResponsibility) ProofDeadline() uint64 {
-	return so.proofDeadline()
+func (sr *StorageResponsibility) ProofDeadline() uint64 {
+	return sr.proofDeadline()
 }
 
 //The block number that the proof must submit
-func (so *StorageResponsibility) proofDeadline() uint64 {
+func (sr *StorageResponsibility) proofDeadline() uint64 {
 	//If there is revision, return NewWindowEnd
-	if len(so.StorageContractRevisions) > 0 {
-		return so.StorageContractRevisions[len(so.StorageContractRevisions)-1].NewWindowEnd
+	if len(sr.StorageContractRevisions) > 0 {
+		return sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1].NewWindowEnd
 	}
-	return so.OriginStorageContract.WindowEnd
+	return sr.OriginStorageContract.WindowEnd
 
 }
 
 //Amount that can be obtained after fulfilling the responsibility
-func (so StorageResponsibility) value() common.BigInt {
-	return so.ContractCost.Add(so.PotentialDownloadRevenue).Add(so.PotentialStorageRevenue).Add(so.PotentialUploadRevenue).Add(so.RiskedStorageDeposit)
+func (sr StorageResponsibility) value() common.BigInt {
+	return sr.ContractCost.Add(sr.PotentialDownloadRevenue).Add(sr.PotentialStorageRevenue).Add(sr.PotentialUploadRevenue).Add(sr.RiskedStorageDeposit)
 }
 
 // storageResponsibilities fetches the set of storage Responsibility in the host and
