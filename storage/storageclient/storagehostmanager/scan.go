@@ -40,7 +40,8 @@ func (shm *StorageHostManager) scan() {
 	shm.lock.Lock()
 	// If the previous initial scan is false, the hosts's scores are all evaluated based on default
 	// market price. These evaluations need to be updates.
-	if shm.initialScan {
+	if !shm.initialScan {
+		shm.initialScan = true
 		if err := shm.evaluateHostTree(shm.storageHostTree); err != nil {
 			shm.log.Warn("Failed to evaluate the host tree: %v", err)
 		}
@@ -48,7 +49,6 @@ func (shm *StorageHostManager) scan() {
 			shm.log.Warn("Failed to evaluate the filtered tree: %v", err)
 		}
 	}
-	shm.initialScan = true
 	shm.lock.Unlock()
 
 	// scan automatically in a time range
@@ -198,16 +198,16 @@ func (shm *StorageHostManager) scanExecute(scanWorker <-chan storage.HostInfo) {
 		if err := shm.waitOnline(); err != nil {
 			return
 		}
-		shm.updateHostConfig(info)
+		shm.scanAndUpdateHostConfig(info)
 	}
 	shm.lock.Lock()
 	shm.scanningWorkers--
 	shm.lock.Unlock()
 }
 
-// updateHostSettings will connect to the host, grabbing the settings,
+// scanAndUpdateHostConfig will connect to the host, grabbing the settings,
 // and update the host pool
-func (shm *StorageHostManager) updateHostConfig(hi storage.HostInfo) {
+func (shm *StorageHostManager) scanAndUpdateHostConfig(hi storage.HostInfo) {
 	shm.log.Info("Started updating the storage host", "Host ID", hi.EnodeURL)
 
 	// get the IP network and check if it is changed
