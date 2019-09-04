@@ -6,6 +6,7 @@ package hostnegotiation
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/DxChainNetwork/godx/core/types"
 
@@ -36,11 +37,19 @@ func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg
 	}
 
 	// construct and verify new contract revision
-	_, err = constructAndVerifyNewRevision(np, &nd, sr, uploadReq, hostConfig)
+	newRevision, err = constructAndVerifyNewRevision(np, &nd, sr, uploadReq, hostConfig)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
+
+	// construct upload merkle proof
+	merkleProof, err := constructUploadMerkleProof(nd, sr)
+	if err != nil {
+		negotiateErr = err
+		return
+	}
+
 }
 
 // decodeUploadReqAndGetSr will decode the upload request and get the storage responsibility
@@ -116,6 +125,60 @@ func constructAndVerifyNewRevision(np NegotiationProtocol, nd *uploadNegotiation
 
 	// after validation, return the new revision
 	return newRev, nil
+}
+
+func constructUploadMerkleProof(nd uploadNegotiationData, sr storagehost.StorageResponsibility) (storage.UploadMerkleProof, error) {
+	proofRanges := calcAndSortProofRanges(sr, nd)
+	leafHashes := calcLeafHashes(proofRanges, sr)
+	oldHashSet, err := calcOldHashSet(sr, proofRanges)
+	if err != nil {
+		err = fmt.Errorf("failed to construct upload merkle proof: %s", err.Error())
+		return storage.UploadMerkleProof{}, err
+	}
+
+	// construct the merkle proof
+	return storage.UploadMerkleProof{
+		OldSubtreeHashes: oldHashSet,
+		OldLeafHashes:    leafHashes,
+		NewMerkleRoot:    nd.newMerkleRoot,
+	}, nil
+
+}
+
+func calcAndSortProofRanges(sr storagehost.StorageResponsibility, nd uploadNegotiationData) []merkle.SubTreeLimit {
+	// calculate proof ranges
+	oldNumSectors := uint64(len(sr.SectorRoots))
+	var proofRanges []merkle.SubTreeLimit
+	for i := range nd.sectorsChanged {
+		if i < oldNumSectors {
+			proofRange := merkle.SubTreeLimit{
+				Left:  i,
+				Right: i + 1,
+			}
+
+			proofRanges = append(proofRanges, proofRange)
+		}
+	}
+
+	// sort proof ranges
+	sort.Slice(proofRanges, func(i, j int) bool {
+		return proofRanges[i].Left < proofRanges[j].Left
+	})
+
+	return proofRanges
+}
+
+func calcLeafHashes(proofRanges []merkle.SubTreeLimit, sr storagehost.StorageResponsibility) []common.Hash {
+	var leafHashes []common.Hash
+	for _, proofRange := range proofRanges {
+		leafHashes = append(leafHashes, sr.SectorRoots[proofRange.Left])
+	}
+
+	return leafHashes
+}
+
+func calcOldHashSet(sr storagehost.StorageResponsibility, proofRanges []merkle.SubTreeLimit) ([]common.Hash, error) {
+	return merkle.Sha256DiffProof(sr.SectorRoots, proofRanges, uint64(len(sr.SectorRoots)))
 }
 
 // updateRevisionFileSize will update the new contract revision's file size based on the

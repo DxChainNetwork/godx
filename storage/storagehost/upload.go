@@ -144,6 +144,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	sort.Slice(proofRanges, func(i, j int) bool {
 		return proofRanges[i].Left < proofRanges[j].Left
 	})
+
 	// Record old leaf hashes for all changed sectors
 	leafHashes := make([]common.Hash, len(proofRanges))
 	for i, r := range proofRanges {
@@ -163,9 +164,7 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		NewMerkleRoot:    newMerkleRoot,
 	}
 
-	// Calculate bandwidth cost of proof
-	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
-	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
+	//////// ====================================
 
 	if err := sp.SendUploadMerkleProof(merkleResp); err != nil {
 		log.Error("storage host failed to send merkle proof to the storage client", "err", err)
@@ -206,6 +205,10 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	newRevision.Signatures = [][]byte{clientRevisionSign, hostSig}
 
 	// Update the storage responsibility
+	// Calculate bandwidth cost of proof
+	proofSize := storage.HashSize * (len(merkleResp.OldSubtreeHashes) + len(leafHashes) + 1)
+	bandwidthRevenue = bandwidthRevenue.Add(settings.DownloadBandwidthPrice.Mult(common.NewBigInt(int64(proofSize))))
+
 	so.SectorRoots = newRoots
 	so.PotentialStorageRevenue = so.PotentialStorageRevenue.Add(storageRevenue)
 	so.RiskedStorageDeposit = so.RiskedStorageDeposit.Add(newDeposit)
@@ -330,7 +333,6 @@ func VerifyRevision(so *StorageResponsibility, revision *types.StorageContractRe
 		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred: ", fromClient, toHost)
 		return ExtendErr(s, errLowHostValidOutput)
 	}
-
 
 	// If the client's valid proof output is larger than the client's missed
 	// proof output, the client has incentive to see the host fail. Make sure
