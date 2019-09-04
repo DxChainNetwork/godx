@@ -44,10 +44,10 @@ var (
 	}
 )
 
-func mockNewDposContext(db ethdb.Database) *types.DposContext {
+func mockNewDposContext(db ethdb.Database) (*types.DposContext, error) {
 	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	var (
@@ -60,31 +60,55 @@ func mockNewDposContext(db ethdb.Database) *types.DposContext {
 		addresses = append(addresses, common.HexToAddress(MockEpochValidators[i]))
 	}
 
-	dposContext.SetValidators(addresses)
+	err = dposContext.SetValidators(addresses)
+	if err != nil {
+		return nil, err
+	}
 
 	for j := 0; j < len(MockEpochValidators); j++ {
 		delegator = common.HexToAddress(MockEpochValidators[(j+1)%len(MockEpochValidators)]).Bytes()
 
 		candidate = common.HexToAddress(MockEpochValidators[j]).Bytes()
-		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
-		dposContext.VoteTrie().TryUpdate(delegator, candidate)
+		err = dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
+		if err != nil {
+			return nil, err
+		}
+
+		err = dposContext.VoteTrie().TryUpdate(delegator, candidate)
+		if err != nil {
+			return nil, err
+		}
 
 		delegator = common.HexToAddress(MockEpochValidators[(j+2)%len(MockEpochValidators)]).Bytes()
-		dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
-		dposContext.VoteTrie().TryUpdate(delegator, candidate)
+		err = dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
+		if err != nil {
+			return nil, err
+		}
 
-		dposContext.CandidateTrie().TryUpdate(candidate, candidate)
+		err = dposContext.VoteTrie().TryUpdate(delegator, candidate)
+		if err != nil {
+			return nil, err
+		}
+
+		err = dposContext.CandidateTrie().TryUpdate(candidate, candidate)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return dposContext
+	return dposContext, nil
 }
 
-func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) {
+func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) error {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	err := mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
@@ -100,7 +124,10 @@ func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie)
 
 func TestUpdateMintCnt(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext := mockNewDposContext(db)
+	dposContext, err := mockNewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to mock dpos context,error: %v", err)
+	}
 
 	// new block still in the same epoch with current block, but newMiner is the first time to mint in the epoch
 	lastTime := int64(EpochInterval)
@@ -109,19 +136,26 @@ func TestUpdateMintCnt(t *testing.T) {
 	blockTime := int64(EpochInterval + BlockInterval)
 
 	beforeUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	updateMintCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	assert.Nil(t, err)
+
 	afterUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 
 	// new block still in the same epoch with current block, and newMiner has mint block before in the epoch
-	setMintCntTrie(blockTime/EpochInterval, miner, dposContext.MintCntTrie(), int64(1))
+	err = setMintCntTrie(blockTime/EpochInterval, miner, dposContext.MintCntTrie(), int64(1))
+	if err != nil {
+		t.Fatalf("failed to set mint count trie,error: %v", err)
+	}
 
 	blockTime = EpochInterval + BlockInterval*4
 
 	// currentBlock has recorded the count for the newMiner before UpdateMintCnt
 	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	updateMintCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	assert.Nil(t, err)
+
 	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(1), beforeUpdateCnt)
 	assert.Equal(t, int64(2), afterUpdateCnt)
@@ -130,7 +164,9 @@ func TestUpdateMintCnt(t *testing.T) {
 	blockTime = EpochInterval * 2
 
 	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	updateMintCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	assert.Nil(t, err)
+
 	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
@@ -138,7 +174,10 @@ func TestUpdateMintCnt(t *testing.T) {
 
 func TestAccumulateRewards(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext := mockNewDposContext(db)
+	dposContext, err := mockNewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to mock dpos context,error: %v", err)
+	}
 
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
