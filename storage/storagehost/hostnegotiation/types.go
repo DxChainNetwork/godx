@@ -10,7 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -19,16 +18,14 @@ import (
 // NegotiationProtocol contains methods that are used in contract negotiation
 // upload negotiation and download negotiation
 type NegotiationProtocol interface {
-	CheckAndUpdateConnection(peerNode *enode.Node)
 	GetFinancialMetrics() storagehost.HostFinancialMetrics
 	GetHostConfig() storage.HostIntConfig
-	GetDB() *ethdb.LDBDatabase
 	GetStateDB() (*state.StateDB, error)
-	FindWallet(account accounts.Account) (accounts.Wallet, error)
 	GetBlockHeight() uint64
+	GetStorageResponsibility(storageContractID common.Hash) (storagehost.StorageResponsibility, error)
+	FindWallet(account accounts.Account) (accounts.Wallet, error)
+	CheckAndUpdateConnection(peerNode *enode.Node)
 	InsertContract(peerNode string, contractID common.Hash)
-	DeleteContract(peerNode string)
-	GetStorageResponsibility(db ethdb.Database, storageContractID common.Hash) (storagehost.StorageResponsibility, error)
 	IsAcceptingContract() bool
 	SetStatic(node *enode.Node)
 	FinalizeStorageResponsibility(sr storagehost.StorageResponsibility) error

@@ -2,10 +2,11 @@ package eth
 
 import (
 	"errors"
+
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 )
 
 func (pm *ProtocolManager) hostConfigMsgHandler(p *peer, configMsg p2p.Msg) error {
@@ -43,7 +44,7 @@ func (pm *ProtocolManager) contractMsgHandler(p *peer, msg p2p.Msg) error {
 	return nil
 }
 
-func (pm *ProtocolManager) contractReqHandler(handler func(h *storagehost.StorageHost, sp storage.Peer, msg p2p.Msg), p *peer, msg p2p.Msg) error {
+func (pm *ProtocolManager) contractReqHandler(handler func(np hostnegotiation.NegotiationProtocol, sp storage.Peer, msg p2p.Msg), p *peer, msg p2p.Msg) error {
 	// avoid continuously contract related requests attack
 	// generate too many go routines and used all resources
 	if err := p.HostContractProcessing(); err != nil {

@@ -6,17 +6,18 @@ package eth
 
 import (
 	"errors"
-	"github.com/DxChainNetwork/godx/storage/storagehost"
+
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-var hostHandlers = map[uint64]func(h *storagehost.StorageHost, sp storage.Peer, msg p2p.Msg){
-	storage.ContractCreateReqMsg:   storagehost.ContractCreateHandler,
-	storage.ContractUploadReqMsg:   storagehost.UploadHandler,
-	storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
+var hostHandlers = map[uint64]func(np hostnegotiation.NegotiationProtocol, sp storage.Peer, msg p2p.Msg){
+	storage.ContractCreateReqMsg: hostnegotiation.ContractCreateRenewHandler,
+	//storage.ContractUploadReqMsg:   storagehost.UploadHandler,
+	//storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
 }
 
 func (pm *ProtocolManager) msgDispatch(msg p2p.Msg, p *peer) error {

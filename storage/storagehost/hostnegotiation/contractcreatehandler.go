@@ -21,14 +21,16 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-func ContractCreateHandler(np NegotiationProtocol, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
+func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var negotiateErr error
 	var negotiationData contractNegotiation
-	defer handleNegotiateErr(&negotiateErr)
+	defer handleNegotiationErr(&negotiateErr, sp, np)
 
-	// check if the contract is accepted
+	// check if the contract is accepted, if not, make the error
+	// storage host negotiation error
 	if !np.IsAcceptingContract() {
-		negotiateErr = fmt.Errorf("storage host does not accept new storage contract")
+		err := fmt.Errorf("storage host does not accept new storage contract")
+		negotiateErr = common.ErrCompose(err, storage.ErrHostNegotiate)
 		return
 	}
 
@@ -61,7 +63,8 @@ func ContractCreateHandler(np NegotiationProtocol, sp storage.Peer, contractCrea
 
 // decodeAndValidateReq will decode and validate the contract create request
 func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, negotiationData *contractNegotiation) (storage.ContractCreateRequest, error) {
-	// decode the contract create request
+	// decode the contract create request, if failed, the error
+	// should be categorized as client's error
 	var req storage.ContractCreateRequest
 	if err := contractCreateReqMsg.Decode(&req); err != nil {
 		err = fmt.Errorf("failed to decode the contract create request: %s", err.Error())
@@ -276,7 +279,7 @@ func constructStorageResponsibility(contractPrice common.BigInt, blockNumber uin
 
 func updateStorageResponsibility(np NegotiationProtocol, req storage.ContractCreateRequest, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig) storagehost.StorageResponsibility {
 	// try to get storage responsibility first
-	oldSr, err := np.GetStorageResponsibility(np.GetDB(), req.OldContractID)
+	oldSr, err := np.GetStorageResponsibility(req.OldContractID)
 	if err == nil {
 		sr.SectorRoots = oldSr.SectorRoots
 	}

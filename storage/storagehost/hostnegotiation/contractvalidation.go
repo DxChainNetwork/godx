@@ -63,12 +63,14 @@ func hostBalanceValidation(np NegotiationProtocol, hostAddress common.Address, h
 	// get the stateDB
 	stateDB, err := np.GetStateDB()
 	if err != nil {
-		return fmt.Errorf("failed to get the stateDb: %s", err.Error())
+		err = fmt.Errorf("failed to get the stateDb: %s", err.Error())
+		return common.ErrCompose(err, storage.ErrHostNegotiate)
 	}
 
 	// check storage host balance
 	if stateDB.GetBalance(hostAddress).Cmp(hostDeposit) < 0 {
-		return fmt.Errorf("storage host has insufficient balance")
+		err := fmt.Errorf("storage host has insufficient balance")
+		return common.ErrCompose(err, storage.ErrHostNegotiate)
 	}
 
 	return nil
@@ -100,7 +102,7 @@ func contractCreateValidation(sc types.StorageContract, hostConfig storage.HostI
 //  3. deposit and payout validation
 func contractRenewValidation(np NegotiationProtocol, oldContractID common.Hash, sc types.StorageContract, hostConfig storage.HostIntConfig, lockedStorageDeposit common.BigInt) error {
 	// try to get storage responsibility first
-	sr, err := np.GetStorageResponsibility(np.GetDB(), oldContractID)
+	sr, err := np.GetStorageResponsibility(oldContractID)
 	if err != nil {
 		return err
 	}
