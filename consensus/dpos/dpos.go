@@ -90,9 +90,6 @@ var (
 	timeOfFirstBlock = int64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
-
-	// MockVoteCount is the mock value of vote count for test. It will be removed later
-	MockVoteCount = common.NewBigInt(13333)
 )
 
 var (
@@ -483,7 +480,10 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	}
 
 	//update mint count trie
-	updateMintCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
+	err = updateMintCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
+	if err != nil {
+		return nil, err
+	}
 	header.DposContext = dposContext.ToProto()
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
@@ -617,7 +617,7 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMintCnt update counts in mintCntTrie for the miner of newBlock
-func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) {
+func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMintCntTrie := dposContext.MintCntTrie()
 	currentEpoch := parentBlockTime / EpochInterval
 	currentEpochBytes := make([]byte, 8)
@@ -644,7 +644,7 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	newEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
-	dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+	return dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }
 
 // hashToRewardRatioNumerator return the customized block reward ratio numerator
