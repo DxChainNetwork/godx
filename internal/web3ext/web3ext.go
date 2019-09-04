@@ -157,6 +157,12 @@ web3._extend({
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
 		new web3._extend.Method({
+			name: 'getVotedCandidatesByAddress',
+			call: 'getVotedCandidatesByAddress',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+		new web3._extend.Method({
 			name: 'sendApplyCandidateTx',
 			call: 'dpos_sendApplyCandidateTx',
 			params: 3,

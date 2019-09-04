@@ -35,8 +35,8 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 		return nil, errUnknownBlock
 	}
 
-	dbWithCache := trie.NewDatabaseWithCache(api.dpos.db, 256)
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, dbWithCache)
+	db := trie.NewDatabase(api.dpos.db)
+	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, db)
 	if err != nil {
 		return nil, err
 	}
@@ -70,4 +70,15 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	}
 
 	return header.Number, nil
+}
+
+// GetVotedCandidatesByAddress retrieve all voted candidates of given delegator at now
+func (api *API) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
+	currentHeader := api.chain.CurrentHeader()
+	dposContext, err := types.NewDposContextFromProto(api.dpos.db, currentHeader.DposContext)
+	if err != nil {
+		return nil, err
+	}
+
+	return dposContext.GetVotedCandidatesByAddress(delegator)
 }

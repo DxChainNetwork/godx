@@ -528,3 +528,23 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 	dc.epochTrie.Update(key, validatorsRLP)
 	return nil
 }
+
+// GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
+func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
+	key := delegator.Bytes()
+	candidates, err := dc.voteTrie.TryGet(key)
+	if err != nil {
+		if _, ok := err.(*trie.MissingNodeError); ok {
+			return []common.Address{}, nil
+		}
+		return nil, err
+	}
+
+	result := []common.Address{}
+	err = rlp.DecodeBytes(candidates, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
