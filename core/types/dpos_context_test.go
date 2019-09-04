@@ -9,8 +9,8 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -186,4 +186,21 @@ func TestDposContextValidators(t *testing.T) {
 	for _, validator := range result {
 		assert.True(t, validatorMap[validator])
 	}
+}
+
+func TestDposContext_GetVotedCandidatesByAddress(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	dposContext, err := NewDposContext(db)
+	assert.Nil(t, err)
+
+	bytes, err := rlp.EncodeToBytes(addresses)
+	assert.Nil(t, err)
+
+	delegator := common.HexToAddress("0x666")
+	err = dposContext.voteTrie.TryUpdate(delegator.Bytes(), bytes)
+	assert.Nil(t, err)
+
+	candidateListFromTrie, err := dposContext.GetVotedCandidatesByAddress(delegator)
+	assert.Nil(t, err)
+	assert.Equal(t, addresses, candidateListFromTrie)
 }
