@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -35,7 +36,9 @@ type StorageHostManager struct {
 	ipViolationCheck bool
 
 	// maintenance related
-	initialScanFinished chan struct{}
+	// initialScanFinished is atomic value to denote the status whether the initial scan has been
+	// finished. Initialized to value 0, and changed value to 1 when initial scan is finished.
+	initialScanFinished uint32
 	scanWaitList        []storage.HostInfo
 	scanLookup          map[enode.ID]struct{}
 	scanWait            bool
@@ -66,12 +69,11 @@ type StorageHostManager struct {
 func New(persistDir string) *StorageHostManager {
 	// initialization
 	shm := &StorageHostManager{
-		persistDir:          persistDir,
-		rent:                storage.DefaultRentPayment,
-		scanLookup:          make(map[enode.ID]struct{}),
-		filterMode:          DisableFilter,
-		filteredHosts:       make(map[enode.ID]struct{}),
-		initialScanFinished: make(chan struct{}),
+		persistDir:    persistDir,
+		rent:          storage.DefaultRentPayment,
+		scanLookup:    make(map[enode.ID]struct{}),
+		filterMode:    DisableFilter,
+		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)
@@ -419,23 +421,10 @@ func (shm *StorageHostManager) decrementBlockHeight() {
 
 // isInitialScanFinished return whether the initial scan has been finished
 func (shm *StorageHostManager) isInitialScanFinished() bool {
-	select {
-	case <-shm.initialScanFinished:
-		return true
-	default:
-	}
-	return false
+	return atomic.LoadUint32(&(shm.initialScanFinished)) == 1
 }
 
-// finishInitialScan close the channel initialScanFinished to denote that the initial scan is
-// finished
+// finishInitialScan denote the initial scan is already finished
 func (shm *StorageHostManager) finishInitialScan() {
-	// check whether the channel has already been closed
-	select {
-	case <-shm.initialScanFinished:
-		// closing a closed channel will cause panic. Directly return to avoid panic
-		return
-	default:
-	}
-	close(shm.initialScanFinished)
+	atomic.StoreUint32(&(shm.initialScanFinished), 1)
 }

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,11 +24,13 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
+const checkInitialScanInterval = 200 * time.Millisecond
+
 func TestStorageHostManager_Scan(t *testing.T) {
 	shm := newHostManagerTestData()
 
 	// exhaustive test
-	//err := testDataInsert(100000000, shm)
+	//err := testDataInsert(1000000, shm)
 
 	// regular test
 	err := testDataInsert(10000, shm)
@@ -37,7 +40,7 @@ func TestStorageHostManager_Scan(t *testing.T) {
 	}
 	go shm.scan()
 
-	if err = shm.waitUntilInitialScanFinished(2 * time.Second); err != nil {
+	if err = shm.waitUntilInitialScanFinished(10 * time.Minute); err != nil {
 		t.Error(err)
 	}
 }
@@ -45,10 +48,15 @@ func TestStorageHostManager_Scan(t *testing.T) {
 // waitUntilInitialScanFinished will wait until the initial scan is finished or
 // the timeout has been expired.
 func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
-	select {
-	case <-time.After(duration):
-		return fmt.Errorf("after %v, initial scan not finished", duration)
-	case <-shm.initialScanFinished:
+	timeStart := time.Now()
+	for {
+		if atomic.LoadUint32(&(shm.initialScanFinished)) == 1 {
+			break
+		}
+		if time.Since(timeStart) > duration {
+			return fmt.Errorf("time out %v", duration)
+		}
+		time.Sleep(checkInitialScanInterval)
 	}
 	return nil
 }
@@ -107,11 +115,10 @@ type storageClientBackendTestData struct{}
 
 func newHostManagerTestData() *StorageHostManager {
 	shm := &StorageHostManager{
-		b:                   &storageClientBackendTestData{},
-		rent:                storage.DefaultRentPayment,
-		scanLookup:          make(map[enode.ID]struct{}),
-		filteredHosts:       make(map[enode.ID]struct{}),
-		initialScanFinished: make(chan struct{}),
+		b:             &storageClientBackendTestData{},
+		rent:          storage.DefaultRentPayment,
+		scanLookup:    make(map[enode.ID]struct{}),
+		filteredHosts: make(map[enode.ID]struct{}),
 	}
 
 	shm.hostEvaluator = newDefaultEvaluator(shm, shm.rent)

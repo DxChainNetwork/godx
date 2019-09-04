@@ -71,9 +71,8 @@ func newFakeHostTree(infos []storage.HostInfo) *fakeHostTree {
 // newStorageHostForHostMarketTest returns a storage host manager for testing for host market
 func newStorageHostForHostMarketTest(initialScanFinished bool, prices cachedPrices, tree storagehosttree.StorageHostTree) *StorageHostManager {
 	shm := &StorageHostManager{
-		initialScanFinished: make(chan struct{}),
-		storageHostTree:     tree,
-		cachedPrices:        prices,
+		storageHostTree: tree,
+		cachedPrices:    prices,
 	}
 	if initialScanFinished {
 		shm.finishInitialScan()

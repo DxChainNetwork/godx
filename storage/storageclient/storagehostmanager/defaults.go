@@ -22,7 +22,7 @@ const (
 // Scan related constants
 const (
 	scanOnlineCheckDuration = 30 * time.Second
-	scanCheckDuration       = time.Second
+	scanCheckDuration       = 200 * time.Millisecond
 	scanQuantity            = 2500
 	maxScanSleep            = 6 * time.Hour
 	minScanSleep            = time.Hour + time.Minute*30

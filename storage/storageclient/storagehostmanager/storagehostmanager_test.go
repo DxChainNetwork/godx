@@ -5,9 +5,7 @@
 package storagehostmanager
 
 import (
-	"errors"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -140,11 +138,9 @@ func TestStorageHostManager_isInitialScanFinished(t *testing.T) {
 		{true}, {false},
 	}
 	for _, test := range tests {
-		shm := StorageHostManager{
-			initialScanFinished: make(chan struct{}),
-		}
+		shm := StorageHostManager{}
 		if test.finished {
-			close(shm.initialScanFinished)
+			shm.finishInitialScan()
 		}
 
 		res := shm.isInitialScanFinished()
@@ -163,50 +159,14 @@ func TestStorageHostManager_finishInitialScan(t *testing.T) {
 		{true}, {false},
 	}
 	for _, test := range tests {
-		shm := StorageHostManager{initialScanFinished: make(chan struct{})}
+		shm := StorageHostManager{}
 		if test.closed {
-			close(shm.initialScanFinished)
+			shm.finishInitialScan()
 		}
 		shm.finishInitialScan()
 		closed := shm.isInitialScanFinished()
 		if !closed {
 			t.Errorf("After finishInitialScan, the channel still not closed")
-		}
-	}
-}
-
-// TestStorageHostManager_waitUntilInitialScanFinished test the functionality of
-// StorageHostManager.waitUntilInitialScanFinished. Two cases are tested:
-//   1. no time out
-//   2. timed out
-func TestStorageHostManager_waitUntilInitialScanFinished(t *testing.T) {
-	tests := []struct {
-		scanDelay time.Duration
-		timeout   time.Duration
-		err       error
-	}{
-		{time.Millisecond, 10 * time.Millisecond, nil},
-		{10 * time.Millisecond, time.Millisecond, errors.New("timeout")},
-	}
-	for _, test := range tests {
-		shm := StorageHostManager{initialScanFinished: make(chan struct{})}
-		// After timeout, close the channel
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			time.Sleep(test.scanDelay)
-			shm.finishInitialScan()
-			wg.Done()
-		}()
-		var err error
-		go func() {
-			time.Sleep(test.timeout)
-			err = shm.waitUntilInitialScanFinished(test.timeout)
-			wg.Done()
-		}()
-		wg.Wait()
-		if (err == nil) != (test.err == nil) {
-			t.Errorf("expect error %v\nGot error %v", test.err, err)
 		}
 	}
 }
