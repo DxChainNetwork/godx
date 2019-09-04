@@ -37,27 +37,30 @@ func (shm *StorageHostManager) scan() {
 	if err := shm.waitScanFinish(); err != nil {
 		return
 	}
+	shm.finishInitialScan()
+	// After initial scan, the host evaluations need to be updates.
 	shm.lock.Lock()
-	// If the previous initial scan is false, the hosts's scores are all evaluated based on default
-	// market price. These evaluations need to be updates.
-	if !shm.initialScanFinished {
-		shm.initialScanFinished = true
-		if err := shm.evaluateHostTree(shm.storageHostTree); err != nil {
-			shm.log.Warn("Failed to evaluate the host tree: %v", err)
-		}
-		if err := shm.evaluateHostTree(shm.filteredTree); err != nil {
-			shm.log.Warn("Failed to evaluate the filtered tree: %v", err)
-		}
+	if err := shm.evaluateHostTree(shm.storageHostTree); err != nil {
+		shm.log.Warn("Failed to evaluate the host tree: %v", err)
+	}
+	if err := shm.evaluateHostTree(shm.filteredTree); err != nil {
+		shm.log.Warn("Failed to evaluate the filtered tree: %v", err)
 	}
 	shm.lock.Unlock()
 
 	// scan automatically in a time range
-	shm.autoScan()
+	go shm.autoScan()
 }
 
-// scanSchedule will filter out the online and offline hosts, and getting them
+// autoScan will filter out the online and offline hosts, and getting them
 // into the scanning queue, prepare to be scanned
 func (shm *StorageHostManager) autoScan() {
+	if err := shm.tm.Add(); err != nil {
+		shm.log.Warn("Failed to enter auto scan loop")
+		return
+	}
+	defer shm.tm.Done()
+
 	for {
 		var onlineHosts, offlineHosts []storage.HostInfo
 		allStorageHosts := shm.storageHostTree.All()
@@ -294,9 +297,10 @@ func (shm *StorageHostManager) waitScanFinish() error {
 	for {
 		shm.lock.Lock()
 		scanningTasks := len(shm.scanWaitList)
+		numWorkers := shm.scanningWorkers
 		shm.lock.Unlock()
 
-		if scanningTasks == 0 {
+		if scanningTasks == 0 && numWorkers == 0 {
 			break
 		}
 

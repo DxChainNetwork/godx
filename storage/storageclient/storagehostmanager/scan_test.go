@@ -6,6 +6,7 @@ package storagehostmanager
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -36,16 +37,20 @@ func TestStorageHostManager_Scan(t *testing.T) {
 	}
 	go shm.scan()
 
-	for {
-		shm.lock.Lock()
-		is := shm.initialScanFinished
-		shm.lock.Unlock()
-
-		if is {
-			return
-		}
-		time.Sleep(time.Second)
+	if err = shm.waitUntilInitialScanFinished(2 * time.Second); err != nil {
+		t.Error(err)
 	}
+}
+
+// waitUntilInitialScanFinished will wait until the initial scan is finished or
+// the timeout has been expired.
+func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
+	select {
+	case <-time.After(duration):
+		return fmt.Errorf("after %v, initial scan not finished", duration)
+	case <-shm.initialScanFinished:
+	}
+	return nil
 }
 
 func TestStorageHostManager_WaitScanFinish(t *testing.T) {

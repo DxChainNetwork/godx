@@ -11,7 +11,6 @@ import (
 	"reflect"
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
@@ -283,12 +282,11 @@ func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHo
 //  2. addrBlacklist represents for any storage host whose network address is caontine
 func (shm *StorageHostManager) RetrieveRandomHosts(num int, blacklist, addrBlacklist []enode.ID) (infos []storage.HostInfo, err error) {
 	shm.lock.RLock()
-	initScan := shm.initialScanFinished
 	ipCheck := shm.ipViolationCheck
 	shm.lock.RUnlock()
 
 	// if the initialize scan is not complete
-	if !initScan {
+	if !shm.isInitialScanFinished() {
 		err = errors.New("storage host pool initial scan is not finished")
 		return
 	}
@@ -440,15 +438,4 @@ func (shm *StorageHostManager) finishInitialScan() {
 	default:
 	}
 	close(shm.initialScanFinished)
-}
-
-// waitUntilInitialScanFinished will wait until the initial scan is finished or
-// the timeout has been expired.
-func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
-	select {
-	case <-time.After(duration):
-		return fmt.Errorf("after %v, initial scan not finished", duration)
-	case <-shm.initialScanFinished:
-	}
-	return nil
 }
