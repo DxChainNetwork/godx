@@ -355,6 +355,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-w.startCh:
+
+			// prevent to open multiple goroutine by starting miner repeatedly
+			if w.isRunning() {
+				continue
+			}
+
 			go func() {
 				clearPending(w.chain.CurrentBlock().NumberU64())
 				ticker := time.NewTicker(time.Second).C
