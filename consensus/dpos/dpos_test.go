@@ -7,6 +7,7 @@ package dpos
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -199,28 +200,34 @@ func TestAccumulateRewards(t *testing.T) {
 	)
 
 	db := ethdb.NewMemDatabase()
-	dposContext, _, err := mockDposContext(db, time.Now().Unix(), delegator)
+	dposContext, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
 
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
-	// set validator reward ratio
-	validator := common.HexToAddress(MockEpochValidators[1])
-	delegators := []common.Address{common.HexToAddress(MockEpochValidators[2]), common.HexToAddress(MockEpochValidators[3])}
-	for i := 0; i < len(delegators); i++ {
-		stateDB.SetState(delegators[i], KeyVoteDeposit, common.BigToHash(big.NewInt(113)))
-	}
+	// set vote deposit and weight ratio for delegator
+	validator := candidates[1]
+	stateDB.SetState(delegator, KeyVoteDeposit, common.BigToHash(big.NewInt(100000)))
 
+	bits := math.Float64bits(0.5)
+	fbytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(fbytes, bits)
+	stateDB.SetState(delegator, KeyRealVoteWeightRatio, common.BytesToHash(fbytes))
+
+	// set validator reward ratio
 	var rewardRatioNumerator uint8 = 50
 	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
+
+	// set the total vote weight for validator
+	stateDB.SetState(validator, KeyTotalVoteWeight, common.BigToHash(new(big.Int).SetInt64(100000*0.5)))
 	stateDbCopy := stateDB.Copy()
 
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
-	expectedDelegatorReward := []*big.Int{big.NewInt(12712817820445511), big.NewInt(12712817820445511)}
-	expectedValidatorReward := big.NewInt(2974574364359108978)
+	expectedDelegatorReward := big.NewInt(1.5e+18)
+	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
@@ -228,14 +235,12 @@ func TestAccumulateRewards(t *testing.T) {
 
 	validatorBalance := stateDB.GetBalance(validator)
 	if validatorBalance.Cmp(expectedValidatorReward) != 0 {
-		t.Fatalf("validator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
+		t.Errorf("validator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
 	}
 
-	for i := 0; i < len(expectedDelegatorReward); i++ {
-		delegatorBalance := stateDB.GetBalance(delegators[i])
-		if delegatorBalance.Cmp(expectedDelegatorReward[i]) != 0 {
-			t.Fatalf("delegator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
-		}
+	delegatorBalance := stateDB.GetBalance(delegator)
+	if delegatorBalance.Cmp(expectedDelegatorReward) != 0 {
+		t.Errorf("delegator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
 	}
 
 	// mock block sync
@@ -243,7 +248,7 @@ func TestAccumulateRewards(t *testing.T) {
 	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, dposContext)
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
-	if header.Root.String() != headerCopy.Root.String() {
-		t.Fatalf("block sync state root not equal, one: %s, another: %s", header.Root.String(), headerCopy.Root.String())
+	if header.Root != headerCopy.Root {
+		t.Errorf("block sync state root not equal, one: %s, another: %s", header.Root.String(), headerCopy.Root.String())
 	}
 }
