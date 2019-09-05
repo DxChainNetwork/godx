@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/DxChainNetwork/godx/accounts"
+
 	"github.com/DxChainNetwork/godx/core/types"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -37,18 +39,26 @@ func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg
 	}
 
 	// construct and verify new contract revision
-	newRevision, err = constructAndVerifyNewRevision(np, &nd, sr, uploadReq, hostConfig)
+	newRevision, err := constructAndVerifyNewRevision(np, &nd, sr, uploadReq, hostConfig)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
 
-	// construct upload merkle proof
-	merkleProof, err := constructUploadMerkleProof(nd, sr)
+	// merkleProof Negotiation
+	clientRevisionSign, err := merkleProofNegotiation(sp, nd, sr)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
+
+	// host sign and update revision
+	if err := hostSignAndUpdateRevision(np, &newRevision, clientRevisionSign); err != nil {
+		negotiateErr = err
+		return
+	}
+
+	// host revision sign negotiation
 
 }
 
@@ -142,6 +152,46 @@ func constructUploadMerkleProof(nd uploadNegotiationData, sr storagehost.Storage
 		OldLeafHashes:    leafHashes,
 		NewMerkleRoot:    nd.newMerkleRoot,
 	}, nil
+
+}
+
+func merkleProofNegotiation(sp storage.Peer, nd uploadNegotiationData, sr storagehost.StorageResponsibility) ([]byte, error) {
+	// construct merkle proof
+	merkleProof, err := constructUploadMerkleProof(nd, sr)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	// send the merkleProof to storage host
+	if err := sp.SendUploadMerkleProof(merkleProof); err != nil {
+		err := fmt.Errorf("host failed to send upload merkleProof: %s", err.Error())
+		return []byte{}, err
+	}
+
+	// wait for client revision sign
+	return waitAndHandleClientRevSignResp(sp)
+}
+
+func hostSignAndUpdateRevision(np NegotiationProtocol, newRev *types.StorageContractRevision, clientRevisionSign []byte) error {
+	// get the wallet
+	account := accounts.Account{Address: newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Address}
+	wallet, err := np.FindWallet(account)
+	if err != nil {
+		return fmt.Errorf("hostSignAndUpdateRevision failed, cannot find the wallet: %s", err.Error())
+	}
+
+	// sign the revision
+	hostRevisionSign, err := wallet.SignHash(account, newRev.RLPHash().Bytes())
+	if err != nil {
+		return fmt.Errorf("hostSignAndUpdateRevision failed, failed to sign the contract reivision: %s", err.Error())
+	}
+
+	// update the revision
+	newRev.Signatures = [][]byte{clientRevisionSign, hostRevisionSign}
+	return nil
+}
+
+func hostRevisionSignNegotiation() {
 
 }
 

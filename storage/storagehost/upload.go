@@ -188,6 +188,8 @@ func UploadHandler(h *StorageHost, sp storage.Peer, uploadReqMsg p2p.Msg) {
 		return
 	}
 
+	///////////// =========================
+
 	// Sign host's revision and send it to client
 	account := accounts.Account{Address: newRevision.NewValidProofOutputs[1].Address}
 	wallet, err := h.am.Find(account)

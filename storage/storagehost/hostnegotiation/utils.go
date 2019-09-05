@@ -5,6 +5,8 @@
 package hostnegotiation
 
 import (
+	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -35,4 +37,27 @@ func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np NegotiationPr
 		np.CheckAndUpdateConnection(sp.PeerNode())
 	}
 
+}
+
+func waitAndHandleClientRevSignResp(sp storage.Peer) ([]byte, error) {
+	// wait for client response
+	var clientRevisionSign []byte
+	msg, err := sp.HostWaitContractResp()
+	if err != nil {
+		err = fmt.Errorf("storage host failed to wait for client contract reivision sign: %s", err.Error())
+		return []byte{}, err
+	}
+
+	// check for error message code
+	if msg.Code == storage.ClientNegotiateErrorMsg {
+		return []byte{}, storage.ErrClientNegotiate
+	}
+
+	// decode the message
+	if err = msg.Decode(&clientRevisionSign); err != nil {
+		err = fmt.Errorf("failed to decode client revision sign: %s", err.Error())
+		return []byte{}, err
+	}
+
+	return clientRevisionSign, nil
 }

@@ -8,11 +8,10 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 
+	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 
 	"github.com/DxChainNetwork/godx/core/types"
-
-	"github.com/DxChainNetwork/godx/accounts"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -173,29 +172,6 @@ func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc typ
 	}
 
 	return nil
-}
-
-func waitAndHandleClientRevSignResp(sp storage.Peer) ([]byte, error) {
-	// wait for client response
-	var clientRevisionSign []byte
-	msg, err := sp.HostWaitContractResp()
-	if err != nil {
-		err = fmt.Errorf("storage host failed to wait for client contract reivision sign: %s", err.Error())
-		return []byte{}, err
-	}
-
-	// check for error message code
-	if msg.Code == storage.ClientNegotiateErrorMsg {
-		return []byte{}, storage.ErrClientNegotiate
-	}
-
-	// decode the message
-	if err = msg.Decode(&clientRevisionSign); err != nil {
-		err = fmt.Errorf("failed to decode client revision sign: %s", err.Error())
-		return []byte{}, err
-	}
-
-	return clientRevisionSign, nil
 }
 
 func waitAndHandleClientCommitResp(sp storage.Peer, np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
