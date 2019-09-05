@@ -22,124 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	MockEpochValidators = []string{
-		"0x1",
-		"0x2",
-		"0x3",
-		"0x4",
-		"0x5",
-		"0x6",
-		"0x7",
-		"0x8",
-		"0x9",
-		"0xa",
-		"0xb",
-		"0xc",
-		"0xd",
-		"0xe",
-		"0xf",
-		"0x10",
-		"0x11",
-		"0x12",
-		"0x13",
-		"0x14",
-		"0x15",
-	}
-)
-
-func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
-	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
-	var candidates []common.Address
-	for i := 0; i < MaxValidatorSize+5; i++ {
-		str := fmt.Sprintf("%d", i+1)
-		addr := common.HexToAddress("0x" + str)
-		candidates = append(candidates, addr)
-	}
-
-	// update candidate trie and delegate trie
-	for _, can := range candidates {
-		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		err = dposContext.DelegateTrie().TryUpdate(append(can.Bytes(), delegator.Bytes()...), delegator.Bytes())
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// update epoch trie, set the prev MaxValidatorSize candidates as validators
-	err = dposContext.SetValidators(candidates[:MaxValidatorSize])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// update mint count trie
-	cnt := int64(0)
-	epochID := now / EpochInterval
-	epochBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(epochBytes, uint64(epochID))
-	for i := 0; i < MaxValidatorSize; i++ {
-
-		// the prev 1/3 validators will be set not qualified
-		if i < MaxValidatorSize/3 {
-			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 - int64(i+1)
-		} else {
-			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 + int64(i+1)
-		}
-
-		cntBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(cntBytes, uint64(cnt))
-		err = dposContext.MintCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// update vote trie
-	canListBytes, err := rlp.EncodeToBytes(candidates)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = dposContext.VoteTrie().TryUpdate(delegator.Bytes(), canListBytes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return dposContext, candidates, nil
-}
-
-func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) error {
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, uint64(epochID))
-	cntBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	err := mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, uint64(epochID))
-	cntBytes := mintCntTrie.Get(append(key, candidate.Bytes()...))
-	if cntBytes == nil {
-		return 0
-	} else {
-		return int64(binary.BigEndian.Uint64(cntBytes))
-	}
-}
-
 func TestUpdateMintCnt(t *testing.T) {
 	var (
 		delegator = common.HexToAddress("0xaaa")
@@ -250,5 +132,407 @@ func TestAccumulateRewards(t *testing.T) {
 
 	if header.Root != headerCopy.Root {
 		t.Errorf("block sync state root not equal, one: %s, another: %s", header.Root.String(), headerCopy.Root.String())
+	}
+}
+
+func TestDpos_CheckValidator(t *testing.T) {
+	var (
+		delegator = common.HexToAddress("0xaaa")
+
+		tests = []struct {
+			name    string
+			fn      func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error
+			wantErr error
+		}{
+			{
+				name: "mint the future block",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+					lastBlockTime := int64(86430)
+					lastBlockHeader := &types.Header{
+						Time:        new(big.Int).SetInt64(lastBlockTime),
+						DposContext: dposRoot,
+					}
+
+					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
+					dposEng := New(nil, db)
+					dposEng.signer = validator
+					return dposEng.CheckValidator(lastBlock, int64(86420))
+				},
+				wantErr: ErrMintFutureBlock,
+			},
+			{
+				name: "wait for last block arrived",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+					lastBlockTime := int64(86410)
+					lastBlockHeader := &types.Header{
+						Time:        new(big.Int).SetInt64(lastBlockTime),
+						DposContext: dposRoot,
+					}
+
+					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
+					dposEng := New(nil, db)
+					dposEng.signer = validator
+					return dposEng.CheckValidator(lastBlock, int64(86443))
+				},
+				wantErr: ErrWaitForPrevBlock,
+			},
+			{
+				name: "invalid block validator",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+					lastBlockTime := int64(86410)
+					lastBlockHeader := &types.Header{
+						Time:        new(big.Int).SetInt64(lastBlockTime),
+						DposContext: dposRoot,
+					}
+
+					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
+					dposEng := New(nil, db)
+					dposEng.signer = common.HexToAddress("0x234")
+					return dposEng.CheckValidator(lastBlock, int64(86440))
+				},
+				wantErr: ErrInvalidBlockValidator,
+			},
+			{
+				name: "success to check validator",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+					lastBlockTime := int64(86400)
+					lastBlockHeader := &types.Header{
+						Time:        new(big.Int).SetInt64(lastBlockTime),
+						DposContext: dposRoot,
+					}
+
+					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
+					dposEng := New(nil, db)
+					dposEng.signer = validator
+					return dposEng.CheckValidator(lastBlock, int64(86410))
+				},
+				wantErr: nil,
+			},
+		}
+	)
+
+	db := ethdb.NewMemDatabase()
+	dposContext, candidates, err := mockDposContext(db, int64(86400), delegator)
+	if err != nil {
+		t.Fatalf("failed to mock dpos context,error: %v", err)
+	}
+
+	dposRoot, err := dposContext.Commit()
+	if err != nil {
+		t.Fatalf("failed to commit dpos context,error: %v", err)
+	}
+
+	// set the new block is candidates[1]'s turn to produce block
+	for _, test := range tests {
+		err := test.fn(db, dposRoot, candidates[1])
+		if err != test.wantErr {
+			t.Errorf("wanted %v, got %v", test.wantErr, err)
+		}
+	}
+}
+
+func TestUpdateConfirmedBlockHeader(t *testing.T) {
+	var (
+		tests = []struct {
+			name                  string
+			fn                    func() (uint64, error)
+			wantConfirmedBlockNum uint64
+		}{
+			{
+				name: "the number of current block chain less than ConsensusSize",
+				fn: func() (uint64, error) {
+					chainDB := ethdb.NewMemDatabase()
+					dposEng := &Dpos{
+						db: chainDB,
+					}
+
+					testChain := testChainReader{
+						headers: make(map[uint64]*testHeader, 0),
+					}
+
+					for i := uint64(0); i < ConsensusSize; i++ {
+						hash := common.BigToHash(new(big.Int).SetUint64(i))
+						if i == 0 {
+							testChain.insertGenesis(hash, uint64(10*i+1000))
+							continue
+						}
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						if err != nil {
+							return 0, err
+						}
+					}
+
+					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
+				},
+				wantConfirmedBlockNum: 0,
+			},
+			{
+				name: "the number of current block chain more than ConsensusSize",
+				fn: func() (uint64, error) {
+					chainDB := ethdb.NewMemDatabase()
+					dposEng := &Dpos{
+						db: chainDB,
+					}
+
+					testChain := testChainReader{
+						headers: make(map[uint64]*testHeader, 0),
+					}
+
+					for i := uint64(0); i < MaxValidatorSize+5; i++ {
+						hash := common.BigToHash(new(big.Int).SetUint64(i))
+						if i == 0 {
+							testChain.insertGenesis(hash, uint64(10*i+1000))
+							continue
+						}
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						if err != nil {
+							return 0, err
+						}
+					}
+
+					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
+				},
+				wantConfirmedBlockNum: (MaxValidatorSize + 5) * 2 / 3,
+			},
+		}
+	)
+
+	for _, test := range tests {
+		num, err := test.fn()
+		if err != nil {
+			t.Fatalf("%s : %v", test.name, err)
+		}
+
+		if num != test.wantConfirmedBlockNum {
+			t.Errorf("%s want number: %d,got: %d", test.name, test.wantConfirmedBlockNum, num)
+		}
+	}
+
+}
+
+type testHeader struct {
+	hash      common.Hash
+	number    uint64
+	parent    *testHeader
+	time      uint64
+	validator common.Address
+}
+
+type testChainReader struct {
+	headers     map[uint64]*testHeader
+	currentHash common.Hash
+	currentNum  uint64
+}
+
+func (test testChainReader) Config() *params.ChainConfig {
+	return nil
+}
+
+func (test testChainReader) CurrentHeader() *types.Header {
+	if len(test.headers) == 0 {
+		return nil
+	}
+
+	var parentHash common.Hash
+	var timeStamp uint64
+	var validator common.Address
+	if test.currentNum == 0 {
+		parentHash = common.Hash{}
+	} else {
+		parentHash = test.headers[test.currentNum].parent.hash
+		timeStamp = test.headers[test.currentNum].time
+		validator = test.headers[test.currentNum].validator
+	}
+
+	return &types.Header{
+		ParentHash: parentHash,
+		Number:     new(big.Int).SetUint64(test.currentNum),
+		Time:       new(big.Int).SetUint64(timeStamp),
+		Validator:  validator,
+	}
+}
+
+func (test testChainReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	return nil
+}
+
+func (test testChainReader) GetHeaderByNumber(number uint64) *types.Header {
+	if len(test.headers) == 0 {
+		return nil
+	}
+
+	var parentHash common.Hash
+	var timeStamp uint64
+	var validator common.Address
+	if number == 0 {
+		parentHash = common.Hash{}
+	} else {
+		parentHash = test.headers[number].parent.hash
+		timeStamp = test.headers[number].time
+		validator = test.headers[test.currentNum].validator
+	}
+
+	return &types.Header{
+		ParentHash: parentHash,
+		Number:     new(big.Int).SetUint64(number),
+		Time:       new(big.Int).SetUint64(timeStamp),
+		Validator:  validator,
+	}
+}
+
+func (test testChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	if len(test.headers) == 0 {
+		return nil
+	}
+
+	var parentHash common.Hash
+	var number uint64
+	var timeStamp uint64
+	var validator common.Address
+	for _, header := range test.headers {
+		if header.hash == hash {
+			parentHash = header.parent.hash
+			number = header.number
+			timeStamp = header.time
+			validator = header.validator
+			break
+		}
+	}
+
+	return &types.Header{
+		ParentHash: parentHash,
+		Number:     new(big.Int).SetUint64(number),
+		Time:       new(big.Int).SetUint64(timeStamp),
+		Validator:  validator,
+	}
+}
+
+func (test testChainReader) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return nil
+}
+
+func (test testChainReader) insertGenesis(hash common.Hash, time uint64) {
+	header := &testHeader{
+		hash:      hash,
+		number:    0,
+		parent:    nil,
+		time:      time,
+		validator: common.BigToAddress(new(big.Int).SetUint64(0)),
+	}
+	test.headers[0] = header
+	test.currentHash = hash
+	test.currentNum = 0
+}
+
+func (test testChainReader) insert(hash common.Hash, number uint64, time uint64, dposEng *Dpos) error {
+	parent := test.headers[number-1]
+	header := &testHeader{
+		hash:      hash,
+		number:    number,
+		parent:    parent,
+		time:      time,
+		validator: common.BigToAddress(new(big.Int).SetUint64(number)),
+	}
+
+	test.headers[number] = header
+	test.currentHash = hash
+	test.currentNum = number
+	err := dposEng.updateConfirmedBlockHeader(test)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
+	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
+	var candidates []common.Address
+	for i := 0; i < MaxValidatorSize+5; i++ {
+		str := fmt.Sprintf("%d", i+1)
+		addr := common.HexToAddress("0x" + str)
+		candidates = append(candidates, addr)
+	}
+
+	// update candidate trie and delegate trie
+	for _, can := range candidates {
+		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = dposContext.DelegateTrie().TryUpdate(append(can.Bytes(), delegator.Bytes()...), delegator.Bytes())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// update epoch trie, set the prev MaxValidatorSize candidates as validators
+	err = dposContext.SetValidators(candidates[:MaxValidatorSize])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// update mint count trie
+	cnt := int64(0)
+	epochID := now / EpochInterval
+	epochBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(epochBytes, uint64(epochID))
+	for i := 0; i < MaxValidatorSize; i++ {
+
+		// the prev 1/3 validators will be set not qualified
+		if i < MaxValidatorSize/3 {
+			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 - int64(i+1)
+		} else {
+			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 + int64(i+1)
+		}
+
+		cntBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(cntBytes, uint64(cnt))
+		err = dposContext.MintCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// update vote trie
+	canListBytes, err := rlp.EncodeToBytes(candidates)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dposContext.VoteTrie().TryUpdate(delegator.Bytes(), canListBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return dposContext, candidates, nil
+}
+
+func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) error {
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, uint64(epochID))
+	cntBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(cntBytes, uint64(count))
+	err := mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, uint64(epochID))
+	cntBytes := mintCntTrie.Get(append(key, candidate.Bytes()...))
+	if cntBytes == nil {
+		return 0
+	} else {
+		return int64(binary.BigEndian.Uint64(cntBytes))
 	}
 }
