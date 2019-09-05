@@ -174,12 +174,12 @@ func TestStorageHostTree_RetrieveHostInfo(t *testing.T) {
 		t.Fatalf("error new test tree: %v", err)
 	}
 
-	if _, exist := tree.RetrieveHostInfo(notExistID); exist {
+	if _, _, exist := tree.RetrieveHostInfo(notExistID); exist {
 		t.Errorf("error: the node with \"the key does not exist\" should not exist")
 	}
 
 	for id := range hostDataSet {
-		if _, exist := tree.RetrieveHostInfo(id); !exist {
+		if _, _, exist := tree.RetrieveHostInfo(id); !exist {
 			t.Errorf("error: the node with key %s should exist", ips[4])
 		}
 	}
