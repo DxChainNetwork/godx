@@ -135,18 +135,18 @@ func (t *storageHostTree) all() (his []storage.HostInfo) {
 	return
 }
 
-// RetrieveHostInfo will get storage host information from the tree based on the
-// enode ID
-func (t *storageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
+// RetrieveHostInfo will get storage host information and evaluation score from the tree based
+// on the enode ID
+func (t *storageHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, int64, bool) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	node, exist := t.hostPool[enodeID]
 	if !exist {
-		return storage.HostInfo{}, false
+		return storage.HostInfo{}, 0, false
 	}
 
-	return node.entry.HostInfo, true
+	return node.entry.HostInfo, node.entry.eval, true
 }
 
 // SelectRandom will randomly select nodes from the storage host tree based

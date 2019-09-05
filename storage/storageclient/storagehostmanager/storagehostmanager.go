@@ -199,7 +199,7 @@ func (shm *StorageHostManager) RetrieveRentPayment() (rent storage.RentPayment) 
 // Before returning the storage host information, the settings will be validated first
 func (shm *StorageHostManager) RetrieveHostInfo(id enode.ID) (hi storage.HostInfo, exists bool) {
 	// get the storage host information
-	if hi, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
+	if hi, _, exists = shm.storageHostTree.RetrieveHostInfo(id); !exists {
 		return
 	}
 
@@ -251,7 +251,7 @@ func (shm *StorageHostManager) FilterIPViolationHosts(hostIDs []enode.ID) (badHo
 
 	// hosts validation
 	for _, id := range hostIDs {
-		hi, exists := shm.storageHostTree.RetrieveHostInfo(id)
+		hi, _, exists := shm.storageHostTree.RetrieveHostInfo(id)
 		if !exists {
 			badHostIDs = append(badHostIDs, id)
 			continue

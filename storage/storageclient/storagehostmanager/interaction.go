@@ -125,7 +125,7 @@ func (shm *StorageHostManager) updateInteraction(id enode.ID, interactionType In
 	defer shm.lock.Unlock()
 
 	// get the storage host
-	info, exist := shm.storageHostTree.RetrieveHostInfo(id)
+	info, _, exist := shm.storageHostTree.RetrieveHostInfo(id)
 	if !exist {
 		return fmt.Errorf("failed to retrive host info [%v]", id)
 	}

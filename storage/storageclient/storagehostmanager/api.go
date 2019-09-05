@@ -49,7 +49,7 @@ func (api *PublicStorageHostManagerAPI) StorageHost(id string) storage.HostInfo 
 	copy(enodeid[:], idSlice)
 
 	// get the storage host information based on the enode id
-	info, exist := api.shm.storageHostTree.RetrieveHostInfo(enodeid)
+	info, _, exist := api.shm.storageHostTree.RetrieveHostInfo(enodeid)
 
 	if !exist {
 		return storage.HostInfo{}

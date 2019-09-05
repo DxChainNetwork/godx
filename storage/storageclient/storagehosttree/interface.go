@@ -16,6 +16,6 @@ type StorageHostTree interface {
 	HostInfoUpdate(hi storage.HostInfo, eval int64) error
 	Remove(enodeID enode.ID) error
 	All() []storage.HostInfo
-	RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool)
+	RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, int64, bool)
 	SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo
 }

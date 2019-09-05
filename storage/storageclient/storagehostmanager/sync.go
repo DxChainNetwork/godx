@@ -99,7 +99,7 @@ func (shm *StorageHostManager) analyzeHostAnnouncements(hostAnnouncements []type
 // host manager
 func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInfo) {
 	// check if the storage host information already existed
-	oldInfo, exists := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
+	oldInfo, _, exists := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
 	if !exists {
 		// if not existed before, modify the FirstSeen and insert into storage host manager,
 		// start the scan loop

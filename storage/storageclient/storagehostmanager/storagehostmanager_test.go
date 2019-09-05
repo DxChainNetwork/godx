@@ -27,7 +27,7 @@ func TestStorageHostManager_Insert(t *testing.T) {
 		t.Fatalf("insert failed: %s", err.Error())
 	}
 
-	_, exist := shmtest1.storageHostTree.RetrieveHostInfo(hostInfo.EnodeID)
+	_, _, exist := shmtest1.storageHostTree.RetrieveHostInfo(hostInfo.EnodeID)
 	if !exist {
 		t.Fatalf("failed to insert the host information into the storage host tree")
 	}
@@ -38,7 +38,7 @@ func TestStorageHostManager_Insert(t *testing.T) {
 		t.Fatalf("insert failed: %s", err.Error())
 	}
 
-	_, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
+	_, _, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
 	if !exist {
 		t.Fatalf("the host information should be inserted, it is contained in the filtered host field")
 	}
@@ -54,7 +54,7 @@ func TestStorageHostManager_Remove(t *testing.T) {
 		t.Fatalf("remove failed: %s", err.Error())
 	}
 
-	_, exist := shmtest1.storageHostTree.RetrieveHostInfo(hostInfo.EnodeID)
+	_, _, exist := shmtest1.storageHostTree.RetrieveHostInfo(hostInfo.EnodeID)
 	if exist {
 		t.Fatalf("failed to remove the host information into the storage host tree")
 	}
@@ -65,7 +65,7 @@ func TestStorageHostManager_Remove(t *testing.T) {
 		t.Fatalf("insert failed: %s", err.Error())
 	}
 
-	_, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
+	_, _, exist = shmtest1.filteredTree.RetrieveHostInfo(hostInfo.EnodeID)
 	if exist {
 		t.Fatalf("the host information should be removed, it is contained in the filtered host field")
 	}

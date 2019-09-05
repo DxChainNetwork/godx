@@ -6,11 +6,14 @@ package storagehostmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/Pallinder/go-randomdata"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -26,7 +29,8 @@ import (
 
 const checkInitialScanInterval = 200 * time.Millisecond
 
-func TestStorageHostManager_Scan(t *testing.T) {
+// TestStorageHostManager_ScanRace is the test case aiming to find race condition in scan method.
+func TestStorageHostManager_ScanRace(t *testing.T) {
 	shm := newHostManagerTestData()
 
 	// exhaustive test
@@ -45,20 +49,55 @@ func TestStorageHostManager_Scan(t *testing.T) {
 	}
 }
 
-// waitUntilInitialScanFinished will wait until the initial scan is finished or
-// the timeout has been expired.
-func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
-	timeStart := time.Now()
-	for {
-		if atomic.LoadUint32(&(shm.initialScanFinished)) == 1 {
-			break
-		}
-		if time.Since(timeStart) > duration {
-			return fmt.Errorf("time out %v", duration)
-		}
-		time.Sleep(checkInitialScanInterval)
+// TestStorageHostManager_scanLogic test the scan logic for StorageHostManager.scan
+func TestStorageHostManager_scanLogic(t *testing.T) {
+	// Initialize and prepare data
+	shm := newHostManagerTestData()
+	prototype := storage.HostInfo{
+		HostExtConfig: storage.HostExtConfig{
+			AcceptingContracts:     true,
+			ContractPrice:          common.NewBigInt(2),
+			StoragePrice:           common.NewBigInt(2),
+			UploadBandwidthPrice:   common.NewBigInt(2),
+			DownloadBandwidthPrice: common.NewBigInt(2),
+			Deposit:                common.NewBigInt(2),
+			MaxDeposit:             common.NewBigInt(2),
+			RemainingStorage:       storage.DefaultRentPayment.ExpectedStorage * 10,
+		},
 	}
-	return nil
+	sizeInsert := 5
+	infos := hostInfosByPrototype(prototype, sizeInsert)
+	shm.b = &storageClientBackendTestData{infos}
+	if err := insertHostInfos(shm, infos); err != nil {
+		t.Fatal(err)
+	}
+	// Call a goroutine to scan the storage host
+	go shm.scan()
+	// Wait for scan to complete
+	if err := shm.waitUntilInitialScanFinished(1 * time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	// lock the shm and check the evaluations
+	shm.lock.Lock()
+	defer shm.lock.Unlock()
+
+	infos = shm.storageHostTree.All()
+	if len(infos) == 0 {
+		t.Fatal("after insert, host tree has no entries")
+	}
+	evaluator := newDefaultEvaluator(shm, shm.rent)
+	for _, hi := range infos {
+		expect := evaluator.Evaluate(hi)
+		_, got, exist := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
+		if !exist {
+			t.Errorf("host id not in tree: %v", hi.EnodeID)
+		}
+		if expect != got {
+			t.Errorf("host evaluation not expected. Got %v, Expect %v", got, expect)
+		}
+	}
 }
 
 func TestStorageHostManager_WaitScanFinish(t *testing.T) {
@@ -111,7 +150,9 @@ func TestStorageHostManager_ScanValidation(t *testing.T) {
 
 */
 
-type storageClientBackendTestData struct{}
+type storageClientBackendTestData struct {
+	infos []storage.HostInfo
+}
 
 func newHostManagerTestData() *StorageHostManager {
 	shm := &StorageHostManager{
@@ -138,6 +179,44 @@ func testDataInsert(num int, shm *StorageHostManager) error {
 	return nil
 }
 
+// hostInfosByPrototype makes some host infos with the given prototype
+func hostInfosByPrototype(prototype storage.HostInfo, num int) []storage.HostInfo {
+	res := make([]storage.HostInfo, num)
+	for i := 0; i != num; i++ {
+		info := prototype
+		info.IP = randomdata.IpV4Address()
+		info.EnodeID = enodeIDGenerator()
+		res[i] = info
+	}
+	return res
+}
+
+// insertHostInfos insert the infos into the shm
+func insertHostInfos(shm *StorageHostManager, infos []storage.HostInfo) error {
+	for _, info := range infos {
+		if err := shm.insert(info); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// waitUntilInitialScanFinished will wait until the initial scan is finished or
+// the timeout has been expired.
+func (shm *StorageHostManager) waitUntilInitialScanFinished(duration time.Duration) error {
+	timeStart := time.Now()
+	for {
+		if atomic.LoadUint32(&(shm.initialScanFinished)) == 1 {
+			break
+		}
+		if time.Since(timeStart) > duration {
+			return fmt.Errorf("time out %v", duration)
+		}
+		time.Sleep(checkInitialScanInterval)
+	}
+	return nil
+}
+
 func (st *storageClientBackendTestData) Online() bool {
 	return true
 }
@@ -147,12 +226,23 @@ func (st *storageClientBackendTestData) Syncing() bool {
 }
 
 func (st *storageClientBackendTestData) GetStorageHostSetting(hostEnodeID enode.ID, peerID string, config *storage.HostExtConfig) error {
-	config = &storage.HostExtConfig{
-		AcceptingContracts: true,
-		Deposit:            common.NewBigInt(10),
-		MaxDeposit:         common.NewBigInt(100),
+	var info storage.HostInfo
+	var exist bool
+	for _, info = range st.infos {
+		if info.EnodeID == hostEnodeID {
+			exist = true
+			break
+		}
 	}
-	return nil
+	if !exist {
+		return fmt.Errorf("host not exist")
+	}
+	b, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(b, config)
+	return err
 }
 
 func (st *storageClientBackendTestData) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {

@@ -151,15 +151,14 @@ func presenceScoreCalc(info storage.HostInfo, market hostMarket) float64 {
 func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
 	// Evaluate the deposit of the host
 	hostDeposit := evalHostDeposit(info, rent)
+
 	// Evaluate the deposit of the market
 	marketDeposit := evalHostMarketDeposit(rent, market)
-
 	// DepositFactor is the function based on ratio between hostDeposit and marketDeposit.
 	// The function is (x/n)/((x/n) + 1) n is the base divider which is float.
 	// The larger the divider, the larger the deposit is to be encouraged
 	if marketDeposit.Cmp(common.BigInt0) == 0 {
 		marketDeposit = common.BigInt1
-
 	}
 	ratio := hostDeposit.Float64() / marketDeposit.Float64()
 	factor := ratio / (ratio + depositBaseDivider)

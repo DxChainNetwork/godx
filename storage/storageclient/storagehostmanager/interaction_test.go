@@ -138,7 +138,7 @@ func TestStorageHostManager_IncrementSuccessfulInteractions(t *testing.T) {
 	prevSc := interactionScoreCalc(info)
 
 	shm.IncrementSuccessfulInteractions(enodeID, InteractionGetConfig)
-	newInfo, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
+	newInfo, _, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
 	if !exist {
 		t.Fatalf("node %v not exist", enodeID)
 	}
@@ -162,7 +162,7 @@ func TestStorageHostManager_IncrementFailedInteractions(t *testing.T) {
 	prevSc := interactionScoreCalc(info)
 
 	shm.IncrementFailedInteractions(enodeID, InteractionGetConfig)
-	newInfo, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
+	newInfo, _, exist := shm.storageHostTree.RetrieveHostInfo(enodeID)
 	if !exist {
 		t.Fatalf("node %v not exist", enodeID)
 	}
