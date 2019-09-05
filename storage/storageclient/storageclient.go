@@ -1048,6 +1048,9 @@ func (client *StorageClient) GetHostAnnouncementWithBlockHash(blockHash common.H
 	number = block.NumberU64()
 	txs := block.Transactions()
 	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
 		p, ok := precompiled[*tx.To()]
 		if !ok {
 			continue
