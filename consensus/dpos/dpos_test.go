@@ -6,14 +6,17 @@ package dpos
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
 	"github.com/stretchr/testify/assert"
 )
@@ -44,59 +47,73 @@ var (
 	}
 )
 
-func mockNewDposContext(db ethdb.Database) (*types.DposContext, error) {
+func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
 	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var (
-		delegator []byte
-		candidate []byte
-		addresses []common.Address
-	)
-
-	for i := 0; i < MaxValidatorSize; i++ {
-		addresses = append(addresses, common.HexToAddress(MockEpochValidators[i]))
+	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
+	var candidates []common.Address
+	for i := 0; i < MaxValidatorSize+5; i++ {
+		str := fmt.Sprintf("%d", i+1)
+		addr := common.HexToAddress("0x" + str)
+		candidates = append(candidates, addr)
 	}
 
-	err = dposContext.SetValidators(addresses)
+	// update candidate trie and delegate trie
+	for _, can := range candidates {
+		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		err = dposContext.DelegateTrie().TryUpdate(append(can.Bytes(), delegator.Bytes()...), delegator.Bytes())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// update epoch trie, set the prev MaxValidatorSize candidates as validators
+	err = dposContext.SetValidators(candidates[:MaxValidatorSize])
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	for j := 0; j < len(MockEpochValidators); j++ {
-		delegator = common.HexToAddress(MockEpochValidators[(j+1)%len(MockEpochValidators)]).Bytes()
+	// update mint count trie
+	cnt := int64(0)
+	epochID := now / EpochInterval
+	epochBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(epochBytes, uint64(epochID))
+	for i := 0; i < MaxValidatorSize; i++ {
 
-		candidate = common.HexToAddress(MockEpochValidators[j]).Bytes()
-		err = dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
-		if err != nil {
-			return nil, err
+		// the prev 1/3 validators will be set not qualified
+		if i < MaxValidatorSize/3 {
+			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 - int64(i+1)
+		} else {
+			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 + int64(i+1)
 		}
 
-		err = dposContext.VoteTrie().TryUpdate(delegator, candidate)
+		cntBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(cntBytes, uint64(cnt))
+		err = dposContext.MintCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
 		if err != nil {
-			return nil, err
-		}
-
-		delegator = common.HexToAddress(MockEpochValidators[(j+2)%len(MockEpochValidators)]).Bytes()
-		err = dposContext.DelegateTrie().TryUpdate(append(candidate, delegator...), delegator)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dposContext.VoteTrie().TryUpdate(delegator, candidate)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dposContext.CandidateTrie().TryUpdate(candidate, candidate)
-		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return dposContext, nil
+	// update vote trie
+	canListBytes, err := rlp.EncodeToBytes(candidates)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = dposContext.VoteTrie().TryUpdate(delegator.Bytes(), canListBytes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return dposContext, candidates, nil
 }
 
 func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) error {
@@ -123,8 +140,12 @@ func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie)
 }
 
 func TestUpdateMintCnt(t *testing.T) {
+	var (
+		delegator = common.HexToAddress("0xaaa")
+	)
+
 	db := ethdb.NewMemDatabase()
-	dposContext, err := mockNewDposContext(db)
+	dposContext, _, err := mockDposContext(db, time.Now().Unix(), delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
@@ -173,8 +194,12 @@ func TestUpdateMintCnt(t *testing.T) {
 }
 
 func TestAccumulateRewards(t *testing.T) {
+	var (
+		delegator = common.HexToAddress("0xaaa")
+	)
+
 	db := ethdb.NewMemDatabase()
-	dposContext, err := mockNewDposContext(db)
+	dposContext, _, err := mockDposContext(db, time.Now().Unix(), delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}

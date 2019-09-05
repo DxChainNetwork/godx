@@ -6,7 +6,6 @@ package dpos
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -208,82 +207,25 @@ func TestLuckyTurntable(t *testing.T) {
 }
 
 func Test_KickoutValidators(t *testing.T) {
+	now := time.Now().Unix()
+	var (
+		delegator = common.HexToAddress("0xaaa")
+	)
+
 	db := ethdb.NewMemDatabase()
-	dposCtx, err := types.NewDposContext(db)
+	dposContext, candidates, err := mockDposContext(db, now, delegator)
 	if err != nil {
 		t.Fatalf("failed to new dpos context,error: %v", err)
 	}
 
 	timeOfFirstBlock = 100000
-	now := time.Now().Unix()
 
 	epochContext := &EpochContext{
-		DposContext: dposCtx,
+		DposContext: dposContext,
 		TimeStamp:   now,
 	}
 
-	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
-	var candidates []common.Address
-	for i := 0; i < MaxValidatorSize+5; i++ {
-		str := fmt.Sprintf("%d", i+1)
-		addr := common.HexToAddress("0x" + str)
-		candidates = append(candidates, addr)
-	}
-
-	delegator := common.HexToAddress("0xaaa")
-	for _, can := range candidates {
-		err = dposCtx.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
-		if err != nil {
-			t.Fatalf("failed to update candidate trie,error: %v", err)
-		}
-
-		err = dposCtx.DelegateTrie().TryUpdate(append(can.Bytes(), delegator.Bytes()...), delegator.Bytes())
-		if err != nil {
-			t.Fatalf("failed to update delegate trie,error: %v", err)
-		}
-	}
-
-	cnt := int64(0)
 	epochID := now / EpochInterval
-	epochBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(epochBytes, uint64(epochID))
-	for i := 0; i < MaxValidatorSize; i++ {
-
-		// the prev 1/3 validators will be set not qualified
-		if i == 0 {
-			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 - int64(i+1)
-		} else {
-			cnt = EpochInterval/BlockInterval/MaxValidatorSize/2 + int64(i+1)
-		}
-
-		cntBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(cntBytes, uint64(cnt))
-		err = dposCtx.MintCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
-		if err != nil {
-			t.Fatalf("failed to update mint count trie,error: %v", err)
-		}
-	}
-
-	canListBytes, err := rlp.EncodeToBytes(candidates)
-	if err != nil {
-		t.Fatalf("failed to rlp encode candidates,error: %v", err)
-	}
-
-	err = dposCtx.VoteTrie().TryUpdate(delegator.Bytes(), canListBytes)
-	if err != nil {
-		t.Fatalf("failed to update vote trie,error: %v", err)
-	}
-
-	validators, err := rlp.EncodeToBytes(candidates[:MaxValidatorSize])
-	if err != nil {
-		t.Fatalf("failed to rlp encode validators,error: %v", err)
-	}
-
-	err = dposCtx.EpochTrie().TryUpdate([]byte("validator"), validators)
-	if err != nil {
-		t.Fatalf("failed to update epoch trie,error: %v", err)
-	}
-
 	err = epochContext.kickoutValidators(epochID)
 	if err != nil {
 		t.Errorf("something wrong to kick out validators,error: %v", err)
