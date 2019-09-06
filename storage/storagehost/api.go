@@ -255,16 +255,6 @@ func (h *HostPrivateAPI) setMaxReviseBatchSize(str string) error {
 	return nil
 }
 
-// setWindowSize set host WindowSize to value
-func (h *HostPrivateAPI) setWindowSize(str string) error {
-	val, err := unit.ParseTime(str)
-	if err != nil {
-		return fmt.Errorf("invalid time duration string: %v", err)
-	}
-	h.storageHost.config.WindowSize = val
-	return nil
-}
-
 // setPaymentAddress configure the account address used to sign the storage contract,
 // which has and can only be the address of the local wallet.
 func (h *HostPrivateAPI) setPaymentAddress(addrStr string) error {
