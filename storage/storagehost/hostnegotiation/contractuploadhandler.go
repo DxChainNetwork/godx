@@ -46,7 +46,7 @@ func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg
 	}
 
 	// merkleProof Negotiation
-	clientRevisionSign, err := merkleProofNegotiation(sp, nd, sr)
+	clientRevisionSign, err := merkleProofNegotiation(sp, &nd, sr)
 	if err != nil {
 		negotiateErr = err
 		return
@@ -59,7 +59,10 @@ func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg
 	}
 
 	// host revision sign negotiation
-
+	if err := hostRevisionSignNegotiation(sp, np, hostConfig, &nd, sr, newRevision); err != nil {
+		negotiateErr = err
+		return
+	}
 }
 
 // decodeUploadReqAndGetSr will decode the upload request and get the storage responsibility
@@ -137,8 +140,8 @@ func constructAndVerifyNewRevision(np NegotiationProtocol, nd *uploadNegotiation
 	return newRev, nil
 }
 
-func constructUploadMerkleProof(nd uploadNegotiationData, sr storagehost.StorageResponsibility) (storage.UploadMerkleProof, error) {
-	proofRanges := calcAndSortProofRanges(sr, nd)
+func constructUploadMerkleProof(nd *uploadNegotiationData, sr storagehost.StorageResponsibility) (storage.UploadMerkleProof, error) {
+	proofRanges := calcAndSortProofRanges(sr, *nd)
 	leafHashes := calcLeafHashes(proofRanges, sr)
 	oldHashSet, err := calcOldHashSet(sr, proofRanges)
 	if err != nil {
@@ -147,15 +150,18 @@ func constructUploadMerkleProof(nd uploadNegotiationData, sr storagehost.Storage
 	}
 
 	// construct the merkle proof
-	return storage.UploadMerkleProof{
+	merkleProof := storage.UploadMerkleProof{
 		OldSubtreeHashes: oldHashSet,
 		OldLeafHashes:    leafHashes,
 		NewMerkleRoot:    nd.newMerkleRoot,
-	}, nil
+	}
 
+	// update uploadNegotiationData for merkle proof
+	nd.merkleProof = merkleProof
+	return merkleProof, nil
 }
 
-func merkleProofNegotiation(sp storage.Peer, nd uploadNegotiationData, sr storagehost.StorageResponsibility) ([]byte, error) {
+func merkleProofNegotiation(sp storage.Peer, nd *uploadNegotiationData, sr storagehost.StorageResponsibility) ([]byte, error) {
 	// construct merkle proof
 	merkleProof, err := constructUploadMerkleProof(nd, sr)
 	if err != nil {
@@ -191,8 +197,78 @@ func hostSignAndUpdateRevision(np NegotiationProtocol, newRev *types.StorageCont
 	return nil
 }
 
-func hostRevisionSignNegotiation() {
+func hostRevisionSignNegotiation(sp storage.Peer, np NegotiationProtocol, hostConfig storage.HostIntConfig, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, newRev types.StorageContractRevision) error {
+	// get the host revision sign from the new revision, and send the upload host revision sign
+	hostRevSign := newRev.Signatures[hostSignIndex]
+	if err := sp.SendUploadHostRevisionSign(hostRevSign); err != nil {
+		return fmt.Errorf("hostRevisionSignNeogtiation failed, failed to send the host rev sign: %s", err.Error())
+	}
 
+	// storage host wait and handle the client's response
+	return waitAndHandleClientCommitRespUpload(sp, np, nd, sr, hostConfig, newRev)
+}
+
+func waitAndHandleClientCommitRespUpload(sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+	// wait for storage host's response
+	msg, err := sp.HostWaitContractResp()
+	if err != nil {
+		return fmt.Errorf("waitAndHandleClientCommitRespUpload failed, host falied to wait for the client's response: %s", err.Error())
+	}
+
+	// based on the message code, handle the client's upload commit response
+	if err := handleClientUploadCommitResp(msg, sp, np, nd, sr, hostConfig, newRev); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// handleClientUploadCommitResp will handle client's response based on the message code
+func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+	switch msg.Code {
+	case storage.ClientCommitSuccessMsg:
+		return handleClientUploadSuccessCommit(sp, np, nd, sr, hostConfig, newRev)
+	case storage.ClientCommitFailedMsg:
+		return storage.ErrClientCommit
+	case storage.ClientNegotiateErrorMsg:
+		return storage.ErrClientNegotiate
+	default:
+		return fmt.Errorf("failed to reconize the message code")
+	}
+}
+
+func handleClientUploadSuccessCommit(sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+	// update and modify the storage responsibility
+	sr = updateStorageResponsibilityUpload(nd, sr, hostConfig, newRev)
+	if err := np.ModifyStorageResponsibility(sr, nil, nd.sectorGained, nd.gainedSectorData); err != nil {
+		return storage.ErrHostCommit
+	}
+
+	// if the storage host successfully commit the storage responsibility, set the connection to be static
+	np.CheckAndSetStaticConnection(sp)
+
+	// at the end, send the storage host ack message
+	if err := sp.SendHostAckMsg(); err != nil {
+		_ = np.RollbackUploadStorageResponsibility(nd.srSnapshot, nd.sectorGained, nil, nil)
+		return fmt.Errorf("failed to send the host ack message at the end during the upload, negotiation failed: %s", err.Error())
+	}
+
+	return nil
+}
+
+func updateStorageResponsibilityUpload(nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) storagehost.StorageResponsibility {
+	// calculate the bandwidthRevenue after added merkle proof
+	bandwidthRevenue := calcBandwidthRevenueForProof(nd, len(nd.merkleProof.OldSubtreeHashes), len(nd.merkleProof.OldLeafHashes), hostConfig.DownloadBandwidthPrice)
+
+	// update the storage responsibility
+	sr.SectorRoots = nd.newRoots
+	sr.PotentialStorageRevenue = sr.PotentialStorageRevenue.Add(nd.storageRevenue)
+	sr.RiskedStorageDeposit = sr.RiskedStorageDeposit.Add(nd.newDeposit)
+	sr.PotentialUploadRevenue = sr.PotentialUploadRevenue.Add(bandwidthRevenue)
+	sr.StorageContractRevisions = append(sr.StorageContractRevisions, newRev)
+
+	// return the updated storage responsibility
+	return sr
 }
 
 func calcAndSortProofRanges(sr storagehost.StorageResponsibility, nd uploadNegotiationData) []merkle.SubTreeLimit {

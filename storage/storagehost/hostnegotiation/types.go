@@ -29,8 +29,11 @@ type NegotiationProtocol interface {
 	IsAcceptingContract() bool
 	SetStatic(node *enode.Node)
 	FinalizeStorageResponsibility(sr storagehost.StorageResponsibility) error
-	RollBackStorageResponsibility(sr storagehost.StorageResponsibility) error
+	RollBackCreateStorageResponsibility(sr storagehost.StorageResponsibility) error
 	RollBackConnectionType(sp storage.Peer)
+	ModifyStorageResponsibility(sr storagehost.StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error
+	CheckAndSetStaticConnection(sp storage.Peer)
+	RollbackUploadStorageResponsibility(oldSr storagehost.StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error
 }
 
 type contractNegotiationData struct {
@@ -50,6 +53,7 @@ type uploadNegotiationData struct {
 	storageRevenue   common.BigInt
 	newDeposit       common.BigInt
 	newMerkleRoot    common.Hash
+	merkleProof      storage.UploadMerkleProof
 }
 
 type downloadNegotiationData struct {

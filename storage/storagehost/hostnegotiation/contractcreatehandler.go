@@ -155,7 +155,7 @@ func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc typ
 	}
 
 	// wait and handle client contract commit response
-	sr, err := waitAndHandleClientCommitResp(sp, np, req, sc, contractRev)
+	sr, err := waitAndHandleClientCommitRespContractCrate(sp, np, req, sc, contractRev)
 	if err != nil {
 		return err
 	}
@@ -167,14 +167,14 @@ func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc typ
 
 	// send host host ACK message
 	if err := sp.SendHostAckMsg(); err != nil {
-		_ = np.RollBackStorageResponsibility(sr)
+		_ = np.RollBackCreateStorageResponsibility(sr)
 		np.RollBackConnectionType(sp)
 	}
 
 	return nil
 }
 
-func waitAndHandleClientCommitResp(sp storage.Peer, np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
+func waitAndHandleClientCommitRespContractCrate(sp storage.Peer, np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
 		err = fmt.Errorf("waitAndHandleClientCommitResp failed, host failed to wait for client commit response: %s", err.Error())
@@ -202,7 +202,7 @@ func clientCommitSuccessHandle(np NegotiationProtocol, req storage.ContractCreat
 	// construct the storage responsibility
 	sr := constructStorageResponsibility(hostConfig.ContractPrice, blockNumber, sc, contractRevision)
 	if req.Renew {
-		sr = updateStorageResponsibility(np, req, sr, hostConfig)
+		sr = updateStorageResponsibilityContractCreate(np, req, sr, hostConfig)
 	}
 
 	// commit storage responsibility
@@ -253,7 +253,7 @@ func constructStorageResponsibility(contractPrice common.BigInt, blockNumber uin
 	}
 }
 
-func updateStorageResponsibility(np NegotiationProtocol, req storage.ContractCreateRequest, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig) storagehost.StorageResponsibility {
+func updateStorageResponsibilityContractCreate(np NegotiationProtocol, req storage.ContractCreateRequest, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig) storagehost.StorageResponsibility {
 	// try to get storage responsibility first
 	oldSr, err := np.GetStorageResponsibility(req.OldContractID)
 	if err == nil {

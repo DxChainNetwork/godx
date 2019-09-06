@@ -11,7 +11,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -40,9 +39,6 @@ const (
 )
 
 var (
-	// sectorHeight is the parameter used in caching merkle roots
-	sectorHeight uint64
-
 	storageHostMeta = common.Metadata{
 		Header:  "DxChain StorageHost JSON",
 		Version: "V1.0",
@@ -73,20 +69,6 @@ var (
 	// PostponedExecutionBuffer indicates total time to sign the contract
 	PostponedExecutionBuffer = storage.BlocksPerDay
 )
-
-// init set the initial value for sector height
-func init() {
-	sectorHeight = calculateSectorHeight()
-}
-
-// calculateSectorHeight calculate the sector height for specified sector size and leaf size
-func calculateSectorHeight() uint64 {
-	height := uint64(0)
-	for 1<<height < (storage.SectorSize / merkle.LeafSize) {
-		height++
-	}
-	return height
-}
 
 // defaultConfig loads the default setting when
 // it is the first time use the host service, or cannot find the setting file

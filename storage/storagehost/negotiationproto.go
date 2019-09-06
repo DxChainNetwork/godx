@@ -81,7 +81,7 @@ func (h *StorageHost) FinalizeStorageResponsibility(sr StorageResponsibility) er
 	return nil
 }
 
-func (h *StorageHost) RollBackStorageResponsibility(sr StorageResponsibility) error {
+func (h *StorageHost) RollBackCreateStorageResponsibility(sr StorageResponsibility) error {
 	lockErr := h.checkAndTryLockStorageResponsibility(sr.id(), storage.ResponsibilityLockTimeout)
 	if lockErr != nil {
 		return lockErr
@@ -101,4 +101,24 @@ func (h *StorageHost) RollBackConnectionType(sp storage.Peer) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	delete(h.clientToContract, sp.PeerNode().String())
+}
+
+func (h *StorageHost) ModifyStorageResponsibility(sr StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+	return h.modifyStorageResponsibility(sr, sectorsRemoved, sectorsGained, gainedSectorData)
+}
+
+// CheckAndSetStaticConnection will check if the current connection is static connection
+// if not, set the connection to be static connection
+func (h *StorageHost) CheckAndSetStaticConnection(sp storage.Peer) {
+	if !sp.IsStaticConn() {
+		node := sp.PeerNode()
+		if node == nil {
+			return
+		}
+		h.ethBackend.SetStatic(node)
+	}
+}
+
+func (h *StorageHost) RollbackUploadStorageResponsibility(oldSr StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
+	return h.rollbackStorageResponsibility(oldSr, sectorsGained, sectorsRemoved, removedSectorData)
 }

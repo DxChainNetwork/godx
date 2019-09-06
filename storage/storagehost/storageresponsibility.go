@@ -233,16 +233,16 @@ func (h *StorageHost) insertStorageResponsibility(so StorageResponsibility) erro
 }
 
 //the virtual sector will need to appear in 'sectorsRemoved' multiple times. Same with 'sectorsGained'。
-func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
+func (h *StorageHost) modifyStorageResponsibility(sr StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error {
 	// Lock the storage responsibility
-	h.checkAndLockStorageResponsibility(so.id())
-	defer h.checkAndUnlockStorageResponsibility(so.id())
+	h.checkAndLockStorageResponsibility(sr.id())
+	defer h.checkAndUnlockStorageResponsibility(sr.id())
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	//Need enough time to submit revision
-	if so.expiration()-PostponedExecutionBuffer <= h.blockHeight {
+	if sr.expiration()-PostponedExecutionBuffer <= h.blockHeight {
 		return errNotAllowed
 	}
 
@@ -284,12 +284,12 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	var errOld error
 	errDBso := func() error {
 		//Get old storage responsibility, return error if not found
-		oldso, errOld = getStorageResponsibility(h.db, so.id())
+		oldso, errOld = getStorageResponsibility(h.db, sr.id())
 		if errOld != nil {
 			return errOld
 		}
 
-		return putStorageResponsibility(h.db, so.id(), so)
+		return putStorageResponsibility(h.db, sr.id(), sr)
 	}()
 
 	if errDBso != nil {
@@ -307,13 +307,13 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 	}
 
 	// Update the financial information for the storage responsibility - apply the cost
-	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(so.ContractCost)
-	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(so.LockedStorageDeposit)
-	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(so.PotentialStorageRevenue)
-	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(so.PotentialDownloadRevenue)
-	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(so.PotentialUploadRevenue)
-	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(so.RiskedStorageDeposit)
-	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(so.TransactionFeeExpenses)
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(sr.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(sr.LockedStorageDeposit)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(sr.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(sr.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(sr.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(sr.RiskedStorageDeposit)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(sr.TransactionFeeExpenses)
 
 	// Update the financial information for the storage responsibility - remove the cost
 	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(oldso.ContractCost)
@@ -328,10 +328,10 @@ func (h *StorageHost) modifyStorageResponsibility(so StorageResponsibility, sect
 }
 
 // rollbackStorageResponsibility will rollback storage responsibility after modify when receive error
-func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
+func (h *StorageHost) rollbackStorageResponsibility(oldSr StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
 	// Lock the storage responsibility
-	h.checkAndLockStorageResponsibility(oldSo.id())
-	defer h.checkAndUnlockStorageResponsibility(oldSo.id())
+	h.checkAndLockStorageResponsibility(oldSr.id())
+	defer h.checkAndUnlockStorageResponsibility(oldSr.id())
 
 	h.lock.Lock()
 	defer h.lock.Unlock()
@@ -351,45 +351,45 @@ func (h *StorageHost) rollbackStorageResponsibility(oldSo StorageResponsibility,
 	if err != nil {
 		for j := 0; j < i; j++ {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.DeleteSector(sectorsRemoved[j])
+			_ = h.DeleteSector(sectorsRemoved[j])
 		}
 		return err
 	}
 
 	for i := range sectorsGained {
 		//The error of restoring a sector doesn't make any sense to us.
-		h.DeleteSector(sectorsGained[i])
+		_ = h.DeleteSector(sectorsGained[i])
 	}
 
 	var newSo StorageResponsibility
 	var errNew error
 	errDB := func() error {
 		//Get new storage responsibility, return error if not found
-		newSo, errNew = getStorageResponsibility(h.db, oldSo.id())
+		newSo, errNew = getStorageResponsibility(h.db, oldSr.id())
 		if errNew != nil {
 			return errNew
 		}
 
-		return putStorageResponsibility(h.db, oldSo.id(), oldSo)
+		return putStorageResponsibility(h.db, oldSr.id(), oldSr)
 	}()
 
 	if errDB != nil {
 		//This operation is wrong, you need to restore the sector
 		for i := range sectorsRemoved {
 			//The error of restoring a sector doesn't make any sense to us.
-			h.DeleteSector(sectorsRemoved[i])
+			_ = h.DeleteSector(sectorsRemoved[i])
 		}
 		return errDB
 	}
 
-	// revert oldSo financialMetrics
-	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(oldSo.ContractCost)
-	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(oldSo.LockedStorageDeposit)
-	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(oldSo.PotentialStorageRevenue)
-	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(oldSo.PotentialDownloadRevenue)
-	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(oldSo.PotentialUploadRevenue)
-	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(oldSo.RiskedStorageDeposit)
-	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(oldSo.TransactionFeeExpenses)
+	// revert oldSr financialMetrics
+	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Add(oldSr.ContractCost)
+	h.financialMetrics.LockedStorageDeposit = h.financialMetrics.LockedStorageDeposit.Add(oldSr.LockedStorageDeposit)
+	h.financialMetrics.PotentialStorageRevenue = h.financialMetrics.PotentialStorageRevenue.Add(oldSr.PotentialStorageRevenue)
+	h.financialMetrics.PotentialDownloadBandwidthRevenue = h.financialMetrics.PotentialDownloadBandwidthRevenue.Add(oldSr.PotentialDownloadRevenue)
+	h.financialMetrics.PotentialUploadBandwidthRevenue = h.financialMetrics.PotentialUploadBandwidthRevenue.Add(oldSr.PotentialUploadRevenue)
+	h.financialMetrics.RiskedStorageDeposit = h.financialMetrics.RiskedStorageDeposit.Add(oldSr.RiskedStorageDeposit)
+	h.financialMetrics.TransactionFeeExpenses = h.financialMetrics.TransactionFeeExpenses.Add(oldSr.TransactionFeeExpenses)
 
 	// delete new financialMetrics
 	h.financialMetrics.PotentialContractCompensation = h.financialMetrics.PotentialContractCompensation.Sub(newSo.ContractCost)

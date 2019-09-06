@@ -46,3 +46,10 @@ func calcHostRevenue(nd *uploadNegotiationData, sr storagehost.StorageResponsibi
 	calcStorageRevenueAndNewDeposit(nd, sr, blockHeight, hostConfig.StoragePrice, hostConfig.Deposit)
 	return nd.storageRevenue.Add(nd.bandwidthRevenue).Add(hostConfig.BaseRPCPrice)
 }
+
+func calcBandwidthRevenueForProof(nd *uploadNegotiationData, subTreeHashesLen, leafHashesLen int, downloadBandwidthPrice common.BigInt) common.BigInt {
+	// calculate the merkle proof size
+	merkleProofSize := storage.HashSize * (subTreeHashesLen + leafHashesLen + 1)
+	nd.bandwidthRevenue = nd.bandwidthRevenue.Add(downloadBandwidthPrice.Mult(common.NewBigInt(int64(merkleProofSize))))
+	return nd.bandwidthRevenue
+}

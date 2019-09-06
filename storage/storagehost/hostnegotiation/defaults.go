@@ -17,6 +17,7 @@ const (
 	validProofPaybackClientAddressIndex  = 0
 	missedProofPaybackClientAddressIndex = 0
 	contractRequiredSignatures           = 2
+	hostSignIndex                        = 1
 )
 
 // sectorHeight is the height of the merkle tree constructed

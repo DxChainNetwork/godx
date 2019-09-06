@@ -16,7 +16,7 @@ import (
 
 var hostHandlers = map[uint64]func(np hostnegotiation.NegotiationProtocol, sp storage.Peer, msg p2p.Msg){
 	storage.ContractCreateReqMsg: hostnegotiation.ContractCreateRenewHandler,
-	//storage.ContractUploadReqMsg:   storagehost.UploadHandler,
+	storage.ContractUploadReqMsg: hostnegotiation.ContractUploadHandler,
 	//storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
 }
 

@@ -104,6 +104,8 @@ func uploadPaymentValidation(oldRev, newRev types.StorageContractRevision, expec
 	if paymentToHost.Cmp(paymentFromClient) != 0 {
 		return fmt.Errorf("uploadPaymentValidation failed: payment from storage client does not equivalent to payment to the storage hsot")
 	}
+
+	return nil
 }
 
 func uploadRevisionPaybackValidation(oldRev, newRev types.StorageContractRevision) error {

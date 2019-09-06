@@ -18,11 +18,6 @@ var (
 	// missed proof outputs.
 	errBadContractOutputCounts = ErrorRevision("responsibilityRejected for having an unexpected number of outputs")
 
-	// errBadContractParent is returned when a file contract revision is
-	// presented which has a parent id that doesn't match the file contract
-	// which is supposed to be getting revised.
-	errBadContractParent = ErrorRevision("could not find contract's parent")
-
 	// errBadFileMerkleRoot is returned if the client incorrectly updates the
 	// file merkle root during a file contract revision.
 	errBadFileMerkleRoot = ErrorRevision("responsibilityRejected for bad file merkle root")
