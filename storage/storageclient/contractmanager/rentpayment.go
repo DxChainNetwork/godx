@@ -119,14 +119,6 @@ func RentPaymentValidation(rent storage.RentPayment) (err error) {
 		return errors.New("amount of storage hosts cannot be set to 0")
 	case rent.Period == 0:
 		return errors.New("storage period cannot be set to 0")
-	case rent.ExpectedStorage == 0:
-		return errors.New("expected storage cannot be set to 0")
-	case rent.ExpectedUpload == 0:
-		return errors.New("expectedUpload cannot be set to 0")
-	case rent.ExpectedDownload == 0:
-		return errors.New("expectedDownload cannot be set to 0")
-	case rent.ExpectedRedundancy == 0:
-		return errors.New("expectedRedundancy cannot be set to 0")
 	case storage.RenewWindow > rent.Period:
 		return fmt.Errorf("storage period must be greater than %v", unit.FormatTime(storage.RenewWindow))
 	default:
