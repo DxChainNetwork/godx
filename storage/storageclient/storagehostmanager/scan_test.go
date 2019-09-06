@@ -89,7 +89,7 @@ func TestStorageHostManager_scanLogic(t *testing.T) {
 	evaluator := newDefaultEvaluator(shm, shm.rent)
 	for _, hi := range infos {
 		expect := evaluator.Evaluate(hi)
-		_, got, exist := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
+		got, exist := shm.storageHostTree.RetrieveHostEval(hi.EnodeID)
 		if !exist {
 			t.Errorf("host id not in tree: %v", hi.EnodeID)
 		}

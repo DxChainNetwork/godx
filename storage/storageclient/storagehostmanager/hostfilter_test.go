@@ -59,12 +59,12 @@ func TestStorageHostManager_SetFilterMode(t *testing.T) {
 	}
 
 	for _, host := range allHosts {
-		_, _, exist := shm.storageHostTree.RetrieveHostInfo(host.EnodeID)
+		_, exist := shm.storageHostTree.RetrieveHostInfo(host.EnodeID)
 		if !exist {
 			t.Fatalf("the host information is not contained in the storage host tree")
 		}
 
-		_, _, existFilter := shm.filteredTree.RetrieveHostInfo(host.EnodeID)
+		_, existFilter := shm.filteredTree.RetrieveHostInfo(host.EnodeID)
 		if existFilter && !exist {
 			t.Fatalf("the host information is contained in the filtered tree but not in the storage host tree")
 		}

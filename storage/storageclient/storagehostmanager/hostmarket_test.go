@@ -53,9 +53,10 @@ type fakeHostTree struct {
 func (t *fakeHostTree) Insert(hi storage.HostInfo, eval int64) error         { return nil }
 func (t *fakeHostTree) HostInfoUpdate(hi storage.HostInfo, eval int64) error { return nil }
 func (t *fakeHostTree) Remove(enodeID enode.ID) error                        { return nil }
-func (t *fakeHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, int64, bool) {
-	return storage.HostInfo{}, 0, false
+func (t *fakeHostTree) RetrieveHostInfo(enodeID enode.ID) (storage.HostInfo, bool) {
+	return storage.HostInfo{}, false
 }
+func (t *fakeHostTree) RetrieveHostEval(enodeID enode.ID) (int64, bool) { return 0, false }
 func (t *fakeHostTree) SelectRandom(needed int, blacklist, addrBlacklist []enode.ID) []storage.HostInfo {
 	return []storage.HostInfo{}
 }

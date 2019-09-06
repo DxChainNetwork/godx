@@ -24,7 +24,7 @@ func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBac
 		return nil
 	}
 	// get the host info from the tree
-	storedInfo, _, exist := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
+	storedInfo, exist := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
 	if !exist {
 		return fmt.Errorf("host info %v not exist in tree", info.EnodeID)
 	}
