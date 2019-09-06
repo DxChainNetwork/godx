@@ -135,11 +135,19 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 	return &PublicDposTxAPI{b, nonceLock}
 }
 
-// SendApplyCandidateTx submit a apply candidate tx
-func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+// SendApplyCandidateTx submit a apply candidate tx.
+// the parameter ratio is the award distribution ratio that candidate state.
+func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, ratio uint8, value *big.Int) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{13})
 	ctx := context.Background()
+
+	if ratio > 100 {
+		return common.Hash{}, ErrInvalidAwardDistributionRatio
+	}
+
+	// convert uint8 to []byte
+	data := []byte{ratio}
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
@@ -190,10 +198,16 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 }
 
 // SendVoteTx submit a vote tx
-func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, candidates []common.Address, value *big.Int) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{15})
 	ctx := context.Background()
+
+	var data []byte
+	data, err := rlp.EncodeToBytes(candidates)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)

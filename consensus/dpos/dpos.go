@@ -81,7 +81,7 @@ var (
 	EmptyHash = common.Hash{}
 
 	// RewardRatioDenominator is the max value of reward ratio
-	RewardRatioDenominator uint8 = 100
+	RewardRatioDenominator uint64 = 100
 
 	frontierBlockReward       = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
 	byzantiumBlockReward      = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
@@ -422,7 +422,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// get ratio of reward between validator and its delegators
 	h := state.GetState(header.Validator, KeyRewardRatioNumerator)
 	rewardRatioNumerator := hashToRewardRatioNumerator(h)
-	rewardDenominator := common.NewBigIntUint64(uint64(RewardRatioDenominator))
+	rewardDenominator := common.NewBigIntUint64(RewardRatioDenominator)
 	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatioNumerator).Div(rewardDenominator)
 	assignedReward := new(big.Int).SetInt64(0)
 

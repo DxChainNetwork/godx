@@ -31,4 +31,7 @@ var (
 	// ErrUnknownPrecompileContractAddress is returned if the transaction is sent to a
 	// invalid precompile contract address
 	ErrUnknownPrecompileContractAddress = errors.New("invalid precompiled contract address")
+
+	// ErrInvalidAwardDistributionRatio is returned if the ApplyCandidateTx has a invalid ratio parameter
+	ErrInvalidAwardDistributionRatio = errors.New("invalid award distribution ratio,must be an integer within [0,100]")
 )
