@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/DxChainNetwork/godx/common/unit"
+
 	"github.com/DxChainNetwork/godx/storage"
 )
 
@@ -126,7 +128,7 @@ func RentPaymentValidation(rent storage.RentPayment) (err error) {
 	case rent.ExpectedRedundancy == 0:
 		return errors.New("expectedRedundancy cannot be set to 0")
 	case storage.RenewWindow > rent.Period:
-		return errors.New("renew window cannot be larger than the period")
+		return fmt.Errorf("storage period must be greater than %v", unit.FormatTime(storage.RenewWindow))
 	default:
 		return
 	}

@@ -6,7 +6,6 @@ package storageclient
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
@@ -94,38 +93,6 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 // parseStorageHosts will parse the string version of storage hosts into uint64 type
 func parseStorageHosts(hosts string) (parsed uint64, err error) {
 	return unit.ParseUint64(hosts, 1, "")
-}
-
-// parseExpectedUpload will parse the string into the form of rentPayment.ExpectedUpload
-func parseExpectedUpload(upload string) (parsed uint64, err error) {
-	if parsed, err = unit.ParseStorage(upload); err != nil {
-		return
-	}
-
-	// in terms of bytes / month
-	parsed = parsed / unit.BlocksPerMonth
-	return
-}
-
-// parseExpectedDownload will parse the string into the form of rentPayment.ExpectedDownload
-func parseExpectedDownload(download string) (parsed uint64, err error) {
-	if parsed, err = unit.ParseStorage(download); err != nil {
-		return
-	}
-
-	// in terms of bytes / month
-	parsed = parsed / unit.BlocksPerMonth
-	return
-}
-
-// parseExpectedRedundancy will parse the string into the form of rentPayment.ExpectedRedundancy
-func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
-	if parsed, err = strconv.ParseFloat(redundancy, 64); err != nil {
-		err = fmt.Errorf("error parsing the redundancy into float64: %s", err.Error())
-		return
-	}
-
-	return
 }
 
 // clientSettingGetDefault will take the clientSetting and check if any filed in the RentPayment is zero

@@ -213,7 +213,6 @@ type (
 		Fund         string `json:"Fund"`
 		StorageHosts string `json:"Number of Storage Hosts"`
 		Period       string `json:"Storage Time"`
-		RenewWindow  string `json:"Renew Time"`
 
 		// ExpectedStorage is amount of data expected to be stored
 		ExpectedStorage string `json:"Expected Storage"`
