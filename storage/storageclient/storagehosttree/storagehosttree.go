@@ -109,16 +109,10 @@ func (t *storageHostTree) Remove(enodeID enode.ID) error {
 }
 
 // All will retrieve all host information stored in the tree
-func (t *storageHostTree) All() []storage.HostInfo {
+func (t *storageHostTree) All() (his []storage.HostInfo) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
-	return t.all()
-}
-
-// all will retrieve, sort, and return all host information stored in the tree
-func (t *storageHostTree) all() (his []storage.HostInfo) {
-	// collect all node entries
 	var entries []nodeEntry
 	for _, node := range t.hostPool {
 		entries = append(entries, *node.entry)

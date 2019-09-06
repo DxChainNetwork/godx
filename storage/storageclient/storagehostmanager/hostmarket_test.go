@@ -9,12 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/p2p/enode"
-
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 )
 
 // fakeHostMarket is a fake host market that implement hostMarket
