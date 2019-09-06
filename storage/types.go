@@ -168,6 +168,16 @@ type (
 		InteractionType string    `json:"interactionType"`
 		Success         bool      `json:"success"`
 	}
+
+	// MarketPrice is the market price metrics from HostMarket
+	MarketPrice struct {
+		ContractPrice common.BigInt
+		StoragePrice  common.BigInt
+		UploadPrice   common.BigInt
+		DownloadPrice common.BigInt
+		Deposit       common.BigInt
+		MaxDeposit    common.BigInt
+	}
 )
 
 // ContractParams is the drafted contract sent by the storage client.
@@ -405,18 +415,6 @@ type (
 		TotalSectors uint64 `json:"totalSectors"`
 		UsedSectors  uint64 `json:"usedSectors"`
 		FreeSectors  uint64 `json:"freeSectors"`
-	}
-)
-
-type (
-	// MarketPrice is the market price metrics from HostMarket
-	MarketPrice struct {
-		ContractPrice common.BigInt
-		StoragePrice  common.BigInt
-		UploadPrice   common.BigInt
-		DownloadPrice common.BigInt
-		Deposit       common.BigInt
-		MaxDeposit    common.BigInt
 	}
 )
 
