@@ -181,6 +181,88 @@ func TestBlockToStorageContract(t *testing.T) {
 
 }
 
+func TestTestTransactionToStorageContractErr(t *testing.T) {
+	tests := []struct {
+		tx             *types.Transaction
+		expectedOutput string
+	}{
+		{
+			tx: types.NewTransaction(
+				0,
+				common.Address{},
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "not a storage contract related transaction",
+		},
+		{
+			tx: types.NewContractCreation(
+				0,
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "this is a deployment contract transaction",
+		},
+		{
+			tx: types.NewTransaction(
+				0,
+				common.BytesToAddress([]byte{9}),
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "the data field in the transaction is decoded abnormally",
+		},
+		{
+			tx: types.NewTransaction(
+				0,
+				common.BytesToAddress([]byte{10}),
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "the data field in the transaction is decoded abnormally",
+		},
+		{
+			tx: types.NewTransaction(
+				0,
+				common.BytesToAddress([]byte{11}),
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "the data field in the transaction is decoded abnormally",
+		},
+		{
+			tx: types.NewTransaction(
+				0,
+				common.BytesToAddress([]byte{12}),
+				new(big.Int).SetInt64(1),
+				0,
+				new(big.Int).SetInt64(1),
+				nil,
+			),
+			expectedOutput: "the data field in the transaction is decoded abnormally",
+		},
+	}
+
+	for _, test := range tests {
+		_, err := transactionToStorageContract(test.tx)
+		if err.Error() != test.expectedOutput {
+			t.Error(err)
+			return
+		}
+	}
+
+}
+
 func TestTransactionToStorageContract(t *testing.T) {
 	scRlp, err := rlp.EncodeToBytes(sc)
 	if err != nil {

@@ -1162,7 +1162,7 @@ func (s *PublicTransactionPoolAPI) GetStorageContractByTransactionHash(ctx conte
 func transactionToStorageContract(transaction *types.Transaction) (map[string]interface{}, error) {
 	precompiled := vm.PrecompiledEVMStorageContracts
 	if transaction.To() == nil {
-		return nil, errors.New("not a storage contract related transaction")
+		return nil, errors.New("this is a deployment contract transaction")
 	}
 	p, ok := precompiled[*transaction.To()]
 	if !ok {
