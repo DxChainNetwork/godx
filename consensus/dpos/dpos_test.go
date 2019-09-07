@@ -480,7 +480,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 
 	// update mint count trie
 	cnt := int64(0)
-	epochID := now / EpochInterval
+	epochID := CalculateEpochID(now)
 	epochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(epochBytes, uint64(epochID))
 	for i := 0; i < MaxValidatorSize; i++ {

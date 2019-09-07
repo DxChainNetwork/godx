@@ -124,13 +124,18 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 			needKickoutValidators = append(needKickoutValidators, &sortableAddress{validator, big.NewInt(cnt)})
 		}
 	}
+
 	// no validators need kickout
 	needKickoutValidatorCnt := len(needKickoutValidators)
 	if needKickoutValidatorCnt <= 0 {
 		return nil
 	}
-	sort.Sort(sort.Reverse(needKickoutValidators))
 
+	// ascend needKickoutValidators, the prev candidates have smaller mint count,
+	// and they will be remove firstly
+	sort.Sort(needKickoutValidators)
+
+	// count candidates to a safe size as a threshold to remove candidate
 	candidateCount := 0
 	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
 	for iter.Next() {
@@ -180,9 +185,9 @@ func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, er
 
 // tryElect will process election at the beginning of current epoch
 func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
-	genesisEpoch := genesis.Time.Int64() / EpochInterval
-	prevEpoch := parent.Time.Int64() / EpochInterval
-	currentEpoch := ec.TimeStamp / EpochInterval
+	genesisEpoch := CalculateEpochID(genesis.Time.Int64())
+	prevEpoch := CalculateEpochID(parent.Time.Int64())
+	currentEpoch := CalculateEpochID(ec.TimeStamp)
 
 	// if current block does not reach new epoch, directly return
 	if prevEpoch == currentEpoch {
@@ -306,6 +311,8 @@ type sortableAddress struct {
 	address common.Address
 	weight  *big.Int
 }
+
+// ascending, from small to big
 type sortableAddresses []*sortableAddress
 
 func (p sortableAddresses) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
@@ -385,6 +392,7 @@ type sortableVoteProportion struct {
 	proportion float64
 }
 
+// descending, from big to small
 type sortableVoteProportions []*sortableVoteProportion
 
 func (p sortableVoteProportions) Swap(i, j int) { p[i], p[j] = p[j], p[i] }

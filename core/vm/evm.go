@@ -823,7 +823,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 
 	// create thawing address: "thawing_" + currentEpochID
 	stateDB := evm.StateDB
-	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
@@ -884,10 +884,10 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
 
 		// how many epochs has passed from lastVoteTime to now
-		epochPassed := (now - lastVoteTime) / uint64(dpos.EpochInterval)
+		epochPassed := dpos.CalculateEpochID(int64(now) - dpos.CalculateEpochID(int64(lastVoteTime)))
 
 		// the real vote weight ratio
-		for i := uint64(0); i < epochPassed; i++ {
+		for i := int64(0); i < epochPassed; i++ {
 			realVoteWeightRatio *= dpos.AttenuationRatioPerEpoch
 		}
 
@@ -930,7 +930,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	stateDB := evm.StateDB
 
 	// create thawing address: "thawing_" + currentEpochID
-	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {

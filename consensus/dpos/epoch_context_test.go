@@ -225,7 +225,7 @@ func Test_KickoutValidators(t *testing.T) {
 		TimeStamp:   now,
 	}
 
-	epochID := now / EpochInterval
+	epochID := CalculateEpochID(now)
 	err = epochContext.kickoutValidators(epochID)
 	if err != nil {
 		t.Errorf("something wrong to kick out validators,error: %v", err)

@@ -337,7 +337,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-		curEpoch := curHeader.Time.Int64() / EpochInterval
+		curEpoch := CalculateEpochID(curHeader.Time.Int64())
 		if curEpoch != epoch {
 			epoch = curEpoch
 			validatorMap = make(map[common.Address]bool)
@@ -619,12 +619,12 @@ func NextSlot(now int64) int64 {
 // updateMintCnt update counts in mintCntTrie for the miner of newBlock
 func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMintCntTrie := dposContext.MintCntTrie()
-	currentEpoch := parentBlockTime / EpochInterval
+	currentEpoch := CalculateEpochID(parentBlockTime)
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
 
 	cnt := int64(1)
-	newEpoch := currentBlockTime / EpochInterval
+	newEpoch := CalculateEpochID(currentBlockTime)
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
 		iter := trie.NewIterator(currentMintCntTrie.NodeIterator(currentEpochBytes))
@@ -651,4 +651,8 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
 	v := h.Bytes()
 	return common.NewBigIntUint64(uint64(v[len(v)-1]))
+}
+
+func CalculateEpochID(blockTime int64) int64 {
+	return blockTime / EpochInterval
 }

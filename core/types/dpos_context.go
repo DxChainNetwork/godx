@@ -175,33 +175,6 @@ func (dc *DposContext) RevertToSnapShot(snapshot *DposContext) {
 	dc.mintCntTrie = snapshot.mintCntTrie
 }
 
-// FromProto will recover the entire DposContext with the given trie root
-func (dc *DposContext) FromProto(dcp *DposContextProto) error {
-	var err error
-	dc.epochTrie, err = NewEpochTrie(dcp.EpochRoot, dc.db)
-	if err != nil {
-		return err
-	}
-
-	dc.delegateTrie, err = NewDelegateTrie(dcp.DelegateRoot, dc.db)
-	if err != nil {
-		return err
-	}
-
-	dc.candidateTrie, err = NewCandidateTrie(dcp.CandidateRoot, dc.db)
-	if err != nil {
-		return err
-	}
-
-	dc.voteTrie, err = NewVoteTrie(dcp.VoteRoot, dc.db)
-	if err != nil {
-		return err
-	}
-
-	dc.mintCntTrie, err = NewMintCntTrie(dcp.MintCntRoot, dc.db)
-	return err
-}
-
 // DposContextProto wrap 5 trie root hash
 type DposContextProto struct {
 	EpochRoot     common.Hash `json:"epochRoot"        gencodec:"required"`
@@ -239,6 +212,9 @@ func (dc *DposContext) KickoutCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
 	err := dc.candidateTrie.TryDelete(candidate)
 	if err != nil {
+
+		// if got a MissingNodeError, that means cannot find the key of candidate in trie, it's normal case.
+		// if not a MissingNodeError, that means something wrong with the db of trie
 		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
 		}
