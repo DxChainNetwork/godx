@@ -26,8 +26,8 @@ type fakeHostMarket struct {
 	maxDeposit    common.BigInt
 }
 
-// GetMarketPrice return the price for the fake host manager
-func (hm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
+// getMarketPrice return the price for the fake host manager
+func (hm *fakeHostMarket) getMarketPrice() storage.MarketPrice {
 	return storage.MarketPrice{
 		ContractPrice: hm.contractPrice,
 		StoragePrice:  hm.storagePrice,
@@ -79,7 +79,7 @@ func newStorageHostForHostMarketTest(initialScanFinished bool, prices cachedPric
 	return shm
 }
 
-// TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.GetMarketPrice
+// TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.getMarketPrice
 func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 	tests := []struct {
 		initialScanFinished bool
@@ -136,7 +136,7 @@ func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 	}
 	for i, test := range tests {
 		shm := newStorageHostForHostMarketTest(test.initialScanFinished, test.cachedPrices, test.tree)
-		marketPrice := shm.GetMarketPrice()
+		marketPrice := shm.getMarketPrice()
 		if !reflect.DeepEqual(marketPrice, test.expectedPrice) {
 			t.Errorf("Test %d: \n\tGot %+v\n\tExpect %+v", i, marketPrice, test.expectedPrice)
 		}
@@ -194,110 +194,96 @@ func TestCachedPrices_isUpdateNeeded(t *testing.T) {
 // TestGetAverage test the functionality of getAverage
 func TestGetAverage(t *testing.T) {
 	tests := []struct {
-		infos  priceGetterSorter
-		expect common.BigInt
+		infos  []*storage.HostInfo
+		field  []int
+		expect []common.BigInt
 	}{
 		{
-			hostInfosByContractPrice(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
+			hostInfoListToPtrList(makeHostInfos()),
+			[]int{
+				fieldContractPrice,
+				fieldStoragePrice,
+				fieldUploadPrice,
+				fieldDownloadPrice,
+				fieldDeposit,
+				fieldMaxDeposit,
+			},
+			[]common.BigInt{
+				getInfoPriceByField(&infoPrototype, fieldContractPrice),
+				getInfoPriceByField(&infoPrototype, fieldStoragePrice),
+				getInfoPriceByField(&infoPrototype, fieldUploadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDownloadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDeposit),
+				getInfoPriceByField(&infoPrototype, fieldMaxDeposit),
+			},
 		},
 		{
-			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
+			hostInfoListToPtrList(makeShortHostInfos(0)),
+			[]int{
+				fieldContractPrice,
+				fieldStoragePrice,
+				fieldUploadPrice,
+				fieldDownloadPrice,
+				fieldDeposit,
+				fieldMaxDeposit,
+			},
+			[]common.BigInt{
+				getMarketPriceByField(defaultMarketPrice, fieldContractPrice),
+				getMarketPriceByField(defaultMarketPrice, fieldStoragePrice),
+				getMarketPriceByField(defaultMarketPrice, fieldUploadPrice),
+				getMarketPriceByField(defaultMarketPrice, fieldDownloadPrice),
+				getMarketPriceByField(defaultMarketPrice, fieldDeposit),
+				getMarketPriceByField(defaultMarketPrice, fieldMaxDeposit),
+			},
 		},
 		{
-			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
+			hostInfoListToPtrList(makeShortHostInfos(1)),
+			[]int{
+				fieldContractPrice,
+				fieldStoragePrice,
+				fieldUploadPrice,
+				fieldDownloadPrice,
+				fieldDeposit,
+				fieldMaxDeposit,
+			},
+			[]common.BigInt{
+				getInfoPriceByField(&infoPrototype, fieldContractPrice),
+				getInfoPriceByField(&infoPrototype, fieldStoragePrice),
+				getInfoPriceByField(&infoPrototype, fieldUploadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDownloadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDeposit),
+				getInfoPriceByField(&infoPrototype, fieldMaxDeposit),
+			},
 		},
 		{
-			hostInfosByContractPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByStoragePrice(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
-		},
-		{
-			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByStoragePrice(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByUploadPrice(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
-		},
-		{
-			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByUploadPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDownloadPrice(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
-		},
-		{
-			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDownloadPrice(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDeposit(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
-		},
-		{
-			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByDeposit(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByMaxDeposit(hostInfoListToPtrList(makeHostInfos())),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(0))),
-			common.NewBigInt(0),
-		},
-		{
-			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(1))),
-			common.NewBigInt(2),
-		},
-		{
-			hostInfosByMaxDeposit(hostInfoListToPtrList(makeShortHostInfos(2))),
-			common.NewBigInt(2),
+			hostInfoListToPtrList(makeShortHostInfos(2)),
+			[]int{
+				fieldContractPrice,
+				fieldStoragePrice,
+				fieldUploadPrice,
+				fieldDownloadPrice,
+				fieldDeposit,
+				fieldMaxDeposit,
+			},
+			[]common.BigInt{
+				getInfoPriceByField(&infoPrototype, fieldContractPrice),
+				getInfoPriceByField(&infoPrototype, fieldStoragePrice),
+				getInfoPriceByField(&infoPrototype, fieldUploadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDownloadPrice),
+				getInfoPriceByField(&infoPrototype, fieldDeposit),
+				getInfoPriceByField(&infoPrototype, fieldMaxDeposit),
+			},
 		},
 	}
 	for i, test := range tests {
-		res := getAverage(test.infos)
-		if res.Cmp(test.expect) != 0 {
-			t.Errorf("Test %d: got %v, expect %v", i, res, test.expect)
+		data := test.infos
+		for j := range test.field {
+			infoSorter := newInfoPriceSorter(data, test.field[j])
+			got := getAverage(infoSorter)
+			expect := test.expect[j]
+			if got.Cmp(expect) != 0 {
+				t.Errorf("Test %d/%d: got %v, expect %v", i, j, got, expect)
+			}
 		}
 	}
 }
@@ -389,17 +375,7 @@ func makeHostInfos() []storage.HostInfo {
 // makeShortHostInfos makes a list of HostInfo. Note the returned value all points to the same
 // HostInfo
 func makeShortHostInfos(size int) []storage.HostInfo {
-	info := storage.HostInfo{
-		HostExtConfig: storage.HostExtConfig{
-			AcceptingContracts:     true,
-			ContractPrice:          common.NewBigInt(2),
-			StoragePrice:           common.NewBigInt(2),
-			UploadBandwidthPrice:   common.NewBigInt(2),
-			DownloadBandwidthPrice: common.NewBigInt(2),
-			Deposit:                common.NewBigInt(2),
-			MaxDeposit:             common.NewBigInt(2),
-		},
-	}
+	info := infoPrototype
 	res := make([]storage.HostInfo, size)
 	for i := 0; i != size; i++ {
 		res[i] = info

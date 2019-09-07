@@ -143,7 +143,7 @@ const (
 const (
 	// priceUpdateInterval is the time to be passed before the host market price shall be
 	// updated.
-	priceUpdateInterval = 1 * time.Hour
+	priceUpdateInterval = 1 * time.Minute
 
 	// floorRatio is the ratio below which the price does not count for the average
 	floorRatio float64 = 0.2

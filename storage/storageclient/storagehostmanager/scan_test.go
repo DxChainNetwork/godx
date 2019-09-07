@@ -28,6 +28,19 @@ import (
 
 const checkInitialScanInterval = 200 * time.Millisecond
 
+var infoPrototype = storage.HostInfo{
+	HostExtConfig: storage.HostExtConfig{
+		AcceptingContracts:     true,
+		ContractPrice:          common.NewBigInt(2),
+		StoragePrice:           common.NewBigInt(2),
+		UploadBandwidthPrice:   common.NewBigInt(2),
+		DownloadBandwidthPrice: common.NewBigInt(2),
+		Deposit:                common.NewBigInt(2),
+		MaxDeposit:             common.NewBigInt(2),
+		RemainingStorage:       storage.DefaultRentPayment.ExpectedStorage * 10,
+	},
+}
+
 // TestStorageHostManager_ScanRace is the test case aiming to find race condition in scan method.
 func TestStorageHostManager_ScanRace(t *testing.T) {
 	shm := newHostManagerTestData()
@@ -52,20 +65,8 @@ func TestStorageHostManager_ScanRace(t *testing.T) {
 func TestStorageHostManager_scanLogic(t *testing.T) {
 	// Initialize and prepare data
 	shm := newHostManagerTestData()
-	prototype := storage.HostInfo{
-		HostExtConfig: storage.HostExtConfig{
-			AcceptingContracts:     true,
-			ContractPrice:          common.NewBigInt(2),
-			StoragePrice:           common.NewBigInt(2),
-			UploadBandwidthPrice:   common.NewBigInt(2),
-			DownloadBandwidthPrice: common.NewBigInt(2),
-			Deposit:                common.NewBigInt(2),
-			MaxDeposit:             common.NewBigInt(2),
-			RemainingStorage:       storage.DefaultRentPayment.ExpectedStorage * 10,
-		},
-	}
 	sizeInsert := 5
-	infos := hostInfosByPrototype(prototype, sizeInsert)
+	infos := hostInfosByPrototype(infoPrototype, sizeInsert)
 	shm.b = &storageClientBackendTestData{infos}
 	if err := insertHostInfos(shm, infos); err != nil {
 		t.Fatal(err)
@@ -178,7 +179,7 @@ func testDataInsert(num int, shm *StorageHostManager) error {
 	return nil
 }
 
-// hostInfosByPrototype makes some host infos with the given prototype
+// hostInfosByPrototype makes some host infos with the given infoPrototype
 func hostInfosByPrototype(prototype storage.HostInfo, num int) []storage.HostInfo {
 	res := make([]storage.HostInfo, num)
 	for i := 0; i != num; i++ {

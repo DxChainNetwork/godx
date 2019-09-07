@@ -15,17 +15,27 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
+const (
+	// fields denotes the corresponding field in node info
+	fieldContractPrice = iota
+	fieldStoragePrice
+	fieldUploadPrice
+	fieldDownloadPrice
+	fieldDeposit
+	fieldMaxDeposit
+)
+
 // hostMarket provides methods to evaluate the storage price, upload price, download
 // price, and deposit price. Note the hostMarket should have a caching method.
 type hostMarket interface {
-	GetMarketPrice() storage.MarketPrice
+	getMarketPrice() storage.MarketPrice
 	getBlockHeight() uint64
 }
 
-// GetMarketPrice will return the market price. It will first try to get the value from
+// getMarketPrice will return the market price. It will first try to get the value from
 // cached prices. If cached prices need to be updated, prices are calculated and returned.
 // Note that the function need to be protected by shm.lock for shm.initialScanFinished field.
-func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
+func (shm *StorageHostManager) getMarketPrice() storage.MarketPrice {
 	// If the initial scan has not finished, return the default host market price
 	// Since the shm has been locked when evaluating the host score, no lock is needed
 	// here.
@@ -116,133 +126,136 @@ func (cp *cachedPrices) getPrices() storage.MarketPrice {
 	return cp.prices
 }
 
-// priceGetterSorter is the interface that could get a specified price in the indexed item
-// and implement sort.Interface to enable sorting
-type priceGetterSorter interface {
-	sort.Interface
-	getPrice(index int) common.BigInt
+// getAverageContractPrice get the average contract price from host infos
+func getAverageContractPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldContractPrice)
+	return getAverage(sorter)
 }
 
-// getAverage get the average price for hostInfos. The strategy is to neglect the lowest prices and
-// highest prices, and aiming to get the average price for the mid range.
-func getAverage(hostInfos priceGetterSorter) common.BigInt {
-	sort.Sort(hostInfos)
-	length := hostInfos.Len()
-	lowIndex := int(math.Floor(float64(length) * floorRatio))
-	highIndex := length - int(math.Floor(float64(hostInfos.Len())*ceilRatio))
+// getAverageStoragePrice get the average storage price from host infos
+func getAverageStoragePrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldStoragePrice)
+	return getAverage(sorter)
+}
 
-	sum := common.BigInt0
-	if highIndex == lowIndex {
-		return common.BigInt0
+// getAverageUploadPrice get the average upload price from host infos
+func getAverageUploadPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldUploadPrice)
+	return getAverage(sorter)
+}
+
+// getAverageDownloadPrice get the average download price from host infos
+func getAverageDownloadPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldDownloadPrice)
+	return getAverage(sorter)
+}
+
+// getAverageDeposit get the average deposit from host infos
+func getAverageDeposit(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldDeposit)
+	return getAverage(sorter)
+}
+
+// getAverageMaxDeposit get the average max deposit from host infos
+func getAverageMaxDeposit(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldMaxDeposit)
+	return getAverage(sorter)
+}
+
+// hostInfoPriceSorter is the structure for sorting for host infos. The structure implements sort interface
+type hostInfoPriceSorter struct {
+	infos []*storage.HostInfo
+	field int
+}
+
+// newInfoPriceSorter returns a new hostInfoPriceSorter with the given infos and field
+func newInfoPriceSorter(infos []*storage.HostInfo, field int) *hostInfoPriceSorter {
+	return &hostInfoPriceSorter{
+		infos: infos,
+		field: field,
 	}
+}
+
+// getAverage get the average price for infoSorter. The strategy is to neglect the lowest prices and
+// highest prices, and aiming to get the average price for the mid range.
+func getAverage(infoSorter *hostInfoPriceSorter) common.BigInt {
+	// Sort the info sorter
+	sort.Sort(infoSorter)
+	length := infoSorter.Len()
+	// Calculate the range we want to calculate for average
+	lowIndex := int(math.Floor(float64(length) * floorRatio))
+	highIndex := length - int(math.Floor(float64(length)*ceilRatio))
+	if highIndex == lowIndex {
+		return getMarketPriceByField(defaultMarketPrice, infoSorter.field)
+	}
+	// Calculate average
+	sum := common.BigInt0
 	for i := lowIndex; i != highIndex; i++ {
-		sum = sum.Add(hostInfos.getPrice(i))
+		sum = sum.Add(infoSorter.getPrice(i))
 	}
 	average := sum.DivUint64(uint64(highIndex - lowIndex))
 	return average
 }
 
-// hostInfosByContractPrice is the list of hostInfo which implements priceGetterSorter for
-// contractPrice
-type hostInfosByContractPrice []*storage.HostInfo
-
-func (infos hostInfosByContractPrice) getPrice(i int) common.BigInt { return infos[i].ContractPrice }
-func (infos hostInfosByContractPrice) Len() int                     { return len(infos) }
-func (infos hostInfosByContractPrice) Swap(i, j int)                { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByContractPrice) Less(i, j int) bool {
-	return infos[i].ContractPrice.Cmp(infos[j].ContractPrice) < 0
+// Len return the size of the list
+func (infoSorter *hostInfoPriceSorter) Len() int {
+	return len(infoSorter.infos)
 }
 
-// getAverageContractPrice get the contract price from the host infos
-func getAverageContractPrice(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByContractPrice(infos)
-	return getAverage(infosForSort)
+// Swap swap two elements specified by index
+func (infoSorter *hostInfoPriceSorter) Swap(i, j int) {
+	infoSorter.infos[i], infoSorter.infos[j] = infoSorter.infos[j], infoSorter.infos[i]
 }
 
-// hostInfosByStoragePrice is the list of hostInfo which implements priceGetterSorter for
-// storagePrice
-type hostInfosByStoragePrice []*storage.HostInfo
-
-func (infos hostInfosByStoragePrice) getPrice(i int) common.BigInt { return infos[i].StoragePrice }
-func (infos hostInfosByStoragePrice) Len() int                     { return len(infos) }
-func (infos hostInfosByStoragePrice) Swap(i, j int)                { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByStoragePrice) Less(i, j int) bool {
-	return infos[i].StoragePrice.Cmp(infos[j].StoragePrice) < 0
+// Less compare the two items of index i and j to determine whose related price is smaller
+func (infoSorter *hostInfoPriceSorter) Less(i, j int) bool {
+	p1 := infoSorter.getPrice(i)
+	p2 := infoSorter.getPrice(j)
+	return p1.Cmp(p2) < 0
 }
 
-// getAverageStoragePrice get the average storage price from the host infos
-func getAverageStoragePrice(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByStoragePrice(infos)
-	return getAverage(infosForSort)
+// getPrice get the price of specified field of specified indexed item. Notice the index is assumed to be within
+// the range of [0, len(infoSorter.infos] - 1]
+func (infoSorter *hostInfoPriceSorter) getPrice(index int) common.BigInt {
+	return getInfoPriceByField(infoSorter.infos[index], infoSorter.field)
 }
 
-// hostInfosByUploadPrice is the list of hostInfo which implements priceGetterSorter for
-// uploadBandwidthPrice
-type hostInfosByUploadPrice []*storage.HostInfo
-
-func (infos hostInfosByUploadPrice) getPrice(i int) common.BigInt {
-	return infos[i].UploadBandwidthPrice
-}
-func (infos hostInfosByUploadPrice) Len() int      { return len(infos) }
-func (infos hostInfosByUploadPrice) Swap(i, j int) { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByUploadPrice) Less(i, j int) bool {
-	return infos[i].UploadBandwidthPrice.Cmp(infos[j].UploadBandwidthPrice) < 0
-}
-
-// getAverageUploadPrice return the average upload price from the host infos
-func getAverageUploadPrice(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByUploadPrice(infos)
-	return getAverage(infosForSort)
-}
-
-// hostInfosByDownloadPrice is the list of hostInfo which implements priceGetterSorter for
-// downloadBandwidthPrice
-type hostInfosByDownloadPrice []*storage.HostInfo
-
-func (infos hostInfosByDownloadPrice) getPrice(i int) common.BigInt {
-	return infos[i].DownloadBandwidthPrice
-}
-func (infos hostInfosByDownloadPrice) Len() int      { return len(infos) }
-func (infos hostInfosByDownloadPrice) Swap(i, j int) { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByDownloadPrice) Less(i, j int) bool {
-	return infos[i].DownloadBandwidthPrice.Cmp(infos[j].DownloadBandwidthPrice) < 0
+// getInfoPriceByField get the price specified by field of a host info
+func getInfoPriceByField(info *storage.HostInfo, field int) common.BigInt {
+	switch field {
+	case fieldContractPrice:
+		return info.ContractPrice
+	case fieldStoragePrice:
+		return info.StoragePrice
+	case fieldUploadPrice:
+		return info.UploadBandwidthPrice
+	case fieldDownloadPrice:
+		return info.DownloadBandwidthPrice
+	case fieldDeposit:
+		return info.Deposit
+	case fieldMaxDeposit:
+		return info.MaxDeposit
+	default:
+	}
+	return common.BigInt0
 }
 
-// getAverageDownloadPrice return the average download price from the host infos
-func getAverageDownloadPrice(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByDownloadPrice(infos)
-	return getAverage(infosForSort)
-}
-
-// hostInfosByDeposit is the list of hostInfo which implements priceGetterSorter for
-// Deposit
-type hostInfosByDeposit []*storage.HostInfo
-
-func (infos hostInfosByDeposit) getPrice(i int) common.BigInt { return infos[i].Deposit }
-func (infos hostInfosByDeposit) Len() int                     { return len(infos) }
-func (infos hostInfosByDeposit) Swap(i, j int)                { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByDeposit) Less(i, j int) bool {
-	return infos[i].Deposit.Cmp(infos[j].Deposit) < 0
-}
-
-// getAverageDeposit return the average deposit from the host infos
-func getAverageDeposit(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByDeposit(infos)
-	return getAverage(infosForSort)
-}
-
-// hostInfosByMaxDeposit is the list of hostInfo which implements priceGetterSorter for
-// MaxDeposit
-type hostInfosByMaxDeposit []*storage.HostInfo
-
-func (infos hostInfosByMaxDeposit) getPrice(i int) common.BigInt { return infos[i].MaxDeposit }
-func (infos hostInfosByMaxDeposit) Len() int                     { return len(infos) }
-func (infos hostInfosByMaxDeposit) Swap(i, j int)                { infos[i], infos[j] = infos[j], infos[i] }
-func (infos hostInfosByMaxDeposit) Less(i, j int) bool {
-	return infos[i].StoragePrice.Cmp(infos[j].MaxDeposit) < 0
-}
-
-func getAverageMaxDeposit(infos []*storage.HostInfo) common.BigInt {
-	infosForSort := hostInfosByMaxDeposit(infos)
-	return getAverage(infosForSort)
+// getMarketPriceByField get the price specified by field of a storage market prices
+func getMarketPriceByField(prices storage.MarketPrice, field int) common.BigInt {
+	switch field {
+	case fieldContractPrice:
+		return prices.ContractPrice
+	case fieldStoragePrice:
+		return prices.StoragePrice
+	case fieldUploadPrice:
+		return prices.UploadPrice
+	case fieldDownloadPrice:
+		return prices.DownloadPrice
+	case fieldDeposit:
+		return prices.Deposit
+	case fieldMaxDeposit:
+		return prices.MaxDeposit
+	default:
+	}
+	return common.BigInt0
 }

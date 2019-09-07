@@ -31,7 +31,7 @@ type fakeHostMarket struct {
 	prices storage.MarketPrice
 }
 
-// GetMarketPrice of fakeHostMarket directly return the prices
+// getMarketPrice of fakeHostMarket directly return the prices
 func (fhm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
 	return fhm.prices
 }
