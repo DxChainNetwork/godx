@@ -13,24 +13,34 @@ import (
 
 // HostEvaluator defines an interface that include methods that used to calculate
 // the storage host Evaluate and EvaluateDetail
-type HostEvaluator interface {
-	EvaluateDetail(info storage.HostInfo) EvaluationDetail
-	Evaluate(info storage.HostInfo) int64
-}
+type (
+	HostEvaluator interface {
+		EvaluateDetail(info storage.HostInfo) EvaluationDetail
+		Evaluate(info storage.HostInfo) int64
+	}
+
+	// hostMarket provides methods to evaluate the storage price, upload price, download
+	// price, and deposit price. Currently, the storageHostManager implements the hostMarket,
+	// and be used in evaluation.
+	hostMarket interface {
+		GetMarketPrice() storage.MarketPrice
+		getBlockHeight() uint64
+	}
+)
 
 // EvaluationDetail contains the detailed storage host evaluation factors
-type EvaluationDetail struct {
-	Evaluation int64 `json:"evaluation"`
-
-	PresenceScore         float64 `json:"presence_score"`
-	DepositScore          float64 `json:"deposit_score"`
-	InteractionScore      float64 `json:"interaction_score"`
-	ContractPriceScore    float64 `json:"contract_price_score"`
-	StorageRemainingScore float64 `json:"storage_remaining_score"`
-	UptimeScore           float64 `json:"uptime_score"`
-}
-
 type (
+	EvaluationDetail struct {
+		Evaluation int64 `json:"evaluation"`
+
+		PresenceScore         float64 `json:"presenceScore"`
+		DepositScore          float64 `json:"depositScore"`
+		InteractionScore      float64 `json:"interactionScore"`
+		ContractPriceScore    float64 `json:"contract_priceScore"`
+		StorageRemainingScore float64 `json:"storage_remainingScore"`
+		UptimeScore           float64 `json:"uptimeScore"`
+	}
+
 	// defaultEvaluator is the default host evaluation rules.
 	defaultEvaluator struct {
 		market hostMarket

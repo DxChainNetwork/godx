@@ -6,7 +6,6 @@ package storagehostmanager
 
 import (
 	"math"
-	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -25,13 +24,6 @@ const (
 	fieldMaxDeposit
 )
 
-// hostMarket provides methods to evaluate the storage price, upload price, download
-// price, and deposit price. Note the hostMarket should have a caching method.
-type hostMarket interface {
-	GetMarketPrice() storage.MarketPrice
-	getBlockHeight() uint64
-}
-
 // GetMarketPrice will return the market price. It will first try to get the value from
 // cached prices. If cached prices need to be updated, prices are calculated and returned.
 // Note that the function need to be protected by shm.lock for shm.initialScanFinished field.
@@ -42,12 +34,36 @@ func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
 	if !shm.isInitialScanFinished() {
 		return defaultMarketPrice
 	}
-	if shm.cachedPrices.isUpdateNeeded() {
-		// prices need to be calculated and applied to cachedPrices
+	return shm.cachedPrices.getPrices()
+}
+
+// UpdateMarketPriceLoop is a forever loop to update the market price
+func (shm *StorageHostManager) updateMarketPriceLoop() {
+	// Add to thread manager. If error happens directly return and no error reported.
+	if err := shm.tm.Add(); err != nil {
+		return
+	}
+	defer shm.tm.Done()
+	// Wait for initial scan finish. Here the function waitScanFinish is also the function used to update
+	// initial scan. Thus there is no need to implement another wait function for initialScan to become
+	// true.
+	if err := shm.waitScanFinish(); err != nil {
+		// If error returned, meaning the shm has been closed. Directly return and no error reported.
+		return
+	}
+	// Forever loop to update the prices
+	for {
+		// calculate the prices and update
 		prices := shm.calculateMarketPrice()
 		shm.cachedPrices.updatePrices(prices)
+		select {
+		// Return when stopped, continue when interval passed
+		case <-shm.tm.StopChan():
+			return
+		case <-time.After(priceUpdateInterval):
+			continue
+		}
 	}
-	return shm.cachedPrices.getPrices()
 }
 
 // calculateMarketPrice calculate and return the market price
@@ -87,26 +103,8 @@ func hostInfoListToPtrList(infos []storage.HostInfo) []*storage.HostInfo {
 // cachedPrices is the cache for pricing. The field is registered in storage host manager
 // and not saved to persistence
 type cachedPrices struct {
-	prices         storage.MarketPrice
-	timeLastUpdate time.Time
-	lock           sync.RWMutex
-}
-
-// isUpdateNeeded returns whether a cachedPrices update is needed.
-// The prices should be updated when
-// 1. prices are zero
-// 2. last update is before priceUpdateInterval
-func (cp *cachedPrices) isUpdateNeeded() bool {
-	cp.lock.RLock()
-	defer cp.lock.RUnlock()
-
-	if reflect.DeepEqual(cp.prices, storage.MarketPrice{}) {
-		return true
-	}
-	if time.Since(cp.timeLastUpdate) > priceUpdateInterval {
-		return true
-	}
-	return false
+	prices storage.MarketPrice
+	lock   sync.RWMutex
 }
 
 // updatePrices update the prices in cachedPrices
@@ -115,7 +113,6 @@ func (cp *cachedPrices) updatePrices(prices storage.MarketPrice) {
 	defer cp.lock.Unlock()
 
 	cp.prices = prices
-	cp.timeLastUpdate = time.Now()
 }
 
 // getPrices return the prices stored in cachedPrices
@@ -124,42 +121,6 @@ func (cp *cachedPrices) getPrices() storage.MarketPrice {
 	defer cp.lock.RUnlock()
 
 	return cp.prices
-}
-
-// getAverageContractPrice get the average contract price from host infos
-func getAverageContractPrice(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldContractPrice)
-	return getAverage(sorter)
-}
-
-// getAverageStoragePrice get the average storage price from host infos
-func getAverageStoragePrice(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldStoragePrice)
-	return getAverage(sorter)
-}
-
-// getAverageUploadPrice get the average upload price from host infos
-func getAverageUploadPrice(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldUploadPrice)
-	return getAverage(sorter)
-}
-
-// getAverageDownloadPrice get the average download price from host infos
-func getAverageDownloadPrice(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldDownloadPrice)
-	return getAverage(sorter)
-}
-
-// getAverageDeposit get the average deposit from host infos
-func getAverageDeposit(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldDeposit)
-	return getAverage(sorter)
-}
-
-// getAverageMaxDeposit get the average max deposit from host infos
-func getAverageMaxDeposit(infos []*storage.HostInfo) common.BigInt {
-	sorter := newInfoPriceSorter(infos, fieldMaxDeposit)
-	return getAverage(sorter)
 }
 
 // hostInfoPriceSorter is the structure for sorting for host infos. The structure implements sort interface
@@ -218,6 +179,42 @@ func (infoSorter *hostInfoPriceSorter) Less(i, j int) bool {
 // the range of [0, len(infoSorter.infos] - 1]
 func (infoSorter *hostInfoPriceSorter) getPrice(index int) common.BigInt {
 	return getInfoPriceByField(infoSorter.infos[index], infoSorter.field)
+}
+
+// getAverageContractPrice get the average contract price from host infos
+func getAverageContractPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldContractPrice)
+	return getAverage(sorter)
+}
+
+// getAverageStoragePrice get the average storage price from host infos
+func getAverageStoragePrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldStoragePrice)
+	return getAverage(sorter)
+}
+
+// getAverageUploadPrice get the average upload price from host infos
+func getAverageUploadPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldUploadPrice)
+	return getAverage(sorter)
+}
+
+// getAverageDownloadPrice get the average download price from host infos
+func getAverageDownloadPrice(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldDownloadPrice)
+	return getAverage(sorter)
+}
+
+// getAverageDeposit get the average deposit from host infos
+func getAverageDeposit(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldDeposit)
+	return getAverage(sorter)
+}
+
+// getAverageMaxDeposit get the average max deposit from host infos
+func getAverageMaxDeposit(infos []*storage.HostInfo) common.BigInt {
+	sorter := newInfoPriceSorter(infos, fieldMaxDeposit)
+	return getAverage(sorter)
 }
 
 // getInfoPriceByField get the price specified by field of a host info

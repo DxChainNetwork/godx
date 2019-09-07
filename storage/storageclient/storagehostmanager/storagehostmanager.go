@@ -114,6 +114,9 @@ func (shm *StorageHostManager) Start(b storage.ClientBackend) error {
 	// started scan and update storage host information
 	go shm.scan()
 
+	// start a loop to update market price
+	go shm.updateMarketPriceLoop()
+
 	shm.log.Info("Storage Host Manager Started")
 
 	return nil
