@@ -211,21 +211,24 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	// retrieve the caller's candidate deposit and vote deposit
 	balance := evm.StateDB.GetBalance(caller.Address())
-	candidateDeposit := int64(0)
-	voteDeposit := int64(0)
+	candidateDeposit := new(big.Int).SetInt64(0)
+	voteDeposit := new(big.Int).SetInt64(0)
 	candidateDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyCandidateDeposit)
 	if candidateDepositHash != (common.Hash{}) {
-		candidateDeposit = candidateDepositHash.Big().Int64()
+		candidateDeposit = candidateDepositHash.Big()
 	}
 
 	voteDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyVoteDeposit)
 	if voteDepositHash != (common.Hash{}) {
-		voteDeposit = voteDepositHash.Big().Int64()
+		voteDeposit = voteDepositHash.Big()
 	}
 
 	// if caller has candidate deposit or vote deposit, check whether left balance enough the transfer value
-	if value.Int64() > balance.Int64()-candidateDeposit-voteDeposit {
+	allowedBal := new(big.Int).Sub(balance, candidateDeposit)
+	allowedBal.Sub(allowedBal, voteDeposit)
+	if value.Cmp(allowedBal) > 0 {
 		return nil, gas, ErrFrozenAssetsCannotBeUsed
 	}
 
