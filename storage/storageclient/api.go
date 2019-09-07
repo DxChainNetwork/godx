@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/DxChainNetwork/godx/common/unit"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
@@ -140,6 +142,11 @@ func (api *PublicStorageClientAPI) Upload(source string, dxPath string) (string,
 		return "", err
 	}
 	return "success", nil
+}
+
+// GetRenewWindow return the renew window value
+func (api *PublicStorageClientAPI) GetRenewWindow() string {
+	return unit.FormatTime(storage.RenewWindow)
 }
 
 // PrivateStorageClientAPI defines the object used to call eligible APIs

@@ -125,6 +125,11 @@ func (h *HostPrivateAPI) GetPaymentAddress() string {
 	return fmt.Sprintf("Current address: %v", common.Bytes2Hex(addr[:]))
 }
 
+// GetProofWindow return the proof window size
+func (h *HostPrivateAPI) GetProofWindow() string {
+	return unit.FormatTime(storage.ProofWindowSize)
+}
+
 // AddStorageFolder add a storage folder with a specified size
 func (h *HostPrivateAPI) AddStorageFolder(path string, sizeStr string) (string, error) {
 	size, err := unit.ParseStorage(sizeStr)
