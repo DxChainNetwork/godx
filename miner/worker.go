@@ -315,6 +315,18 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
+
+		dposEng, ok := w.engine.(*dpos.Dpos)
+		if !ok {
+			panic("not dpos engine")
+		}
+
+		// check validator at now for dpos consensus
+		err := dposEng.CheckValidator(w.chain.CurrentBlock(), timestamp)
+		if err != nil {
+			return
+		}
+
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
 		atomic.StoreInt32(&w.newTxs, 0)
@@ -539,18 +551,6 @@ func (w *worker) taskLoop() {
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
-			}
-
-			engine, ok := w.engine.(*dpos.Dpos)
-			if !ok {
-				log.Error("not dpos engine")
-				return
-			}
-
-			// check validator at now for dpos consensus
-			err := engine.CheckValidator(w.chain.CurrentBlock(), task.block.Time().Int64())
-			if err != nil {
-				continue
 			}
 
 			// Reject duplicate sealing work due to resubmitting.

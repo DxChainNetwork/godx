@@ -553,7 +553,7 @@ func (s *Ethereum) StartMining(threads int) error {
 		// set validator address for dpos engine
 		dposEng, ok := s.engine.(*dpos.Dpos)
 		if !ok {
-			return errors.New("start mining without dpos engine")
+			panic("start mining without dpos engine")
 		}
 
 		wallet, err := s.accountManager.Find(accounts.Account{Address: validator})
