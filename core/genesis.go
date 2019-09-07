@@ -238,9 +238,12 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	root := statedb.IntermediateRoot(false)
 
 	// init genesis block dpos context
-	dposContext := initGenesisDposContext(g, db)
-	dcProto := dposContext.ToProto()
+	dposContext, err := initGenesisDposContext(statedb, g, db)
+	if err != nil {
+		panic(err)
+	}
 
+	dcProto := dposContext.ToProto()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
 		Nonce:       types.EncodeNonce(g.Nonce),
@@ -261,8 +264,15 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true)
+	_, err = statedb.Commit(false)
+	if err != nil {
+		panic(err)
+	}
+
+	err = statedb.Database().TrieDB().Commit(root, true)
+	if err != nil {
+		panic(err)
+	}
 
 	block := types.NewBlock(head, nil, nil, nil)
 	block.SetDposCtx(dposContext)
@@ -393,17 +403,47 @@ func decodePrealloc(data string) GenesisAlloc {
 }
 
 // initGenesisDposContext returns the dpos context of given genesis block
-func initGenesisDposContext(g *Genesis, db ethdb.Database) *types.DposContext {
+func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
 	dc, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	if g.Config != nil && g.Config.Dpos != nil && g.Config.Dpos.Validators != nil {
-		dc.SetValidators(g.Config.Dpos.Validators)
-		for _, validator := range g.Config.Dpos.Validators {
-			dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
-			dc.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes())
+
+	if g.Config == nil || g.Config.Dpos == nil ||
+		g.Config.Dpos.Validators == nil {
+		return nil, errors.New("invalid dpos config for genesis")
+	}
+
+	err = dc.SetValidators(g.Config.Dpos.Validators)
+	if err != nil {
+		return nil, err
+	}
+
+	// just let genesis initial validator voted themselves
+	for _, validator := range g.Config.Dpos.Validators {
+		err = dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
+		if err != nil {
+			return nil, err
 		}
+
+		err = dc.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes())
+		if err != nil {
+			return nil, err
+		}
+
+		votedList := []common.Address{validator}
+		votedBytes, err := rlp.EncodeToBytes(votedList)
+		if err != nil {
+			return nil, err
+		}
+
+		err = dc.VoteTrie().TryUpdate(validator.Bytes(), votedBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: store deposit for the initial validators
 	}
-	return dc
+
+	return dc, nil
 }
