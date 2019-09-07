@@ -552,9 +552,6 @@ func (w *worker) taskLoop() {
 			// check validator at now for dpos consensus
 			err := engine.CheckValidator(w.chain.CurrentBlock(), task.block.Time().Int64())
 			if err != nil {
-
-				// TODO: too many logs, so temporarily comment it
-				//log.Error("failed to mint the block", "error", err)
 				continue
 			}
 

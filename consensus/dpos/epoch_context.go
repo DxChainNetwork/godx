@@ -49,7 +49,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 		candidateAddr := common.BytesToAddress(candidate)
 		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
 
-		// iterator all vote to the geiven candidateAddr, and count the total actual vote weight
+		// iterator all vote to the given candidateAddr, and count the total actual vote weight
 		for delegateIterator.Next() {
 			delegator := delegateIterator.Value
 			voteWeight, ok := votes[candidateAddr]
@@ -197,38 +197,41 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	// iterator whole thawing account trie, and thawing the deposit of every delegator
 	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
 	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	ec.stateDB.Exist(thawingAddress)
-	thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
-	if thawingTrie == nil {
-		return nil
-	}
+	if ec.stateDB.Exist(thawingAddress) {
+		thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
 
-	it := trie.NewIterator(thawingTrie.NodeIterator(nil))
-	for it.Next() {
-		thawingDeposit := it.Value
-		if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
-			continue
+		// in normal case, it could not happen, just for prevent the nil pointer exception
+		if thawingTrie == nil {
+			return nil
 		}
 
-		// if candidate deposit thawing flag exists, then thawing it
-		if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
-
-			// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
-			ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
-		}
-
-		// if vote deposit thawing flag exists, then thawing it
-		if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
-			addr := string(it.Key[len(PrefixVoteThawing):])
-			currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
-
-			// if current vote deposit more than thawing deposit, directly skip, not thawing
-			if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
+		it := trie.NewIterator(thawingTrie.NodeIterator(nil))
+		for it.Next() {
+			thawingDeposit := it.Value
+			if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
 				continue
 			}
 
-			// else, thawing the difference of deposit
-			ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
+			// if candidate deposit thawing flag exists, then thawing it
+			if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
+
+				// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
+				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
+			}
+
+			// if vote deposit thawing flag exists, then thawing it
+			if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
+				addr := string(it.Key[len(PrefixVoteThawing):])
+				currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
+
+				// if current vote deposit more than thawing deposit, directly skip, not thawing
+				if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
+					continue
+				}
+
+				// else, thawing the difference of deposit
+				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
+			}
 		}
 	}
 

@@ -35,11 +35,20 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	BlockInterval    = int64(10)
-	EpochInterval    = int64(86400)
+	// BlockInterval indicates that a block will be produced every 10 seconds
+	BlockInterval = int64(10)
+
+	// EpochInterval indicates that a new epoch will be elected every a day
+	EpochInterval = int64(86400)
+
+	// MaxValidatorSize indicates that the max number of validators in dpos consensus
 	MaxValidatorSize = 5
-	SafeSize         = MaxValidatorSize*2/3 + 1
-	ConsensusSize    = MaxValidatorSize*2/3 + 1
+
+	// SafeSize indicates that the least number of validators in dpos consensus
+	SafeSize = MaxValidatorSize*2/3 + 1
+
+	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
+	ConsensusSize = MaxValidatorSize*2/3 + 1
 )
 
 var (
@@ -366,8 +375,9 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	return nil
 }
 
-func (s *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
-	key, err := s.db.Get(confirmedBlockHead)
+// load the latest confirmed block from the database
+func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
+	key, err := d.db.Get(confirmedBlockHead)
 	if err != nil {
 		return nil, err
 	}
@@ -378,12 +388,12 @@ func (s *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Hea
 	return header, nil
 }
 
-// store inserts the snapshot into the database.
-func (s *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
-	return db.Put(confirmedBlockHead, s.confirmedBlockHeader.Hash().Bytes())
+// inserts the confirmed block into the database.
+func (d *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
+	return db.Put(confirmedBlockHead, d.confirmedBlockHeader.Hash().Bytes())
 }
 
-// Prepare implements consensus.Engine, assembly some basic fileds into header
+// Prepare implements consensus.Engine, assembly some basic fields into header
 func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()

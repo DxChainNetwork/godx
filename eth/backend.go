@@ -520,6 +520,7 @@ func (s *Ethereum) StartMining(threads int) error {
 	type threaded interface {
 		SetThreads(threads int)
 	}
+
 	if th, ok := s.engine.(threaded); ok {
 		log.Info("Updated mining threads", "threads", threads)
 		if threads == 0 {
@@ -527,34 +528,41 @@ func (s *Ethereum) StartMining(threads int) error {
 		}
 		th.SetThreads(threads)
 	}
+
 	// If the miner was not running, initialize it
 	if !s.IsMining() {
+
 		// Propagate the initial price point to the transaction pool
 		s.lock.RLock()
 		price := s.gasPrice
 		s.lock.RUnlock()
 		s.txPool.SetGasPrice(price)
 
+		// set local address in wallet as validator by default
 		validator, err := s.Validator()
 		if err != nil {
-			log.Error("Cannot start mining without validator", "err", err)
-			return fmt.Errorf("validator missing: %v", err)
+			return fmt.Errorf("validator address missing: %v", err)
 		}
 
-		// Configure the local mining address
+		// set local address in wallet as validator by default
 		coinbase, err := s.Coinbase()
 		if err != nil {
-			log.Error("Cannot start mining without coinbase", "err", err)
-			return fmt.Errorf("coinbase missing: %v", err)
+			return fmt.Errorf("coinbase address missing: %v", err)
 		}
-		if dpos, ok := s.engine.(*dpos.Dpos); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: validator})
-			if wallet == nil || err != nil {
-				log.Error("coinbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			dpos.Authorize(validator, wallet.SignHash)
+
+		// set validator address for dpos engine
+		dposEng, ok := s.engine.(*dpos.Dpos)
+		if !ok {
+			return errors.New("start mining without dpos engine")
 		}
+
+		wallet, err := s.accountManager.Find(accounts.Account{Address: validator})
+		if wallet == nil || err != nil {
+			return fmt.Errorf("signer missing: %v", err)
+		}
+
+		dposEng.Authorize(validator, wallet.SignHash)
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.protocolManager.acceptTxs, 1)
