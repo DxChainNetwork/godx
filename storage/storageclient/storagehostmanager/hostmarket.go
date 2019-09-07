@@ -28,14 +28,14 @@ const (
 // hostMarket provides methods to evaluate the storage price, upload price, download
 // price, and deposit price. Note the hostMarket should have a caching method.
 type hostMarket interface {
-	getMarketPrice() storage.MarketPrice
+	GetMarketPrice() storage.MarketPrice
 	getBlockHeight() uint64
 }
 
-// getMarketPrice will return the market price. It will first try to get the value from
+// GetMarketPrice will return the market price. It will first try to get the value from
 // cached prices. If cached prices need to be updated, prices are calculated and returned.
 // Note that the function need to be protected by shm.lock for shm.initialScanFinished field.
-func (shm *StorageHostManager) getMarketPrice() storage.MarketPrice {
+func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
 	// If the initial scan has not finished, return the default host market price
 	// Since the shm has been locked when evaluating the host score, no lock is needed
 	// here.

@@ -26,8 +26,8 @@ type fakeHostMarket struct {
 	maxDeposit    common.BigInt
 }
 
-// getMarketPrice return the price for the fake host manager
-func (hm *fakeHostMarket) getMarketPrice() storage.MarketPrice {
+// GetMarketPrice return the price for the fake host manager
+func (hm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
 	return storage.MarketPrice{
 		ContractPrice: hm.contractPrice,
 		StoragePrice:  hm.storagePrice,
@@ -79,7 +79,7 @@ func newStorageHostForHostMarketTest(initialScanFinished bool, prices cachedPric
 	return shm
 }
 
-// TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.getMarketPrice
+// TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.GetMarketPrice
 func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 	tests := []struct {
 		initialScanFinished bool
@@ -136,7 +136,7 @@ func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 	}
 	for i, test := range tests {
 		shm := newStorageHostForHostMarketTest(test.initialScanFinished, test.cachedPrices, test.tree)
-		marketPrice := shm.getMarketPrice()
+		marketPrice := shm.GetMarketPrice()
 		if !reflect.DeepEqual(marketPrice, test.expectedPrice) {
 			t.Errorf("Test %d: \n\tGot %+v\n\tExpect %+v", i, marketPrice, test.expectedPrice)
 		}

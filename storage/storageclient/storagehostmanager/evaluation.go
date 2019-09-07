@@ -236,7 +236,7 @@ func evalHostDeposit(info storage.HostInfo, settings storage.RentPayment) common
 // evalHostMarketDeposit evaluate the deposit based on market evaluate price
 func evalHostMarketDeposit(settings storage.RentPayment, market hostMarket) common.BigInt {
 	// Evaluate host deposit for market price
-	marketPrice := market.getMarketPrice()
+	marketPrice := market.GetMarketPrice()
 	// Make the host info with necessary info from market price
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
@@ -270,7 +270,7 @@ func evalContractCost(info storage.HostInfo, settings storage.RentPayment) commo
 // evalMarketContractCost evaluate the market contract price cost
 func evalMarketContractCost(market hostMarket, settings storage.RentPayment) common.BigInt {
 	// Get the price from market
-	marketPrice := market.getMarketPrice()
+	marketPrice := market.GetMarketPrice()
 
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
