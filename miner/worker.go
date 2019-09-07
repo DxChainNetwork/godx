@@ -274,8 +274,12 @@ func (w *worker) pendingBlock() *types.Block {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
-	atomic.StoreInt32(&w.running, 1)
-	w.startCh <- struct{}{}
+
+	// not allow starting miner repeatedly
+	if !w.isRunning() {
+		atomic.StoreInt32(&w.running, 1)
+		w.startCh <- struct{}{}
+	}
 }
 
 // stop sets the running status as 0.
@@ -355,12 +359,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(false, commitInterruptNewHead)
 
 		case <-w.startCh:
-
-			// prevent to open multiple goroutine by starting miner repeatedly
-			if w.isRunning() {
-				continue
-			}
-
 			go func() {
 				clearPending(w.chain.CurrentBlock().NumberU64())
 				ticker := time.NewTicker(time.Second).C
