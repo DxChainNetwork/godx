@@ -48,14 +48,15 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
 		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
+		voteWeight, ok := votes[candidateAddr]
+		if !ok {
+			voteWeight = new(big.Int).SetInt64(0)
+			votes[candidateAddr] = voteWeight
+		}
 
 		// iterator all vote to the given candidateAddr, and count the total actual vote weight
 		for delegateIterator.Next() {
 			delegator := delegateIterator.Value
-			voteWeight, ok := votes[candidateAddr]
-			if !ok {
-				voteWeight = new(big.Int).SetInt64(0)
-			}
 			delegatorAddr := common.BytesToAddress(delegator)
 
 			// retrieve the vote deposit of delegator
