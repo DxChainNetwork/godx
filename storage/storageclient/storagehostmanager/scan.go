@@ -7,6 +7,7 @@ package storagehostmanager
 import (
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/DxChainNetwork/godx/storage"
@@ -38,6 +39,13 @@ func (shm *StorageHostManager) scan() {
 		return
 	}
 	shm.finishInitialScan()
+	// start a loop to update market price. Use a mutex m to indicate whether the first update have completed
+	var m *sync.Mutex
+	go shm.updateMarketPriceLoop(m)
+	// When m can be locked, the initial market price must have been updated. And we do not care about the m
+	// anymore. Leave it for golang gc to collect it.
+	m.Lock()
+
 	// After initial scan, the host evaluations need to be updates.
 	shm.lock.Lock()
 	if err := shm.evaluateHostTree(shm.storageHostTree); err != nil {
