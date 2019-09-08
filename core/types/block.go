@@ -77,7 +77,7 @@ type Header struct {
 	Root        common.Hash       `json:"stateRoot"        gencodec:"required"` // stateRoot
 	TxHash      common.Hash       `json:"transactionsRoot" gencodec:"required"` // txRoot
 	ReceiptHash common.Hash       `json:"receiptsRoot"     gencodec:"required"` // Receipt root
-	DposContext *DposContextProto `json:"dposContext"      gencodec:"required"`
+	DposContext *DposContextProto `json:"dposContext"      gencodec:"required" rlp:"nil"`
 	Bloom       Bloom             `json:"logsBloom"        gencodec:"required"` //
 	Difficulty  *big.Int          `json:"difficulty"       gencodec:"required"` // Difficulty of the current block
 	Number      *big.Int          `json:"number"           gencodec:"required"` // Block height
