@@ -1,25 +1,26 @@
 package miner
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/consensus/ethash"
-	"github.com/DxChainNetwork/godx/event"
-	"github.com/DxChainNetwork/godx/params"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/params"
 )
 
 var (
 	coinbaseAddress common.Address
-	consensusEngine *ethash.Ethash
+	consensusEngine *dpos.Dpos
 	backend         *testWorkerBackend
 	miner           *Miner
 )
 
 func init() {
 	coinbaseAddress = common.HexToAddress("0xD36722ADeC3EdCB29c8e7b5a47f352D701393462")
-	consensusEngine = ethash.NewTester(nil, false)
-	backend = newTestWorkerBackend(new(testing.T), params.TestChainConfig, consensusEngine, 0)
+	consensusEngine = dpos.NewDposFaker()
+	backend = newTestWorkerBackend(new(testing.T), params.DposChainConfig, consensusEngine, 0)
 	miner = New(backend, params.TestChainConfig, new(event.TypeMux), consensusEngine, time.Second, params.GenesisGasLimit, params.GenesisGasLimit, nil)
 }
 

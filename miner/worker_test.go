@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/consensus"
-	"github.com/DxChainNetwork/godx/consensus/ethash"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -34,8 +34,8 @@ import (
 
 var (
 	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
-	ethashChainConfig *params.ChainConfig
+	testTxPoolConfig core.TxPoolConfig
+	dposChainConfig  *params.ChainConfig
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
@@ -53,7 +53,7 @@ var (
 func init() {
 	testTxPoolConfig = core.DefaultTxPoolConfig
 	testTxPoolConfig.Journal = ""
-	ethashChainConfig = params.TestChainConfig
+	dposChainConfig = params.DposChainConfig
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
@@ -80,7 +80,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	)
 
 	switch engine.(type) {
-	case *ethash.Ethash:
+	case *dpos.Dpos:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -129,7 +129,7 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestPendingStateAndBlockEthash(t *testing.T) {
-	testPendingStateAndBlock(t, ethashChainConfig, ethash.NewFaker())
+	testPendingStateAndBlock(t, dposChainConfig, dpos.NewDposFaker())
 }
 
 func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
@@ -157,11 +157,11 @@ func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, eng
 	}
 }
 
-func TestEmptyWorkEthash(t *testing.T) {
-	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
+func TestCheckDposBalance(t *testing.T) {
+	testCheckDposBalance(t, dposChainConfig, dpos.NewDposFaker())
 }
 
-func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+func testCheckDposBalance(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
 	w, _ := newTestWorker(t, chainConfig, engine, 0)
@@ -174,7 +174,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 
 	checkEqual := func(t *testing.T, task *task, index int) {
 		receiptLen, balance := 0, big.NewInt(0)
-		if index == 1 {
+		if index == 0 {
 			receiptLen, balance = 1, big.NewInt(1000)
 		}
 		if len(task.receipts) != receiptLen {
@@ -205,7 +205,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	}
 
 	w.start()
-	for i := 0; i < 2; i += 1 {
+	for i := 0; i < 1; i += 1 {
 		select {
 		case <-taskCh:
 		case <-time.NewTimer(2 * time.Second).C:
@@ -215,10 +215,10 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 }
 
 func TestStreamUncleBlock(t *testing.T) {
-	ethash := ethash.NewFaker()
-	defer ethash.Close()
+	dposEngine := dpos.NewDposFaker()
+	defer dposEngine.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash, 1)
+	w, b := newTestWorker(t, dposChainConfig, dposEngine, 1)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -257,10 +257,11 @@ func TestStreamUncleBlock(t *testing.T) {
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
+
 	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
 
 	select {
@@ -271,7 +272,7 @@ func TestStreamUncleBlock(t *testing.T) {
 }
 
 func TestRegenerateMiningBlockEthash(t *testing.T) {
-	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
+	testRegenerateMiningBlock(t, dposChainConfig, dpos.NewDposFaker())
 }
 
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
@@ -317,7 +318,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
@@ -332,7 +333,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 }
 
 func TestAdjustIntervalEthash(t *testing.T) {
-	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
+	testAdjustInterval(t, dposChainConfig, dpos.NewDposFaker())
 }
 
 func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {

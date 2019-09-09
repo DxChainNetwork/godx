@@ -30,6 +30,12 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+type Mode uint
+const (
+	ModeNormal Mode = iota
+	ModeFake
+)
+
 const (
 	extraVanity        = 32   // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -134,6 +140,8 @@ type Dpos struct {
 
 	mu   sync.RWMutex
 	stop chan bool
+
+	Mode Mode
 }
 
 type SignerFn func(accounts.Account, []byte) ([]byte, error)
@@ -182,6 +190,13 @@ func New(config *params.DposConfig, db ethdb.Database) *Dpos {
 	}
 }
 
+// NewDposFaker create fake dpos for test
+func NewDposFaker() *Dpos {
+	return &Dpos{
+		Mode:ModeFake,
+	}
+}
+
 // Author return the address who produced the block
 func (d *Dpos) Author(header *types.Header) (common.Address, error) {
 	return header.Validator, nil
@@ -198,6 +213,10 @@ func (d *Dpos) VerifyHeader(chain consensus.ChainReader, header *types.Header, s
 }
 
 func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+	if d.Mode == ModeFake {
+		return nil
+	}
+
 	if header.Number == nil {
 		return errUnknownBlock
 	}
@@ -279,6 +298,10 @@ func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 }
 
 func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
+	if d.Mode == ModeFake {
+		return nil
+	}
+
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -366,8 +389,8 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	return nil
 }
 
-func (s *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
-	key, err := s.db.Get(confirmedBlockHead)
+func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
+	key, err := d.db.Get(confirmedBlockHead)
 	if err != nil {
 		return nil, err
 	}
@@ -379,8 +402,8 @@ func (s *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Hea
 }
 
 // store inserts the snapshot into the database.
-func (s *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
-	return db.Put(confirmedBlockHead, s.confirmedBlockHeader.Hash().Bytes())
+func (d *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
+	return db.Put(confirmedBlockHead, d.confirmedBlockHeader.Hash().Bytes())
 }
 
 // Prepare implements consensus.Engine, assembly some basic fileds into header
@@ -462,6 +485,11 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	// Accumulate block rewards and commit the final state root
 	accumulateRewards(chain.Config(), state, header, dposContext)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
+	if d.Mode == ModeFake {
+		return types.NewBlock(header, txs, uncles, receipts), nil
+	}
+
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
 		stateDB:     state,
@@ -504,6 +532,10 @@ func (d *Dpos) checkDeadline(lastBlock *types.Block, now int64) error {
 
 // CheckValidator check the given block whether has a right validator to produce
 func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
+	if d.Mode == ModeFake {
+		return nil
+	}
+
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
@@ -524,6 +556,17 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 
 // Seal implements consensus.Engine, sign the given block and return it
 func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	if d.Mode == ModeFake {
+		header := block.Header()
+		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", d.SealHash(block.Header()))
+		}
+		return nil
+	}
+
 	header := block.Header()
 	number := header.Number.Uint64()
 	// Sealing the genesis block is not supported
