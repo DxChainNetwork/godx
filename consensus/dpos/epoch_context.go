@@ -234,6 +234,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
 			}
 		}
+
+		// mark the thawingAddress as empty account, that will be deleted by stateDB
+		ec.stateDB.SetNonce(thawingAddress, 0)
 	}
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch

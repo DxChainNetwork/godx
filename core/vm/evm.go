@@ -826,6 +826,9 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
 	}
 
 	// set thawing flag for from address: "candidate_thawing_" + from ==> from
@@ -928,6 +931,9 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
 	}
 
 	// set thawing flag for from address: "vote_thawing_" + from ==> from
