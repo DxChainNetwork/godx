@@ -40,9 +40,6 @@ const (
 
 	//Total time to sign the contract
 	postponedExecutionBuffer = 12 * unit.BlocksPerHour
-
-	// ProofWindowSize is the window for storage host to submit a storage proof
-	proofWindowSize = 12 * unit.BlocksPerHour
 )
 
 var (
