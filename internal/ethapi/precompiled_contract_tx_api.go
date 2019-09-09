@@ -372,13 +372,14 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 		}
 
 		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
-		voteDeposit := int64(0)
+		voteDeposit := new(big.Int).SetInt64(0)
 		voteDepositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
 		if voteDepositHash != emptyHash {
-			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
+			voteDeposit = voteDepositHash.Big()
 		}
 
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-voteDeposit {
+		allowedBal := new(big.Int).Sub(balance, voteDeposit)
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
 			return ErrDepositValueNotSuitable
 		}
 
@@ -405,13 +406,14 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 		}
 
 		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
-		deposit := int64(0)
-		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
-		if depositHash != emptyHash {
-			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
+		candidateDeposit := new(big.Int).SetInt64(0)
+		candidateDepositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
+		if candidateDepositHash != emptyHash {
+			candidateDeposit = candidateDepositHash.Big()
 		}
 
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-deposit {
+		allowedBal := new(big.Int).Sub(balance, candidateDeposit)
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
 			return ErrDepositValueNotSuitable
 		}
 
