@@ -41,6 +41,15 @@ var infoPrototype = storage.HostInfo{
 	},
 }
 
+var marketPricePrototype = storage.MarketPrice{
+	ContractPrice: common.NewBigInt(2),
+	StoragePrice:  common.NewBigInt(2),
+	UploadPrice:   common.NewBigInt(2),
+	DownloadPrice: common.NewBigInt(2),
+	Deposit:       common.NewBigInt(2),
+	MaxDeposit:    common.NewBigInt(2),
+}
+
 // TestStorageHostManager_ScanRace is the test case aiming to find race condition in scan method.
 func TestStorageHostManager_ScanRace(t *testing.T) {
 	shm := newHostManagerTestData()
@@ -97,6 +106,9 @@ func TestStorageHostManager_scanLogic(t *testing.T) {
 		if expect != got {
 			t.Errorf("host evaluation not expected. Got %v, Expect %v", got, expect)
 		}
+	}
+	if err := shm.Close(); err != nil {
+		t.Errorf("cannot close the storage host manager: %v", err)
 	}
 }
 

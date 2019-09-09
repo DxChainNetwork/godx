@@ -40,7 +40,7 @@ func (shm *StorageHostManager) GetMarketPrice() storage.MarketPrice {
 // UpdateMarketPriceLoop is a infinite loop to update the market price. The input mutex is locked in
 // the inital status. After the first market price is updated, the lock will be unlocked to allow
 // scan to continue.
-func (shm *StorageHostManager) updateMarketPriceLoop(mutex *sync.RWMutex) {
+func (shm *StorageHostManager) updateMarketPriceLoop(mutex *sync.Mutex) {
 	// Add to thread manager. If error happens directly return and no error reported.
 	if err := shm.tm.Add(); err != nil {
 		return
@@ -54,7 +54,8 @@ func (shm *StorageHostManager) updateMarketPriceLoop(mutex *sync.RWMutex) {
 		// calculate the prices and update
 		prices := shm.calculateMarketPrice()
 		shm.cachedPrices.updatePrices(prices)
-		once.Do(mutex.Unlock)
+		// unlock the mutex for once
+		once.Do(func() { mutex.Unlock() })
 		select {
 		// Return when stopped, continue when interval passed
 		case <-shm.tm.StopChan():

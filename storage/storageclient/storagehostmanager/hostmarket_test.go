@@ -6,6 +6,7 @@ package storagehostmanager
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,63 +68,52 @@ func newFakeHostTree(infos []storage.HostInfo) *fakeHostTree {
 	return &fakeHostTree{infos}
 }
 
-// newStorageHostForHostMarketTest returns a storage host manager for testing for host market
-func newStorageHostForHostMarketTest(initialScanFinished bool, prices cachedPrices, tree storagehosttree.StorageHostTree) *StorageHostManager {
+// TestStorageHostManager_UpdateMarketPriceLoop test the functionality of sotrageHostManager.
+// updateMarketPriceLoop
+func TestStorageHostManager_updateMarketPriceLoop(t *testing.T) {
 	shm := &StorageHostManager{
-		storageHostTree: tree,
-		cachedPrices:    prices,
+		storageHostTree: newFakeHostTree(makeHostInfos()),
 	}
-	if initialScanFinished {
-		shm.finishInitialScan()
+	m := &sync.Mutex{}
+	m.Lock()
+	go shm.updateMarketPriceLoop(m)
+	m.Lock()
+
+	// After the initial update is finished, the cached price should have been updated.
+	if !reflect.DeepEqual(shm.cachedPrices.prices, marketPricePrototype) {
+		t.Fatalf("cached prices got %+v expect %+v", shm.cachedPrices.prices, marketPricePrototype)
 	}
-	return shm
+	// Closing the shm will terminate the program immediately
+	wait := make(chan struct{})
+	errChan := make(chan error)
+	go func() {
+		if err := shm.Close(); err != nil {
+			errChan <- err
+		} else {
+			close(wait)
+		}
+	}()
+	select {
+	case err := <-errChan:
+		t.Fatalf("Closing shm return an error: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		t.Error("closing timeout")
+	case <-wait:
+	}
 }
 
 // TestStorageHostManager_GetMarketPrice test the functionality of StorageHostManager.GetMarketPrice
-func TestStorageHostManager_GetMarketPrice(t *testing.T) {
+func TestStorageHostManager_calculateMarketPrice(t *testing.T) {
 	tests := []struct {
-		initialScanFinished bool
-		tree                storagehosttree.StorageHostTree
-		cachedPrices        cachedPrices
-		expectedPrice       storage.MarketPrice
+		tree          storagehosttree.StorageHostTree
+		expectedPrice storage.MarketPrice
 	}{
 		{
-			initialScanFinished: false,
-			tree:                newFakeHostTree([]storage.HostInfo{}),
-			expectedPrice:       defaultMarketPrice,
+			tree:          newFakeHostTree([]storage.HostInfo{}),
+			expectedPrice: defaultMarketPrice,
 		},
 		{
-			// Need update
-			initialScanFinished: true,
-			tree:                newFakeHostTree(makeHostInfos()),
-			cachedPrices: cachedPrices{
-				prices:         storage.MarketPrice{},
-				timeLastUpdate: time.Now().AddDate(-1, 0, 0),
-			},
-			expectedPrice: storage.MarketPrice{
-				ContractPrice: common.NewBigInt(2),
-				StoragePrice:  common.NewBigInt(2),
-				UploadPrice:   common.NewBigInt(2),
-				DownloadPrice: common.NewBigInt(2),
-				Deposit:       common.NewBigInt(2),
-				MaxDeposit:    common.NewBigInt(2),
-			},
-		},
-		{
-			// No need update
-			initialScanFinished: true,
-			tree:                newFakeHostTree([]storage.HostInfo{}),
-			cachedPrices: cachedPrices{
-				prices: storage.MarketPrice{
-					ContractPrice: common.NewBigInt(2),
-					StoragePrice:  common.NewBigInt(2),
-					UploadPrice:   common.NewBigInt(2),
-					DownloadPrice: common.NewBigInt(2),
-					Deposit:       common.NewBigInt(2),
-					MaxDeposit:    common.NewBigInt(2),
-				},
-				timeLastUpdate: time.Now(),
-			},
+			tree: newFakeHostTree(makeHostInfos()),
 			expectedPrice: storage.MarketPrice{
 				ContractPrice: common.NewBigInt(2),
 				StoragePrice:  common.NewBigInt(2),
@@ -135,10 +125,32 @@ func TestStorageHostManager_GetMarketPrice(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		shm := newStorageHostForHostMarketTest(test.initialScanFinished, test.cachedPrices, test.tree)
-		marketPrice := shm.GetMarketPrice()
+		shm := &StorageHostManager{storageHostTree: test.tree}
+		marketPrice := shm.calculateMarketPrice()
 		if !reflect.DeepEqual(marketPrice, test.expectedPrice) {
 			t.Errorf("Test %d: \n\tGot %+v\n\tExpect %+v", i, marketPrice, test.expectedPrice)
+		}
+	}
+}
+
+// TestStorageHostManager_GetMarketPrice test the logic for storageHostManager.GetMarketPrice
+func TestStorageHostManager_GetMarketPrice(t *testing.T) {
+	tests := []struct {
+		initialScanFinished uint32
+		cachedPrices        cachedPrices
+		expectedPrice       storage.MarketPrice
+	}{
+		{0, cachedPrices{prices: marketPricePrototype}, defaultMarketPrice},
+		{1, cachedPrices{prices: marketPricePrototype}, marketPricePrototype},
+	}
+	for i, test := range tests {
+		shm := &StorageHostManager{
+			initialScanFinished: test.initialScanFinished,
+			cachedPrices:        test.cachedPrices,
+		}
+		got := shm.GetMarketPrice()
+		if !reflect.DeepEqual(got, test.expectedPrice) {
+			t.Errorf("Test %d: got %+v, expect %+v", i, got, test.expectedPrice)
 		}
 	}
 }
@@ -153,41 +165,6 @@ func TestEmptyCalculateMarketPrice(t *testing.T) {
 	if !reflect.DeepEqual(marketPrice, defaultMarketPrice) {
 		t.Errorf("Empty host tree not return default market price\n\tGot %+v\n\tExpect %+v", marketPrice,
 			defaultMarketPrice)
-	}
-}
-
-// TestCachedPrices_isUpdateNeeded test cachedPrices.isUpdateNeeded
-func TestCachedPrices_isUpdateNeeded(t *testing.T) {
-	tests := []struct {
-		marketPrice storage.MarketPrice
-		timeUpdate  time.Time
-		expect      bool
-	}{
-		{
-			storage.MarketPrice{},
-			time.Now(),
-			true,
-		},
-		{
-			storage.MarketPrice{ContractPrice: common.BigInt1},
-			time.Now(),
-			false,
-		},
-		{
-			storage.MarketPrice{ContractPrice: common.BigInt1},
-			time.Now().AddDate(-1, 0, 0),
-			true,
-		},
-	}
-	for i, test := range tests {
-		cp := &cachedPrices{
-			prices:         test.marketPrice,
-			timeLastUpdate: test.timeUpdate,
-		}
-		res := cp.isUpdateNeeded()
-		if res != test.expect {
-			t.Errorf("Test %v result not expected. Got %v, Expect %v", i, res, test.expect)
-		}
 	}
 }
 

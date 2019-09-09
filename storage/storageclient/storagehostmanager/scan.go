@@ -40,7 +40,8 @@ func (shm *StorageHostManager) scan() {
 	}
 	shm.finishInitialScan()
 	// start a loop to update market price. Use a mutex m to indicate whether the first update have completed
-	var m *sync.Mutex
+	m := &sync.Mutex{}
+	m.Lock()
 	go shm.updateMarketPriceLoop(m)
 	// When m can be locked, the initial market price must have been updated. And we do not care about the m
 	// anymore. Leave it for golang gc to collect it.
