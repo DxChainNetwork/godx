@@ -423,7 +423,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// retrieve the total vote weight of header's validator
-	voteCount := common.NewBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big().Int64())
+	voteCount := common.PtrBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big())
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return

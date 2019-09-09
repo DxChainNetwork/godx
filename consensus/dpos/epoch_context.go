@@ -47,12 +47,23 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	for existCandidate {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
+
+		// retrieve candidate deposit
+		candidateDeposit := new(big.Int).SetInt64(0)
+		candidateDepositHash := statedb.GetState(candidateAddr, KeyCandidateDeposit)
+		if candidateDepositHash != EmptyHash {
+			candidateDeposit = candidateDepositHash.Big()
+		}
+
 		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
 		voteWeight, ok := votes[candidateAddr]
 		if !ok {
 			voteWeight = new(big.Int).SetInt64(0)
-			votes[candidateAddr] = voteWeight
 		}
+
+		// candidate' total vote weight will include candidate deposit
+		voteWeight.Add(voteWeight, candidateDeposit)
+		votes[candidateAddr] = voteWeight
 
 		// iterator all vote to the given candidateAddr, and count the total actual vote weight
 		for delegateIterator.Next() {
@@ -66,7 +77,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			if voteDepositHash == EmptyHash {
 				continue
 			}
-			voteDeposit := new(big.Int).SetBytes(voteDepositHash.Bytes())
+			voteDeposit := voteDepositHash.Big()
 
 			// retrieve the real vote weight ratio of delegator
 			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyRealVoteWeightRatio)
