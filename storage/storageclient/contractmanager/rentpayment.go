@@ -10,7 +10,6 @@ import (
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/common/unit"
-
 	"github.com/DxChainNetwork/godx/storage"
 )
 
