@@ -8,10 +8,13 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -31,8 +34,15 @@ var (
 )
 
 const (
+
+	// MaxVoteCount is the max number of voted candidates in a vot tx
+	MaxVoteCount = 30
+
+	// StorageContractTxGas defines the default gas for storage contract tx
 	StorageContractTxGas = 90000
-	DposTxGas            = 1000000
+
+	// DposTxGas defines the default gas for dpos tx
+	DposTxGas = 1000000
 )
 
 // PrivateStorageContractTxAPI exposes the storage contract tx methods for the RPC interface
@@ -137,20 +147,16 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 
 // SendApplyCandidateTx submit a apply candidate tx.
 // the parameter ratio is the award distribution ratio that candidate state.
-func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, ratio uint8, value *big.Int) (common.Hash, error) {
+func (dpos *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]interface{}) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{13})
 	ctx := context.Background()
 
-	if ratio > 100 {
-		return common.Hash{}, ErrInvalidAwardDistributionRatio
+	// parse precompile contract tx args
+	args, err := ParsePrecompileContractTxArgs(to, DposTxGas, fields)
+	if err != nil {
+		return common.Hash{}, err
 	}
-
-	// convert uint8 to []byte
-	data := []byte{ratio}
-
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
 
 	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
@@ -198,19 +204,16 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 }
 
 // SendVoteTx submit a vote tx
-func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, candidates []common.Address, value *big.Int) (common.Hash, error) {
+func (dpos *PublicDposTxAPI) SendVoteTx(fields map[string]interface{}) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{15})
 	ctx := context.Background()
 
-	var data []byte
-	data, err := rlp.EncodeToBytes(candidates)
+	// parse precompile contract tx args
+	args, err := ParsePrecompileContractTxArgs(to, DposTxGas, fields)
 	if err != nil {
 		return common.Hash{}, err
 	}
-
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
 
 	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
@@ -431,4 +434,81 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 	default:
 		return ErrUnknownPrecompileContractAddress
 	}
+}
+
+func ParsePrecompileContractTxArgs(to common.Address, gas uint64, fields map[string]interface{}) (args *PrecompiledContractTxArgs, err error) {
+	var data []byte
+	var from common.Address
+	var deposit common.BigInt
+	for key, value := range fields {
+		switch key {
+		case "ratio":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrRatioNotStringFormat
+			}
+
+			ratio, err := strconv.ParseUint(str, 10, 8)
+			if err != nil {
+				return nil, ErrParseStringToUint
+			}
+
+			if ratio > uint64(100) {
+				return nil, ErrInvalidAwardDistributionRatio
+			}
+
+			// convert uint8 to []byte
+			data = []byte{uint8(ratio)}
+
+		case "from":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrFromNotStringFormat
+			}
+
+			from = common.HexToAddress(str)
+
+		case "deposit":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrDepositNotStringFormat
+			}
+
+			// parse to big int,like "1000camel"、"10dx" and so on
+			deposit, err = unit.ParseCurrency(str)
+			if err != nil {
+				return nil, ErrParseStringToBigInt
+			}
+
+		case "candidates":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrCandidatesNotStringFormat
+			}
+
+			hexAddrs := strings.Split(str, ",")
+
+			// limit the max vote count to 30
+			if len(hexAddrs) > MaxVoteCount {
+				return nil, ErrBeyondMaxVoteSize
+			}
+
+			candidates := make([]common.Address, 0)
+			for _, hexAddr := range hexAddrs {
+				addr := common.HexToAddress(hexAddr)
+				candidates = append(candidates, addr)
+			}
+
+			data, err = rlp.EncodeToBytes(candidates)
+			if err != nil {
+				return nil, ErrRLPEncodeCandidates
+			}
+
+		default:
+			return nil, ErrUnknownParameter
+		}
+	}
+
+	args = NewPrecompiledContractTxArgs(from, to, data, deposit.BigIntPtr(), gas)
+	return
 }

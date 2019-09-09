@@ -19,7 +19,6 @@ package vm
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -34,10 +33,6 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
-)
-
-const (
-	MaxVoteCount = 30
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -861,11 +856,6 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
-	}
-
-	// limit the max vote count to 30
-	if len(candidateList) > MaxVoteCount {
-		return nil, gasRemainDec, fmt.Errorf("actually vote %d candidates, beyond the max size 30", len(candidateList))
 	}
 
 	// record vote data
