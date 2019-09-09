@@ -331,7 +331,7 @@ func (args *PrecompiledContractTxArgs) NewPrecompiledContractTx(ctx context.Cont
 		return nil, errors.New(`precompile contract tx without to`)
 	}
 
-	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+	return types.NewTransaction(uint64(*args.Nonce), args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
 }
 
 // NewPrecompiledContractTxArgs construct precompiled contract tx args
@@ -436,6 +436,7 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 	}
 }
 
+// ParsePrecompileContractTxArgs parse the input fields to PrecompiledContractTxArgs format
 func ParsePrecompileContractTxArgs(to common.Address, gas uint64, fields map[string]interface{}) (args *PrecompiledContractTxArgs, err error) {
 	var data []byte
 	var from common.Address
