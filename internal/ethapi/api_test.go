@@ -100,6 +100,7 @@ var ha = types.HostAnnouncement{
 func TestBlockToStorageContract(t *testing.T) {
 	tests := []struct {
 		block        *types.Block
+		expectLength int
 		expectOutput string
 	}{
 		{
@@ -112,11 +113,26 @@ func TestBlockToStorageContract(t *testing.T) {
 						new(big.Int).SetInt64(1),
 						0,
 						new(big.Int).SetInt64(1),
-						[]byte("contractCreate")),
+						[]byte("contractCreate1")),
+					types.NewTransaction(
+						1,
+						common.BytesToAddress([]byte{10}),
+						new(big.Int).SetInt64(2),
+						0,
+						new(big.Int).SetInt64(2),
+						[]byte("contractCreate2")),
+					types.NewTransaction(
+						2,
+						common.BytesToAddress([]byte{10}),
+						new(big.Int).SetInt64(3),
+						0,
+						new(big.Int).SetInt64(3),
+						[]byte("contractCreate3")),
 				},
 				nil,
 				nil),
 			expectOutput: vm.ContractCreateTransaction,
+			expectLength: 3,
 		},
 		{
 			block: types.NewBlock(
@@ -128,11 +144,19 @@ func TestBlockToStorageContract(t *testing.T) {
 						new(big.Int).SetInt64(1),
 						0,
 						new(big.Int).SetInt64(1),
-						[]byte("CommitRevision")),
+						[]byte("CommitRevision1")),
+					types.NewTransaction(
+						1,
+						common.BytesToAddress([]byte{11}),
+						new(big.Int).SetInt64(2),
+						0,
+						new(big.Int).SetInt64(2),
+						[]byte("CommitRevision2")),
 				},
 				nil,
 				nil),
 			expectOutput: vm.CommitRevisionTransaction,
+			expectLength: 2,
 		},
 		{
 			block: types.NewBlock(
@@ -144,11 +168,33 @@ func TestBlockToStorageContract(t *testing.T) {
 						new(big.Int).SetInt64(1),
 						0,
 						new(big.Int).SetInt64(1),
-						[]byte("StorageProof")),
+						[]byte("StorageProof1")),
+					types.NewTransaction(
+						1,
+						common.BytesToAddress([]byte{12}),
+						new(big.Int).SetInt64(2),
+						0,
+						new(big.Int).SetInt64(2),
+						[]byte("StorageProof2")),
+					types.NewTransaction(
+						2,
+						common.BytesToAddress([]byte{12}),
+						new(big.Int).SetInt64(3),
+						0,
+						new(big.Int).SetInt64(3),
+						[]byte("StorageProof3")),
+					types.NewTransaction(
+						3,
+						common.BytesToAddress([]byte{12}),
+						new(big.Int).SetInt64(4),
+						0,
+						new(big.Int).SetInt64(4),
+						[]byte("StorageProof4")),
 				},
 				nil,
 				nil),
 			expectOutput: vm.StorageProofTransaction,
+			expectLength: 4,
 		},
 		{
 			block: types.NewBlock(
@@ -160,11 +206,70 @@ func TestBlockToStorageContract(t *testing.T) {
 						new(big.Int).SetInt64(1),
 						0,
 						new(big.Int).SetInt64(1),
-						[]byte("HostAnnounce")),
+						[]byte("HostAnnounce1")),
+					types.NewTransaction(
+						1,
+						common.BytesToAddress([]byte{9}),
+						new(big.Int).SetInt64(2),
+						0,
+						new(big.Int).SetInt64(2),
+						[]byte("HostAnnounce2")),
+					types.NewTransaction(
+						2,
+						common.BytesToAddress([]byte{9}),
+						new(big.Int).SetInt64(3),
+						0,
+						new(big.Int).SetInt64(3),
+						[]byte("HostAnnounce3")),
+					types.NewTransaction(
+						3,
+						common.BytesToAddress([]byte{9}),
+						new(big.Int).SetInt64(4),
+						0,
+						new(big.Int).SetInt64(4),
+						[]byte("HostAnnounce4")),
+					types.NewTransaction(
+						4,
+						common.BytesToAddress([]byte{9}),
+						new(big.Int).SetInt64(5),
+						0,
+						new(big.Int).SetInt64(5),
+						[]byte("HostAnnounce5")),
 				},
 				nil,
 				nil),
 			expectOutput: vm.HostAnnounceTransaction,
+			expectLength: 5,
+		},
+		{
+			block: types.NewBlock(
+				header,
+				types.Transactions{
+					types.NewContractCreation(
+						0,
+						new(big.Int).SetInt64(1),
+						0,
+						new(big.Int).SetInt64(1),
+						nil,
+					),
+					types.NewContractCreation(
+						1,
+						new(big.Int).SetInt64(2),
+						0,
+						new(big.Int).SetInt64(2),
+						nil,
+					),
+					types.NewContractCreation(
+						2,
+						new(big.Int).SetInt64(3),
+						0,
+						new(big.Int).SetInt64(3),
+						nil,
+					),
+				},
+				nil,
+				nil),
+			expectLength: 0,
 		},
 	}
 
@@ -174,14 +279,24 @@ func TestBlockToStorageContract(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		if result[test.block.Transactions()[0].Hash().String()] != test.expectOutput {
-			t.Error("the returned result does not match the expectOutput value")
+
+		if len(result) != test.expectLength {
+			t.Error("the expectLength error:", len(result))
 		}
+
+		if len(result) != 0 {
+			for _, value := range result {
+				if value != test.expectOutput {
+					t.Error("the expectOutput error:", value)
+				}
+			}
+		}
+
 	}
 
 }
 
-func TestTestTransactionToStorageContractErr(t *testing.T) {
+func TestTransactionToStorageContractErr(t *testing.T) {
 	tests := []struct {
 		tx             *types.Transaction
 		expectedOutput string
@@ -199,7 +314,7 @@ func TestTestTransactionToStorageContractErr(t *testing.T) {
 		},
 		{
 			tx: types.NewContractCreation(
-				0,
+				1,
 				new(big.Int).SetInt64(1),
 				0,
 				new(big.Int).SetInt64(1),
@@ -209,7 +324,7 @@ func TestTestTransactionToStorageContractErr(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				2,
 				common.BytesToAddress([]byte{9}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -220,7 +335,7 @@ func TestTestTransactionToStorageContractErr(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				3,
 				common.BytesToAddress([]byte{10}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -231,7 +346,7 @@ func TestTestTransactionToStorageContractErr(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				4,
 				common.BytesToAddress([]byte{11}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -242,7 +357,7 @@ func TestTestTransactionToStorageContractErr(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				5,
 				common.BytesToAddress([]byte{12}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -299,7 +414,7 @@ func TestTransactionToStorageContract(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				1,
 				common.BytesToAddress([]byte{11}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -312,7 +427,7 @@ func TestTransactionToStorageContract(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				2,
 				common.BytesToAddress([]byte{12}),
 				new(big.Int).SetInt64(1),
 				0,
@@ -325,7 +440,7 @@ func TestTransactionToStorageContract(t *testing.T) {
 		},
 		{
 			tx: types.NewTransaction(
-				0,
+				3,
 				common.BytesToAddress([]byte{9}),
 				new(big.Int).SetInt64(1),
 				0,

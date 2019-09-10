@@ -6,6 +6,14 @@ package storageclient
 
 import (
 	"context"
+	"math/big"
+	"math/rand"
+	"os"
+	"os/user"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -18,22 +26,35 @@ import (
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"math/big"
-	"math/rand"
-	"os"
-	"os/user"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 var hashes = []string{"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd51",
 	"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd53", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd54", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd55"}
+
+var mokeHostAnnouncements = []types.HostAnnouncement{
+	{
+		NetAddress: "enode://0ec8f957266eb79c56fc422c28643119a0b7b9771f0cd1a3dc91dc1b865b29e25e3856703bd8fe040556c443cea2ff13fd5bf432adfa3445a3366e0eb9ae063d@127.0.0.1:30303",
+		Signature:  []byte("0x111111"),
+	},
+	{
+		NetAddress: "enode://0ec8f957266eb79c56fc422c28643119a0b7b9771f0cd1a3dc91dc1b865b29e25e3856703bd8fe040556c443cea2ff13fd5bf432adfa3445a3366e0eb9ae063d@127.0.0.1:30303",
+		Signature:  []byte("0x222222"),
+	},
+	{
+		NetAddress: "enode://0ec8f957266eb79c56fc422c28643119a0b7b9771f0cd1a3dc91dc1b865b29e25e3856703bd8fe040556c443cea2ff13fd5bf432adfa3445a3366e0eb9ae063d@127.0.0.1:30303",
+		Signature:  []byte("0x333333"),
+	},
+	{
+		NetAddress: "enode://0ec8f957266eb79c56fc422c28643119a0b7b9771f0cd1a3dc91dc1b865b29e25e3856703bd8fe040556c443cea2ff13fd5bf432adfa3445a3366e0eb9ae063d@127.0.0.1:30303",
+		Signature:  []byte("0x444444"),
+	},
+}
 
 type StorageClientTester struct {
 	Client  *StorageClient
@@ -116,6 +137,73 @@ func homeDir() string {
 	return ""
 }
 
+func mokeBlockHeader(number uint64) *types.Header {
+	return &types.Header{
+		ParentHash: common.HexToHash("abcdef"),
+		UncleHash:  types.CalcUncleHash(nil),
+		Coinbase:   common.HexToAddress("01238abcdd"),
+		Root:       crypto.Keccak256Hash([]byte("1")),
+		TxHash:     crypto.Keccak256Hash([]byte("11")),
+		Bloom:      types.BytesToBloom(nil),
+		Difficulty: big.NewInt(10000000),
+		Number:     new(big.Int).SetUint64(number),
+		GasLimit:   uint64(5000),
+		GasUsed:    uint64(300),
+		Time:       big.NewInt(1550103878),
+		Extra:      []byte{},
+		MixDigest:  crypto.Keccak256Hash(nil),
+		Nonce:      types.EncodeNonce(uint64(1)),
+	}
+}
+
+func TestStorageClient_GetHostAnnouncementWithBlockHash(t *testing.T) {
+	client := &StorageClient{}
+	client.ethBackend = &BackendTest{}
+	tests := []struct {
+		client       *StorageClient
+		blockHash    common.Hash
+		expectNumber uint64
+		expectLength int
+		expectOut    []types.HostAnnouncement
+	}{
+		{
+			client:       client,
+			blockHash:    common.Hash{1},
+			expectNumber: 1,
+			expectLength: 4,
+			expectOut:    mokeHostAnnouncements,
+		},
+		{
+			client:       client,
+			blockHash:    common.Hash{2},
+			expectNumber: 2,
+			expectLength: 0,
+		},
+	}
+
+	for _, test := range tests {
+		has, number, err := test.client.GetHostAnnouncementWithBlockHash(test.blockHash)
+		if err != nil {
+			t.Fatal("the function GetHostAnnouncementWithBlockHash error:", err)
+		}
+		if number != test.expectNumber {
+			t.Error("the expectNumber error:", number)
+		}
+		if len(has) != test.expectLength {
+			t.Error("the expectLength error:", len(has))
+		}
+
+		if len(has) > 0 {
+			for index, ha := range has {
+				if ha.RLPHash() != test.expectOut[index].RLPHash() {
+					t.Error("the expectOut error:", ha)
+				}
+			}
+		}
+
+	}
+}
+
 type BackendTest struct{}
 
 func (b *BackendTest) SelfEnodeURL() string { return "" }
@@ -144,6 +232,108 @@ func (b *BackendTest) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent)
 }
 
 func (b *BackendTest) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+	switch blockHash {
+	case common.Hash{1}:
+		haRlp1, err := rlp.EncodeToBytes(mokeHostAnnouncements[0])
+		if err != nil {
+			return nil, err
+		}
+		haRlp2, err := rlp.EncodeToBytes(mokeHostAnnouncements[1])
+		if err != nil {
+			return nil, err
+		}
+		haRlp3, err := rlp.EncodeToBytes(mokeHostAnnouncements[2])
+		if err != nil {
+			return nil, err
+		}
+		haRlp4, err := rlp.EncodeToBytes(mokeHostAnnouncements[3])
+		if err != nil {
+			return nil, err
+		}
+		return types.NewBlock(
+			mokeBlockHeader(1),
+			types.Transactions{
+				types.NewTransaction(
+					0,
+					common.BytesToAddress([]byte{9}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					haRlp1),
+				types.NewTransaction(
+					1,
+					common.BytesToAddress([]byte{9}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					haRlp2),
+				types.NewTransaction(
+					2,
+					common.BytesToAddress([]byte{9}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					haRlp3),
+				types.NewTransaction(
+					3,
+					common.BytesToAddress([]byte{9}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					haRlp4),
+				types.NewTransaction(
+					4,
+					common.BytesToAddress([]byte{10}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					[]byte("storage contract")),
+				types.NewTransaction(
+					5,
+					common.BytesToAddress([]byte{11}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					[]byte("storage contract revision")),
+				types.NewTransaction(
+					6,
+					common.BytesToAddress([]byte{12}),
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					[]byte("storage proof")),
+			},
+			nil,
+			nil), nil
+	case common.Hash{2}:
+		return types.NewBlock(
+			mokeBlockHeader(2),
+			types.Transactions{
+				types.NewContractCreation(
+					0,
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					nil,
+				),
+				types.NewContractCreation(
+					1,
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					nil,
+				),
+				types.NewContractCreation(
+					2,
+					new(big.Int).SetInt64(1),
+					0,
+					new(big.Int).SetInt64(1),
+					nil,
+				),
+			},
+			nil,
+			nil), nil
+	}
 	return &types.Block{}, nil
 }
 
