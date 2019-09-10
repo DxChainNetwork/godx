@@ -27,6 +27,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -819,24 +820,12 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 		return nil, gas, err
 	}
 
-	// create thawing address: "thawing_" + currentEpochID
-	stateDB := evm.StateDB
+	// mark the caller that will be thawed in next next epoch
+	stateDB := evm.StateDB.(*state.StateDB)
 	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		stateDB.CreateAccount(thawingAddress)
+	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixCandidateThawing)
 
-		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 1)
-	}
-
-	// set thawing flag for from address: "candidate_thawing_" + from ==> from
-	key := dpos.PrefixCandidateThawing + caller.String()
-	deposit := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
-
-	// defines that dposCtx.KickoutCandidate and SetState all cost params.SstoreSetGas
+	// defines that dposCtx.KickoutCandidate and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		dposSnapshot.RevertToSnapShot(dposSnapshot)
@@ -922,26 +911,12 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 		return nil, gas, err
 	}
 
-	// if successfully above, then mark from as that will be thawed in next epoch
-	stateDB := evm.StateDB
-
-	// create thawing address: "thawing_" + currentEpochID
+	// if successfully above, then mark the caller that will be thawed in next next epoch
+	stateDB := evm.StateDB.(*state.StateDB)
 	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		stateDB.CreateAccount(thawingAddress)
+	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixVoteThawing)
 
-		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 1)
-	}
-
-	// set thawing flag for from address: "vote_thawing_" + from ==> from
-	key := dpos.PrefixVoteThawing + caller.String()
-	deposit := stateDB.GetState(caller, dpos.KeyVoteDeposit)
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
-
-	// defines that dposCtx.CancelVote and SetState all cost params.SstoreSetGas
+	// defines that dposCtx.CancelVote and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		dposSnapshot.RevertToSnapShot(dposSnapshot)

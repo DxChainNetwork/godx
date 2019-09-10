@@ -166,6 +166,11 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
 			return err
 		}
+
+		// if successfully above, then mark the validator that will be thawed in next next epoch
+		currentEpochID := CalculateEpochID(ec.TimeStamp)
+		MarkThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
+
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.weight.String())
@@ -281,6 +286,32 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 	return nil
+}
+
+// MarkThawingAddress mark the given addr that will be thawed in next next epoch
+func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpochID int64, keyPrefix string) {
+
+	// create thawing address: "thawing_" + currentEpochID
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
+	}
+
+	// set thawing flag for from address: "candidate_thawing_" + from ==> from
+	key := keyPrefix + addr.String()
+
+	depositKey := common.Hash{}
+	if keyPrefix == PrefixCandidateThawing {
+		depositKey = KeyCandidateDeposit
+	} else if keyPrefix == PrefixVoteThawing {
+		depositKey = KeyVoteDeposit
+	}
+	deposit := stateDB.GetState(addr, depositKey)
+	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 }
 
 // thawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2

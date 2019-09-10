@@ -228,9 +228,12 @@ func Test_KickoutValidators(t *testing.T) {
 
 	timeOfFirstBlock = 100000
 
+	sdb := state.NewDatabase(db)
+	stateDB, _ := state.New(common.Hash{}, sdb)
 	epochContext := &EpochContext{
 		DposContext: dposContext,
 		TimeStamp:   now,
+		stateDB:     stateDB,
 	}
 
 	epochID := CalculateEpochID(now)
