@@ -46,8 +46,8 @@ func TestLookupValidator(t *testing.T) {
 	}
 
 	_, err = mockEpochContext.lookupValidator(BlockInterval - 1)
-	if err != ErrInvalidMintBlockTime {
-		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", ErrInvalidMintBlockTime, err)
+	if err != ErrInvalidMinedBlockTime {
+		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", ErrInvalidMinedBlockTime, err)
 	}
 }
 

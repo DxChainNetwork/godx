@@ -1791,7 +1791,7 @@ func (d *Downloader) syncDposContextState(context *types.DposContextProto) error
 		context.DelegateRoot,
 		context.VoteRoot,
 		context.EpochRoot,
-		context.MintCntRoot,
+		context.MinedCntRoot,
 	}
 	for _, root := range roots {
 		if err := d.syncState(root).Wait(); err != nil {

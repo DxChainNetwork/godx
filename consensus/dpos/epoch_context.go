@@ -128,7 +128,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		binary.BigEndian.PutUint64(key, uint64(epoch))
 		key = append(key, validator.Bytes()...)
 		cnt := int64(0)
-		if cntBytes := ec.DposContext.MintCntTrie().Get(key); cntBytes != nil {
+		if cntBytes := ec.DposContext.MinedCntTrie().Get(key); cntBytes != nil {
 			cnt = int64(binary.BigEndian.Uint64(cntBytes))
 		}
 		if cnt < epochDuration/BlockInterval/MaxValidatorSize/2 {
@@ -143,7 +143,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		return nil
 	}
 
-	// ascend needKickoutValidators, the prev candidates have smaller mint count,
+	// ascend needKickoutValidators, the prev candidates have smaller mined count,
 	// and they will be remove firstly
 	sort.Sort(needKickoutValidators)
 
@@ -169,7 +169,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 		// if kickout success, candidateCount minus 1
 		candidateCount--
-		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "mintCnt", validator.weight.String())
+		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.weight.String())
 	}
 	return nil
 }
@@ -179,7 +179,7 @@ func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, er
 	validator = common.Address{}
 	offset := now % EpochInterval
 	if offset%BlockInterval != 0 {
-		return common.Address{}, ErrInvalidMintBlockTime
+		return common.Address{}, ErrInvalidMinedBlockTime
 	}
 	offset /= BlockInterval
 
@@ -216,7 +216,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
-	iter := trie.NewIterator(ec.DposContext.MintCntTrie().PrefixIterator(prevEpochBytes))
+	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
 
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
