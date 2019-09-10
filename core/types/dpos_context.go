@@ -95,7 +95,7 @@ func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
 }
 
 // NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextProto) (*DposContext, error) {
+func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextRoot) (*DposContext, error) {
 	db := trie.NewDatabase(diskdb)
 
 	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, db)
@@ -175,18 +175,18 @@ func (dc *DposContext) RevertToSnapShot(snapshot *DposContext) {
 	dc.minedCntTrie = snapshot.minedCntTrie
 }
 
-// DposContextProto wrap 5 trie root hash
-type DposContextProto struct {
+// DposContextRoot wrap 5 trie root hash
+type DposContextRoot struct {
 	EpochRoot     common.Hash `json:"epochRoot"        gencodec:"required"`
 	DelegateRoot  common.Hash `json:"delegateRoot"     gencodec:"required"`
 	CandidateRoot common.Hash `json:"candidateRoot"    gencodec:"required"`
 	VoteRoot      common.Hash `json:"voteRoot"         gencodec:"required"`
-	MinedCntRoot  common.Hash `json:"minedCntRoot"      gencodec:"required"`
+	MinedCntRoot  common.Hash `json:"minedCntRoot"     gencodec:"required"`
 }
 
-// ToProto convert DposContext to DposContextProto
-func (dc *DposContext) ToProto() *DposContextProto {
-	return &DposContextProto{
+// ToRoot convert DposContext to DposContextRoot
+func (dc *DposContext) ToRoot() *DposContextRoot {
+	return &DposContextRoot{
 		EpochRoot:     dc.epochTrie.Hash(),
 		DelegateRoot:  dc.delegateTrie.Hash(),
 		CandidateRoot: dc.candidateTrie.Hash(),
@@ -196,7 +196,7 @@ func (dc *DposContext) ToProto() *DposContextProto {
 }
 
 // Root calculates the root hash of 5 tries in DposContext
-func (dcp *DposContextProto) Root() (h common.Hash) {
+func (dcp *DposContextRoot) Root() (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, dcp.EpochRoot)
 	rlp.Encode(hw, dcp.DelegateRoot)
@@ -406,7 +406,7 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 }
 
 // Commit writes the data in 5 tries to db
-func (dc *DposContext) Commit() (*DposContextProto, error) {
+func (dc *DposContext) Commit() (*DposContextRoot, error) {
 
 	// commit dpos context into memory
 	epochRoot, err := dc.epochTrie.Commit(nil)
@@ -460,7 +460,7 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 		return nil, err
 	}
 
-	return &DposContextProto{
+	return &DposContextRoot{
 		EpochRoot:     epochRoot,
 		DelegateRoot:  delegateRoot,
 		VoteRoot:      voteRoot,

@@ -494,7 +494,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	if err != nil {
 		return nil, err
 	}
-	header.DposContext = dposContext.ToProto()
+	header.DposContext = dposContext.ToRoot()
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
 

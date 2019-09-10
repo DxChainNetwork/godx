@@ -243,7 +243,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
-	dcProto := dposContext.ToProto()
+	dcProto := dposContext.ToRoot()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
 		Nonce:       types.EncodeNonce(g.Nonce),
@@ -404,7 +404,7 @@ func decodePrealloc(data string) GenesisAlloc {
 
 // initGenesisDposContext returns the dpos context of given genesis block
 func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
+	dc, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}

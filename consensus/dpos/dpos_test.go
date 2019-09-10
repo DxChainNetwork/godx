@@ -141,12 +141,12 @@ func TestDpos_CheckValidator(t *testing.T) {
 
 		tests = []struct {
 			name    string
-			fn      func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error
+			fn      func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error
 			wantErr error
 		}{
 			{
 				name: "mined the future block",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86430)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -162,7 +162,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 			},
 			{
 				name: "wait for last block arrived",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86410)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -178,7 +178,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 			},
 			{
 				name: "invalid block validator",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86410)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -194,7 +194,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 			},
 			{
 				name: "success to check validator",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86400)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -446,7 +446,7 @@ func (test testChainReader) insert(hash common.Hash, number uint64, time uint64,
 }
 
 func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
-	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
+	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
 	if err != nil {
 		return nil, nil, err
 	}
