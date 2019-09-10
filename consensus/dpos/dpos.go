@@ -469,9 +469,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
-	// Accumulate block rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, dposContext)
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
 		stateDB:     state,
@@ -483,6 +480,8 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 			timeOfFirstBlock = firstBlockHeader.Time.Int64()
 		}
 	}
+
+	// try to elect, if current block is the first one in a new epoch, then elect new epoch
 	genesis := chain.GetHeaderByNumber(0)
 	err := epochContext.tryElect(genesis, parent)
 	if err != nil {
@@ -495,6 +494,11 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 		return nil, err
 	}
 	header.DposContext = dposContext.ToRoot()
+
+	// Accumulate block rewards and commit the final state root
+	accumulateRewards(chain.Config(), state, header, dposContext)
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
 

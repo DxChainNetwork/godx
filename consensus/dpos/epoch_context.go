@@ -115,7 +115,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	epochDuration := EpochInterval
 	// First epoch duration may lt epoch interval,
 	// while the first block time wouldn't always align with epoch interval,
-	// so caculate the first epoch duartion with first block time instead of epoch interval,
+	// so calculate the first epoch duration with first block time instead of epoch interval,
 	// prevent the validators were kickout incorrectly.
 	if ec.TimeStamp-timeOfFirstBlock < EpochInterval {
 		epochDuration = ec.TimeStamp - timeOfFirstBlock
