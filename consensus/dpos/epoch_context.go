@@ -44,7 +44,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	}
 
 	// iterator all candidate's vote record
-	for existCandidate {
+	for iterCandidate.Next() {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
 
@@ -98,7 +98,6 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 
 		// store the total vote weight for every candidate
 		ec.stateDB.SetState(candidateAddr, KeyTotalVoteWeight, common.BigToHash(votes[candidateAddr]))
-		existCandidate = iterCandidate.Next()
 	}
 	return votes, nil
 }
