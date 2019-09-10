@@ -43,12 +43,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 
 	dposContext := types.DposContext{}
 	dposContext.SetEpoch(epochTrie)
-	validators, err := dposContext.GetValidators()
-	if err != nil {
-		return nil, err
-	}
-
-	return validators, nil
+	return dposContext.GetValidators()
 }
 
 // GetConfirmedBlockNumber retrieves the latest irreversible block
@@ -75,10 +70,13 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator at now
 func (api *API) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	currentHeader := api.chain.CurrentHeader()
-	dposContext, err := types.NewDposContextFromProto(api.dpos.db, currentHeader.DposContext)
+	db := trie.NewDatabase(api.dpos.db)
+	voteTrie, err := types.NewVoteTrie(currentHeader.DposContext.VoteRoot, db)
 	if err != nil {
 		return nil, err
 	}
 
+	dposContext := types.DposContext{}
+	dposContext.SetVote(voteTrie)
 	return dposContext.GetVotedCandidatesByAddress(delegator)
 }

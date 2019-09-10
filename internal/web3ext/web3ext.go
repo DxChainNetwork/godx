@@ -165,8 +165,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'sendApplyCandidateTx',
 			call: 'dpos_sendApplyCandidateTx',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter,null,web3._extend.utils.fromDecimal]
+			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'sendCancelCandidateTx',
@@ -177,8 +176,7 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'sendVoteTx',
 			call: 'dpos_sendVoteTx',
-			params: 3,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter,null,web3._extend.utils.fromDecimal]
+			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'sendCancelVoteTx',

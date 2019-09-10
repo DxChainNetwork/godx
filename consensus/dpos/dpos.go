@@ -41,11 +41,20 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	BlockInterval    = int64(10)
-	EpochInterval    = int64(86400)
+	// BlockInterval indicates that a block will be produced every 10 seconds
+	BlockInterval = int64(10)
+
+	// EpochInterval indicates that a new epoch will be elected every a day
+	EpochInterval = int64(86400)
+
+	// MaxValidatorSize indicates that the max number of validators in dpos consensus
 	MaxValidatorSize = 5
-	SafeSize         = MaxValidatorSize*2/3 + 1
-	ConsensusSize    = MaxValidatorSize*2/3 + 1
+
+	// SafeSize indicates that the least number of validators in dpos consensus
+	SafeSize = MaxValidatorSize*2/3 + 1
+
+	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
+	ConsensusSize = MaxValidatorSize*2/3 + 1
 )
 
 var (
@@ -87,7 +96,7 @@ var (
 	EmptyHash = common.Hash{}
 
 	// RewardRatioDenominator is the max value of reward ratio
-	RewardRatioDenominator uint8 = 100
+	RewardRatioDenominator uint64 = 100
 
 	frontierBlockReward       = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
 	byzantiumBlockReward      = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
@@ -214,6 +223,15 @@ func (d *Dpos) VerifyHeader(chain consensus.ChainReader, header *types.Header, s
 
 func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, parents []*types.Header) error {
 	if d.Mode == ModeFake {
+		var parent *types.Header
+		if len(parents) > 0 {
+			parent = parents[len(parents)-1]
+		} else {
+			parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+		}
+		if parent == nil || parent.Number.Uint64() != header.Number.Uint64()-1 || parent.Hash() != header.ParentHash {
+			return consensus.ErrUnknownAncestor
+		}
 		return nil
 	}
 
@@ -285,6 +303,10 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, headers []*types.Heade
 // VerifyUncles implements consensus.Engine, returning an error if the block has uncles,
 // because dpos engine doesn't support uncles.
 func (d *Dpos) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	if d.Mode == ModeFake {
+		return nil
+	}
+
 	if len(block.Uncles()) > 0 {
 		return errors.New("uncles not allowed")
 	}
@@ -360,7 +382,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-		curEpoch := curHeader.Time.Int64() / EpochInterval
+		curEpoch := CalculateEpochID(curHeader.Time.Int64())
 		if curEpoch != epoch {
 			epoch = curEpoch
 			validatorMap = make(map[common.Address]bool)
@@ -389,6 +411,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	return nil
 }
 
+// load the latest confirmed block from the database
 func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
 	key, err := d.db.Get(confirmedBlockHead)
 	if err != nil {
@@ -401,12 +424,12 @@ func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Hea
 	return header, nil
 }
 
-// store inserts the snapshot into the database.
+// inserts the confirmed block into the database.
 func (d *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
 	return db.Put(confirmedBlockHead, d.confirmedBlockHeader.Hash().Bytes())
 }
 
-// Prepare implements consensus.Engine, assembly some basic fileds into header
+// Prepare implements consensus.Engine, assembly some basic fields into header
 func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error {
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()
@@ -436,7 +459,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// retrieve the total vote weight of header's validator
-	voteCount := common.NewBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big().Int64())
+	voteCount := common.PtrBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big())
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return
@@ -445,7 +468,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// get ratio of reward between validator and its delegators
 	h := state.GetState(header.Validator, KeyRewardRatioNumerator)
 	rewardRatioNumerator := hashToRewardRatioNumerator(h)
-	rewardDenominator := common.NewBigIntUint64(uint64(RewardRatioDenominator))
+	rewardDenominator := common.NewBigIntUint64(RewardRatioDenominator)
 	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatioNumerator).Div(rewardDenominator)
 	assignedReward := new(big.Int).SetInt64(0)
 
@@ -662,12 +685,12 @@ func NextSlot(now int64) int64 {
 // updateMintCnt update counts in mintCntTrie for the miner of newBlock
 func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMintCntTrie := dposContext.MintCntTrie()
-	currentEpoch := parentBlockTime / EpochInterval
+	currentEpoch := CalculateEpochID(parentBlockTime)
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
 
 	cnt := int64(1)
-	newEpoch := currentBlockTime / EpochInterval
+	newEpoch := CalculateEpochID(currentBlockTime)
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
 		iter := trie.NewIterator(currentMintCntTrie.NodeIterator(currentEpochBytes))
@@ -694,4 +717,8 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
 	v := h.Bytes()
 	return common.NewBigIntUint64(uint64(v[len(v)-1]))
+}
+
+func CalculateEpochID(blockTime int64) int64 {
+	return blockTime / EpochInterval
 }

@@ -38,7 +38,7 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		engine = ethash.NewFaker()
 		db     = ethdb.NewMemDatabase()
 		gspec  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.DposChainConfig,
 			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
 		}
 		genesis       = gspec.MustCommit(db)
@@ -55,11 +55,8 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		return nil, nil, err
 	}
 	ethConf := &Config{
-		Genesis:  core.DeveloperGenesisBlock(15, common.Address{}),
+		Genesis:  core.DefaultGenesisBlock(),
 		Coinbase: common.HexToAddress("0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"),
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
-		},
 	}
 	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return New(ctx, ethConf) }); err != nil {
 		return nil, nil, err

@@ -31,4 +31,34 @@ var (
 	// ErrUnknownPrecompileContractAddress is returned if the transaction is sent to a
 	// invalid precompile contract address
 	ErrUnknownPrecompileContractAddress = errors.New("invalid precompiled contract address")
+
+	// ErrInvalidAwardDistributionRatio is returned if the ApplyCandidateTx has a invalid ratio parameter
+	ErrInvalidAwardDistributionRatio = errors.New("invalid award distribution ratio,must be an integer within [0,100]")
+
+	// ErrRatioNotStringFormat is returned if the ApplyCandidateTx input a none string ratio parameter
+	ErrRatioNotStringFormat = errors.New("the parameter ratio is not string format")
+
+	// ErrParseStringToUint is returned if fail to convert string ratio to uint8 in ApplyCandidateTx
+	ErrParseStringToUint = errors.New("failed to parse string to uint8")
+
+	// ErrFromNotStringFormat is returned if dpos tx input a none string from parameter
+	ErrFromNotStringFormat = errors.New("the parameter from is not string format")
+
+	// ErrDepositNotStringFormat is returned if dpos tx input a none string deposit parameter
+	ErrDepositNotStringFormat = errors.New("the parameter deposit is not string format")
+
+	// ErrParseStringToBigInt is returned if fail to convert string deposit to big int in dpos tx
+	ErrParseStringToBigInt = errors.New("failed to parse string to big int")
+
+	// ErrCandidatesNotStringFormat is returned if vote tx input a none string candidates parameter
+	ErrCandidatesNotStringFormat = errors.New("the parameter candidates is not string format")
+
+	// ErrBeyondMaxVoteSize is returned if vote beyond 30 candidates
+	ErrBeyondMaxVoteSize = errors.New("vote beyond the max size 30")
+
+	// ErrRLPEncodeCandidates is returned if rlp encode voted candidates
+	ErrRLPEncodeCandidates = errors.New("failed to rlp encode candidate list")
+
+	// ErrUnknownParameter is returned if input unknown parameter name in dpos tx
+	ErrUnknownParameter = errors.New("unknown parameter name,cannot parse it")
 )

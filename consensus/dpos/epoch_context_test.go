@@ -102,9 +102,13 @@ func Test_CountVotes(t *testing.T) {
 			t.Fatalf("Failed to commit mock dpos context,error: %v", err)
 		}
 
+		// set candidate deposit
+		candidateDeposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
+		stateDB.SetState(addr, KeyCandidateDeposit, common.BytesToHash(candidateDeposit.Bytes()))
+
 		// set vote deposit
-		deposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
-		stateDB.SetState(addr, KeyVoteDeposit, common.BytesToHash(deposit.Bytes()))
+		voteDeposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
+		stateDB.SetState(addr, KeyVoteDeposit, common.BytesToHash(voteDeposit.Bytes()))
 
 		ratio := float64(1.0)
 		bits := math.Float64bits(ratio)
@@ -126,8 +130,10 @@ func Test_CountVotes(t *testing.T) {
 	// check vote weight without attenuation
 	expectedVoteWeightWithoutAttenuation := int64(15e6)
 	for addr, weight := range votes {
-		if weight.Int64() != expectedVoteWeightWithoutAttenuation {
-			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), expectedVoteWeightWithoutAttenuation, weight.Int64())
+		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
+		wantTotalVoteWeight := expectedVoteWeightWithoutAttenuation + candidateDeposit.Int64()
+		if weight.Int64() != wantTotalVoteWeight {
+			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), wantTotalVoteWeight, weight.Int64())
 		}
 	}
 
@@ -147,8 +153,10 @@ func Test_CountVotes(t *testing.T) {
 	// check vote weight with attenuation
 	expectedVoteWeightWithAttenuation := int64(5.5e6)
 	for addr, weight := range votes {
-		if weight.Int64() != expectedVoteWeightWithAttenuation {
-			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), expectedVoteWeightWithAttenuation, weight.Int64())
+		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
+		wantTotalVoteWeight := expectedVoteWeightWithAttenuation + candidateDeposit.Int64()
+		if weight.Int64() != wantTotalVoteWeight {
+			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), wantTotalVoteWeight, weight.Int64())
 		}
 	}
 }
@@ -225,7 +233,7 @@ func Test_KickoutValidators(t *testing.T) {
 		TimeStamp:   now,
 	}
 
-	epochID := now / EpochInterval
+	epochID := CalculateEpochID(now)
 	err = epochContext.kickoutValidators(epochID)
 	if err != nil {
 		t.Errorf("something wrong to kick out validators,error: %v", err)

@@ -8,10 +8,13 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"strconv"
+	"strings"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -31,8 +34,15 @@ var (
 )
 
 const (
+
+	// MaxVoteCount is the max number of voted candidates in a vot tx
+	MaxVoteCount = 30
+
+	// StorageContractTxGas defines the default gas for storage contract tx
 	StorageContractTxGas = 90000
-	DposTxGas            = 1000000
+
+	// DposTxGas defines the default gas for dpos tx
+	DposTxGas = 1000000
 )
 
 // PrivateStorageContractTxAPI exposes the storage contract tx methods for the RPC interface
@@ -135,14 +145,18 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 	return &PublicDposTxAPI{b, nonceLock}
 }
 
-// SendApplyCandidateTx submit a apply candidate tx
-func (dpos *PublicDposTxAPI) SendApplyCandidateTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+// SendApplyCandidateTx submit a apply candidate tx.
+// the parameter ratio is the award distribution ratio that candidate state.
+func (dpos *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]interface{}) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{13})
 	ctx := context.Background()
 
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+	// parse precompile contract tx args
+	args, err := ParsePrecompileContractTxArgs(to, DposTxGas, fields)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
@@ -190,13 +204,16 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 }
 
 // SendVoteTx submit a vote tx
-func (dpos *PublicDposTxAPI) SendVoteTx(from common.Address, data []byte, value *big.Int) (common.Hash, error) {
+func (dpos *PublicDposTxAPI) SendVoteTx(fields map[string]interface{}) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{15})
 	ctx := context.Background()
 
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, data, value, DposTxGas)
+	// parse precompile contract tx args
+	args, err := ParsePrecompileContractTxArgs(to, DposTxGas, fields)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
@@ -314,7 +331,7 @@ func (args *PrecompiledContractTxArgs) NewPrecompiledContractTx(ctx context.Cont
 		return nil, errors.New(`precompile contract tx without to`)
 	}
 
-	return types.NewTransaction(uint64(*args.Nonce), args.To, nil, uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
+	return types.NewTransaction(uint64(*args.Nonce), args.To, (*big.Int)(args.Value), uint64(*args.Gas), (*big.Int)(args.GasPrice), *args.Input), nil
 }
 
 // NewPrecompiledContractTxArgs construct precompiled contract tx args
@@ -358,13 +375,14 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 		}
 
 		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
-		voteDeposit := int64(0)
+		voteDeposit := new(big.Int).SetInt64(0)
 		voteDepositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
 		if voteDepositHash != emptyHash {
-			voteDeposit = new(big.Int).SetBytes(voteDepositHash.Bytes()).Int64()
+			voteDeposit = voteDepositHash.Big()
 		}
 
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-voteDeposit {
+		allowedBal := new(big.Int).Sub(balance, voteDeposit)
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
 			return ErrDepositValueNotSuitable
 		}
 
@@ -391,13 +409,14 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 		}
 
 		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
-		deposit := int64(0)
-		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
-		if depositHash != emptyHash {
-			deposit = new(big.Int).SetBytes(depositHash.Bytes()).Int64()
+		candidateDeposit := new(big.Int).SetInt64(0)
+		candidateDepositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
+		if candidateDepositHash != emptyHash {
+			candidateDeposit = candidateDepositHash.Big()
 		}
 
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Int64() > balance.Int64()-deposit {
+		allowedBal := new(big.Int).Sub(balance, candidateDeposit)
+		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
 			return ErrDepositValueNotSuitable
 		}
 
@@ -415,4 +434,82 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 	default:
 		return ErrUnknownPrecompileContractAddress
 	}
+}
+
+// ParsePrecompileContractTxArgs parse the input fields to PrecompiledContractTxArgs format
+func ParsePrecompileContractTxArgs(to common.Address, gas uint64, fields map[string]interface{}) (args *PrecompiledContractTxArgs, err error) {
+	var data []byte
+	var from common.Address
+	var deposit common.BigInt
+	for key, value := range fields {
+		switch key {
+		case "ratio":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrRatioNotStringFormat
+			}
+
+			ratio, err := strconv.ParseUint(str, 10, 8)
+			if err != nil {
+				return nil, ErrParseStringToUint
+			}
+
+			if ratio > uint64(100) {
+				return nil, ErrInvalidAwardDistributionRatio
+			}
+
+			// convert uint8 to []byte
+			data = []byte{uint8(ratio)}
+
+		case "from":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrFromNotStringFormat
+			}
+
+			from = common.HexToAddress(str)
+
+		case "deposit":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrDepositNotStringFormat
+			}
+
+			// parse to big int,like "1000camel"、"10dx" and so on
+			deposit, err = unit.ParseCurrency(str)
+			if err != nil {
+				return nil, ErrParseStringToBigInt
+			}
+
+		case "candidates":
+			str, ok := value.(string)
+			if !ok {
+				return nil, ErrCandidatesNotStringFormat
+			}
+
+			hexAddrs := strings.Split(str, ",")
+
+			// limit the max vote count to 30
+			if len(hexAddrs) > MaxVoteCount {
+				return nil, ErrBeyondMaxVoteSize
+			}
+
+			candidates := make([]common.Address, 0)
+			for _, hexAddr := range hexAddrs {
+				addr := common.HexToAddress(hexAddr)
+				candidates = append(candidates, addr)
+			}
+
+			data, err = rlp.EncodeToBytes(candidates)
+			if err != nil {
+				return nil, ErrRLPEncodeCandidates
+			}
+
+		default:
+			return nil, ErrUnknownParameter
+		}
+	}
+
+	args = NewPrecompiledContractTxArgs(from, to, data, deposit.BigIntPtr(), gas)
+	return
 }

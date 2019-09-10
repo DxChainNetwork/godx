@@ -274,8 +274,12 @@ func (w *worker) pendingBlock() *types.Block {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
-	atomic.StoreInt32(&w.running, 1)
-	w.startCh <- struct{}{}
+
+	// not allow starting miner repeatedly
+	if !w.isRunning() {
+		atomic.StoreInt32(&w.running, 1)
+		w.startCh <- struct{}{}
+	}
 }
 
 // stop sets the running status as 0.
@@ -311,6 +315,18 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
+
+		dposEng, ok := w.engine.(*dpos.Dpos)
+		if !ok {
+			panic("not dpos engine")
+		}
+
+		// check validator at now for dpos consensus
+		err := dposEng.CheckValidator(w.chain.CurrentBlock(), timestamp)
+		if err != nil {
+			return
+		}
+
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		timer.Reset(recommit)
 		atomic.StoreInt32(&w.newTxs, 0)
@@ -541,21 +557,6 @@ func (w *worker) taskLoop() {
 		case task := <-w.taskCh:
 			if w.newTaskHook != nil {
 				w.newTaskHook(task)
-			}
-
-			engine, ok := w.engine.(*dpos.Dpos)
-			if !ok {
-				log.Error("not dpos engine")
-				return
-			}
-
-			// check validator at now for dpos consensus
-			err := engine.CheckValidator(w.chain.CurrentBlock(), task.block.Time().Int64())
-			if err != nil {
-
-				// TODO: too many logs, so temporarily comment it
-				//log.Error("failed to mint the block", "error", err)
-				continue
 			}
 
 			// Reject duplicate sealing work due to resubmitting.

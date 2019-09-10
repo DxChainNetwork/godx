@@ -135,7 +135,7 @@ func TestEVM_CandidateCancelTx(t *testing.T) {
 		t.Fatal("NewDposContext err:", err)
 	}
 
-	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 

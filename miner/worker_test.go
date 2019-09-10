@@ -205,13 +205,13 @@ func testCheckDposBalance(t *testing.T, chainConfig *params.ChainConfig, engine 
 	}
 
 	w.start()
-	for i := 0; i < 1; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(2 * time.Second).C:
-			t.Error("new task timeout")
-		}
+
+	select {
+	case <-taskCh:
+	case <-time.NewTimer(2 * time.Second).C:
+		t.Error("new task timeout")
 	}
+
 }
 
 func TestStreamUncleBlock(t *testing.T) {

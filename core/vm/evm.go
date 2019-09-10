@@ -19,7 +19,6 @@ package vm
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -34,10 +33,6 @@ import (
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage/coinchargemaintenance"
-)
-
-const (
-	MaxVoteCount = 30
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already
@@ -211,21 +206,24 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		return nil, gas, ErrInsufficientBalance
 	}
 
+	// retrieve the caller's candidate deposit and vote deposit
 	balance := evm.StateDB.GetBalance(caller.Address())
-	candidateDeposit := int64(0)
-	voteDeposit := int64(0)
+	candidateDeposit := new(big.Int).SetInt64(0)
+	voteDeposit := new(big.Int).SetInt64(0)
 	candidateDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyCandidateDeposit)
 	if candidateDepositHash != (common.Hash{}) {
-		candidateDeposit = candidateDepositHash.Big().Int64()
+		candidateDeposit = candidateDepositHash.Big()
 	}
 
 	voteDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyVoteDeposit)
 	if voteDepositHash != (common.Hash{}) {
-		voteDeposit = voteDepositHash.Big().Int64()
+		voteDeposit = voteDepositHash.Big()
 	}
 
 	// if caller has candidate deposit or vote deposit, check whether left balance enough the transfer value
-	if value.Int64() > balance.Int64()-candidateDeposit-voteDeposit {
+	allowedBal := new(big.Int).Sub(balance, candidateDeposit)
+	allowedBal.Sub(allowedBal, voteDeposit)
+	if value.Cmp(allowedBal) > 0 {
 		return nil, gas, ErrFrozenAssetsCannotBeUsed
 	}
 
@@ -823,11 +821,14 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 
 	// create thawing address: "thawing_" + currentEpochID
 	stateDB := evm.StateDB
-	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
 	}
 
 	// set thawing flag for from address: "candidate_thawing_" + from ==> from
@@ -860,11 +861,6 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		return nil, gasRemainDec, errDec
 	}
 
-	// limit the max vote count to 30
-	if len(candidateList) > MaxVoteCount {
-		return nil, gasRemainDec, fmt.Errorf("actually vote %d candidates, beyond the max size 30", len(candidateList))
-	}
-
 	// record vote data
 	dposSnapshot := dposCtx.Snapshot()
 	successCount, err := dposCtx.Vote(caller, candidateList)
@@ -884,10 +880,10 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
 
 		// how many epochs has passed from lastVoteTime to now
-		epochPassed := (now - lastVoteTime) / uint64(dpos.EpochInterval)
+		epochPassed := dpos.CalculateEpochID(int64(now) - dpos.CalculateEpochID(int64(lastVoteTime)))
 
 		// the real vote weight ratio
-		for i := uint64(0); i < epochPassed; i++ {
+		for i := int64(0); i < epochPassed; i++ {
 			realVoteWeightRatio *= dpos.AttenuationRatioPerEpoch
 		}
 
@@ -930,11 +926,14 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	stateDB := evm.StateDB
 
 	// create thawing address: "thawing_" + currentEpochID
-	currentEpochID := evm.Time.Int64() / dpos.EpochInterval
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
 	}
 
 	// set thawing flag for from address: "vote_thawing_" + from ==> from
