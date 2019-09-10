@@ -206,49 +206,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		return nil
 	}
 
-	// iterator whole thawing account trie, and thawing the deposit of every delegator
-	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if ec.stateDB.Exist(thawingAddress) {
-		thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
-
-		// in normal case, it could not happen, just for prevent the nil pointer exception
-		if thawingTrie == nil {
-			return nil
-		}
-
-		it := trie.NewIterator(thawingTrie.NodeIterator(nil))
-		for it.Next() {
-			thawingDeposit := it.Value
-			if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
-				continue
-			}
-
-			// if candidate deposit thawing flag exists, then thawing it
-			if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
-
-				// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
-				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
-			}
-
-			// if vote deposit thawing flag exists, then thawing it
-			if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
-				addr := string(it.Key[len(PrefixVoteThawing):])
-				currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
-
-				// if current vote deposit more than thawing deposit, directly skip, not thawing
-				if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
-					continue
-				}
-
-				// else, thawing the difference of deposit
-				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
-			}
-		}
-
-		// mark the thawingAddress as empty account, that will be deleted by stateDB
-		ec.stateDB.SetNonce(thawingAddress, 0)
-	}
+	// thawing some deposit for currentEpoch-2
+	thawingDeposit(ec.stateDB, currentEpoch)
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
@@ -323,6 +282,54 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 	return nil
+}
+
+// thawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
+func thawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
+	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if stateDB.Exist(thawingAddress) {
+		thawingTrie := stateDB.StorageTrie(thawingAddress)
+
+		// in normal case, it could not happen, just for prevent the nil pointer exception
+		if thawingTrie == nil {
+			log.Error("thawing trie is null", "thawing_addr", thawingAddress.String())
+			return
+		}
+
+		// iterator whole thawing account trie, and thawing the deposit of every delegator
+		it := trie.NewIterator(thawingTrie.NodeIterator(nil))
+		for it.Next() {
+			thawingDeposit := it.Value
+			if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
+				continue
+			}
+
+			// if candidate deposit thawing flag exists, then thawing it
+			if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
+
+				// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
+				stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
+			}
+
+			// if vote deposit thawing flag exists, then thawing it
+			if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
+				addr := string(it.Key[len(PrefixVoteThawing):])
+				currentDeposit := stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
+
+				// if current vote deposit more than thawing deposit, directly skip, not thawing
+				if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
+					continue
+				}
+
+				// else, thawing the difference of deposit
+				stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
+			}
+		}
+
+		// mark the thawingAddress as empty account, that will be deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 0)
+	}
 }
 
 type sortableAddress struct {
