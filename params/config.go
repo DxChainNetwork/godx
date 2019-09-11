@@ -44,6 +44,7 @@ var (
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: nil,
 		Ethash:              new(EthashConfig),
+		Dpos:                DefaultDposConfig(),
 	}
 
 	// MainnetTrustedCheckpoint contains the light client trusted checkpoint for the main network.
@@ -117,8 +118,7 @@ var (
 		EIP155Block:    big.NewInt(0),
 		EIP158Block:    big.NewInt(0),
 		ByzantiumBlock: big.NewInt(0),
-
-		Dpos: &DposConfig{},
+		Dpos:           DefaultDposConfig(),
 	}
 
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
@@ -198,16 +198,6 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
-}
-
-// DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
-type DposConfig struct {
-	Validators []common.Address `json:"validators"` // Genesis validator list
-}
-
-// String implements the stringer interface, returning the consensus engine details.
-func (d *DposConfig) String() string {
-	return "dpos"
 }
 
 // String implements the fmt.Stringer interface.
