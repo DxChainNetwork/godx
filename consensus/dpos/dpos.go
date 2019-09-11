@@ -81,10 +81,10 @@ var (
 	PrefixThawingAddr = "thawing_"
 
 	// PrefixCandidateThawing is the prefix thawing string of candidate thawing key
-	PrefixCandidateThawing = "candidate_thawing_"
+	PrefixCandidateThawing = "candidate_"
 
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key
-	PrefixVoteThawing = "vote_thawing_"
+	PrefixVoteThawing = "vote_"
 
 	// EmptyHash is the empty hash for judgement of empty value
 	EmptyHash = common.Hash{}

@@ -5,7 +5,6 @@
 package dpos
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -21,6 +20,12 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/trie"
+)
+
+const (
+
+	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
+	ThawingEpochDuration = 2
 )
 
 // EpochContext define current epoch context for dpos consensus
@@ -301,61 +306,45 @@ func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpoc
 		stateDB.SetNonce(thawingAddress, 1)
 	}
 
-	// set thawing flag for from address: "candidate_thawing_" + from ==> from
-	key := keyPrefix + addr.String()
-
-	depositKey := common.Hash{}
-	if keyPrefix == PrefixCandidateThawing {
-		depositKey = KeyCandidateDeposit
-	} else if keyPrefix == PrefixVoteThawing {
-		depositKey = KeyVoteDeposit
-	}
-	deposit := stateDB.GetState(addr, depositKey)
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
+	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
+	keyAndValue := append([]byte(keyPrefix), addr.Bytes()...)
+	stateDB.SetState(thawingAddress, common.BytesToHash(keyAndValue), common.BytesToHash(keyAndValue))
 }
 
 // ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
 func ThawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
-	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
+	epochIDStr := strconv.FormatInt(currentEpoch-ThawingEpochDuration, 10)
 	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
 	if stateDB.Exist(thawingAddress) {
-		thawingTrie := stateDB.StorageTrie(thawingAddress)
-
-		// in normal case, it could not happen, just for prevent the nil pointer exception
-		if thawingTrie == nil {
-			log.Error("thawing trie is null", "thawing_addr", thawingAddress.String())
-			return
-		}
 
 		// iterator whole thawing account trie, and thawing the deposit of every delegator
-		it := trie.NewIterator(thawingTrie.NodeIterator(nil))
-		for it.Next() {
-			thawingDeposit := it.Value
-			if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
-				continue
+		stateDB.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
+			if value == (common.Hash{}) {
+				return false
 			}
 
-			// if candidate deposit thawing flag exists, then thawing it
-			if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
+			addr := common.BytesToAddress(value.Bytes()[12:])
 
-				// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
-				stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
+			// if candidate deposit thawing flag exists, then thawing it
+			candidateThawingKey := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
+			if common.BytesToHash(candidateThawingKey) == value {
+
+				// set 0 for candidate deposit
+				stateDB.SetState(addr, KeyCandidateDeposit, common.Hash{})
 			}
 
 			// if vote deposit thawing flag exists, then thawing it
-			if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
-				addr := string(it.Key[len(PrefixVoteThawing):])
-				currentDeposit := stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
+			voteThawingKey := append([]byte(PrefixVoteThawing), addr.Bytes()...)
+			if common.BytesToHash(voteThawingKey) == value {
 
-				// if current vote deposit more than thawing deposit, directly skip, not thawing
-				if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
-					continue
-				}
-
-				// else, thawing the difference of deposit
-				stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
+				// set 0 for vote deposit
+				stateDB.SetState(addr, KeyVoteDeposit, common.Hash{})
 			}
-		}
+
+			// candidate or vote deposit does not allow to submit repeatedly, so thawing directly set 0
+			stateDB.SetState(thawingAddress, key, common.Hash{})
+			return true
+		})
 
 		// mark the thawingAddress as empty account, that will be deleted by stateDB
 		stateDB.SetNonce(thawingAddress, 0)
