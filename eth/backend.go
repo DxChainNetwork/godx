@@ -417,7 +417,7 @@ func (s *Ethereum) Validator() (common.Address, error) {
 			s.validator = validator
 			s.lock.Unlock()
 
-			log.Info("validator address automatically configured", "address", validator)
+			log.Info("Validator address automatically configured", "address", validator)
 			return validator, nil
 		}
 	}
@@ -425,10 +425,18 @@ func (s *Ethereum) Validator() (common.Address, error) {
 }
 
 // SetValidator sets given validator into full node
-func (self *Ethereum) SetValidator(validator common.Address) {
-	self.lock.Lock()
-	self.validator = validator
-	self.lock.Unlock()
+func (s *Ethereum) SetValidator(validator common.Address) {
+	s.lock.Lock()
+	account := accounts.Account{Address: validator}
+	_, err := s.AccountManager().Find(account)
+	if err != nil {
+		s.lock.Unlock()
+		log.Error("Can not find this account in local wallet", "address", validator)
+		return
+	}
+
+	s.validator = validator
+	s.lock.Unlock()
 }
 
 // Coinbase return the address that will receive block award
@@ -454,7 +462,7 @@ func (s *Ethereum) Coinbase() (eb common.Address, err error) {
 			s.coinbase = coinbase
 			s.lock.Unlock()
 
-			log.Info("coinbase address automatically configured", "address", coinbase)
+			log.Info("Coinbase address automatically configured", "address", coinbase)
 			return coinbase, nil
 		}
 	}
