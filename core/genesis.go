@@ -414,13 +414,15 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		return nil, errors.New("invalid dpos config for genesis")
 	}
 
-	err = dc.SetValidators(g.Config.Dpos.Validators)
+	// get validators from the genesis DPOS config
+	validators := g.Config.Dpos.ParseValidators()
+	err = dc.SetValidators(validators)
 	if err != nil {
 		return nil, err
 	}
 
 	// just let genesis initial validator voted themselves
-	for _, validator := range g.Config.Dpos.Validators {
+	for _, validator := range validators {
 		err = dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
 		if err != nil {
 			return nil, err
