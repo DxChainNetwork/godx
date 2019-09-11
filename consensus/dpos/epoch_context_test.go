@@ -286,22 +286,80 @@ func TestMarkThawingAddress(t *testing.T) {
 
 	addr := common.HexToAddress("0x1")
 	currentEpochID := int64(123)
-	deposit := new(big.Int).SetInt64(100000)
 
 	// set candidate deposit
-	stateDB.SetState(addr, KeyCandidateDeposit, common.BigToHash(deposit))
 	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
 
 	// check candidate thawing flag
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
 	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
 	if !stateDB.Exist(thawingAddress) {
-		t.Error("failed to create thawing address")
+		t.Error("no this thawing address")
 	}
 
-	stateDB.GetState(thawingAddress, PrefixCandidateThawing)
+	key := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
+	canThawingFlag := stateDB.GetState(thawingAddress, common.BytesToHash(key))
+	if canThawingFlag != common.BytesToHash(key) {
+		t.Errorf("wanted candidate thawing flag %v,got %v", common.BytesToHash(key), canThawingFlag)
+	}
+
+	// set vote deposit
+	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
+
+	key = append([]byte(PrefixVoteThawing), addr.Bytes()...)
+	voteThawingFlag := stateDB.GetState(thawingAddress, common.BytesToHash(key))
+	if voteThawingFlag != common.BytesToHash(key) {
+		t.Errorf("wanted vote thawing flag %v,got %v", common.BytesToHash(key), voteThawingFlag)
+	}
 }
 
 func TestThawingDeposit(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	sdb := state.NewDatabase(db)
+	stateDB, _ := state.New(common.Hash{}, sdb)
+
+	addr := common.HexToAddress("0x1")
+	currentEpochID := int64(123)
+	deposit := new(big.Int).SetInt64(100000)
+
+	// mark candidate deposit as thawing flag
+	stateDB.SetState(addr, KeyCandidateDeposit, common.BigToHash(deposit))
+	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
+
+	// mark candidate deposit as thawing flag
+	stateDB.SetState(addr, KeyVoteDeposit, common.BigToHash(deposit))
+	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
+	stateDB.Commit(true)
+
+	ThawingDeposit(stateDB, currentEpochID+ThawingEpochDuration)
+
+	// check whether deposit is thawed
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		t.Error("no this thawing address")
+	}
+
+	key := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
+	canThawingDeposit := stateDB.GetState(thawingAddress, common.BytesToHash(key))
+	if canThawingDeposit != (common.Hash{}) {
+		t.Errorf("failed to thaw candidate deposit")
+	}
+
+	canDeposit := stateDB.GetState(addr, KeyCandidateDeposit)
+	if canDeposit != (common.Hash{}) {
+		t.Errorf("candidate deposit not return back")
+	}
+
+	key = append([]byte(PrefixVoteThawing), addr.Bytes()...)
+	voteThawingDeposit := stateDB.GetState(thawingAddress, common.BytesToHash(key))
+	if voteThawingDeposit != (common.Hash{}) {
+		t.Errorf("failed to thaw vote deposit")
+	}
+
+	voteDeposit := stateDB.GetState(addr, KeyVoteDeposit)
+	if voteDeposit != (common.Hash{}) {
+		t.Errorf("vote deposit not return back")
+	}
 
 }

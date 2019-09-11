@@ -87,7 +87,7 @@ func TestEVM_CandidateTx(t *testing.T) {
 		},
 		{
 			from:            pas[0].Address,
-			wantErr:         errDuplicateCandidateTx,
+			wantErr:         ErrAlreadyCandidate,
 			wantGas:         100000,
 			wantDeposit:     new(big.Int).SetUint64(10000),
 			wantRewardRatio: common.BytesToHash([]byte("0x50")),
