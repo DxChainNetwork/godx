@@ -26,7 +26,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
@@ -154,11 +153,6 @@ func (api *PrivateMinerAPI) SetValidator(validator common.Address) bool {
 func (api *PrivateMinerAPI) SetCoinbase(coinbase common.Address) bool {
 	api.e.SetCoinbase(coinbase)
 	return true
-}
-
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *PrivateMinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
 }
 
 // GetHashrate returns the current hashrate of the miner.
