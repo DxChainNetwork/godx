@@ -258,21 +258,22 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
-		if interrupt != nil {
-			atomic.StoreInt32(interrupt, s)
-		}
-		interrupt = new(int32)
-
 		dposEng, ok := w.engine.(*dpos.Dpos)
 		if !ok {
 			panic("not dpos engine")
 		}
 
-		// check validator at now for dpos consensus
+		// before interrupt last task, we should firstly check validator at this timestamp.
+		// because maybe now is not right slot for validator to produce block, then let last task go on.
 		err := dposEng.CheckValidator(w.chain.CurrentBlock(), timestamp)
 		if err != nil {
 			return
 		}
+
+		if interrupt != nil {
+			atomic.StoreInt32(interrupt, s)
+		}
+		interrupt = new(int32)
 
 		w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}
 		atomic.StoreInt32(&w.newTxs, 0)
