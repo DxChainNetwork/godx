@@ -28,6 +28,15 @@ var (
 	MainnetGenesisHash = common.HexToHash("0xb2cc46f3f3158932effff18f2b71969fdca09945aa4cbbe98a4c5e3fc9716b58")
 	TestnetGenesisHash = common.HexToHash("0xe113fa64d10b08cdb9d86e60c8085602b1421c71d571102abd020debab83e271")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
+
+	// GenesisValidatorList is the default for genesis struct in hard code style
+	GenesisValidatorList = []common.Address{
+		common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
+		common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
+		common.HexToAddress("0x801ee9587ea0d52fe477755a3e91d7244e6556a3"),
+		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
+		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
+	}
 )
 
 var (
@@ -69,7 +78,7 @@ var (
 		ConstantinopleBlock: big.NewInt(4230000),
 		Ethash:              new(EthashConfig),
 		Dpos: &DposConfig{
-			Validators:[]common.Address{
+			Validators: []common.Address{
 				common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
 				common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
 				common.HexToAddress("0x801ee9587ea0d52fe477755a3e91d7244e6556a3"),
@@ -128,13 +137,7 @@ var (
 		ByzantiumBlock: big.NewInt(0),
 
 		Dpos: &DposConfig{
-			Validators:[]common.Address{
-				common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
-				common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
-				common.HexToAddress("0x801ee9587ea0d52fe477755a3e91d7244e6556a3"),
-				common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
-				common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
-			},
+			Validators: GenesisValidatorList,
 		},
 	}
 
