@@ -5,22 +5,35 @@
 package contractmanager
 
 import (
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 )
 
+// In testing, erasure code related settings are redefined here
+func init() {
+	defaultMinSectors = 1
+	defaultNumSectors = 2
+}
+
 var rentPaymentTest = storage.RentPayment{
-	Fund:               common.NewBigInt(1000000),
-	StorageHosts:       3,
-	Period:             10,
-	RenewWindow:        5,
-	ExpectedStorage:    100,
-	ExpectedUpload:     100,
-	ExpectedDownload:   100,
-	ExpectedRedundancy: 3,
+	Fund:         common.NewBigInt(1000000),
+	StorageHosts: 3,
+	Period:       unit.BlocksPerDay,
+}
+
+type fakeHostMarket struct {
+	prices storage.MarketPrice
+}
+
+// getMarketPrice of fakeHostMarket directly return the prices
+func (fhm *fakeHostMarket) GetMarketPrice() storage.MarketPrice {
+	return fhm.prices
 }
 
 func TestContractManager_SetRentPayment(t *testing.T) {
@@ -72,7 +85,14 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 	}()
 
 	// set the rent payment
-	if err := cm.SetRentPayment(rentPaymentTest); err != nil {
+	market := &fakeHostMarket{
+		storage.MarketPrice{
+			StoragePrice:  common.NewBigInt(1),
+			UploadPrice:   common.NewBigInt(1),
+			DownloadPrice: common.NewBigInt(1),
+		},
+	}
+	if err := cm.SetRentPayment(rentPaymentTest, market); err != nil {
 		t.Fatalf("failed to set the rent payment: %s", err.Error())
 	}
 
@@ -81,14 +101,12 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 	rentPayment := cm.rentPayment
 	cm.lock.RUnlock()
 
-	if rentPayment.ExpectedDownload != rentPaymentTest.ExpectedDownload {
-		t.Fatalf("expected rentPayment to be set as %+v, instead got %+v",
-			rentPaymentTest, rentPayment)
+	if err := checkRentPaymentEqual(rentPayment, rentPaymentTest); err != nil {
+		t.Fatal(err)
 	}
-
-	if cm.hostManager.RetrieveRentPayment().ExpectedUpload != rentPaymentTest.ExpectedUpload {
-		t.Fatalf("expected rentPayment for storage host manager to be set as %+v, got %+v",
-			cm.hostManager.RetrieveRentPayment(), rentPaymentTest)
+	hmRent := cm.hostManager.RetrieveRentPayment()
+	if err := checkRentPaymentEqual(hmRent, rentPaymentTest); err != nil {
+		t.Fatal(err)
 	}
 
 	time.Sleep(time.Second)
@@ -102,5 +120,48 @@ func TestContractManager_SetRentPayment(t *testing.T) {
 			t.Fatalf("maitenance failed, the contract should be in the expired contract list")
 		}
 	}
+}
 
+func TestEstimateRentPaymentSizes(t *testing.T) {
+	prices := storage.MarketPrice{
+		StoragePrice:  common.NewBigInt(1),
+		UploadPrice:   common.NewBigInt(1),
+		DownloadPrice: common.NewBigInt(1),
+	}
+	rent := storage.RentPayment{
+		Fund:         common.NewBigInt(100000000000000),
+		StorageHosts: 5,
+	}
+	res := estimateRentPaymentSizes(rent, prices)
+	// Check the results
+	expectedRedundancy := float64(defaultNumSectors) / float64(defaultMinSectors)
+	if res.ExpectedRedundancy != expectedRedundancy {
+		t.Errorf("unexpected redundancy. Expect %v, Got %v", expectedRedundancy, res.ExpectedRedundancy)
+	}
+	if res.ExpectedDownload == 0 || res.ExpectedUpload == 0 || res.ExpectedStorage == 0 {
+		t.Errorf("zero results")
+	}
+	if float64(res.ExpectedDownload)/float64(res.ExpectedUpload) != downloadSizeRatio/uploadSizeRatio {
+		t.Errorf("upload download ratio not expected. %v : %v != %v : %v", res.ExpectedDownload,
+			res.ExpectedUpload, downloadSizeRatio, uploadSizeRatio)
+	}
+	if float64(res.ExpectedStorage)/float64(res.ExpectedDownload) != storageSizeRatio*expectedRedundancy/downloadSizeRatio {
+		t.Errorf("storage to download ratio not expected. %v : %v != %v : %v", float64(res.ExpectedStorage)*
+			expectedRedundancy, res.ExpectedDownload, storageSizeRatio*expectedRedundancy, downloadSizeRatio)
+	}
+}
+
+// checkRentPaymentEqual checks whether the two input rent payments are the same.
+// The checked fields does not include the size fields
+func checkRentPaymentEqual(rent1, rent2 storage.RentPayment) error {
+	if rent1.Fund.Cmp(rent2.Fund) != 0 {
+		return fmt.Errorf("fund not equal. %v != %v", rent1.Fund, rent2.Fund)
+	}
+	if rent1.Period != rent2.Period {
+		return fmt.Errorf("period not equal. %v != %v", rent1.Period, rent2.Period)
+	}
+	if rent1.StorageHosts != rent2.StorageHosts {
+		return fmt.Errorf("storage host number not equal. %v != %v", rent1.StorageHosts, rent2.StorageHosts)
+	}
+	return nil
 }

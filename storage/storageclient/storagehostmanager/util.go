@@ -31,9 +31,10 @@ func hostInfoGenerator() storage.HostInfo {
 		HostExtConfig: storage.HostExtConfig{
 			AcceptingContracts:     true,
 			Deposit:                common.NewBigInt(100),
+			MaxDeposit:             common.RandomBigInt(),
 			ContractPrice:          common.RandomBigInt(),
-			DownloadBandwidthPrice: common.RandomBigInt(),
 			StoragePrice:           common.RandomBigInt(),
+			DownloadBandwidthPrice: common.RandomBigInt(),
 			UploadBandwidthPrice:   common.RandomBigInt(),
 			SectorAccessPrice:      common.RandomBigInt(),
 			RemainingStorage:       100,

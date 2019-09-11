@@ -216,18 +216,16 @@ flag must be used along with this flag to specify the account address`,
 			Flags: []cli.Flag{
 				contractPeriodFlag,
 				contractHostFlag,
-				contractRenewFlag,
 				contractFundFlag,
 			},
 			Description: `
-			gdx sclient setConfig [--period arg] [--host arg] [--renew arg] [--fund arg]
+			gdx sclient setConfig [--period arg] [--host arg] [--fund arg]
 		
 will configure the client settings used for contract creation, file upload, download, and etc. There are
 multiple flags can be used along with this command to specify the setting:
 1. period: specifies the file storage time
 2. host: specifies the number of storage hosts that the client want to sign contracts with
-3. renew: specifies the time that the contract will automatically be renewed.
-4. fund: specifies the amount of money the client wants to be used for the storage service
+3. fund: specifies the amount of money the client wants to be used for the storage service
 
 units:
 currency: [camel, gcamel, dx]
@@ -347,7 +345,6 @@ func getConfig(ctx *cli.Context) error {
 	Fund:                           %s
 	Period:                         %s
 	HostsNeeded:                    %s
-	Renew:                          %s
 	Redundancy:                     %s
 	ExpectedStorage:                %s
 	ExpectedUpload:                 %s
@@ -355,7 +352,7 @@ func getConfig(ctx *cli.Context) error {
 	Max Upload Speed:               %s
 	Max Download Speed:             %s
 	IP Violation Check Status:      %s
-`, config.RentPayment.Fund, config.RentPayment.Period, config.RentPayment.StorageHosts, config.RentPayment.RenewWindow,
+`, config.RentPayment.Fund, config.RentPayment.Period, config.RentPayment.StorageHosts,
 		config.RentPayment.ExpectedRedundancy, config.RentPayment.ExpectedStorage, config.RentPayment.ExpectedUpload,
 		config.RentPayment.ExpectedDownload, config.MaxUploadSpeed, config.MaxDownloadSpeed, config.EnableIPViolation)
 
@@ -638,10 +635,6 @@ func setClientConfig(ctx *cli.Context) error {
 
 	if ctx.IsSet(contractFundFlag.Name) {
 		settings["fund"] = ctx.String(contractFundFlag.Name)
-	}
-
-	if ctx.IsSet(contractRenewFlag.Name) {
-		settings["renew"] = ctx.String(contractRenewFlag.Name)
 	}
 
 	var resp string

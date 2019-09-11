@@ -130,8 +130,9 @@ func TestStorageHostManager_IncrementSuccessfulInteractions(t *testing.T) {
 	info := storage.HostInfo{EnodeID: enodeID, SuccessfulInteractionFactor: 10, FailedInteractionFactor: 10}
 	shm := &StorageHostManager{}
 	shm.hostEvaluator = newDefaultEvaluator(shm, storage.RentPayment{})
-	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
-	if err := shm.storageHostTree.Insert(info); err != nil {
+	shm.storageHostTree = storagehosttree.New()
+	score := shm.hostEvaluator.Evaluate(info)
+	if err := shm.storageHostTree.Insert(info, score); err != nil {
 		t.Fatal("cannot insert into the storage host tree: ", err)
 	}
 	prevSc := interactionScoreCalc(info)
@@ -153,8 +154,9 @@ func TestStorageHostManager_IncrementFailedInteractions(t *testing.T) {
 	info := storage.HostInfo{EnodeID: enodeID, SuccessfulInteractionFactor: 10, FailedInteractionFactor: 10}
 	shm := &StorageHostManager{}
 	shm.hostEvaluator = newDefaultEvaluator(shm, storage.RentPayment{})
-	shm.storageHostTree = storagehosttree.New(shm.hostEvaluator)
-	if err := shm.storageHostTree.Insert(info); err != nil {
+	shm.storageHostTree = storagehosttree.New()
+	score := shm.hostEvaluator.Evaluate(info)
+	if err := shm.storageHostTree.Insert(info, score); err != nil {
 		t.Fatal("cannot insert into the storage host tree: ", err)
 	}
 	prevSc := interactionScoreCalc(info)

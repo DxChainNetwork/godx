@@ -243,7 +243,7 @@ func (client *StorageClient) SetClientSetting(setting storage.ClientSetting) (er
 	}
 
 	// set the rent payment
-	if err = client.contractManager.SetRentPayment(setting.RentPayment); err != nil {
+	if err = client.contractManager.SetRentPayment(setting.RentPayment, client.storageHostManager); err != nil {
 		return
 	}
 

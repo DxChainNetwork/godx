@@ -6,6 +6,14 @@ package storageclient
 
 import (
 	"context"
+	"math/big"
+	"math/rand"
+	"os"
+	"os/user"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -23,13 +31,6 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager"
 	"github.com/DxChainNetwork/godx/storage/storageclient/erasurecode"
 	"github.com/DxChainNetwork/godx/storage/storageclient/filesystem/dxfile"
-	"math/big"
-	"math/rand"
-	"os"
-	"os/user"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 var hashes = []string{"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd51",
@@ -310,11 +311,10 @@ func randRentPaymentGenerator() (rentPayment storage.RentPayment) {
 		Fund:               common.RandomBigInt(),
 		StorageHosts:       randUint64(),
 		Period:             randUint64(),
-		RenewWindow:        randUint64(),
-		ExpectedStorage:    randUint64(),
-		ExpectedUpload:     randUint64(),
-		ExpectedDownload:   randUint64(),
-		ExpectedRedundancy: randFloat64(),
+		ExpectedStorage:    0,
+		ExpectedUpload:     0,
+		ExpectedDownload:   0,
+		ExpectedRedundancy: 0,
 	}
 
 	return

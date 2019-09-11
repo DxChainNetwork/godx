@@ -63,7 +63,7 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, hostInfo []enode.ID)
 	isWhitelist := fm == WhitelistFilter
 
 	// initialize filtered tree
-	shm.filteredTree = storagehosttree.New(shm.hostEvaluator)
+	shm.filteredTree = storagehosttree.New()
 	shm.filteredHosts = make(map[enode.ID]struct{})
 	shm.filterMode = fm
 
@@ -78,7 +78,8 @@ func (shm *StorageHostManager) SetFilterMode(fm FilterMode, hostInfo []enode.ID)
 	allHosts := shm.storageHostTree.All()
 	for _, host := range allHosts {
 		if _, exist := shm.filteredHosts[host.EnodeID]; exist == isWhitelist {
-			if err := shm.filteredTree.Insert(host); err != nil {
+			score := shm.hostEvaluator.Evaluate(host)
+			if err := shm.filteredTree.Insert(host, score); err != nil {
 				return err
 			}
 		}
