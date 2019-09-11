@@ -79,9 +79,9 @@ var spf = types.StorageProof{
 	Signature: []byte("0x14564645456"),
 }
 
-type mokeHostBackend struct{}
+type mockHostBackend struct{}
 
-func mokeBlockHeader(number uint64) *types.Header {
+func mockBlockHeader(number uint64) *types.Header {
 	return &types.Header{
 		ParentHash: common.HexToHash("abcdef"),
 		UncleHash:  types.CalcUncleHash(nil),
@@ -100,11 +100,11 @@ func mokeBlockHeader(number uint64) *types.Header {
 	}
 }
 
-func (m *mokeHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
+func (m *mockHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	switch blockHash {
 	case common.Hash{1}:
 		return types.NewBlock(
-			mokeBlockHeader(1),
+			mockBlockHeader(1),
 			types.Transactions{
 				types.NewContractCreation(
 					0,
@@ -122,7 +122,7 @@ func (m *mokeHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, e
 			return nil, err
 		}
 		return types.NewBlock(
-			mokeBlockHeader(2),
+			mockBlockHeader(2),
 			types.Transactions{
 				types.NewTransaction(
 					0,
@@ -140,7 +140,7 @@ func (m *mokeHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, e
 			return nil, err
 		}
 		return types.NewBlock(
-			mokeBlockHeader(3),
+			mockBlockHeader(3),
 			types.Transactions{
 				types.NewTransaction(
 					0,
@@ -158,7 +158,7 @@ func (m *mokeHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, e
 			return nil, err
 		}
 		return types.NewBlock(
-			mokeBlockHeader(4),
+			mockBlockHeader(4),
 			types.Transactions{
 				types.NewTransaction(
 					0,
@@ -174,19 +174,19 @@ func (m *mokeHostBackend) GetBlockByHash(blockHash common.Hash) (*types.Block, e
 	return nil, nil
 }
 
-func (m *mokeHostBackend) GetBlockByNumber(number uint64) (*types.Block, error) { return nil, nil }
-func (m *mokeHostBackend) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
+func (m *mockHostBackend) GetBlockByNumber(number uint64) (*types.Block, error) { return nil, nil }
+func (m *mockHostBackend) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent) event.Subscription {
 	return nil
 }
-func (m *mokeHostBackend) GetBlockChain() *core.BlockChain               { return nil }
-func (m *mokeHostBackend) AccountManager() *accounts.Manager             { return nil }
-func (m *mokeHostBackend) SetStatic(node *enode.Node)                    {}
-func (m *mokeHostBackend) CheckAndUpdateConnection(peerNode *enode.Node) {}
-func (m *mokeHostBackend) APIs() []rpc.API                               { return nil }
+func (m *mockHostBackend) GetBlockChain() *core.BlockChain               { return nil }
+func (m *mockHostBackend) AccountManager() *accounts.Manager             { return nil }
+func (m *mockHostBackend) SetStatic(node *enode.Node)                    {}
+func (m *mockHostBackend) CheckAndUpdateConnection(peerNode *enode.Node) {}
+func (m *mockHostBackend) APIs() []rpc.API                               { return nil }
 
 func TestGetAllStorageContractIDsWithBlockHash(t *testing.T) {
 	host := &StorageHost{}
-	host.ethBackend = &mokeHostBackend{}
+	host.ethBackend = &mockHostBackend{}
 
 	tests := []struct {
 		host                 *StorageHost

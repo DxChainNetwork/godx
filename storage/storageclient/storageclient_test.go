@@ -37,7 +37,7 @@ import (
 var hashes = []string{"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd50", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd51",
 	"0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd53", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd54", "0x89c99d90b79719238d2645c7642f2c9295246e80775b38cfd162b696817fbd55"}
 
-var mokeHostAnnouncements = []types.HostAnnouncement{
+var mockHostAnnouncements = []types.HostAnnouncement{
 	{
 		NetAddress: "enode://0ec8f957266eb79c56fc422c28643119a0b7b9771f0cd1a3dc91dc1b865b29e25e3856703bd8fe040556c443cea2ff13fd5bf432adfa3445a3366e0eb9ae063d@127.0.0.1:30303",
 		Signature:  []byte("0x111111"),
@@ -137,7 +137,7 @@ func homeDir() string {
 	return ""
 }
 
-func mokeBlockHeader(number uint64) *types.Header {
+func mockBlockHeader(number uint64) *types.Header {
 	return &types.Header{
 		ParentHash: common.HexToHash("abcdef"),
 		UncleHash:  types.CalcUncleHash(nil),
@@ -171,7 +171,7 @@ func TestStorageClient_GetHostAnnouncementWithBlockHash(t *testing.T) {
 			blockHash:    common.Hash{1},
 			expectNumber: 1,
 			expectLength: 4,
-			expectOut:    mokeHostAnnouncements,
+			expectOut:    mockHostAnnouncements,
 		},
 		{
 			client:       client,
@@ -234,24 +234,24 @@ func (b *BackendTest) SubscribeChainChangeEvent(ch chan<- core.ChainChangeEvent)
 func (b *BackendTest) GetBlockByHash(blockHash common.Hash) (*types.Block, error) {
 	switch blockHash {
 	case common.Hash{1}:
-		haRlp1, err := rlp.EncodeToBytes(mokeHostAnnouncements[0])
+		haRlp1, err := rlp.EncodeToBytes(mockHostAnnouncements[0])
 		if err != nil {
 			return nil, err
 		}
-		haRlp2, err := rlp.EncodeToBytes(mokeHostAnnouncements[1])
+		haRlp2, err := rlp.EncodeToBytes(mockHostAnnouncements[1])
 		if err != nil {
 			return nil, err
 		}
-		haRlp3, err := rlp.EncodeToBytes(mokeHostAnnouncements[2])
+		haRlp3, err := rlp.EncodeToBytes(mockHostAnnouncements[2])
 		if err != nil {
 			return nil, err
 		}
-		haRlp4, err := rlp.EncodeToBytes(mokeHostAnnouncements[3])
+		haRlp4, err := rlp.EncodeToBytes(mockHostAnnouncements[3])
 		if err != nil {
 			return nil, err
 		}
 		return types.NewBlock(
-			mokeBlockHeader(1),
+			mockBlockHeader(1),
 			types.Transactions{
 				types.NewTransaction(
 					0,
@@ -307,7 +307,7 @@ func (b *BackendTest) GetBlockByHash(blockHash common.Hash) (*types.Block, error
 			nil), nil
 	case common.Hash{2}:
 		return types.NewBlock(
-			mokeBlockHeader(2),
+			mockBlockHeader(2),
 			types.Transactions{
 				types.NewContractCreation(
 					0,
