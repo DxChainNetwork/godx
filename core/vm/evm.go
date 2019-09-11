@@ -782,7 +782,7 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 	stateDB := evm.StateDB
 	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
 	if depositHash != (common.Hash{}) {
-		return nil, gas, errDuplicateCandidateTx
+		return nil, gas, ErrAlreadyCandidate
 	}
 
 	//exception will cause the database to roll back
@@ -843,6 +843,12 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		candidateList []common.Address
 		stateDB       = evm.StateDB
 	)
+
+	// only after thawing vote deposit, user can send a new vote tx
+	depositHash := stateDB.GetState(caller, dpos.KeyVoteDeposit)
+	if depositHash != (common.Hash{}) {
+		return nil, gas, ErrAlreadyVote
+	}
 
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
 	errDec, _ := resultDec[0].(error)
