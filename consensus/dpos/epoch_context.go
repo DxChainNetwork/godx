@@ -211,7 +211,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	}
 
 	// thawing some deposit for currentEpoch-2
-	thawingDeposit(ec.stateDB, currentEpoch)
+	ThawingDeposit(ec.stateDB, currentEpoch)
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
@@ -314,8 +314,8 @@ func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpoc
 	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
 }
 
-// thawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
-func thawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
+// ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
+func ThawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
 	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
 	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
 	if stateDB.Exist(thawingAddress) {

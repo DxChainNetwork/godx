@@ -278,3 +278,30 @@ func Test_KickoutValidators(t *testing.T) {
 		t.Errorf("failed to delete the kick out one from vote trie,wanted length: %d,got: %d", MaxValidatorSize+5-MaxValidatorSize/3, len(votedCan))
 	}
 }
+
+func TestMarkThawingAddress(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	sdb := state.NewDatabase(db)
+	stateDB, _ := state.New(common.Hash{}, sdb)
+
+	addr := common.HexToAddress("0x1")
+	currentEpochID := int64(123)
+	deposit := new(big.Int).SetInt64(100000)
+
+	// set candidate deposit
+	stateDB.SetState(addr, KeyCandidateDeposit, common.BigToHash(deposit))
+	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
+
+	// check candidate thawing flag
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		t.Error("failed to create thawing address")
+	}
+
+	stateDB.GetState(thawingAddress, PrefixCandidateThawing)
+}
+
+func TestThawingDeposit(t *testing.T) {
+
+}
