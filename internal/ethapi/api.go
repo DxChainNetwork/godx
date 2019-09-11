@@ -617,6 +617,9 @@ func blockToStorageContract(block *types.Block) (map[string]interface{}, error) 
 	precompiled := vm.PrecompiledEVMStorageContracts
 	txs := block.Transactions()
 	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
 		p, ok := precompiled[*tx.To()]
 		if !ok {
 			continue
@@ -1158,6 +1161,9 @@ func (s *PublicTransactionPoolAPI) GetStorageContractByTransactionHash(ctx conte
 // transactionToStorageContract return storage contract info.
 func transactionToStorageContract(transaction *types.Transaction) (map[string]interface{}, error) {
 	precompiled := vm.PrecompiledEVMStorageContracts
+	if transaction.To() == nil {
+		return nil, errors.New("this is a deployment contract transaction")
+	}
 	p, ok := precompiled[*transaction.To()]
 	if !ok {
 		return nil, errors.New("not a storage contract related transaction")
