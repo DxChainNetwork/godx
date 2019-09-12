@@ -236,7 +236,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root := statedb.IntermediateRoot(false)
 
 	// init genesis block dpos context
 	dposContext, err := initGenesisDposContext(statedb, g, db)
@@ -244,6 +243,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
+	root := statedb.IntermediateRoot(false)
 	dcProto := dposContext.ToRoot()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
