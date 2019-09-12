@@ -30,14 +30,14 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-// dpos consensus engine work mode
+// Mode is dpos consensus engine work mode
 type Mode uint
 
 const (
-	// the default work mode
+	// ModeNormal is the default work mode
 	ModeNormal Mode = iota
 
-	// fake mode skipping verify(Header/Uncle/DposState) logic
+	// ModeFake is fake mode skipping verify(Header/Uncle/DposState) logic
 	ModeFake
 )
 
@@ -511,7 +511,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	if d.Mode == ModeFake {
-
 		// Accumulate block rewards and commit the final state root
 		accumulateRewards(chain.Config(), state, header, dposContext)
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))

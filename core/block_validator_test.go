@@ -35,7 +35,7 @@ func TestHeaderVerification(t *testing.T) {
 		testdb    = ethdb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.DposChainConfig}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.DposChainConfig, genesis, ethash.NewFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {

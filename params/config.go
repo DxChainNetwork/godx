@@ -25,18 +25,9 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("05eed3723c0b7992a014d663b541889e9c02092ab8c9afdc25e0fab5eb034069")
-	TestnetGenesisHash = common.HexToHash("0xe113fa64d10b08cdb9d86e60c8085602b1421c71d571102abd020debab83e271")
+	MainnetGenesisHash = common.HexToHash("0xe500069f800e1b4e250aaf0e51fcf7a1d5cd17238fef095526aa0dd8f4a2a8f5")
+	TestnetGenesisHash = common.HexToHash("0xda6d48cb354a1aa635ff05493f01267d2816fed42f452ed7195dca2d7ca89ab5")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
-
-	// GenesisValidatorList is the default for genesis struct in hard code style
-	GenesisValidatorList = []common.Address{
-		common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
-		common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
-		common.HexToAddress("0x801ee9587ea0d52fe477755a3e91d7244e6556a3"),
-		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
-		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
-	}
 )
 
 var (

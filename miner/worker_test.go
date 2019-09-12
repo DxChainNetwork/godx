@@ -228,7 +228,7 @@ func TestStreamUncleBlock(t *testing.T) {
 		if task.block.NumberU64() == 2 {
 			if taskIndex == 2 {
 				have := task.block.Header().UncleHash
-				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
+				want := types.EmptyUncleHash
 				if have != want {
 					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
 				}
