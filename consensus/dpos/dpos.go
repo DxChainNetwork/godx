@@ -558,7 +558,7 @@ func (d *Dpos) checkDeadline(lastBlock *types.Block, now int64) error {
 		return ErrMinedFutureBlock
 	}
 	// last block was arrived, or time's up
-	if lastBlock.Time().Int64() == prevSlot || nextSlot-now <= 1 {
+	if lastBlock.Time().Int64() == prevSlot || nextSlot-now <= 0 {
 		return nil
 	}
 	return ErrWaitForPrevBlock
