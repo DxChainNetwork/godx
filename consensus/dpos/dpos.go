@@ -469,10 +469,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 		// retrieve the real vote weight ratio,and calculate the real vote weight of delegator
 		realVoteWeight := float64(0)
-		realVoteWeightRatioHash := state.GetState(delegator, KeyRealVoteWeightRatio)
+		realVoteWeightRatioHash := state.GetState(delegator, KeyVoteWeight)
 		if realVoteWeightRatioHash != EmptyHash {
 			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
-			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes()[24:])
+			realVoteWeightRatio := hashToFloat64(realVoteWeightRatioHash)
 			realVoteWeight = float64(vote.BigIntPtr().Int64()) * realVoteWeightRatio
 		}
 

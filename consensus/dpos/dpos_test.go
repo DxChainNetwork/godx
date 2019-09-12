@@ -96,7 +96,7 @@ func TestAccumulateRewards(t *testing.T) {
 	bits := math.Float64bits(0.5)
 	fbytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(fbytes, bits)
-	stateDB.SetState(delegator, KeyRealVoteWeightRatio, common.BytesToHash(fbytes))
+	stateDB.SetState(delegator, KeyVoteWeight, common.BytesToHash(fbytes))
 
 	// set validator reward ratio
 	var rewardRatioNumerator uint8 = 50

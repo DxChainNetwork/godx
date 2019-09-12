@@ -114,7 +114,7 @@ func Test_CountVotes(t *testing.T) {
 		bits := math.Float64bits(ratio)
 		ratioBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, KeyRealVoteWeightRatio, common.BytesToHash(ratioBytes))
+		stateDB.SetState(addr, KeyVoteWeight, common.BytesToHash(ratioBytes))
 		_, err = stateDB.Commit(false)
 		if err != nil {
 			t.Fatalf("Failed to commit state,error: %v", err)
@@ -143,7 +143,7 @@ func Test_CountVotes(t *testing.T) {
 		bits := math.Float64bits(ratio)
 		ratioBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, KeyRealVoteWeightRatio, common.BytesToHash(ratioBytes))
+		stateDB.SetState(addr, KeyVoteWeight, common.BytesToHash(ratioBytes))
 	}
 	votes, err = epochContext.countVotes()
 	if err != nil {

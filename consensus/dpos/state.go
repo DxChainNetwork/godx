@@ -5,15 +5,16 @@
 package dpos
 
 import (
-	"encoding/binary"
-
 	"github.com/DxChainNetwork/godx/common"
 )
 
 type stateDB interface {
-	GetState(common.Address, common.Hash) common.Hash
-	SetState(common.Address, common.Hash, common.Hash)
-	ForEachStorage(common.Address, func(common.Hash, common.Hash) bool)
+	GetState(addr common.Address, key common.Hash) common.Hash
+	SetState(addr common.Address, key, value common.Hash)
+	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool)
+	Exist(addr common.Address) bool
+	CreateAccount(addr common.Address)
+	SetNonce(addr common.Address, nonce uint64)
 }
 
 var (
@@ -23,8 +24,8 @@ var (
 	// KeyVoteDeposit is the key of vote deposit
 	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
 
-	// KeyRealVoteWeightRatio is the weight ratio of vote
-	KeyRealVoteWeightRatio = common.BytesToHash([]byte("real-vote-weight-ratio"))
+	// KeyVoteWeight is the weight ratio of vote
+	KeyVoteWeight = common.BytesToHash([]byte("vote-weight"))
 
 	// KeyCandidateDeposit is the key of candidate deposit
 	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
@@ -88,16 +89,27 @@ func setCandidateRewardRatioNumerator(state stateDB, addr common.Address, value 
 	state.SetState(addr, KeyRewardRatioNumerator, hash)
 }
 
-// hashToUint64 convert the hash to uint64. Only the last 8 bytes in the hash is interpreted as
-// uint64
-func hashToUint64(hash common.Hash) uint64 {
-	return binary.LittleEndian.Uint64(hash[common.HashLength-8:])
+// getLastVoteTime return the last vote time for the address in the stateDB
+func getLastVoteTime(state stateDB, addr common.Address) int64 {
+	timeHash := state.GetState(addr, KeyLastVoteTime)
+	return int64(hashToUint64(timeHash))
 }
 
-// uint64ToHash convert the uint64 value to the hash. The value is written in the last 8 bytes
-// in the hash
-func uint64ToHash(value uint64) common.Hash {
-	var h common.Hash
-	binary.LittleEndian.PutUint64(h[common.HashLength-8:], value)
-	return h
+// setLastVoteTime set the last vote time for the address to the specified value time in the
+// stateDB
+func setLastVoteTime(state stateDB, addr common.Address, time int64) {
+	timeHash := uint64ToHash(uint64(time))
+	state.SetState(addr, KeyLastVoteTime, timeHash)
+}
+
+// getVoteWeight get the vote weight for the address in the stateDB
+func getVoteWeight(state stateDB, addr common.Address) float64 {
+	ratioHash := state.GetState(addr, KeyVoteWeight)
+	return hashToFloat64(ratioHash)
+}
+
+// setVoteWeight set the vote weight to the value of the addr in stateDB
+func setVoteWeight(state stateDB, addr common.Address, value float64) {
+	ratioHash := float64ToHash(value)
+	state.SetState(addr, KeyVoteWeight, ratioHash)
 }

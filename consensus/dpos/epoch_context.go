@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -85,7 +84,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			voteDeposit := voteDepositHash.Big()
 
 			// retrieve the real vote weight ratio of delegator
-			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyRealVoteWeightRatio)
+			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyVoteWeight)
 
 			// maybe current is genesis, has no vote before
 			if realVoteWeightRatioHash == EmptyHash {
@@ -93,7 +92,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 			}
 
 			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
-			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes()[24:])
+			realVoteWeightRatio := hashToFloat64(realVoteWeightRatioHash)
 
 			// calculate the real vote weight of delegator
 			realVoteWeight := float64(voteDeposit.Int64()) * realVoteWeightRatio
@@ -294,7 +293,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 }
 
 // MarkThawingAddress mark the given addr that will be thawed in next next epoch
-func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpochID int64, keyPrefix string) {
+func MarkThawingAddress(stateDB stateDB, addr common.Address, currentEpochID int64, keyPrefix string) {
 
 	// create thawing address: "thawing_" + currentEpochID
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
@@ -312,7 +311,7 @@ func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpoc
 }
 
 // ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
-func ThawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
+func ThawingDeposit(stateDB stateDB, currentEpoch int64) {
 	epochIDStr := strconv.FormatInt(currentEpoch-ThawingEpochDuration, 10)
 	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
 	if stateDB.Exist(thawingAddress) {
@@ -369,12 +368,6 @@ func (p sortableAddresses) Less(i, j int) bool {
 	} else {
 		return p[i].address.String() < p[j].address.String()
 	}
-}
-
-// BytesToFloat64 converts []byte to float64
-func BytesToFloat64(bytes []byte) float64 {
-	bits := binary.BigEndian.Uint64(bytes)
-	return math.Float64frombits(bits)
 }
 
 // LuckyTurntable elects some validators with random seed
