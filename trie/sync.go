@@ -76,7 +76,7 @@ func NewSync(root common.Hash, database DatabaseReader, callback LeafCallback) *
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
 func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
-	if root == emptyRoot {
+	if root == emptyRoot || root == (common.Hash{}) {
 		return
 	}
 	if _, ok := s.membatch.batch[root]; ok {

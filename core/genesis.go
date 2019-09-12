@@ -322,7 +322,7 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := DefaultGenesisBlock()
-	g.Alloc = GenesisAlloc{addr: {Balance: balance}}
+	g.Alloc[addr] = GenesisAccount{Balance: balance}
 	return g.MustCommit(db)
 }
 
@@ -336,7 +336,6 @@ func DefaultGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1048576),
 		Alloc: map[common.Address]GenesisAccount{
 			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
-			common.HexToAddress(""): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
 		},
 	}
 }
