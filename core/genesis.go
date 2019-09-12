@@ -417,6 +417,11 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 
 	// get validators from the genesis DPOS config
 	validators := g.Config.Dpos.ParseValidators()
+
+	// confirmed sorted validator list
+	validators = SortValidators(validators)
+
+	// set initial genesis epoch validators
 	err = dc.SetValidators(validators)
 	if err != nil {
 		return nil, err
@@ -452,4 +457,16 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	return dc, nil
+}
+
+// SortValidators sort validators after ParseValidators
+func SortValidators(validators []common.Address) []common.Address {
+	for i := 0; i < len(validators); i++ {
+		for j := i + 1; j < len(validators); j++ {
+			if validators[i].String() < validators[j].String() {
+				validators[i], validators[j] = validators[j], validators[i]
+			}
+		}
+	}
+	return validators
 }

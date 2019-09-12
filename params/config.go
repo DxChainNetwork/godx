@@ -25,8 +25,8 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("05eed3723c0b7992a014d663b541889e9c02092ab8c9afdc25e0fab5eb034069")
-	TestnetGenesisHash = common.HexToHash("0xe113fa64d10b08cdb9d86e60c8085602b1421c71d571102abd020debab83e271")
+	MainnetGenesisHash = common.HexToHash("0x87155ef8a2d887ebd571beb022e6a9d33f25f1c49e33bbaebc25937813c02416")
+	TestnetGenesisHash = common.HexToHash("0x101495c2096316b37db8028b34d56b664d4e0f0bb33288756aafaa99fd40b383")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 
 	// GenesisValidatorList is the default for genesis struct in hard code style
