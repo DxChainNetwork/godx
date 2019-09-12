@@ -23,13 +23,18 @@ func TestFindCommonAncestor(t *testing.T) {
 	//					^|
 	//				header03
 
-	header00 := &types.Header{Number: big.NewInt(0)}
-	header01 := &types.Header{ParentHash: header00.Hash(), Number: big.NewInt(1)}
-	header02 := &types.Header{ParentHash: header01.Hash(), Number: big.NewInt(2), Extra: []byte("this is a branch")}
-	header03 := &types.Header{ParentHash: header01.Hash(), Number: big.NewInt(2), Extra: []byte("this is another branch")}
-	header04 := &types.Header{ParentHash: header02.Hash(), Number: big.NewInt(3)}
-	header05 := &types.Header{Number: big.NewInt(1), Extra: []byte("Ancestor of a chain")}
-	header06 := &types.Header{Number: big.NewInt(3), Extra: []byte("Ancestor of a another chain")}
+	dposCtx, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to new dpos context: %v", err)
+	}
+
+	header00 := &types.Header{Number: big.NewInt(0), DposContext: dposCtx.ToRoot()}
+	header01 := &types.Header{ParentHash: header00.Hash(), Number: big.NewInt(1), DposContext: dposCtx.ToRoot()}
+	header02 := &types.Header{ParentHash: header01.Hash(), Number: big.NewInt(2), Extra: []byte("this is a branch"), DposContext: dposCtx.ToRoot()}
+	header03 := &types.Header{ParentHash: header01.Hash(), Number: big.NewInt(2), Extra: []byte("this is another branch"), DposContext: dposCtx.ToRoot()}
+	header04 := &types.Header{ParentHash: header02.Hash(), Number: big.NewInt(3), DposContext: dposCtx.ToRoot()}
+	header05 := &types.Header{Number: big.NewInt(1), Extra: []byte("Ancestor of a chain"), DposContext: dposCtx.ToRoot()}
+	header06 := &types.Header{Number: big.NewInt(3), Extra: []byte("Ancestor of a another chain"), DposContext: dposCtx.ToRoot()}
 
 	// write nodes into database
 	WriteHeader(db, header00)

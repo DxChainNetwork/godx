@@ -53,7 +53,7 @@ func TestSetupGenesis(t *testing.T) {
 	oldcustomg.Config = &params.ChainConfig{
 		HomesteadBlock: big.NewInt(2),
 		Dpos: &params.DposConfig{
-			Validators: params.GenesisValidatorList,
+			Validators: params.DefaultValidators,
 		},
 	}
 

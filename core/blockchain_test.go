@@ -18,6 +18,12 @@ package core
 
 import (
 	"fmt"
+	"math/big"
+	"math/rand"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
@@ -29,11 +35,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"math/rand"
-	"sync"
-	"testing"
-	"time"
 )
 
 // So we can deterministically seed different blockchains
@@ -521,7 +522,7 @@ func testReorgBadHashes(t *testing.T, full bool) {
 		defer func() { delete(BadHashes, headers[3].Hash()) }()
 	}
 	blockchain.Stop()
-	
+
 	// Create a new BlockChain and check that it rolled back the state.
 	ncm, err := NewBlockChain(blockchain.db, nil, blockchain.chainConfig, dpos.NewDposFaker(), vm.Config{}, nil)
 	if err != nil {
@@ -692,7 +693,7 @@ func TestFastVsFullChains(t *testing.T) {
 func TestLightVsFastVsFullChainHeads(t *testing.T) {
 	// Configure and generate a sample block chain
 	var (
-		gendb   = ethdb.NewMemDatabase()
+		gendb = ethdb.NewMemDatabase()
 		//key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		//address = crypto.PubkeyToAddress(key.PublicKey)
 		gspec   = DefaultGenesisBlock()
@@ -994,7 +995,7 @@ done:
 			}
 			i++
 
-			if i == len(expectedSideHashes) || i == len(expectedSideHashes) - 1 {
+			if i == len(expectedSideHashes) || i == len(expectedSideHashes)-1 {
 				timeout.Stop()
 
 				break done
@@ -1171,19 +1172,14 @@ func TestEIP161AccountRemoval(t *testing.T) {
 		funds   = big.NewInt(1000000000)
 		theAddr = common.Address{1}
 		gspec   = &Genesis{
-				Config: &params.ChainConfig{
-					ChainID:        big.NewInt(1),
-					HomesteadBlock: new(big.Int),
-					EIP155Block:    new(big.Int),
-					EIP158Block:    big.NewInt(2),
-					Dpos: &params.DposConfig{
-						Validators:[]common.Address{
-							common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
-							common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
-						},
-					},
-				},
-				Alloc: GenesisAlloc{address: {Balance: funds}},
+			Config: &params.ChainConfig{
+				ChainID:        big.NewInt(1),
+				HomesteadBlock: new(big.Int),
+				EIP155Block:    new(big.Int),
+				EIP158Block:    big.NewInt(2),
+				Dpos:           params.DefaultDposConfig(),
+			},
+			Alloc: GenesisAlloc{address: {Balance: funds}},
 		}
 		genesis = gspec.MustCommit(db)
 	)
