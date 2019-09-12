@@ -54,7 +54,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 		candidateAddr := common.BytesToAddress(candidateAddrBytes)
 
 		// sanity check
-		if _, ok := votes[candidateAddr]; !ok {
+		if _, ok := votes[candidateAddr]; ok {
 			return nil, fmt.Errorf("countVotes failed, get same candidates from the candidate trie: %v", candidateAddr)
 		}
 
