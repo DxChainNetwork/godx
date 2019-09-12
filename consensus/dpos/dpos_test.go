@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpdateMintCnt(t *testing.T) {
+func TestUpdateMinedCnt(t *testing.T) {
 	var (
 		delegator = common.HexToAddress("0xaaa")
 	)
@@ -33,45 +33,45 @@ func TestUpdateMintCnt(t *testing.T) {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
 
-	// new block still in the same epoch with current block, but newMiner is the first time to mint in the epoch
+	// new block still in the same epoch with current block, but newMiner is the first time to mined in the epoch
 	lastTime := int64(EpochInterval)
 
 	miner := common.HexToAddress("0xab")
 	blockTime := int64(EpochInterval + BlockInterval)
 
-	beforeUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	beforeUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt := getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 
-	// new block still in the same epoch with current block, and newMiner has mint block before in the epoch
-	err = setMintCntTrie(blockTime/EpochInterval, miner, dposContext.MintCntTrie(), int64(1))
+	// new block still in the same epoch with current block, and newMiner has mined block before in the epoch
+	err = setMinedCntTrie(blockTime/EpochInterval, miner, dposContext.MinedCntTrie(), int64(1))
 	if err != nil {
-		t.Fatalf("failed to set mint count trie,error: %v", err)
+		t.Fatalf("failed to set mined count trie,error: %v", err)
 	}
 
 	blockTime = EpochInterval + BlockInterval*4
 
-	// currentBlock has recorded the count for the newMiner before UpdateMintCnt
-	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	// currentBlock has recorded the count for the newMiner before updateMinedCnt
+	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
 	assert.Equal(t, int64(1), beforeUpdateCnt)
 	assert.Equal(t, int64(2), afterUpdateCnt)
 
 	// new block come to a new epoch
 	blockTime = EpochInterval * 2
 
-	beforeUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
-	err = updateMintCnt(lastTime, blockTime, miner, dposContext)
+	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt = getMintCnt(blockTime/EpochInterval, miner, dposContext.MintCntTrie())
+	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 }
@@ -141,12 +141,12 @@ func TestDpos_CheckValidator(t *testing.T) {
 
 		tests = []struct {
 			name    string
-			fn      func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error
+			fn      func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error
 			wantErr error
 		}{
 			{
-				name: "mint the future block",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				name: "mined the future block",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86430)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -158,11 +158,11 @@ func TestDpos_CheckValidator(t *testing.T) {
 					dposEng.signer = validator
 					return dposEng.CheckValidator(lastBlock, int64(86420))
 				},
-				wantErr: ErrMintFutureBlock,
+				wantErr: ErrMinedFutureBlock,
 			},
 			{
 				name: "wait for last block arrived",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86410)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -178,7 +178,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 			},
 			{
 				name: "invalid block validator",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86410)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -194,7 +194,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 			},
 			{
 				name: "success to check validator",
-				fn: func(db ethdb.Database, dposRoot *types.DposContextProto, validator common.Address) error {
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86400)
 					lastBlockHeader := &types.Header{
 						Time:        new(big.Int).SetInt64(lastBlockTime),
@@ -446,7 +446,7 @@ func (test testChainReader) insert(hash common.Hash, number uint64, time uint64,
 }
 
 func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
-	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
+	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -478,7 +478,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		return nil, nil, err
 	}
 
-	// update mint count trie
+	// update mined count trie
 	cnt := int64(0)
 	epochID := CalculateEpochID(now)
 	epochBytes := make([]byte, 8)
@@ -494,7 +494,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 
 		cntBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(cntBytes, uint64(cnt))
-		err = dposContext.MintCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
+		err = dposContext.MinedCntTrie().TryUpdate(append(epochBytes, candidates[i].Bytes()...), cntBytes)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -514,22 +514,22 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 	return dposContext, candidates, nil
 }
 
-func setMintCntTrie(epochID int64, candidate common.Address, mintCntTrie *trie.Trie, count int64) error {
+func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie *trie.Trie, count int64) error {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	err := mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	err := minedCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func getMintCnt(epochID int64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
+func getMinedCnt(epochID int64, candidate common.Address, minedCntTrie *trie.Trie) int64 {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
-	cntBytes := mintCntTrie.Get(append(key, candidate.Bytes()...))
+	cntBytes := minedCntTrie.Get(append(key, candidate.Bytes()...))
 	if cntBytes == nil {
 		return 0
 	} else {

@@ -5,7 +5,6 @@
 package dpos
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -21,6 +20,12 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/trie"
+)
+
+const (
+
+	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
+	ThawingEpochDuration = 2
 )
 
 // EpochContext define current epoch context for dpos consensus
@@ -44,7 +49,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	}
 
 	// iterator all candidate's vote record
-	for existCandidate {
+	for iterCandidate.Next() {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
 
@@ -98,7 +103,6 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 
 		// store the total vote weight for every candidate
 		ec.stateDB.SetState(candidateAddr, KeyTotalVoteWeight, common.BigToHash(votes[candidateAddr]))
-		existCandidate = iterCandidate.Next()
 	}
 	return votes, nil
 }
@@ -116,7 +120,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	epochDuration := EpochInterval
 	// First epoch duration may lt epoch interval,
 	// while the first block time wouldn't always align with epoch interval,
-	// so caculate the first epoch duartion with first block time instead of epoch interval,
+	// so calculate the first epoch duration with first block time instead of epoch interval,
 	// prevent the validators were kickout incorrectly.
 	if ec.TimeStamp-timeOfFirstBlock < EpochInterval {
 		epochDuration = ec.TimeStamp - timeOfFirstBlock
@@ -128,7 +132,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		binary.BigEndian.PutUint64(key, uint64(epoch))
 		key = append(key, validator.Bytes()...)
 		cnt := int64(0)
-		if cntBytes := ec.DposContext.MintCntTrie().Get(key); cntBytes != nil {
+		if cntBytes := ec.DposContext.MinedCntTrie().Get(key); cntBytes != nil {
 			cnt = int64(binary.BigEndian.Uint64(cntBytes))
 		}
 		if cnt < epochDuration/BlockInterval/MaxValidatorSize/2 {
@@ -143,7 +147,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		return nil
 	}
 
-	// ascend needKickoutValidators, the prev candidates have smaller mint count,
+	// ascend needKickoutValidators, the prev candidates have smaller mined count,
 	// and they will be remove firstly
 	sort.Sort(needKickoutValidators)
 
@@ -167,9 +171,14 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
 			return err
 		}
+
+		// if successfully above, then mark the validator that will be thawed in next next epoch
+		currentEpochID := CalculateEpochID(ec.TimeStamp)
+		MarkThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
+
 		// if kickout success, candidateCount minus 1
 		candidateCount--
-		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "mintCnt", validator.weight.String())
+		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.weight.String())
 	}
 	return nil
 }
@@ -179,7 +188,7 @@ func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, er
 	validator = common.Address{}
 	offset := now % EpochInterval
 	if offset%BlockInterval != 0 {
-		return common.Address{}, ErrInvalidMintBlockTime
+		return common.Address{}, ErrInvalidMinedBlockTime
 	}
 	offset /= BlockInterval
 
@@ -206,49 +215,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		return nil
 	}
 
-	// iterator whole thawing account trie, and thawing the deposit of every delegator
-	epochIDStr := strconv.FormatInt(currentEpoch-2, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if ec.stateDB.Exist(thawingAddress) {
-		thawingTrie := ec.stateDB.StorageTrie(thawingAddress)
-
-		// in normal case, it could not happen, just for prevent the nil pointer exception
-		if thawingTrie == nil {
-			return nil
-		}
-
-		it := trie.NewIterator(thawingTrie.NodeIterator(nil))
-		for it.Next() {
-			thawingDeposit := it.Value
-			if bytes.Equal(thawingDeposit, (common.Hash{}).Bytes()) {
-				continue
-			}
-
-			// if candidate deposit thawing flag exists, then thawing it
-			if len(PrefixCandidateThawing)+len(common.Hash{}.String()) == len(it.Key) {
-
-				// candidate deposit does not allow to submit repeatedly, so thawing directly set 0
-				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), common.Hash{})
-			}
-
-			// if vote deposit thawing flag exists, then thawing it
-			if len(PrefixVoteThawing)+len(common.Hash{}.String()) == len(it.Key) {
-				addr := string(it.Key[len(PrefixVoteThawing):])
-				currentDeposit := ec.stateDB.GetState(common.HexToAddress(addr), KeyVoteDeposit)
-
-				// if current vote deposit more than thawing deposit, directly skip, not thawing
-				if new(big.Int).SetBytes(currentDeposit.Bytes()).Cmp(new(big.Int).SetBytes(thawingDeposit)) > 0 {
-					continue
-				}
-
-				// else, thawing the difference of deposit
-				ec.stateDB.SetState(thawingAddress, common.BytesToHash(it.Key), currentDeposit)
-			}
-		}
-
-		// mark the thawingAddress as empty account, that will be deleted by stateDB
-		ec.stateDB.SetNonce(thawingAddress, 0)
-	}
+	// thawing some deposit for currentEpoch-2
+	ThawingDeposit(ec.stateDB, currentEpoch)
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
@@ -257,7 +225,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
-	iter := trie.NewIterator(ec.DposContext.MintCntTrie().PrefixIterator(prevEpochBytes))
+	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
 
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
@@ -323,6 +291,64 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 	return nil
+}
+
+// MarkThawingAddress mark the given addr that will be thawed in next next epoch
+func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpochID int64, keyPrefix string) {
+
+	// create thawing address: "thawing_" + currentEpochID
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if !stateDB.Exist(thawingAddress) {
+		stateDB.CreateAccount(thawingAddress)
+
+		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 1)
+	}
+
+	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
+	keyAndValue := append([]byte(keyPrefix), addr.Bytes()...)
+	stateDB.SetState(thawingAddress, common.BytesToHash(keyAndValue), common.BytesToHash(keyAndValue))
+}
+
+// ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
+func ThawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
+	epochIDStr := strconv.FormatInt(currentEpoch-ThawingEpochDuration, 10)
+	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	if stateDB.Exist(thawingAddress) {
+
+		// iterator whole thawing account trie, and thawing the deposit of every delegator
+		stateDB.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
+			if value == (common.Hash{}) {
+				return false
+			}
+
+			addr := common.BytesToAddress(value.Bytes()[12:])
+
+			// if candidate deposit thawing flag exists, then thawing it
+			candidateThawingKey := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
+			if common.BytesToHash(candidateThawingKey) == value {
+
+				// set 0 for candidate deposit
+				stateDB.SetState(addr, KeyCandidateDeposit, common.Hash{})
+			}
+
+			// if vote deposit thawing flag exists, then thawing it
+			voteThawingKey := append([]byte(PrefixVoteThawing), addr.Bytes()...)
+			if common.BytesToHash(voteThawingKey) == value {
+
+				// set 0 for vote deposit
+				stateDB.SetState(addr, KeyVoteDeposit, common.Hash{})
+			}
+
+			// candidate or vote deposit does not allow to submit repeatedly, so thawing directly set 0
+			stateDB.SetState(thawingAddress, key, common.Hash{})
+			return true
+		})
+
+		// mark the thawingAddress as empty account, that will be deleted by stateDB
+		stateDB.SetNonce(thawingAddress, 0)
+	}
 }
 
 type sortableAddress struct {

@@ -22,7 +22,7 @@ type DposContext struct {
 	delegateTrie  *trie.Trie
 	voteTrie      *trie.Trie
 	candidateTrie *trie.Trie
-	mintCntTrie   *trie.Trie
+	minedCntTrie  *trie.Trie
 
 	db *trie.Database
 }
@@ -32,7 +32,7 @@ var (
 	delegatePrefix  = []byte("delegate-")
 	votePrefix      = []byte("vote-")
 	candidatePrefix = []byte("candidate-")
-	mintCntPrefix   = []byte("mintCnt-")
+	minedCntPrefix  = []byte("minedCnt-")
 )
 
 func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
@@ -51,8 +51,8 @@ func NewCandidateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
 }
 
-func NewMintCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, mintCntPrefix, db)
+func NewMinedCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
+	return trie.NewTrieWithPrefix(root, minedCntPrefix, db)
 }
 
 // NewDposContext creates DposContext with the given database
@@ -79,7 +79,7 @@ func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
 		return nil, err
 	}
 
-	mintCntTrie, err := NewMintCntTrie(common.Hash{}, db)
+	minedCntTrie, err := NewMinedCntTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
@@ -89,13 +89,13 @@ func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
-		mintCntTrie:   mintCntTrie,
+		minedCntTrie:  minedCntTrie,
 		db:            db,
 	}, nil
 }
 
 // NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextProto) (*DposContext, error) {
+func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextRoot) (*DposContext, error) {
 	db := trie.NewDatabase(diskdb)
 
 	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, db)
@@ -118,7 +118,7 @@ func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextProto) 
 		return nil, err
 	}
 
-	mintCntTrie, err := NewMintCntTrie(ctxProto.MintCntRoot, db)
+	minedCntTrie, err := NewMinedCntTrie(ctxProto.MinedCntRoot, db)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextProto) 
 		delegateTrie:  delegateTrie,
 		voteTrie:      voteTrie,
 		candidateTrie: candidateTrie,
-		mintCntTrie:   mintCntTrie,
+		minedCntTrie:  minedCntTrie,
 		db:            db,
 	}, nil
 }
@@ -139,13 +139,13 @@ func (dc *DposContext) Copy() *DposContext {
 	delegateTrie := *dc.delegateTrie
 	voteTrie := *dc.voteTrie
 	candidateTrie := *dc.candidateTrie
-	mintCntTrie := *dc.mintCntTrie
+	minedCntTrie := *dc.minedCntTrie
 	return &DposContext{
 		epochTrie:     &epochTrie,
 		delegateTrie:  &delegateTrie,
 		voteTrie:      &voteTrie,
 		candidateTrie: &candidateTrie,
-		mintCntTrie:   &mintCntTrie,
+		minedCntTrie:  &minedCntTrie,
 	}
 }
 
@@ -156,7 +156,7 @@ func (dc *DposContext) Root() (h common.Hash) {
 	rlp.Encode(hw, dc.delegateTrie.Hash())
 	rlp.Encode(hw, dc.candidateTrie.Hash())
 	rlp.Encode(hw, dc.voteTrie.Hash())
-	rlp.Encode(hw, dc.mintCntTrie.Hash())
+	rlp.Encode(hw, dc.minedCntTrie.Hash())
 	hw.Sum(h[:0])
 	return h
 }
@@ -172,37 +172,37 @@ func (dc *DposContext) RevertToSnapShot(snapshot *DposContext) {
 	dc.delegateTrie = snapshot.delegateTrie
 	dc.candidateTrie = snapshot.candidateTrie
 	dc.voteTrie = snapshot.voteTrie
-	dc.mintCntTrie = snapshot.mintCntTrie
+	dc.minedCntTrie = snapshot.minedCntTrie
 }
 
-// DposContextProto wrap 5 trie root hash
-type DposContextProto struct {
+// DposContextRoot wrap 5 trie root hash
+type DposContextRoot struct {
 	EpochRoot     common.Hash `json:"epochRoot"        gencodec:"required"`
 	DelegateRoot  common.Hash `json:"delegateRoot"     gencodec:"required"`
 	CandidateRoot common.Hash `json:"candidateRoot"    gencodec:"required"`
 	VoteRoot      common.Hash `json:"voteRoot"         gencodec:"required"`
-	MintCntRoot   common.Hash `json:"mintCntRoot"      gencodec:"required"`
+	MinedCntRoot  common.Hash `json:"minedCntRoot"     gencodec:"required"`
 }
 
-// ToProto convert DposContext to DposContextProto
-func (dc *DposContext) ToProto() *DposContextProto {
-	return &DposContextProto{
+// ToRoot convert DposContext to DposContextRoot
+func (dc *DposContext) ToRoot() *DposContextRoot {
+	return &DposContextRoot{
 		EpochRoot:     dc.epochTrie.Hash(),
 		DelegateRoot:  dc.delegateTrie.Hash(),
 		CandidateRoot: dc.candidateTrie.Hash(),
 		VoteRoot:      dc.voteTrie.Hash(),
-		MintCntRoot:   dc.mintCntTrie.Hash(),
+		MinedCntRoot:  dc.minedCntTrie.Hash(),
 	}
 }
 
 // Root calculates the root hash of 5 tries in DposContext
-func (dcp *DposContextProto) Root() (h common.Hash) {
+func (dcp *DposContextRoot) Root() (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
 	rlp.Encode(hw, dcp.EpochRoot)
 	rlp.Encode(hw, dcp.DelegateRoot)
 	rlp.Encode(hw, dcp.CandidateRoot)
 	rlp.Encode(hw, dcp.VoteRoot)
-	rlp.Encode(hw, dcp.MintCntRoot)
+	rlp.Encode(hw, dcp.MinedCntRoot)
 	hw.Sum(h[:0])
 	return h
 }
@@ -406,7 +406,7 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 }
 
 // Commit writes the data in 5 tries to db
-func (dc *DposContext) Commit() (*DposContextProto, error) {
+func (dc *DposContext) Commit() (*DposContextRoot, error) {
 
 	// commit dpos context into memory
 	epochRoot, err := dc.epochTrie.Commit(nil)
@@ -429,7 +429,7 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 		return nil, err
 	}
 
-	mintCntRoot, err := dc.mintCntTrie.Commit(nil)
+	minedCntRoot, err := dc.minedCntTrie.Commit(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -450,7 +450,7 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 		return nil, err
 	}
 
-	err = dc.DB().Commit(mintCntRoot, false)
+	err = dc.DB().Commit(minedCntRoot, false)
 	if err != nil {
 		return nil, err
 	}
@@ -460,12 +460,12 @@ func (dc *DposContext) Commit() (*DposContextProto, error) {
 		return nil, err
 	}
 
-	return &DposContextProto{
+	return &DposContextRoot{
 		EpochRoot:     epochRoot,
 		DelegateRoot:  delegateRoot,
 		VoteRoot:      voteRoot,
 		CandidateRoot: candidateRoot,
-		MintCntRoot:   mintCntRoot,
+		MinedCntRoot:  minedCntRoot,
 	}, nil
 }
 
@@ -473,13 +473,13 @@ func (dc *DposContext) CandidateTrie() *trie.Trie         { return dc.candidateT
 func (dc *DposContext) DelegateTrie() *trie.Trie          { return dc.delegateTrie }
 func (dc *DposContext) VoteTrie() *trie.Trie              { return dc.voteTrie }
 func (dc *DposContext) EpochTrie() *trie.Trie             { return dc.epochTrie }
-func (dc *DposContext) MintCntTrie() *trie.Trie           { return dc.mintCntTrie }
+func (dc *DposContext) MinedCntTrie() *trie.Trie          { return dc.minedCntTrie }
 func (dc *DposContext) DB() *trie.Database                { return dc.db }
 func (dc *DposContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
 func (dc *DposContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
 func (dc *DposContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
 func (dc *DposContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMintCnt(mintCnt *trie.Trie)     { dc.mintCntTrie = mintCnt }
+func (dc *DposContext) SetMinedCnt(minedCnt *trie.Trie)   { dc.minedCntTrie = minedCnt }
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {

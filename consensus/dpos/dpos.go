@@ -92,10 +92,10 @@ var (
 	PrefixThawingAddr = "thawing_"
 
 	// PrefixCandidateThawing is the prefix thawing string of candidate thawing key
-	PrefixCandidateThawing = "candidate_thawing_"
+	PrefixCandidateThawing = "candidate_"
 
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key
-	PrefixVoteThawing = "vote_thawing_"
+	PrefixVoteThawing = "vote_"
 
 	// EmptyHash is the empty hash for judgement of empty value
 	EmptyHash = common.Hash{}
@@ -132,10 +132,10 @@ var (
 	// the previous block's timestamp + the minimum block period.
 	ErrInvalidTimestamp           = errors.New("invalid timestamp")
 	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
-	ErrMintFutureBlock            = errors.New("mint the future block")
+	ErrMinedFutureBlock           = errors.New("mined the future block")
 	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
 	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-	ErrInvalidMintBlockTime       = errors.New("invalid time to mint the block")
+	ErrInvalidMinedBlockTime      = errors.New("invalid time to mined the block")
 	ErrNilBlockHeader             = errors.New("nil block header returned")
 )
 var (
@@ -510,11 +510,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
-	// Accumulate block rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, dposContext)
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-
 	if d.Mode == ModeFake {
+
+		// Accumulate block rewards and commit the final state root
+		accumulateRewards(chain.Config(), state, header, dposContext)
+		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 		return types.NewBlock(header, txs, uncles, receipts), nil
 	}
 
@@ -529,18 +529,25 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 			timeOfFirstBlock = firstBlockHeader.Time.Int64()
 		}
 	}
+
+	// try to elect, if current block is the first one in a new epoch, then elect new epoch
 	genesis := chain.GetHeaderByNumber(0)
 	err := epochContext.tryElect(genesis, parent)
 	if err != nil {
 		return nil, fmt.Errorf("got error when elect next epoch, err: %s", err)
 	}
 
-	//update mint count trie
-	err = updateMintCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
+	//update mined count trie
+	err = updateMinedCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
 	if err != nil {
 		return nil, err
 	}
-	header.DposContext = dposContext.ToProto()
+	header.DposContext = dposContext.ToRoot()
+
+	// Accumulate block rewards and commit the final state root
+	accumulateRewards(chain.Config(), state, header, dposContext)
+	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+
 	return types.NewBlock(header, txs, uncles, receipts), nil
 }
 
@@ -549,7 +556,7 @@ func (d *Dpos) checkDeadline(lastBlock *types.Block, now int64) error {
 	prevSlot := PrevSlot(now)
 	nextSlot := NextSlot(now)
 	if lastBlock.Time().Int64() >= nextSlot {
-		return ErrMintFutureBlock
+		return ErrMinedFutureBlock
 	}
 	// last block was arrived, or time's up
 	if lastBlock.Time().Int64() == prevSlot || nextSlot-now <= 1 {
@@ -687,9 +694,9 @@ func NextSlot(now int64) int64 {
 	return int64((now+BlockInterval-1)/BlockInterval) * BlockInterval
 }
 
-// updateMintCnt update counts in mintCntTrie for the miner of newBlock
-func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
-	currentMintCntTrie := dposContext.MintCntTrie()
+// updateMinedCnt update counts in minedCntTrie for the miner of newBlock
+func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
+	currentMinedCntTrie := dposContext.MinedCntTrie()
 	currentEpoch := CalculateEpochID(parentBlockTime)
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
@@ -698,13 +705,13 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	newEpoch := CalculateEpochID(currentBlockTime)
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
-		iter := trie.NewIterator(currentMintCntTrie.NodeIterator(currentEpochBytes))
+		iter := trie.NewIterator(currentMinedCntTrie.NodeIterator(currentEpochBytes))
 
-		// when current is not genesis, read last count from the MintCntTrie
+		// when current is not genesis, read last count from the MinedCntTrie
 		if iter.Next() {
-			cntBytes := currentMintCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
+			cntBytes := currentMinedCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
 
-			// not the first time to mint
+			// not the first time to mined
 			if cntBytes != nil {
 				cnt = int64(binary.BigEndian.Uint64(cntBytes)) + 1
 			}
@@ -715,7 +722,7 @@ func updateMintCnt(parentBlockTime, currentBlockTime int64, validator common.Add
 	newEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
-	return dposContext.MintCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+	return dposContext.MinedCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }
 
 // hashToRewardRatioNumerator return the customized block reward ratio numerator

@@ -28,6 +28,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -243,7 +244,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
-	dcProto := dposContext.ToProto()
+	dcProto := dposContext.ToRoot()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
 		Nonce:       types.EncodeNonce(g.Nonce),
@@ -405,7 +406,7 @@ func decodePrealloc(data string) GenesisAlloc {
 
 // initGenesisDposContext returns the dpos context of given genesis block
 func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(db, &types.DposContextProto{})
+	dc, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}
@@ -414,13 +415,15 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		return nil, errors.New("invalid dpos config for genesis")
 	}
 
-	err = dc.SetValidators(g.Config.Dpos.Validators)
+	// get validators from the genesis DPOS config
+	validators := g.Config.Dpos.ParseValidators()
+	err = dc.SetValidators(validators)
 	if err != nil {
 		return nil, err
 	}
 
 	// just let genesis initial validator voted themselves
-	for _, validator := range g.Config.Dpos.Validators {
+	for _, validator := range validators {
 		err = dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
 		if err != nil {
 			return nil, err
@@ -442,7 +445,10 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 			return nil, err
 		}
 
-		// TODO: store deposit for the initial validators
+		candidateDeposit := common.BigToHash(g.Config.Dpos.Validators[validator].Deposit.BigIntPtr())
+		stateDB.SetState(validator, dpos.KeyCandidateDeposit, candidateDeposit)
+		rewardRatio := common.BytesToHash([]byte{g.Config.Dpos.Validators[validator].RewardRatio})
+		stateDB.SetState(validator, dpos.KeyRewardRatioNumerator, rewardRatio)
 	}
 
 	return dc, nil

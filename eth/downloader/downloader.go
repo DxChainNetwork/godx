@@ -1785,13 +1785,13 @@ func (d *Downloader) requestTTL() time.Duration {
 }
 
 // syncDposContextState sync dpos context state
-func (d *Downloader) syncDposContextState(context *types.DposContextProto) error {
+func (d *Downloader) syncDposContextState(context *types.DposContextRoot) error {
 	roots := []common.Hash{
 		context.CandidateRoot,
 		context.DelegateRoot,
 		context.VoteRoot,
 		context.EpochRoot,
-		context.MintCntRoot,
+		context.MinedCntRoot,
 	}
 	for _, root := range roots {
 		if err := d.syncState(root).Wait(); err != nil {

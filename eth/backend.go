@@ -403,26 +403,40 @@ func (s *Ethereum) Validator() (common.Address, error) {
 	if validator != (common.Address{}) {
 		return validator, nil
 	}
+
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 			validator := accounts[0].Address
 
 			s.lock.Lock()
+			if validator == (common.Address{}) {
+				s.lock.Unlock()
+				return common.Address{}, errors.New("local wallets have no addresses to assign the validator")
+			}
+
 			s.validator = validator
 			s.lock.Unlock()
 
-			log.Info("validator automatically configured", "address", validator)
+			log.Info("Validator address automatically configured", "address", validator)
 			return validator, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("validator must be explicitly specified")
+	return common.Address{}, fmt.Errorf("validator address must be explicitly specified")
 }
 
 // SetValidator sets given validator into full node
-func (self *Ethereum) SetValidator(validator common.Address) {
-	self.lock.Lock()
-	self.validator = validator
-	self.lock.Unlock()
+func (s *Ethereum) SetValidator(validator common.Address) {
+	s.lock.Lock()
+	account := accounts.Account{Address: validator}
+	_, err := s.AccountManager().Find(account)
+	if err != nil {
+		s.lock.Unlock()
+		log.Error("Can not find this account in local wallet", "address", validator)
+		return
+	}
+
+	s.validator = validator
+	s.lock.Unlock()
 }
 
 // Coinbase return the address that will receive block award
@@ -434,19 +448,25 @@ func (s *Ethereum) Coinbase() (eb common.Address, err error) {
 	if coinbase != (common.Address{}) {
 		return coinbase, nil
 	}
+
 	if wallets := s.AccountManager().Wallets(); len(wallets) > 0 {
 		if accounts := wallets[0].Accounts(); len(accounts) > 0 {
 			coinbase := accounts[0].Address
 
 			s.lock.Lock()
+			if coinbase == (common.Address{}) {
+				s.lock.Unlock()
+				return common.Address{}, errors.New("local wallets have no addresses to assign the coinbase")
+			}
+
 			s.coinbase = coinbase
 			s.lock.Unlock()
 
-			log.Info("coinbase automatically configured", "address", coinbase)
+			log.Info("Coinbase address automatically configured", "address", coinbase)
 			return coinbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("coinbase must be explicitly specified")
+	return common.Address{}, fmt.Errorf("coinbase address must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined

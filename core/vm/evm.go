@@ -27,6 +27,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -562,8 +563,8 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("Enter create contract tx executing ... ")
 	var (
-		state    = evm.StateDB
-		snapshot = state.Snapshot()
+		stateDB  = evm.StateDB
+		snapshot = stateDB.Snapshot()
 	)
 
 	// rlp decode and calculate gas used
@@ -583,28 +584,28 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	contractAddr := common.BytesToAddress(scID[12:])
 
 	// if the account not exist, create it
-	if !state.Exist(statusAddr) {
-		state.CreateAccount(statusAddr)
+	if !stateDB.Exist(statusAddr) {
+		stateDB.CreateAccount(statusAddr)
 
 		// before reaching the height windowEnd, mark statusAddr as not empty account to avoid being deleted by stateDB
-		state.SetNonce(statusAddr, 1)
+		stateDB.SetNonce(statusAddr, 1)
 	}
 
 	// check if this storage contract exist
-	if state.Exist(contractAddr) {
+	if stateDB.Exist(contractAddr) {
 		return nil, gasRemainDecode, errors.New("this storage contract already exist")
 	}
-	state.CreateAccount(contractAddr)
+	stateDB.CreateAccount(contractAddr)
 
 	// before this contract finished, mark contractAddr as not empty account to avoid being deleted by stateDB
-	state.SetNonce(contractAddr, 1)
+	stateDB.SetNonce(contractAddr, 1)
 
 	// check form contract and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckCreateContract, state, sc, uint64(currentHeight))
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckCreateContract, stateDB, sc, uint64(currentHeight))
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
-		state.RevertToSnapshot(snapshot)
+		stateDB.RevertToSnapshot(snapshot)
 		log.Error("Failed to check create contract", "err", errCheck)
 		return nil, gasRemainCheck, errCheck
 	}
@@ -614,43 +615,43 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	hostAddr := sc.HostCollateral.Address
 	clientCollateralAmount := sc.ClientCollateral.Value
 	hostCollateralAmount := sc.HostCollateral.Value
-	state.SubBalance(clientAddr, clientCollateralAmount)
-	state.SubBalance(hostAddr, hostCollateralAmount)
+	stateDB.SubBalance(clientAddr, clientCollateralAmount)
+	stateDB.SubBalance(hostAddr, hostCollateralAmount)
 
 	totalCollateral := new(big.Int).Add(clientCollateralAmount, hostCollateralAmount)
-	state.AddBalance(contractAddr, totalCollateral)
+	stateDB.AddBalance(contractAddr, totalCollateral)
 
 	// mark this new storage contract as not proofed
 	notProofedStatus := append(coinchargemaintenance.NotProofedStatus, contractAddr[:]...)
-	state.SetState(statusAddr, scID, common.BytesToHash(notProofedStatus))
+	stateDB.SetState(statusAddr, scID, common.BytesToHash(notProofedStatus))
 
-	// store storage contract in this contractAddr's state
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
+	// store storage contract in this contractAddr's stateDB
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientAddress, common.BytesToHash(sc.ClientCollateral.Address.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostAddress, common.BytesToHash(sc.HostCollateral.Address.Bytes()))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientCollateral, common.BytesToHash(sc.ClientCollateral.Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostCollateral, common.BytesToHash(sc.HostCollateral.Value.Bytes()))
 
 	uintBytes := Uint64ToBytes(sc.FileSize)
-	state.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyUnlockHash, sc.UnlockHash)
-	state.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyUnlockHash, sc.UnlockHash)
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, sc.FileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(sc.RevisionNumber)
-	state.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowStart)
-	state.SetState(contractAddr, coinchargemaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyWindowStart, common.BytesToHash(uintBytes))
 
 	uintBytes = Uint64ToBytes(sc.WindowEnd)
-	state.SetState(contractAddr, coinchargemaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyWindowEnd, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[0].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(sc.ValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[0].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
 	log.Info("Create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
@@ -661,7 +662,7 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("Enter storage contract revision tx executing ... ")
 	var (
-		state = evm.StateDB
+		stateDB = evm.StateDB
 	)
 
 	scr := types.StorageContractRevision{}
@@ -673,13 +674,13 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// check if the account exist
 	contractAddr := common.BytesToAddress(scr.ParentID.Bytes()[12:])
-	if !state.Exist(contractAddr) {
+	if !stateDB.Exist(contractAddr) {
 		return nil, gasRemainDecode, errors.New("no this storage contract account")
 	}
 
 	// check storage contract reversion and calculate gas used
 	currentHeight := evm.BlockNumber.Uint64()
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckRevisionContract, state, scr, uint64(currentHeight), contractAddr)
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDecode, CheckRevisionContract, stateDB, scr, uint64(currentHeight), contractAddr)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		log.Error("Failed to check storage contract revision", "err", errCheck)
@@ -688,18 +689,18 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 
 	// update revision info
 	uintBytes := Uint64ToBytes(scr.NewFileSize)
-	state.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyFileSize, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, scr.NewFileMerkleRoot)
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyFileMerkleRoot, scr.NewFileMerkleRoot)
 
 	uintBytes = Uint64ToBytes(scr.NewRevisionNumber)
-	state.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyRevisionNumber, common.BytesToHash(uintBytes))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[0].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput, common.BytesToHash(scr.NewValidProofOutputs[1].Value.Bytes()))
 
-	state.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
-	state.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
+	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
 	log.Info("Storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -709,7 +710,7 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Info("Enter storage proof tx executing ... ")
 	var (
-		state = evm.StateDB
+		stateDB = evm.StateDB
 	)
 
 	sp := types.StorageProof{}
@@ -722,23 +723,23 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	currentHeight := evm.BlockNumber.Uint64()
 
 	contractAddr := common.BytesToAddress(sp.ParentID[12:])
-	if !state.Exist(contractAddr) {
+	if !stateDB.Exist(contractAddr) {
 		return nil, gasRemainDec, errors.New("no this storage contract account")
 	}
 
 	// retrieve origin data in storage contract
-	windowEndHash := state.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
-	clientValidOutputHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
-	hostValidOutputHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
-	clientAddressHash := state.GetState(contractAddr, coinchargemaintenance.KeyClientAddress)
-	hostAddressHash := state.GetState(contractAddr, coinchargemaintenance.KeyHostAddress)
+	windowEndHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyWindowEnd)
+	clientValidOutputHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientValidProofOutput)
+	hostValidOutputHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostValidProofOutput)
+	clientAddressHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyClientAddress)
+	hostAddressHash := stateDB.GetState(contractAddr, coinchargemaintenance.KeyHostAddress)
 
 	// get status account address
 	windowEnd := new(big.Int).SetBytes(windowEndHash.Bytes()).Uint64()
 	windowEndStr := strconv.FormatUint(windowEnd, 10)
 	statusAddr := common.BytesToAddress([]byte(coinchargemaintenance.StrPrefixExpSC + windowEndStr))
 
-	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, state, sp, uint64(currentHeight), statusAddr, contractAddr)
+	gasRemainCheck, resultCheck := RemainGas(gasRemainDec, CheckStorageProof, stateDB, sp, uint64(currentHeight), statusAddr, contractAddr)
 	errCheck, _ := resultCheck[0].(error)
 	if errCheck != nil {
 		return nil, gasRemainCheck, errCheck
@@ -747,22 +748,22 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	// effect valid proof outputs, first for client, second for host
 	clientValidOutput := new(big.Int).SetBytes(clientValidOutputHash.Bytes())
 	clientAddress := common.BytesToAddress(clientAddressHash.Bytes())
-	state.AddBalance(clientAddress, clientValidOutput)
+	stateDB.AddBalance(clientAddress, clientValidOutput)
 
 	hostValidOutput := new(big.Int).SetBytes(hostValidOutputHash.Bytes())
 	hostAddress := common.BytesToAddress(hostAddressHash.Bytes())
-	state.AddBalance(hostAddress, hostValidOutput)
+	stateDB.AddBalance(hostAddress, hostValidOutput)
 
 	totalValue := new(big.Int).SetInt64(0)
 	totalValue.Add(clientValidOutput, hostValidOutput)
-	state.SubBalance(contractAddr, totalValue)
+	stateDB.SubBalance(contractAddr, totalValue)
 
 	// set completed for this storage contract
 	proofedStatus := append(coinchargemaintenance.ProofedStatus, contractAddr[:]...)
-	state.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
+	stateDB.SetState(statusAddr, sp.ParentID, common.BytesToHash(proofedStatus))
 
 	// this contract is finished, so mark it empty account that will be deleted by stateDB
-	state.SetNonce(contractAddr, 0)
+	stateDB.SetNonce(contractAddr, 0)
 
 	log.Info("Storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
@@ -781,7 +782,7 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, valu
 	stateDB := evm.StateDB
 	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
 	if depositHash != (common.Hash{}) {
-		return nil, gas, errDuplicateCandidateTx
+		return nil, gas, ErrAlreadyCandidate
 	}
 
 	//exception will cause the database to roll back
@@ -819,24 +820,12 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 		return nil, gas, err
 	}
 
-	// create thawing address: "thawing_" + currentEpochID
-	stateDB := evm.StateDB
+	// mark the caller that will be thawed in next next epoch
+	stateDB := evm.StateDB.(*state.StateDB)
 	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		stateDB.CreateAccount(thawingAddress)
+	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixCandidateThawing)
 
-		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 1)
-	}
-
-	// set thawing flag for from address: "candidate_thawing_" + from ==> from
-	key := dpos.PrefixCandidateThawing + caller.String()
-	deposit := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
-
-	// defines that dposCtx.KickoutCandidate and SetState all cost params.SstoreSetGas
+	// defines that dposCtx.KickoutCandidate and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		dposSnapshot.RevertToSnapShot(dposSnapshot)
@@ -854,6 +843,12 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		candidateList []common.Address
 		stateDB       = evm.StateDB
 	)
+
+	// only after thawing vote deposit, user can send a new vote tx
+	depositHash := stateDB.GetState(caller, dpos.KeyVoteDeposit)
+	if depositHash != (common.Hash{}) {
+		return nil, gas, ErrAlreadyVote
+	}
 
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
 	errDec, _ := resultDec[0].(error)
@@ -922,26 +917,12 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 		return nil, gas, err
 	}
 
-	// if successfully above, then mark from as that will be thawed in next epoch
-	stateDB := evm.StateDB
-
-	// create thawing address: "thawing_" + currentEpochID
+	// if successfully above, then mark the caller that will be thawed in next next epoch
+	stateDB := evm.StateDB.(*state.StateDB)
 	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		stateDB.CreateAccount(thawingAddress)
+	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixVoteThawing)
 
-		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 1)
-	}
-
-	// set thawing flag for from address: "vote_thawing_" + from ==> from
-	key := dpos.PrefixVoteThawing + caller.String()
-	deposit := stateDB.GetState(caller, dpos.KeyVoteDeposit)
-	stateDB.SetState(thawingAddress, common.BytesToHash([]byte(key)), deposit)
-
-	// defines that dposCtx.CancelVote and SetState all cost params.SstoreSetGas
+	// defines that dposCtx.CancelVote and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		dposSnapshot.RevertToSnapShot(dposSnapshot)
