@@ -63,25 +63,6 @@ const (
 )
 
 var (
-
-	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
-	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
-
-	// KeyVoteDeposit is the key of vote deposit
-	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
-
-	// KeyRealVoteWeightRatio is the weight ratio of vote
-	KeyRealVoteWeightRatio = common.BytesToHash([]byte("real-vote-weight-ratio"))
-
-	// KeyCandidateDeposit is the key of candidate deposit
-	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
-
-	// KeyLastVoteTime is the key of last vote time
-	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
-
-	// KeyTotalVoteWeight is the key of total vote weight for every candidate
-	KeyTotalVoteWeight = common.BytesToHash([]byte("total-vote-weight"))
-
 	// MinVoteWeightRatio is the minimum vote weight ration
 	MinVoteWeightRatio = 0.5
 

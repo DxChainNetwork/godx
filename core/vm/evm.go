@@ -505,6 +505,13 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // ApplyStorageContractTransaction distinguish and execute transactions
 func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	stateSnap := evm.StateDB.Snapshot()
+	defer func() {
+		if err != nil {
+			evm.StateDB.RevertToSnapshot(stateSnap)
+		}
+	}()
+
 	switch txType {
 	case HostAnnounceTransaction:
 		return evm.HostAnnounceTx(caller, data, gas)
@@ -521,6 +528,15 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 
 // ApplyDposTransaction handlers all dpos consensus txs
 func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	dposSnap := dposContext.Snapshot()
+	stateSnap := evm.StateDB.Snapshot()
+	defer func() {
+		if err != nil {
+			dposContext.RevertToSnapShot(dposSnap)
+			evm.StateDB.RevertToSnapshot(stateSnap)
+		}
+	}()
+
 	switch txType {
 	case ApplyCandidate:
 		return evm.CandidateTx(from, data, gas, value, dposContext)
@@ -537,7 +553,7 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 
 // HostAnnounceTx host declares its own information on the chain
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter host announce tx executing ... ")
+	log.Trace("Enter host announce tx executing ... ")
 
 	ha := types.HostAnnouncement{}
 	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &ha)
@@ -553,7 +569,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasCheck, errCheck
 	}
 
-	log.Info("Host announce tx execution done", "remain_gas", gasCheck, "host_address", ha.NetAddress)
+	log.Trace("Host announce tx execution done", "remain_gas", gasCheck, "host_address", ha.NetAddress)
 
 	// return remain gas if everything is ok
 	return nil, gasCheck, nil
@@ -561,7 +577,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 // CreateContractTx executes contract creation tx
 func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter create contract tx executing ... ")
+	log.Trace("Enter create contract tx executing ... ")
 	var (
 		stateDB  = evm.StateDB
 		snapshot = stateDB.Snapshot()
@@ -654,13 +670,13 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
-	log.Info("Create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
+	log.Trace("Create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
 // CommitRevisionTx host sends a revision transaction
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter storage contract revision tx executing ... ")
+	log.Trace("Enter storage contract revision tx executing ... ")
 	var (
 		stateDB = evm.StateDB
 	)
@@ -702,13 +718,13 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
-	log.Info("Storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
+	log.Trace("Storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
 // StorageProofTx host send storage certificate transaction
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter storage proof tx executing ... ")
+	log.Trace("Enter storage proof tx executing ... ")
 	var (
 		stateDB = evm.StateDB
 	)
@@ -765,7 +781,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	// this contract is finished, so mark it empty account that will be deleted by stateDB
 	stateDB.SetNonce(contractAddr, 0)
 
-	log.Info("Storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
+	log.Trace("Storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
@@ -778,41 +794,25 @@ func Uint64ToBytes(i uint64) []byte {
 
 // CandidateTx campaign becomes a candidate and pledges part of the assets.
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
-	log.Info("Enter candidate tx executing ... ")
-	stateDB := evm.StateDB
-	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
-	if depositHash != (common.Hash{}) {
-		return nil, gas, ErrAlreadyCandidate
-	}
-
-	//exception will cause the database to roll back
-	dposSnapshot := dposContext.Snapshot()
-	err := dposContext.BecomeCandidate(caller)
-	if err != nil {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
+	log.Trace("Enter candidate tx executing ... ")
+	// Add candidate in dpos
+	rewardRatio := binary.LittleEndian.Uint64(data)
+	if err := dpos.AddCandidate(evm.StateDB, dposContext, caller, common.PtrBigInt(value), rewardRatio); err != nil {
 		return nil, gas, err
 	}
-
-	// If successfully applying candidate, then store deposit
-	stateDB.SetState(caller, dpos.KeyCandidateDeposit, common.BigToHash(value))
-
-	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
-	stateDB.SetState(caller, dpos.KeyRewardRatioNumerator, common.BytesToHash(data))
-
 	// defines that dposCtx.BecomeCandidate and SetState all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*3)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gas, ErrOutOfGas
 	}
 
-	log.Info("Candidate tx execution done")
+	log.Trace("Candidate tx execution done")
 	return nil, gasRemain, nil
 }
 
 // CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
 func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
-	log.Info("Enter cancel candidate tx executing ... ")
+	log.Trace("Enter cancel candidate tx executing ... ")
 	dposSnapshot := dposContext.Snapshot()
 	err := dposContext.KickoutCandidate(caller)
 	if err != nil {
@@ -832,13 +832,13 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 		return nil, gas, ErrOutOfGas
 	}
 
-	log.Info("Cancel candidate tx execution done")
+	log.Trace("Cancel candidate tx execution done")
 	return nil, gasRemain, nil
 }
 
 // VoteTx handles a new vote to some candidates that will remove last vote records
 func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
-	log.Info("Enter vote tx executing ... ")
+	log.Trace("Enter vote tx executing ... ")
 	var (
 		candidateList []common.Address
 		stateDB       = evm.StateDB
@@ -902,13 +902,13 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 		return nil, gasRemainDec, ErrOutOfGas
 	}
 
-	log.Info("Vote tx execution done", "vote_count", successCount)
+	log.Trace("Vote tx execution done", "vote_count", successCount)
 	return nil, gasRemain, nil
 }
 
 // CancelVoteTx handles a cancel vote tx that will remove all vote records
 func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter cancel vote tx executing ... ")
+	log.Trace("Enter cancel vote tx executing ... ")
 	// remove all vote record from dpos context
 	dposSnapshot := dposCtx.Snapshot()
 	err := dposCtx.CancelVote(caller)
@@ -929,7 +929,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 		return nil, gas, ErrOutOfGas
 	}
 
-	log.Info("Cancel vote tx execution done")
+	log.Trace("Cancel vote tx execution done")
 	return nil, gasRemain, nil
 }
 
