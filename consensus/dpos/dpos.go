@@ -30,9 +30,14 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// dpos consensus engine work mode
 type Mode uint
+
 const (
+	// the default work mode
 	ModeNormal Mode = iota
+
+	// fake mode skipping verify(Header/Uncle/DposState) logic
 	ModeFake
 )
 
@@ -202,7 +207,7 @@ func New(config *params.DposConfig, db ethdb.Database) *Dpos {
 // NewDposFaker create fake dpos for test
 func NewDposFaker() *Dpos {
 	return &Dpos{
-		Mode:ModeFake,
+		Mode: ModeFake,
 	}
 }
 
