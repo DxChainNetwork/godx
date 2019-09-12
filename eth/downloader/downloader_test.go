@@ -19,11 +19,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/event"
-	"github.com/DxChainNetwork/godx/trie"
 	"math/big"
 	"strings"
 	"sync"
@@ -32,6 +27,11 @@ import (
 	"time"
 
 	ethereum "github.com/DxChainNetwork/godx"
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/trie"
 )
 
 // Reduce some of the parameters to make the tester faster.
@@ -1026,7 +1026,7 @@ func testHighTDStarvationAttack(t *testing.T, protocol int, mode SyncMode) {
 
 	chain := testChainBase.shorten(1)
 	tester.newPeer("attack", protocol, chain)
-	if err := tester.sync("attack", big.NewInt(1000000), mode); err != errStallingPeer {
+	if err := tester.sync("attack", big.NewInt(10000000), mode); err != errStallingPeer {
 		t.Fatalf("synchronisation error mismatch: have %v, want %v", err, errStallingPeer)
 	}
 }

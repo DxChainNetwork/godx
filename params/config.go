@@ -25,8 +25,8 @@ import (
 
 // Genesis hashes to enforce below configs on.
 var (
-	MainnetGenesisHash = common.HexToHash("0xb26008421ab16c42d5c022b83585e05239ef30946f52721c1a95f1aa02400f49")
-	TestnetGenesisHash = common.HexToHash("0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d")
+	MainnetGenesisHash = common.HexToHash("0x87155ef8a2d887ebd571beb022e6a9d33f25f1c49e33bbaebc25937813c02416")
+	TestnetGenesisHash = common.HexToHash("0x101495c2096316b37db8028b34d56b664d4e0f0bb33288756aafaa99fd40b383")
 	RinkebyGenesisHash = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 )
 
@@ -69,6 +69,7 @@ var (
 		ByzantiumBlock:      big.NewInt(1700000),
 		ConstantinopleBlock: big.NewInt(4230000),
 		Ethash:              new(EthashConfig),
+		Dpos:                DefaultDposConfig(),
 	}
 
 	// TestnetTrustedCheckpoint contains the light client trusted checkpoint for the Ropsten test network.

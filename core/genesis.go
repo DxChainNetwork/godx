@@ -236,7 +236,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	root := statedb.IntermediateRoot(false)
 
 	// init genesis block dpos context
 	dposContext, err := initGenesisDposContext(statedb, g, db)
@@ -244,6 +243,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
+	root := statedb.IntermediateRoot(false)
 	dcProto := dposContext.ToRoot()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
@@ -322,7 +322,8 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	g := Genesis{Alloc: GenesisAlloc{addr: {Balance: balance}}}
+	g := DefaultGenesisBlock()
+	g.Alloc[addr] = GenesisAccount{Balance: balance}
 	return g.MustCommit(db)
 }
 
@@ -335,7 +336,7 @@ func DefaultGenesisBlock() *Genesis {
 		GasLimit:   3141592,
 		Difficulty: big.NewInt(1048576),
 		Alloc: map[common.Address]GenesisAccount{
-			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
+			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
 		},
 	}
 }
@@ -410,13 +411,17 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		return nil, err
 	}
 
-	if g.Config == nil || g.Config.Dpos == nil ||
-		g.Config.Dpos.Validators == nil {
+	if g.Config == nil || g.Config.Dpos == nil || g.Config.Dpos.Validators == nil {
 		return nil, errors.New("invalid dpos config for genesis")
 	}
 
 	// get validators from the genesis DPOS config
 	validators := g.Config.Dpos.ParseValidators()
+
+	// confirmed sorted validator list
+	validators = SortValidators(validators)
+
+	// set initial genesis epoch validators
 	err = dc.SetValidators(validators)
 	if err != nil {
 		return nil, err
@@ -452,4 +457,16 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	return dc, nil
+}
+
+// SortValidators sort validators after ParseValidators
+func SortValidators(validators []common.Address) []common.Address {
+	for i := 0; i < len(validators); i++ {
+		for j := i + 1; j < len(validators); j++ {
+			if validators[i].String() < validators[j].String() {
+				validators[i], validators[j] = validators[j], validators[i]
+			}
+		}
+	}
+	return validators
 }

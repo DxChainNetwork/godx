@@ -3,6 +3,7 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"io/ioutil"
 	"math/big"
 	"sort"
@@ -10,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -35,16 +35,16 @@ var (
 func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func(int, *core.BlockGen), newtx chan<- []*types.Transaction) (*ProtocolManager, *ethdb.MemDatabase, error) {
 	var (
 		evmux  = new(event.TypeMux)
-		engine = ethash.NewFaker()
+		engine = dpos.NewDposFaker()
 		db     = ethdb.NewMemDatabase()
 		gspec  = &core.Genesis{
-			Config: params.TestChainConfig,
+			Config: params.DposChainConfig,
 			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
 		}
 		genesis       = gspec.MustCommit(db)
 		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
 	)
-	chain, _ := core.GenerateChain(gspec.Config, genesis, ethash.NewFaker(), db, blocks, generator)
+	chain, _ := core.GenerateChain(gspec.Config, genesis, dpos.NewDposFaker(), db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
@@ -55,11 +55,8 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		return nil, nil, err
 	}
 	ethConf := &Config{
-		Genesis:  core.DeveloperGenesisBlock(15, common.Address{}),
+		Genesis:  core.DefaultGenesisBlock(),
 		Coinbase: common.HexToAddress("0x8605cdbbdb6d264aa742e77020dcbc58fcdce182"),
-		Ethash: ethash.Config{
-			PowMode: ethash.ModeTest,
-		},
 	}
 	if err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return New(ctx, ethConf) }); err != nil {
 		return nil, nil, err

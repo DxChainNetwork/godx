@@ -1241,15 +1241,15 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			return it.index, events, coalescedLogs, err
 		}
 
-		// Validate the dpos state using the default validator
-		err = bc.Validator().ValidateDposState(block)
-		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			return it.index, events, coalescedLogs, err
-		}
-
-		// if dpos engine, check whether the signature of given block is right
+		// validate the dpos state using the default validator firstly
+		// check whether the signature of given block is right secondly if it is dpos engine
 		if dposEngine, ok := bc.engine.(*dpos.Dpos); ok {
+			err = bc.Validator().ValidateDposState(block)
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				return it.index, events, coalescedLogs, err
+			}
+
 			err = dposEngine.VerifySeal(bc, block.Header())
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
