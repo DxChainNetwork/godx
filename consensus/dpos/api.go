@@ -46,6 +46,37 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 	return dposContext.GetValidators()
 }
 
+func (api *API) GetCandidates(number *rpc.BlockNumber) ([]common.Address, error) {
+	var header *types.Header
+	if number == nil || *number == rpc.LatestBlockNumber {
+		header = api.chain.CurrentHeader()
+	} else {
+		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
+	}
+
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+
+	// get the new candidate trie
+	db := trie.NewDatabase(api.dpos.db)
+	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// iterate through the candidates trie
+	var candidates []common.Address
+	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	for iterCandidate.Next() {
+		candidateAddr := common.BytesToAddress(iterCandidate.Value)
+		candidates = append(candidates, candidateAddr)
+	}
+
+	// return candidates
+	return candidates, nil
+}
+
 // GetConfirmedBlockNumber retrieves the latest irreversible block
 func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	var err error
