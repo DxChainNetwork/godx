@@ -19,7 +19,6 @@ package vm
 import (
 	"encoding/binary"
 	"errors"
-	"math"
 	"math/big"
 	"strconv"
 	"sync/atomic"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
-	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -828,16 +826,13 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 // VoteTx handles a new vote to some candidates that will remove last vote records
 func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
 	log.Trace("Enter vote tx executing ... ")
-	var (
-		candidateList []common.Address
-		stateDB       = evm.StateDB
-	)
+	var candidateList []common.Address
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
-	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, value, candidateList, evm.Time.Int64())
+	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, common.PtrBigInt(value), candidateList, evm.Time.Int64())
 	if err != nil {
 		return nil, gasRemainDec, err
 	}
@@ -854,32 +849,15 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
 	log.Trace("Enter cancel vote tx executing ... ")
 	// remove all vote record from dpos context
-	dposSnapshot := dposCtx.Snapshot()
-	err := dposCtx.CancelVote(caller)
-	if err != nil {
-		dposCtx.RevertToSnapShot(dposSnapshot)
+
+	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64()); err != nil {
 		return nil, gas, err
 	}
-
-	// if successfully above, then mark the caller that will be thawed in next next epoch
-	stateDB := evm.StateDB.(*state.StateDB)
-	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixVoteThawing)
-
-	// defines that dposCtx.CancelVote and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gas, ErrOutOfGas
 	}
 
 	log.Trace("Cancel vote tx execution done")
 	return nil, gasRemain, nil
-}
-
-func float64ToBytes(f float64) []byte {
-	bits := math.Float64bits(f)
-	bytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(bytes, bits)
-	return bytes
 }

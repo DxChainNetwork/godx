@@ -34,6 +34,6 @@ func hashToFloat64(hash common.Hash) float64 {
 func float64ToHash(value float64) common.Hash {
 	var hash common.Hash
 	bits := math.Float64bits(value)
-	binary.BigEndian.Uint64(hash[common.HashLength-8:], bits)
+	binary.BigEndian.PutUint64(hash[common.HashLength-8:], bits)
 	return hash
 }

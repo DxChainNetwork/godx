@@ -34,6 +34,16 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	return successVote, nil
 }
 
+// ProcessCancelVote process the cancel vote request for state and dpos context
+func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
+	if err := ctx.CancelVote(addr); err != nil {
+		return err
+	}
+	currentEpoch := CalculateEpochID(time)
+	MarkThawingAddress(state, addr, currentEpoch, PrefixVoteThawing)
+	return nil
+}
+
 // calcVoteWeightByAddress calculate the vote weight by address
 func calcVoteWeightByAddress(state stateDB, addr common.Address, curTime int64) float64 {
 	timeLastVote := getLastVoteTime(state, addr)
