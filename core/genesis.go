@@ -28,6 +28,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -444,7 +445,10 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 			return nil, err
 		}
 
-		// TODO: store deposit for the initial validators
+		candidateDeposit := common.BigToHash(g.Config.Dpos.Validators[validator].Deposit.BigIntPtr())
+		stateDB.SetState(validator, dpos.KeyCandidateDeposit, candidateDeposit)
+		rewardRatio := common.BytesToHash([]byte{g.Config.Dpos.Validators[validator].RewardRatio})
+		stateDB.SetState(validator, dpos.KeyRewardRatioNumerator, rewardRatio)
 	}
 
 	return dc, nil
