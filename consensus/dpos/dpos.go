@@ -53,7 +53,7 @@ const (
 	EpochInterval = int64(86400)
 
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 5
+	MaxValidatorSize = 4
 
 	// SafeSize indicates that the least number of validators in dpos consensus
 	SafeSize = MaxValidatorSize*2/3 + 1
@@ -585,6 +585,7 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 	if (validator == common.Address{}) || bytes.Compare(validator.Bytes(), d.signer.Bytes()) != 0 {
 		return ErrInvalidBlockValidator
 	}
+
 	return nil
 }
 

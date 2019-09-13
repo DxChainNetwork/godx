@@ -9,6 +9,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/trie"
@@ -75,6 +76,17 @@ func (api *API) GetCandidates(number *rpc.BlockNumber) ([]common.Address, error)
 
 	// return candidates
 	return candidates, nil
+}
+
+func (api *API) GetCandidateDeposit(candidateAddress common.Address) (*big.Int, error) {
+	header := api.chain.CurrentHeader()
+	statedb, err := state.New(header.Root, state.NewDatabase(api.dpos.db))
+	if err != nil {
+		return nil, err
+	}
+
+	candidateDepositHash := statedb.GetState(candidateAddress, KeyCandidateDeposit)
+	return candidateDepositHash.Big(), nil
 }
 
 // GetConfirmedBlockNumber retrieves the latest irreversible block
