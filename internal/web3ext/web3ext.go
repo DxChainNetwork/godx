@@ -164,30 +164,35 @@ web3._extend({
 			params: 0,
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
+
 		new web3._extend.Method({
 			name: 'getVotedCandidatesByAddress',
 			call: 'getVotedCandidatesByAddress',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
+
 		new web3._extend.Method({
-			name: 'sendApplyCandidateTx',
+			name: 'applyCandidate',
 			call: 'dpos_sendApplyCandidateTx',
 			params: 1,
 		}),
+
 		new web3._extend.Method({
-			name: 'sendCancelCandidateTx',
+			name: 'cancelCandidate',
 			call: 'dpos_sendCancelCandidateTx',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
+
 		new web3._extend.Method({
-			name: 'sendVoteTx',
+			name: 'vote',
 			call: 'dpos_sendVoteTx',
 			params: 1,
 		}),
+
 		new web3._extend.Method({
-			name: 'sendCancelVoteTx',
+			name: 'cancelVote',
 			call: 'dpos_sendCancelVoteTx',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
