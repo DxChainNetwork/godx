@@ -89,6 +89,17 @@ func (api *API) GetCandidateDeposit(candidateAddress common.Address) (*big.Int, 
 	return candidateDepositHash.Big(), nil
 }
 
+func (api *API) GetVoteDeposit(voteAddress common.Address) (*big.Int, error) {
+	header := api.chain.CurrentHeader()
+	statedb, err := state.New(header.Root, state.NewDatabase(api.dpos.db))
+	if err != nil {
+		return nil, err
+	}
+
+	voteDepositHash := statedb.GetState(voteAddress, KeyVoteDeposit)
+	return voteDepositHash.Big(), nil
+}
+
 // GetConfirmedBlockNumber retrieves the latest irreversible block
 func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	var err error
