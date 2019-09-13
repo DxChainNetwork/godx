@@ -36,74 +36,91 @@ type EpochContext struct {
 
 // countVotes will calculate the number of votes at the beginning of current epoch
 func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err error) {
+	// get the needed variables
 	votes = map[common.Address]*big.Int{}
 	delegateTrie := ec.DposContext.DelegateTrie()
 	candidateTrie := ec.DposContext.CandidateTrie()
 	statedb := ec.stateDB
 
 	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
-	existCandidate := iterCandidate.Next()
-	if !existCandidate {
-		return votes, errors.New("no candidates")
-	}
+	var hasCandidate bool
 
-	// iterator all candidate's vote record
+	// loop through all candidates and calculate total votes for each of them
 	for iterCandidate.Next() {
-		candidate := iterCandidate.Value
-		candidateAddr := common.BytesToAddress(candidate)
+		// get and initialize all variables
+		hasCandidate = true
+		candidateAddrBytes := iterCandidate.Value
+		candidateAddr := common.BytesToAddress(candidateAddrBytes)
 
-		// retrieve candidate deposit
-		candidateDeposit := new(big.Int).SetInt64(0)
-		candidateDepositHash := statedb.GetState(candidateAddr, KeyCandidateDeposit)
-		if candidateDepositHash != EmptyHash {
-			candidateDeposit = candidateDepositHash.Big()
+		// sanity check
+		if _, ok := votes[candidateAddr]; ok {
+			return nil, fmt.Errorf("countVotes failed, get same candidates from the candidate trie: %v", candidateAddr)
 		}
 
-		delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate))
-		voteWeight, ok := votes[candidateAddr]
-		if !ok {
-			voteWeight = new(big.Int).SetInt64(0)
-		}
+		// get the candidateDepositVotes
+		candidateVotes := candidateDepositVotes(candidateAddr, statedb)
+		delegatorVotes := delegatorDepositVotes(candidateAddrBytes, statedb, delegateTrie)
 
-		// candidate' total vote weight will include candidate deposit
-		voteWeight.Add(voteWeight, candidateDeposit)
-		votes[candidateAddr] = voteWeight
-
-		// iterator all vote to the given candidateAddr, and count the total actual vote weight
-		for delegateIterator.Next() {
-			delegator := delegateIterator.Value
-			delegatorAddr := common.BytesToAddress(delegator)
-
-			// retrieve the vote deposit of delegator
-			voteDepositHash := statedb.GetState(delegatorAddr, KeyVoteDeposit)
-
-			// maybe current is genesis, has no vote before
-			if voteDepositHash == EmptyHash {
-				continue
-			}
-			voteDeposit := voteDepositHash.Big()
-
-			// retrieve the real vote weight ratio of delegator
-			realVoteWeightRatioHash := statedb.GetState(delegatorAddr, KeyVoteWeight)
-
-			// maybe current is genesis, has no vote before
-			if realVoteWeightRatioHash == EmptyHash {
-				continue
-			}
-
-			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
-			realVoteWeightRatio := hashToFloat64(realVoteWeightRatioHash)
-
-			// calculate the real vote weight of delegator
-			realVoteWeight := float64(voteDeposit.Int64()) * realVoteWeightRatio
-			voteWeight.Add(voteWeight, common.NewBigIntFloat64(realVoteWeight).BigIntPtr())
-			votes[candidateAddr] = voteWeight
-		}
-
-		// store the total vote weight for every candidate
+		// get the total votes, and
+		totalVotes := new(big.Int).Add(candidateVotes, delegatorVotes)
+		votes[candidateAddr] = totalVotes
 		ec.stateDB.SetState(candidateAddr, KeyTotalVoteWeight, common.BigToHash(votes[candidateAddr]))
 	}
+
+	// if there are no candidates, return error
+	if !hasCandidate {
+		return votes, fmt.Errorf("countVotes failed, no candidates available")
+	}
+
 	return votes, nil
+}
+
+func candidateDepositVotes(candidateAddr common.Address, statedb *state.StateDB) *big.Int {
+	// retrieve the candidate deposit votes
+	candidateDepositVotes := new(big.Int).SetInt64(0)
+	candidateDepositHash := statedb.GetState(candidateAddr, KeyCandidateDeposit)
+	if candidateDepositHash != EmptyHash {
+		candidateDepositVotes = candidateDepositHash.Big()
+	}
+	// return the candidateDepositVotes
+	return candidateDepositVotes
+}
+
+func delegatorDepositVotes(candidateAddrBytes []byte, statedb *state.StateDB, delegateTrie *trie.Trie) *big.Int {
+	delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidateAddrBytes))
+	var delegatorVotes = common.Big0
+
+	// loop through each delegator, get all votes
+	for delegateIterator.Next() {
+		delegatorAddr := common.BytesToAddress(delegateIterator.Value)
+		voteDepositHash := statedb.GetState(delegatorAddr, KeyVoteDeposit)
+		if voteDepositHash == EmptyHash {
+			continue
+		}
+		voteDeposit := voteDepositHash.Big()
+		// get the realVoteDeposit, after applied voteWeight
+		realVoteDeposit, exists := getAndApplyVoteWeight(voteDeposit, statedb, delegatorAddr)
+		if !exists {
+			continue
+		}
+
+		// add the realVoteDeposit
+		delegatorVotes.Add(delegatorVotes, realVoteDeposit)
+	}
+
+	return delegatorVotes
+}
+
+func getAndApplyVoteWeight(voteDeposit *big.Int, statedb *state.StateDB, delegatorAddr common.Address) (*big.Int, bool) {
+	// get the voteWeight
+	voteWeightHash := statedb.GetState(delegatorAddr, KeyVoteWeight)
+	if voteWeightHash == EmptyHash {
+		return nil, false
+	}
+	voteWeight := hashToFloat64(voteWeightHash)
+	// apply vote weight adn return the real vote deposit
+	realVoteDeposit := common.PtrBigInt(voteDeposit).MultFloat64(voteWeight)
+	return realVoteDeposit.BigIntPtr(), true
 }
 
 // kickoutValidators will kick out irresponsible validators of last epoch at the beginning of current epoch
@@ -228,7 +245,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
-
 		// if prevEpoch is not genesis, kickout not active candidate
 		if !prevEpochIsGenesis && iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
@@ -237,24 +253,24 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 
 		// calculate the actual result of the vote based on the attenuation
-		votes, err := ec.countVotes()
+		candidateVotes, err := ec.countVotes()
 		if err != nil {
 			return err
 		}
 
-		// maybe current is genesis, so has no vote on chain, just return
-		if len(votes) == 0 {
-			return nil
+		// check if number of candidates is smaller than safe size
+		if len(candidateVotes) < SafeSize {
+			return errors.New("too few candidates")
 		}
 
 		// calculate the vote weight proportion based on the vote weight
 		totalVotes := new(big.Int).SetInt64(0)
 		voteProportions := sortableVoteProportions{}
-		for _, vote := range votes {
+		for _, vote := range candidateVotes {
 			totalVotes.Add(totalVotes, vote)
 		}
 
-		for candidateAddr, vote := range votes {
+		for candidateAddr, vote := range candidateVotes {
 			voteProportion := &sortableVoteProportion{
 				address:    candidateAddr,
 				proportion: float64(vote.Int64()) / float64(totalVotes.Int64()),
@@ -264,9 +280,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 		// sort by asc
 		sort.Sort(voteProportions)
-		if len(voteProportions) < SafeSize {
-			return errors.New("too few candidates")
-		}
 
 		// make random seed
 		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i

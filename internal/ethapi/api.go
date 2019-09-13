@@ -30,6 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -505,7 +506,19 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	if state == nil || err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+
+	if state.Error() != nil {
+		return nil, err
+	}
+
+	accountBalance := state.GetBalance(address)
+	candidateDeposit := state.GetState(address, dpos.KeyCandidateDeposit)
+	voteDeposit := state.GetState(address, dpos.KeyVoteDeposit)
+
+	accountBalance.Sub(accountBalance, candidateDeposit.Big()).Sub(accountBalance, voteDeposit.Big())
+	return (*hexutil.Big)(accountBalance), nil
+
+	//return (*hexutil.Big)(state.GetBalance(address)), state.Error()
 }
 
 // Result structs for GetProof
