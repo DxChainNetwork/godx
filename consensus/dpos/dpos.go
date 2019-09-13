@@ -225,7 +225,7 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
-	// Unnecssary to verify the block from feature
+	// Unnecessary to verify the block from feature
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
 		return consensus.ErrFutureBlock
 	}
