@@ -145,17 +145,29 @@ web3._extend({
 	property: 'dpos',
 	methods: [
 		new web3._extend.Method({
-			name: 'getValidators',
-			call: 'dpos_getValidators',
+			name: 'validators',
+			call: 'dpos_validators',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		
 		new web3._extend.Method({
 			name: 'candidates',
-			call: 'dpos_getCandidates',
+			call: 'dpos_candidates',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'candidateDeposit',
+			call: 'dpos_candidateDeposit',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'voteDeposit',
+			call: 'dpos_voteDeposit',
+			params: 1,
 		}),
 
 		new web3._extend.Method({
@@ -196,18 +208,6 @@ web3._extend({
 			call: 'dpos_sendCancelVoteTx',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
-		}),
-
-		new web3._extend.Method({
-			name: 'candidateDeposit',
-			call: 'dpos_getCandidateDeposit',
-			params: 1,
-		}),
-
-		new web3._extend.Method({
-			name: 'voteDeposit',
-			call: 'dpos_getVoteDeposit',
-			params: 1,
 		}),
 
 		new web3._extend.Method({
