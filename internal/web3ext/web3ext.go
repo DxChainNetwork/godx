@@ -203,6 +203,18 @@ web3._extend({
 			call: 'dpos_getCandidateDeposit',
 			params: 1,
 		}),
+
+		new web3._extend.Method({
+			name: 'voteDeposit',
+			call: 'dpos_getVoteDeposit',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'candidateVotes',
+			call: 'dpos_getCandidatesVote',
+			params: 1,
+		}),
 	]
 });
 `
