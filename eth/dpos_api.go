@@ -19,6 +19,20 @@ type PublicDposAPI struct {
 	e *Ethereum
 }
 
+type CandidateInfo struct {
+	Candidate          common.Address
+	Deposit            common.BigInt
+	Votes              common.BigInt
+	RewardDistribution common.BigInt
+}
+
+type ValidatorInfo struct {
+	Validator          common.Address
+	Votes              common.BigInt
+	MinedBlocks        uint64
+	RewardDistribution uint8
+}
+
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
 	return &PublicDposAPI{
 		e: e,
@@ -71,6 +85,33 @@ func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, 
 	return candidates, nil
 }
 
+func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInfo, error) {
+	// based n the block header root, get the statedb
+	header := d.e.BlockChain().CurrentHeader()
+	statedb, err := d.e.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return CandidateInfo{}, err
+	}
+
+	// get the candidate deposit
+	candidateDeposit := statedb.GetState(candidateAddress, dpos.KeyCandidateDeposit).Big()
+
+	// get the number of votes that candidate get
+	candidateVotes := statedb.GetState(candidateAddress, dpos.KeyTotalVoteWeight).Big()
+
+	// get the reward distribution plan
+	rewardDistribution := statedb.GetState(candidateAddress, dpos.KeyRewardRatioNumerator)
+
+	return CandidateInfo{
+		Candidate:          candidateAddress.String(),
+		Deposit:            common.PtrBigInt(candidateDeposit),
+		Votes:              common.PtrBigInt(candidateVotes),
+		RewardDistribution: hashToRewardRatioNumerator(rewardDistribution),
+	}, nil
+
+}
+
+// CandidateDeposit is used to check how much deposit a candidate has put in
 func (d *PublicDposAPI) CandidateDeposit(candidateAddress common.Address) (*big.Int, error) {
 	// based on the block header root, get the statedb
 	header := d.e.BlockChain().CurrentHeader()
@@ -113,4 +154,10 @@ func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Heade
 
 	// return
 	return header, nil
+}
+
+// hashToRewardRatioNumerator return the customized block reward ratio numerator
+func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
+	v := h.Bytes()
+	return common.NewBigIntUint64(uint64(v[len(v)-1]))
 }

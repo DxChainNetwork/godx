@@ -399,7 +399,7 @@ func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
 	s.blockchain.ResetWithGenesisBlock(gb)
 }
 
-// Validator retrieves current miner address for dpos engine
+// Validator retrieves current miner Address for dpos engine
 func (s *Ethereum) Validator() (common.Address, error) {
 	s.lock.RLock()
 	validator := s.validator
@@ -422,11 +422,11 @@ func (s *Ethereum) Validator() (common.Address, error) {
 			s.validator = validator
 			s.lock.Unlock()
 
-			log.Info("Validator address automatically configured", "address", validator)
+			log.Info("Validator Address automatically configured", "Address", validator)
 			return validator, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("validator address must be explicitly specified")
+	return common.Address{}, fmt.Errorf("validator Address must be explicitly specified")
 }
 
 // SetValidator sets given validator into full node
@@ -436,7 +436,7 @@ func (s *Ethereum) SetValidator(validator common.Address) {
 	_, err := s.AccountManager().Find(account)
 	if err != nil {
 		s.lock.Unlock()
-		log.Error("Can not find this account in local wallet", "address", validator)
+		log.Error("Can not find this account in local wallet", "Address", validator)
 		return
 	}
 
@@ -444,7 +444,7 @@ func (s *Ethereum) SetValidator(validator common.Address) {
 	s.lock.Unlock()
 }
 
-// Coinbase return the address that will receive block award
+// Coinbase return the Address that will receive block award
 func (s *Ethereum) Coinbase() (eb common.Address, err error) {
 	s.lock.RLock()
 	coinbase := s.coinbase
@@ -467,11 +467,11 @@ func (s *Ethereum) Coinbase() (eb common.Address, err error) {
 			s.coinbase = coinbase
 			s.lock.Unlock()
 
-			log.Info("Coinbase address automatically configured", "address", coinbase)
+			log.Info("Coinbase Address automatically configured", "Address", coinbase)
 			return coinbase, nil
 		}
 	}
-	return common.Address{}, fmt.Errorf("coinbase address must be explicitly specified")
+	return common.Address{}, fmt.Errorf("coinbase Address must be explicitly specified")
 }
 
 // isLocalBlock checks whether the specified block is mined
@@ -485,14 +485,14 @@ func (s *Ethereum) isLocalBlock(block *types.Block) bool {
 		log.Warn("Failed to retrieve block author", "number", block.NumberU64(), "hash", block.Hash(), "err", err)
 		return false
 	}
-	// Check whether the given address is coinbase.
+	// Check whether the given Address is coinbase.
 	s.lock.RLock()
 	coinbase := s.coinbase
 	s.lock.RUnlock()
 	if author == coinbase {
 		return true
 	}
-	// Check whether the given address is specified by `txpool.local`
+	// Check whether the given Address is specified by `txpool.local`
 	// CLI flag.
 	for _, account := range s.config.TxPool.Locals {
 		if account == author {
@@ -528,7 +528,7 @@ func (s *Ethereum) shouldPreserve(block *types.Block) bool {
 	return s.isLocalBlock(block)
 }
 
-// SetCoinbase sets the mining reward address.
+// SetCoinbase sets the mining reward Address.
 func (s *Ethereum) SetCoinbase(coinbase common.Address) {
 	s.lock.Lock()
 	s.coinbase = coinbase
@@ -563,19 +563,19 @@ func (s *Ethereum) StartMining(threads int) error {
 		s.lock.RUnlock()
 		s.txPool.SetGasPrice(price)
 
-		// set local address in wallet as validator by default
+		// set local Address in wallet as validator by default
 		validator, err := s.Validator()
 		if err != nil {
-			return fmt.Errorf("validator address missing: %v", err)
+			return fmt.Errorf("validator Address missing: %v", err)
 		}
 
-		// set local address in wallet as validator by default
+		// set local Address in wallet as validator by default
 		coinbase, err := s.Coinbase()
 		if err != nil {
-			return fmt.Errorf("coinbase address missing: %v", err)
+			return fmt.Errorf("coinbase Address missing: %v", err)
 		}
 
-		// set validator address for dpos engine
+		// set validator Address for dpos engine
 		dposEng, ok := s.engine.(*dpos.Dpos)
 		if !ok {
 			panic("start mining without dpos engine")

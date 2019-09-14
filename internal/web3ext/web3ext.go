@@ -159,6 +159,12 @@ web3._extend({
 		}),
 
 		new web3._extend.Method({
+			name: 'candidate',
+			call: 'dpos_candidate',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
 			name: 'candidateDeposit',
 			call: 'dpos_candidateDeposit',
 			params: 1,

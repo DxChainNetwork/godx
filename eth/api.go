@@ -51,12 +51,12 @@ func NewPublicEthereumAPI(e *Ethereum) *PublicEthereumAPI {
 	return &PublicEthereumAPI{e}
 }
 
-// Validator is the address who produces the new block
+// Validator is the Address who produces the new block
 func (api *PublicEthereumAPI) Validator() (common.Address, error) {
 	return api.e.Validator()
 }
 
-// Coinbase is the address that mining rewards will be send to
+// Coinbase is the Address that mining rewards will be send to
 func (api *PublicEthereumAPI) Coinbase() (common.Address, error) {
 	return api.e.Coinbase()
 }
