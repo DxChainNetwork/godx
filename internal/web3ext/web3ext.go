@@ -150,6 +150,12 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+
+		new web3._extend.Method({
+			name: 'validator',
+			call: 'dpos_validator',
+			params: 1,
+		}),
 		
 		new web3._extend.Method({
 			name: 'candidates',
