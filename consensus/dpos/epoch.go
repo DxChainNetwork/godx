@@ -61,6 +61,7 @@ func calcBlockSlot(blockTime int64) (int64, error) {
 	return slot, nil
 }
 
+// CalculateEpochID calculate the epoch ID given the block time
 func CalculateEpochID(blockTime int64) int64 {
 	return blockTime / EpochInterval
 }

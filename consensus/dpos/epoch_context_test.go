@@ -132,8 +132,8 @@ func Test_CountVotes(t *testing.T) {
 	for addr, weight := range votes {
 		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
 		wantTotalVoteWeight := expectedVoteWeightWithoutAttenuation + candidateDeposit.Int64()
-		if weight.Int64() != wantTotalVoteWeight {
-			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), wantTotalVoteWeight, weight.Int64())
+		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight)) != 0 {
+			t.Errorf("%s wanted vote weight: %d,got %v", addr.String(), wantTotalVoteWeight, weight)
 		}
 	}
 
@@ -155,8 +155,8 @@ func Test_CountVotes(t *testing.T) {
 	for addr, weight := range votes {
 		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
 		wantTotalVoteWeight := expectedVoteWeightWithAttenuation + candidateDeposit.Int64()
-		if weight.Int64() != wantTotalVoteWeight {
-			t.Errorf("%s wanted vote weight: %d,got %d", addr.String(), wantTotalVoteWeight, weight.Int64())
+		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight)) != 0 {
+			t.Errorf("%s wanted vote weight: %d,got %v", addr.String(), wantTotalVoteWeight, weight)
 		}
 	}
 }
