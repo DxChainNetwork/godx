@@ -46,12 +46,6 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	// BlockInterval indicates that a block will be produced every 10 seconds
-	BlockInterval = int64(10)
-
-	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(86400)
-
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
 	MaxValidatorSize = 4
 
@@ -78,6 +72,9 @@ var (
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key
 	PrefixVoteThawing = "vote_"
 
+	// KeyValidator is the key in epochTrie
+	KeyValidator = []byte("validator")
+
 	// EmptyHash is the empty hash for judgement of empty value
 	EmptyHash = common.Hash{}
 
@@ -87,8 +84,6 @@ var (
 	frontierBlockReward       = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
 	byzantiumBlockReward      = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
 	constantinopleBlockReward = big.NewInt(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
-
-	timeOfFirstBlock = int64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
@@ -116,8 +111,8 @@ var (
 	ErrMinedFutureBlock           = errors.New("mined the future block")
 	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
 	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-	ErrInvalidMinedBlockTime      = errors.New("invalid time to mined the block")
-	ErrNilBlockHeader             = errors.New("nil block header returned")
+
+	ErrNilBlockHeader = errors.New("nil block header returned")
 )
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -445,7 +440,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// retrieve the total vote weight of header's validator
-	voteCount := common.PtrBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big())
+	voteCount := common.PtrBigInt(state.GetState(header.Validator, KeyTotalVote).Big())
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward)
 		return
@@ -676,6 +671,7 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMinedCnt update counts in minedCntTrie for the miner of newBlock
+// TODO: fix this
 func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMinedCntTrie := dposContext.MinedCntTrie()
 	currentEpoch := CalculateEpochID(parentBlockTime)
@@ -710,8 +706,4 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
 	v := h.Bytes()
 	return common.NewBigIntUint64(uint64(v[len(v)-1]))
-}
-
-func CalculateEpochID(blockTime int64) int64 {
-	return blockTime / EpochInterval
 }

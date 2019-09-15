@@ -28,7 +28,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	setVoteDeposit(state, addr, deposit)
 	setLastVoteTime(state, addr, time)
 	// Calculate and apply the vote weight
-	weight := calcVoteWeightByAddress(state, addr, time)
+	weight := calcVoteWeightByDelegator(state, addr, time)
 	setVoteWeight(state, addr, weight)
 
 	return successVote, nil
@@ -44,9 +44,9 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	return nil
 }
 
-// calcVoteWeightByAddress calculate the vote weight by address
-func calcVoteWeightByAddress(state stateDB, addr common.Address, curTime int64) float64 {
-	timeLastVote := getLastVoteTime(state, addr)
+// calcVoteWeightByDelegator calculate the vote weight by address
+func calcVoteWeightByDelegator(state stateDB, delegatorAddr common.Address, curTime int64) float64 {
+	timeLastVote := getLastVoteTime(state, delegatorAddr)
 	return calcVoteWeight(timeLastVote, curTime)
 }
 
@@ -65,4 +65,18 @@ func calcVoteWeight(timeLastVote, curTime int64) float64 {
 		weight = MinVoteWeightRatio
 	}
 	return weight
+}
+
+// getVoteWithWeight get the vote after applying the voteWeight for a delegator addr
+func getVoteWithWeight(state stateDB, delegatorAddr common.Address) common.BigInt {
+	// get the vote deposit
+	voteDeposit := getVoteDeposit(state, delegatorAddr)
+	// get the voteWeight
+	voteWeight := getVoteWeight(state, delegatorAddr)
+	if voteWeight == 0 {
+		return common.BigInt0
+	}
+	// apply vote weight and return the actual vote deposit
+	weightedVote := voteDeposit.MultFloat64(voteWeight)
+	return weightedVote
 }

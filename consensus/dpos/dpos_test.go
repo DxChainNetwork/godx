@@ -103,7 +103,7 @@ func TestAccumulateRewards(t *testing.T) {
 	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
 
 	// set the total vote weight for validator
-	stateDB.SetState(validator, KeyTotalVoteWeight, common.BigToHash(new(big.Int).SetInt64(100000*0.5)))
+	stateDB.SetState(validator, KeyTotalVote, common.BigToHash(new(big.Int).SetInt64(100000*0.5)))
 	stateDbCopy := stateDB.Copy()
 
 	// Byzantium

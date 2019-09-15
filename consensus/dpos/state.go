@@ -33,8 +33,8 @@ var (
 	// KeyLastVoteTime is the key of last vote time
 	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
 
-	// KeyTotalVoteWeight is the key of total vote weight for every candidate
-	KeyTotalVoteWeight = common.BytesToHash([]byte("total-vote-weight"))
+	// KeyTotalVote is the key of total vote for each candidate
+	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
 )
 
 // getCandidateDeposit get the candidate deposit of the addr from the state
@@ -112,4 +112,16 @@ func getVoteWeight(state stateDB, addr common.Address) float64 {
 func setVoteWeight(state stateDB, addr common.Address, value float64) {
 	ratioHash := float64ToHash(value)
 	state.SetState(addr, KeyVoteWeight, ratioHash)
+}
+
+// getTotalVote get the total vote for the candidate address
+func getTotalVote(state stateDB, addr common.Address) common.BigInt {
+	hash := state.GetState(addr, KeyTotalVote)
+	return common.PtrBigInt(hash.Big())
+}
+
+// setTotalVote set the total vote to value for the candidate address
+func setTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) {
+	hash := common.BigToHash(totalVotes.BigIntPtr())
+	state.SetState(addr, KeyTotalVote, hash)
 }
