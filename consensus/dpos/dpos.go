@@ -445,7 +445,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	// get ratio of reward between validator and its delegators
 	rewardRatioNumerator := getCandidateRewardRatioNumerator(state, header.Validator)
-	delegatorReward := blockReward.MultUint64(rewardRatioNumerator).MultUint64(RewardRatioDenominator)
+	delegatorReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
 
 	delegateTrie := dposContext.DelegateTrie()
@@ -458,7 +458,6 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 		// calculate reward of each delegator due to it's vote(stake) percent
 		percentReward := realVoteWeight.Mult(delegatorReward).Div(voteCount)
-
 		state.AddBalance(delegator, percentReward.BigIntPtr())
 		assignedReward = assignedReward.Add(percentReward)
 	}

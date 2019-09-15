@@ -26,7 +26,7 @@ func MarkThawingAddress(stateDB stateDB, addr common.Address, currentEpoch int64
 // ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
 func ThawingDeposit(stateDB stateDB, currentEpoch int64) {
 	// create thawing address: "thawing_" + currentEpochID
-	thawingAddress := getThawingAddress(currentEpoch)
+	thawingAddress := getThawingAddress(currentEpoch - ThawingEpochDuration)
 	if stateDB.Exist(thawingAddress) {
 		// iterator whole thawing account trie, and thawing the deposit of every delegator
 		stateDB.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
@@ -51,7 +51,6 @@ func ThawingDeposit(stateDB stateDB, currentEpoch int64) {
 				// set 0 for vote deposit
 				setVoteDeposit(stateDB, addr, common.BigInt0)
 			}
-
 			// candidate or vote deposit does not allow to submit repeatedly, so thawing directly set 0
 			stateDB.SetState(thawingAddress, key, common.Hash{})
 			return true
