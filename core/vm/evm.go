@@ -794,7 +794,7 @@ func Uint64ToBytes(i uint64) []byte {
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
 	log.Trace("Enter candidate tx executing ... ")
 	// Add candidate in dpos
-	rewardRatio := binary.LittleEndian.Uint64(data)
+	rewardRatio := binary.BigEndian.Uint64(data)
 	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, common.PtrBigInt(value), rewardRatio); err != nil {
 		return nil, gas, err
 	}

@@ -12,8 +12,10 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -47,236 +49,236 @@ type PrivkeyAddress struct {
 	Address common.Address
 }
 
-//func TestEVM_CandidateTx(t *testing.T) {
-//	// mock evm
-//	evm, _, pas, err := mockEvmAndState(100)
-//	if err != nil {
-//		t.Fatal("mockEvmAndState err:", err)
-//	}
-//
-//	//mock dposContext
-//	db := ethdb.NewMemDatabase()
-//	dposContext, err := types.NewDposContext(db)
-//	if err != nil {
-//		t.Fatal("NewDposContext err:", err)
-//	}
-//
-//	tests := []struct {
-//		from            common.Address
-//		wantErr         error
-//		wantGas         uint64
-//		wantDeposit     *big.Int
-//		wantRewardRatio common.Hash
-//		wantCandidate   common.Address
-//		data            []byte
-//		gas             uint64
-//		value           *big.Int
-//	}{
-//		{
-//			from:            pas[0].Address,
-//			wantErr:         nil,
-//			wantGas:         40000,
-//			wantDeposit:     new(big.Int).SetUint64(10000),
-//			wantRewardRatio: common.BytesToHash([]byte("0x50")),
-//			wantCandidate:   pas[0].Address,
-//			data:            []byte("0x11111111"),
-//			gas:             100000,
-//			value:           new(big.Int).SetUint64(10000),
-//		},
-//		{
-//			from:            pas[0].Address,
-//			wantErr:         dpos.ErrAlreadyCandidate,
-//			wantGas:         100000,
-//			wantDeposit:     new(big.Int).SetUint64(10000),
-//			wantRewardRatio: common.BytesToHash([]byte("0x50")),
-//			wantCandidate:   pas[0].Address,
-//			data:            []byte("0x11111111"),
-//			gas:             100000,
-//			value:           new(big.Int).SetUint64(20000),
-//		},
-//	}
-//	for _, test := range tests {
-//		_, gas, err := evm.CandidateTx(test.from, test.data, test.gas, test.value, dposContext)
-//		if (err == nil) != (test.wantErr == nil) || (err != nil && err.Error() != test.wantErr.Error()) {
-//			t.Errorf("wanted error: %v, got: %v", test.wantErr, err)
-//		} else if gas != test.wantGas {
-//			t.Errorf("wanted gas: %d,got: %d", test.wantGas, gas)
-//		} else if rewardRatio := evm.StateDB.GetState(test.from, dpos.KeyRewardRatioNumerator); rewardRatio != test.wantRewardRatio {
-//			t.Errorf("wanted rewardRatio: %v,got: %v", test.wantRewardRatio, rewardRatio)
-//		} else if deposit := evm.StateDB.GetState(test.from, dpos.KeyCandidateDeposit); deposit != common.BigToHash(test.wantDeposit) {
-//			t.Errorf("wanted candidateDeposit: %v,got: %v", common.BigToHash(test.wantDeposit), deposit)
-//		}
-//
-//		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
-//		if err != nil {
-//			t.Error("CandidateTrie err:", err)
-//		}
-//		if common.BytesToAddress(data) != test.wantCandidate {
-//			t.Error("CandidateTrie data", data)
-//		}
-//	}
-//
-//}
-//
-//func TestEVM_CandidateCancelTx(t *testing.T) {
-//	// mock evm
-//	evm, _, pas, err := mockEvmAndState(100)
-//	if err != nil {
-//		t.Fatal("mockEvmAndState err:", err)
-//	}
-//	evm.Context.Time = new(big.Int).SetUint64(86400)
-//
-//	//mock dposContext
-//	db := ethdb.NewMemDatabase()
-//	dposContext, err := types.NewDposContext(db)
-//	if err != nil {
-//		t.Fatal("NewDposContext err:", err)
-//	}
-//
-//	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-//	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-//	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
-//
-//	tests := []struct {
-//		from                 common.Address
-//		wantErr              error
-//		wantGas              uint64
-//		wantCandidateThawing common.Hash
-//		wantCandidate        common.Address
-//		gas                  uint64
-//		thawingAddress       common.Address
-//		keyCandidateThawing  string
-//	}{
-//		{
-//			from:                 pas[0].Address,
-//			wantErr:              nil,
-//			wantGas:              60000,
-//			wantCandidateThawing: common.BytesToHash(pas[0].Address.Bytes()),
-//			wantCandidate:        common.Address{},
-//			gas:                  100000,
-//			thawingAddress:       thawingAddress,
-//			keyCandidateThawing:  dpos.PrefixCandidateThawing + pas[0].Address.String(),
-//		},
-//	}
-//
-//	for _, test := range tests {
-//		_, gas, err := evm.CandidateCancelTx(test.from, test.gas, dposContext)
-//		if err != test.wantErr {
-//			t.Errorf("wanted error: %v, got: %v", test.wantErr, err)
-//		} else if gas != test.wantGas {
-//			t.Errorf("wanted gas: %d,got: %d", test.wantGas, gas)
-//		}
-//
-//		candidateThawing := evm.StateDB.GetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)))
-//		if candidateThawing != (common.Hash{}) {
-//			t.Errorf("wanted candidateThawing: %v,got: %v", (common.Hash{}), candidateThawing)
-//		}
-//
-//		evm.StateDB.SetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)), common.BytesToHash(pas[0].Address.Bytes()))
-//		candidateThawing = evm.StateDB.GetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)))
-//		if candidateThawing != test.wantCandidateThawing {
-//			t.Errorf("wanted candidateThawing: %v,got: %v", test.wantCandidateThawing, candidateThawing)
-//		}
-//
-//		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
-//		if err != nil {
-//			t.Error("CandidateTrie err:", err)
-//		}
-//		if common.BytesToAddress(data) != test.wantCandidate {
-//			t.Error("CandidateTrie data", data)
-//		}
-//	}
-//}
-//
-//func TestEVM_VoteTx(t *testing.T) {
-//	// mock evm
-//	evm, _, addresses, err := mockEvmAndState(100)
-//	if err != nil {
-//		t.Fatalf("failed to create evm and state,err: %v", err)
-//	}
-//
-//	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-//	dposContext, err := types.NewDposContext(db)
-//	if err != nil {
-//		t.Fatalf("failed to create dpos context,err: %v", err)
-//	}
-//
-//	from := addresses[0].Address
-//	candidateList := []common.Address{
-//		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
-//		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
-//		common.HexToAddress("0x6de5af2854ad0f9d5b7d0b749fffa3f7a57d7b9d"),
-//	}
-//
-//	for _, addr := range candidateList {
-//		err = dposContext.CandidateTrie().TryUpdate(addr.Bytes(), addr.Bytes())
-//		if err != nil {
-//			t.Fatalf("failed to insert candidate,error: %v", err)
-//		}
-//	}
-//
-//	data, err := rlp.EncodeToBytes(candidateList)
-//	if err != nil {
-//		t.Fatalf("failed to rlp encode candidate list,err: %v", err)
-//	}
-//
-//	_, gasRemain, err := evm.VoteTx(from, dposContext, data, 1000000, new(big.Int).SetInt64(1e18))
-//	if err != nil {
-//		t.Errorf("failed to execute vote tx,error: %v", err)
-//	}
-//
-//	if gasRemain != 1000000-1000-20000*4 {
-//		t.Errorf("wanted gas remain: %d,got: %d", (1000000 - 1000 - 20000*4), gasRemain)
-//	}
-//}
-//
-//func TestEVM_CancelVoteTx(t *testing.T) {
-//	// mock evm
-//	evm, _, addresses, err := mockEvmAndState(100)
-//	if err != nil {
-//		t.Fatalf("failed to create evm and state,err: %v", err)
-//	}
-//
-//	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-//	dposContext, err := types.NewDposContext(db)
-//	if err != nil {
-//		t.Fatalf("failed to create dpos context,err: %v", err)
-//	}
-//
-//	from := addresses[0].Address
-//	candidateList := []common.Address{
-//		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
-//		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
-//		common.HexToAddress("0x6de5af2854ad0f9d5b7d0b749fffa3f7a57d7b9d"),
-//	}
-//
-//	for _, addr := range candidateList {
-//		err = dposContext.DelegateTrie().TryUpdate(append(addr.Bytes(), from.Bytes()...), from.Bytes())
-//		if err != nil {
-//			t.Fatalf("failed to insert delegate,error: %v", err)
-//		}
-//	}
-//
-//	data, err := rlp.EncodeToBytes(candidateList)
-//	if err != nil {
-//		t.Fatalf("failed to rlp encode candidate list,err: %v", err)
-//	}
-//
-//	err = dposContext.VoteTrie().TryUpdate(from.Bytes(), data)
-//	if err != nil {
-//		t.Fatalf("failed to insert delegate,error: %v", err)
-//	}
-//
-//	evm.Time = new(big.Int).SetInt64(time.Now().Unix())
-//	_, gasRemain, err := evm.CancelVoteTx(from, dposContext, 1000000)
-//	if err != nil {
-//		t.Errorf("failed to execute vote tx,error: %v", err)
-//	}
-//
-//	if gasRemain != 1000000-20000*2 {
-//		t.Errorf("wanted gas remain: %d,got: %d", (1000000 - 20000*2), gasRemain)
-//	}
-//}
+func TestEVM_CandidateTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatal("mockEvmAndState err:", err)
+	}
+
+	//mock dposContext
+	db := ethdb.NewMemDatabase()
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatal("NewDposContext err:", err)
+	}
+
+	tests := []struct {
+		from            common.Address
+		wantErr         error
+		wantGas         uint64
+		wantDeposit     *big.Int
+		wantRewardRatio common.Hash
+		wantCandidate   common.Address
+		data            []byte
+		gas             uint64
+		value           *big.Int
+	}{
+		{
+			from:            pas[0].Address,
+			wantErr:         nil,
+			wantGas:         40000,
+			wantDeposit:     new(big.Int).SetUint64(10000),
+			wantRewardRatio: common.HexToHash("0000000000000032"),
+			wantCandidate:   pas[0].Address,
+			data:            common.Hex2Bytes("0000000000000032"),
+			gas:             100000,
+			value:           new(big.Int).SetUint64(10000),
+		},
+		{
+			from:            pas[0].Address,
+			wantErr:         dpos.ErrAlreadyCandidate,
+			wantGas:         100000,
+			wantDeposit:     new(big.Int).SetUint64(10000),
+			wantRewardRatio: common.HexToHash("0000000000000032"),
+			wantCandidate:   pas[0].Address,
+			data:            common.Hex2Bytes("0000000000000032"),
+			gas:             100000,
+			value:           new(big.Int).SetUint64(20000),
+		},
+	}
+	for _, test := range tests {
+		_, gas, err := evm.CandidateTx(test.from, test.data, test.gas, test.value, dposContext)
+		if (err == nil) != (test.wantErr == nil) || (err != nil && err.Error() != test.wantErr.Error()) {
+			t.Errorf("wanted error: %v, got: %v", test.wantErr, err)
+		} else if gas != test.wantGas {
+			t.Errorf("wanted gas: %d,got: %d", test.wantGas, gas)
+		} else if rewardRatio := evm.StateDB.GetState(test.from, dpos.KeyRewardRatioNumerator); rewardRatio != test.wantRewardRatio {
+			t.Errorf("wanted rewardRatio: %v,got: %v", test.wantRewardRatio, rewardRatio)
+		} else if deposit := evm.StateDB.GetState(test.from, dpos.KeyCandidateDeposit); deposit != common.BigToHash(test.wantDeposit) {
+			t.Errorf("wanted candidateDeposit: %v,got: %v", common.BigToHash(test.wantDeposit), deposit)
+		}
+
+		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
+		if err != nil {
+			t.Error("CandidateTrie err:", err)
+		}
+		if common.BytesToAddress(data) != test.wantCandidate {
+			t.Error("CandidateTrie data", data)
+		}
+	}
+
+}
+
+func TestEVM_CandidateCancelTx(t *testing.T) {
+	// mock evm
+	evm, _, pas, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatal("mockEvmAndState err:", err)
+	}
+	evm.Context.Time = new(big.Int).SetUint64(86400)
+
+	//mock dposContext
+	db := ethdb.NewMemDatabase()
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatal("NewDposContext err:", err)
+	}
+
+	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
+	epochIDStr := strconv.FormatInt(currentEpochID, 10)
+	thawingAddress := common.BytesToAddress([]byte(dpos.PrefixThawingAddr + epochIDStr))
+
+	tests := []struct {
+		from                 common.Address
+		wantErr              error
+		wantGas              uint64
+		wantCandidateThawing common.Hash
+		wantCandidate        common.Address
+		gas                  uint64
+		thawingAddress       common.Address
+		keyCandidateThawing  string
+	}{
+		{
+			from:                 pas[0].Address,
+			wantErr:              nil,
+			wantGas:              60000,
+			wantCandidateThawing: common.BytesToHash(pas[0].Address.Bytes()),
+			wantCandidate:        common.Address{},
+			gas:                  100000,
+			thawingAddress:       thawingAddress,
+			keyCandidateThawing:  dpos.PrefixCandidateThawing + pas[0].Address.String(),
+		},
+	}
+
+	for _, test := range tests {
+		_, gas, err := evm.CandidateCancelTx(test.from, test.gas, dposContext)
+		if err != test.wantErr {
+			t.Errorf("wanted error: %v, got: %v", test.wantErr, err)
+		} else if gas != test.wantGas {
+			t.Errorf("wanted gas: %d,got: %d", test.wantGas, gas)
+		}
+
+		candidateThawing := evm.StateDB.GetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)))
+		if candidateThawing != (common.Hash{}) {
+			t.Errorf("wanted candidateThawing: %v,got: %v", (common.Hash{}), candidateThawing)
+		}
+
+		evm.StateDB.SetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)), common.BytesToHash(pas[0].Address.Bytes()))
+		candidateThawing = evm.StateDB.GetState(test.thawingAddress, common.BytesToHash([]byte(test.keyCandidateThawing)))
+		if candidateThawing != test.wantCandidateThawing {
+			t.Errorf("wanted candidateThawing: %v,got: %v", test.wantCandidateThawing, candidateThawing)
+		}
+
+		data, err := dposContext.CandidateTrie().TryGet(test.from.Bytes())
+		if err != nil {
+			t.Error("CandidateTrie err:", err)
+		}
+		if common.BytesToAddress(data) != test.wantCandidate {
+			t.Error("CandidateTrie data", data)
+		}
+	}
+}
+
+func TestEVM_VoteTx(t *testing.T) {
+	// mock evm
+	evm, _, addresses, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatalf("failed to create evm and state,err: %v", err)
+	}
+	evm.Time = common.NewBigInt(time.Now().Unix()).BigIntPtr()
+	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to create dpos context,err: %v", err)
+	}
+
+	from := addresses[0].Address
+	candidateList := []common.Address{
+		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
+		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
+		common.HexToAddress("0x6de5af2854ad0f9d5b7d0b749fffa3f7a57d7b9d"),
+	}
+
+	for _, addr := range candidateList {
+		err = dposContext.CandidateTrie().TryUpdate(addr.Bytes(), addr.Bytes())
+		if err != nil {
+			t.Fatalf("failed to insert candidate,error: %v", err)
+		}
+	}
+
+	data, err := rlp.EncodeToBytes(candidateList)
+	if err != nil {
+		t.Fatalf("failed to rlp encode candidate list,err: %v", err)
+	}
+
+	_, gasRemain, err := evm.VoteTx(from, dposContext, data, 1000000, new(big.Int).SetInt64(1e18))
+	if err != nil {
+		t.Errorf("failed to execute vote tx,error: %v", err)
+	}
+
+	if gasRemain != 1000000-1000-20000*4 {
+		t.Errorf("wanted gas remain: %d,got: %d", (1000000 - 1000 - 20000*4), gasRemain)
+	}
+}
+
+func TestEVM_CancelVoteTx(t *testing.T) {
+	// mock evm
+	evm, _, addresses, err := mockEvmAndState(100)
+	if err != nil {
+		t.Fatalf("failed to create evm and state,err: %v", err)
+	}
+
+	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
+	dposContext, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to create dpos context,err: %v", err)
+	}
+
+	from := addresses[0].Address
+	candidateList := []common.Address{
+		common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
+		common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
+		common.HexToAddress("0x6de5af2854ad0f9d5b7d0b749fffa3f7a57d7b9d"),
+	}
+
+	for _, addr := range candidateList {
+		err = dposContext.DelegateTrie().TryUpdate(append(addr.Bytes(), from.Bytes()...), from.Bytes())
+		if err != nil {
+			t.Fatalf("failed to insert delegate,error: %v", err)
+		}
+	}
+
+	data, err := rlp.EncodeToBytes(candidateList)
+	if err != nil {
+		t.Fatalf("failed to rlp encode candidate list,err: %v", err)
+	}
+
+	err = dposContext.VoteTrie().TryUpdate(from.Bytes(), data)
+	if err != nil {
+		t.Fatalf("failed to insert delegate,error: %v", err)
+	}
+
+	evm.Time = new(big.Int).SetInt64(time.Now().Unix())
+	_, gasRemain, err := evm.CancelVoteTx(from, dposContext, 1000000)
+	if err != nil {
+		t.Errorf("failed to execute vote tx,error: %v", err)
+	}
+
+	if gasRemain != 1000000-20000*2 {
+		t.Errorf("wanted gas remain: %d,got: %d", (1000000 - 20000*2), gasRemain)
+	}
+}
 
 func TestEVM_HostAnnounceTx(t *testing.T) {
 
