@@ -16,7 +16,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	candidates []common.Address, time int64) (int, error) {
 	prevDeposit := getVoteDeposit(state, addr)
 	// If previously voted, cannot vote again
-	if prevDeposit.Cmp(common.BigInt0) == 0 {
+	if prevDeposit.Cmp(common.BigInt0) != 0 {
 		return 0, ErrAlreadyVote
 	}
 	// Vote the candidates
@@ -28,7 +28,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	setVoteDeposit(state, addr, deposit)
 	setLastVoteTime(state, addr, time)
 	// Calculate and apply the vote weight
-	weight := calcVoteWeightByDelegator(state, addr, time)
+	weight := calcVoteWeightForDelegator(state, addr, time)
 	setVoteWeight(state, addr, weight)
 
 	return successVote, nil
@@ -44,8 +44,8 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	return nil
 }
 
-// calcVoteWeightByDelegator calculate the vote weight by address
-func calcVoteWeightByDelegator(state stateDB, delegatorAddr common.Address, curTime int64) float64 {
+// calcVoteWeightForDelegator calculate the vote weight by address
+func calcVoteWeightForDelegator(state stateDB, delegatorAddr common.Address, curTime int64) float64 {
 	timeLastVote := getLastVoteTime(state, delegatorAddr)
 	return calcVoteWeight(timeLastVote, curTime)
 }

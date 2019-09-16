@@ -42,9 +42,9 @@ func expectedBlocksInEpoch(timeFirstBlock int64, curTime int64) int64 {
 	return epochDuration / BlockInterval
 }
 
-// calcBlockSlotAndEpochID calculate the block slot and epoch ID from the block time.
+// calcBlockEpochIDAndSlot calculate the block epoch ID and slot from the block time.
 // If invalid block time stamp, ErrInvalidMinedBlockTime is returned.
-func calcBlockSlotAndEpochID(blockTime int64) (epoch, slot int64, err error) {
+func calcBlockEpochIDAndSlot(blockTime int64) (epoch, slot int64, err error) {
 	epoch = CalculateEpochID(blockTime)
 	slot, err = calcBlockSlot(blockTime)
 	return

@@ -14,7 +14,7 @@ import (
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	rewardRatio uint64) error {
 	prevDeposit := getCandidateDeposit(state, addr)
-	if prevDeposit.Cmp(common.BigInt0) == 0 {
+	if prevDeposit.Cmp(common.BigInt0) != 0 {
 		return ErrAlreadyCandidate
 	}
 	// Add the candidate to DposContext

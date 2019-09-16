@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"sort"
 
@@ -196,7 +195,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	return nil
 }
 
-// ineligibleValidators return the ineligible validators in a certain epoch. An ineligible validator is
+// getIneligibleValidators return the ineligible validators in a certain epoch. An ineligible validator is
 // defined as a validator who produced blocks less than half as expected
 func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64) (addressesByCnt, error) {
 	validators, err := ctx.GetValidators()
@@ -246,28 +245,8 @@ func (ec *EpochContext) lookupValidator(blockTime int64) (validator common.Addre
 	return validators[index], nil
 }
 
-type sortableAddress struct {
-	address common.Address
-	weight  *big.Int
-}
-
-// ascending, from small to big
-type sortableAddresses []*sortableAddress
-
-func (p sortableAddresses) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p sortableAddresses) Len() int      { return len(p) }
-func (p sortableAddresses) Less(i, j int) bool {
-	if p[i].weight.Cmp(p[j].weight) < 0 {
-		return false
-	} else if p[i].weight.Cmp(p[j].weight) > 0 {
-		return true
-	} else {
-		return p[i].address.String() < p[j].address.String()
-	}
-}
-
 type (
-	// addressesByMinedCnt is a sortable address list of address with a count
+	// addressesByMinedCnt is a sortable address list of address with a count by ascending order
 	addressesByCnt []*addressByCnt
 
 	addressByCnt struct {
@@ -321,13 +300,13 @@ func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []commo
 				}
 
 				// calculate the vote weight proportion of the left candidate
-				totoalPros := float64(0)
+				totalPros := float64(0)
 				for _, pro := range voteProportions {
-					totoalPros += pro.proportion
+					totalPros += pro.proportion
 				}
 
 				for _, pro := range voteProportions {
-					pro.proportion = pro.proportion / totoalPros
+					pro.proportion = pro.proportion / totalPros
 				}
 
 				// sort by asc
@@ -344,7 +323,7 @@ type sortableVoteProportion struct {
 	proportion float64
 }
 
-// descending, from big to small
+// Ascending, from small to big
 type sortableVoteProportions []*sortableVoteProportion
 
 func (p sortableVoteProportions) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
