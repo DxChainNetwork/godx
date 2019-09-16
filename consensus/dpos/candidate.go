@@ -35,7 +35,7 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	}
 	// Mark the thawing address in the future
 	currentEpochID := CalculateEpochID(time)
-	MarkThawingAddress(state, addr, currentEpochID, PrefixCandidateThawing)
+	markThawingAddress(state, addr, currentEpochID, PrefixCandidateThawing)
 	return nil
 }
 

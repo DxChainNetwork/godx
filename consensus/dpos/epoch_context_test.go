@@ -290,7 +290,7 @@ func TestMarkThawingAddress(t *testing.T) {
 	currentEpochID := int64(123)
 
 	// set candidate deposit
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
+	markThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
 
 	// check candidate thawing flag
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)
@@ -306,7 +306,7 @@ func TestMarkThawingAddress(t *testing.T) {
 	}
 
 	// set vote deposit
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
+	markThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
 
 	key = append([]byte(PrefixVoteThawing), addr.Bytes()...)
 	voteThawingFlag := stateDB.GetState(thawingAddress, common.BytesToHash(key))
@@ -326,14 +326,14 @@ func TestThawingDeposit(t *testing.T) {
 
 	// mark candidate deposit as thawing flag
 	stateDB.SetState(addr, KeyCandidateDeposit, common.BigToHash(deposit))
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
+	markThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
 
 	// mark candidate deposit as thawing flag
 	stateDB.SetState(addr, KeyVoteDeposit, common.BigToHash(deposit))
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
+	markThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
 	stateDB.Commit(true)
 
-	ThawingDeposit(stateDB, currentEpochID+ThawingEpochDuration)
+	thawFrozenAssetsInEpoch(stateDB, currentEpochID+ThawingEpochDuration)
 
 	// check whether deposit is thawed
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)

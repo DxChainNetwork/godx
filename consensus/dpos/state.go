@@ -5,6 +5,8 @@
 package dpos
 
 import (
+	"encoding/binary"
+
 	"github.com/DxChainNetwork/godx/common"
 )
 
@@ -35,6 +37,12 @@ var (
 
 	// KeyTotalVote is the key of total vote for each candidate
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
+
+	// KeyFrozenAssets is the key for frozen assets for in an account
+	KeyFrozenAssets = common.BytesToHash([]byte("frozen-assets"))
+
+	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
+	PrefixThawingAssets = []byte("thawing-assets")
 )
 
 // getCandidateDeposit get the candidate deposit of the addr from the state
@@ -124,4 +132,76 @@ func getTotalVote(state stateDB, addr common.Address) common.BigInt {
 func setTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) {
 	hash := common.BigToHash(totalVotes.BigIntPtr())
 	state.SetState(addr, KeyTotalVote, hash)
+}
+
+// getFrozenAssets returns the frozen assets for an addr
+func getFrozenAssets(state stateDB, addr common.Address) common.BigInt {
+	hash := state.GetState(addr, KeyFrozenAssets)
+	return common.PtrBigInt(hash.Big())
+}
+
+// setFrozenAssets set the frozen assets for an addr
+func setFrozenAssets(state stateDB, addr common.Address, value common.BigInt) {
+	hash := common.BigToHash(value.BigIntPtr())
+	state.SetState(addr, KeyFrozenAssets, hash)
+}
+
+// addFrozenAssets add the diff to the frozen assets of the address
+func addFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) {
+	prev := getFrozenAssets(state, addr)
+	newValue := prev.Add(diff)
+	setFrozenAssets(state, addr, newValue)
+	return nil
+}
+
+// subFrozenAssets sub the diff from the frozen assets of the address
+func subFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) error {
+	prev := getFrozenAssets(state, addr)
+	if prev.Cmp(diff) < 0 {
+		return errInsufficientFrozenAssets
+	}
+	newValue := prev.Sub(diff)
+	setFrozenAssets(state, addr, newValue)
+	return nil
+}
+
+// getThawingAssets return the thawing asset amount of the address in a certain epoch
+func getThawingAssets(state stateDB, addr common.Address, epoch int64) common.BigInt {
+	key := makeThawingAssetsKey(epoch)
+	hash := state.GetState(addr, key)
+	return common.PtrBigInt(hash.Big())
+}
+
+// setThawingAssets set the thawing assets in the epoch field for the addr in state
+func setThawingAssets(state stateDB, addr common.Address, epoch int64, value common.BigInt) {
+	key := makeThawingAssetsKey(epoch)
+	hash := common.BigToHash(value.BigIntPtr())
+	state.SetState(addr, key, hash)
+}
+
+// addThawingAssets add the thawing assets of diffin the epoch field for the addr in state
+func addThawingAssets(state stateDB, addr common.Address, epoch int64, diff common.BigInt) {
+	prev := getThawingAssets(state, addr, epoch)
+	newValue := prev.Add(diff)
+	setThawingAssets(state, addr, epoch, newValue)
+}
+
+// removeThawingAssets remove the thawing assets in a certain epoch for the address
+func removeThawingAssets(state stateDB, addr common.Address, epoch int64) {
+	key := makeThawingAssetsKey(epoch)
+	state.SetState(addr, key, common.Hash{})
+}
+
+// makeThawingAssetsKey makes the key for the thawing assets in a certain epoch
+func makeThawingAssetsKey(epoch int64) common.Hash {
+	epochByte := make([]byte, 8)
+	binary.BigEndian.PutUint64(epochByte, uint64(epoch))
+	return common.BytesToHash(append(PrefixThawingAssets, epochByte...))
+}
+
+// removeAddressInState remove the address from the state. Note currently only set nonce to 0.
+// The balance field is not checked thus there is no guarantee that the account is removed.
+// If this is the case, simply leave the address there.
+func removeAddressInState(state stateDB, addr common.Address) {
+	state.SetNonce(addr, 0)
 }

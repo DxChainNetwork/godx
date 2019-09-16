@@ -40,7 +40,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 		return err
 	}
 	currentEpoch := CalculateEpochID(time)
-	MarkThawingAddress(state, addr, currentEpoch, PrefixVoteThawing)
+	markThawingAddress(state, addr, currentEpoch, PrefixVoteThawing)
 	return nil
 }
 

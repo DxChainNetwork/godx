@@ -814,7 +814,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	if err := dpos.ProcessCancelCandidate(evm.StateDB, dposContext, caller, evm.Time.Int64()); err != nil {
 		return nil, gas, err
 	}
-	// defines that dposCtx.KickoutCandidate and MarkThawingAddress all cost params.SstoreSetGas
+	// defines that dposCtx.KickoutCandidate and markThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		return nil, gas, ErrOutOfGas

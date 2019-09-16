@@ -47,7 +47,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	}
 
 	// thawing some deposit for currentEpoch-2
-	ThawingDeposit(ec.stateDB, currentEpoch)
+	thawFrozenAssetsInEpoch(ec.stateDB, currentEpoch)
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
@@ -187,7 +187,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
-		MarkThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
+		markThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.cnt)

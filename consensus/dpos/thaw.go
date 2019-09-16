@@ -5,79 +5,108 @@
 package dpos
 
 import (
-	"strconv"
+	"encoding/binary"
 
 	"github.com/DxChainNetwork/godx/common"
 )
 
-// MarkThawingAddress mark the given addr that will be thawed in next next epoch
-func MarkThawingAddress(stateDB stateDB, addr common.Address, currentEpoch int64, keyPrefix string) {
+// markThawingAddressAndValue add the thawing diff to the addr's storage trie, and mark the address
+// to be thawed in the thawing address
+func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int64, diff common.BigInt) {
+	thawingEpoch := calcThawingEpoch(curEpoch)
+	// Add the diff value to thawing assets to be thawed
+	addThawingAssets(state, addr, thawingEpoch, diff)
+	// Mark the address in the thawing address
+	markThawingAddress(state, addr, thawingEpoch)
+}
+
+// markThawingAddress mark the given addr that will be thawed in thawingEpoch
+func markThawingAddress(stateDB stateDB, addr common.Address, thawingEpoch int64) {
 	// create thawing address: "thawing_" + currentEpoch
-	thawingAddress := getThawingAddress(currentEpoch)
+	thawingAddress := getThawingAddress(thawingEpoch)
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
 		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
 		stateDB.SetNonce(thawingAddress, 1)
 	}
 	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
-	setAddrInThawingAddress(stateDB, thawingAddress, addr, keyPrefix)
+	setAddrInThawingAddress(stateDB, thawingAddress, addr)
 }
 
-// ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
-func ThawingDeposit(stateDB stateDB, currentEpoch int64) {
-	// create thawing address: "thawing_" + currentEpochID
-	thawingAddress := getThawingAddress(currentEpoch - ThawingEpochDuration)
-	if stateDB.Exist(thawingAddress) {
-		// iterator whole thawing account trie, and thawing the deposit of every delegator
-		stateDB.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
-			if value == (common.Hash{}) {
-				return false
-			}
+// thawFrozenAssetsInEpoch thaw the frozenAssets for the all candidates or delegator effected in
+// the epoch
+func thawFrozenAssetsInEpoch(state stateDB, epoch int64) error {
+	thawingAddress := getThawingAddress(epoch)
+	var err error
+	// For each thawing address, thaw specified amount, and remove the related storage fields.
+	forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
+		thawValue := getThawingAssets(state, addr, epoch)
+		err = subFrozenAssets(state, addr, thawValue)
+		if err != nil {
+			// If error happens, this is a really critical error, meaning the system is
+			// not consistent with itself. Thus no need to report every error.
+			return
+		}
+		// Remove fields in both thawing address and thawing assets in account address
+		removeThawingAssets(state, addr, epoch)
+		removeAddrInThawingAddress(state, thawingAddress, addr)
+	})
+	removeAddressInState(state, thawingAddress)
+	return err
+}
 
-			addr := common.BytesToAddress(value.Bytes()[12:])
-
-			// if candidate deposit thawing flag exists, then thawing it
-			candidateThawingKey := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
-			if common.BytesToHash(candidateThawingKey) == value {
-
-				// set 0 for candidate deposit
-				setCandidateDeposit(stateDB, addr, common.BigInt0)
-			}
-
-			// if vote deposit thawing flag exists, then thawing it
-			voteThawingKey := append([]byte(PrefixVoteThawing), addr.Bytes()...)
-			if common.BytesToHash(voteThawingKey) == value {
-
-				// set 0 for vote deposit
-				setVoteDeposit(stateDB, addr, common.BigInt0)
-			}
-			// candidate or vote deposit does not allow to submit repeatedly, so thawing directly set 0
-			stateDB.SetState(thawingAddress, key, common.Hash{})
-			return true
-		})
-
-		// mark the thawingAddress as empty account, that will be deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 0)
+// forEachEntryInThawingAddress execute the cb callback function on each entry in the thawing address
+func forEachEntryInThawingAddress(state stateDB, thawingAddress common.Address, cb func(address common.Address)) {
+	if !state.Exist(thawingAddress) {
+		return
 	}
+	state.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
+		// If empty value, directly return
+		if value == (common.Hash{}) {
+			return false
+		}
+		// Execute the callback for the address from value
+		addr := getAddressFromThawingValue(value)
+		cb(addr)
+		return true
+	})
 }
 
 // getThawingAddress return the thawing address with the epoch
 func getThawingAddress(epoch int64) common.Address {
-	epochIDStr := strconv.FormatInt(epoch, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
+	epochBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(epochBytes, uint64(epoch))
+	b := append([]byte(PrefixThawingAddr), epochBytes...)
+	thawingAddress := common.BytesToAddress(b)
 	return thawingAddress
 }
 
 // setAddrInThawingAddress set the address in the thawing address
-func setAddrInThawingAddress(state stateDB, thawingAddress, addr common.Address, keyPrefix string) {
+func setAddrInThawingAddress(state stateDB, thawingAddress, addr common.Address) {
 	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
-	keyAndValue := makeThawingAddressKey(keyPrefix, addr)
+	keyAndValue := makeThawingAddressKey(addr)
 	state.SetState(thawingAddress, keyAndValue, keyAndValue)
 }
 
+// removeAddrInThawingAddress removes an entry specified by addr in thawingAddress
+func removeAddrInThawingAddress(state stateDB, thawingAddress, addr common.Address) {
+	key := makeThawingAddressKey(addr)
+	state.SetState(thawingAddress, key, common.Hash{})
+}
+
 // makeThawingAddressKey makes the key / value for the thawing address
-func makeThawingAddressKey(keyPrefix string, addr common.Address) common.Hash {
+func makeThawingAddressKey(addr common.Address) common.Hash {
 	// thawing flag for from address: "candidate_" + from ==> "candidate_" + from
-	b := append([]byte(keyPrefix), addr.Bytes()...)
-	return common.BytesToHash(b)
+	return common.BytesToHash(addr.Bytes())
+}
+
+// getAddressFromThawingValue returns the address from the key / value in the thawing address
+// storage trie
+func getAddressFromThawingValue(h common.Hash) common.Address {
+	return common.BytesToAddress(h[common.HashLength-common.AddressLength:])
+}
+
+// calcThawingEpoch calculate the epoch to be thawed for the thawing record in the current epoch
+func calcThawingEpoch(curEpoch int64) int64 {
+	return curEpoch + ThawingEpochDuration
 }
