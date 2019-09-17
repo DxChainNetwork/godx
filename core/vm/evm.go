@@ -19,7 +19,6 @@ package vm
 import (
 	"encoding/binary"
 	"errors"
-	"math"
 	"math/big"
 	"strconv"
 	"sync/atomic"
@@ -27,7 +26,6 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
-	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -505,6 +503,13 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 // ApplyStorageContractTransaction distinguish and execute transactions
 func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType string, data []byte, gas uint64) (ret []byte, leftOverGas uint64, err error) {
+	stateSnap := evm.StateDB.Snapshot()
+	defer func() {
+		if err != nil {
+			evm.StateDB.RevertToSnapshot(stateSnap)
+		}
+	}()
+
 	switch txType {
 	case HostAnnounceTransaction:
 		return evm.HostAnnounceTx(caller, data, gas)
@@ -521,6 +526,15 @@ func (evm *EVM) ApplyStorageContractTransaction(caller ContractRef, txType strin
 
 // ApplyDposTransaction handlers all dpos consensus txs
 func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposContext, from common.Address, data []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+	dposSnap := dposContext.Snapshot()
+	stateSnap := evm.StateDB.Snapshot()
+	defer func() {
+		if err != nil {
+			dposContext.RevertToSnapShot(dposSnap)
+			evm.StateDB.RevertToSnapshot(stateSnap)
+		}
+	}()
+
 	switch txType {
 	case ApplyCandidate:
 		return evm.CandidateTx(from, data, gas, value, dposContext)
@@ -537,7 +551,7 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 
 // HostAnnounceTx host declares its own information on the chain
 func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter host announce tx executing ... ")
+	log.Trace("Enter host announce tx executing ... ")
 
 	ha := types.HostAnnouncement{}
 	gasDecode, resultDecode := RemainGas(gas, rlp.DecodeBytes, data, &ha)
@@ -553,7 +567,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 		return nil, gasCheck, errCheck
 	}
 
-	log.Info("Host announce tx execution done", "remain_gas", gasCheck, "host_address", ha.NetAddress)
+	log.Trace("Host announce tx execution done", "remain_gas", gasCheck, "host_address", ha.NetAddress)
 
 	// return remain gas if everything is ok
 	return nil, gasCheck, nil
@@ -561,7 +575,7 @@ func (evm *EVM) HostAnnounceTx(caller ContractRef, data []byte, gas uint64) ([]b
 
 // CreateContractTx executes contract creation tx
 func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter create contract tx executing ... ")
+	log.Trace("Enter create contract tx executing ... ")
 	var (
 		stateDB  = evm.StateDB
 		snapshot = stateDB.Snapshot()
@@ -654,13 +668,13 @@ func (evm *EVM) CreateContractTx(caller ContractRef, data []byte, gas uint64) ([
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(sc.MissedProofOutputs[1].Value.Bytes()))
 
 	// return remain gas if everything is ok
-	log.Info("Create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
+	log.Trace("Create contract tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
 // CommitRevisionTx host sends a revision transaction
 func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter storage contract revision tx executing ... ")
+	log.Trace("Enter storage contract revision tx executing ... ")
 	var (
 		stateDB = evm.StateDB
 	)
@@ -702,13 +716,13 @@ func (evm *EVM) CommitRevisionTx(caller ContractRef, data []byte, gas uint64) ([
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyClientMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[0].Value.Bytes()))
 	stateDB.SetState(contractAddr, coinchargemaintenance.KeyHostMissedProofOutput, common.BytesToHash(scr.NewMissedProofOutputs[1].Value.Bytes()))
 
-	log.Info("Storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
+	log.Trace("Storage contract reversion tx execution done", "remain_gas", gasRemainCheck, "storage_contract_id", scr.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
 // StorageProofTx host send storage certificate transaction
 func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter storage proof tx executing ... ")
+	log.Trace("Enter storage proof tx executing ... ")
 	var (
 		stateDB = evm.StateDB
 	)
@@ -765,7 +779,7 @@ func (evm *EVM) StorageProofTx(caller ContractRef, data []byte, gas uint64) ([]b
 	// this contract is finished, so mark it empty account that will be deleted by stateDB
 	stateDB.SetNonce(contractAddr, 0)
 
-	log.Info("Storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
+	log.Trace("Storage proof tx execution done", "storage_contract_id", sp.ParentID.Hex())
 	return nil, gasRemainCheck, nil
 }
 
@@ -778,164 +792,72 @@ func Uint64ToBytes(i uint64) []byte {
 
 // CandidateTx campaign becomes a candidate and pledges part of the assets.
 func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
-	log.Info("Enter candidate tx executing ... ")
-	stateDB := evm.StateDB
-	depositHash := stateDB.GetState(caller, dpos.KeyCandidateDeposit)
-	if depositHash != (common.Hash{}) {
-		return nil, gas, ErrAlreadyCandidate
-	}
-
-	//exception will cause the database to roll back
-	dposSnapshot := dposContext.Snapshot()
-	err := dposContext.BecomeCandidate(caller)
-	if err != nil {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
+	log.Trace("Enter candidate tx executing ... ")
+	// Add candidate in dpos
+	rewardRatio := binary.BigEndian.Uint64(data)
+	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, common.PtrBigInt(value), rewardRatio); err != nil {
 		return nil, gas, err
 	}
-
-	// If successfully applying candidate, then store deposit
-	stateDB.SetState(caller, dpos.KeyCandidateDeposit, common.BigToHash(value))
-
-	// If the user customizes the RewardRatio, then the RewardRatio must be within 100%.
-	stateDB.SetState(caller, dpos.KeyRewardRatioNumerator, common.BytesToHash(data))
-
 	// defines that dposCtx.BecomeCandidate and SetState all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*3)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gas, ErrOutOfGas
 	}
 
-	log.Info("Candidate tx execution done")
+	log.Trace("Candidate tx execution done")
 	return nil, gasRemain, nil
 }
 
 // CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
 func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
-	log.Info("Enter cancel candidate tx executing ... ")
-	dposSnapshot := dposContext.Snapshot()
-	err := dposContext.KickoutCandidate(caller)
-	if err != nil {
-		dposContext.RevertToSnapShot(dposSnapshot)
+	log.Trace("Enter cancel candidate tx executing ... ")
+	if err := dpos.ProcessCancelCandidate(evm.StateDB, dposContext, caller, evm.Time.Int64()); err != nil {
 		return nil, gas, err
 	}
-
-	// mark the caller that will be thawed in next next epoch
-	stateDB := evm.StateDB.(*state.StateDB)
-	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixCandidateThawing)
-
 	// defines that dposCtx.KickoutCandidate and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gas, ErrOutOfGas
 	}
-
-	log.Info("Cancel candidate tx execution done")
+	log.Trace("Cancel candidate tx execution done")
 	return nil, gasRemain, nil
 }
 
 // VoteTx handles a new vote to some candidates that will remove last vote records
 func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
-	log.Info("Enter vote tx executing ... ")
-	var (
-		candidateList []common.Address
-		stateDB       = evm.StateDB
-	)
-
-	// only after thawing vote deposit, user can send a new vote tx
-	depositHash := stateDB.GetState(caller, dpos.KeyVoteDeposit)
-	if depositHash != (common.Hash{}) {
-		return nil, gas, ErrAlreadyVote
-	}
-
+	log.Trace("Enter vote tx executing ... ")
+	var candidateList []common.Address
 	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
-
-	// record vote data
-	dposSnapshot := dposCtx.Snapshot()
-	successCount, err := dposCtx.Vote(caller, candidateList)
+	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, common.PtrBigInt(value), candidateList, evm.Time.Int64())
 	if err != nil {
-		dposCtx.RevertToSnapShot(dposSnapshot)
 		return nil, gasRemainDec, err
 	}
-
-	// if successfully record voting, then store deposit
-	stateDB.SetState(caller, dpos.KeyVoteDeposit, common.BigToHash(value))
-
-	// check last vote time and calculate the real vote weight ratio
-	realVoteWeightRatio := float64(1)
-	now := uint64(time.Now().Unix())
-	lastVoteTimeHash := stateDB.GetState(caller, dpos.KeyLastVoteTime)
-	if lastVoteTimeHash != (common.Hash{}) {
-		lastVoteTime := binary.BigEndian.Uint64(lastVoteTimeHash.Bytes())
-
-		// how many epochs has passed from lastVoteTime to now
-		epochPassed := dpos.CalculateEpochID(int64(now) - dpos.CalculateEpochID(int64(lastVoteTime)))
-
-		// the real vote weight ratio
-		for i := int64(0); i < epochPassed; i++ {
-			realVoteWeightRatio *= dpos.AttenuationRatioPerEpoch
-		}
-
-		if realVoteWeightRatio < dpos.MinVoteWeightRatio {
-			realVoteWeightRatio = dpos.MinVoteWeightRatio
-		}
-	}
-
-	// record the real vote weight ratio
-	realVoteWeightRatioBytes := Float64ToBytes(realVoteWeightRatio)
-	stateDB.SetState(caller, dpos.KeyRealVoteWeightRatio, common.BytesToHash(realVoteWeightRatioBytes))
-
-	// record the new vote time
-	nowBytes := Uint64ToBytes(now)
-	stateDB.SetState(caller, dpos.KeyLastVoteTime, common.BytesToHash(nowBytes))
-
 	// defines that dposCtx.Vote and SetState all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gasRemainDec, params.SstoreSetGas*4)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gasRemainDec, ErrOutOfGas
 	}
-
-	log.Info("Vote tx execution done", "vote_count", successCount)
+	log.Trace("Vote tx execution done", "vote_count", successVote)
 	return nil, gasRemain, nil
 }
 
 // CancelVoteTx handles a cancel vote tx that will remove all vote records
 func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, gas uint64) ([]byte, uint64, error) {
-	log.Info("Enter cancel vote tx executing ... ")
+	log.Trace("Enter cancel vote tx executing ... ")
 	// remove all vote record from dpos context
-	dposSnapshot := dposCtx.Snapshot()
-	err := dposCtx.CancelVote(caller)
-	if err != nil {
-		dposCtx.RevertToSnapShot(dposSnapshot)
+
+	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64()); err != nil {
 		return nil, gas, err
 	}
-
-	// if successfully above, then mark the caller that will be thawed in next next epoch
-	stateDB := evm.StateDB.(*state.StateDB)
-	currentEpochID := dpos.CalculateEpochID(evm.Time.Int64())
-	dpos.MarkThawingAddress(stateDB, caller, currentEpochID, dpos.PrefixVoteThawing)
-
-	// defines that dposCtx.CancelVote and MarkThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
-		dposSnapshot.RevertToSnapShot(dposSnapshot)
 		return nil, gas, ErrOutOfGas
 	}
 
-	log.Info("Cancel vote tx execution done")
+	log.Trace("Cancel vote tx execution done")
 	return nil, gasRemain, nil
-}
-
-func Float64ToBytes(f float64) []byte {
-	bits := math.Float64bits(f)
-	bytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(bytes, bits)
-	return bytes
 }

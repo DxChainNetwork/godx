@@ -79,27 +79,27 @@ func TestEVM_CandidateTx(t *testing.T) {
 			wantErr:         nil,
 			wantGas:         40000,
 			wantDeposit:     new(big.Int).SetUint64(10000),
-			wantRewardRatio: common.BytesToHash([]byte("0x50")),
+			wantRewardRatio: common.HexToHash("0000000000000032"),
 			wantCandidate:   pas[0].Address,
-			data:            []byte("0x50"),
+			data:            common.Hex2Bytes("0000000000000032"),
 			gas:             100000,
 			value:           new(big.Int).SetUint64(10000),
 		},
 		{
 			from:            pas[0].Address,
-			wantErr:         ErrAlreadyCandidate,
+			wantErr:         dpos.ErrAlreadyCandidate,
 			wantGas:         100000,
 			wantDeposit:     new(big.Int).SetUint64(10000),
-			wantRewardRatio: common.BytesToHash([]byte("0x50")),
+			wantRewardRatio: common.HexToHash("0000000000000032"),
 			wantCandidate:   pas[0].Address,
-			data:            []byte("0x99"),
+			data:            common.Hex2Bytes("0000000000000032"),
 			gas:             100000,
 			value:           new(big.Int).SetUint64(20000),
 		},
 	}
 	for _, test := range tests {
 		_, gas, err := evm.CandidateTx(test.from, test.data, test.gas, test.value, dposContext)
-		if err != test.wantErr {
+		if (err == nil) != (test.wantErr == nil) || (err != nil && err.Error() != test.wantErr.Error()) {
 			t.Errorf("wanted error: %v, got: %v", test.wantErr, err)
 		} else if gas != test.wantGas {
 			t.Errorf("wanted gas: %d,got: %d", test.wantGas, gas)
@@ -196,7 +196,7 @@ func TestEVM_VoteTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create evm and state,err: %v", err)
 	}
-
+	evm.Time = common.NewBigInt(time.Now().Unix()).BigIntPtr()
 	db := evm.StateDB.Database().TrieDB().DiskDB().(ethdb.Database)
 	dposContext, err := types.NewDposContext(db)
 	if err != nil {

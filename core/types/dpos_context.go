@@ -5,6 +5,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -33,6 +34,7 @@ var (
 	votePrefix      = []byte("vote-")
 	candidatePrefix = []byte("candidate-")
 	minedCntPrefix  = []byte("minedCnt-")
+	keyValidator    = []byte("validator")
 )
 
 func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
@@ -484,8 +486,7 @@ func (dc *DposContext) SetMinedCnt(minedCnt *trie.Trie)   { dc.minedCntTrie = mi
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
-	key := []byte("validator")
-	validatorsRLP := dc.epochTrie.Get(key)
+	validatorsRLP := dc.epochTrie.Get(keyValidator)
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
@@ -495,13 +496,12 @@ func (dc *DposContext) GetValidators() ([]common.Address, error) {
 
 // SetValidators update validators into epochTrie
 func (dc *DposContext) SetValidators(validators []common.Address) error {
-	key := []byte("validator")
 	validatorsRLP, err := rlp.EncodeToBytes(validators)
 	if err != nil {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
 	}
 
-	dc.epochTrie.Update(key, validatorsRLP)
+	dc.epochTrie.Update(keyValidator, validatorsRLP)
 	return nil
 }
 
@@ -516,4 +516,21 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 	}
 
 	return result, nil
+}
+
+// GetMinedCnt get mined block count in the minedCntTrie
+func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
+	key := makeMinedCntKey(epoch, addr)
+	cntBytes := dc.minedCntTrie.Get(key)
+	cnt := int64(binary.BigEndian.Uint64(cntBytes))
+	return cnt
+}
+
+// makeMinedCntKey is the private function to make the key for the specified addr and
+// epoch
+func makeMinedCntKey(epoch int64, validatorAddr common.Address) []byte {
+	key := make([]byte, 8)
+	binary.BigEndian.PutUint64(key, uint64(epoch))
+	key = append(key, validatorAddr.Bytes()...)
+	return key
 }

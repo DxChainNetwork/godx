@@ -393,7 +393,7 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 
 		return nil
 
-	// check CancelCandidate tx
+	// check ProcessCancelCandidate tx
 	case common.BytesToAddress([]byte{14}):
 		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
 		if depositHash == emptyHash {
