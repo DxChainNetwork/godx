@@ -8,14 +8,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
-	"math/big"
 	"math/rand"
 	"sort"
-	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -26,202 +22,17 @@ const (
 
 	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
 	ThawingEpochDuration = 2
+
+	// eigibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
+	// produces block less than expected by this denominator, it is considered as ineligible.
+	eigibleValidatorDenominator = 2
 )
 
 // EpochContext define current epoch context for dpos consensus
 type EpochContext struct {
 	TimeStamp   int64
 	DposContext *types.DposContext
-	stateDB     *state.StateDB
-}
-
-// countVotes will calculate the number of votes at the beginning of current epoch
-func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err error) {
-	// get the needed variables
-	votes = map[common.Address]*big.Int{}
-	delegateTrie := ec.DposContext.DelegateTrie()
-	candidateTrie := ec.DposContext.CandidateTrie()
-	statedb := ec.stateDB
-
-	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
-	var hasCandidate bool
-
-	// loop through all candidates and calculate total votes for each of them
-	for iterCandidate.Next() {
-		// get and initialize all variables
-		hasCandidate = true
-		candidateAddrBytes := iterCandidate.Value
-		candidateAddr := common.BytesToAddress(candidateAddrBytes)
-
-		// sanity check
-		if _, ok := votes[candidateAddr]; ok {
-			return nil, fmt.Errorf("countVotes failed, get same candidates from the candidate trie: %v", candidateAddr)
-		}
-
-		// get the candidateDepositVotes
-		candidateVotes := candidateDepositVotes(candidateAddr, statedb)
-		delegatorVotes := delegatorDepositVotes(candidateAddrBytes, statedb, delegateTrie)
-
-		// get the total votes, and
-		totalVotes := new(big.Int).Add(candidateVotes, delegatorVotes)
-		votes[candidateAddr] = totalVotes
-		ec.stateDB.SetState(candidateAddr, KeyTotalVoteWeight, common.BigToHash(votes[candidateAddr]))
-	}
-
-	// if there are no candidates, return error
-	if !hasCandidate {
-		return votes, fmt.Errorf("countVotes failed, no candidates available")
-	}
-
-	return votes, nil
-}
-
-func candidateDepositVotes(candidateAddr common.Address, statedb *state.StateDB) *big.Int {
-	// retrieve the candidate deposit votes
-	candidateDepositVotes := new(big.Int).SetInt64(0)
-	candidateDepositHash := statedb.GetState(candidateAddr, KeyCandidateDeposit)
-	if candidateDepositHash != EmptyHash {
-		candidateDepositVotes = candidateDepositHash.Big()
-	}
-
-	// return the candidateDepositVotes
-	return candidateDepositVotes
-}
-
-func delegatorDepositVotes(candidateAddrBytes []byte, statedb *state.StateDB, delegateTrie *trie.Trie) *big.Int {
-	delegateIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidateAddrBytes))
-	var delegatorVotes = common.Big0
-
-	// loop through each delegator, get all votes
-	for delegateIterator.Next() {
-		delegatorAddr := common.BytesToAddress(delegateIterator.Value)
-		voteDepositHash := statedb.GetState(delegatorAddr, KeyVoteDeposit)
-		if voteDepositHash == EmptyHash {
-			continue
-		}
-		voteDeposit := voteDepositHash.Big()
-
-		// get the realVoteDeposit, after applied voteWeight
-		realVoteDeposit, exists := getAndApplyVoteWeight(voteDeposit, statedb, delegatorAddr)
-		if !exists {
-			continue
-		}
-
-		// add the realVoteDeposit
-		delegatorVotes.Add(delegatorVotes, realVoteDeposit)
-	}
-
-	return delegatorVotes
-}
-
-func getAndApplyVoteWeight(voteDeposit *big.Int, statedb *state.StateDB, delegatorAddr common.Address) (*big.Int, bool) {
-	// get the voteWeight
-	voteWeightHash := statedb.GetState(delegatorAddr, KeyRealVoteWeightRatio)
-	if voteWeightHash == EmptyHash {
-		return nil, false
-	}
-	voteWeight := BytesToFloat64(voteWeightHash.Bytes()[24:])
-
-	// apply vote weight adn return the real vote deposit
-	realVoteDeposit := common.PtrBigInt(voteDeposit).MultFloat64(voteWeight)
-	return realVoteDeposit.BigIntPtr(), true
-}
-
-// kickoutValidators will kick out irresponsible validators of last epoch at the beginning of current epoch
-func (ec *EpochContext) kickoutValidators(epoch int64) error {
-	validators, err := ec.DposContext.GetValidators()
-	if err != nil {
-		return fmt.Errorf("failed to get validator: %s", err)
-	}
-	if len(validators) == 0 {
-		return errors.New("no validator could be kickout")
-	}
-
-	epochDuration := EpochInterval
-	// First epoch duration may lt epoch interval,
-	// while the first block time wouldn't always align with epoch interval,
-	// so calculate the first epoch duration with first block time instead of epoch interval,
-	// prevent the validators were kickout incorrectly.
-	if ec.TimeStamp-timeOfFirstBlock < EpochInterval {
-		epochDuration = ec.TimeStamp - timeOfFirstBlock
-	}
-
-	needKickoutValidators := sortableAddresses{}
-	for _, validator := range validators {
-		key := make([]byte, 8)
-		binary.BigEndian.PutUint64(key, uint64(epoch))
-		key = append(key, validator.Bytes()...)
-		cnt := int64(0)
-		if cntBytes := ec.DposContext.MinedCntTrie().Get(key); cntBytes != nil {
-			cnt = int64(binary.BigEndian.Uint64(cntBytes))
-		}
-		if cnt < epochDuration/BlockInterval/MaxValidatorSize/2 {
-			// not active validators need kickout
-			needKickoutValidators = append(needKickoutValidators, &sortableAddress{validator, big.NewInt(cnt)})
-		}
-	}
-
-	// no validators need kickout
-	needKickoutValidatorCnt := len(needKickoutValidators)
-	if needKickoutValidatorCnt <= 0 {
-		return nil
-	}
-
-	// ascend needKickoutValidators, the prev candidates have smaller mined count,
-	// and they will be remove firstly
-	sort.Sort(needKickoutValidators)
-
-	// count candidates to a safe size as a threshold to remove candidate
-	candidateCount := 0
-	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
-	for iter.Next() {
-		candidateCount++
-		if candidateCount >= needKickoutValidatorCnt+SafeSize {
-			break
-		}
-	}
-
-	for i, validator := range needKickoutValidators {
-		// ensure candidate count greater than or equal to safeSize
-		if candidateCount <= SafeSize {
-			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
-			return nil
-		}
-
-		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
-			return err
-		}
-
-		// if successfully above, then mark the validator that will be thawed in next next epoch
-		currentEpochID := CalculateEpochID(ec.TimeStamp)
-		MarkThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
-
-		// if kickout success, candidateCount minus 1
-		candidateCount--
-		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.weight.String())
-	}
-	return nil
-}
-
-// lookupValidator try to find a validator at the time of now in current epoch
-func (ec *EpochContext) lookupValidator(now int64) (validator common.Address, err error) {
-	validator = common.Address{}
-	offset := now % EpochInterval
-	if offset%BlockInterval != 0 {
-		return common.Address{}, ErrInvalidMinedBlockTime
-	}
-	offset /= BlockInterval
-
-	validators, err := ec.DposContext.GetValidators()
-	if err != nil {
-		return common.Address{}, err
-	}
-	validatorSize := len(validators)
-	if validatorSize == 0 {
-		return common.Address{}, errors.New("failed to lookup validator")
-	}
-	offset %= int64(validatorSize)
-	return validators[offset], nil
+	stateDB     stateDB
 }
 
 // tryElect will process election at the beginning of current epoch
@@ -268,16 +79,16 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 
 		// calculate the vote weight proportion based on the vote weight
-		totalVotes := new(big.Int).SetInt64(0)
+		totalVotes := common.BigInt0
 		voteProportions := sortableVoteProportions{}
 		for _, vote := range candidateVotes {
-			totalVotes.Add(totalVotes, vote)
+			totalVotes = totalVotes.Add(vote)
 		}
 
 		for candidateAddr, vote := range candidateVotes {
 			voteProportion := &sortableVoteProportion{
 				address:    candidateAddr,
-				proportion: float64(vote.Int64()) / float64(totalVotes.Int64()),
+				proportion: vote.Float64() / totalVotes.Float64(),
 			}
 			voteProportions = append(voteProportions, voteProportion)
 		}
@@ -309,88 +120,148 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	return nil
 }
 
-// MarkThawingAddress mark the given addr that will be thawed in next next epoch
-func MarkThawingAddress(stateDB *state.StateDB, addr common.Address, currentEpochID int64, keyPrefix string) {
+// countVotes will calculate the number of votes at the beginning of current epoch
+func (ec *EpochContext) countVotes() (votes map[common.Address]common.BigInt, err error) {
+	// get the needed variables
+	votes = make(map[common.Address]common.BigInt)
+	candidateTrie := ec.DposContext.CandidateTrie()
+	statedb := ec.stateDB
 
-	// create thawing address: "thawing_" + currentEpochID
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		stateDB.CreateAccount(thawingAddress)
+	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	var hasCandidate bool
 
-		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 1)
+	// loop through all candidates and calculate total votes for each of them
+	for iterCandidate.Next() {
+		// get and initialize all variables
+		hasCandidate = true
+		candidateAddr := common.BytesToAddress(iterCandidate.Value)
+		// sanity check
+		if _, ok := votes[candidateAddr]; ok {
+			return nil, fmt.Errorf("countVotes failed, get same candidates from the candidate trie: %v", candidateAddr)
+		}
+		// Calculate the candidate votes
+		totalVotes := ec.calcCandidateTotalVotes(candidateAddr)
+		// write the totalVotes to result and state
+		votes[candidateAddr] = totalVotes
+		setTotalVote(statedb, candidateAddr, totalVotes)
 	}
-
-	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
-	keyAndValue := append([]byte(keyPrefix), addr.Bytes()...)
-	stateDB.SetState(thawingAddress, common.BytesToHash(keyAndValue), common.BytesToHash(keyAndValue))
-}
-
-// ThawingDeposit thawing the deposit for the candidate or delegator cancel in currentEpoch-2
-func ThawingDeposit(stateDB *state.StateDB, currentEpoch int64) {
-	epochIDStr := strconv.FormatInt(currentEpoch-ThawingEpochDuration, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if stateDB.Exist(thawingAddress) {
-
-		// iterator whole thawing account trie, and thawing the deposit of every delegator
-		stateDB.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
-			if value == (common.Hash{}) {
-				return false
-			}
-
-			addr := common.BytesToAddress(value.Bytes()[12:])
-
-			// if candidate deposit thawing flag exists, then thawing it
-			candidateThawingKey := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
-			if common.BytesToHash(candidateThawingKey) == value {
-
-				// set 0 for candidate deposit
-				stateDB.SetState(addr, KeyCandidateDeposit, common.Hash{})
-			}
-
-			// if vote deposit thawing flag exists, then thawing it
-			voteThawingKey := append([]byte(PrefixVoteThawing), addr.Bytes()...)
-			if common.BytesToHash(voteThawingKey) == value {
-
-				// set 0 for vote deposit
-				stateDB.SetState(addr, KeyVoteDeposit, common.Hash{})
-			}
-
-			// candidate or vote deposit does not allow to submit repeatedly, so thawing directly set 0
-			stateDB.SetState(thawingAddress, key, common.Hash{})
-			return true
-		})
-
-		// mark the thawingAddress as empty account, that will be deleted by stateDB
-		stateDB.SetNonce(thawingAddress, 0)
+	// if there are no candidates, return error
+	if !hasCandidate {
+		return votes, fmt.Errorf("countVotes failed, no candidates available")
 	}
+	return votes, nil
 }
 
-type sortableAddress struct {
-	address common.Address
-	weight  *big.Int
-}
-
-// ascending, from small to big
-type sortableAddresses []*sortableAddress
-
-func (p sortableAddresses) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p sortableAddresses) Len() int      { return len(p) }
-func (p sortableAddresses) Less(i, j int) bool {
-	if p[i].weight.Cmp(p[j].weight) < 0 {
-		return false
-	} else if p[i].weight.Cmp(p[j].weight) > 0 {
-		return true
-	} else {
-		return p[i].address.String() < p[j].address.String()
+// kickoutValidators will kick out irresponsible validators of last epoch at the beginning of current epoch
+func (ec *EpochContext) kickoutValidators(epoch int64) error {
+	needKickoutValidators, err := getIneligibleValidators(ec.DposContext, epoch, ec.TimeStamp)
+	if err != nil {
+		return err
 	}
+	// no validators need kicked out
+	needKickoutValidatorCnt := len(needKickoutValidators)
+	if needKickoutValidatorCnt <= 0 {
+		return nil
+	}
+	// ascend needKickoutValidators, the prev candidates have smaller mined count,
+	// and they will be remove firstly
+	sort.Sort(needKickoutValidators)
+	// count candidates to a safe size as a threshold to remove candidate
+	candidateCount := 0
+	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
+	for iter.Next() {
+		candidateCount++
+		if candidateCount >= needKickoutValidatorCnt+SafeSize {
+			break
+		}
+	}
+	// Loop over the first part of the needKickOutValidators to kick out
+	for i, validator := range needKickoutValidators {
+		// ensure candidate count greater than or equal to safeSize
+		if candidateCount <= SafeSize {
+			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
+			return nil
+		}
+		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
+			return err
+		}
+		// if successfully above, then mark the validator that will be thawed in next next epoch
+		currentEpochID := CalculateEpochID(ec.TimeStamp)
+		MarkThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
+		// if kickout success, candidateCount minus 1
+		candidateCount--
+		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.cnt)
+	}
+	return nil
 }
 
-// BytesToFloat64 converts []byte to float64
-func BytesToFloat64(bytes []byte) float64 {
-	bits := binary.BigEndian.Uint64(bytes)
-	return math.Float64frombits(bits)
+// getIneligibleValidators return the ineligible validators in a certain epoch. An ineligible validator is
+// defined as a validator who produced blocks less than half as expected
+func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64) (addressesByCnt, error) {
+	validators, err := ctx.GetValidators()
+	if err != nil {
+		return addressesByCnt{}, fmt.Errorf("failed to get validator: %s", err)
+	}
+	if len(validators) == 0 {
+		return addressesByCnt{}, errors.New("no validators")
+	}
+	expectedBlockPerValidator := expectedBlocksPerValidatorInEpoch(timeOfFirstBlock, curTime)
+	var ineligibleValidators addressesByCnt
+	for _, validator := range validators {
+		cnt := ctx.GetMinedCnt(epoch, validator)
+		if !isEligibleValidator(cnt, expectedBlockPerValidator) {
+			ineligibleValidators = append(ineligibleValidators, &addressByCnt{validator, cnt})
+		}
+	}
+	return ineligibleValidators, nil
+}
+
+// isEligibleValidator check whether the validator is still ok to be an eligible validator in
+// the next epoch. The criteria is that the validator produces more than half of the expected
+// blocks being mined in the epoch
+func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
+	// Get the addr's mined block
+	return gotBlockProduced >= expectedBlockProduced/eigibleValidatorDenominator
+}
+
+// lookupValidator returns the validator responsible for producing the block in the curTime.
+// If not a valid timestamp, an error is returned
+func (ec *EpochContext) lookupValidator(blockTime int64) (validator common.Address, err error) {
+	validator = common.Address{}
+	slot, err := calcBlockSlot(blockTime)
+	if err != nil {
+		return common.Address{}, err
+	}
+	// Get validators and the expected validator
+	validators, err := ec.DposContext.GetValidators()
+	if err != nil {
+		return common.Address{}, err
+	}
+	validatorSize := len(validators)
+	if validatorSize == 0 {
+		return common.Address{}, errors.New("failed to lookup validator")
+	}
+	index := slot % int64(validatorSize)
+	return validators[index], nil
+}
+
+type (
+	// addressesByMinedCnt is a sortable address list of address with a count by ascending order
+	addressesByCnt []*addressByCnt
+
+	addressByCnt struct {
+		address common.Address
+		cnt     int64
+	}
+)
+
+func (a addressesByCnt) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a addressesByCnt) Len() int      { return len(a) }
+func (a addressesByCnt) Less(i, j int) bool {
+	if a[i].cnt != a[j].cnt {
+		return a[i].cnt < a[j].cnt
+	}
+	return a[i].address.String() < a[j].address.String()
 }
 
 // LuckyTurntable elects some validators with random seed
@@ -429,13 +300,13 @@ func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []commo
 				}
 
 				// calculate the vote weight proportion of the left candidate
-				totoalPros := float64(0)
+				totalPros := float64(0)
 				for _, pro := range voteProportions {
-					totoalPros += pro.proportion
+					totalPros += pro.proportion
 				}
 
 				for _, pro := range voteProportions {
-					pro.proportion = pro.proportion / totoalPros
+					pro.proportion = pro.proportion / totalPros
 				}
 
 				// sort by asc
@@ -452,7 +323,7 @@ type sortableVoteProportion struct {
 	proportion float64
 }
 
-// descending, from big to small
+// Ascending, from small to big
 type sortableVoteProportions []*sortableVoteProportion
 
 func (p sortableVoteProportions) Swap(i, j int) { p[i], p[j] = p[j], p[i] }

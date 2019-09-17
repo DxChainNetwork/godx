@@ -46,12 +46,6 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	// BlockInterval indicates that a block will be produced every 10 seconds
-	BlockInterval = int64(10)
-
-	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(86400)
-
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
 	MaxValidatorSize = 4
 
@@ -60,28 +54,12 @@ const (
 
 	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
 	ConsensusSize = MaxValidatorSize*2/3 + 1
+
+	// RewardRatioDenominator is the max value of reward ratio
+	RewardRatioDenominator uint64 = 100
 )
 
 var (
-
-	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
-	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
-
-	// KeyVoteDeposit is the key of vote deposit
-	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
-
-	// KeyRealVoteWeightRatio is the weight ratio of vote
-	KeyRealVoteWeightRatio = common.BytesToHash([]byte("real-vote-weight-ratio"))
-
-	// KeyCandidateDeposit is the key of candidate deposit
-	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
-
-	// KeyLastVoteTime is the key of last vote time
-	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
-
-	// KeyTotalVoteWeight is the key of total vote weight for every candidate
-	KeyTotalVoteWeight = common.BytesToHash([]byte("total-vote-weight"))
-
 	// MinVoteWeightRatio is the minimum vote weight ration
 	MinVoteWeightRatio = 0.5
 
@@ -100,14 +78,9 @@ var (
 	// EmptyHash is the empty hash for judgement of empty value
 	EmptyHash = common.Hash{}
 
-	// RewardRatioDenominator is the max value of reward ratio
-	RewardRatioDenominator uint64 = 100
-
-	frontierBlockReward       = big.NewInt(5e+18) // Block reward in camel for successfully mining a block
-	byzantiumBlockReward      = big.NewInt(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
-	constantinopleBlockReward = big.NewInt(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
-
-	timeOfFirstBlock = int64(0)
+	frontierBlockReward       = common.NewBigIntUint64(5e+18) // Block reward in camel for successfully mining a block
+	byzantiumBlockReward      = common.NewBigIntUint64(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
+	constantinopleBlockReward = common.NewBigIntUint64(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
 
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
@@ -135,8 +108,8 @@ var (
 	ErrMinedFutureBlock           = errors.New("mined the future block")
 	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
 	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-	ErrInvalidMinedBlockTime      = errors.New("invalid time to mined the block")
-	ErrNilBlockHeader             = errors.New("nil block header returned")
+
+	ErrNilBlockHeader = errors.New("nil block header returned")
 )
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -244,7 +217,7 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, p
 		return errUnknownBlock
 	}
 	number := header.Number.Uint64()
-	// Unnecssary to verify the block from feature
+	// Unnecessary to verify the block from feature
 	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
 		return consensus.ErrFutureBlock
 	}
@@ -464,18 +437,16 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// retrieve the total vote weight of header's validator
-	voteCount := common.PtrBigInt(state.GetState(header.Validator, KeyTotalVoteWeight).Big())
+	voteCount := getTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
-		state.AddBalance(header.Coinbase, blockReward)
+		state.AddBalance(header.Coinbase, blockReward.BigIntPtr())
 		return
 	}
 
 	// get ratio of reward between validator and its delegators
-	h := state.GetState(header.Validator, KeyRewardRatioNumerator)
-	rewardRatioNumerator := hashToRewardRatioNumerator(h)
-	rewardDenominator := common.NewBigIntUint64(RewardRatioDenominator)
-	delegatorReward := common.NewBigInt(blockReward.Int64()).Mult(rewardRatioNumerator).Div(rewardDenominator)
-	assignedReward := new(big.Int).SetInt64(0)
+	rewardRatioNumerator := getCandidateRewardRatioNumerator(state, header.Validator)
+	delegatorReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
+	assignedReward := common.BigInt0
 
 	delegateTrie := dposContext.DelegateTrie()
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
@@ -483,28 +454,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 
 		// get the votes of delegator to vote for delegate
-		vb := state.GetState(delegator, KeyVoteDeposit)
-		vote := common.NewBigInt(vb.Big().Int64())
-
-		// retrieve the real vote weight ratio,and calculate the real vote weight of delegator
-		realVoteWeight := float64(0)
-		realVoteWeightRatioHash := state.GetState(delegator, KeyRealVoteWeightRatio)
-		if realVoteWeightRatioHash != EmptyHash {
-			// float64 only has 8 bytes, so just need the last 8 bytes of common.Hash
-			realVoteWeightRatio := BytesToFloat64(realVoteWeightRatioHash.Bytes()[24:])
-			realVoteWeight = float64(vote.BigIntPtr().Int64()) * realVoteWeightRatio
-		}
+		realVoteWeight := getVoteWithWeight(state, delegator)
 
 		// calculate reward of each delegator due to it's vote(stake) percent
-		percentReward := common.NewBigIntFloat64(realVoteWeight).Mult(delegatorReward).Div(voteCount).BigIntPtr()
-
-		state.AddBalance(delegator, percentReward)
-		assignedReward.Add(assignedReward, percentReward)
+		percentReward := realVoteWeight.Mult(delegatorReward).Div(voteCount)
+		state.AddBalance(delegator, percentReward.BigIntPtr())
+		assignedReward = assignedReward.Add(percentReward)
 	}
 
 	// accumulate the rest rewards for the validator
-	validatorReward := new(big.Int).Sub(blockReward, assignedReward)
-	state.AddBalance(header.Coinbase, validatorReward)
+	validatorReward := blockReward.Sub(assignedReward)
+	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())
 }
 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
@@ -695,6 +655,7 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMinedCnt update counts in minedCntTrie for the miner of newBlock
+// TODO: fix this
 func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMinedCntTrie := dposContext.MinedCntTrie()
 	currentEpoch := CalculateEpochID(parentBlockTime)
@@ -723,14 +684,4 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
 	return dposContext.MinedCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
-}
-
-// hashToRewardRatioNumerator return the customized block reward ratio numerator
-func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
-	v := h.Bytes()
-	return common.NewBigIntUint64(uint64(v[len(v)-1]))
-}
-
-func CalculateEpochID(blockTime int64) int64 {
-	return blockTime / EpochInterval
 }

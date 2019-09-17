@@ -28,6 +28,4 @@ var (
 	ErrContractAddressCollision = errors.New("contract address collision")
 	ErrNoCompatibleInterpreter  = errors.New("no compatible interpreter")
 	ErrFrozenAssetsCannotBeUsed = errors.New("frozen assets cannot be used")
-	ErrAlreadyCandidate         = errors.New("already become candidate")
-	ErrAlreadyVote              = errors.New("already vote some candidates")
 )
