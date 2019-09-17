@@ -435,33 +435,28 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsConstantinople(header.Number) {
 		blockReward = constantinopleBlockReward
 	}
-
 	// retrieve the total vote weight of header's validator
 	voteCount := getTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward.BigIntPtr())
 		return
 	}
-
-	// get ratio of reward between validator and its delegators
+	// get ratio of reward between validator and its delegator
 	rewardRatioNumerator := getCandidateRewardRatioNumerator(state, header.Validator)
-	delegatorReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
+	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
-
+	// Loop over the delegators to add delegator rewards
 	delegateTrie := dposContext.DelegateTrie()
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
 	for delegatorIterator.Next() {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
-
 		// get the votes of delegator to vote for delegate
-		realVoteWeight := getVoteWithWeight(state, delegator)
-
+		delegatorVote := getVoteLastEpoch(state, delegator)
 		// calculate reward of each delegator due to it's vote(stake) percent
-		percentReward := realVoteWeight.Mult(delegatorReward).Div(voteCount)
-		state.AddBalance(delegator, percentReward.BigIntPtr())
-		assignedReward = assignedReward.Add(percentReward)
+		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
+		state.AddBalance(delegator, delegatorReward.BigIntPtr())
+		assignedReward = assignedReward.Add(delegatorReward)
 	}
-
 	// accumulate the rest rewards for the validator
 	validatorReward := blockReward.Sub(assignedReward)
 	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())

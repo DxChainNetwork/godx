@@ -69,17 +69,28 @@ func (ec *EpochContext) calcCandidateTotalVotes(candidateAddr common.Address) co
 func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr common.Address) common.BigInt {
 	dt := ec.DposContext.DelegateTrie()
 	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
-
 	// loop through each delegator, get all votes
 	delegatorVotes := common.BigInt0
 	for delegateIterator.Next() {
 		delegatorAddr := common.BytesToAddress(delegateIterator.Value)
 		// Get the weighted vote
-		weightedVote := getVoteWithWeight(state, delegatorAddr)
+		vote := getVoteDeposit(state, delegatorAddr)
 		// add the weightedVote
-		delegatorVotes = delegatorVotes.Add(weightedVote)
+		delegatorVotes = delegatorVotes.Add(vote)
 	}
 	return delegatorVotes
+}
+
+// getAllDelegatorForCandidate get all delegator who votes for the candidate
+func getAllDelegatorForCandidate(state stateDB, ctx *types.DposContext, candidateAddr common.Address) []common.Address {
+	dt := ctx.DelegateTrie()
+	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
+	var addresses []common.Address
+	for delegateIterator.Next() {
+		delegatorAddr := common.BytesToAddress(delegateIterator.Value)
+		addresses = append(addresses, delegatorAddr)
+	}
+	return addresses
 }
 
 // checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidate.

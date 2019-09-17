@@ -5,8 +5,6 @@
 package dpos
 
 import (
-	"math"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 )
@@ -42,10 +40,6 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	}
 	// Update vote deposit
 	setVoteDeposit(state, addr, deposit)
-	setLastVoteTime(state, addr, time)
-	// Calculate and apply the vote weight
-	weight := calcVoteWeightForDelegator(state, addr, time)
-	setVoteWeight(state, addr, weight)
 
 	return successVote, nil
 }
@@ -60,41 +54,4 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	setVoteDeposit(state, addr, common.BigInt0)
 	return nil
-}
-
-// calcVoteWeightForDelegator calculate the vote weight by address
-func calcVoteWeightForDelegator(state stateDB, delegatorAddr common.Address, curTime int64) float64 {
-	timeLastVote := getLastVoteTime(state, delegatorAddr)
-	return calcVoteWeight(timeLastVote, curTime)
-}
-
-// calcVoteWeight calculate the the vote weight. The vote weight decays at a rate of AttenuationRatioPerEpoch
-// per epoch
-func calcVoteWeight(timeLastVote, curTime int64) float64 {
-	lastVoteEpoch := CalculateEpochID(timeLastVote)
-	currentEpoch := CalculateEpochID(curTime)
-	// Calculate the decay
-	epochPassed := currentEpoch - lastVoteEpoch
-	if epochPassed <= 0 {
-		return 1
-	}
-	weight := math.Pow(AttenuationRatioPerEpoch, float64(epochPassed))
-	if weight < MinVoteWeightRatio {
-		weight = MinVoteWeightRatio
-	}
-	return weight
-}
-
-// getVoteWithWeight get the vote after applying the voteWeight for a delegator addr
-func getVoteWithWeight(state stateDB, delegatorAddr common.Address) common.BigInt {
-	// get the vote deposit
-	voteDeposit := getVoteDeposit(state, delegatorAddr)
-	// get the voteWeight
-	voteWeight := getVoteWeight(state, delegatorAddr)
-	if voteWeight == 0 {
-		return common.BigInt0
-	}
-	// apply vote weight and return the actual vote deposit
-	weightedVote := voteDeposit.MultFloat64(voteWeight)
-	return weightedVote
 }

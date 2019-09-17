@@ -50,7 +50,7 @@ func calcBlockEpochIDAndSlot(blockTime int64) (epoch, slot int64, err error) {
 	return
 }
 
-// calcBlockSlot calculate the epoch ID and slot ID for the block time stamp.
+// calcBlockSlot calculate slot ID for the block time stamp.
 // If not a valid slot, ErrInvalidMinedBlockTime will be returned.
 func calcBlockSlot(blockTime int64) (int64, error) {
 	offset := blockTime % EpochInterval

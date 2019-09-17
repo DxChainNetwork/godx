@@ -45,6 +45,9 @@ var (
 
 	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
 	PrefixThawingAssets = []byte("thawing-assets")
+
+	// KeyVoteLastEpoch is the vote deposit in the last epoch
+	KeyVoteLastEpoch = common.BytesToHash([]byte("vote-last-epoch"))
 )
 
 // getCandidateDeposit get the candidate deposit of the addr from the state
@@ -59,13 +62,6 @@ func setCandidateDeposit(state stateDB, addr common.Address, deposit common.BigI
 	state.SetState(addr, KeyCandidateDeposit, hash)
 }
 
-// addCandidateDepsoit add the candidate deposit of diff value for the addr in state
-func addCandidateDepsoit(state stateDB, addr common.Address, diff common.BigInt) {
-	prevDeposit := getCandidateDeposit(state, addr)
-	newDeposit := prevDeposit.Add(diff)
-	setCandidateDeposit(state, addr, newDeposit)
-}
-
 // getCandidateDeposit get the vote deposit of the addr from the state
 func getVoteDeposit(state stateDB, addr common.Address) common.BigInt {
 	depositHash := state.GetState(addr, KeyVoteDeposit)
@@ -76,13 +72,6 @@ func getVoteDeposit(state stateDB, addr common.Address) common.BigInt {
 func setVoteDeposit(state stateDB, addr common.Address, deposit common.BigInt) {
 	hash := common.BigToHash(deposit.BigIntPtr())
 	state.SetState(addr, KeyVoteDeposit, hash)
-}
-
-// addVoteDeposit add the vote deposit of diff value for the addr in state
-func addVoteDeposit(state stateDB, addr common.Address, diff common.BigInt) {
-	prevDeposit := getVoteDeposit(state, addr)
-	newDeposit := prevDeposit.Add(diff)
-	setVoteDeposit(state, addr, newDeposit)
 }
 
 // getCandidateRewardRatioNumerator get the reward ratio for a candidate for the addr in state.
@@ -97,31 +86,6 @@ func getCandidateRewardRatioNumerator(state stateDB, addr common.Address) uint64
 func setCandidateRewardRatioNumerator(state stateDB, addr common.Address, value uint64) {
 	hash := uint64ToHash(value)
 	state.SetState(addr, KeyRewardRatioNumerator, hash)
-}
-
-// getLastVoteTime return the last vote time for the address in the stateDB
-func getLastVoteTime(state stateDB, addr common.Address) int64 {
-	timeHash := state.GetState(addr, KeyLastVoteTime)
-	return int64(hashToUint64(timeHash))
-}
-
-// setLastVoteTime set the last vote time for the address to the specified value time in the
-// stateDB
-func setLastVoteTime(state stateDB, addr common.Address, time int64) {
-	timeHash := uint64ToHash(uint64(time))
-	state.SetState(addr, KeyLastVoteTime, timeHash)
-}
-
-// getVoteWeight get the vote weight for the address in the stateDB
-func getVoteWeight(state stateDB, addr common.Address) float64 {
-	ratioHash := state.GetState(addr, KeyVoteWeight)
-	return hashToFloat64(ratioHash)
-}
-
-// setVoteWeight set the vote weight to the value of the addr in stateDB
-func setVoteWeight(state stateDB, addr common.Address, value float64) {
-	ratioHash := float64ToHash(value)
-	state.SetState(addr, KeyVoteWeight, ratioHash)
 }
 
 // getTotalVote get the total vote for the candidate address
@@ -153,7 +117,6 @@ func addFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) {
 	prev := getFrozenAssets(state, addr)
 	newValue := prev.Add(diff)
 	setFrozenAssets(state, addr, newValue)
-	return nil
 }
 
 // subFrozenAssets sub the diff from the frozen assets of the address
@@ -181,7 +144,7 @@ func setThawingAssets(state stateDB, addr common.Address, epoch int64, value com
 	state.SetState(addr, key, hash)
 }
 
-// addThawingAssets add the thawing assets of diffin the epoch field for the addr in state
+// addThawingAssets add the thawing assets of diff in the epoch field for the addr in state
 func addThawingAssets(state stateDB, addr common.Address, epoch int64, diff common.BigInt) {
 	prev := getThawingAssets(state, addr, epoch)
 	newValue := prev.Add(diff)
@@ -199,6 +162,18 @@ func makeThawingAssetsKey(epoch int64) common.Hash {
 	epochByte := make([]byte, 8)
 	binary.BigEndian.PutUint64(epochByte, uint64(epoch))
 	return common.BytesToHash(append(PrefixThawingAssets, epochByte...))
+}
+
+// getVoteLastEpoch get the vote deposit in the last epoch
+func getVoteLastEpoch(state stateDB, addr common.Address) common.BigInt {
+	h := state.GetState(addr, KeyVoteLastEpoch)
+	return common.PtrBigInt(h.Big())
+}
+
+// setVoteLastEpoch set the vote epoch in the last epoch
+func setVoteLastEpoch(state stateDB, addr common.Address, value common.BigInt) {
+	h := common.BigToHash(value.BigIntPtr())
+	state.SetState(addr, KeyVoteLastEpoch, h)
 }
 
 // removeAddressInState remove the address from the state. Note currently only set nonce to 0.

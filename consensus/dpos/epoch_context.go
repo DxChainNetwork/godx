@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -47,7 +46,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	}
 
 	// thawing some deposit for currentEpoch-2
-	thawAllFrozenAssetsInEpoch(ec.stateDB, currentEpoch)
+	if err := thawAllFrozenAssetsInEpoch(ec.stateDB, currentEpoch); err != nil {
+		return fmt.Errorf("system not consistent: %v", err)
+	}
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
@@ -66,54 +67,35 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 				return err
 			}
 		}
-
-		// calculate the actual result of the vote based on the attenuation
+		// calculate the actual validators of the vote based on the attenuation
 		candidateVotes, err := ec.countVotes()
 		if err != nil {
 			return err
 		}
-
 		// check if number of candidates is smaller than safe size
 		if len(candidateVotes) < SafeSize {
 			return errors.New("too few candidates")
 		}
-
-		// calculate the vote weight proportion based on the vote weight
-		totalVotes := common.BigInt0
-		voteProportions := sortableVoteProportions{}
-		for _, vote := range candidateVotes {
-			totalVotes = totalVotes.Add(vote)
-		}
-
-		for candidateAddr, vote := range candidateVotes {
-			voteProportion := &sortableVoteProportion{
-				address:    candidateAddr,
-				proportion: vote.Float64() / totalVotes.Float64(),
-			}
-			voteProportions = append(voteProportions, voteProportion)
-		}
-
-		// sort by asc
-		sort.Sort(voteProportions)
-
-		// make random seed
+		// Create the seed and pseudo-randomly select the validators
 		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i
-		r := rand.New(rand.NewSource(seed))
-
-		// Lucky Turntable election
-		result := LuckyTurntable(voteProportions, seed)
-
-		// shuffle candidates
-		for i := len(result) - 1; i > 0; i-- {
-			j := int(r.Int31n(int32(i + 1)))
-			result[i], result[j] = result[j], result[i]
+		validators, err := selectValidator(candidateVotes, seed)
+		if err != nil {
+			return err
 		}
 
 		epochTrie, _ := types.NewEpochTrie(common.Hash{}, ec.DposContext.DB())
 		ec.DposContext.SetEpoch(epochTrie)
-		err = ec.DposContext.SetValidators(result)
+		err = ec.DposContext.SetValidators(validators)
 		if err != nil {
 			return err
+		}
+
+		// Set vote last epoch for all delegators who select the validators.
+		allDelegators := allDelegatorForValidators(ec.stateDB, ec.DposContext, validators)
+		for delegator := range allDelegators {
+			// get the vote deposit and set it in vote last epoch
+			vote := getVoteDeposit(ec.stateDB, delegator)
+			setVoteLastEpoch(ec.stateDB, delegator, vote)
 		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
@@ -187,7 +169,8 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
-		markThawingAddress(ec.stateDB, validator.address, currentEpochID, PrefixCandidateThawing)
+		deposit := getCandidateDeposit(ec.stateDB, validator.address)
+		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.cnt)
@@ -222,6 +205,37 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 	// Get the addr's mined block
 	return gotBlockProduced >= expectedBlockProduced/eigibleValidatorDenominator
+}
+
+func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64) ([]common.Address, error) {
+	// convert the candidateVotes to randomSelectorEntry
+	var entries randomSelectorEntries
+	for candidate, vote := range candidateVotes {
+		entries = append(entries, &randomSelectorEntry{candidate, vote})
+	}
+	// random select the addresses
+	selector, err := newRandomAddressSelector(typeLuckyWheel, entries, seed, MaxValidatorSize)
+	var validators []common.Address
+	if err == errNotEnoughEntries {
+		validators = entries.listAddresses()
+	} else if err == nil {
+		validators = selector.RandomSelect()
+	} else {
+		return []common.Address{}, fmt.Errorf("random select error: %v", err)
+	}
+	return validators, nil
+}
+
+// allDelegatorForValidators returns a map containing all delegator who vote for the validators
+func allDelegatorForValidators(state stateDB, ctx *types.DposContext, validators []common.Address) map[common.Address]struct{} {
+	res := make(map[common.Address]struct{})
+	for _, validator := range validators {
+		delegators := getAllDelegatorForCandidate(state, ctx, validator)
+		for _, delegator := range delegators {
+			res[delegator] = struct{}{}
+		}
+	}
+	return res
 }
 
 // lookupValidator returns the validator responsible for producing the block in the curTime.
@@ -262,86 +276,4 @@ func (a addressesByCnt) Less(i, j int) bool {
 		return a[i].cnt < a[j].cnt
 	}
 	return a[i].address.String() < a[j].address.String()
-}
-
-// LuckyTurntable elects some validators with random seed
-func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []common.Address {
-
-	// if total candidates less than maxValidatorSize, directly return all
-	if len(voteProportions) <= MaxValidatorSize {
-		return voteProportions.ListAddresses()
-	}
-
-	// if total candidates more than maxValidatorSize, election from them
-	result := make([]common.Address, 0)
-	r := rand.New(rand.NewSource(seed))
-	for j := 0; j < MaxValidatorSize; j++ {
-		selection := r.Float64()
-		sumProp := float64(0)
-		for i := range voteProportions {
-			sumProp += voteProportions[i].proportion
-			if selection <= sumProp {
-
-				// Lucky one
-				result = append(result, voteProportions[i].address)
-
-				// NOTE: It's indeed that we should remove the elected one, because maybe there are some same vote proportion.
-				// When removed one of the same vote proportion, the left can be elected with greater probability.
-				// remove the elected one from current candidate list
-				preVoteProportions := voteProportions[:i]
-				sufVoteProportions := sortableVoteProportions{}
-				if i != len(voteProportions)-1 {
-					sufVoteProportions = voteProportions[(i + 1):]
-				}
-				voteProportions = sortableVoteProportions{}
-				voteProportions = append(voteProportions, preVoteProportions[:]...)
-				if len(sufVoteProportions) > 0 {
-					voteProportions = append(voteProportions, sufVoteProportions[:]...)
-				}
-
-				// calculate the vote weight proportion of the left candidate
-				totalPros := float64(0)
-				for _, pro := range voteProportions {
-					totalPros += pro.proportion
-				}
-
-				for _, pro := range voteProportions {
-					pro.proportion = pro.proportion / totalPros
-				}
-
-				// sort by asc
-				sort.Sort(voteProportions)
-				break
-			}
-		}
-	}
-	return result
-}
-
-type sortableVoteProportion struct {
-	address    common.Address
-	proportion float64
-}
-
-// Ascending, from small to big
-type sortableVoteProportions []*sortableVoteProportion
-
-func (p sortableVoteProportions) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p sortableVoteProportions) Len() int      { return len(p) }
-func (p sortableVoteProportions) Less(i, j int) bool {
-	if p[i].proportion < p[j].proportion {
-		return true
-	} else if p[i].proportion > p[j].proportion {
-		return false
-	} else {
-		return p[i].address.String() < p[j].address.String()
-	}
-}
-
-func (p sortableVoteProportions) ListAddresses() []common.Address {
-	result := make([]common.Address, 0)
-	for _, votePro := range p {
-		result = append(result, votePro.address)
-	}
-	return result
 }
