@@ -35,6 +35,9 @@ var (
 	// the last epoch.
 	KeyRewardRatioNumeratorLastEpoch = common.BytesToHash([]byte("reward-ratio-last-epoch"))
 
+	// KeyVoteLastEpoch is the vote deposit in the last epoch
+	KeyVoteLastEpoch = common.BytesToHash([]byte("vote-last-epoch"))
+
 	// KeyTotalVote is the key of total vote for each candidate
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
 
@@ -43,9 +46,6 @@ var (
 
 	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
 	PrefixThawingAssets = []byte("thawing-assets")
-
-	// KeyVoteLastEpoch is the vote deposit in the last epoch
-	KeyVoteLastEpoch = common.BytesToHash([]byte("vote-last-epoch"))
 )
 
 // getCandidateDeposit get the candidate deposit of the addr from the state

@@ -17,8 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
-const ()
-
 // EpochContext define current epoch context for dpos consensus
 type EpochContext struct {
 	TimeStamp   int64
