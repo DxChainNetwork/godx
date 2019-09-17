@@ -22,7 +22,7 @@ var (
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	rewardRatio uint64) error {
 
-	if err := isValidCandidate(state, addr, deposit, rewardRatio); err != nil {
+	if err := checkValidCandidate(state, addr, deposit, rewardRatio); err != nil {
 		return err
 	}
 	// Add the candidate to DposContext
@@ -82,9 +82,9 @@ func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr
 	return delegatorVotes
 }
 
-// isValidCandidate checks whether the candidateAddr is valid for becoming a validator.
+// checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidate.
 // If not valid, an error is returned.
-func isValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
+func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
 	// Candidate balance should be greater than the threshold
 	balance := common.PtrBigInt(state.GetBalance(candidateAddr))
 	if balance.Cmp(candidateThreshold) < 0 {

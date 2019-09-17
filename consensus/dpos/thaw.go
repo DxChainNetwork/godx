@@ -10,8 +10,8 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 )
 
-// markThawingAddressAndValue add the thawing diff to the addr's storage trie, and mark the address
-// to be thawed in the thawing address
+// markThawingAddressAndValue add the thawing diff to the addr's thawing assets in corresponding epoch,
+// and mark the address to be thawed in the thawing address
 func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int64, diff common.BigInt) {
 	thawingEpoch := calcThawingEpoch(curEpoch)
 	// Add the diff value to thawing assets to be thawed
