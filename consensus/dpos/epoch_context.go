@@ -22,9 +22,9 @@ const (
 	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
 	ThawingEpochDuration = 2
 
-	// eigibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
+	// eligibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
 	// produces block less than expected by this denominator, it is considered as ineligible.
-	eigibleValidatorDenominator = 2
+	eligibleValidatorDenominator = 2
 )
 
 // EpochContext define current epoch context for dpos consensus
@@ -82,7 +82,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		if err != nil {
 			return err
 		}
-
+		// Set the new validators
 		epochTrie, _ := types.NewEpochTrie(common.Hash{}, ec.DposContext.DB())
 		ec.DposContext.SetEpoch(epochTrie)
 		err = ec.DposContext.SetValidators(validators)
@@ -91,7 +91,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 
 		// Set vote last epoch for all delegators who select the validators.
-		allDelegators := allDelegatorForValidators(ec.stateDB, ec.DposContext, validators)
+		allDelegators := allDelegatorForValidators(ec.DposContext, validators)
 		for delegator := range allDelegators {
 			// get the vote deposit and set it in vote last epoch
 			vote := getVoteDeposit(ec.stateDB, delegator)
@@ -204,7 +204,7 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 // blocks being mined in the epoch
 func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 	// Get the addr's mined block
-	return gotBlockProduced >= expectedBlockProduced/eigibleValidatorDenominator
+	return gotBlockProduced >= expectedBlockProduced/eligibleValidatorDenominator
 }
 
 func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64) ([]common.Address, error) {
@@ -226,11 +226,11 @@ func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64
 	return validators, nil
 }
 
-// allDelegatorForValidators returns a map containing all delegator who vote for the validators
-func allDelegatorForValidators(state stateDB, ctx *types.DposContext, validators []common.Address) map[common.Address]struct{} {
+// allDelegatorForValidators returns a map containing all delegators who vote for the validators
+func allDelegatorForValidators(ctx *types.DposContext, validators []common.Address) map[common.Address]struct{} {
 	res := make(map[common.Address]struct{})
 	for _, validator := range validators {
-		delegators := getAllDelegatorForCandidate(state, ctx, validator)
+		delegators := getAllDelegatorForCandidate(ctx, validator)
 		for _, delegator := range delegators {
 			res[delegator] = struct{}{}
 		}

@@ -6,7 +6,6 @@ package dpos
 
 import (
 	"encoding/binary"
-	"math"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -23,17 +22,4 @@ func uint64ToHash(value uint64) common.Hash {
 	var h common.Hash
 	binary.BigEndian.PutUint64(h[common.HashLength-8:], value)
 	return h
-}
-
-func hashToFloat64(hash common.Hash) float64 {
-	bits := binary.BigEndian.Uint64(hash[common.HashLength-8:])
-	return math.Float64frombits(bits)
-}
-
-// float64ToHash convert the float64 to hash. Only the last 8 bytes are used
-func float64ToHash(value float64) common.Hash {
-	var hash common.Hash
-	bits := math.Float64bits(value)
-	binary.BigEndian.PutUint64(hash[common.HashLength-8:], bits)
-	return hash
 }

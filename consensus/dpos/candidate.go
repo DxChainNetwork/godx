@@ -82,7 +82,7 @@ func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr
 }
 
 // getAllDelegatorForCandidate get all delegator who votes for the candidate
-func getAllDelegatorForCandidate(state stateDB, ctx *types.DposContext, candidateAddr common.Address) []common.Address {
+func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Address) []common.Address {
 	dt := ctx.DelegateTrie()
 	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
 	var addresses []common.Address

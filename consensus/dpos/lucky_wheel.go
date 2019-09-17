@@ -49,9 +49,6 @@ type (
 	}
 )
 
-// errNotEnoughEntries happens when entries is not sufficient for selection target number of entries
-var errNotEnoughEntries = errors.New("not enough entries for selection")
-
 // newRandomAddressSelector creates a randomAddressSelector with sepecified typeCode
 func newRandomAddressSelector(typeCode int, entries randomSelectorEntries, seed int64, target int) (randomAddressSelector, error) {
 	switch typeCode {

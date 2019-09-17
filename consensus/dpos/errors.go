@@ -32,4 +32,8 @@ var (
 	// errCandidateDecreasingDeposit happens when processing a candidate transaction, found the
 	// value of deposit is decreasing.
 	errCandidateDecreasingDeposit = errors.New("candidate argument not qualified - candidate deposit shall not be decreased")
+
+	// errNotEnoughEntries happens when entries is not sufficient for selection target number of entries
+	// in lucky wheel algorithm
+	errNotEnoughEntries = errors.New("not enough entries for selection")
 )
