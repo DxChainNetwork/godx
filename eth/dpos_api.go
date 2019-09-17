@@ -5,7 +5,6 @@
 package eth
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rpc"
-	"github.com/DxChainNetwork/godx/trie"
 )
 
 type PublicDposAPI struct {
@@ -24,14 +22,14 @@ type CandidateInfo struct {
 	Candidate          common.Address
 	Deposit            common.BigInt
 	Votes              common.BigInt
-	RewardDistribution common.BigInt
+	RewardDistribution uint64
 }
 
 type ValidatorInfo struct {
 	Validator          common.Address
 	Votes              common.BigInt
 	MinedBlocks        int64
-	RewardDistribution common.BigInt
+	RewardDistribution uint64
 }
 
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
@@ -40,6 +38,7 @@ func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
 	}
 }
 
+// Validators will return a list of validators based on the blockNumber provided
 func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderBasedOnNumber(blockNr, d.e)
@@ -47,19 +46,11 @@ func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, 
 		return nil, err
 	}
 
-	// re-create the tree based on the chain database
-	triedb := trie.NewDatabase(d.e.ChainDb())
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, triedb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to recover the epochTrie based on the root: %s", err.Error())
-	}
-
-	// based on the epochTrie, get the validators
-	dposContext := types.DposContext{}
-	dposContext.SetEpoch(epochTrie)
-	return dposContext.GetValidators()
+	// return the list of validators
+	return dpos.GetValidators(d.e.ChainDb(), header)
 }
 
+// Validator will return detailed validator's information based on the validator address provided
 func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInfo, error) {
 	// based on the block header root, get the statedb
 	header := d.e.BlockChain().CurrentHeader()
@@ -68,29 +59,21 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInf
 		return ValidatorInfo{}, err
 	}
 
-	// get the validator votes
-	validatorVotes := statedb.GetState(validatorAddress, dpos.KeyTotalVoteWeight).Big()
-
-	// get the validator reward distribution
-	rewardDistribution := statedb.GetState(validatorAddress, dpos.KeyRewardRatioNumerator)
-
-	// get the validator minedBlocks
-	triedb := trie.NewDatabase(d.e.ChainDb())
-	minedCntTrie, err := types.NewMinedCntTrie(header.DposContext.MinedCntRoot, triedb)
+	// get the detailed information
+	votes, rewardDistribution, minedCount, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
 	if err != nil {
-		return ValidatorInfo{}, fmt.Errorf("failed to recover the minedCntTrie based on the root: %s", err.Error())
+
 	}
-	epochID := dpos.CalculateEpochID(header.Time.Int64())
-	minedCount := getMinedCnt(epochID, validatorAddress, minedCntTrie)
 
 	return ValidatorInfo{
 		Validator:          validatorAddress,
-		Votes:              common.PtrBigInt(validatorVotes),
-		RewardDistribution: hashToRewardRatioNumerator(rewardDistribution),
+		Votes:              votes,
+		RewardDistribution: rewardDistribution,
 		MinedBlocks:        minedCount,
 	}, nil
 }
 
+// Candidates will return a list of candidates information based on the blockNumber provided
 func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderBasedOnNumber(blockNr, d.e)
@@ -98,25 +81,10 @@ func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, 
 		return nil, err
 	}
 
-	// re-create the tree based on the chain database
-	triedb := trie.NewDatabase(d.e.ChainDb())
-	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, triedb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
-	}
-
-	// iterate through the candidateTrie, get each candidate
-	var candidates []common.Address
-	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
-	for iterCandidate.Next() {
-		candidateAddr := common.BytesToAddress(iterCandidate.Value)
-		candidates = append(candidates, candidateAddr)
-	}
-
-	// return candidates
-	return candidates, nil
+	return dpos.GetCandidates(d.e.ChainDb(), header)
 }
 
+// Candidate will return detailed candidate's information based on the candidate address provided
 func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInfo, error) {
 	// based on the block header root, get the statedb
 	header := d.e.BlockChain().CurrentHeader()
@@ -125,20 +93,14 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInf
 		return CandidateInfo{}, err
 	}
 
-	// get the candidate deposit
-	candidateDeposit := statedb.GetState(candidateAddress, dpos.KeyCandidateDeposit).Big()
-
-	// get the number of votes that candidate get
-	candidateVotes := statedb.GetState(candidateAddress, dpos.KeyTotalVoteWeight).Big()
-
-	// get the reward distribution plan
-	rewardDistribution := statedb.GetState(candidateAddress, dpos.KeyRewardRatioNumerator)
+	// get detailed information
+	candidateDeposit, candidateVotes, rewardDistribution := dpos.GetCandidateInfo(statedb, candidateAddress)
 
 	return CandidateInfo{
 		Candidate:          candidateAddress,
-		Deposit:            common.PtrBigInt(candidateDeposit),
-		Votes:              common.PtrBigInt(candidateVotes),
-		RewardDistribution: hashToRewardRatioNumerator(rewardDistribution),
+		Deposit:            candidateDeposit,
+		Votes:              candidateVotes,
+		RewardDistribution: rewardDistribution,
 	}, nil
 
 }
@@ -157,6 +119,7 @@ func (d *PublicDposAPI) CandidateDeposit(candidateAddress common.Address) (*big.
 	return candidateDepositHash.Big(), nil
 }
 
+// VoteDeposit checks the vote deposit paid based on the voteAddress provided
 func (d *PublicDposAPI) VoteDeposit(voteAddress common.Address) (*big.Int, error) {
 	// based on the block header root, get the statedb
 	header := d.e.BlockChain().CurrentHeader()
@@ -170,6 +133,7 @@ func (d *PublicDposAPI) VoteDeposit(voteAddress common.Address) (*big.Int, error
 	return voteDepositHash.Big(), nil
 }
 
+// getHeaderBasedOnNumber will return the block header information based on the block number provided
 func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Header, error) {
 	// based on the block number, get the block header
 	var header *types.Header
@@ -186,22 +150,4 @@ func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Heade
 
 	// return
 	return header, nil
-}
-
-// hashToRewardRatioNumerator return the customized block reward ratio numerator
-func hashToRewardRatioNumerator(h common.Hash) common.BigInt {
-	v := h.Bytes()
-	return common.NewBigIntUint64(uint64(v[len(v)-1]))
-}
-
-func getMinedCnt(epochID int64, validator common.Address, minedCntTrie *trie.Trie) int64 {
-	// form the key
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, uint64(epochID))
-	cntBytes := minedCntTrie.Get(append(key, validator.Bytes()...))
-	if cntBytes == nil {
-		return 0
-	} else {
-		return int64(binary.BigEndian.Uint64(cntBytes))
-	}
 }
