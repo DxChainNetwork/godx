@@ -17,10 +17,6 @@ var (
 	// larger the stored frozen assets
 	errInsufficientFrozenAssets = errors.New("not enough frozen assets to subtract")
 
-	// errCandidateInsufficientBalance happens when processing a candidate transaction, found
-	// that the candidate has balance lower than the threshold
-	errCandidateInsufficientBalance = fmt.Errorf("candidate not qualified - minimum balance: %v", candidateThreshold)
-
 	// errCandidateInsufficientDeposit happens when processing a candidate transaction, found
 	// that the candidate's deposit is lower than the threshold
 	errCandidateInsufficientDeposit = fmt.Errorf("candidate argument not qualified - minimum deposit: %v", minDeposit)

@@ -13,9 +13,6 @@ import (
 var (
 	// defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1000)
-
-	// defines the minimum balance of candidate
-	candidateThreshold = common.NewBigIntUint64(1e18).MultInt64(1000)
 )
 
 // ProcessAddCandidate adds a candidate to the DposContext and updated the related fields in stateDB
@@ -98,9 +95,6 @@ func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Ad
 func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
 	// Candidate balance should be greater than the threshold
 	balance := common.PtrBigInt(state.GetBalance(candidateAddr))
-	if balance.Cmp(candidateThreshold) < 0 {
-		return errCandidateInsufficientBalance
-	}
 	// Candidate deposit should be greate than the threshold
 	if deposit.Cmp(minDeposit) < 0 {
 		return errCandidateInsufficientDeposit

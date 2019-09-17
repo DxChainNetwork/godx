@@ -641,7 +641,6 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMinedCnt update counts in minedCntTrie for the miner of newBlock
-// TODO: fix this
 func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMinedCntTrie := dposContext.MinedCntTrie()
 	currentEpoch := CalculateEpochID(parentBlockTime)

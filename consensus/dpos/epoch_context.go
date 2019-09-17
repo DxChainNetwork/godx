@@ -95,7 +95,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			ratio := getRewardRatioNumerator(ec.stateDB, validator)
 			setRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
 		}
-
 		// Set vote last epoch for all delegators who select the validators.
 		allDelegators := allDelegatorForValidators(ec.DposContext, validators)
 		for delegator := range allDelegators {
