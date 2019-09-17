@@ -47,7 +47,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	}
 
 	// thawing some deposit for currentEpoch-2
-	thawFrozenAssetsInEpoch(ec.stateDB, currentEpoch)
+	thawAllFrozenAssetsInEpoch(ec.stateDB, currentEpoch)
 
 	prevEpochIsGenesis := prevEpoch == genesisEpoch
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {

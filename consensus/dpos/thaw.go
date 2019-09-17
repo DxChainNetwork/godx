@@ -33,9 +33,9 @@ func markThawingAddress(stateDB stateDB, addr common.Address, thawingEpoch int64
 	setAddrInThawingAddress(stateDB, thawingAddress, addr)
 }
 
-// thawFrozenAssetsInEpoch thaw the frozenAssets for the all candidates or delegator effected in
+// thawAllFrozenAssetsInEpoch thaw the frozenAssets for all candidates or delegator effected in
 // the epoch
-func thawFrozenAssetsInEpoch(state stateDB, epoch int64) error {
+func thawAllFrozenAssetsInEpoch(state stateDB, epoch int64) error {
 	thawingAddress := getThawingAddress(epoch)
 	var err error
 	// For each thawing address, thaw specified amount, and remove the related storage fields.

@@ -333,7 +333,7 @@ func TestThawingDeposit(t *testing.T) {
 	markThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
 	stateDB.Commit(true)
 
-	thawFrozenAssetsInEpoch(stateDB, currentEpochID+ThawingEpochDuration)
+	thawAllFrozenAssetsInEpoch(stateDB, currentEpochID+ThawingEpochDuration)
 
 	// check whether deposit is thawed
 	epochIDStr := strconv.FormatInt(currentEpochID, 10)

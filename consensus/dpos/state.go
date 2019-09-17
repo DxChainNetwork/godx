@@ -6,6 +6,7 @@ package dpos
 
 import (
 	"encoding/binary"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
 )
@@ -17,6 +18,7 @@ type stateDB interface {
 	Exist(addr common.Address) bool
 	CreateAccount(addr common.Address)
 	SetNonce(addr common.Address, nonce uint64)
+	GetBalance(addr common.Address) *big.Int
 }
 
 var (

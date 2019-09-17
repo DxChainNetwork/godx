@@ -10,16 +10,30 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
+var (
+	// defines the minimum deposit of candidate
+	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1000)
+
+	// defines the minimum balance of candidate
+	candidateThreshold = common.NewBigIntUint64(1e18).MultInt64(1000)
+)
+
 // ProcessAddCandidate adds a candidate to the DposContext and updated the related fields in stateDB
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	rewardRatio uint64) error {
-	prevDeposit := getCandidateDeposit(state, addr)
-	if prevDeposit.Cmp(common.BigInt0) != 0 {
-		return ErrAlreadyCandidate
+
+	if err := isValidCandidate(state, addr, deposit, rewardRatio); err != nil {
+		return err
 	}
 	// Add the candidate to DposContext
 	if err := ctx.BecomeCandidate(addr); err != nil {
 		return err
+	}
+	// After validation, the candidate deposit could not decrease. Update the frozen asset field
+	prevDeposit := getCandidateDeposit(state, addr)
+	if deposit.Cmp(prevDeposit) > 0 {
+		diff := deposit.Sub(prevDeposit)
+		addFrozenAssets(state, addr, diff)
 	}
 	// Apply the candidate settings
 	setCandidateDeposit(state, addr, deposit)
@@ -34,8 +48,9 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 		return err
 	}
 	// Mark the thawing address in the future
+	prevDeposit := getCandidateDeposit(state, addr)
 	currentEpochID := CalculateEpochID(time)
-	markThawingAddress(state, addr, currentEpochID, PrefixCandidateThawing)
+	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
 	return nil
 }
 
@@ -65,4 +80,28 @@ func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr
 		delegatorVotes = delegatorVotes.Add(weightedVote)
 	}
 	return delegatorVotes
+}
+
+// isValidCandidate checks whether the candidateAddr is valid for becoming a validator.
+// If not valid, an error is returned.
+func isValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
+	// Candidate balance should be greater than the threshold
+	balance := common.PtrBigInt(state.GetBalance(candidateAddr))
+	if balance.Cmp(candidateThreshold) < 0 {
+		return errCandidateInsufficientBalance
+	}
+	// Candidate deposit should be greate than the threshold
+	if deposit.Cmp(minDeposit) < 0 {
+		return errCandidateInsufficientDeposit
+	}
+	// Reward ratio should be between 0 and 100
+	if rewardRatio > RewardRatioDenominator {
+		return errCandidateInvalidRewardRatio
+	}
+	// Deposit should be only increasing
+	prevDeposit := getCandidateDeposit(state, candidateAddr)
+	if deposit.Cmp(prevDeposit) < 0 {
+		return errCandidateDecreasingDeposit
+	}
+	return nil
 }
