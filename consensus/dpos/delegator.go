@@ -13,9 +13,9 @@ import (
 func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	candidates []common.Address, time int64) (int, error) {
 
-	// Voting with 0 deposit is not allowed
-	if deposit.Cmp(common.BigInt0) == 0 {
-		return 0, errVoteZeroDeposit
+	// Validation: voting with 0 deposit is not allowed
+	if err := checkValidVote(deposit, candidates); err != nil {
+		return 0, err
 	}
 	// Vote the candidates
 	successVote, err := ctx.Vote(addr, candidates)
@@ -53,5 +53,19 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	currentEpoch := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	setVoteDeposit(state, addr, common.BigInt0)
+	return nil
+}
+
+// checkValidVote checks whether the input argument is valid for a vote transaction
+func checkValidVote(deposit common.BigInt, candidates []common.Address) error {
+	if deposit.Cmp(common.BigInt0) <= 0 {
+		return errVoteZeroOrNegativeDeposit
+	}
+	if len(candidates) == 0 {
+		return errVoteZeroCandidates
+	}
+	if len(candidates) > MaxVoteCount {
+		return errVoteTooManyCandidates
+	}
 	return nil
 }

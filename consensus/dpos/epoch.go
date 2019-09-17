@@ -4,15 +4,9 @@
 
 package dpos
 
+import "github.com/DxChainNetwork/godx/consensus"
+
 var timeOfFirstBlock = int64(0)
-
-const (
-	// BlockInterval indicates that a block will be produced every 10 seconds
-	BlockInterval = int64(10)
-
-	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(86400)
-)
 
 // expectedBlocksPerValidatorInEpoch return the expected number of blocks to be produced
 // for each validator in an epoch. The input timeFirstBlock and curTime is passed in to
@@ -50,4 +44,13 @@ func calcBlockSlot(blockTime int64) (int64, error) {
 // CalculateEpochID calculate the epoch ID given the block time
 func CalculateEpochID(blockTime int64) int64 {
 	return blockTime / EpochInterval
+}
+
+// updateTimeOfFirstBlockIfNecessary update the value of timeOfFirstBlock if the value is not assigned
+func updateTimeOfFirstBlockIfNecessary(chain consensus.ChainReader) {
+	if timeOfFirstBlock == 0 {
+		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
+			timeOfFirstBlock = firstBlockHeader.Time.Int64()
+		}
+	}
 }

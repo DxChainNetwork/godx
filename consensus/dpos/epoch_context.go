@@ -17,15 +17,7 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
-const (
-
-	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
-	ThawingEpochDuration = 2
-
-	// eligibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
-	// produces block less than expected by this denominator, it is considered as ineligible.
-	eligibleValidatorDenominator = 2
-)
+const ()
 
 // EpochContext define current epoch context for dpos consensus
 type EpochContext struct {
@@ -221,7 +213,7 @@ func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64
 	// random select the addresses
 	selector, err := newRandomAddressSelector(typeLuckyWheel, entries, seed, MaxValidatorSize)
 	var validators []common.Address
-	if err == errNotEnoughEntries {
+	if err == errRandomSelectNotEnoughEntries {
 		validators = entries.listAddresses()
 	} else if err == nil {
 		validators = selector.RandomSelect()

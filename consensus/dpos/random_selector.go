@@ -62,7 +62,7 @@ func newRandomAddressSelector(typeCode int, entries randomSelectorEntries, seed 
 // the target number to be selected
 func newLuckyWheel(entries randomSelectorEntries, seed int64, target int) (*luckyWheel, error) {
 	if len(entries) < target {
-		return nil, errNotEnoughEntries
+		return nil, errRandomSelectNotEnoughEntries
 	}
 	sumVotes := common.BigInt0
 	for _, entry := range entries {

@@ -10,11 +10,6 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
-var (
-	// defines the minimum deposit of candidate
-	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1000)
-)
-
 // ProcessAddCandidate adds a candidate to the DposContext and updated the related fields in stateDB
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	rewardRatio uint64) error {
@@ -93,8 +88,6 @@ func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Ad
 // checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidate.
 // If not valid, an error is returned.
 func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
-	// Candidate balance should be greater than the threshold
-	balance := common.PtrBigInt(state.GetBalance(candidateAddr))
 	// Candidate deposit should be greate than the threshold
 	if deposit.Cmp(minDeposit) < 0 {
 		return errCandidateInsufficientDeposit

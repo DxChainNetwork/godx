@@ -41,24 +41,6 @@ const (
 	ModeFake
 )
 
-const (
-	extraVanity        = 32   // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
-	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
-
-	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 4
-
-	// SafeSize indicates that the least number of validators in dpos consensus
-	SafeSize = MaxValidatorSize*2/3 + 1
-
-	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
-	ConsensusSize = MaxValidatorSize*2/3 + 1
-
-	// RewardRatioDenominator is the max value of reward ratio
-	RewardRatioDenominator uint64 = 100
-)
-
 var (
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
@@ -69,39 +51,9 @@ var (
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key
 	PrefixVoteThawing = "vote_"
 
-	frontierBlockReward       = common.NewBigIntUint64(5e+18) // Block reward in camel for successfully mining a block
-	byzantiumBlockReward      = common.NewBigIntUint64(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
-	constantinopleBlockReward = common.NewBigIntUint64(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
-
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
 
-var (
-	// errUnknownBlock is returned when the list of signers is requested for a block
-	// that is not part of the local blockchain.
-	errUnknownBlock = errors.New("unknown block")
-	// errMissingVanity is returned if a block's extra-data section is shorter than
-	// 32 bytes, which is required to store the signer vanity.
-	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
-	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a 65 byte secp256k1 signature.
-	errMissingSignature = errors.New("extra-data 65 byte suffix signature missing")
-	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
-	errInvalidMixDigest = errors.New("non-zero mix digest")
-	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
-	errInvalidUncleHash  = errors.New("non empty uncle hash")
-	errInvalidDifficulty = errors.New("invalid difficulty")
-
-	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
-	ErrInvalidTimestamp           = errors.New("invalid timestamp")
-	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
-	ErrMinedFutureBlock           = errors.New("mined the future block")
-	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
-	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-
-	ErrNilBlockHeader = errors.New("nil block header returned")
-)
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 )
@@ -469,11 +421,8 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 		DposContext: dposContext,
 		TimeStamp:   header.Time.Int64(),
 	}
-	if timeOfFirstBlock == 0 {
-		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
-			timeOfFirstBlock = firstBlockHeader.Time.Int64()
-		}
-	}
+	// update the value of timeOfFirstBlock if the value is 0
+	updateTimeOfFirstBlockIfNecessary(chain)
 
 	// try to elect, if current block is the first one in a new epoch, then elect new epoch
 	genesis := chain.GetHeaderByNumber(0)
