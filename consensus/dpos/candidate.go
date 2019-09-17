@@ -37,7 +37,7 @@ func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Addr
 	}
 	// Apply the candidate settings
 	setCandidateDeposit(state, addr, deposit)
-	setCandidateRewardRatioNumerator(state, addr, rewardRatio)
+	setRewardRatioNumerator(state, addr, rewardRatio)
 	return nil
 }
 

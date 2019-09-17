@@ -4,8 +4,6 @@
 
 package dpos
 
-import "errors"
-
 var timeOfFirstBlock = int64(0)
 
 const (
@@ -14,10 +12,6 @@ const (
 
 	// EpochInterval indicates that a new epoch will be elected every a day
 	EpochInterval = int64(86400)
-)
-
-var (
-	ErrInvalidMinedBlockTime = errors.New("invalid time to mined the block")
 )
 
 // expectedBlocksPerValidatorInEpoch return the expected number of blocks to be produced
@@ -42,20 +36,12 @@ func expectedBlocksInEpoch(timeFirstBlock int64, curTime int64) int64 {
 	return epochDuration / BlockInterval
 }
 
-// calcBlockEpochIDAndSlot calculate the block epoch ID and slot from the block time.
-// If invalid block time stamp, ErrInvalidMinedBlockTime is returned.
-func calcBlockEpochIDAndSlot(blockTime int64) (epoch, slot int64, err error) {
-	epoch = CalculateEpochID(blockTime)
-	slot, err = calcBlockSlot(blockTime)
-	return
-}
-
 // calcBlockSlot calculate slot ID for the block time stamp.
-// If not a valid slot, ErrInvalidMinedBlockTime will be returned.
+// If not a valid slot, errInvalidMinedBlockTime will be returned.
 func calcBlockSlot(blockTime int64) (int64, error) {
 	offset := blockTime % EpochInterval
 	if offset%BlockInterval != 0 {
-		return 0, ErrInvalidMinedBlockTime
+		return 0, errInvalidMinedBlockTime
 	}
 	slot := offset / BlockInterval
 	return slot, nil

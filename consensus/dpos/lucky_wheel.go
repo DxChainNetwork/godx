@@ -117,8 +117,7 @@ func (lw *luckyWheel) selectSingleEntry() int {
 	// Sanity: This shall never reached if code is correct. If this happens, currently
 	// return the last entry of the entries
 	// TODO: Should we panic here?
-	index := len(lw.entries) - 1
-	return index
+	return len(lw.entries) - 1
 }
 
 // listAddresses return the list of addresses of the entries

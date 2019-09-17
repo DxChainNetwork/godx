@@ -22,20 +22,18 @@ type stateDB interface {
 }
 
 var (
-	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
-	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
-
 	// KeyVoteDeposit is the key of vote deposit
 	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
-
-	// KeyVoteWeight is the weight ratio of vote
-	KeyVoteWeight = common.BytesToHash([]byte("vote-weight"))
 
 	// KeyCandidateDeposit is the key of candidate deposit
 	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
 
-	// KeyLastVoteTime is the key of last vote time
-	KeyLastVoteTime = common.BytesToHash([]byte("last-vote-time"))
+	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
+	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
+
+	// KeyRewardRatioNumeratorLastEpoch is the key for storing the reward ratio in
+	// the last epoch.
+	KeyRewardRatioNumeratorLastEpoch = common.BytesToHash([]byte("reward-ratio-last-epoch"))
 
 	// KeyTotalVote is the key of total vote for each candidate
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
@@ -74,18 +72,30 @@ func setVoteDeposit(state stateDB, addr common.Address, deposit common.BigInt) {
 	state.SetState(addr, KeyVoteDeposit, hash)
 }
 
-// getCandidateRewardRatioNumerator get the reward ratio for a candidate for the addr in state.
+// getRewardRatioNumerator get the reward ratio for a candidate for the addr in state.
 // The value is used in calculating block reward for miner and his delegator
-func getCandidateRewardRatioNumerator(state stateDB, addr common.Address) uint64 {
+func getRewardRatioNumerator(state stateDB, addr common.Address) uint64 {
 	rewardRatioHash := state.GetState(addr, KeyRewardRatioNumerator)
 	return hashToUint64(rewardRatioHash)
 }
 
-// setCandidateRewardRatioNumerator set the CandidateRewardRatioNumerator for the addr
+// setRewardRatioNumerator set the CandidateRewardRatioNumerator for the addr
 // in state
-func setCandidateRewardRatioNumerator(state stateDB, addr common.Address, value uint64) {
+func setRewardRatioNumerator(state stateDB, addr common.Address, value uint64) {
 	hash := uint64ToHash(value)
 	state.SetState(addr, KeyRewardRatioNumerator, hash)
+}
+
+// getRewardRatioNumeratorLastEpoch get the rewardRatio for the validator in the last epoch
+func getRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address) uint64 {
+	hash := state.GetState(addr, KeyRewardRatioNumeratorLastEpoch)
+	return hashToUint64(hash)
+}
+
+// setRewardRatioNumeratorLastEpoch set the rewardRatio for the validator in the last epoch
+func setRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address, value uint64) {
+	hash := uint64ToHash(value)
+	state.SetState(addr, KeyRewardRatioNumeratorLastEpoch, hash)
 }
 
 // getTotalVote get the total vote for the candidate address

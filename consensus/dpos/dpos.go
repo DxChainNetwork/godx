@@ -442,7 +442,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return
 	}
 	// get ratio of reward between validator and its delegator
-	rewardRatioNumerator := getCandidateRewardRatioNumerator(state, header.Validator)
+	rewardRatioNumerator := getRewardRatioNumeratorLastEpoch(state, header.Validator)
 	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
 	// Loop over the delegators to add delegator rewards

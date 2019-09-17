@@ -36,4 +36,8 @@ var (
 	// errNotEnoughEntries happens when entries is not sufficient for selection target number of entries
 	// in lucky wheel algorithm
 	errNotEnoughEntries = errors.New("not enough entries for selection")
+
+	// errInvalidMinedBlockTime is the error indicating the block mining time is not in the right
+	// time slot
+	errInvalidMinedBlockTime = errors.New("invalid time to mined the block")
 )
