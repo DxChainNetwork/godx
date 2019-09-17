@@ -60,12 +60,6 @@ const (
 )
 
 var (
-	// MinVoteWeightRatio is the minimum vote weight ration
-	MinVoteWeightRatio = 0.5
-
-	// AttenuationRatioPerEpoch is the ratio of attenuation per epoch
-	AttenuationRatioPerEpoch = 0.98
-
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
 
@@ -74,9 +68,6 @@ var (
 
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key
 	PrefixVoteThawing = "vote_"
-
-	// EmptyHash is the empty hash for judgement of empty value
-	EmptyHash = common.Hash{}
 
 	frontierBlockReward       = common.NewBigIntUint64(5e+18) // Block reward in camel for successfully mining a block
 	byzantiumBlockReward      = common.NewBigIntUint64(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
@@ -662,11 +653,9 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
 		iter := trie.NewIterator(currentMinedCntTrie.NodeIterator(currentEpochBytes))
-
 		// when current is not genesis, read last count from the MinedCntTrie
 		if iter.Next() {
 			cntBytes := currentMinedCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
-
 			// not the first time to mined
 			if cntBytes != nil {
 				cnt = int64(binary.BigEndian.Uint64(cntBytes)) + 1
