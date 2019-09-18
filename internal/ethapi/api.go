@@ -52,7 +52,7 @@ const (
 )
 
 type AccountBalance struct {
-	Balance          *big.Int
+	TotalBalance     *big.Int
 	AvailableBalance *big.Int
 	VoteDeposit      *big.Int
 	CandidateDeposit *big.Int
@@ -525,7 +525,7 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	availableBalance = new(big.Int).Sub(availableBalance, voteDeposit.Big())
 
 	return AccountBalance{
-		Balance:          accountBalance,
+		TotalBalance:     accountBalance,
 		AvailableBalance: availableBalance,
 		VoteDeposit:      voteDeposit.Big(),
 		CandidateDeposit: candidateDeposit.Big(),
