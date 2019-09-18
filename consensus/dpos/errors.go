@@ -27,12 +27,22 @@ var (
 
 	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
 	// the previous block's timestamp + the minimum block period.
-	ErrInvalidTimestamp           = errors.New("invalid timestamp")
-	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
-	ErrMinedFutureBlock           = errors.New("mined the future block")
-	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
-	ErrInvalidBlockValidator      = errors.New("invalid block validator")
+	ErrInvalidTimestamp = errors.New("invalid timestamp")
 
+	// ErrWaitForPrevBlock is returned if the last block has not arrived and it is not
+	// time for producing the next block.
+	ErrWaitForPrevBlock = errors.New("wait for last block arrived")
+
+	// ErrMinedFutureBlock is returned if the block is expected to be mined in the future
+	ErrMinedFutureBlock = errors.New("mined the future block")
+
+	// ErrMismatchSignerAndValidator is returned if the signer and validator is not matched
+	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
+
+	// ErrInvalidBlockValidator is returned if the validator is not valid for a block
+	ErrInvalidBlockValidator = errors.New("invalid block validator")
+
+	// ErrNilBlockHeader is returned if returning a nil block header in api functions
 	ErrNilBlockHeader = errors.New("nil block header returned")
 )
 
@@ -69,4 +79,7 @@ var (
 	// errInvalidMinedBlockTime is the error indicating the block mining time is not in the right
 	// time slot
 	errInvalidMinedBlockTime = errors.New("invalid time to mined the block")
+
+	// errUnknownRandomAddressSelectorType is the error type for unknown randomAddressSelector type.
+	errUnknownRandomAddressSelectorType = errors.New("unknown randomAddressSelector type")
 )

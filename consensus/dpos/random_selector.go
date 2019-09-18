@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/pkg/errors"
 )
 
 // randomAddressSelector is the random selection algorithm for selecting multiple addresses
@@ -49,13 +48,32 @@ type (
 	}
 )
 
+// randomSelectAddress randomly select entries based on weight from the entries.
+func randomSelectAddress(typeCode int, data map[common.Address]common.BigInt, seed int64, target int) ([]common.Address, error) {
+	// convert the map to entries
+	var entries randomSelectorEntries
+	for addr, weight := range data {
+		entries = append(entries, &randomSelectorEntry{addr, weight})
+	}
+	// Run random select
+	ras, err := newRandomAddressSelector(typeCode, entries, seed, target)
+	if err != nil {
+		// If not enough entries, return the address in entries directly
+		if err == errRandomSelectNotEnoughEntries {
+			return entries.listAddresses(), nil
+		}
+		return []common.Address{}, err
+	}
+	return ras.RandomSelect(), nil
+}
+
 // newRandomAddressSelector creates a randomAddressSelector with sepecified typeCode
 func newRandomAddressSelector(typeCode int, entries randomSelectorEntries, seed int64, target int) (randomAddressSelector, error) {
 	switch typeCode {
 	case typeLuckyWheel:
 		return newLuckyWheel(entries, seed, target)
 	}
-	return nil, errors.New("unknown randomAddressSelector type")
+	return nil, errUnknownRandomAddressSelectorType
 }
 
 // newLuckyWheel create a lucky wheel for random selection. target is used for specifying
@@ -109,7 +127,7 @@ func (lw *luckyWheel) selectSingleEntry() int {
 	for i, entry := range lw.entries {
 		vote := entry.vote
 		// The entry is selected
-		if vote.Cmp(selected) <= 0 {
+		if selected.Cmp(vote) <= 0 {
 			return i
 		}
 		selected = selected.Sub(vote)

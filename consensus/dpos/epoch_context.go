@@ -202,23 +202,9 @@ func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 	return gotBlockProduced >= expectedBlockProduced/eligibleValidatorDenominator
 }
 
+// selectValidator select validators randomly based on candidate votes and seed
 func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64) ([]common.Address, error) {
-	// convert the candidateVotes to randomSelectorEntry
-	var entries randomSelectorEntries
-	for candidate, vote := range candidateVotes {
-		entries = append(entries, &randomSelectorEntry{candidate, vote})
-	}
-	// random select the addresses
-	selector, err := newRandomAddressSelector(typeLuckyWheel, entries, seed, MaxValidatorSize)
-	var validators []common.Address
-	if err == errRandomSelectNotEnoughEntries {
-		validators = entries.listAddresses()
-	} else if err == nil {
-		validators = selector.RandomSelect()
-	} else {
-		return []common.Address{}, fmt.Errorf("random select error: %v", err)
-	}
-	return validators, nil
+	return randomSelectAddress(typeLuckyWheel, candidateVotes, seed, MaxValidatorSize)
 }
 
 // allDelegatorForValidators returns a map containing all delegators who vote for the validators
