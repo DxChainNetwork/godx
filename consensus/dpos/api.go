@@ -70,7 +70,9 @@ func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Addres
 	}
 
 	// based on the candidateTrie, get the list of candidates and return
-	return getCandidates(candidateTrie), nil
+	dposContext := types.DposContext{}
+	dposContext.SetCandidate(candidateTrie)
+	return dposContext.GetCandidates(), nil
 }
 
 // GetValidatorInfo will return the detailed validator information
@@ -112,16 +114,4 @@ func getMinedBlocksCount(diskdb ethdb.Database, header *types.Header, validatorA
 	dposContext := types.DposContext{}
 	dposContext.SetMinedCnt(minedCntTrie)
 	return dposContext.GetMinedCnt(epochID, validatorAddress), nil
-}
-
-// getCandidates will iterate through the candidateTrie and get all candidates
-func getCandidates(candidateTrie *trie.Trie) []common.Address {
-	var candidates []common.Address
-	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
-	for iterCandidate.Next() {
-		candidateAddr := common.BytesToAddress(iterCandidate.Value)
-		candidates = append(candidates, candidateAddr)
-	}
-
-	return candidates
 }
