@@ -14,6 +14,8 @@ import (
 	"github.com/DxChainNetwork/godx/rpc"
 )
 
+// PublicDposAPI object is used to implement all
+// DPOS related APIs
 type PublicDposAPI struct {
 	e *Ethereum
 }
