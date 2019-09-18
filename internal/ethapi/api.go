@@ -51,6 +51,7 @@ const (
 	defaultGasPrice = params.GWei
 )
 
+// AccountBalance is an object that is used to show detailed account information
 type AccountBalance struct {
 	TotalBalance     *big.Int
 	AvailableBalance *big.Int

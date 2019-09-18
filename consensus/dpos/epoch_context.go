@@ -281,7 +281,6 @@ func LuckyTurntable(voteProportions sortableVoteProportions, seed int64) []commo
 		for i := range voteProportions {
 			sumProp += voteProportions[i].proportion
 			if selection <= sumProp {
-
 				// Lucky one
 				result = append(result, voteProportions[i].address)
 

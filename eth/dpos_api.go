@@ -18,6 +18,7 @@ type PublicDposAPI struct {
 	e *Ethereum
 }
 
+// CandidateInfo stores detailed candidate information
 type CandidateInfo struct {
 	Candidate          common.Address
 	Deposit            common.BigInt
@@ -25,6 +26,7 @@ type CandidateInfo struct {
 	RewardDistribution uint64
 }
 
+// ValidatorInfo stores detailed validator information
 type ValidatorInfo struct {
 	Validator          common.Address
 	Votes              common.BigInt
@@ -32,6 +34,8 @@ type ValidatorInfo struct {
 	RewardDistribution uint64
 }
 
+// NewPublicDposAPI will create a PublicDposAPI object that is used
+// to access all DPOS API Method
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
 	return &PublicDposAPI{
 		e: e,
@@ -62,7 +66,7 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInf
 	// get the detailed information
 	votes, rewardDistribution, minedCount, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
 	if err != nil {
-
+		return ValidatorInfo{}, err
 	}
 
 	return ValidatorInfo{

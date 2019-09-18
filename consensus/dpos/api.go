@@ -8,12 +8,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/core/state"
-
-	"github.com/DxChainNetwork/godx/core/types"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/core/state"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/trie"
 	"github.com/syndtr/goleveldb/leveldb"
