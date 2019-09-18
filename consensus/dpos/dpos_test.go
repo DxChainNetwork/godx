@@ -7,7 +7,6 @@ package dpos
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -91,19 +90,15 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// set vote deposit and weight ratio for delegator
 	validator := candidates[1]
-	stateDB.SetState(delegator, KeyVoteDeposit, common.BigToHash(big.NewInt(100000)))
-
-	bits := math.Float64bits(0.5)
-	fbytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(fbytes, bits)
-	stateDB.SetState(delegator, KeyVoteWeight, common.BytesToHash(fbytes))
+	setVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
 
 	// set validator reward ratio
-	var rewardRatioNumerator uint8 = 50
-	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
+	var rewardRatioNumerator uint64 = 50
+	setRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
 
 	// set the total vote weight for validator
-	stateDB.SetState(validator, KeyTotalVote, common.BigToHash(new(big.Int).SetInt64(100000*0.5)))
+	setTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
+
 	stateDbCopy := stateDB.Copy()
 
 	// Byzantium

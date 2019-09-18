@@ -91,7 +91,7 @@ func (lw *luckyWheel) randomSelect() {
 		selectedIndex := lw.selectSingleEntry()
 		selectedEntry := lw.entries[selectedIndex]
 		// Add to result, and remove from entry
-		lw.results = append(lw.results, selectedEntry.addr)
+		lw.results[i] = selectedEntry.addr
 		if selectedIndex == len(lw.entries)-1 {
 			lw.entries = lw.entries[:len(lw.entries)-1]
 		} else {
