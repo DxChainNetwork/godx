@@ -101,5 +101,10 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 	if deposit.Cmp(prevDeposit) < 0 {
 		return errCandidateDecreasingDeposit
 	}
+	// Reward ratio should also forbid decreasing
+	prevRewardRatio := getRewardRatioNumerator(state, candidateAddr)
+	if rewardRatio < prevRewardRatio {
+		return errCandidateDecreasingRewardRatio
+	}
 	return nil
 }

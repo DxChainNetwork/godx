@@ -68,6 +68,10 @@ var (
 	// value of deposit is decreasing.
 	errCandidateDecreasingDeposit = errors.New("candidate argument not qualified - candidate deposit shall not be decreased")
 
+	// errCandidateDecreasingRewardRatio happens when processing a candidate transaction, found
+	// the value of reward ratio is decreasing.
+	errCandidateDecreasingRewardRatio = errors.New("candidate argument not qualified - candidate reward ratio shall not be decreased")
+
 	// errInsufficientFrozenAssets is the error happens when subtracting frozen assets, the diff value is
 	// larger the stored frozen assets
 	errInsufficientFrozenAssets = errors.New("not enough frozen assets to subtract")
