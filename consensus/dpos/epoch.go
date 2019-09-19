@@ -4,7 +4,9 @@
 
 package dpos
 
-import "errors"
+import (
+	"errors"
+)
 
 var timeOfFirstBlock = int64(0)
 
@@ -57,6 +59,7 @@ func calcBlockSlot(blockTime int64) (int64, error) {
 	if offset%BlockInterval != 0 {
 		return 0, ErrInvalidMinedBlockTime
 	}
+
 	slot := offset / BlockInterval
 	return slot, nil
 }

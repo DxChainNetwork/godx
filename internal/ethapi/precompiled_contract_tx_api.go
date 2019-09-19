@@ -449,7 +449,7 @@ func ParsePrecompileContractTxArgs(to common.Address, gas uint64, fields map[str
 				return nil, ErrRatioNotStringFormat
 			}
 
-			ratio, err := strconv.ParseUint(str, 10, 8)
+			ratio, err := strconv.ParseUint(str, 10, 64)
 			if err != nil {
 				return nil, ErrParseStringToUint
 			}
