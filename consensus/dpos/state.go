@@ -14,7 +14,7 @@ import (
 type stateDB interface {
 	GetState(addr common.Address, key common.Hash) common.Hash
 	SetState(addr common.Address, key, value common.Hash)
-	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool)
+	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) error
 	Exist(addr common.Address) bool
 	CreateAccount(addr common.Address)
 	SetNonce(addr common.Address, nonce uint64)

@@ -96,7 +96,7 @@ func removeAddrInThawingAddress(state stateDB, thawingAddress, addr common.Addre
 
 // makeThawingAddressKey makes the key / value for the thawing address
 func makeThawingAddressKey(addr common.Address) common.Hash {
-	// thawing flag for from address: "candidate_" + from ==> "candidate_" + from
+
 	return common.BytesToHash(addr.Bytes())
 }
 

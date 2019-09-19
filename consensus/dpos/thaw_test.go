@@ -13,9 +13,10 @@ import (
 )
 
 func TestMarkThawingAddressAndValue(t *testing.T) {
-	num := 100
+	num := 1000
 	db := ethdb.NewMemDatabase()
 	state, addresses, err := newStateDBWithAccounts(db, num)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestMarkThawingAddressAndValue(t *testing.T) {
 
 // TestThawAllFrozenAssetsInEpoch test the functionality of thawAllFrozenAssetsInEpoch
 func TestThawAllFrozenAssetsInEpoch(t *testing.T) {
-	num := 100
+	num := 1000
 	db := ethdb.NewMemDatabase()
 	state, addresses, err := newStateDBWithAccounts(db, num)
 	if err != nil {
@@ -99,12 +100,12 @@ func checkThawingAddressAndValue(state stateDB, epoch int64, expect map[common.A
 	forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
 		expectTa, exist := expect[addr]
 		if !exist {
-			err = fmt.Errorf("address %v not in map", addr)
+			err = fmt.Errorf("address %x not in map", addr)
 			return
 		}
 		gotTa := getThawingAssets(state, addr, epoch)
 		if gotTa.Cmp(expectTa) != 0 {
-			err = fmt.Errorf("address %v thawing assets not expected", addr)
+			err = fmt.Errorf("address %x thawing assets not expected", addr)
 			return
 		}
 		delete(expect, addr)
