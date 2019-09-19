@@ -139,6 +139,18 @@ func (d *PublicDposAPI) VoteDeposit(voteAddress common.Address) (*big.Int, error
 	return voteDepositHash.Big(), nil
 }
 
+// EpochID will calculates the epoch id based on the block number provided
+func (d *PublicDposAPI) EpochID(blockNr *rpc.BlockNumber) (int64, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return 0, nil
+	}
+
+	// calculate epochID and return
+	return dpos.CalculateEpochID(header.Time.Int64()), nil
+}
+
 // getHeaderBasedOnNumber will return the block header information based on the block number provided
 func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Header, error) {
 	// based on the block number, get the block header

@@ -227,6 +227,13 @@ web3._extend({
 			call: 'dpos_getCandidatesVote',
 			params: 1,
 		}),
+
+		new web3._extend.Method({
+			name: 'epoch',
+			call: 'dpos_epoch',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
 	]
 });
 `
