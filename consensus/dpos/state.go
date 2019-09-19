@@ -110,8 +110,8 @@ func setTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) 
 	state.SetState(addr, KeyTotalVote, hash)
 }
 
-// getFrozenAssets returns the frozen assets for an addr
-func getFrozenAssets(state stateDB, addr common.Address) common.BigInt {
+// GetFrozenAssets returns the frozen assets for an addr
+func GetFrozenAssets(state stateDB, addr common.Address) common.BigInt {
 	hash := state.GetState(addr, KeyFrozenAssets)
 	return common.PtrBigInt(hash.Big())
 }
@@ -124,14 +124,14 @@ func setFrozenAssets(state stateDB, addr common.Address, value common.BigInt) {
 
 // addFrozenAssets add the diff to the frozen assets of the address
 func addFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) {
-	prev := getFrozenAssets(state, addr)
+	prev := GetFrozenAssets(state, addr)
 	newValue := prev.Add(diff)
 	setFrozenAssets(state, addr, newValue)
 }
 
 // subFrozenAssets sub the diff from the frozen assets of the address
 func subFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) error {
-	prev := getFrozenAssets(state, addr)
+	prev := GetFrozenAssets(state, addr)
 	if prev.Cmp(diff) < 0 {
 		return errInsufficientFrozenAssets
 	}
