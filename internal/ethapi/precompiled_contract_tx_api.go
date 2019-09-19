@@ -444,7 +444,7 @@ func ParseCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]
 	}
 
 	// form candidate tx data
-	data, err := formEncodedVoteTxData(fields)
+	data, err := formEncodedAddCandidateTxData(fields)
 	if err != nil {
 		return nil, err
 	}
@@ -459,8 +459,8 @@ func ParseVoteTxArgs(to common.Address, gas uint64, fields map[string]string) (*
 		from = common.HexToAddress(fromStr)
 	}
 
-	// form candidate tx data
-	data, err := formEncodedAddCandidateTxData(fields)
+	// form vote tx data
+	data, err := formEncodedVoteTxData(fields)
 	if err != nil {
 		return nil, err
 	}
