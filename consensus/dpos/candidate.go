@@ -46,6 +46,7 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	return nil
 }
 
+// CandidateTxDepositValidation will validate the candidate apply transaction before sending it
 func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
 	// deposit validation
 	if data.Deposit.Cmp(minDeposit) < 0 {
@@ -62,6 +63,8 @@ func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, 
 	return nil
 }
 
+// IsCandidate will check whether or not the given address is a candidate address
+// by checking the candidate deposit
 func IsCandidate(candidateAddress common.Address, state stateDB) bool {
 	// check if the candidate deposit is not zero
 	candidateDeposit := getCandidateDeposit(state, candidateAddress)
