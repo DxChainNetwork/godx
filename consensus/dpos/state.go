@@ -140,6 +140,14 @@ func subFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) err
 	return nil
 }
 
+// getAvailableBalance get the available balance, which is the result of balance minus
+// frozen assets.
+func getAvailableBalance(state stateDB, addr common.Address) common.BigInt {
+	balance := common.PtrBigInt(state.GetBalance(addr))
+	frozenAssets := GetFrozenAssets(state, addr)
+	return balance.Sub(frozenAssets)
+}
+
 // getThawingAssets return the thawing asset amount of the address in a certain epoch
 func getThawingAssets(state stateDB, addr common.Address, epoch int64) common.BigInt {
 	key := makeThawingAssetsKey(epoch)

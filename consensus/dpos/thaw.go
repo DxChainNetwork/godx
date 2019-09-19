@@ -22,14 +22,12 @@ func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int
 
 // markThawingAddress mark the given addr that will be thawed in thawingEpoch
 func markThawingAddress(stateDB stateDB, addr common.Address, thawingEpoch int64) {
-	// create thawing address: "thawing_" + currentEpoch
 	thawingAddress := getThawingAddress(thawingEpoch)
 	if !stateDB.Exist(thawingAddress) {
 		stateDB.CreateAccount(thawingAddress)
 		// before thawing deposit, mark thawingAddress as not empty account to avoid being deleted by stateDB
 		stateDB.SetNonce(thawingAddress, 1)
 	}
-	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
 	setAddrInThawingAddress(stateDB, thawingAddress, addr)
 }
 
@@ -83,7 +81,6 @@ func getThawingAddress(epoch int64) common.Address {
 
 // setAddrInThawingAddress set the address in the thawing address
 func setAddrInThawingAddress(state stateDB, thawingAddress, addr common.Address) {
-	// set thawing flag for from address: "candidate_" + from ==> "candidate_" + from
 	keyAndValue := makeThawingAddressKey(addr)
 	state.SetState(thawingAddress, keyAndValue, keyAndValue)
 }
@@ -96,7 +93,6 @@ func removeAddrInThawingAddress(state stateDB, thawingAddress, addr common.Addre
 
 // makeThawingAddressKey makes the key / value for the thawing address
 func makeThawingAddressKey(addr common.Address) common.Hash {
-
 	return common.BytesToHash(addr.Bytes())
 }
 
