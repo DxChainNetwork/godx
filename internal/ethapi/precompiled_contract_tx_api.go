@@ -367,7 +367,6 @@ func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArg
 
 	// check ApplyCandidate tx
 	case common.BytesToAddress([]byte{13}):
-
 		// to be a candidate need minimum balance of candidateThreshold,
 		// which can stop flooding of applying candidate
 		if balance.Cmp(candidateThreshold) < 0 {
@@ -476,7 +475,7 @@ func formEncodedVoteTxData(fields map[string]string) (data []byte, err error) {
 	}
 
 	// rlp encode data
-	return rlp.EncodeToBytes(voteTxData)
+	return rlp.EncodeToBytes(&voteTxData)
 }
 
 func formEncodedAddCandidateTxData(fields map[string]string) (data []byte, err error) {
@@ -487,7 +486,7 @@ func formEncodedAddCandidateTxData(fields map[string]string) (data []byte, err e
 	}
 
 	// rlp encode data
-	return rlp.EncodeToBytes(addCandidateTxData)
+	return rlp.EncodeToBytes(&addCandidateTxData)
 }
 
 func formVoteTxData(fields map[string]string) (data types.VoteTxData, err error) {
