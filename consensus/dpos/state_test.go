@@ -5,6 +5,7 @@
 package dpos
 
 import (
+	"crypto/rand"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -34,19 +35,30 @@ func TestMakeThawingAssetsKey(t *testing.T) {
 
 // newStateDBWithAccounts create a new state db with a number of created accounts. The accounts
 // are addresses 0x000001 ~ 0x0000${NUM}
-func newStateDBWithAccounts(db ethdb.Database, num int) (*state.StateDB, error) {
+func newStateDBWithAccounts(db ethdb.Database, num int) (*state.StateDB, []common.Address, error) {
 	stateDB, err := newStateDB(db)
 	if err != nil {
-		return nil, err
+		return nil, []common.Address{}, err
 	}
+	var addresses []common.Address
 	for i := 0; i != num; i++ {
-		address := common.BytesToAddress([]byte{byte(i + 1)})
+		address := randomAddress()
 		stateDB.CreateAccount(address)
 		stateDB.SetNonce(address, 1)
+		addresses = append(addresses, address)
 	}
-	return stateDB, nil
+	return stateDB, addresses, nil
 }
 
 func newStateDB(db ethdb.Database) (*state.StateDB, error) {
 	return state.New(common.Hash{}, state.NewDatabase(db))
+}
+
+func randomAddress() common.Address {
+	var addr common.Address
+	_, err := rand.Read(addr[:])
+	if err != nil {
+		panic("cannot randomize an address")
+	}
+	return addr
 }
