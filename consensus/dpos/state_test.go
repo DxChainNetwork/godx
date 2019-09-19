@@ -14,11 +14,6 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 )
 
-type testOperation interface {
-	execute()
-	check() error
-}
-
 func TestMakeThawingAssetsKey(t *testing.T) {
 	tests := []int64{
 		1, 2, 3, 4, 5, 100,

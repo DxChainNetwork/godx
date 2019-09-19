@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/DxChainNetwork/godx/core/state"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
 )
@@ -99,8 +101,26 @@ func TestThawAllFrozenAssetsInEpochError(t *testing.T) {
 	}
 }
 
+// randomMarkThawAddresses randomly mark the thawing address with a random value value,
+// It also add the frozen assets and then commit to statedb.
+// Return the thawing address to value field.
+func randomMarkThawAddresses(stateDB *state.StateDB, addresses []common.Address, epoch int64) (map[common.Address]common.BigInt, error) {
+	m := make(map[common.Address]common.BigInt)
+	for _, addr := range addresses {
+		ta := common.RandomBigInt()
+		markThawingAddressAndValue(stateDB, addr, epoch, ta)
+		addFrozenAssets(stateDB, addr, ta)
+		m[addr] = ta
+	}
+	_, err := stateDB.Commit(true)
+	if err != nil {
+		return make(map[common.Address]common.BigInt), err
+	}
+	return m, nil
+}
+
 // checkThawingAddressAndValue checks the result of markThawingAddressAndValue
-func checkThawingAddressAndValue(state stateDB, epoch int64, expect map[common.Address]common.BigInt) error {
+func checkThawingAddressAndValue(state *state.StateDB, epoch int64, expect map[common.Address]common.BigInt) error {
 	thawingAddress := getThawingAddress(epoch)
 	var err error
 	forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
@@ -123,22 +143,4 @@ func checkThawingAddressAndValue(state stateDB, epoch int64, expect map[common.A
 		return fmt.Errorf("thawing size not expected")
 	}
 	return nil
-}
-
-// randomMarkThawAddresses randomly mark the thawing address with a random value value,
-// It also add the frozen assets and then commit to statedb.
-// Return the thawing address to value field.
-func randomMarkThawAddresses(stateDB stateDB, addresses []common.Address, epoch int64) (map[common.Address]common.BigInt, error) {
-	m := make(map[common.Address]common.BigInt)
-	for _, addr := range addresses {
-		ta := common.RandomBigInt()
-		markThawingAddressAndValue(stateDB, addr, epoch, ta)
-		addFrozenAssets(stateDB, addr, ta)
-		m[addr] = ta
-	}
-	_, err := stateDB.Commit(true)
-	if err != nil {
-		return make(map[common.Address]common.BigInt), err
-	}
-	return m, nil
 }

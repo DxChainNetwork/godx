@@ -19,8 +19,6 @@ type stateDB interface {
 	CreateAccount(addr common.Address)
 	SetNonce(addr common.Address, nonce uint64)
 	GetBalance(addr common.Address) *big.Int
-	IntermediateRoot(deleteEmptyObjects bool) common.Hash
-	Commit(deleteEmptyObjects bool) (root common.Hash, err error)
 }
 
 var (
