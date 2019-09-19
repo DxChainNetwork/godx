@@ -9,40 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
+
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
-	"github.com/DxChainNetwork/godx/common/unit"
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
-)
-
-var (
-	// dpos related parameters
-
-	// defines the minimum deposit of candidate
-	minDeposit = big.NewInt(1e18)
-
-	// defines the minimum balance of candidate
-	candidateThreshold = big.NewInt(1e18)
-)
-
-const (
-
-	// MaxVoteCount is the max number of voted candidates in a vot tx
-	MaxVoteCount = 30
-
-	// StorageContractTxGas defines the default gas for storage contract tx
-	StorageContractTxGas = 90000
-
-	// DposTxGas defines the default gas for dpos tx
-	DposTxGas = 1000000
 )
 
 // PrivateStorageContractTxAPI exposes the storage contract tx methods for the RPC interface
@@ -147,29 +122,23 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 
 // SendApplyCandidateTx submit a apply candidate tx.
 // the parameter ratio is the award distribution ratio that candidate state.
-func (dpos *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
+func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{13})
 	ctx := context.Background()
 
+	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	// parse precompile contract tx args
-	args, err := ParseCandidateApplyTxArgs(to, DposTxGas, fields)
+	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// check dpos tx
-	err = CheckDposOperationTx(stateDB, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -177,7 +146,7 @@ func (dpos *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (com
 }
 
 // SendCancelCandidateTx submit a cancel candidate tx
-func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
+func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{14})
 	ctx := context.Background()
@@ -185,18 +154,18 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	// check dpos tx
-	err = CheckDposOperationTx(stateDB, args)
-	if err != nil {
-		return common.Hash{}, err
+	// check if the address is the candidate address
+	if !dpos.IsCandidate(args.From, stateDB) {
+		return common.Hash{}, ErrNotCandidate
 	}
 
-	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	// send contract transaction
+	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -204,29 +173,23 @@ func (dpos *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.
 }
 
 // SendVoteTx submit a vote tx
-func (dpos *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
+func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{15})
 	ctx := context.Background()
 
+	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	// parse precompile contract tx args
-	args, err := ParseVoteTxArgs(to, DposTxGas, fields)
+	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// check dpos tx
-	err = CheckDposOperationTx(stateDB, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -234,7 +197,7 @@ func (dpos *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, 
 }
 
 // SendCancelVoteTx submit a cancel vote tx
-func (dpos *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
+func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
 	to := common.Address{}
 	to.SetBytes([]byte{16})
 	ctx := context.Background()
@@ -242,18 +205,18 @@ func (dpos *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash,
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := dpos.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	// check dpos tx
-	err = CheckDposOperationTx(stateDB, args)
-	if err != nil {
-		return common.Hash{}, err
+	// check has voted
+	if !dpos.HasVoted(args.From, stateDB) {
+		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
 	}
 
-	txHash, err := sendPrecompiledContractTx(ctx, dpos.b, dpos.nonceLock, args)
+	// send the contract transaction
+	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -357,236 +320,4 @@ func NewPrecompiledContractTxArgs(from, to common.Address, input []byte, value *
 	}
 
 	return args
-}
-
-// CheckDposOperationTx checks the dpos transaction's filed
-func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArgs) error {
-	balance := stateDB.GetBalance(args.From)
-	emptyHash := common.Hash{}
-	switch args.To {
-
-	// check ApplyCandidate tx
-	case common.BytesToAddress([]byte{13}):
-		// to be a candidate need minimum balance of candidateThreshold,
-		// which can stop flooding of applying candidate
-		if balance.Cmp(candidateThreshold) < 0 {
-			return ErrBalanceNotEnoughCandidateThreshold
-		}
-
-		// maybe already become a delegator, so should checkout the allowed balance whether enough for this deposit
-		voteDeposit := new(big.Int).SetInt64(0)
-		voteDepositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
-		if voteDepositHash != emptyHash {
-			voteDeposit = voteDepositHash.Big()
-		}
-
-		allowedBal := new(big.Int).Sub(balance, voteDeposit)
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
-			return ErrDepositValueNotSuitable
-		}
-
-		// check the deposit value which must more than minDeposit
-		if args.Value.ToInt().Cmp(minDeposit) < 0 {
-			return ErrCandidateDepositTooLow
-		}
-
-		return nil
-
-	// check ProcessCancelCandidate tx
-	case common.BytesToAddress([]byte{14}):
-		depositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
-		if depositHash == emptyHash {
-			log.Error("has not become candidate yet,so can not submit cancel candidate tx", "address", args.From.String())
-			return ErrNotCandidate
-		}
-		return nil
-
-	// check Vote tx
-	case common.BytesToAddress([]byte{15}):
-		if args.Input == nil {
-			return ErrEmptyInput
-		}
-
-		// maybe already become a candidate, so should checkout the allowed balance whether enough for this deposit
-		candidateDeposit := new(big.Int).SetInt64(0)
-		candidateDepositHash := stateDB.GetState(args.From, dpos.KeyCandidateDeposit)
-		if candidateDepositHash != emptyHash {
-			candidateDeposit = candidateDepositHash.Big()
-		}
-
-		allowedBal := new(big.Int).Sub(balance, candidateDeposit)
-		if args.Value.ToInt().Sign() <= 0 || args.Value.ToInt().Cmp(allowedBal) > 0 {
-			return ErrDepositValueNotSuitable
-		}
-
-		return nil
-
-	// check CancelVote tx
-	case common.BytesToAddress([]byte{16}):
-		depositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
-		if depositHash == emptyHash {
-			log.Error("has not voted before,so can not submit cancel vote tx", "address", args.From.String())
-			return ErrHasNotVote
-		}
-		return nil
-
-	default:
-		return ErrUnknownPrecompileContractAddress
-	}
-}
-
-func ParseCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string) (*PrecompiledContractTxArgs, error) {
-	// parse the from field
-	var from common.Address
-	if fromStr, ok := fields["from"]; ok {
-		from = common.HexToAddress(fromStr)
-	}
-
-	// form candidate tx data
-	data, err := formEncodedAddCandidateTxData(fields)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPrecompiledContractTxArgs(from, to, data, nil, gas), nil
-}
-
-func ParseVoteTxArgs(to common.Address, gas uint64, fields map[string]string) (*PrecompiledContractTxArgs, error) {
-	// parse the from field
-	var from common.Address
-	if fromStr, ok := fields["from"]; ok {
-		from = common.HexToAddress(fromStr)
-	}
-
-	// form vote tx data
-	data, err := formEncodedVoteTxData(fields)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPrecompiledContractTxArgs(from, to, data, nil, gas), nil
-}
-
-func formEncodedVoteTxData(fields map[string]string) (data []byte, err error) {
-	// form the vote tx data
-	var voteTxData types.VoteTxData
-	if voteTxData, err = formVoteTxData(fields); err != nil {
-		return nil, err
-	}
-
-	// rlp encode data
-	return rlp.EncodeToBytes(&voteTxData)
-}
-
-func formEncodedAddCandidateTxData(fields map[string]string) (data []byte, err error) {
-	// form the add candidate tx data
-	var addCandidateTxData types.AddCandidateTxData
-	if addCandidateTxData, err = formAddCandidateTxData(fields); err != nil {
-		return nil, err
-	}
-
-	// rlp encode data
-	return rlp.EncodeToBytes(&addCandidateTxData)
-}
-
-func formVoteTxData(fields map[string]string) (data types.VoteTxData, err error) {
-	// get deposit
-	depositStr, ok := fields["deposit"]
-	if !ok {
-		return types.VoteTxData{}, fmt.Errorf("failed to form voteTxData, vote deposit is not provided")
-	}
-
-	// get candidates
-	candidatesStr, ok := fields["candidates"]
-	if !ok {
-		return types.VoteTxData{}, fmt.Errorf("failed to form voteTxData, vote candidates is not provided")
-	}
-
-	// parse candidates
-	if data.Candidates, err = parseCandidates(candidatesStr); err != nil {
-		return types.VoteTxData{}, err
-	}
-
-	// parse deposit
-	if data.Deposit, err = unit.ParseCurrency(depositStr); err != nil {
-		return types.VoteTxData{}, err
-	}
-
-	return
-}
-
-func formAddCandidateTxData(fields map[string]string) (data types.AddCandidateTxData, err error) {
-	// get reward ratio
-	rewardRatioStr, ok := fields["ratio"]
-	if !ok {
-		return types.AddCandidateTxData{}, fmt.Errorf("failed to form addCandidateTxData, candidate rewardRatio is not provided")
-	}
-
-	// get deposit
-	depositStr, ok := fields["deposit"]
-	if !ok {
-		return types.AddCandidateTxData{}, fmt.Errorf("failed to form addCandidateTxData, candidate deposit is not provided")
-	}
-
-	// parse reward ratio
-	if data.RewardRatio, err = parseRewardRatio(rewardRatioStr); err != nil {
-		return types.AddCandidateTxData{}, err
-	}
-
-	// parse deposit
-	if data.Deposit, err = unit.ParseCurrency(depositStr); err != nil {
-		return types.AddCandidateTxData{}, err
-	}
-
-	return
-}
-
-func parseCandidates(candidates string) ([]common.Address, error) {
-	// strip all white spaces
-	candidates = strings.Replace(candidates, " ", "", -1)
-
-	// convert it to a list of candidates
-	candidateAddresses := strings.Split(candidates, ",")
-	return candidatesValidationAndConversion(candidateAddresses)
-}
-
-// parseRewardRatio is used to convert the ratio from string to uint64
-// and to validate the parsed ratio
-func parseRewardRatio(ratio string) (uint64, error) {
-	// convert the string to uint64
-	rewardRatio, err := unit.ParseUint64(ratio, 1, "")
-	if err != nil {
-		return 0, ErrParseStringToUint
-	}
-
-	// validate the rewardRatio and return
-	return rewardRatioValidation(rewardRatio)
-}
-
-// rewardRatioValidation is used to validate the reward ratio
-func rewardRatioValidation(ratio uint64) (uint64, error) {
-	// check if the reward ratio
-	if ratio > dpos.RewardRatioDenominator {
-		return 0, ErrInvalidAwardDistributionRatio
-	}
-	return ratio, nil
-}
-
-// candidatesValidationAndConversion will check the string list format candidates first
-// and then convert the string list to address list
-func candidatesValidationAndConversion(candidates []string) ([]common.Address, error) {
-	// candidates validation
-	if len(candidates) > MaxVoteCount {
-		return nil, ErrBeyondMaxVoteSize
-	}
-
-	// candidates conversion
-	var candidateAddresses []common.Address
-	for _, candidate := range candidates {
-		addr := common.HexToAddress(candidate)
-		candidateAddresses = append(candidateAddresses, addr)
-	}
-
-	// return
-	return candidateAddresses, nil
 }

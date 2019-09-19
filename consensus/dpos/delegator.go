@@ -56,6 +56,27 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	return nil
 }
 
+func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
+	// validate the vote deposit and available balance
+	delegatorBalance := common.PtrBigInt(state.GetBalance(delegatorAddress))
+	delegatorAvailableBalance := delegatorBalance.Sub(getFrozenAssets(state, delegatorAddress))
+	if delegatorAvailableBalance.Cmp(voteData.Deposit) < 0 {
+		return errDelegatorInsufficientBalance
+	}
+	return nil
+}
+
+func HasVoted(delegatorAddress common.Address, state stateDB) bool {
+	// check if the delegator has voted
+	voteDeposit := getVoteDeposit(state, delegatorAddress)
+	if voteDeposit.Cmp(common.BigInt0) <= 0 {
+		return false
+	}
+
+	// if the vote deposit is greater than 0, meaning the delegator has voted
+	return true
+}
+
 // checkValidVote checks whether the input argument is valid for a vote transaction
 func checkValidVote(deposit common.BigInt, candidates []common.Address) error {
 	if deposit.Cmp(common.BigInt0) <= 0 {

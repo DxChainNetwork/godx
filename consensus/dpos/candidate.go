@@ -46,6 +46,33 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	return nil
 }
 
+func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
+	// deposit validation
+	if data.Deposit.Cmp(minDeposit) < 0 {
+		return errCandidateInsufficientDeposit
+	}
+
+	// available balance validation
+	candidateBalance := common.PtrBigInt(state.GetBalance(candidateAddress))
+	candidateAvailableBalance := candidateBalance.Sub(getFrozenAssets(state, candidateAddress))
+	if candidateAvailableBalance.Cmp(data.Deposit) < 0 {
+		return errCandidateInsufficientBalance
+	}
+
+	return nil
+}
+
+func IsCandidate(candidateAddress common.Address, state stateDB) bool {
+	// check if the candidate deposit is not zero
+	candidateDeposit := getCandidateDeposit(state, candidateAddress)
+	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
+		return false
+	}
+
+	// if the candidate deposit is not 0, meaning it is the candidate
+	return true
+}
+
 // calcCandidateTotalVotes calculate the total votes for the candidate. The result include the deposit for the
 // candidate himself and the delegated votes from delegator
 func (ec *EpochContext) calcCandidateTotalVotes(candidateAddr common.Address) common.BigInt {
@@ -88,7 +115,7 @@ func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Ad
 // checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidate.
 // If not valid, an error is returned.
 func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
-	// Candidate deposit should be greate than the threshold
+	// Candidate deposit should be great than the threshold
 	if deposit.Cmp(minDeposit) < 0 {
 		return errCandidateInsufficientDeposit
 	}
