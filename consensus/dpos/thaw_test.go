@@ -13,7 +13,7 @@ import (
 )
 
 func TestMarkThawingAddressAndValue(t *testing.T) {
-	num := 1000
+	num := 100
 	db := ethdb.NewMemDatabase()
 	state, addresses, err := newStateDBWithAccounts(db, num)
 
@@ -22,8 +22,14 @@ func TestMarkThawingAddressAndValue(t *testing.T) {
 	}
 	// Mark 100 addresses as thaw in 2 epochs
 	epoch1, epoch2 := int64(100), int64(101)
-	m1 := randomMarkThawAddresses(state, addresses, epoch1)
-	m2 := randomMarkThawAddresses(state, addresses, epoch2)
+	m1, err := randomMarkThawAddresses(state, addresses, epoch1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m2, err := randomMarkThawAddresses(state, addresses, epoch2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// check the two periods
 	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch1), m1); err != nil {
 		t.Error("period1: ", err)
@@ -35,7 +41,7 @@ func TestMarkThawingAddressAndValue(t *testing.T) {
 
 // TestThawAllFrozenAssetsInEpoch test the functionality of thawAllFrozenAssetsInEpoch
 func TestThawAllFrozenAssetsInEpoch(t *testing.T) {
-	num := 1000
+	num := 100
 	db := ethdb.NewMemDatabase()
 	state, addresses, err := newStateDBWithAccounts(db, num)
 	if err != nil {
@@ -122,7 +128,7 @@ func checkThawingAddressAndValue(state stateDB, epoch int64, expect map[common.A
 // randomMarkThawAddresses randomly mark the thawing address with a random value value,
 // It also add the frozen assets and then commit to statedb.
 // Return the thawing address to value field.
-func randomMarkThawAddresses(stateDB stateDB, addresses []common.Address, epoch int64) map[common.Address]common.BigInt {
+func randomMarkThawAddresses(stateDB stateDB, addresses []common.Address, epoch int64) (map[common.Address]common.BigInt, error) {
 	m := make(map[common.Address]common.BigInt)
 	for _, addr := range addresses {
 		ta := common.RandomBigInt()
@@ -130,6 +136,9 @@ func randomMarkThawAddresses(stateDB stateDB, addresses []common.Address, epoch 
 		addFrozenAssets(stateDB, addr, ta)
 		m[addr] = ta
 	}
-	stateDB.IntermediateRoot(true)
-	return m
+	_, err := stateDB.Commit(true)
+	if err != nil {
+		return make(map[common.Address]common.BigInt), err
+	}
+	return m, nil
 }
