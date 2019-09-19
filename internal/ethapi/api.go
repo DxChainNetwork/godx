@@ -51,6 +51,14 @@ const (
 	defaultGasPrice = params.GWei
 )
 
+// AccountBalance is an object that is used to show detailed account information
+type AccountBalance struct {
+	TotalBalance     *big.Int
+	AvailableBalance *big.Int
+	VoteDeposit      *big.Int
+	CandidateDeposit *big.Int
+}
+
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
 type PublicEthereumAPI struct {
@@ -501,24 +509,28 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (AccountBalance, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
-		return nil, err
+		return AccountBalance{}, err
 	}
 
 	if state.Error() != nil {
-		return nil, err
+		return AccountBalance{}, err
 	}
 
 	accountBalance := state.GetBalance(address)
 	candidateDeposit := state.GetState(address, dpos.KeyCandidateDeposit)
 	voteDeposit := state.GetState(address, dpos.KeyVoteDeposit)
+	availableBalance := new(big.Int).Sub(accountBalance, candidateDeposit.Big())
+	availableBalance = new(big.Int).Sub(availableBalance, voteDeposit.Big())
 
-	accountBalance.Sub(accountBalance, candidateDeposit.Big()).Sub(accountBalance, voteDeposit.Big())
-	return (*hexutil.Big)(accountBalance), nil
-
-	//return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+	return AccountBalance{
+		TotalBalance:     accountBalance,
+		AvailableBalance: availableBalance,
+		VoteDeposit:      voteDeposit.Big(),
+		CandidateDeposit: candidateDeposit.Big(),
+	}, nil
 }
 
 // Result structs for GetProof

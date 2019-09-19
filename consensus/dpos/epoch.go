@@ -37,6 +37,7 @@ func calcBlockSlot(blockTime int64) (int64, error) {
 	if offset%BlockInterval != 0 {
 		return 0, errInvalidMinedBlockTime
 	}
+
 	slot := offset / BlockInterval
 	return slot, nil
 }
