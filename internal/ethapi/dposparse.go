@@ -9,10 +9,10 @@ import (
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
+// ParseAndValidateCandidateApplyTxArgs will parse and validate the candidate apply transaction arguments
 func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB) (*PrecompiledContractTxArgs, error) {
 	// parse the candidateAddress field
 	var candidateAddress common.Address
@@ -29,6 +29,7 @@ func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields 
 	return NewPrecompiledContractTxArgs(candidateAddress, to, data, nil, gas), nil
 }
 
+// ParseAndValidateVoteTxArgs will parse and validate the vote transaction arguments
 func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB) (*PrecompiledContractTxArgs, error) {
 	// parse the delegator account address
 	var delegatorAddress common.Address
@@ -45,6 +46,7 @@ func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string
 	return NewPrecompiledContractTxArgs(delegatorAddress, to, data, nil, gas), nil
 }
 
+// formAndValidateAndEncodeCandidateTxData will form, validate and encode candidate apply transaction data
 func formAndValidateAndEncodeCandidateTxData(stateDB *state.StateDB, candidateAddress common.Address, fields map[string]string) ([]byte, error) {
 	// form candidate tx data
 	addCandidateTxData, err := formAddCandidateTxData(fields)
@@ -61,6 +63,7 @@ func formAndValidateAndEncodeCandidateTxData(stateDB *state.StateDB, candidateAd
 	return rlp.EncodeToBytes(&addCandidateTxData)
 }
 
+// formAndValidateAndEncodeVoteTxData will form, validate, and encode vote transaction data
 func formAndValidateAndEncodeVoteTxData(stateDB *state.StateDB, delegatorAddress common.Address, fields map[string]string) ([]byte, error) {
 	// form the vote tx data
 	voteTxData, err := formVoteTxData(fields)
@@ -77,6 +80,7 @@ func formAndValidateAndEncodeVoteTxData(stateDB *state.StateDB, delegatorAddress
 	return rlp.EncodeToBytes(&voteTxData)
 }
 
+// formVoteTxData will parse the fields and form vote transaction data
 func formVoteTxData(fields map[string]string) (data types.VoteTxData, err error) {
 	// get deposit
 	depositStr, ok := fields["deposit"]
@@ -103,6 +107,7 @@ func formVoteTxData(fields map[string]string) (data types.VoteTxData, err error)
 	return
 }
 
+// formAddCandidateTxData will parse the fields and form candidate apply transaction data
 func formAddCandidateTxData(fields map[string]string) (data types.AddCandidateTxData, err error) {
 	// get reward ratio
 	rewardRatioStr, ok := fields["ratio"]
@@ -129,6 +134,7 @@ func formAddCandidateTxData(fields map[string]string) (data types.AddCandidateTx
 	return
 }
 
+// parseCandidates will convert the string to a list of candidate address
 func parseCandidates(candidates string) ([]common.Address, error) {
 	// strip all white spaces
 	candidates = strings.Replace(candidates, " ", "", -1)
@@ -177,23 +183,4 @@ func candidatesValidationAndConversion(candidates []string) ([]common.Address, e
 
 	// return
 	return candidateAddresses, nil
-}
-
-// CheckDposOperationTx checks the dpos transaction's filed
-func CheckDposOperationTx(stateDB *state.StateDB, args *PrecompiledContractTxArgs) error {
-	emptyHash := common.Hash{}
-	switch args.To {
-
-	// check CancelVote tx
-	case common.BytesToAddress([]byte{16}):
-		depositHash := stateDB.GetState(args.From, dpos.KeyVoteDeposit)
-		if depositHash == emptyHash {
-			log.Error("has not voted before,so can not submit cancel vote tx", "address", args.From.String())
-			return ErrHasNotVote
-		}
-		return nil
-
-	default:
-		return ErrUnknownPrecompileContractAddress
-	}
 }
