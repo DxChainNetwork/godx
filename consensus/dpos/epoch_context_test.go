@@ -5,16 +5,13 @@
 package dpos
 
 import (
-	"encoding/binary"
 	"math/big"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
 )
@@ -129,63 +126,6 @@ func Test_CountVotes(t *testing.T) {
 		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight)) != 0 {
 			t.Errorf("%s wanted vote weight: %d,got %v", addr.String(), wantTotalVoteWeight, weight)
 		}
-	}
-}
-
-func TestLuckyTurntable(t *testing.T) {
-
-	// test 1: candidates less than maxValidatorSize
-	// mock some vote proportion
-	votes := make(randomSelectorEntries, 0)
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		voteProportion := randomSelectorEntry{
-			addr: common.HexToAddress("0x" + str),
-			vote: common.NewBigIntUint64(uint64(i + 1)),
-		}
-		votes = append(votes, &voteProportion)
-	}
-
-	// make random seed
-	blockHash := common.HexToAddress("0xb7c653791455fdb56fca714c0090c8dffa83a50c546b1dc4ab4dd73b91639b38")
-	epochID := int64(1001)
-	seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(blockHash.Bytes()))) + epochID
-	rs, err := newRandomAddressSelector(typeLuckyWheel, votes, seed, MaxValidatorSize)
-	if err != errRandomSelectNotEnoughEntries {
-		t.Fatalf("expect %v, got %v", errRandomSelectNotEnoughEntries, nil)
-	}
-	result := votes.listAddresses()
-
-	// check result
-	if len(result) != MaxValidatorSize-1 {
-		t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize-1, len(result))
-	}
-
-	for i, addr := range result {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		if addr != common.HexToAddress("0x"+str) {
-			t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want elected addr: %s,got: %s", common.HexToAddress("0x"+str).String(), addr.String())
-		}
-	}
-
-	// test 2: candidates more than maxValidatorSize
-	// add another maxValidatorSize-1 candidates
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+MaxValidatorSize-1), 10)
-		voteProportion := randomSelectorEntry{
-			addr: common.HexToAddress("0x" + str),
-			vote: common.NewBigIntUint64(uint64(i + 1)),
-		}
-		votes = append(votes, &voteProportion)
-	}
-
-	rs, err = newRandomAddressSelector(typeLuckyWheel, votes, seed, MaxValidatorSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result = rs.RandomSelect()
-	if len(result) != MaxValidatorSize {
-		t.Errorf("candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize, len(result))
 	}
 }
 

@@ -104,6 +104,12 @@ func (lw *luckyWheel) RandomSelect() []common.Address {
 // RandomSelect is a helper function that randomly select addresses from the lucky wheel.
 // The execution result is added to lw.results field
 func (lw *luckyWheel) randomSelect() {
+	// If the number of entries is less than target, return shuffled entries
+	if len(lw.entries) < lw.target {
+		lw.shuffleAndWriteEntriesToResult()
+		return
+	}
+	// Else execute the random selection algorithm
 	for i := 0; i < lw.target; i++ {
 		// Execute the selection
 		selectedIndex := lw.selectSingleEntry()
@@ -136,6 +142,17 @@ func (lw *luckyWheel) selectSingleEntry() int {
 	// return the last entry of the entries
 	// TODO: Should we panic here?
 	return len(lw.entries) - 1
+}
+
+// shuffleAndWriteEntriesToResult shuffle and write the entries to results.
+// The function is only used when the target is smaller than entry length.
+func (lw *luckyWheel) shuffleAndWriteEntriesToResult() {
+	list := lw.entries.listAddresses()
+	lw.rand.Shuffle(len(lw.entries), func(i, j int) {
+		list[i], list[j] = list[j], list[i]
+	})
+	lw.results = list
+	return
 }
 
 // listAddresses return the list of addresses of the entries
