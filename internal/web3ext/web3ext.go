@@ -229,8 +229,8 @@ web3._extend({
 		}),
 
 		new web3._extend.Method({
-			name: 'epoch',
-			call: 'dpos_epoch',
+			name: 'epochid',
+			call: 'dpos_epochID',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
