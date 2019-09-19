@@ -21,6 +21,8 @@ import (
 	"math"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -157,6 +159,27 @@ func (st *StateTransition) buyGas() error {
 	if st.state.GetBalance(st.msg.From()).Cmp(mgval) < 0 {
 		return errInsufficientBalanceForGas
 	}
+
+	balance := st.state.GetBalance(st.msg.From())
+	candidateDeposit := new(big.Int).SetInt64(0)
+	voteDeposit := new(big.Int).SetInt64(0)
+	candidateDepositHash := st.state.GetState(st.msg.From(), dpos.KeyCandidateDeposit)
+	if candidateDepositHash != (common.Hash{}) {
+		candidateDeposit = candidateDepositHash.Big()
+	}
+
+	voteDepositHash := st.state.GetState(st.msg.From(), dpos.KeyVoteDeposit)
+	if voteDepositHash != (common.Hash{}) {
+		voteDeposit = voteDepositHash.Big()
+	}
+
+	// if caller has candidate deposit or vote deposit, check whether left balance enough the transfer value
+	allowedBal := new(big.Int).Sub(balance, candidateDeposit)
+	allowedBal.Sub(allowedBal, voteDeposit)
+	if mgval.Cmp(allowedBal) > 0 {
+		return errInsufficientBalanceForGas
+	}
+
 	if err := st.gp.SubGas(st.msg.Gas()); err != nil {
 		return err
 	}
