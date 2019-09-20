@@ -80,13 +80,15 @@ func newLuckyWheel(entries randomSelectorEntries, seed int64, target int) (*luck
 	for _, entry := range entries {
 		sumVotes = sumVotes.Add(entry.vote)
 	}
-	return &luckyWheel{
+	lw := &luckyWheel{
 		rand:     rand.New(rand.NewSource(seed)),
-		entries:  entries,
 		target:   target,
+		entries:  make(randomSelectorEntries, len(entries)),
 		results:  make([]common.Address, target),
 		sumVotes: sumVotes,
-	}, nil
+	}
+	copy(lw.entries, entries)
+	return lw, nil
 }
 
 // RandomSelect return the result of the random selection of lucky wheel
@@ -151,7 +153,7 @@ func (lw *luckyWheel) shuffleAndWriteEntriesToResult() {
 
 // listAddresses return the list of addresses of the entries
 func (entries randomSelectorEntries) listAddresses() []common.Address {
-	var res []common.Address
+	res := make([]common.Address, 0, len(entries))
 	for _, entry := range entries {
 		res = append(res, entry.addr)
 	}

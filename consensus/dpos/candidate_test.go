@@ -36,7 +36,7 @@ func TestProcessAddCandidate(t *testing.T) {
 
 	c := newCandidatePrototype(candidateAddr)
 	createOrigCandidateInState(state, c)
-	err := ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
 	if err != nil {
 		t.Fatal(err)
 	}
