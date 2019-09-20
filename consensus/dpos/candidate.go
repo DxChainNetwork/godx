@@ -136,5 +136,11 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 	if rewardRatio < prevRewardRatio {
 		return errCandidateDecreasingRewardRatio
 	}
+	// The candidate should have enough balance for the transaction
+	availableBalance := getAvailableBalance(state, candidateAddr)
+	increasedDeposit := deposit.Sub(prevDeposit)
+	if availableBalance.Cmp(increasedDeposit) < 0 {
+		return errCandidateInsufficientBalance
+	}
 	return nil
 }

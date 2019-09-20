@@ -14,7 +14,7 @@ import (
 type stateDB interface {
 	GetState(addr common.Address, key common.Hash) common.Hash
 	SetState(addr common.Address, key, value common.Hash)
-	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool)
+	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) error
 	Exist(addr common.Address) bool
 	CreateAccount(addr common.Address)
 	SetNonce(addr common.Address, nonce uint64)
@@ -110,8 +110,8 @@ func setTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) 
 	state.SetState(addr, KeyTotalVote, hash)
 }
 
-// getFrozenAssets returns the frozen assets for an addr
-func getFrozenAssets(state stateDB, addr common.Address) common.BigInt {
+// GetFrozenAssets returns the frozen assets for an addr
+func GetFrozenAssets(state stateDB, addr common.Address) common.BigInt {
 	hash := state.GetState(addr, KeyFrozenAssets)
 	return common.PtrBigInt(hash.Big())
 }
@@ -124,20 +124,35 @@ func setFrozenAssets(state stateDB, addr common.Address, value common.BigInt) {
 
 // addFrozenAssets add the diff to the frozen assets of the address
 func addFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) {
-	prev := getFrozenAssets(state, addr)
+	prev := GetFrozenAssets(state, addr)
 	newValue := prev.Add(diff)
 	setFrozenAssets(state, addr, newValue)
 }
 
 // subFrozenAssets sub the diff from the frozen assets of the address
 func subFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) error {
-	prev := getFrozenAssets(state, addr)
+	prev := GetFrozenAssets(state, addr)
 	if prev.Cmp(diff) < 0 {
 		return errInsufficientFrozenAssets
 	}
 	newValue := prev.Sub(diff)
 	setFrozenAssets(state, addr, newValue)
 	return nil
+}
+
+// getBalance returns the balance of the address. This is simply an adapter function
+// to convert the type from *big.Int to common.BigInt
+func getBalance(state stateDB, addr common.Address) common.BigInt {
+	balance := state.GetBalance(addr)
+	return common.PtrBigInt(balance)
+}
+
+// getAvailableBalance get the available balance, which is the result of balance minus
+// frozen assets.
+func getAvailableBalance(state stateDB, addr common.Address) common.BigInt {
+	balance := getBalance(state, addr)
+	frozenAssets := GetFrozenAssets(state, addr)
+	return balance.Sub(frozenAssets)
 }
 
 // getThawingAssets return the thawing asset amount of the address in a certain epoch

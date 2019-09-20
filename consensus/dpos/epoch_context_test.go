@@ -120,7 +120,8 @@ func Test_CountVotes(t *testing.T) {
 
 	// check vote weight without attenuation
 	expectedVoteWeightWithoutAttenuation := int64(15e6)
-	for addr, weight := range votes {
+	for _, entry := range votes {
+		addr, weight := entry.addr, entry.vote
 		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
 		wantTotalVoteWeight := expectedVoteWeightWithoutAttenuation + candidateDeposit.Int64()
 		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight)) != 0 {

@@ -49,18 +49,12 @@ type (
 )
 
 // randomSelectAddress randomly select entries based on weight from the entries.
-func randomSelectAddress(typeCode int, data map[common.Address]common.BigInt, seed int64, target int) ([]common.Address, error) {
-	// convert the map to entries
-	var entries randomSelectorEntries
-	for addr, weight := range data {
-		entries = append(entries, &randomSelectorEntry{addr, weight})
-	}
-	// Run random select
-	ras, err := newRandomAddressSelector(typeCode, entries, seed, target)
+func randomSelectAddress(typeCode int, data randomSelectorEntries, seed int64, target int) ([]common.Address, error) {
+	ras, err := newRandomAddressSelector(typeCode, data, seed, target)
 	if err != nil {
 		// If not enough entries, return the address in entries directly
 		if err == errRandomSelectNotEnoughEntries {
-			return entries.listAddresses(), nil
+			return data.listAddresses(), nil
 		}
 		return []common.Address{}, err
 	}
@@ -86,13 +80,15 @@ func newLuckyWheel(entries randomSelectorEntries, seed int64, target int) (*luck
 	for _, entry := range entries {
 		sumVotes = sumVotes.Add(entry.vote)
 	}
-	return &luckyWheel{
+	lw := &luckyWheel{
 		rand:     rand.New(rand.NewSource(seed)),
-		entries:  entries,
 		target:   target,
+		entries:  make(randomSelectorEntries, len(entries)),
 		results:  make([]common.Address, target),
 		sumVotes: sumVotes,
-	}, nil
+	}
+	copy(lw.entries, entries)
+	return lw, nil
 }
 
 // RandomSelect return the result of the random selection of lucky wheel
@@ -157,7 +153,7 @@ func (lw *luckyWheel) shuffleAndWriteEntriesToResult() {
 
 // listAddresses return the list of addresses of the entries
 func (entries randomSelectorEntries) listAddresses() []common.Address {
-	var res []common.Address
+	res := make([]common.Address, 0, len(entries))
 	for _, entry := range entries {
 		res = append(res, entry.addr)
 	}

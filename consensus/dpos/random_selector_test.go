@@ -16,20 +16,27 @@ import (
 
 // TestRandomSelectAddress test randomSelectAddress
 func TestRandomSelectAddress(t *testing.T) {
+	for i := 0; i != 100; i++ {
+		testRandomSelectAddress(t)
+	}
+}
+
+func testRandomSelectAddress(t *testing.T) {
 	tests := []struct {
 		entrySize    int
 		targetSize   int
 		expectedSize int
 	}{
 		{4, 4, 4},
+		{5, 4, 4},
 		{100, 100, 100},
 		{100, 4, 4},
 		{4, 100, 4},
-		{10000, 21, 21},
+		{1000, 21, 21},
 	}
 	for i, test := range tests {
 		data := makeRandomSelectorData(test.entrySize)
-		seed := int64(0)
+		seed := time.Now().UnixNano()
 		selected, err := randomSelectAddress(typeLuckyWheel, data, seed, test.targetSize)
 		if err != nil {
 			t.Fatal(err)
@@ -41,7 +48,7 @@ func TestRandomSelectAddress(t *testing.T) {
 		m := make(map[common.Address]struct{})
 		for _, v := range selected {
 			if _, exist := m[v]; exist {
-				t.Fatal("duplicate selected address")
+				t.Fatalf("Test %d: duplicate selected address %x", i, v)
 			}
 			m[v] = struct{}{}
 		}
@@ -59,12 +66,10 @@ func TestRandomSelectAddressWeight(t *testing.T) {
 func testRandomSelectAddressWeight(t *testing.T) {
 	// Create entry data. Only one of the addresses are given a high weight
 	data := makeRandomSelectorData(5)
+	selectedIndex := 1
 	seed := time.Now().UnixNano()
-	var selectedAddr common.Address
-	for selectedAddr = range data {
-		data[selectedAddr] = common.NewBigIntUint64(1e18)
-		break
-	}
+	data[selectedIndex].vote = common.NewBigIntUint64(1e18)
+	selectedAddr := data[selectedIndex].addr
 	// Select one from the entries. Expect the selectedAddr should be selected
 	selected, err := randomSelectAddress(typeLuckyWheel, data, seed, 1)
 	if err != nil {
@@ -82,7 +87,7 @@ func testRandomSelectAddressWeight(t *testing.T) {
 func TestRandomSelectAddressError(t *testing.T) {
 	tests := []struct {
 		typeCode    int
-		entries     map[common.Address]common.BigInt
+		entries     randomSelectorEntries
 		target      int
 		expectedErr error
 	}{
@@ -103,13 +108,42 @@ func TestRandomSelectAddressError(t *testing.T) {
 	}
 }
 
-func makeRandomSelectorData(num int) map[common.Address]common.BigInt {
-	m := make(map[common.Address]common.BigInt)
+// TestRandomSelectAddressConsistent test the consistency of randomSelectAddressConsistent.
+// Given the same input, the function should always give the same output.
+func TestRandomSelectAddressConsistent(t *testing.T) {
+	var res []common.Address
+	num := 10
+	data := makeRandomSelectorData(100)
+	seed := time.Now().UnixNano()
 	for i := 0; i != num; i++ {
-		addr := common.BytesToAddress([]byte{byte(i + 1)})
-		m[addr] = common.BigInt1
+		validators, err := randomSelectAddress(typeLuckyWheel, data, seed, 21)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res) == 0 {
+			res = validators
+			continue
+		}
+		// the selected validators should be exactly the same with order
+		if len(res) != len(validators) {
+			t.Fatalf("Round %d, validator size not equal. Got %v, Expect %v", i, len(validators), len(res))
+		}
+		for j := range res {
+			if res[j] != validators[j] {
+				t.Errorf("Round %d, validator[%d] not equal. Got %v, expect %v", i, j,
+					validators[j], res[j])
+			}
+		}
 	}
-	return m
+}
+
+func makeRandomSelectorData(num int) randomSelectorEntries {
+	var entries randomSelectorEntries
+	for i := 0; i != num; i++ {
+		addr := common.BigToAddress(common.NewBigIntUint64(uint64(i)).BigIntPtr())
+		entries = append(entries, &randomSelectorEntry{addr, common.BigInt1})
+	}
+	return entries
 }
 
 func TestLuckyWheel(t *testing.T) {

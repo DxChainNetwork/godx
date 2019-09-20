@@ -56,6 +56,9 @@ var (
 	// errVoteTooManyCandidates happens when voting more than MaxVoteCount candidates
 	errVoteTooManyCandidates = fmt.Errorf("cannot vote more than %v candidates", MaxVoteCount)
 
+	// errVoteInsufficientBalance happens when voting, the account has less balance than needed.
+	errVoteInsufficientBalance = errors.New("insufficient balance to vote")
+
 	// errCandidateInsufficientDeposit happens when processing a candidate transaction, found
 	// that the candidate's deposit is lower than the threshold
 	errCandidateInsufficientDeposit = fmt.Errorf("candidate argument not qualified - minimum deposit: %v", minDeposit)
@@ -71,6 +74,10 @@ var (
 	// errCandidateDecreasingRewardRatio happens when processing a candidate transaction, found
 	// the value of reward ratio is decreasing.
 	errCandidateDecreasingRewardRatio = errors.New("candidate argument not qualified - candidate reward ratio shall not be decreased")
+
+	// errCandidateInsufficientBalance happens when a user has insufficient balance for the candidate
+	// transaction
+	errCandidateInsufficientBalance = errors.New("candidate not qualified - candidate does not have enough balance")
 
 	// errInsufficientFrozenAssets is the error happens when subtracting frozen assets, the diff value is
 	// larger the stored frozen assets
