@@ -122,22 +122,25 @@ func randomMarkThawAddresses(stateDB *state.StateDB, addresses []common.Address,
 // checkThawingAddressAndValue checks the result of markThawingAddressAndValue
 func checkThawingAddressAndValue(state *state.StateDB, epoch int64, expect map[common.Address]common.BigInt) error {
 	thawingAddress := getThawingAddress(epoch)
-	var err error
-	forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
+	var internalErr error
+	err := forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
 		expectTa, exist := expect[addr]
 		if !exist {
-			err = fmt.Errorf("address %x not in map", addr)
+			internalErr = fmt.Errorf("address %x not in map", addr)
 			return
 		}
 		gotTa := getThawingAssets(state, addr, epoch)
 		if gotTa.Cmp(expectTa) != 0 {
-			err = fmt.Errorf("address %x thawing assets not expected", addr)
+			internalErr = fmt.Errorf("address %x thawing assets not expected", addr)
 			return
 		}
 		delete(expect, addr)
 	})
 	if err != nil {
 		return err
+	}
+	if internalErr != nil {
+		return internalErr
 	}
 	if len(expect) != 0 {
 		return fmt.Errorf("thawing size not expected")

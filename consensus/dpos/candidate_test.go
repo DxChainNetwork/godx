@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -83,7 +84,41 @@ func TestProcessAddCandidateError(t *testing.T) {
 
 // TestProcessCancelCandidate test the functionality of ProcessCancelCandidate
 func TestProcessCancelCandidate(t *testing.T) {
-
+	addr := common.BytesToAddress([]byte{1})
+	state, dposCtx, err := newStateAndDposContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := candidatePrototype(addr)
+	addAccountInState(state, c.address, c.balance, c.frozenAssets)
+	if err = ProcessAddCandidate(state, dposCtx, c.address, c.deposit, c.rewardRatio); err != nil {
+		t.Fatal(err)
+	}
+	// cancel the candidate and commit
+	curTime := time.Now().Unix()
+	if err = ProcessCancelCandidate(state, dposCtx, addr, curTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := state.Commit(true); err != nil {
+		t.Fatal(err)
+	}
+	// check the results
+	// The candidate should not be in the candidate trie
+	if b, err := dposCtx.CandidateTrie().TryGet(addr.Bytes()); err == nil && b != nil && len(b) != 0 {
+		t.Fatal("after cancel candidate, the candidate still in candidate trie")
+	}
+	// Check thawing logic
+	m := map[common.Address]common.BigInt{
+		addr: c.deposit,
+	}
+	epoch := calcThawingEpoch(CalculateEpochID(curTime))
+	if err = checkThawingAddressAndValue(state, epoch, m); err != nil {
+		t.Fatal(err)
+	}
+	// Check deposit
+	if deposit := getCandidateDeposit(state, addr); deposit.Cmp(common.BigInt0) != 0 {
+		t.Fatalf("after cancel candidate, the candidate deposit not zero: %v", deposit)
+	}
 }
 
 func TestCheckValidCandidate(t *testing.T) {
