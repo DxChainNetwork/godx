@@ -60,6 +60,13 @@ func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, 
 func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInfo, error) {
 	// based on the block header root, get the statedb
 	header := d.e.BlockChain().CurrentHeader()
+
+	// check if the given address is a validator's address
+	if err := dpos.IsValidator(d.e.ChainDb(), header, validatorAddress); err != nil {
+		return ValidatorInfo{}, err
+	}
+
+	// get statedb for retrieving detailed information
 	statedb, err := d.e.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return ValidatorInfo{}, err
@@ -101,6 +108,12 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInf
 
 	// get detailed information
 	candidateDeposit, candidateVotes, rewardDistribution := dpos.GetCandidateInfo(statedb, candidateAddress)
+
+	// check candidateDeposit to validate if the given address is a
+	// candidate address
+	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
+		return CandidateInfo{}, fmt.Errorf("the given address %s is not a candidate", candidateAddress.String())
+	}
 
 	return CandidateInfo{
 		Candidate:          candidateAddress,

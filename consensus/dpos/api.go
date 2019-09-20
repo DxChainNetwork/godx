@@ -60,6 +60,23 @@ func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Addres
 	return dposContext.GetValidators()
 }
 
+// IsValidator checks if the given address is a validator address
+func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Address) error {
+	validators, err := GetValidators(diskdb, header)
+	if err != nil {
+		return err
+	}
+
+	// check if the address is the validator address
+	for _, validator := range validators {
+		if validator == addr {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("the given address %s is not a validator's address", addr.String())
+}
+
 // GetCandidates will return the candidate list based on the block header provided
 func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the candidateTrie
