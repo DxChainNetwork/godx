@@ -43,6 +43,8 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	prevDeposit := getCandidateDeposit(state, addr)
 	currentEpochID := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
+	// set the candidate deposit to 0
+	setCandidateDeposit(state, addr, common.BigInt0)
 	return nil
 }
 

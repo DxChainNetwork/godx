@@ -54,11 +54,11 @@ func thawAllFrozenAssetsInEpoch(state stateDB, epoch int64) error {
 }
 
 // forEachEntryInThawingAddress execute the cb callback function on each entry in the thawing address
-func forEachEntryInThawingAddress(state stateDB, thawingAddress common.Address, cb func(address common.Address)) {
+func forEachEntryInThawingAddress(state stateDB, thawingAddress common.Address, cb func(address common.Address)) error {
 	if !state.Exist(thawingAddress) {
-		return
+		return nil
 	}
-	state.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
+	err := state.ForEachStorage(thawingAddress, func(key, value common.Hash) bool {
 		// If empty value, directly return
 		if value == (common.Hash{}) {
 			return false
@@ -68,6 +68,7 @@ func forEachEntryInThawingAddress(state stateDB, thawingAddress common.Address, 
 		cb(addr)
 		return true
 	})
+	return err
 }
 
 // getThawingAddress return the thawing address with the epoch
