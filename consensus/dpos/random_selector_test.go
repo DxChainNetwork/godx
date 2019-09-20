@@ -126,14 +126,8 @@ func TestRandomSelectAddressConsistent(t *testing.T) {
 			continue
 		}
 		// the selected validators should be exactly the same with order
-		if len(res) != len(validators) {
-			t.Fatalf("Round %d, validator size not equal. Got %v, Expect %v", i, len(validators), len(res))
-		}
-		for j := range res {
-			if res[j] != validators[j] {
-				t.Errorf("Round %d, validator[%d] not equal. Got %v, expect %v", i, j,
-					validators[j], res[j])
-			}
+		if err := checkSameValidatorSet(res, validators); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
@@ -155,7 +149,9 @@ func TestRandomSelectAddressDifferent(t *testing.T) {
 	}
 	// The possibility of validators1 == validators2 beingexactly the same is really small.
 	// So if the two validator set is exactly the same, report the error.
-
+	if err := checkSameValidatorSet(validators1, validators2); err == nil {
+		t.Fatal("different seed should not yield same result")
+	}
 }
 
 func makeRandomSelectorData(num int) randomSelectorEntries {
@@ -173,9 +169,10 @@ func checkSameValidatorSet(vs1, vs2 []common.Address) error {
 	}
 	for i := range vs1 {
 		if vs1[i] != vs2[i] {
-			return fmt.Errorf("validators[%d]: %x")
+			return fmt.Errorf("validators[%d]: %x != %x", i, vs1[i], vs2[i])
 		}
 	}
+	return nil
 }
 
 func TestLuckyWheel(t *testing.T) {

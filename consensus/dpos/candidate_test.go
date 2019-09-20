@@ -5,12 +5,13 @@
 package dpos
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
-
-	"github.com/DxChainNetwork/godx/core/types"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 )
 
@@ -41,6 +42,22 @@ func TestProcessAddCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check the result of being a candidate
+	err = checkProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio, c.deposit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The candidate submit a candidate transaction for the second time. Increase
+	// the rewardRatio and deposit
+	c.deposit = c.deposit.AddInt64(1e18)
+	c.rewardRatio = c.rewardRatio + 1
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio, c.deposit)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCheckValidCandidate(t *testing.T) {
@@ -133,8 +150,27 @@ func createOrigCandidateInState(state *state.StateDB, c candidate) {
 	}
 }
 
-//
-//func checkProcessAddCandidate(state *state.StateDB, ctx *types.DposContext, addr common.Address,
-//	expectedRewardRatio uint64, expectedDeposit common.BigInt, expectedFrozenAssets common.BigInt) error {
-//
-//}
+// checkProcessAddCandidate checks whether the addr stores the correct information in
+// DposContext and state
+func checkProcessAddCandidate(state *state.StateDB, ctx *types.DposContext, addr common.Address,
+	expectedDeposit common.BigInt, expectedRewardRatio uint64, expectedFrozenAssets common.BigInt) error {
+
+	// Check whether the candidate address is in the candidateTrie
+	ct := ctx.CandidateTrie()
+	if b, err := ct.TryGet(addr.Bytes()); err != nil || !bytes.Equal(b, addr.Bytes()) {
+		return fmt.Errorf("addr not in candidate trie")
+	}
+	// Check expectedRewardRatio
+	if rewardRatio := getRewardRatioNumerator(state, addr); rewardRatio != expectedRewardRatio {
+		return fmt.Errorf("reward ratio not expected. Got %v, Expect %v", rewardRatio, expectedRewardRatio)
+	}
+	// Check expectedDeposit
+	if deposit := getCandidateDeposit(state, addr); deposit.Cmp(expectedDeposit) != 0 {
+		return fmt.Errorf("deposit not expected. Got %v, Expect %v", deposit, expectedDeposit)
+	}
+	// Check frozenAssets
+	if frozenAssets := GetFrozenAssets(state, addr); frozenAssets.Cmp(expectedFrozenAssets) != 0 {
+		return fmt.Errorf("frozenAssets not expected. Got %v, Expect %v", frozenAssets, expectedFrozenAssets)
+	}
+	return nil
+}
