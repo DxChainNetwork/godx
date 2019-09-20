@@ -162,6 +162,8 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := getCandidateDeposit(ec.stateDB, validator.address)
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
+		// set candidate deposit to 0
+		setCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.cnt)
