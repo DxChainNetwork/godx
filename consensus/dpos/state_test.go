@@ -8,6 +8,8 @@ import (
 	"crypto/rand"
 	"testing"
 
+	"github.com/DxChainNetwork/godx/core/types"
+
 	"github.com/DxChainNetwork/godx/ethdb"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -28,6 +30,19 @@ func TestMakeThawingAssetsKey(t *testing.T) {
 	}
 }
 
+func newStateAndDposContext() (*state.StateDB, *types.DposContext, error) {
+	db := ethdb.NewMemDatabase()
+	stateDB, err := newStateDB(db)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, err := types.NewDposContext(db)
+	if err != nil {
+		return nil, nil, err
+	}
+	return stateDB, ctx, nil
+}
+
 // newStateDBWithAccounts create a new state db with a number of created accounts. The accounts
 // are addresses 0x000001 ~ 0x0000${NUM}
 func newStateDBWithAccounts(db ethdb.Database, num int) (*state.StateDB, []common.Address, error) {
@@ -43,6 +58,13 @@ func newStateDBWithAccounts(db ethdb.Database, num int) (*state.StateDB, []commo
 		addresses = append(addresses, address)
 	}
 	return stateDB, addresses, nil
+}
+
+// addAccountInState add an account in stateDB balance and frozenAssets
+func addAccountInState(state *state.StateDB, addr common.Address, balance common.BigInt, frozenAssets common.BigInt) {
+	state.CreateAccount(addr)
+	state.SetBalance(addr, balance.BigIntPtr())
+	setFrozenAssets(state, addr, frozenAssets)
 }
 
 func newStateDB(db ethdb.Database) (*state.StateDB, error) {

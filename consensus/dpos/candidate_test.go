@@ -26,17 +26,16 @@ type candidate struct {
 	prevRewardRatio uint64
 }
 
+// TestProcessAddCandidate test the normal case of ProcessAddCandidate.
+// Two scenarios are tests: 1. a new candidate 2. previously already a candidate
 func TestProcessAddCandidate(t *testing.T) {
 	candidateAddr := common.BytesToAddress([]byte{1})
-	db := ethdb.NewMemDatabase()
-	state, err := newStateDB(db)
+	state, dposCtx, err := newStateAndDposContext()
 	if err != nil {
 		t.Fatal(err)
 	}
-	dposCtx, err := types.NewDposContext(db)
-
 	c := newCandidatePrototype(candidateAddr)
-	createOrigCandidateInState(state, c)
+	addOrigCandidateInState(state, c)
 	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +57,33 @@ func TestProcessAddCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestProcessAddCandidateError test the error case for processAddCandidate.
+// Note that not all error cases are tested in this function. More error cases please see
+// the test case TestCheckValidCandidate
+func TestProcessAddCandidateError(t *testing.T) {
+	candidateAddr := common.BytesToAddress([]byte{1})
+	state, dposCtx, err := newStateAndDposContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := candidatePrototype(candidateAddr)
+	err = addOrigCandidateData(state, dposCtx, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Decrease the deposit and add candidate.
+	c.deposit = c.prevDeposit.SubInt64(1000)
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	if err == nil {
+		t.Fatal("decrease the deposit should report error")
+	}
+}
+
+// TestProcessCancelCandidate test the functionality of ProcessCancelCandidate
+func TestProcessCancelCandidate(t *testing.T) {
+
 }
 
 func TestCheckValidCandidate(t *testing.T) {
@@ -91,6 +117,11 @@ func TestCheckValidCandidate(t *testing.T) {
 			func(c *candidate) { c.prevRewardRatio = 70 },
 			errCandidateDecreasingRewardRatio,
 		},
+		// Invalid reward ratio
+		{
+			func(c *candidate) { c.rewardRatio = 101 },
+			errCandidateInvalidRewardRatio,
+		},
 	}
 	for i, test := range tests {
 		c := candidatePrototype(candidateAddr)
@@ -99,7 +130,7 @@ func TestCheckValidCandidate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		createOrigCandidateInState(state, c)
+		addOrigCandidateInState(state, c)
 		err = checkValidCandidate(state, c.address, c.deposit, c.rewardRatio)
 		if err != test.expectErr {
 			t.Errorf("check valid candidate %d error: \nexpect [%v]\ngot [%v]", i, test.expectErr, err)
@@ -134,8 +165,17 @@ func candidatePrototype(addr common.Address) candidate {
 	}
 }
 
-// createOrigCandidateInState create the original candidate data in state db.
-func createOrigCandidateInState(state *state.StateDB, c candidate) {
+// addOrigCandidateData add the candidate data to StateDB and DposContext
+func addOrigCandidateData(state *state.StateDB, ctx *types.DposContext, c candidate) error {
+	if err := ctx.BecomeCandidate(c.address); err != nil {
+		return err
+	}
+	addOrigCandidateInState(state, c)
+	return nil
+}
+
+// addOrigCandidateInState create the original candidate data in state db.
+func addOrigCandidateInState(state *state.StateDB, c candidate) {
 	addr := c.address
 	state.CreateAccount(addr)
 	state.SetBalance(addr, c.balance.BigIntPtr())
@@ -154,7 +194,6 @@ func createOrigCandidateInState(state *state.StateDB, c candidate) {
 // DposContext and state
 func checkProcessAddCandidate(state *state.StateDB, ctx *types.DposContext, addr common.Address,
 	expectedDeposit common.BigInt, expectedRewardRatio uint64, expectedFrozenAssets common.BigInt) error {
-
 	// Check whether the candidate address is in the candidateTrie
 	ct := ctx.CandidateTrie()
 	if b, err := ct.TryGet(addr.Bytes()); err != nil || !bytes.Equal(b, addr.Bytes()) {

@@ -52,10 +52,6 @@ type (
 func randomSelectAddress(typeCode int, data randomSelectorEntries, seed int64, target int) ([]common.Address, error) {
 	ras, err := newRandomAddressSelector(typeCode, data, seed, target)
 	if err != nil {
-		// If not enough entries, return the address in entries directly
-		if err == errRandomSelectNotEnoughEntries {
-			return data.listAddresses(), nil
-		}
 		return []common.Address{}, err
 	}
 	return ras.RandomSelect(), nil
@@ -73,9 +69,6 @@ func newRandomAddressSelector(typeCode int, entries randomSelectorEntries, seed 
 // newLuckyWheel create a lucky wheel for random selection. target is used for specifying
 // the target number to be selected
 func newLuckyWheel(entries randomSelectorEntries, seed int64, target int) (*luckyWheel, error) {
-	if len(entries) < target {
-		return nil, errRandomSelectNotEnoughEntries
-	}
 	sumVotes := common.BigInt0
 	for _, entry := range entries {
 		sumVotes = sumVotes.Add(entry.vote)
@@ -146,7 +139,7 @@ func (lw *luckyWheel) selectSingleEntry() int {
 // The function is only used when the target is smaller than entry length.
 func (lw *luckyWheel) shuffleAndWriteEntriesToResult() {
 	list := lw.entries.listAddresses()
-	lw.rand.Shuffle(len(lw.entries), func(i, j int) {
+	lw.rand.Shuffle(len(list), func(i, j int) {
 		list[i], list[j] = list[j], list[i]
 	})
 	lw.results = list

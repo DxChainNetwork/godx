@@ -5,14 +5,11 @@
 package dpos
 
 import (
-	"encoding/binary"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/crypto"
 )
 
 // TestRandomSelectAddress test randomSelectAddress
@@ -112,22 +109,31 @@ func TestRandomSelectAddressError(t *testing.T) {
 // TestRandomSelectAddressConsistent test the consistency of randomSelectAddressConsistent.
 // Given the same input, the function should always give the same output.
 func TestRandomSelectAddressConsistent(t *testing.T) {
-	var res []common.Address
-	numIter := 10
-	data := makeRandomSelectorData(100)
-	seed := time.Now().UnixNano()
-	for i := 0; i != numIter; i++ {
-		validators, err := randomSelectAddress(typeLuckyWheel, data, seed, 21)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(res) == 0 {
-			res = validators
-			continue
-		}
-		// the selected validators should be exactly the same with order
-		if err := checkSameValidatorSet(res, validators); err != nil {
-			t.Fatal(err)
+	tests := []struct {
+		dataSize   int
+		targetSize int
+	}{
+		{1000, 21},
+		{15, 21},
+	}
+	for _, test := range tests {
+		var res []common.Address
+		numIter := 10
+		data := makeRandomSelectorData(test.dataSize)
+		seed := time.Now().UnixNano()
+		for i := 0; i != numIter; i++ {
+			validators, err := randomSelectAddress(typeLuckyWheel, data, seed, test.targetSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(res) == 0 {
+				res = validators
+				continue
+			}
+			// the selected validators should be exactly the same with order
+			if err := checkSameValidatorSet(res, validators); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 }
@@ -135,22 +141,31 @@ func TestRandomSelectAddressConsistent(t *testing.T) {
 // Given the different seed, the randomSelectAddress function should return different
 // results.
 func TestRandomSelectAddressDifferent(t *testing.T) {
-	seed1 := time.Now().UnixNano()
-	time.Sleep(1 * time.Nanosecond)
-	seed2 := time.Now().UnixNano()
-	data := makeRandomSelectorData(10000)
-	validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, 21)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		dataSize   int
+		targetSize int
+	}{
+		//{1000, 21},
+		{15, 21},
 	}
-	validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, 21)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The possibility of validators1 == validators2 beingexactly the same is really small.
-	// So if the two validator set is exactly the same, report the error.
-	if err := checkSameValidatorSet(validators1, validators2); err == nil {
-		t.Fatal("different seed should not yield same result")
+	for i, test := range tests {
+		seed1 := time.Now().UnixNano()
+		time.Sleep(1 * time.Nanosecond)
+		seed2 := time.Now().UnixNano()
+		data := makeRandomSelectorData(test.dataSize)
+		validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, test.targetSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, test.targetSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The possibility of validators1 == validators2 being exactly the same is really small.
+		// So if the two validator set is exactly the same, report the error.
+		if err := checkSameValidatorSet(validators1, validators2); err == nil {
+			t.Fatalf("Test %d: different seed should not yield same result", i)
+		}
 	}
 }
 
@@ -173,60 +188,4 @@ func checkSameValidatorSet(vs1, vs2 []common.Address) error {
 		}
 	}
 	return nil
-}
-
-func TestLuckyWheel(t *testing.T) {
-	// test 1: candidates less than maxValidatorSize
-	// mock some vote proportion
-	votes := make(randomSelectorEntries, 0)
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		voteProportion := randomSelectorEntry{
-			addr: common.HexToAddress("0x" + str),
-			vote: common.NewBigIntUint64(uint64(i + 1)),
-		}
-		votes = append(votes, &voteProportion)
-	}
-
-	// make random seed
-	blockHash := common.HexToAddress("0xb7c653791455fdb56fca714c0090c8dffa83a50c546b1dc4ab4dd73b91639b38")
-	epochID := int64(1001)
-	seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(blockHash.Bytes()))) + epochID
-	rs, err := newRandomAddressSelector(typeLuckyWheel, votes, seed, MaxValidatorSize)
-	if err != errRandomSelectNotEnoughEntries {
-		t.Fatalf("expect %v, got %v", errRandomSelectNotEnoughEntries, nil)
-	}
-	result := votes.listAddresses()
-
-	// check result
-	if len(result) != MaxValidatorSize-1 {
-		t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize-1, len(result))
-	}
-
-	for i, addr := range result {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		if addr != common.HexToAddress("0x"+str) {
-			t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want elected addr: %s,got: %s", common.HexToAddress("0x"+str).String(), addr.String())
-		}
-	}
-
-	// test 2: candidates more than maxValidatorSize
-	// add another maxValidatorSize-1 candidates
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+MaxValidatorSize-1), 10)
-		voteProportion := randomSelectorEntry{
-			addr: common.HexToAddress("0x" + str),
-			vote: common.NewBigIntUint64(uint64(i + 1)),
-		}
-		votes = append(votes, &voteProportion)
-	}
-
-	rs, err = newRandomAddressSelector(typeLuckyWheel, votes, seed, MaxValidatorSize)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result = rs.RandomSelect()
-	if len(result) != MaxValidatorSize {
-		t.Errorf("candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize, len(result))
-	}
 }
