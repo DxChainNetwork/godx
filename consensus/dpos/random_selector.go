@@ -87,6 +87,8 @@ func newLuckyWheel(entries randomSelectorEntries, seed int64, target int) (*luck
 		results:  make([]common.Address, target),
 		sumVotes: sumVotes,
 	}
+	// Make a copy of the input entries. Thus the modification of lw.entries will not effect
+	// the input entries
 	copy(lw.entries, entries)
 	return lw, nil
 }
