@@ -55,7 +55,7 @@ func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, 
 
 	// available balance validation
 	candidateBalance := common.PtrBigInt(state.GetBalance(candidateAddress))
-	candidateAvailableBalance := candidateBalance.Sub(getFrozenAssets(state, candidateAddress))
+	candidateAvailableBalance := candidateBalance.Sub(GetFrozenAssets(state, candidateAddress))
 	if candidateAvailableBalance.Cmp(data.Deposit) < 0 {
 		return errCandidateInsufficientBalance
 	}

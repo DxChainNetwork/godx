@@ -60,7 +60,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
 	// validate the vote deposit and available balance
 	delegatorBalance := common.PtrBigInt(state.GetBalance(delegatorAddress))
-	delegatorAvailableBalance := delegatorBalance.Sub(getFrozenAssets(state, delegatorAddress))
+	delegatorAvailableBalance := delegatorBalance.Sub(GetFrozenAssets(state, delegatorAddress))
 	if delegatorAvailableBalance.Cmp(voteData.Deposit) < 0 {
 		return errDelegatorInsufficientBalance
 	}
