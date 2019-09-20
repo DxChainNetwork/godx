@@ -140,10 +140,17 @@ func subFrozenAssets(state stateDB, addr common.Address, diff common.BigInt) err
 	return nil
 }
 
+// getBalance returns the balance of the address. This is simply an adapter function
+// to convert the type from *big.Int to common.BigInt
+func getBalance(state stateDB, addr common.Address) common.BigInt {
+	balance := state.GetBalance(addr)
+	return common.PtrBigInt(balance)
+}
+
 // getAvailableBalance get the available balance, which is the result of balance minus
 // frozen assets.
 func getAvailableBalance(state stateDB, addr common.Address) common.BigInt {
-	balance := common.PtrBigInt(state.GetBalance(addr))
+	balance := getBalance(state, addr)
 	frozenAssets := GetFrozenAssets(state, addr)
 	return balance.Sub(frozenAssets)
 }
