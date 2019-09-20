@@ -524,7 +524,7 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
 	key := makeMinedCntKey(epoch, addr)
 	cntBytes, err := dc.minedCntTrie.TryGet(key)
-	if err != nil || len(cntBytes) >= 8 {
+	if err != nil || cntBytes == nil || len(cntBytes) < 8 {
 		return 0
 	}
 	cnt := int64(binary.BigEndian.Uint64(cntBytes))

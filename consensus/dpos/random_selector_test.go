@@ -6,6 +6,7 @@ package dpos
 
 import (
 	"encoding/binary"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -112,10 +113,10 @@ func TestRandomSelectAddressError(t *testing.T) {
 // Given the same input, the function should always give the same output.
 func TestRandomSelectAddressConsistent(t *testing.T) {
 	var res []common.Address
-	num := 10
+	numIter := 10
 	data := makeRandomSelectorData(100)
 	seed := time.Now().UnixNano()
-	for i := 0; i != num; i++ {
+	for i := 0; i != numIter; i++ {
 		validators, err := randomSelectAddress(typeLuckyWheel, data, seed, 21)
 		if err != nil {
 			t.Fatal(err)
@@ -137,6 +138,26 @@ func TestRandomSelectAddressConsistent(t *testing.T) {
 	}
 }
 
+// Given the different seed, the randomSelectAddress function should return different
+// results.
+func TestRandomSelectAddressDifferent(t *testing.T) {
+	seed1 := time.Now().UnixNano()
+	time.Sleep(1 * time.Nanosecond)
+	seed2 := time.Now().UnixNano()
+	data := makeRandomSelectorData(10000)
+	validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The possibility of validators1 == validators2 beingexactly the same is really small.
+	// So if the two validator set is exactly the same, report the error.
+
+}
+
 func makeRandomSelectorData(num int) randomSelectorEntries {
 	var entries randomSelectorEntries
 	for i := 0; i != num; i++ {
@@ -144,6 +165,17 @@ func makeRandomSelectorData(num int) randomSelectorEntries {
 		entries = append(entries, &randomSelectorEntry{addr, common.BigInt1})
 	}
 	return entries
+}
+
+func checkSameValidatorSet(vs1, vs2 []common.Address) error {
+	if len(vs1) != len(vs2) {
+		return fmt.Errorf("size not same. %v != %v", len(vs1), len(vs2))
+	}
+	for i := range vs1 {
+		if vs1[i] != vs2[i] {
+			return fmt.Errorf("validators[%d]: %x")
+		}
+	}
 }
 
 func TestLuckyWheel(t *testing.T) {
