@@ -93,7 +93,7 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.
 	// The delegator should have enough balance for vote if he want to increase the deposit
 	prevVoteDeposit := getVoteDeposit(state, delegatorAddr)
 	if deposit.Cmp(prevVoteDeposit) > 0 {
-		availableBalance := getAvailableBalance(state, delegatorAddr)
+		availableBalance := GetAvailableBalance(state, delegatorAddr)
 		diff := deposit.Sub(prevVoteDeposit)
 		if availableBalance.Cmp(diff) < 0 {
 			return errVoteInsufficientBalance
