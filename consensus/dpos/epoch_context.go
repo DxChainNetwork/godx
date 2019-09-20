@@ -40,9 +40,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		return fmt.Errorf("system not consistent: %v", err)
 	}
 
-	prevEpochIsGenesis := prevEpoch == genesisEpoch
-	if prevEpochIsGenesis && prevEpoch < currentEpoch {
-		prevEpoch = currentEpoch - 1
+	// if previous epoch is genesis epoch, return directly
+	if prevEpoch == genesisEpoch {
+		return nil
 	}
 
 	prevEpochBytes := make([]byte, 8)
@@ -52,7 +52,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
 		// if prevEpoch is not genesis, kickout not active candidate
-		if !prevEpochIsGenesis && iter.Next() {
+		if iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
 				return err
 			}

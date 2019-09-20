@@ -145,17 +145,41 @@ web3._extend({
 	property: 'dpos',
 	methods: [
 		new web3._extend.Method({
-			name: 'getValidators',
-			call: 'dpos_getValidators',
+			name: 'validators',
+			call: 'dpos_validators',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'validator',
+			call: 'dpos_validator',
+			params: 1,
 		}),
 		
 		new web3._extend.Method({
 			name: 'candidates',
-			call: 'dpos_getCandidates',
+			call: 'dpos_candidates',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'candidate',
+			call: 'dpos_candidate',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'candidateDeposit',
+			call: 'dpos_candidateDeposit',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'voteDeposit',
+			call: 'dpos_voteDeposit',
+			params: 1,
 		}),
 
 		new web3._extend.Method({
@@ -164,38 +188,43 @@ web3._extend({
 			params: 0,
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
+
 		new web3._extend.Method({
 			name: 'getVotedCandidatesByAddress',
 			call: 'getVotedCandidatesByAddress',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
+
 		new web3._extend.Method({
-			name: 'sendApplyCandidateTx',
+			name: 'applyCandidate',
 			call: 'dpos_sendApplyCandidateTx',
 			params: 1,
 		}),
+
 		new web3._extend.Method({
-			name: 'sendCancelCandidateTx',
+			name: 'cancelCandidate',
 			call: 'dpos_sendCancelCandidateTx',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
+
 		new web3._extend.Method({
-			name: 'sendVoteTx',
+			name: 'vote',
 			call: 'dpos_sendVoteTx',
 			params: 1,
 		}),
+
 		new web3._extend.Method({
-			name: 'sendCancelVoteTx',
+			name: 'cancelVote',
 			call: 'dpos_sendCancelVoteTx',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
 
 		new web3._extend.Method({
-			name: 'candidateDeposit',
-			call: 'dpos_getCandidateDeposit',
+			name: 'candidateVotes',
+			call: 'dpos_getCandidatesVote',
 			params: 1,
 		}),
 	]

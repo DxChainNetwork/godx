@@ -5,13 +5,14 @@
 package dpos
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/trie"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -21,72 +22,6 @@ import (
 type API struct {
 	chain consensus.ChainReader
 	dpos  *Dpos
-}
-
-// GetValidators retrieves the list of the validators at specified block
-func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error) {
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
-	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
-	}
-
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-
-	db := trie.NewDatabase(api.dpos.db)
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, db)
-	if err != nil {
-		return nil, err
-	}
-
-	dposContext := types.DposContext{}
-	dposContext.SetEpoch(epochTrie)
-	return dposContext.GetValidators()
-}
-
-func (api *API) GetCandidates(number *rpc.BlockNumber) ([]common.Address, error) {
-	var header *types.Header
-	if number == nil || *number == rpc.LatestBlockNumber {
-		header = api.chain.CurrentHeader()
-	} else {
-		header = api.chain.GetHeaderByNumber(uint64(number.Int64()))
-	}
-
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-
-	// get the new candidate trie
-	db := trie.NewDatabase(api.dpos.db)
-	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, db)
-	if err != nil {
-		return nil, err
-	}
-
-	// iterate through the candidates trie
-	var candidates []common.Address
-	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
-	for iterCandidate.Next() {
-		candidateAddr := common.BytesToAddress(iterCandidate.Value)
-		candidates = append(candidates, candidateAddr)
-	}
-
-	// return candidates
-	return candidates, nil
-}
-
-func (api *API) GetCandidateDeposit(candidateAddress common.Address) (*big.Int, error) {
-	header := api.chain.CurrentHeader()
-	statedb, err := state.New(header.Root, state.NewDatabase(api.dpos.db))
-	if err != nil {
-		return nil, err
-	}
-
-	candidateDepositHash := statedb.GetState(candidateAddress, KeyCandidateDeposit)
-	return candidateDepositHash.Big(), nil
 }
 
 // GetConfirmedBlockNumber retrieves the latest irreversible block
@@ -110,16 +45,73 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	return header.Number, nil
 }
 
-// GetVotedCandidatesByAddress retrieve all voted candidates of given delegator at now
-func (api *API) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
-	currentHeader := api.chain.CurrentHeader()
-	db := trie.NewDatabase(api.dpos.db)
-	voteTrie, err := types.NewVoteTrie(currentHeader.DposContext.VoteRoot, db)
+// GetValidators will return the validator list based on the block header provided
+func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
+	// re-construct trieDB and get the epochTrie
+	trieDb := trie.NewDatabase(diskdb)
+	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, trieDb)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to recover the epochTrie based on the root: %s", err.Error())
 	}
 
+	// construct dposContext and get validators
 	dposContext := types.DposContext{}
-	dposContext.SetVote(voteTrie)
-	return dposContext.GetVotedCandidatesByAddress(delegator)
+	dposContext.SetEpoch(epochTrie)
+	return dposContext.GetValidators()
+}
+
+// GetCandidates will return the candidate list based on the block header provided
+func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
+	// re-construct trieDB and get the candidateTrie
+	trieDb := trie.NewDatabase(diskdb)
+	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
+	if err != nil {
+		return nil, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
+	}
+
+	// based on the candidateTrie, get the list of candidates and return
+	dposContext := types.DposContext{}
+	dposContext.SetCandidate(candidateTrie)
+	return dposContext.GetCandidates(), nil
+}
+
+// GetValidatorInfo will return the detailed validator information
+func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, diskdb ethdb.Database, header *types.Header) (common.BigInt, uint64, int64, error) {
+	votes := getTotalVote(stateDb, validatorAddress)
+	rewardDistribution := getRewardRatioNumerator(stateDb, validatorAddress)
+	minedCount, err := getMinedBlocksCount(diskdb, header, validatorAddress)
+	if err != nil {
+		return common.BigInt0, 0, 0, err
+	}
+
+	// return validator information
+	return votes, rewardDistribution, minedCount, nil
+}
+
+// GetCandidateInfo will return the detailed candidate information
+func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address) (common.BigInt, common.BigInt, uint64) {
+	// get detailed candidate information
+	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
+	candidateVotes := getTotalVote(stateDb, candidateAddress)
+	rewardDistribution := getRewardRatioNumerator(stateDb, candidateAddress)
+
+	return candidateDeposit, candidateVotes, rewardDistribution
+}
+
+// getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch
+func getMinedBlocksCount(diskdb ethdb.Database, header *types.Header, validatorAddress common.Address) (int64, error) {
+	// re-construct the minedCntTrie
+	trieDb := trie.NewDatabase(diskdb)
+	minedCntTrie, err := types.NewMinedCntTrie(header.DposContext.MinedCntRoot, trieDb)
+	if err != nil {
+		return 0, fmt.Errorf("failed to recover the minedCntTrie based on the root: %s", err.Error())
+	}
+
+	// based on the header, calculate the epochID
+	epochID := CalculateEpochID(header.Time.Int64())
+
+	// construct dposContext and get mined count
+	dposContext := types.DposContext{}
+	dposContext.SetMinedCnt(minedCntTrie)
+	return dposContext.GetMinedCnt(epochID, validatorAddress), nil
 }
