@@ -49,18 +49,12 @@ type (
 )
 
 // randomSelectAddress randomly select entries based on weight from the entries.
-func randomSelectAddress(typeCode int, data map[common.Address]common.BigInt, seed int64, target int) ([]common.Address, error) {
-	// convert the map to entries
-	var entries randomSelectorEntries
-	for addr, weight := range data {
-		entries = append(entries, &randomSelectorEntry{addr, weight})
-	}
-	// Run random select
-	ras, err := newRandomAddressSelector(typeCode, entries, seed, target)
+func randomSelectAddress(typeCode int, data randomSelectorEntries, seed int64, target int) ([]common.Address, error) {
+	ras, err := newRandomAddressSelector(typeCode, data, seed, target)
 	if err != nil {
 		// If not enough entries, return the address in entries directly
 		if err == errRandomSelectNotEnoughEntries {
-			return entries.listAddresses(), nil
+			return data.listAddresses(), nil
 		}
 		return []common.Address{}, err
 	}

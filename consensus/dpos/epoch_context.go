@@ -98,9 +98,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 }
 
 // countVotes will calculate the number of votes at the beginning of current epoch
-func (ec *EpochContext) countVotes() (votes map[common.Address]common.BigInt, err error) {
+func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 	// get the needed variables
-	votes = make(map[common.Address]common.BigInt)
 	candidateTrie := ec.DposContext.CandidateTrie()
 	statedb := ec.stateDB
 
@@ -113,13 +112,10 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]common.BigInt, er
 		hasCandidate = true
 		candidateAddr := common.BytesToAddress(iterCandidate.Value)
 		// sanity check
-		if _, ok := votes[candidateAddr]; ok {
-			return nil, fmt.Errorf("countVotes failed, get same candidates from the candidate trie: %v", candidateAddr)
-		}
 		// Calculate the candidate votes
 		totalVotes := ec.calcCandidateTotalVotes(candidateAddr)
 		// write the totalVotes to result and state
-		votes[candidateAddr] = totalVotes
+		votes = append(votes, &randomSelectorEntry{addr: candidateAddr, vote: totalVotes})
 		setTotalVote(statedb, candidateAddr, totalVotes)
 	}
 	// if there are no candidates, return error
@@ -203,7 +199,7 @@ func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 }
 
 // selectValidator select validators randomly based on candidate votes and seed
-func selectValidator(candidateVotes map[common.Address]common.BigInt, seed int64) ([]common.Address, error) {
+func selectValidator(candidateVotes randomSelectorEntries, seed int64) ([]common.Address, error) {
 	return randomSelectAddress(typeLuckyWheel, candidateVotes, seed, MaxValidatorSize)
 }
 
