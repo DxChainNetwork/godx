@@ -39,7 +39,11 @@ func TestProcessVoteNewDelegator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkProcessVote(stateDB, ctx, addr, deposit, deposit, candidates, calcThawingEpoch(CalculateEpochID(curTime)), common.BigInt0)
+	if _, err = stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
+	err = checkProcessVote(stateDB, ctx, addr, deposit, deposit, candidates, calcThawingEpoch(CalculateEpochID(curTime)),
+		common.BigInt0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +68,13 @@ func TestProcessVoteIncreasingDeposit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err = stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
 	// Check the result
-	if err = checkProcessVote(stateDB, ctx, addr, curDeposit, curDeposit, curCandidates, calcThawingEpoch(CalculateEpochID(curTime)), common.BigInt0); err != nil {
+	err = checkProcessVote(stateDB, ctx, addr, curDeposit, curDeposit, curCandidates,
+		calcThawingEpoch(CalculateEpochID(curTime)), common.BigInt0, true)
+	if err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,8 +98,79 @@ func TestProcessVoteDecreasingDeposit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
 	// Check the result
-	if err = checkProcessVote(stateDB, ctx, addr, prevDeposit, curDeposit, curCandidates, calcThawingEpoch((CalculateEpochID(curTime))), prevDeposit.Sub(curDeposit)); err != nil {
+	err = checkProcessVote(stateDB, ctx, addr, prevDeposit, curDeposit, curCandidates,
+		calcThawingEpoch(CalculateEpochID(curTime)), prevDeposit.Sub(curDeposit), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProcessVoteErr(t *testing.T) {
+	addr := randomAddress()
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addAccountInState(stateDB, addr, dx.MultInt64(10), common.BigInt0)
+	curTime := time.Now().Unix()
+	thawingEpoch := calcThawingEpoch(CalculateEpochID(curTime))
+	// Error 1: error from checkValidVote
+	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(11), candidates, curTime)
+	if err == nil {
+		t.Fatal("should raise error not enough balance")
+	}
+	if _, err := stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
+	// check the result
+	err = checkProcessVote(stateDB, ctx, addr, common.BigInt0, common.BigInt0, []common.Address{},
+		thawingEpoch, common.BigInt0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Error 2: no valid candidates
+	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(1), []common.Address{randomAddress()}, curTime)
+	if err == nil {
+		t.Fatal("should raise no candidate voted error")
+	}
+	if _, err := stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
+	err = checkProcessVote(stateDB, ctx, addr, common.BigInt0, common.BigInt0, []common.Address{},
+		thawingEpoch, common.BigInt0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProcessCancelVote(t *testing.T) {
+	addr := randomAddress()
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prevFrozen, deposit, curTime := dx.MultInt64(1), dx.MultInt64(8), time.Now().Unix()
+	addAccountInState(stateDB, addr, dx.MultInt64(10), prevFrozen)
+	thawingEpoch := calcThawingEpoch(CalculateEpochID(curTime))
+	// Process Vote
+	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, curTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cancel Vote
+	if err = ProcessCancelVote(stateDB, ctx, addr, curTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = stateDB.Commit(true); err != nil {
+		t.Fatal(err)
+	}
+	err = checkProcessVote(stateDB, ctx, addr, prevFrozen.Add(deposit), common.BigInt0, []common.Address{},
+		thawingEpoch, deposit, false)
+	if err != nil {
 		t.Fatal(err)
 	}
 }
@@ -161,16 +241,6 @@ func TestCheckValidVote(t *testing.T) {
 	}
 }
 
-func getPrototypeValidDelegator(addr common.Address) delegator {
-	return delegator{
-		addr:         addr,
-		balance:      dx.MultInt64(10),
-		frozenAssets: dx.MultInt64(4),
-		deposit:      dx.MultInt64(4),
-		candidates:   makeCandidates(30),
-	}
-}
-
 func makeCandidates(num int) []common.Address {
 	addresses := make([]common.Address, 0, num)
 	for i := 0; i != num; i++ {
@@ -182,21 +252,27 @@ func makeCandidates(num int) []common.Address {
 
 func checkProcessVote(state *state.StateDB, ctx *types.DposContext, addr common.Address,
 	expectedFrozenAssets common.BigInt, expectedDeposit common.BigInt, expectedCandidates []common.Address,
-	thawEpoch int64, thawValue common.BigInt) error {
+	thawEpoch int64, thawValue common.BigInt, addrInTrie bool) error {
 
 	// Check voteTrie
 	voteTrie := ctx.VoteTrie()
 	candidateBytes, err := voteTrie.TryGet(addr.Bytes())
-	if err != nil || candidateBytes == nil || len(candidateBytes) == 0 {
-		return fmt.Errorf("address %x not in vote trie", addr)
+	if !addrInTrie && (err == nil && candidateBytes != nil && len(candidateBytes) != 0) {
+		return fmt.Errorf("address %x should not in vote trie", addr)
 	}
-	// check whether the candidates are written to voteTrie
-	var candidates []common.Address
-	if err := rlp.DecodeBytes(candidateBytes, &candidates); err != nil {
-		return fmt.Errorf("rlp candidates decode error: %v", err)
-	}
-	if err := checkSameValidatorSet(candidates, expectedCandidates); err != nil {
-		return fmt.Errorf("validator set not expected: %v", err)
+	if addrInTrie {
+		if err != nil || candidateBytes == nil || len(candidateBytes) == 0 {
+			fmt.Println(addrInTrie)
+			return fmt.Errorf("address %x not in vote trie", addr)
+		}
+		// check whether the candidates are written to voteTrie
+		var candidates []common.Address
+		if err := rlp.DecodeBytes(candidateBytes, &candidates); err != nil {
+			return fmt.Errorf("rlp candidates decode error: %v", err)
+		}
+		if err := checkSameValidatorSet(candidates, expectedCandidates); err != nil {
+			return fmt.Errorf("validator set not expected: %v", err)
+		}
 	}
 	// Check the vote deposit
 	voteDeposit := getVoteDeposit(state, addr)
