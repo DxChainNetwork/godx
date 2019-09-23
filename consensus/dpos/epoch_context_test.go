@@ -82,7 +82,7 @@ func Test_CountVotes(t *testing.T) {
 		addrBytes := addr.Bytes()
 		err := epochContext.DposContext.CandidateTrie().TryUpdate(addrBytes, addrBytes)
 		if err != nil {
-			t.Fatalf("Failed to update candidate,error: %v", err)
+			t.Fatalf("Failed to update candidates,error: %v", err)
 		}
 
 		for j := 0; j < len(addresses); j++ {
@@ -98,7 +98,7 @@ func Test_CountVotes(t *testing.T) {
 			t.Fatalf("Failed to commit mock dpos context,error: %v", err)
 		}
 
-		// set candidate deposit
+		// set candidates deposit
 		candidateDeposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
 		stateDB.SetState(addr, KeyCandidateDeposit, common.BytesToHash(candidateDeposit.Bytes()))
 
@@ -170,7 +170,7 @@ func Test_KickoutValidators(t *testing.T) {
 	for i := 0; i < MaxValidatorSize/3; i++ {
 		canFromTrie := epochContext.DposContext.CandidateTrie().Get(candidates[i].Bytes())
 		if canFromTrie != nil {
-			t.Errorf("failed to delete the kick out one from candidate trie: %s", candidates[i].String())
+			t.Errorf("failed to delete the kick out one from candidates trie: %s", candidates[i].String())
 		}
 
 		delegatorFromTrie := epochContext.DposContext.DelegateTrie().Get(append(candidates[i].Bytes(), delegator.Bytes()...))

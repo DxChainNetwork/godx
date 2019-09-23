@@ -77,7 +77,7 @@ func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Addres
 	return fmt.Errorf("the given address %s is not a validator's address", addr.String())
 }
 
-// GetCandidates will return the candidate list based on the block header provided
+// GetCandidates will return the candidates list based on the block header provided
 func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the candidateTrie
 	trieDb := trie.NewDatabase(diskdb)
@@ -105,9 +105,9 @@ func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, d
 	return votes, rewardDistribution, minedCount, nil
 }
 
-// GetCandidateInfo will return the detailed candidate information
+// GetCandidateInfo will return the detailed candidates information
 func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address) (common.BigInt, common.BigInt, uint64) {
-	// get detailed candidate information
+	// get detailed candidates information
 	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
 	candidateVotes := getTotalVote(stateDb, candidateAddress)
 	rewardDistribution := getRewardRatioNumerator(stateDb, candidateAddress)

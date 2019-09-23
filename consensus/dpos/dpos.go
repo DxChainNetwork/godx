@@ -45,7 +45,7 @@ var (
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
 
-	// PrefixCandidateThawing is the prefix thawing string of candidate thawing key
+	// PrefixCandidateThawing is the prefix thawing string of candidates thawing key
 	PrefixCandidateThawing = "candidate_"
 
 	// PrefixVoteThawing is the prefix thawing string of vote thawing key

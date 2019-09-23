@@ -446,7 +446,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		return nil, nil, err
 	}
 
-	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
+	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidates as validator
 	var candidates []common.Address
 	for i := 0; i < MaxValidatorSize+5; i++ {
 		str := fmt.Sprintf("%d", i+1)
@@ -454,7 +454,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		candidates = append(candidates, addr)
 	}
 
-	// update candidate trie and delegate trie
+	// update candidates trie and delegate trie
 	for _, can := range candidates {
 		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
 		if err != nil {

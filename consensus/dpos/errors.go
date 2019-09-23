@@ -59,25 +59,25 @@ var (
 	// errVoteInsufficientBalance happens when voting, the account has less balance than needed.
 	errVoteInsufficientBalance = errors.New("insufficient balance to vote")
 
-	// errCandidateInsufficientDeposit happens when processing a candidate transaction, found
-	// that the candidate's deposit is lower than the threshold
-	errCandidateInsufficientDeposit = fmt.Errorf("candidate argument not qualified - minimum deposit: %v", minDeposit)
+	// errCandidateInsufficientDeposit happens when processing a candidates transaction, found
+	// that the candidates's deposit is lower than the threshold
+	errCandidateInsufficientDeposit = fmt.Errorf("candidates argument not qualified - minimum deposit: %v", minDeposit)
 
-	// errCandidateInvalidRewardRatio happens when processing a candidate transaction, found
+	// errCandidateInvalidRewardRatio happens when processing a candidates transaction, found
 	// the value of reward ratio is invalid
-	errCandidateInvalidRewardRatio = fmt.Errorf("candidate argument not qualified - invalid reward ratio: must between 0 to %v", RewardRatioDenominator)
+	errCandidateInvalidRewardRatio = fmt.Errorf("candidates argument not qualified - invalid reward ratio: must between 0 to %v", RewardRatioDenominator)
 
-	// errCandidateDecreasingDeposit happens when processing a candidate transaction, found the
+	// errCandidateDecreasingDeposit happens when processing a candidates transaction, found the
 	// value of deposit is decreasing.
-	errCandidateDecreasingDeposit = errors.New("candidate argument not qualified - candidate deposit shall not be decreased")
+	errCandidateDecreasingDeposit = errors.New("candidates argument not qualified - candidates deposit shall not be decreased")
 
-	// errCandidateDecreasingRewardRatio happens when processing a candidate transaction, found
+	// errCandidateDecreasingRewardRatio happens when processing a candidates transaction, found
 	// the value of reward ratio is decreasing.
-	errCandidateDecreasingRewardRatio = errors.New("candidate argument not qualified - candidate reward ratio shall not be decreased")
+	errCandidateDecreasingRewardRatio = errors.New("candidates argument not qualified - candidates reward ratio shall not be decreased")
 
-	// errCandidateInsufficientBalance happens when a user has insufficient balance for the candidate
+	// errCandidateInsufficientBalance happens when a user has insufficient balance for the candidates
 	// transaction
-	errCandidateInsufficientBalance = errors.New("candidate not qualified - candidate does not have enough balance")
+	errCandidateInsufficientBalance = errors.New("candidates not qualified - candidates does not have enough balance")
 
 	// errInsufficientFrozenAssets is the error happens when subtracting frozen assets, the diff value is
 	// larger the stored frozen assets

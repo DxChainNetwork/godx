@@ -25,8 +25,8 @@ var (
 	// KeyVoteDeposit is the key of vote deposit
 	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
 
-	// KeyCandidateDeposit is the key of candidate deposit
-	KeyCandidateDeposit = common.BytesToHash([]byte("candidate-deposit"))
+	// KeyCandidateDeposit is the key of candidates deposit
+	KeyCandidateDeposit = common.BytesToHash([]byte("candidates-deposit"))
 
 	// KeyRewardRatioNumerator is the key of block reward ration numerator indicates the percent of share validator with its delegators
 	KeyRewardRatioNumerator = common.BytesToHash([]byte("reward-ratio-numerator"))
@@ -38,7 +38,7 @@ var (
 	// KeyVoteLastEpoch is the vote deposit in the last epoch
 	KeyVoteLastEpoch = common.BytesToHash([]byte("vote-last-epoch"))
 
-	// KeyTotalVote is the key of total vote for each candidate
+	// KeyTotalVote is the key of total vote for each candidates
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
 
 	// KeyFrozenAssets is the key for frozen assets for in an account
@@ -48,13 +48,13 @@ var (
 	PrefixThawingAssets = []byte("thawing-assets")
 )
 
-// getCandidateDeposit get the candidate deposit of the addr from the state
+// getCandidateDeposit get the candidates deposit of the addr from the state
 func getCandidateDeposit(state stateDB, addr common.Address) common.BigInt {
 	depositHash := state.GetState(addr, KeyCandidateDeposit)
 	return common.PtrBigInt(depositHash.Big())
 }
 
-// setCandidateDeposit set the candidate deposit of the addr in the state
+// setCandidateDeposit set the candidates deposit of the addr in the state
 func setCandidateDeposit(state stateDB, addr common.Address, deposit common.BigInt) {
 	hash := common.BigToHash(deposit.BigIntPtr())
 	state.SetState(addr, KeyCandidateDeposit, hash)
@@ -72,7 +72,7 @@ func setVoteDeposit(state stateDB, addr common.Address, deposit common.BigInt) {
 	state.SetState(addr, KeyVoteDeposit, hash)
 }
 
-// getRewardRatioNumerator get the reward ratio for a candidate for the addr in state.
+// getRewardRatioNumerator get the reward ratio for a candidates for the addr in state.
 // The value is used in calculating block reward for miner and his delegator
 func getRewardRatioNumerator(state stateDB, addr common.Address) uint64 {
 	rewardRatioHash := state.GetState(addr, KeyRewardRatioNumerator)
@@ -98,13 +98,13 @@ func setRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address, value 
 	state.SetState(addr, KeyRewardRatioNumeratorLastEpoch, hash)
 }
 
-// getTotalVote get the total vote for the candidate address
+// getTotalVote get the total vote for the candidates address
 func getTotalVote(state stateDB, addr common.Address) common.BigInt {
 	hash := state.GetState(addr, KeyTotalVote)
 	return common.PtrBigInt(hash.Big())
 }
 
-// setTotalVote set the total vote to value for the candidate address
+// setTotalVote set the total vote to value for the candidates address
 func setTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) {
 	hash := common.BigToHash(totalVotes.BigIntPtr())
 	state.SetState(addr, KeyTotalVote, hash)
