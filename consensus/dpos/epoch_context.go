@@ -51,7 +51,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
-		// if prevEpoch is not genesis, kickout not active candidate
+		// if prevEpoch is not genesis, kickout not active candidates
 		if iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
 				return err
@@ -112,7 +112,7 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 		hasCandidate = true
 		candidateAddr := common.BytesToAddress(iterCandidate.Value)
 		// sanity check
-		// Calculate the candidate votes
+		// Calculate the candidates votes
 		totalVotes := ec.calcCandidateTotalVotes(candidateAddr)
 		// write the totalVotes to result and state
 		votes = append(votes, &randomSelectorEntry{addr: candidateAddr, vote: totalVotes})
@@ -139,7 +139,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	// ascend needKickoutValidators, the prev candidates have smaller mined count,
 	// and they will be remove firstly
 	sort.Sort(needKickoutValidators)
-	// count candidates to a safe size as a threshold to remove candidate
+	// count candidates to a safe size as a threshold to remove candidates
 	candidateCount := 0
 	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
 	for iter.Next() {
@@ -150,9 +150,9 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	}
 	// Loop over the first part of the needKickOutValidators to kick out
 	for i, validator := range needKickoutValidators {
-		// ensure candidate count greater than or equal to safeSize
+		// ensure candidates count greater than or equal to safeSize
 		if candidateCount <= SafeSize {
-			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
+			log.Info("No more candidates can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
@@ -162,11 +162,11 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := getCandidateDeposit(ec.stateDB, validator.address)
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
-		// set candidate deposit to 0
+		// set candidates deposit to 0
 		setCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
-		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "minedCnt", validator.cnt)
+		log.Info("Kickout candidates", "prevEpochID", epoch, "candidates", validator.address.String(), "minedCnt", validator.cnt)
 	}
 	return nil
 }
@@ -200,7 +200,7 @@ func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 	return gotBlockProduced >= expectedBlockProduced/eligibleValidatorDenominator
 }
 
-// selectValidator select validators randomly based on candidate votes and seed
+// selectValidator select validators randomly based on candidates votes and seed
 func selectValidator(candidateVotes randomSelectorEntries, seed int64) ([]common.Address, error) {
 	return randomSelectAddress(typeLuckyWheel, candidateVotes, seed, MaxValidatorSize)
 }

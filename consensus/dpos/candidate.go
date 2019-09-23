@@ -10,32 +10,32 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
-// ProcessAddCandidate adds a candidate to the DposContext and updated the related fields in stateDB
+// ProcessAddCandidate adds a candidates to the DposContext and updated the related fields in stateDB
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	rewardRatio uint64) error {
 
 	if err := checkValidCandidate(state, addr, deposit, rewardRatio); err != nil {
 		return err
 	}
-	// Add the candidate to DposContext
+	// Add the candidates to DposContext
 	if err := ctx.BecomeCandidate(addr); err != nil {
 		return err
 	}
-	// After validation, the candidate deposit could not decrease. Update the frozen asset field
+	// After validation, the candidates deposit could not decrease. Update the frozen asset field
 	prevDeposit := getCandidateDeposit(state, addr)
 	if deposit.Cmp(prevDeposit) > 0 {
 		diff := deposit.Sub(prevDeposit)
 		addFrozenAssets(state, addr, diff)
 	}
-	// Apply the candidate settings
+	// Apply the candidates settings
 	setCandidateDeposit(state, addr, deposit)
 	setRewardRatioNumerator(state, addr, rewardRatio)
 	return nil
 }
 
-// ProcessCancelCandidate cancel the addr being an candidate
+// ProcessCancelCandidate cancel the addr being an candidates
 func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
-	// Kick out the candidate in DposContext
+	// Kick out the candidates in DposContext
 	if err := ctx.KickoutCandidate(addr); err != nil {
 		return err
 	}
@@ -43,23 +43,23 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	prevDeposit := getCandidateDeposit(state, addr)
 	currentEpochID := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
-	// set the candidate deposit to 0
+	// set the candidates deposit to 0
 	setCandidateDeposit(state, addr, common.BigInt0)
 	return nil
 }
 
-// calcCandidateTotalVotes calculate the total votes for the candidate. The result include the deposit for the
-// candidate himself and the delegated votes from delegator
+// calcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
+// candidates himself and the delegated votes from delegator
 func (ec *EpochContext) calcCandidateTotalVotes(candidateAddr common.Address) common.BigInt {
 	state := ec.stateDB
-	// Calculate the candidate deposit and delegatedVote
+	// Calculate the candidates deposit and delegatedVote
 	candidateDeposit := getCandidateDeposit(state, candidateAddr)
 	delegatedVote := ec.calcCandidateDelegatedVotes(state, candidateAddr)
-	// return the sum of candidate deposit and delegated vote
+	// return the sum of candidates deposit and delegated vote
 	return candidateDeposit.Add(delegatedVote)
 }
 
-// calcCandidateDelegatedVotes calculate the total votes from delegator for the candidate in the current dposContext
+// calcCandidateDelegatedVotes calculate the total votes from delegator for the candidates in the current dposContext
 func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr common.Address) common.BigInt {
 	dt := ec.DposContext.DelegateTrie()
 	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
@@ -75,7 +75,7 @@ func (ec *EpochContext) calcCandidateDelegatedVotes(state stateDB, candidateAddr
 	return delegatorVotes
 }
 
-// getAllDelegatorForCandidate get all delegator who votes for the candidate
+// getAllDelegatorForCandidate get all delegator who votes for the candidates
 func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Address) []common.Address {
 	dt := ctx.DelegateTrie()
 	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
@@ -87,7 +87,7 @@ func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Ad
 	return addresses
 }
 
-// checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidate.
+// checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidates.
 // If not valid, an error is returned.
 func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
 	// Candidate deposit should be greate than the threshold
@@ -108,7 +108,7 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 	if rewardRatio < prevRewardRatio {
 		return errCandidateDecreasingRewardRatio
 	}
-	// The candidate should have enough balance for the transaction
+	// The candidates should have enough balance for the transaction
 	availableBalance := getAvailableBalance(state, candidateAddr)
 	increasedDeposit := deposit.Sub(prevDeposit)
 	if availableBalance.Cmp(increasedDeposit) < 0 {

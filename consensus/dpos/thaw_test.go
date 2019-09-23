@@ -7,6 +7,7 @@ package dpos
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/core/state"
 
@@ -38,6 +39,19 @@ func TestMarkThawingAddressAndValue(t *testing.T) {
 	}
 	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch2), m2); err != nil {
 		t.Error("period2: ", err)
+	}
+}
+
+// TestEmptyThawAllFrozenAssetsInEpoch test the logic for thawing an empty thawing address
+func TestEmptyThawAllFrozenAssetsInEpoch(t *testing.T) {
+	state, _, err := newStateAndDposContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := calcThawingEpoch(CalculateEpochID(time.Now().Unix()))
+	err = checkThawingAddressAndValue(state, epoch, make(map[common.Address]common.BigInt))
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

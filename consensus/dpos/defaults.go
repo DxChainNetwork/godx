@@ -28,7 +28,7 @@ const (
 	// RewardRatioDenominator is the max value of reward ratio
 	RewardRatioDenominator uint64 = 100
 
-	// ThawingEpochDuration defines that if user cancel candidate or vote, the deposit will be thawed after 2 epochs
+	// ThawingEpochDuration defines that if user cancel candidates or vote, the deposit will be thawed after 2 epochs
 	ThawingEpochDuration = 2
 
 	// eligibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
@@ -56,6 +56,6 @@ var (
 	// Block reward in camel for successfully mining a block upward from Constantinople
 	constantinopleBlockReward = common.NewBigIntUint64(1e18).MultInt64(2)
 
-	// minDeposit defines the minimum deposit of candidate
+	// minDeposit defines the minimum deposit of candidates
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1000)
 )
