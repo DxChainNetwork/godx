@@ -39,7 +39,7 @@ func TestProcessVoteNewDelegator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkProcessVote(stateDB, ctx, addr, deposit, deposit, candidates, 0, common.BigInt0)
+	err = checkProcessVote(stateDB, ctx, addr, deposit, deposit, candidates, calcThawingEpoch(CalculateEpochID(curTime)), common.BigInt0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,32 @@ func TestProcessVoteIncreasingDeposit(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check the result
-	if err = checkProcessVote(stateDB, ctx, addr, curDeposit, curDeposit, curCandidates, 0, common.BigInt0); err != nil {
+	if err = checkProcessVote(stateDB, ctx, addr, curDeposit, curDeposit, curCandidates, calcThawingEpoch(CalculateEpochID(curTime)), common.BigInt0); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProcessVoteDecreasingDeposit(t *testing.T) {
+	addr := randomAddress()
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addAccountInState(stateDB, addr, dx.MultInt64(10), common.BigInt0)
+	// Vote the first time
+	prevDeposit, prevCandidates, prevTime := dx.MultInt64(10), candidates[:30], time.Now().AddDate(0, 0, -1).Unix()
+	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, prevTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Vote the second time
+	curDeposit, curCandidates, curTime := dx.MultInt64(1), candidates[20:], time.Now().Unix()
+	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, curTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check the result
+	if err = checkProcessVote(stateDB, ctx, addr, prevDeposit, curDeposit, curCandidates, calcThawingEpoch((CalculateEpochID(curTime))), prevDeposit.Sub(curDeposit)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -188,7 +213,9 @@ func checkProcessVote(state *state.StateDB, ctx *types.DposContext, addr common.
 		return nil
 	}
 	m := make(map[common.Address]common.BigInt)
-	m[addr] = thawValue
+	if thawValue.Cmp(common.BigInt0) != 0 {
+		m[addr] = thawValue
+	}
 	return checkThawingAddressAndValue(state, thawEpoch, m)
 }
 
