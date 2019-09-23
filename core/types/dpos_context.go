@@ -399,7 +399,6 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 			return fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
 		}
 	}
-
 	// delete vote records from voteTrie
 	err = dc.voteTrie.TryDelete(delegator)
 	if err != nil {
