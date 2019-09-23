@@ -62,6 +62,18 @@ func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, 
 		return errCandidateInsufficientBalance
 	}
 
+	// previous candidate's deposit validation
+	prevDeposit := getCandidateDeposit(state, candidateAddress)
+	if data.Deposit.Cmp(prevDeposit) < 0 {
+		return errCandidateDecreasingDeposit
+	}
+
+	// previous candidate's reward distribution ratio validation
+	prevRewardRatio := getRewardRatioNumerator(state, candidateAddress)
+	if data.RewardRatio < prevRewardRatio {
+		return errCandidateDecreasingRewardRatio
+	}
+
 	return nil
 }
 
