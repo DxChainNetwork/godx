@@ -28,19 +28,44 @@ type delegator struct {
 // TestProcessVoteIncreaseDeposit test function ProcessDeposit of previously not a delegator
 func TestProcessVoteNewDelegator(t *testing.T) {
 	addr := randomAddress()
-	state, ctx, candidates, err := newStateAndDposContextWithCandidate(30)
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(30)
 	if err != nil {
 		t.Fatal(err)
 	}
 	deposit, curTime := dx.MultInt64(10), time.Now().Unix()
-	addAccountInState(state, addr, deposit, common.BigInt0)
+	addAccountInState(stateDB, addr, deposit, common.BigInt0)
 	// Process vote
-	_, err = ProcessVote(state, ctx, addr, deposit, candidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, curTime)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkProcessVote(state, ctx, addr, deposit, deposit, candidates, 0, common.BigInt0)
+	err = checkProcessVote(stateDB, ctx, addr, deposit, deposit, candidates, 0, common.BigInt0)
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProcessVoteIncreasingDeposit(t *testing.T) {
+	addr := randomAddress()
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addAccountInState(stateDB, addr, dx.MultInt64(10), common.BigInt0)
+	// Vote the first time
+	prevDeposit, prevCandidates, prevTime := dx, candidates[:30], time.Now().AddDate(0, 0, -1).Unix()
+	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, prevTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Vote the second time
+	curDeposit, curCandidates, curTime := dx.MultInt64(10), candidates[20:], time.Now().Unix()
+	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, curTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Check the result
+	if err = checkProcessVote(stateDB, ctx, addr, curDeposit, curDeposit, curCandidates, 0, common.BigInt0); err != nil {
 		t.Fatal(err)
 	}
 }
