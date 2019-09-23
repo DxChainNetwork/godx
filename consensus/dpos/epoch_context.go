@@ -112,8 +112,8 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 		hasCandidate = true
 		candidateAddr := common.BytesToAddress(iterCandidate.Value)
 		// sanity check
-		// Calculate the candidates votes
-		totalVotes := ec.calcCandidateTotalVotes(candidateAddr)
+		// calculate the candidates votes
+		totalVotes := CalcCandidateTotalVotes(candidateAddr, ec.stateDB, ec.DposContext.DelegateTrie())
 		// write the totalVotes to result and state
 		votes = append(votes, &randomSelectorEntry{addr: candidateAddr, vote: totalVotes})
 		setTotalVote(statedb, candidateAddr, totalVotes)

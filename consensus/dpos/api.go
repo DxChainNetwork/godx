@@ -106,13 +106,19 @@ func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, d
 }
 
 // GetCandidateInfo will return the detailed candidates information
-func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address) (common.BigInt, common.BigInt, uint64) {
+func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
 	// get detailed candidates information
 	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
-	candidateVotes := getTotalVote(stateDb, candidateAddress)
+
+	// get the candidateTrie
+	delegateTrie, err := types.NewCandidateTrie(header.DposContext.DelegateRoot, trieDb)
+	if err != nil {
+		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
+	}
+	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
 	rewardDistribution := getRewardRatioNumerator(stateDb, candidateAddress)
 
-	return candidateDeposit, candidateVotes, rewardDistribution
+	return candidateDeposit, candidateVotes, rewardDistribution, nil
 }
 
 // getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch

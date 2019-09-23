@@ -12,6 +12,7 @@ import (
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rpc"
+	"github.com/DxChainNetwork/godx/trie"
 )
 
 // PublicDposAPI object is used to implement all
@@ -107,7 +108,11 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInf
 	}
 
 	// get detailed information
-	candidateDeposit, candidateVotes, rewardDistribution := dpos.GetCandidateInfo(statedb, candidateAddress)
+	trieDb := trie.NewDatabase(d.e.ChainDb())
+	candidateDeposit, candidateVotes, rewardDistribution, err := dpos.GetCandidateInfo(statedb, candidateAddress, header, trieDb)
+	if err != nil {
+		return CandidateInfo{}, err
+	}
 
 	// check candidateDeposit to validate if the given address is a
 	// candidate address
