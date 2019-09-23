@@ -6,6 +6,7 @@ package dpos
 
 import (
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -193,4 +194,70 @@ func Test_KickoutValidators(t *testing.T) {
 	if len(votedCan) != MaxValidatorSize+5-MaxValidatorSize/3 {
 		t.Errorf("failed to delete the kick out one from vote trie,wanted length: %d,got: %d", MaxValidatorSize+5-MaxValidatorSize/3, len(votedCan))
 	}
+}
+
+// TestAllDelegatorForValidators test the function allDelegatorForValidators
+func TestAllDelegatorForValidators(t *testing.T) {
+	//m := make(map[common.Address][]common.Address)
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// randomly pick 21 validators from the 1000 candidates
+	validators := randomSelectFromAddress(candidates, 21, r)
+	vm := make(map[common.Address]struct{})
+	for _, v := range validators {
+		vm[v] = struct{}{}
+	}
+	// Vote. at 1/100 ratio, the vote come from an existing candidates
+	selectedDelegators := make(map[common.Address]struct{})
+	numDelegators, deposit, curTime := 10000, dx.MultInt64(100), time.Now().Unix()
+	for i := 0; i != numDelegators; i++ {
+		addr := randomAddress()
+		if r.Intn(100) == 0 {
+			addr = candidates[r.Intn(len(candidates))]
+		}
+		stateDB.AddBalance(addr, deposit.BigIntPtr())
+		voteCandidates := randomSelectFromAddress(candidates, 30, r)
+		for _, c := range voteCandidates {
+			if _, exist := vm[c]; exist {
+				selectedDelegators[addr] = struct{}{}
+				break
+			}
+		}
+		if _, err = ProcessVote(stateDB, ctx, addr, deposit, voteCandidates, curTime); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Check the results
+	res := allDelegatorForValidators(ctx, validators)
+	for addr := range res {
+		_, exist := selectedDelegators[addr]
+		if !exist {
+			t.Errorf("address %x not exist in selected", addr)
+		}
+		delete(selectedDelegators, addr)
+	}
+	if len(selectedDelegators) != 0 {
+		t.Fatalf("size of selected not expected %v: %v", len(selectedDelegators), selectedDelegators)
+	}
+}
+
+func randomSelectFromAddress(rawList []common.Address, num int, r *rand.Rand) []common.Address {
+	length := len(rawList)
+	if length <= num {
+		return rawList
+	}
+	res := make([]common.Address, 0, num)
+	list := make([]common.Address, length)
+	copy(list, rawList)
+	// Randomly select num of addresses from the list
+	for i := 0; i != num; i++ {
+		index := r.Intn(length)
+		res = append(res, list[index])
+		list[index] = list[length-1]
+		length--
+	}
+	return res
 }
