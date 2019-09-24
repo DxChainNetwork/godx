@@ -229,7 +229,7 @@ func (dc *DposContext) KickoutCandidate(candidateAddr common.Address, epochID in
 	iter := trie.NewIterator(dc.delegateTrie.PrefixIterator(append(epochBytes, candidate...)))
 	for iter.Next() {
 		delegator := iter.Value
-		key := append(candidate, delegator...)
+		key := append(epochBytes, append(candidate, delegator...)...)
 		err = dc.delegateTrie.TryDelete(key)
 		if err != nil {
 			if _, ok := err.(*trie.MissingNodeError); !ok {

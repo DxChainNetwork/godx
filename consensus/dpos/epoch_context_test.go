@@ -153,6 +153,8 @@ func Test_KickoutValidators(t *testing.T) {
 	}
 
 	epochID := CalculateEpochID(now)
+	epochIdBytes := common.Int64ToBytes(epochID)
+
 	err = epochContext.kickoutValidators(epochID)
 	if err != nil {
 		t.Errorf("something wrong to kick out validators,error: %v", err)
@@ -173,7 +175,7 @@ func Test_KickoutValidators(t *testing.T) {
 			t.Errorf("failed to delete the kick out one from candidate trie: %s", candidates[i].String())
 		}
 
-		delegatorFromTrie := epochContext.DposContext.DelegateTrie().Get(append(candidates[i].Bytes(), delegator.Bytes()...))
+		delegatorFromTrie := epochContext.DposContext.DelegateTrie().Get(append(epochIdBytes, append(candidates[i].Bytes(), delegator.Bytes()...)...))
 		if delegatorFromTrie != nil {
 			t.Errorf("failed to delete the kick out one from delegate trie: %s", candidates[i].String())
 		}

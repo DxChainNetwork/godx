@@ -22,6 +22,9 @@ var (
 	}
 
 	notExistAddress = common.HexToAddress("0x0")
+
+	epochID      int64 = 1000000000
+	epochIdBytes       = common.Int64ToBytes(epochID)
 )
 
 func TestDposContextSnapshot(t *testing.T) {
@@ -71,12 +74,12 @@ func TestDposContextKickoutCandidate(t *testing.T) {
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
-		_, err := dposContext.Vote(candidate, candidates)
+		_, err := dposContext.Vote(candidate, candidates, epochID)
 		assert.Nil(t, err)
 	}
 
 	kickIdx := 1
-	assert.Nil(t, dposContext.KickoutCandidate(candidates[kickIdx]))
+	assert.Nil(t, dposContext.KickoutCandidate(candidates[kickIdx], epochID))
 	candidateMap := map[common.Address]bool{}
 	candidateIter := trie.NewIterator(dposContext.candidateTrie.NodeIterator(nil))
 	for candidateIter.Next() {
@@ -90,7 +93,7 @@ func TestDposContextKickoutCandidate(t *testing.T) {
 	}
 
 	for i, candidate := range candidates {
-		delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
+		delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(append(epochIdBytes,candidate.Bytes()...)))
 		if i == kickIdx {
 			assert.False(t, delegateIter.Next())
 			assert.False(t, candidateMap[candidate])
@@ -120,15 +123,15 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 		candidateMap[string(candidateIter.Value)] = true
 	}
 
-	_, err = dposContext.Vote(delegator, []common.Address{notExistAddress})
+	_, err = dposContext.Vote(delegator, []common.Address{notExistAddress}, epochID)
 	assert.NotNil(t, err)
 
 	// delegator vote to old candidate
-	_, err = dposContext.Vote(delegator, []common.Address{candidate})
+	_, err = dposContext.Vote(delegator, []common.Address{candidate}, epochID)
 	assert.Nil(t, err)
-	delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
+	delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(append(epochIdBytes,candidate.Bytes()...)))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(delegatePrefix, append(epochIdBytes,append(candidate.Bytes(), delegator.Bytes()...)...)...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
@@ -139,13 +142,13 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	}
 
 	// delegator vote to new candidate
-	_, err = dposContext.Vote(delegator, []common.Address{newCandidate})
+	_, err = dposContext.Vote(delegator, []common.Address{newCandidate}, epochID)
 	assert.Nil(t, err)
-	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
+	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(append(epochIdBytes,candidate.Bytes()...)))
 	assert.False(t, delegateIter.Next())
-	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
+	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(append(epochIdBytes, newCandidate.Bytes()...)))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(newCandidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(delegatePrefix, append(epochIdBytes,append(newCandidate.Bytes(), delegator.Bytes()...)...)...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
@@ -156,10 +159,10 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	}
 
 	// a not exist delegator cancel vote record
-	assert.NotNil(t, dposContext.CancelVote(notExistAddress))
+	assert.NotNil(t, dposContext.CancelVote(notExistAddress, epochID))
 
 	// delegator cancel all vote record
-	assert.Nil(t, dposContext.CancelVote(delegator))
+	assert.Nil(t, dposContext.CancelVote(delegator, epochID))
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
 	assert.False(t, delegateIter.Next())
 	voteIter = trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))

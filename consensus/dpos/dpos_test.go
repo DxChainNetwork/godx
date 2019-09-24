@@ -78,10 +78,11 @@ func TestUpdateMinedCnt(t *testing.T) {
 func TestAccumulateRewards(t *testing.T) {
 	var (
 		delegator = common.HexToAddress("0xaaa")
+		now = time.Now().Unix()
 	)
 
 	db := ethdb.NewMemDatabase()
-	dposContext, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
+	dposContext, candidates, err := mockDposContext(db, now, delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
@@ -102,7 +103,7 @@ func TestAccumulateRewards(t *testing.T) {
 	stateDbCopy := stateDB.Copy()
 
 	// Byzantium
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator, Time:big.NewInt(now)}
 	expectedDelegatorReward := big.NewInt(1.5e+18)
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
@@ -454,6 +455,8 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		candidates = append(candidates, addr)
 	}
 
+	epochIdBytes := common.Int64ToBytes(CalculateEpochID(now))
+
 	// update candidate trie and delegate trie
 	for _, can := range candidates {
 		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
@@ -461,7 +464,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 			return nil, nil, err
 		}
 
-		err = dposContext.DelegateTrie().TryUpdate(append(can.Bytes(), delegator.Bytes()...), delegator.Bytes())
+		err = dposContext.DelegateTrie().TryUpdate(append(epochIdBytes, append(can.Bytes(), delegator.Bytes()...)...), delegator.Bytes())
 		if err != nil {
 			return nil, nil, err
 		}
