@@ -35,13 +35,15 @@ func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Addr
 
 // ProcessCancelCandidate cancel the addr being an candidate
 func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
+	currentEpochID := CalculateEpochID(time)
+
 	// Kick out the candidate in DposContext
-	if err := ctx.KickoutCandidate(addr); err != nil {
+	if err := ctx.KickoutCandidate(addr, currentEpochID); err != nil {
 		return err
 	}
 	// Mark the thawing address in the future
 	prevDeposit := getCandidateDeposit(state, addr)
-	currentEpochID := CalculateEpochID(time)
+
 	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
 	// set the candidate deposit to 0
 	setCandidateDeposit(state, addr, common.BigInt0)

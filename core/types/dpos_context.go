@@ -212,7 +212,7 @@ func (dcp *DposContextRoot) Root() (h common.Hash) {
 }
 
 // KickoutCandidate will kick out the given candidate
-func (dc *DposContext) KickoutCandidate(candidateAddr common.Address) error {
+func (dc *DposContext) KickoutCandidate(candidateAddr common.Address, epochID int64) error {
 	candidate := candidateAddr.Bytes()
 	err := dc.candidateTrie.TryDelete(candidate)
 	if err != nil {
@@ -224,7 +224,9 @@ func (dc *DposContext) KickoutCandidate(candidateAddr common.Address) error {
 		}
 	}
 
-	iter := trie.NewIterator(dc.delegateTrie.PrefixIterator(candidate))
+	epochBytes := common.Int64ToBytes(epochID)
+
+	iter := trie.NewIterator(dc.delegateTrie.PrefixIterator(append(epochBytes, candidate...)))
 	for iter.Next() {
 		delegator := iter.Value
 		key := append(candidate, delegator...)
@@ -289,9 +291,10 @@ func (dc *DposContext) BecomeCandidate(candidateAddr common.Address) error {
 }
 
 // Vote will store the vote record
-func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common.Address) (int, error) {
+func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common.Address, epochID int64) (int, error) {
 	delegator := delegatorAddr.Bytes()
 	successVoted := make([]common.Address, 0)
+	epochBytes := common.Int64ToBytes(epochID)
 
 	oldCandidateBytes, err := dc.voteTrie.TryGet(delegator)
 	if err != nil {
@@ -316,7 +319,7 @@ func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common
 		}
 
 		for _, oldCandidate := range oldCandidateList {
-			err = dc.delegateTrie.TryDelete(append(oldCandidate.Bytes(), delegator...))
+			err = dc.delegateTrie.TryDelete(append(epochBytes, append(oldCandidate.Bytes(), delegator...)...))
 			if err != nil {
 				if _, ok := err.(*trie.MissingNodeError); !ok {
 					return 0, fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
@@ -344,7 +347,7 @@ func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common
 			continue
 		}
 
-		err = dc.delegateTrie.TryUpdate(append(candidate, delegator...), delegator)
+		err = dc.delegateTrie.TryUpdate(append(epochBytes, append(candidate, delegator...)...), delegator)
 		if err != nil {
 			log.Error("Failed to update a new vote to delegateTrie", "error", err)
 			continue
@@ -372,8 +375,9 @@ func (dc *DposContext) Vote(delegatorAddr common.Address, candidateList []common
 }
 
 // CancelVote will remove all vote records
-func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
+func (dc *DposContext) CancelVote(delegatorAddr common.Address, epochID int64) error {
 	delegator := delegatorAddr.Bytes()
+	epochBytes := common.Int64ToBytes(epochID)
 
 	oldCandidateBytes, err := dc.voteTrie.TryGet(delegator)
 	if err != nil {
@@ -394,7 +398,7 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 
 	// delete all vote records from delegateTrie
 	for _, oldCandidate := range oldCandidateList {
-		err = dc.delegateTrie.TryDelete(append(oldCandidate.Bytes(), delegator...))
+		err = dc.delegateTrie.TryDelete(append(epochBytes, append(oldCandidate.Bytes(), delegator...)...))
 		if err != nil {
 			return fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
 		}

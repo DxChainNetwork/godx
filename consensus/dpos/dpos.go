@@ -378,6 +378,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsConstantinople(header.Number) {
 		blockReward = constantinopleBlockReward
 	}
+
 	// retrieve the total vote weight of header's validator
 	voteCount := getTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
@@ -388,10 +389,20 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	rewardRatioNumerator := getRewardRatioNumeratorLastEpoch(state, header.Validator)
 	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
+
 	// Loop over the delegators to add delegator rewards
+	epochID := CalculateEpochID(header.Time.Int64())
+	epochBytes := common.Int64ToBytes(epochID)
+
 	delegateTrie := dposContext.DelegateTrie()
-	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
-	for delegatorIterator.Next() {
+	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(append(epochBytes, header.Validator.Bytes()...)))
+	isExist := delegatorIterator.Next()
+
+	if !isExist {
+		delegatorIterator = trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
+		isExist = delegatorIterator.Next()
+	}
+	for isExist {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 		// get the votes of delegator to vote for delegate
 		delegatorVote := getVoteLastEpoch(state, delegator)
@@ -399,7 +410,10 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
 		state.AddBalance(delegator, delegatorReward.BigIntPtr())
 		assignedReward = assignedReward.Add(delegatorReward)
+
+		isExist = delegatorIterator.Next()
 	}
+
 	// accumulate the rest rewards for the validator
 	validatorReward := blockReward.Sub(assignedReward)
 	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())

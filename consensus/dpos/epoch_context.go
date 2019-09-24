@@ -155,7 +155,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
-		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
+		if err := ec.DposContext.KickoutCandidate(validator.address, epoch); err != nil {
 			return err
 		}
 		// if successfully above, then mark the validator that will be thawed in next next epoch

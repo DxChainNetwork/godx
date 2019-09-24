@@ -12,16 +12,19 @@ import (
 // ProcessVote process the process request for state and dpos context
 func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	candidates []common.Address, time int64) (int, error) {
-
 	// Validation: voting with 0 deposit is not allowed
 	if err := checkValidVote(state, addr, deposit, candidates); err != nil {
 		return 0, err
 	}
+
+	epoch := CalculateEpochID(time)
+
 	// Vote the candidates
-	successVote, err := ctx.Vote(addr, candidates)
+	successVote, err := ctx.Vote(addr, candidates, epoch)
 	if err != nil {
 		return 0, err
 	}
+
 	// Compare the new deposit with the previous deposit. Different strategy is applied for
 	// different condition. Note if previous deposit is the same as the new deposit, no frozen
 	// or thawing fields need to be updated
@@ -30,7 +33,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 		// If new deposit is smaller than previous deposit, the diff will be thawed after
 		// ThawingEpochDuration
 		diff := prevDeposit.Sub(deposit)
-		epoch := CalculateEpochID(time)
+
 		markThawingAddressAndValue(state, addr, epoch, diff)
 	} else if deposit.Cmp(prevDeposit) > 0 {
 		// If the new deposit is larger than previous deposit, the diff will be added directly
@@ -46,12 +49,12 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 
 // ProcessCancelVote process the cancel vote request for state and dpos context
 func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
-	if err := ctx.CancelVote(addr); err != nil {
+	currentEpochID := CalculateEpochID(time)
+	if err := ctx.CancelVote(addr, currentEpochID); err != nil {
 		return err
 	}
 	prevDeposit := getVoteDeposit(state, addr)
-	currentEpoch := CalculateEpochID(time)
-	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
+	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
 	setVoteDeposit(state, addr, common.BigInt0)
 	return nil
 }
