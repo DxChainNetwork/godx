@@ -45,12 +45,6 @@ var (
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
 
-	// PrefixCandidateThawing is the prefix thawing string of candidates thawing key
-	PrefixCandidateThawing = "candidate_"
-
-	// PrefixVoteThawing is the prefix thawing string of vote thawing key
-	PrefixVoteThawing = "vote_"
-
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
 
@@ -299,22 +293,19 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	}
 
 	curHeader := chain.CurrentHeader()
-	epoch := int64(-1)
+
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-		curEpoch := CalculateEpochID(curHeader.Time.Int64())
-		if curEpoch != epoch {
-			epoch = curEpoch
-			validatorMap = make(map[common.Address]bool)
-		}
+
 		// fast return
-		// if block number difference less consensusSize-witnessNum
+		// if block number difference less consensusSize-witnessNum,
 		// there is no need to check block is confirmed
 		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
 			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
 			return nil
 		}
+
 		validatorMap[curHeader.Validator] = true
 		if len(validatorMap) >= ConsensusSize {
 			d.confirmedBlockHeader = curHeader
@@ -324,6 +315,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 			log.Debug("Dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
 			return nil
 		}
+
 		curHeader = chain.GetHeaderByHash(curHeader.ParentHash)
 		if curHeader == nil {
 			return ErrNilBlockHeader
