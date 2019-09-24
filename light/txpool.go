@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -373,7 +375,7 @@ func (pool *TxPool) validateTx(ctx context.Context, tx *types.Transaction) error
 
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if b := currentState.GetBalance(from); b.Cmp(tx.Cost()) < 0 {
+	if b := dpos.GetAvailableBalance(currentState, from); b.Cmp(common.PtrBigInt(tx.Cost())) < 0 {
 		return core.ErrInsufficientFunds
 	}
 

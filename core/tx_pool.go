@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/prque"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -615,9 +617,10 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	if dpos.GetAvailableBalance(pool.currentState, from).Cmp(common.PtrBigInt(tx.Cost())) < 0 {
 		return ErrInsufficientFunds
 	}
+
 	intrGas, err := IntrinsicGas(tx.Data(), tx.To() == nil, pool.homestead)
 	if err != nil {
 		return err
