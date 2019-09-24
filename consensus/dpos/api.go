@@ -111,7 +111,7 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
 
 	// get the candidateTrie
-	delegateTrie, err := types.NewCandidateTrie(header.DposContext.DelegateRoot, trieDb)
+	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
 	if err != nil {
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
