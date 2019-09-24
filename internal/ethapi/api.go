@@ -53,9 +53,9 @@ const (
 
 // AccountBalance is an object that is used to show detailed account information
 type AccountBalance struct {
-	TotalBalance     common.BigInt
-	AvailableBalance common.BigInt
-	FrozenAssets     common.BigInt
+	TotalBalance     *hexutil.Big
+	AvailableBalance *hexutil.Big
+	FrozenAssets     *hexutil.Big
 }
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -523,9 +523,9 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 	frozenAssets := dpos.GetFrozenAssets(state, address)
 
 	return AccountBalance{
-		TotalBalance:     totalBalance,
-		AvailableBalance: availableBalance,
-		FrozenAssets:     frozenAssets,
+		TotalBalance:     (*hexutil.Big)(totalBalance.BigIntPtr()),
+		AvailableBalance: (*hexutil.Big)(availableBalance.BigIntPtr()),
+		FrozenAssets:     (*hexutil.Big)(frozenAssets.BigIntPtr()),
 	}, nil
 }
 

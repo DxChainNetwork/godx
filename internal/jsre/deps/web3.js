@@ -3683,6 +3683,14 @@ var outputBigNumberFormatter = function (number) {
     return utils.toBigNumber(number);
 };
 
+var outputBalanceFormatter = function (object) {
+    totalBalance = utils.toBigNumber(object.TotalBalance)
+    availableBalance = utils.toBigNumber(object.AvailableBalance)
+    frozenAssets = utils.toBigNumber(object.FrozenAssets)
+
+    return {TotalBalance:totalBalance, AvailableBalance: availableBalance, FrozenAssets: frozenAssets}
+};
+
 var isPredefinedBlockNumber = function (blockNumber) {
     return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest';
 };
@@ -3943,6 +3951,7 @@ module.exports = {
     inputAddressFormatter: inputAddressFormatter,
     inputPostFormatter: inputPostFormatter,
     outputBigNumberFormatter: outputBigNumberFormatter,
+    outputBalanceFormatter: outputBalanceFormatter,
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
@@ -5261,6 +5270,7 @@ var methods = function () {
         params: 2,
         inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
         // outputFormatter: formatters.outputBigNumberFormatter
+        outputFormatter: formatters.outputBalanceFormatter
     });
 
     var getStorageAt = new Method({
