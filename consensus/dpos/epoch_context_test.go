@@ -5,6 +5,7 @@
 package dpos
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -198,50 +199,64 @@ func Test_KickoutValidators(t *testing.T) {
 
 // TestAllDelegatorForValidators test the function allDelegatorForValidators
 func TestAllDelegatorForValidators(t *testing.T) {
-	//m := make(map[common.Address][]common.Address)
 	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(1000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	// randomly pick 21 validators from the 1000 candidates
-	validators := randomSelectFromAddress(candidates, 21, r)
-	vm := make(map[common.Address]struct{})
-	for _, v := range validators {
-		vm[v] = struct{}{}
-	}
-	// Vote. at 1/100 ratio, the vote come from an existing candidates
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	validators, validatorMap := randomSelectWithListAndMapFromAddress(candidates, 21, r)
+	// selectedDelegators are a map of delegators who select the validators in candidates
 	selectedDelegators := make(map[common.Address]struct{})
 	numDelegators, deposit, curTime := 10000, dx.MultInt64(100), time.Now().Unix()
+	// Vote numDelegators delegator
 	for i := 0; i != numDelegators; i++ {
+		// at 1/100 ratio, the vote come from an existing candidates
 		addr := randomAddress()
 		if r.Intn(100) == 0 {
 			addr = candidates[r.Intn(len(candidates))]
 		}
-		stateDB.AddBalance(addr, deposit.BigIntPtr())
-		voteCandidates := randomSelectFromAddress(candidates, 30, r)
-		for _, c := range voteCandidates {
-			if _, exist := vm[c]; exist {
-				selectedDelegators[addr] = struct{}{}
-				break
-			}
-		}
-		if _, err = ProcessVote(stateDB, ctx, addr, deposit, voteCandidates, curTime); err != nil {
+		selected, err := randomProcessVote(stateDB, ctx, addr, deposit, candidates, validatorMap, curTime, r)
+		if err != nil {
 			t.Fatal(err)
 		}
-	}
-	// Check the results
-	res := allDelegatorForValidators(ctx, validators)
-	for addr := range res {
-		_, exist := selectedDelegators[addr]
-		if !exist {
-			t.Errorf("address %x not exist in selected", addr)
+		if selected {
+			selectedDelegators[addr] = struct{}{}
 		}
-		delete(selectedDelegators, addr)
 	}
-	if len(selectedDelegators) != 0 {
-		t.Fatalf("size of selected not expected %v: %v", len(selectedDelegators), selectedDelegators)
+	// Execute the function
+	res := allDelegatorForValidators(ctx, validators)
+	// Check the results. The result should be exactly the same as selectedDelegators
+	if err = checkSetsEqual(selectedDelegators, res); err != nil {
+		t.Fatal(err)
 	}
+}
+
+func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt, candidates []common.Address,
+	validators map[common.Address]struct{}, time int64, r *rand.Rand) (bool, error) {
+
+	selected := false
+	stateDB.AddBalance(addr, deposit.BigIntPtr())
+	votedCandidates := randomSelectFromAddress(candidates, 30, r)
+	for _, c := range votedCandidates {
+		if _, exist := validators[c]; exist {
+			selected = true
+			break
+		}
+	}
+	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, time); err != nil {
+		return false, err
+	}
+	return selected, nil
+}
+
+func randomSelectWithListAndMapFromAddress(source []common.Address, num int, r *rand.Rand) ([]common.Address, map[common.Address]struct{}) {
+	validators := randomSelectFromAddress(source, num, r)
+	vm := make(map[common.Address]struct{})
+	for _, v := range validators {
+		vm[v] = struct{}{}
+	}
+	return validators, vm
 }
 
 func randomSelectFromAddress(rawList []common.Address, num int, r *rand.Rand) []common.Address {
@@ -260,4 +275,22 @@ func randomSelectFromAddress(rawList []common.Address, num int, r *rand.Rand) []
 		length--
 	}
 	return res
+}
+
+func checkSetsEqual(m1, m2 map[common.Address]struct{}) error {
+	// Copy m2
+	m2Copy := make(map[common.Address]struct{})
+	for k, v := range m2 {
+		m2Copy[k] = v
+	}
+	for k1 := range m1 {
+		if _, exist := m2Copy[k1]; !exist {
+			return fmt.Errorf("key %v exist in m1 not in m2", k1)
+		}
+		delete(m2Copy, k1)
+	}
+	if len(m2Copy) != 0 {
+		return fmt.Errorf("m2 contains more key than m1: %v", m2Copy)
+	}
+	return nil
 }
