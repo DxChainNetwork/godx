@@ -208,13 +208,18 @@ func TestAllDelegatorForValidators(t *testing.T) {
 	validators, validatorMap := randomSelectWithListAndMapFromAddress(candidates, 21, r)
 	// selectedDelegators are a map of delegators who select the validators in candidates
 	selectedDelegators := make(map[common.Address]struct{})
+	votedCandidates := make(map[common.Address]struct{})
 	numDelegators, deposit, curTime := 10000, dx.MultInt64(100), time.Now().Unix()
 	// Vote numDelegators delegator
 	for i := 0; i != numDelegators; i++ {
 		// at 1/100 ratio, the vote come from an existing candidates
 		addr := randomAddress()
 		if r.Intn(100) == 0 {
-			addr = candidates[r.Intn(len(candidates))]
+			c := candidates[r.Intn(len(candidates))]
+			if _, exist := votedCandidates[c]; !exist {
+				votedCandidates[c] = struct{}{}
+				addr = c
+			}
 		}
 		selected, err := randomProcessVote(stateDB, ctx, addr, deposit, candidates, validatorMap, curTime, r)
 		if err != nil {
@@ -232,6 +237,8 @@ func TestAllDelegatorForValidators(t *testing.T) {
 	}
 }
 
+// randomProcessVote use the input arguments as vote parameters, randomly select 30 voting candidates from candidates
+// and vote. If one or more of the selected candidates exist in validators, return true and error. Else return false.
 func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt, candidates []common.Address,
 	validators map[common.Address]struct{}, time int64, r *rand.Rand) (bool, error) {
 
