@@ -7,6 +7,7 @@ package dpos
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/trie"
 )
 
@@ -54,15 +55,20 @@ func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, can
 }
 
 // IsCandidate will check whether or not the given address is a candidate address
-// by checking the candidate deposit
-func IsCandidate(candidateAddress common.Address, state stateDB) bool {
-	// check if the candidate deposit is not zero
-	candidateDeposit := getCandidateDeposit(state, candidateAddress)
-	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
+func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
+	// re-construct trieDB and get the candidateTrie
+	trieDb := trie.NewDatabase(diskDB)
+	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
+	if err != nil {
 		return false
 	}
 
-	// if the candidate deposit is not 0, meaning it is the candidate
+	// check if the candidate exists
+	if value, err := candidateTrie.TryGet(candidateAddress.Bytes()); err != nil || value == nil {
+		return false
+	}
+
+	// otherwise, it means the candidate exists
 	return true
 }
 

@@ -153,13 +153,14 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
+	// get the latest block header
+	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if header == nil || err != nil {
 		return common.Hash{}, err
 	}
 
 	// check if the address is the candidate address
-	if !dpos.IsCandidate(args.From, stateDB) {
+	if !dpos.IsCandidate(args.From, header, pd.b.ChainDb()) {
 		return common.Hash{}, ErrNotCandidate
 	}
 
