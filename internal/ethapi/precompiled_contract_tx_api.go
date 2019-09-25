@@ -205,13 +205,14 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
+	// get the latest block header
+	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if header == nil || err != nil {
 		return common.Hash{}, err
 	}
 
-	// check has voted
-	if !dpos.HasVoted(args.From, stateDB) {
+	// check if the delegator has voted before
+	if !dpos.HasVoted(args.From, header, pd.b.ChainDb()) {
 		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
 	}
 
