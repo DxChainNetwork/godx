@@ -5,10 +5,6 @@
 package ethapi
 
 const (
-
-	// MaxVoteCount is the max number of voted candidates in a vot tx
-	MaxVoteCount = 30
-
 	// StorageContractTxGas defines the default gas for storage contract tx
 	StorageContractTxGas = 90000
 

@@ -144,8 +144,16 @@ func parseCandidates(candidates string) ([]common.Address, error) {
 	candidates = strings.Replace(candidates, " ", "", -1)
 
 	// convert it to a list of candidates
-	candidateAddresses := strings.Split(candidates, ",")
-	return candidatesValidationAndConversion(candidateAddresses)
+	candidatesList := strings.Split(candidates, ",")
+
+	// candidates addresses conversion
+	var candidateAddresses []common.Address
+	for _, candidate := range candidatesList {
+		addr := common.HexToAddress(candidate)
+		candidateAddresses = append(candidateAddresses, addr)
+	}
+
+	return candidateAddresses, nil
 }
 
 // parseRewardRatio is used to convert the ratio from string to uint64
@@ -168,23 +176,4 @@ func rewardRatioValidation(ratio uint64) (uint64, error) {
 		return 0, ErrInvalidAwardDistributionRatio
 	}
 	return ratio, nil
-}
-
-// candidatesValidationAndConversion will check the string list format candidates first
-// and then convert the string list to address list
-func candidatesValidationAndConversion(candidates []string) ([]common.Address, error) {
-	// candidates validation
-	if len(candidates) > MaxVoteCount {
-		return nil, ErrBeyondMaxVoteSize
-	}
-
-	// candidates conversion
-	var candidateAddresses []common.Address
-	for _, candidate := range candidates {
-		addr := common.HexToAddress(candidate)
-		candidateAddresses = append(candidateAddresses, addr)
-	}
-
-	// return
-	return candidateAddresses, nil
 }
