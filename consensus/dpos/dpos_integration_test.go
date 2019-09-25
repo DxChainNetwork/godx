@@ -10,6 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DxChainNetwork/godx/rlp"
+
+	"github.com/DxChainNetwork/godx/trie"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -31,6 +35,8 @@ var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	balance = minDeposit.MultInt64(10)
+
+	errNoEntriesInDelegateTrie = errors.New("no entries in delegate trie")
 )
 
 type (
@@ -314,6 +320,64 @@ func executeTestCancelVote(tec *testEpochContext, addr common.Address) error {
 	return nil
 }
 
+// checkConsistent checks whether the expected context is consistent with the state and context.
+func (tec *testEpochContext) checkConsistency() error {
+	return nil
+}
+
+// checkCandidateRecordsConsistency checks the consistency for candidateRecords
+func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
+	for addr := range tec.ec.userRecords {
+		err := tec.ec.checkCandidateRecord(tec.stateDB, tec.ctx, addr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tec *testEpochContext) checkCandidateRecordsLastEpochConsistency() error {
+	// for last epoch, only check for exist entries
+	for addr := range tec.ec.candidateRecordsLastEpoch {
+		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tec *testEpochContext) checkDelegatorRecordsConsistency() error {
+	for addr := range tec.ec.userRecords {
+		err := tec.ec.checkDelegatorRecord(tec.stateDB, tec.ctx, addr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
+	for addr := range tec.ec.delegatorRecordsLastEpoch {
+		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tec *testEpochContext) checkBalanceConsistency() error {
+	for addr := range tec.ec.userRecords {
+		expectedBalance := tec.ec.getExpectedBalance(addr)
+		gotBalance := getBalance(tec.stateDB, addr)
+		if expectedBalance.Cmp(gotBalance) != 0 {
+			return fmt.Errorf("balance not expected. %x: expect %v; got %v", addr, expectedBalance, gotBalance)
+		}
+	}
+	return nil
+}
+
 func (ec *expectContext) addCandidate(candidate common.Address, deposit common.BigInt, rewardRatio uint64,
 	prevVotes map[common.Address]struct{}) {
 
@@ -377,6 +441,176 @@ func (ec *expectContext) addFrozenAssets(addr common.Address, diff common.BigInt
 	ec.frozenAssets[addr] = newFrozenAssets
 }
 
+func (ec *expectContext) getExpectedBalance(addr common.Address) common.BigInt {
+	balance, exist := ec.balance[addr]
+	if !exist {
+		balance = common.BigInt0
+	}
+	return balance
+}
+
+func (ec *expectContext) checkCandidateRecord(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	record, exist := ec.candidateRecords[addr]
+	if !exist {
+		return checkEmptyCandidate(stateDB, ctx, addr)
+	}
+	return checkCandidate(stateDB, ctx, addr, record)
+}
+
+// checkEmptyCandidate checks in stateDB and ctx whether the addr is an empty candidate
+func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	candidateDeposit := getCandidateDeposit(stateDB, addr)
+	if candidateDeposit.Cmp(common.BigInt0) != 0 {
+		return fmt.Errorf("non candidate address %x have non-zero candidate deposit %v", addr, candidateDeposit)
+	}
+	rewardRatio := getRewardRatioNumerator(stateDB, addr)
+	if rewardRatio != 0 {
+		return fmt.Errorf("non candidate address %x have non-zero reward ratio %v", addr, rewardRatio)
+	}
+	// check candidate trie
+	b, err := ctx.CandidateTrie().TryGet(addr.Bytes())
+	if err == nil && b != nil && len(b) != 0 {
+		return fmt.Errorf("non candidate address %x exist in candidate trie", addr)
+	}
+	// check delegateTrie
+	var votes []common.Address
+	err = forEachDelegatorForCandidate(ctx, addr, func(address common.Address) error {
+		votes = append(votes, address)
+		return nil
+	})
+	if err != errNoEntriesInDelegateTrie {
+		return fmt.Errorf("non candidate address %x expect no vote. But got votes %v", addr, formatAddressList(votes))
+	}
+	return nil
+}
+
+func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address,
+	record candidateRecord) error {
+
+	candidateDeposit := getCandidateDeposit(stateDB, addr)
+	if candidateDeposit.Cmp(record.deposit) != 0 {
+		return fmt.Errorf("candidate %x does not have expected deposit. Got %v, Expect %v", addr,
+			candidateDeposit, record.deposit)
+	}
+	rewardRatio := getRewardRatioNumerator(stateDB, addr)
+	if rewardRatio != record.rewardRatio {
+		return fmt.Errorf("candidate %x does not have expected reward ratio. Got %v, Expect %v", addr,
+			rewardRatio, record.rewardRatio)
+	}
+	// check candidateTrie
+	b, err := ctx.CandidateTrie().TryGet(addr.Bytes())
+	if err != nil || b == nil || len(b) == 0 {
+		return fmt.Errorf("non candidate address %x exist in candidate trie", addr)
+	}
+	var votes []common.Address
+	err = forEachDelegatorForCandidate(ctx, addr, func(addr common.Address) error {
+		votes = append(votes, addr)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("check candidate address [%x] delegator: %v", addr, err)
+	}
+	if err = checkAddressListConsistentToMap(votes, record.votes); err != nil {
+		return fmt.Errorf("check candidate address [%x] votes: %v", addr, err)
+	}
+	return nil
+}
+
+func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	record := ec.candidateRecordsLastEpoch[addr]
+	gotRewardRatio := getRewardRatioNumeratorLastEpoch(state, addr)
+	if gotRewardRatio != record.rewardRatio {
+		return fmt.Errorf("candidate %x last epoch reward ratio not expected. Got %v, Expect %v", addr, gotRewardRatio, record.rewardRatio)
+	}
+	// Calculate the total votes
+	expectTotalVotes := record.deposit
+	for delegator := range record.votes {
+		expectTotalVotes = expectTotalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
+	}
+	gotTotalVotes := getTotalVote(state, addr)
+	if expectTotalVotes.Cmp(gotTotalVotes) != 0 {
+		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
+	}
+	// TODO: check the previous delegate trie method after xfliu merge branch
+	return nil
+}
+
+func (ec *expectContext) checkDelegatorRecord(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	record, exist := ec.delegatorRecords[addr]
+	if !exist {
+		return checkEmptyDelegator(stateDB, ctx, addr)
+	}
+	return checkDelegator(stateDB, ctx, addr, record)
+}
+
+func checkEmptyDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	// delegator should not in vote trie
+	candidatesByte, err := ctx.VoteTrie().TryGet(addr.Bytes())
+	if err == nil && candidatesByte != nil && len(candidatesByte) != 0 {
+		return fmt.Errorf("empty delegator %x should not be in vote trie", addr)
+	}
+	// check delegator deposit
+	gotDeposit := getVoteDeposit(stateDB, addr)
+	if gotDeposit.Cmp(common.BigInt0) != 0 {
+		return fmt.Errorf("empty delegator %x should have deposit 0, but got %v", addr, gotDeposit)
+	}
+	return nil
+}
+
+func checkDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, record delegatorRecord) error {
+	// delegator should be in vote trie and have candidates in record
+	candidatesByte, err := ctx.VoteTrie().TryGet(addr.Bytes())
+	if err != nil || candidatesByte == nil || len(candidatesByte) == 0 {
+		return fmt.Errorf("delegator %x should be in vote trie", addr)
+	}
+	var candidates []common.Address
+	if err = rlp.DecodeBytes(candidatesByte, &candidates); err != nil {
+		return fmt.Errorf("delegator %x vote decode error: %v", addr, err)
+	}
+	if err = checkAddressListConsistentToMap(candidates, record.votes); err != nil {
+		return fmt.Errorf("delegator %x vote not expected: %v", addr, err)
+	}
+	// check the votes in the delegateTrie
+	dt := ctx.DelegateTrie()
+	for _, c := range candidates {
+		key := append(c.Bytes(), addr.Bytes()...)
+		b, err := dt.TryGet(key)
+		if err != nil || b == nil || len(b) == 0 {
+			return fmt.Errorf("delegator %x vote to %x not found in delegate trie", addr, c)
+		}
+	}
+	return nil
+}
+
+func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+	record := ec.delegatorRecordsLastEpoch[addr]
+	gotDeposit := getVoteLastEpoch(stateDB, addr)
+	if gotDeposit.Cmp(record.deposit) != 0 {
+		return fmt.Errorf("delegator %x last epoch deposit: expect %v, got %v", addr, gotDeposit, record.deposit)
+	}
+	// TODO: check delegateTrie in the last epoch
+	return nil
+}
+
+// forEachDelegatorForCandidate iterate over the delegator votes for the candidate and execute
+// the cb callback function
+func forEachDelegatorForCandidate(ctx *types.DposContext, candidate common.Address, cb func(delegator common.Address) error) error {
+	delegateTrie := ctx.DelegateTrie()
+	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate.Bytes()))
+	var hasEntry bool
+	for delegatorIterator.Next() {
+		hasEntry = true
+		delegator := common.BytesToAddress(delegatorIterator.Value)
+		if err := cb(delegator); err != nil {
+			return err
+		}
+	}
+	if !hasEntry {
+		return errNoEntriesInDelegateTrie
+	}
+	return nil
+}
+
 func randomPickCandidates(candidates candidateRecords, num int) []common.Address {
 	votes := make([]common.Address, 0, num)
 	added := 0
@@ -388,4 +622,26 @@ func randomPickCandidates(candidates candidateRecords, num int) []common.Address
 		}
 	}
 	return votes
+}
+
+func formatAddressList(addresses []common.Address) string {
+	s := "[\n"
+	for _, addr := range addresses {
+		s += fmt.Sprintf("\t%x\n", addr)
+	}
+	s += "]"
+	return s
+}
+
+func checkAddressListConsistentToMap(list []common.Address, m map[common.Address]struct{}) error {
+	if len(list) != len(m) {
+		return fmt.Errorf("list and map size not equal. %v != %v", len(list), len(m))
+	}
+	for _, addr := range list {
+		_, exist := m[addr]
+		if !exist {
+			return fmt.Errorf("address %x exist in list not in map", addr)
+		}
+	}
+	return nil
 }
