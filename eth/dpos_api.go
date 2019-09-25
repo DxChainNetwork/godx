@@ -33,6 +33,7 @@ type CandidateInfo struct {
 type ValidatorInfo struct {
 	Validator   common.Address `json:"validator"`
 	Votes       common.BigInt  `json:"votes"`
+	EpochID     int64          `json:"current_epoch"`
 	MinedBlocks int64          `json:"epoch_mined_blocks"`
 	RewardRatio uint64         `json:"reward_distribution"`
 }
@@ -58,9 +59,12 @@ func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, 
 }
 
 // Validator will return detailed validator's information based on the validator address provided
-func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInfo, error) {
-	// based on the block header root, get the statedb
-	header := d.e.BlockChain().CurrentHeader()
+func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.BlockNumber) (ValidatorInfo, error) {
+	// based on the block number, get the block header
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return ValidatorInfo{}, err
+	}
 
 	// check if the given address is a validator's address
 	if err := dpos.IsValidator(d.e.ChainDb(), header, validatorAddress); err != nil {
@@ -74,7 +78,7 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInf
 	}
 
 	// get the detailed information
-	votes, rewardRatio, minedCount, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
+	votes, rewardRatio, minedCount, epochID, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
 	if err != nil {
 		return ValidatorInfo{}, err
 	}
@@ -84,6 +88,7 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInf
 		Votes:       votes,
 		RewardRatio: rewardRatio,
 		MinedBlocks: minedCount,
+		EpochID:     epochID,
 	}, nil
 }
 
@@ -99,9 +104,14 @@ func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, 
 }
 
 // Candidate will return detailed candidate's information based on the candidate address provided
-func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInfo, error) {
+func (d *PublicDposAPI) Candidate(candidateAddress common.Address, blockNr *rpc.BlockNumber) (CandidateInfo, error) {
+	// based on the block number, retrieve the header
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return CandidateInfo{}, err
+	}
+
 	// based on the block header root, get the statedb
-	header := d.e.BlockChain().CurrentHeader()
 	statedb, err := d.e.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return CandidateInfo{}, err

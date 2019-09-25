@@ -3711,6 +3711,12 @@ var inputBlockNumberFormatter = function (blockNumber) {
     return utils.toHex(blockNumber);
 };
 
+/*
+var inputAddressBlockNumberFormatter = function (address, blockNumber) {
+    return inputBlockNumberFormatter(blockNumber);
+};
+*/
+
 /**
  * Formats the input of a transaction and converts all values to HEX
  *
@@ -3946,6 +3952,7 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    // inputAddressBlockNumberFormatter: inputAddressBlockNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
