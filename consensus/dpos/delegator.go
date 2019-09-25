@@ -58,13 +58,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 
 // VoteTxDepositValidation will validate the vote transaction before sending it
 func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
-	// validate the vote deposit and available balance
-	delegatorBalance := common.PtrBigInt(state.GetBalance(delegatorAddress))
-	delegatorAvailableBalance := delegatorBalance.Sub(GetFrozenAssets(state, delegatorAddress))
-	if delegatorAvailableBalance.Cmp(voteData.Deposit) < 0 {
-		return errDelegatorInsufficientBalance
-	}
-	return nil
+	return checkValidVote(state, delegatorAddress, voteData.Deposit, voteData.Candidates)
 }
 
 // HasVoted will check whether the provided delegator address is voted
