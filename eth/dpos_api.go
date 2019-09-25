@@ -23,18 +23,18 @@ type PublicDposAPI struct {
 
 // CandidateInfo stores detailed candidate information
 type CandidateInfo struct {
-	Candidate          common.Address
-	Deposit            common.BigInt
-	Votes              common.BigInt
-	RewardDistribution uint64
+	Candidate   common.Address `json:"candidate"`
+	Deposit     common.BigInt  `json:"deposit"`
+	Votes       common.BigInt  `json:"votes"`
+	RewardRatio uint64         `json:"reward_distribution"`
 }
 
 // ValidatorInfo stores detailed validator information
 type ValidatorInfo struct {
-	Validator          common.Address
-	Votes              common.BigInt
-	MinedBlocks        int64
-	RewardDistribution uint64
+	Validator   common.Address `json:"validator"`
+	Votes       common.BigInt  `json:"votes"`
+	MinedBlocks int64          `json:"epoch_mined_blocks"`
+	RewardRatio uint64         `json:"reward_distribution"`
 }
 
 // NewPublicDposAPI will create a PublicDposAPI object that is used
@@ -74,16 +74,16 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address) (ValidatorInf
 	}
 
 	// get the detailed information
-	votes, rewardDistribution, minedCount, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
+	votes, rewardRatio, minedCount, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
 	if err != nil {
 		return ValidatorInfo{}, err
 	}
 
 	return ValidatorInfo{
-		Validator:          validatorAddress,
-		Votes:              votes,
-		RewardDistribution: rewardDistribution,
-		MinedBlocks:        minedCount,
+		Validator:   validatorAddress,
+		Votes:       votes,
+		RewardRatio: rewardRatio,
+		MinedBlocks: minedCount,
 	}, nil
 }
 
@@ -109,7 +109,7 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInf
 
 	// get detailed information
 	trieDb := trie.NewDatabase(d.e.ChainDb())
-	candidateDeposit, candidateVotes, rewardDistribution, err := dpos.GetCandidateInfo(statedb, candidateAddress, header, trieDb)
+	candidateDeposit, candidateVotes, rewardRatio, err := dpos.GetCandidateInfo(statedb, candidateAddress, header, trieDb)
 	if err != nil {
 		return CandidateInfo{}, err
 	}
@@ -121,10 +121,10 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address) (CandidateInf
 	}
 
 	return CandidateInfo{
-		Candidate:          candidateAddress,
-		Deposit:            candidateDeposit,
-		Votes:              candidateVotes,
-		RewardDistribution: rewardDistribution,
+		Candidate:   candidateAddress,
+		Deposit:     candidateDeposit,
+		Votes:       candidateVotes,
+		RewardRatio: rewardRatio,
 	}, nil
 
 }
