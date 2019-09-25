@@ -10,11 +10,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"

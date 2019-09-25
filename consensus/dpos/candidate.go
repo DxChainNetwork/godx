@@ -90,7 +90,7 @@ func IsCandidate(candidateAddress common.Address, state stateDB) bool {
 	return true
 }
 
-// calcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
+// CalcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
 // candidates himself and the delegated votes from delegator
 func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
 	// Calculate the candidates deposit and delegatedVote

@@ -25,10 +25,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/prque"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
