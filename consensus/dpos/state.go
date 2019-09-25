@@ -46,6 +46,12 @@ var (
 
 	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
 	PrefixThawingAssets = []byte("thawing-assets")
+
+	// KeyPreEpochSnapshotDelegateTrieBlockNumber is the key of block number where snapshot delegate trie
+	KeyPreEpochSnapshotDelegateTrieBlockNumber = common.BytesToHash([]byte("pre-epoch-bn"))
+
+	// KeyValueCommonAddress is the address for some common key-value storage
+	KeyValueCommonAddress = common.BigToAddress(big.NewInt(0))
 )
 
 // getCandidateDeposit get the candidates deposit of the addr from the state
@@ -206,4 +212,19 @@ func setVoteLastEpoch(state stateDB, addr common.Address, value common.BigInt) {
 // If this is the case, simply leave the address there.
 func removeAddressInState(state stateDB, addr common.Address) {
 	state.SetNonce(addr, 0)
+}
+
+// getPreEpochSnapshotDelegateTrieBlockNumber get the block number of snapshot delegate trie
+func getPreEpochSnapshotDelegateTrieBlockNumber(state stateDB) common.BigInt {
+	h := state.GetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieBlockNumber)
+	if h == (common.Hash{}) {
+		return common.BigInt0
+	}
+	return common.PtrBigInt(h.Big())
+}
+
+// setPreEpochSnapshotDelegateTrieBlockNumber set the block number of snapshot delegate trie
+func setPreEpochSnapshotDelegateTrieBlockNumber(state stateDB, value common.BigInt) {
+	h := common.BigToHash(value.BigIntPtr())
+	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieBlockNumber, h)
 }

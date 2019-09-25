@@ -76,15 +76,15 @@ func TestUpdateMinedCnt(t *testing.T) {
 }
 
 func TestAccumulateRewards(t *testing.T) {
-	var (
-		delegator = common.HexToAddress("0xaaa")
-	)
-
+	delegator := common.HexToAddress("0xaaa")
 	db := ethdb.NewMemDatabase()
-	dposContext, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
+	dposCtx, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
+
+	_, err = dposCtx.Commit()
+	assert.Nil(t, err)
 
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
@@ -101,13 +101,30 @@ func TestAccumulateRewards(t *testing.T) {
 
 	stateDbCopy := stateDB.Copy()
 
+	dposEng := &Dpos{
+		db: db,
+	}
+
+	testChain := testChainReader{
+		headers: make(map[uint64]*testHeader, 0),
+	}
+
+	for i := uint64(0); i < ConsensusSize; i++ {
+		hash := common.BigToHash(new(big.Int).SetUint64(i))
+		if i == 0 {
+			testChain.insertGenesis(hash, uint64(10*i+1000), dposCtx)
+			continue
+		}
+		testChain.insert(hash, i, uint64(10*i+1000), dposEng, dposCtx)
+	}
+
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
 	expectedDelegatorReward := big.NewInt(1.5e+18)
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
-	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
+	accumulateRewards(params.MainnetChainConfig, stateDB, header, db, testChain)
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
 	validatorBalance := stateDB.GetBalance(validator)
@@ -122,7 +139,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// mock block sync
 	headerCopy := header
-	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, dposContext)
+	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, db, testChain)
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
 	if header.Root != headerCopy.Root {
@@ -248,10 +265,10 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 					for i := uint64(0); i < ConsensusSize; i++ {
 						hash := common.BigToHash(new(big.Int).SetUint64(i))
 						if i == 0 {
-							testChain.insertGenesis(hash, uint64(10*i+1000))
+							testChain.insertGenesis(hash, uint64(10*i+1000), nil)
 							continue
 						}
-						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng, nil)
 						if err != nil {
 							return 0, err
 						}
@@ -276,10 +293,10 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 					for i := uint64(0); i < MaxValidatorSize+5; i++ {
 						hash := common.BigToHash(new(big.Int).SetUint64(i))
 						if i == 0 {
-							testChain.insertGenesis(hash, uint64(10*i+1000))
+							testChain.insertGenesis(hash, uint64(10*i+1000), nil)
 							continue
 						}
-						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng, nil)
 						if err != nil {
 							return 0, err
 						}
@@ -306,11 +323,12 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 }
 
 type testHeader struct {
-	hash      common.Hash
-	number    uint64
-	parent    *testHeader
-	time      uint64
-	validator common.Address
+	hash        common.Hash
+	number      uint64
+	parent      *testHeader
+	time        uint64
+	validator   common.Address
+	DposContext *types.DposContextRoot
 }
 
 type testChainReader struct {
@@ -368,10 +386,11 @@ func (test testChainReader) GetHeaderByNumber(number uint64) *types.Header {
 	}
 
 	return &types.Header{
-		ParentHash: parentHash,
-		Number:     new(big.Int).SetUint64(number),
-		Time:       new(big.Int).SetUint64(timeStamp),
-		Validator:  validator,
+		ParentHash:  parentHash,
+		Number:      new(big.Int).SetUint64(number),
+		Time:        new(big.Int).SetUint64(timeStamp),
+		Validator:   validator,
+		DposContext: test.headers[number].DposContext,
 	}
 }
 
@@ -406,27 +425,37 @@ func (test testChainReader) GetBlock(hash common.Hash, number uint64) *types.Blo
 	return nil
 }
 
-func (test testChainReader) insertGenesis(hash common.Hash, time uint64) {
+func (test testChainReader) insertGenesis(hash common.Hash, time uint64, dposCtx *types.DposContext) {
+	var dposCtxRoot *types.DposContextRoot
+	if dposCtx != nil {
+		dposCtxRoot = dposCtx.ToRoot()
+	}
 	header := &testHeader{
-		hash:      hash,
-		number:    0,
-		parent:    nil,
-		time:      time,
-		validator: common.BigToAddress(new(big.Int).SetUint64(0)),
+		hash:        hash,
+		number:      0,
+		parent:      nil,
+		time:        time,
+		validator:   common.BigToAddress(new(big.Int).SetUint64(0)),
+		DposContext: dposCtxRoot,
 	}
 	test.headers[0] = header
 	test.currentHash = hash
 	test.currentNum = 0
 }
 
-func (test testChainReader) insert(hash common.Hash, number uint64, time uint64, dposEng *Dpos) error {
+func (test testChainReader) insert(hash common.Hash, number uint64, time uint64, dposEng *Dpos, dposCtx *types.DposContext) error {
 	parent := test.headers[number-1]
+	var dposCtxRoot *types.DposContextRoot
+	if dposCtx != nil {
+		dposCtxRoot = dposCtx.ToRoot()
+	}
 	header := &testHeader{
-		hash:      hash,
-		number:    number,
-		parent:    parent,
-		time:      time,
-		validator: common.BigToAddress(new(big.Int).SetUint64(number)),
+		hash:        hash,
+		number:      number,
+		parent:      parent,
+		time:        time,
+		validator:   common.BigToAddress(new(big.Int).SetUint64(number)),
+		DposContext: dposCtxRoot,
 	}
 
 	test.headers[number] = header
