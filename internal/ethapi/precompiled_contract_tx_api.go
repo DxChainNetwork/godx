@@ -123,7 +123,7 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 // the parameter ratio is the award distribution ratio that candidate state.
 func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
 	to := common.Address{}
-	to.SetBytes([]byte{13})
+	to.SetBytes(ApplyCandidateContractAddr)
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -147,7 +147,7 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 // SendCancelCandidateTx submit a cancel candidate tx
 func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
 	to := common.Address{}
-	to.SetBytes([]byte{14})
+	to.SetBytes(CancelCandidateContractAddr)
 	ctx := context.Background()
 
 	// construct args
@@ -175,7 +175,7 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 // SendVoteTx submit a vote tx
 func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
 	to := common.Address{}
-	to.SetBytes([]byte{15})
+	to.SetBytes(VoteContractAddr)
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -199,7 +199,7 @@ func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, er
 // SendCancelVoteTx submit a cancel vote tx
 func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
 	to := common.Address{}
-	to.SetBytes([]byte{16})
+	to.SetBytes(CancelVoteContractAddr)
 	ctx := context.Background()
 
 	// construct args
