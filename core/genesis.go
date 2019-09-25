@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -452,7 +453,9 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 
 		candidateDeposit := common.BigToHash(g.Config.Dpos.Validators[validator].Deposit.BigIntPtr())
 		stateDB.SetState(validator, dpos.KeyCandidateDeposit, candidateDeposit)
-		rewardRatio := common.BytesToHash([]byte{g.Config.Dpos.Validators[validator].RewardRatio})
+
+		var rewardRatio common.Hash
+		binary.BigEndian.PutUint64(rewardRatio[common.HashLength-8:], g.Config.Dpos.Validators[validator].RewardRatio)
 		stateDB.SetState(validator, dpos.KeyRewardRatioNumerator, rewardRatio)
 	}
 
