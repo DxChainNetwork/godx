@@ -132,7 +132,7 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 	}
 
 	// parse precompile contract tx args
-	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB)
+	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -184,7 +184,7 @@ func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, er
 	}
 
 	// parse precompile contract tx args
-	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB)
+	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
 	if err != nil {
 		return common.Hash{}, err
 	}

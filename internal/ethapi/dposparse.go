@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DxChainNetwork/godx/accounts"
+	"github.com/DxChainNetwork/godx/log"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
@@ -17,11 +20,14 @@ import (
 )
 
 // ParseAndValidateCandidateApplyTxArgs will parse and validate the candidate apply transaction arguments
-func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB) (*PrecompiledContractTxArgs, error) {
+func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB, account *accounts.Manager) (*PrecompiledContractTxArgs, error) {
 	// parse the candidateAddress field
 	var candidateAddress common.Address
 	if fromStr, ok := fields["from"]; ok {
 		candidateAddress = common.HexToAddress(fromStr)
+	} else {
+		candidateAddress = defaultAccount(account)
+		log.Info("Candidate account is automatically configured", "candidateAccount", account)
 	}
 
 	// form,  validate, and encode candidate tx data
@@ -34,11 +40,14 @@ func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields 
 }
 
 // ParseAndValidateVoteTxArgs will parse and validate the vote transaction arguments
-func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB) (*PrecompiledContractTxArgs, error) {
+func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB, account *accounts.Manager) (*PrecompiledContractTxArgs, error) {
 	// parse the delegator account address
 	var delegatorAddress common.Address
 	if fromStr, ok := fields["from"]; ok {
 		delegatorAddress = common.HexToAddress(fromStr)
+	} else {
+		delegatorAddress = defaultAccount(account)
+		log.Info("Vote account is automatically configured", "voteAccount", account)
 	}
 
 	// form, validate, and encode vote tx data
@@ -176,4 +185,18 @@ func rewardRatioValidation(ratio uint64) (uint64, error) {
 		return 0, ErrInvalidAwardDistributionRatio
 	}
 	return ratio, nil
+}
+
+// defaultAccount will return the first account address from the first wallet
+func defaultAccount(account *accounts.Manager) common.Address {
+	// check if there are existing account, if so, use the first one as
+	// default account
+	if wallets := account.Wallets(); len(wallets) > 0 {
+		if walletAccounts := wallets[0].Accounts(); len(walletAccounts) > 0 {
+			return walletAccounts[0].Address
+		}
+	}
+
+	// otherwise, return empty account address
+	return common.Address{}
 }
