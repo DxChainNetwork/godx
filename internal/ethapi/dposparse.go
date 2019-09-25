@@ -30,8 +30,19 @@ func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields 
 		log.Info("Candidate account is automatically configured", "candidateAccount", account)
 	}
 
-	// form,  validate, and encode candidate tx data
-	data, err := formAndValidateAndEncodeCandidateTxData(stateDB, candidateAddress, fields)
+	// form candidate tx data
+	addCandidateTxData, err := formAddCandidateTxData(fields)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate candidate tx data
+	if err := dpos.CandidateTxDataValidation(stateDB, addCandidateTxData, candidateAddress); err != nil {
+		return nil, err
+	}
+
+	// candidate transaction data encoding
+	data, err := rlp.EncodeToBytes(&addCandidateTxData)
 	if err != nil {
 		return nil, err
 	}
@@ -50,34 +61,6 @@ func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string
 		log.Info("Vote account is automatically configured", "voteAccount", account)
 	}
 
-	// form, validate, and encode vote tx data
-	data, err := formAndValidateAndEncodeVoteTxData(stateDB, delegatorAddress, fields)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewPrecompiledContractTxArgs(delegatorAddress, to, data, nil, gas), nil
-}
-
-// formAndValidateAndEncodeCandidateTxData will form, validate and encode candidate apply transaction data
-func formAndValidateAndEncodeCandidateTxData(stateDB *state.StateDB, candidateAddress common.Address, fields map[string]string) ([]byte, error) {
-	// form candidate tx data
-	addCandidateTxData, err := formAddCandidateTxData(fields)
-	if err != nil {
-		return nil, err
-	}
-
-	// validate candidate tx data
-	if err := dpos.CandidateTxDataValidation(stateDB, addCandidateTxData, candidateAddress); err != nil {
-		return nil, err
-	}
-
-	// candidate transaction data encoding
-	return rlp.EncodeToBytes(&addCandidateTxData)
-}
-
-// formAndValidateAndEncodeVoteTxData will form, validate, and encode vote transaction data
-func formAndValidateAndEncodeVoteTxData(stateDB *state.StateDB, delegatorAddress common.Address, fields map[string]string) ([]byte, error) {
 	// form the vote tx data
 	voteTxData, err := formVoteTxData(fields)
 	if err != nil {
@@ -90,7 +73,12 @@ func formAndValidateAndEncodeVoteTxData(stateDB *state.StateDB, delegatorAddress
 	}
 
 	// encode and return the data
-	return rlp.EncodeToBytes(&voteTxData)
+	data, err := rlp.EncodeToBytes(&voteTxData)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewPrecompiledContractTxArgs(delegatorAddress, to, data, nil, gas), nil
 }
 
 // formVoteTxData will parse the fields and form vote transaction data
