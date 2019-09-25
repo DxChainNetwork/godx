@@ -55,7 +55,7 @@ func formAndValidateAndEncodeCandidateTxData(stateDB *state.StateDB, candidateAd
 	}
 
 	// validate candidate tx data
-	if err := dpos.CandidateTxDepositValidation(stateDB, addCandidateTxData, candidateAddress); err != nil {
+	if err := dpos.CandidateTxDataValidation(stateDB, addCandidateTxData, candidateAddress); err != nil {
 		return nil, err
 	}
 

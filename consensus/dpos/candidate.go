@@ -48,33 +48,9 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	return nil
 }
 
-// CandidateTxDepositValidation will validate the candidate apply transaction before sending it
-func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
-	// deposit validation
-	if data.Deposit.Cmp(minDeposit) < 0 {
-		return errCandidateInsufficientDeposit
-	}
-
-	// available balance validation
-	candidateBalance := common.PtrBigInt(state.GetBalance(candidateAddress))
-	candidateAvailableBalance := candidateBalance.Sub(GetFrozenAssets(state, candidateAddress))
-	if candidateAvailableBalance.Cmp(data.Deposit) < 0 {
-		return errCandidateInsufficientBalance
-	}
-
-	// previous candidate's deposit validation
-	prevDeposit := getCandidateDeposit(state, candidateAddress)
-	if data.Deposit.Cmp(prevDeposit) < 0 {
-		return errCandidateDecreasingDeposit
-	}
-
-	// previous candidate's reward distribution ratio validation
-	prevRewardRatio := getRewardRatioNumerator(state, candidateAddress)
-	if data.RewardRatio < prevRewardRatio {
-		return errCandidateDecreasingRewardRatio
-	}
-
-	return nil
+// CandidateTxDataValidation will validate the candidate apply transaction before sending it
+func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
+	return checkValidCandidate(state, candidateAddress, data.Deposit, data.RewardRatio)
 }
 
 // IsCandidate will check whether or not the given address is a candidate address
