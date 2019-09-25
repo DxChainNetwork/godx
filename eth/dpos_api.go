@@ -117,17 +117,16 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address, blockNr *rpc.
 		return CandidateInfo{}, err
 	}
 
+	// check if the given address is candidate address
+	if !dpos.IsCandidate(candidateAddress, header, d.e.ChainDb()) {
+		return CandidateInfo{}, fmt.Errorf("the given address %s is not a candidate", candidateAddress.String())
+	}
+
 	// get detailed information
 	trieDb := trie.NewDatabase(d.e.ChainDb())
 	candidateDeposit, candidateVotes, rewardRatio, err := dpos.GetCandidateInfo(statedb, candidateAddress, header, trieDb)
 	if err != nil {
 		return CandidateInfo{}, err
-	}
-
-	// check candidateDeposit to validate if the given address is a
-	// candidate address
-	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
-		return CandidateInfo{}, fmt.Errorf("the given address %s is not a candidate", candidateAddress.String())
 	}
 
 	return CandidateInfo{
