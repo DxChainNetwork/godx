@@ -287,7 +287,7 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 
 					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
 				},
-				wantConfirmedBlockNum: (MaxValidatorSize + 5) * 2 / 3,
+				wantConfirmedBlockNum: (MaxValidatorSize + 5) - ConsensusSize,
 			},
 		}
 	)
@@ -380,13 +380,15 @@ func (test testChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
 		return nil
 	}
 
-	var parentHash common.Hash
+	parentHash := common.Hash{}
 	var number uint64
 	var timeStamp uint64
 	var validator common.Address
 	for _, header := range test.headers {
 		if header.hash == hash {
-			parentHash = header.parent.hash
+			if header.number != 0 {
+				parentHash = header.parent.hash
+			}
 			number = header.number
 			timeStamp = header.time
 			validator = header.validator
