@@ -426,17 +426,17 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	// update the value of timeOfFirstBlock if the value is 0
 	updateTimeOfFirstBlockIfNecessary(chain)
 
+	//update mined count trie
+	err := updateMinedCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
+	if err != nil {
+		return nil, err
+	}
 	// try to elect, if current block is the first one in a new epoch, then elect new epoch
-	err := epochContext.tryElect(genesis, parent)
+	err = epochContext.tryElect(genesis, parent)
 	if err != nil {
 		return nil, fmt.Errorf("got error when elect next epoch, err: %s", err)
 	}
 
-	//update mined count trie
-	err = updateMinedCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
-	if err != nil {
-		return nil, err
-	}
 	header.DposContext = dposContext.ToRoot()
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
