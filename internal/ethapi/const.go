@@ -11,11 +11,3 @@ const (
 	// DposTxGas defines the default gas for dpos tx
 	DposTxGas = 1000000
 )
-
-var (
-	// pre-compiled contracts addresses
-	ApplyCandidateContractAddr  = []byte{13}
-	CancelCandidateContractAddr = []byte{14}
-	VoteContractAddr            = []byte{15}
-	CancelVoteContractAddr      = []byte{16}
-)

@@ -15,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 )
@@ -122,8 +123,7 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 // SendApplyCandidateTx submit a apply candidate tx.
 // the parameter ratio is the award distribution ratio that candidate state.
 func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes(ApplyCandidateContractAddr)
+	to := vm.ApplyCandidateContractAddress
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -146,8 +146,7 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 
 // SendCancelCandidateTx submit a cancel candidate tx
 func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes(CancelCandidateContractAddr)
+	to := vm.CancelCandidateContractAddress
 	ctx := context.Background()
 
 	// construct args
@@ -174,8 +173,7 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 
 // SendVoteTx submit a vote tx
 func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes(VoteContractAddr)
+	to := vm.VoteContractAddress
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -198,8 +196,7 @@ func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, er
 
 // SendCancelVoteTx submit a cancel vote tx
 func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes(CancelVoteContractAddr)
+	to := vm.CancelVoteContractAddress
 	ctx := context.Background()
 
 	// construct args
