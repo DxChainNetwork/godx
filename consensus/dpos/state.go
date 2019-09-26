@@ -60,7 +60,7 @@ func SetCandidateDeposit(state stateDB, addr common.Address, deposit common.BigI
 	state.SetState(addr, KeyCandidateDeposit, hash)
 }
 
-// GetCandidateDeposit get the vote deposit of the addr from the state
+// GetVoteDeposit get the vote deposit of the addr from the state
 func GetVoteDeposit(state stateDB, addr common.Address) common.BigInt {
 	depositHash := state.GetState(addr, KeyVoteDeposit)
 	return common.PtrBigInt(depositHash.Big())

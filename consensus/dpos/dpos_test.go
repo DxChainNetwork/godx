@@ -529,7 +529,7 @@ func getMinedCnt(epochID int64, candidate common.Address, minedCntTrie *trie.Tri
 	cntBytes := minedCntTrie.Get(append(key, candidate.Bytes()...))
 	if cntBytes == nil {
 		return 0
-	} else {
-		return int64(binary.BigEndian.Uint64(cntBytes))
 	}
+
+	return int64(binary.BigEndian.Uint64(cntBytes))
 }

@@ -68,6 +68,7 @@ type Dpos struct {
 	Mode Mode
 }
 
+// SignerFn is the function for signature
 type SignerFn func(accounts.Account, []byte) ([]byte, error)
 
 // NOTE: sigHash was copy from clique
@@ -530,6 +531,7 @@ func (d *Dpos) Authorize(signer common.Address, signFn SignerFn) {
 	d.mu.Unlock()
 }
 
+// APIs implemented Engine interface which includes DPOS API
 func (d *Dpos) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "dpos",
