@@ -429,37 +429,22 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	// just let genesis initial validator voted themselves
-	for _, validator := range validators {
-		err = dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
-		if err != nil {
-			return nil, err
-		}
+	for _, validator := range g.Config.Dpos.Validators {
+		validatorAddr := validator.Address
 
-		err = dc.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes())
-		if err != nil {
-			return nil, err
-		}
-
-		votedList := []common.Address{validator}
-		votedBytes, err := rlp.EncodeToBytes(votedList)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dc.VoteTrie().TryUpdate(validator.Bytes(), votedBytes)
+		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
 		if err != nil {
 			return nil, err
 		}
 
 		// set deposit and frozen assets
-		validatorConfig := g.Config.Dpos.Validators[validator]
-		stateDB.AddBalance(validator, validatorConfig.Deposit.BigIntPtr())
-		dpos.SetCandidateDeposit(stateDB, validator, validatorConfig.Deposit)
-		dpos.SetFrozenAssets(stateDB, validator, validatorConfig.Deposit)
+		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
+		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
+		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
 
 		// set reward ratio
-		dpos.SetRewardRatioNumerator(stateDB, validator, validatorConfig.RewardRatio)
-		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validator, validatorConfig.RewardRatio)
+		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
+		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
 	}
 
 	return dc, nil
