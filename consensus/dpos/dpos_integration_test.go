@@ -322,6 +322,30 @@ func executeTestCancelVote(tec *testEpochContext, addr common.Address) error {
 
 // checkConsistent checks whether the expected context is consistent with the state and context.
 func (tec *testEpochContext) checkConsistency() error {
+	if err := tec.ec.checkSelfConsistency(); err != nil {
+		return fmt.Errorf("check expect context self consistency: %v", err)
+	}
+	if err := tec.checkCandidateRecordsConsistency(); err != nil {
+		return fmt.Errorf("check candidate records consistency: %v", err)
+	}
+	if err := tec.checkCandidateRecordsLastEpochConsistency(); err != nil {
+		return fmt.Errorf("check candidate records last epoch consistency: %v", err)
+	}
+	if err := tec.checkDelegatorRecordsConsistency(); err != nil {
+		return fmt.Errorf("check delegator records consistency: %v", err)
+	}
+	if err := tec.checkDelegatorRecordsLastEpochConsistency(); err != nil {
+		return fmt.Errorf("check delegator records last epoch consistency: %v", err)
+	}
+	if err := tec.checkThawingConsistency(); err != nil {
+		return fmt.Errorf("check thawing logic consistency: %v", err)
+	}
+	if err := tec.checkFrozenAssetsConsistency(); err != nil {
+		return fmt.Errorf("check frozen assets consistency: %v", err)
+	}
+	if err := tec.checkBalanceConsistency(); err != nil {
+		return fmt.Errorf("check balance consisstency: %v", err)
+	}
 	return nil
 }
 
@@ -541,6 +565,10 @@ func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 		return nil
 	})
 	if err != nil {
+		// If expectedVotes has length 0 and no entry found, continue to the next candidate
+		if err == errNoEntriesInDelegateTrie && len(record.votes) == 0 {
+			return nil
+		}
 		return fmt.Errorf("check candidate address [%x] delegator: %v", addr, err)
 	}
 	if err = checkAddressListConsistentToMap(votes, record.votes); err != nil {
@@ -555,7 +583,7 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx
 	if gotRewardRatio != record.rewardRatio {
 		return fmt.Errorf("candidate %x last epoch reward ratio not expected. Got %v, Expect %v", addr, gotRewardRatio, record.rewardRatio)
 	}
-	// Calculate the total votes
+	// Calculate and check the total votes
 	expectTotalVotes := record.deposit
 	for delegator := range record.votes {
 		expectTotalVotes = expectTotalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
@@ -564,7 +592,29 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx
 	if expectTotalVotes.Cmp(gotTotalVotes) != 0 {
 		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
 	}
-	// TODO: check the previous delegate trie method after xfliu merge branch
+	// check the delegate trie from the last epoch
+	var genesis *types.Header
+	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB().DiskDB(), preEpochSnapshotDelegateTrieRoot)
+	if err != nil {
+		return fmt.Errorf("cannot recover delegate trie: %v", err)
+	}
+	var gotVotes []common.Address
+	expectVotes := record.votes
+	err = forEachDelegatorForCandidateFromTrie(delegateTrie, addr, func(delegator common.Address) error {
+		gotVotes = append(gotVotes, delegator)
+		return nil
+	})
+	if err != nil {
+		// If expectedVotes has length 0 and no entry found, continue to the next candidate
+		if err == errNoEntriesInDelegateTrie && len(expectVotes) == 0 {
+			return nil
+		}
+		return fmt.Errorf("check candidate address [%x] delegator last epoch: %v", addr, err)
+	}
+	if err := checkAddressListConsistentToMap(gotVotes, expectVotes); err != nil {
+		return fmt.Errorf("check candidate address [%x] last epoch votes: %v", addr, err)
+	}
 	return nil
 }
 
@@ -625,10 +675,56 @@ func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *ty
 	return nil
 }
 
+// checkSelfConsistency checks the consistency for the expectContext itself.
+func (ec *expectContext) checkSelfConsistency() error {
+	// check the current records
+	if err := checkRecordsConsistency(ec.candidateRecords, ec.delegatorRecords); err != nil {
+		return fmt.Errorf("current epoch self consistency check failed: %v", err)
+	}
+	if err := checkRecordsConsistency(ec.candidateRecordsLastEpoch, ec.delegatorRecordsLastEpoch); err != nil {
+		return fmt.Errorf("last epoch self consistency check failed: %v", err)
+	}
+	return nil
+}
+
+func checkRecordsConsistency(cRecords candidateRecords, dRecords delegatorRecords) error {
+	// for each vote in candidate records, should find the vote in delegator records
+	for c, cRecord := range cRecords {
+		votes := cRecord.votes
+		for d := range votes {
+			dRecord, exist := dRecords[d]
+			if !exist {
+				return fmt.Errorf("delegator %x voted candidate %x but not a delegator", d, c)
+			}
+			if _, exist := dRecord.votes[c]; !exist {
+				return fmt.Errorf("delegator %x voted candidate %x but has not voted candidate", d, c)
+			}
+		}
+	}
+	// for each vote in delegate records, should find all votes in candidate records
+	for d, dRecord := range dRecords {
+		votes := dRecord.votes
+		for c := range votes {
+			cRecord, exist := cRecords[c]
+			if !exist {
+				return fmt.Errorf("delegator %x voted candidate %x but not a candidate", d, c)
+			}
+			if _, exist := cRecord.votes[d]; !exist {
+				return fmt.Errorf("delegator %x voted candidate %x but candidate no vote from delegator", d, c)
+			}
+		}
+	}
+	return nil
+}
+
 // forEachDelegatorForCandidate iterate over the delegator votes for the candidate and execute
 // the cb callback function
 func forEachDelegatorForCandidate(ctx *types.DposContext, candidate common.Address, cb func(delegator common.Address) error) error {
 	delegateTrie := ctx.DelegateTrie()
+	return forEachDelegatorForCandidateFromTrie(delegateTrie, candidate, cb)
+}
+
+func forEachDelegatorForCandidateFromTrie(delegateTrie *trie.Trie, candidate common.Address, cb func(delegator common.Address) error) error {
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate.Bytes()))
 	var hasEntry bool
 	for delegatorIterator.Next() {
