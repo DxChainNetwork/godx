@@ -45,9 +45,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		return nil
 	}
 
-	// set the snapshot delegate trie block number for accumulateRewards
-	setPreEpochSnapshotDelegateTrieBlockNumber(ec.stateDB, common.NewBigIntUint64(parent.Number.Uint64()+1))
-
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
 	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
@@ -97,6 +94,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
+
+	// Finally, set the snapshot delegate trie root for accumulateRewards
+	setPreEpochSnapshotDelegateTrieRoot(ec.stateDB, ec.DposContext.DelegateTrie().Hash())
 	return nil
 }
 

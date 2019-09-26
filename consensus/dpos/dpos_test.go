@@ -124,7 +124,7 @@ func TestAccumulateRewards(t *testing.T) {
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
-	accumulateRewards(params.MainnetChainConfig, stateDB, header, db, testChain)
+	accumulateRewards(params.MainnetChainConfig, stateDB, header, db, testChain.GetHeaderByNumber(0))
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
 	validatorBalance := stateDB.GetBalance(validator)
@@ -139,7 +139,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// mock block sync
 	headerCopy := header
-	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, db, testChain)
+	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, db, testChain.GetHeaderByNumber(0))
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
 	if header.Root != headerCopy.Root {

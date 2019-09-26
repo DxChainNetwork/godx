@@ -6,6 +6,7 @@ package dpos
 
 import (
 	"encoding/binary"
+	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -17,6 +18,7 @@ type stateDB interface {
 	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) error
 	Exist(addr common.Address) bool
 	CreateAccount(addr common.Address)
+	GetNonce(common.Address) uint64
 	SetNonce(addr common.Address, nonce uint64)
 	GetBalance(addr common.Address) *big.Int
 }
@@ -47,8 +49,8 @@ var (
 	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
 	PrefixThawingAssets = []byte("thawing-assets")
 
-	// KeyPreEpochSnapshotDelegateTrieBlockNumber is the key of block number where snapshot delegate trie
-	KeyPreEpochSnapshotDelegateTrieBlockNumber = common.BytesToHash([]byte("pre-epoch-bn"))
+	// KeyPreEpochSnapshotDelegateTrieRoot is the key of block number where snapshot delegate trie
+	KeyPreEpochSnapshotDelegateTrieRoot = common.BytesToHash([]byte("pre-epoch-dtr"))
 
 	// KeyValueCommonAddress is the address for some common key-value storage
 	KeyValueCommonAddress = common.BigToAddress(big.NewInt(0))
@@ -214,17 +216,17 @@ func removeAddressInState(state stateDB, addr common.Address) {
 	state.SetNonce(addr, 0)
 }
 
-// getPreEpochSnapshotDelegateTrieBlockNumber get the block number of snapshot delegate trie
-func getPreEpochSnapshotDelegateTrieBlockNumber(state stateDB) common.BigInt {
-	h := state.GetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieBlockNumber)
-	if h == (common.Hash{}) {
-		return common.BigInt0
+// getPreEpochSnapshotDelegateTrieRoot get the block number of snapshot delegate trie
+func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) common.Hash {
+	h := state.GetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot)
+	if h == types.EmptyHash {
+		h = genesis.DposContext.DelegateRoot
 	}
-	return common.PtrBigInt(h.Big())
+	return h
 }
 
-// setPreEpochSnapshotDelegateTrieBlockNumber set the block number of snapshot delegate trie
-func setPreEpochSnapshotDelegateTrieBlockNumber(state stateDB, value common.BigInt) {
-	h := common.BigToHash(value.BigIntPtr())
-	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieBlockNumber, h)
+// setPreEpochSnapshotDelegateTrieRoot set the block number of snapshot delegate trie
+func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
+	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
+	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
 }
