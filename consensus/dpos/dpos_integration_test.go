@@ -88,7 +88,7 @@ func TestDPOSIntegration(t *testing.T) {
 
 }
 
-func NewTestEpochContext(num int) (*testEpochContext, error) {
+func newTestEpochContext(num int) (*testEpochContext, error) {
 	curTime := time.Now().Unix() / BlockInterval * BlockInterval
 	stateDB, ctx, err := newStateAndDposContext()
 	if err != nil {
