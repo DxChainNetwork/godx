@@ -6,9 +6,15 @@ package dpos
 
 import (
 	"fmt"
+	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/core"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 
 	"github.com/DxChainNetwork/godx/rlp"
 
@@ -34,13 +40,14 @@ const (
 var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	balance = minDeposit.MultInt64(10)
-
 	errNoEntriesInDelegateTrie = errors.New("no entries in delegate trie")
+
+	maxNumValidators = 21
 )
 
 type (
 	testEpochContext struct {
+		genesis *types.Header
 		curTime int64
 		stateDB *state.StateDB
 		ctx     *types.DposContext
@@ -90,13 +97,22 @@ func TestDPOSIntegration(t *testing.T) {
 
 func newTestEpochContext(num int) (*testEpochContext, error) {
 	curTime := time.Now().Unix() / BlockInterval * BlockInterval
-	stateDB, ctx, err := newStateAndDposContext()
+	db := ethdb.NewMemDatabase()
+	// Write genesis
+	genesisConfig := getGenesis()
+	genesisBlock := genesisConfig.ToBlock(db)
+	genesisHeader := genesisBlock.Header()
+	// get state from genesis
+	statedb, err := state.New(genesisBlock.Root(), state.NewDatabase(db))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot create a new stateDB: %v", err)
 	}
+	ctx := genesisBlock.DposCtx()
+	// construct the epoch context
 	tec := &testEpochContext{
+		genesis: genesisHeader,
 		curTime: curTime,
-		stateDB: stateDB,
+		stateDB: statedb,
 		ctx:     ctx,
 		ec: &expectContext{
 			userRecords:               makeUsers(num),
@@ -109,14 +125,13 @@ func newTestEpochContext(num int) (*testEpochContext, error) {
 			balance:                   make(map[common.Address]common.BigInt),
 		},
 	}
+	// initialize with genesis
+	tec.ec.setGenesis(genesisConfig)
 	// Add balance for all users
 	for addr := range tec.ec.userRecords {
-		addAccountInState(stateDB, addr, minDeposit.MultInt64(100), common.BigInt0)
+		statedb.CreateAccount(addr)
+		statedb.SetBalance(addr, minDeposit.MultInt64(100).BigIntPtr())
 		tec.ec.balance[addr] = minDeposit.MultInt64(100)
-	}
-	// initial validators
-	if err := tec.addInitialValidator(MaxValidatorSize); err != nil {
-		return nil, err
 	}
 	return tec, nil
 }
@@ -363,7 +378,7 @@ func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
 func (tec *testEpochContext) checkCandidateRecordsLastEpochConsistency() error {
 	// for last epoch, only check for exist entries
 	for addr := range tec.ec.candidateRecordsLastEpoch {
-		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr)
+		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis)
 		if err != nil {
 			return err
 		}
@@ -383,7 +398,7 @@ func (tec *testEpochContext) checkDelegatorRecordsConsistency() error {
 
 func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 	for addr := range tec.ec.delegatorRecordsLastEpoch {
-		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr)
+		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis)
 		if err != nil {
 			return err
 		}
@@ -433,6 +448,27 @@ func (tec *testEpochContext) checkBalanceConsistency() error {
 		}
 	}
 	return nil
+}
+
+// setGenesis add the genesis data to the expectContext
+func (ec *expectContext) setGenesis(genesis *core.Genesis) {
+	validators := genesis.Config.Dpos.Validators
+	for v, vConfig := range validators {
+		ec.userRecords[v] = userRecord{
+			addr:        v,
+			isCandidate: true,
+			isDelegator: false,
+		}
+		ec.candidateRecords[v] = candidateRecord{
+			deposit:     vConfig.Deposit,
+			rewardRatio: vConfig.RewardRatio,
+			votes:       make(map[common.Address]struct{}),
+		}
+		ec.addFrozenAssets(v, vConfig.Deposit)
+		ec.addCandidate(v, vConfig.Deposit, vConfig.RewardRatio, make(map[common.Address]struct{}))
+		ec.addBalance(v, vConfig.Deposit)
+		ec.candidateRecordsLastEpoch[v].rewardRatio = vConfig.RewardRatio
+	}
 }
 
 func (ec *expectContext) addCandidate(candidate common.Address, deposit common.BigInt, rewardRatio uint64,
@@ -514,6 +550,14 @@ func (ec *expectContext) checkCandidateRecord(stateDB *state.StateDB, ctx *types
 	return checkCandidate(stateDB, ctx, addr, record)
 }
 
+func (ec *expectContext) addBalance(addr common.Address, diff common.BigInt) {
+	prevBalance, exist := ec.balance[addr]
+	if !exist {
+		prevBalance = common.BigInt0
+	}
+	ec.balance[addr] = prevBalance.Add(diff)
+}
+
 // checkEmptyCandidate checks in stateDB and ctx whether the addr is an empty candidate
 func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
 	candidateDeposit := GetCandidateDeposit(stateDB, addr)
@@ -577,9 +621,11 @@ func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 	return nil
 }
 
-func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB *state.StateDB, ctx *types.DposContext,
+	addr common.Address, genesis *types.Header) error {
+
 	record := ec.candidateRecordsLastEpoch[addr]
-	gotRewardRatio := GetRewardRatioNumeratorLastEpoch(state, addr)
+	gotRewardRatio := GetRewardRatioNumeratorLastEpoch(stateDB, addr)
 	if gotRewardRatio != record.rewardRatio {
 		return fmt.Errorf("candidate %x last epoch reward ratio not expected. Got %v, Expect %v", addr, gotRewardRatio, record.rewardRatio)
 	}
@@ -588,14 +634,13 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx
 	for delegator := range record.votes {
 		expectTotalVotes = expectTotalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
 	}
-	gotTotalVotes := GetTotalVote(state, addr)
+	gotTotalVotes := GetTotalVote(stateDB, addr)
 	if expectTotalVotes.Cmp(gotTotalVotes) != 0 {
 		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
 	}
 	// check the delegate trie from the last epoch
-	var genesis *types.Header
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
-	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB().DiskDB(), preEpochSnapshotDelegateTrieRoot)
+	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return fmt.Errorf("cannot recover delegate trie: %v", err)
 	}
@@ -658,20 +703,34 @@ func checkDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 	for _, c := range candidates {
 		key := append(c.Bytes(), addr.Bytes()...)
 		b, err := dt.TryGet(key)
-		if err != nil || b == nil || len(b) == 0 {
+		if err != nil || b == nil {
 			return fmt.Errorf("delegator %x vote to %x not found in delegate trie", addr, c)
 		}
 	}
 	return nil
 }
 
-func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *types.DposContext,
+	addr common.Address, genesis *types.Header) error {
+
 	record := ec.delegatorRecordsLastEpoch[addr]
 	gotDeposit := GetVoteLastEpoch(stateDB, addr)
 	if gotDeposit.Cmp(record.deposit) != 0 {
 		return fmt.Errorf("delegator %x last epoch deposit: expect %v, got %v", addr, gotDeposit, record.deposit)
 	}
-	// TODO: check delegateTrie in the last epoch
+	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	dt, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
+	if err != nil {
+		return fmt.Errorf("cannot recover delegate trie: %v", err)
+	}
+	candidates := record.votes
+	for c := range candidates {
+		key := append(c.Bytes(), addr.Bytes()...)
+		b, err := dt.TryGet(key)
+		if err != nil || b == nil {
+			return fmt.Errorf("delegator %x vote to %x in last epoch not found in delegate trie", addr, c)
+		}
+	}
 	return nil
 }
 
@@ -773,4 +832,38 @@ func checkAddressListConsistentToMap(list []common.Address, m map[common.Address
 		}
 	}
 	return nil
+}
+
+func getGenesis() *core.Genesis {
+	genesisValidators := make(map[common.Address]params.ValidatorConfig)
+	for i := 0; i != maxNumValidators; i++ {
+		genesisValidators[randomAddress()] = params.ValidatorConfig{
+			Deposit:     minDeposit.MultInt64(r.Int63n(10) + 1),
+			RewardRatio: uint64(r.Int63n(100)),
+		}
+	}
+	chainConfig := &params.ChainConfig{
+		ChainID:        big.NewInt(5),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   nil,
+		DAOForkSupport: false,
+		EIP150Block:    big.NewInt(0),
+		EIP150Hash:     common.Hash{},
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		Dpos: &params.DposConfig{
+			Validators: genesisValidators,
+		},
+	}
+	return &core.Genesis{
+		Config:     chainConfig,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x4478436861696e204e6574776f726b20546573746e657420302e372e32"),
+		GasLimit:   3141592,
+		Difficulty: big.NewInt(1048576),
+		Alloc: map[common.Address]core.GenesisAccount{
+			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
+		},
+	}
 }
