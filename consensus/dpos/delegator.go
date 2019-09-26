@@ -27,7 +27,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	// Compare the new deposit with the previous deposit. Different strategy is applied for
 	// different condition. Note if previous deposit is the same as the new deposit, no frozen
 	// or thawing fields need to be updated
-	prevDeposit := getVoteDeposit(state, addr)
+	prevDeposit := GetVoteDeposit(state, addr)
 	if deposit.Cmp(prevDeposit) < 0 {
 		// If new deposit is smaller than previous deposit, the diff will be thawed after
 		// ThawingEpochDuration
@@ -38,10 +38,10 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 		// If the new deposit is larger than previous deposit, the diff will be added directly
 		// to the frozenAssets
 		diff := deposit.Sub(prevDeposit)
-		addFrozenAssets(state, addr, diff)
+		AddFrozenAssets(state, addr, diff)
 	}
 	// Update vote deposit
-	setVoteDeposit(state, addr, deposit)
+	SetVoteDeposit(state, addr, deposit)
 
 	return successVote, nil
 }
@@ -51,10 +51,10 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	if err := ctx.CancelVote(addr); err != nil {
 		return err
 	}
-	prevDeposit := getVoteDeposit(state, addr)
+	prevDeposit := GetVoteDeposit(state, addr)
 	currentEpoch := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
-	setVoteDeposit(state, addr, common.BigInt0)
+	SetVoteDeposit(state, addr, common.BigInt0)
 	return nil
 }
 
@@ -93,7 +93,7 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.
 		return errVoteTooManyCandidates
 	}
 	// The delegator should have enough balance for vote if he want to increase the deposit
-	prevVoteDeposit := getVoteDeposit(state, delegatorAddr)
+	prevVoteDeposit := GetVoteDeposit(state, delegatorAddr)
 	if deposit.Cmp(prevVoteDeposit) > 0 {
 		availableBalance := GetAvailableBalance(state, delegatorAddr)
 		diff := deposit.Sub(prevVoteDeposit)
