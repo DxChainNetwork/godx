@@ -6,7 +6,7 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 [![Go Report Card](https://goreportcard.com/badge/github.com/DxChainNetwork/godx)](https://goreportcard.com/report/github.com/DxChainNetwork/godx)
 [![Coverage](https://codecov.io/gh/DxChainNetwork/godx/branch/master/graph/badge.svg)](https://codecov.io/gh/DxChainNetwork/godx)
 [![Golang](https://img.shields.io/badge/go-1.11.4-blue.svg)](https://golang.org/dl/)
-[![release](https://img.shields.io/badge/release-v0.8.2-blue)](https://github.com/DxChainNetwork/godx/releases)
+[![release](https://img.shields.io/badge/release-v0.8.3-blue)](https://github.com/DxChainNetwork/godx/releases)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://opensource.org/)
 

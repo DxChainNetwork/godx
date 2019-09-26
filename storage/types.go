@@ -168,6 +168,16 @@ type (
 		InteractionType string    `json:"interactionType"`
 		Success         bool      `json:"success"`
 	}
+
+	// MarketPrice is the market price metrics from HostMarket
+	MarketPrice struct {
+		ContractPrice common.BigInt
+		StoragePrice  common.BigInt
+		UploadPrice   common.BigInt
+		DownloadPrice common.BigInt
+		Deposit       common.BigInt
+		MaxDeposit    common.BigInt
+	}
 )
 
 // ContractParams is the drafted contract sent by the storage client.
@@ -186,7 +196,6 @@ type RentPayment struct {
 	Fund         common.BigInt `json:"fund"`
 	StorageHosts uint64        `json:"storageHosts"`
 	Period       uint64        `json:"period"`
-	RenewWindow  uint64        `json:"renewWindow"`
 
 	// ExpectedStorage is amount of data expected to be stored
 	ExpectedStorage uint64 `json:"expectedStorage"`
@@ -214,7 +223,6 @@ type (
 		Fund         string `json:"Fund"`
 		StorageHosts string `json:"Number of Storage Hosts"`
 		Period       string `json:"Storage Time"`
-		RenewWindow  string `json:"Renew Time"`
 
 		// ExpectedStorage is amount of data expected to be stored
 		ExpectedStorage string `json:"Expected Storage"`

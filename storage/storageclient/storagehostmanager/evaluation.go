@@ -13,24 +13,34 @@ import (
 
 // HostEvaluator defines an interface that include methods that used to calculate
 // the storage host Evaluate and EvaluateDetail
-type HostEvaluator interface {
-	EvaluateDetail(info storage.HostInfo) EvaluationDetail
-	Evaluate(info storage.HostInfo) int64
-}
+type (
+	HostEvaluator interface {
+		EvaluateDetail(info storage.HostInfo) EvaluationDetail
+		Evaluate(info storage.HostInfo) int64
+	}
+
+	// hostMarket provides methods to evaluate the storage price, upload price, download
+	// price, and deposit price. Currently, the storageHostManager implements the hostMarket,
+	// and be used in evaluation.
+	hostMarket interface {
+		GetMarketPrice() storage.MarketPrice
+		getBlockHeight() uint64
+	}
+)
 
 // EvaluationDetail contains the detailed storage host evaluation factors
-type EvaluationDetail struct {
-	Evaluation int64 `json:"evaluation"`
-
-	PresenceScore         float64 `json:"presence_score"`
-	DepositScore          float64 `json:"deposit_score"`
-	InteractionScore      float64 `json:"interaction_score"`
-	ContractPriceScore    float64 `json:"contract_price_score"`
-	StorageRemainingScore float64 `json:"storage_remaining_score"`
-	UptimeScore           float64 `json:"uptime_score"`
-}
-
 type (
+	EvaluationDetail struct {
+		Evaluation int64 `json:"evaluation"`
+
+		PresenceScore         float64 `json:"presenceScore"`
+		DepositScore          float64 `json:"depositScore"`
+		InteractionScore      float64 `json:"interactionScore"`
+		ContractPriceScore    float64 `json:"contract_priceScore"`
+		StorageRemainingScore float64 `json:"storage_remainingScore"`
+		UptimeScore           float64 `json:"uptimeScore"`
+	}
+
 	// defaultEvaluator is the default host evaluation rules.
 	defaultEvaluator struct {
 		market hostMarket
@@ -151,15 +161,14 @@ func presenceScoreCalc(info storage.HostInfo, market hostMarket) float64 {
 func depositScoreCalc(info storage.HostInfo, rent storage.RentPayment, market hostMarket) float64 {
 	// Evaluate the deposit of the host
 	hostDeposit := evalHostDeposit(info, rent)
+
 	// Evaluate the deposit of the market
 	marketDeposit := evalHostMarketDeposit(rent, market)
-
 	// DepositFactor is the function based on ratio between hostDeposit and marketDeposit.
 	// The function is (x/n)/((x/n) + 1) n is the base divider which is float.
 	// The larger the divider, the larger the deposit is to be encouraged
 	if marketDeposit.Cmp(common.BigInt0) == 0 {
 		marketDeposit = common.BigInt1
-
 	}
 	ratio := hostDeposit.Float64() / marketDeposit.Float64()
 	factor := ratio / (ratio + depositBaseDivider)
@@ -237,7 +246,7 @@ func evalHostDeposit(info storage.HostInfo, settings storage.RentPayment) common
 // evalHostMarketDeposit evaluate the deposit based on market evaluate price
 func evalHostMarketDeposit(settings storage.RentPayment, market hostMarket) common.BigInt {
 	// Evaluate host deposit for market price
-	marketPrice := market.getMarketPrice()
+	marketPrice := market.GetMarketPrice()
 	// Make the host info with necessary info from market price
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
@@ -271,7 +280,7 @@ func evalContractCost(info storage.HostInfo, settings storage.RentPayment) commo
 // evalMarketContractCost evaluate the market contract price cost
 func evalMarketContractCost(market hostMarket, settings storage.RentPayment) common.BigInt {
 	// Get the price from market
-	marketPrice := market.getMarketPrice()
+	marketPrice := market.GetMarketPrice()
 
 	info := storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{

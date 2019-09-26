@@ -128,3 +128,45 @@ func hostInfoGeneratorForIPViolation(ip string, changeTime time.Time) storage.Ho
 		LastIPNetWorkChange: changeTime,
 	}
 }
+
+// TestStorageHostManager_isInitialScanFinished test the functionality of StorageHostManager.
+// isInitialScanFinished
+func TestStorageHostManager_isInitialScanFinished(t *testing.T) {
+	tests := []struct {
+		finished bool
+	}{
+		{true}, {false},
+	}
+	for _, test := range tests {
+		shm := StorageHostManager{}
+		if test.finished {
+			shm.finishInitialScan()
+		}
+
+		res := shm.isInitialScanFinished()
+		if res != test.finished {
+			t.Errorf("isInitialScanFinished return unexpected value. Expect %v, got %v", test.finished,
+				res)
+		}
+	}
+}
+
+// TestStorageHostManager_finishInitialScan test the functionality of StorageHostManager.finishInitialScan
+func TestStorageHostManager_finishInitialScan(t *testing.T) {
+	tests := []struct {
+		closed bool
+	}{
+		{true}, {false},
+	}
+	for _, test := range tests {
+		shm := StorageHostManager{}
+		if test.closed {
+			shm.finishInitialScan()
+		}
+		shm.finishInitialScan()
+		closed := shm.isInitialScanFinished()
+		if !closed {
+			t.Errorf("After finishInitialScan, the channel still not closed")
+		}
+	}
+}

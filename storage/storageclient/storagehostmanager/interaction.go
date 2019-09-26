@@ -130,8 +130,9 @@ func (shm *StorageHostManager) updateInteraction(id enode.ID, interactionType In
 		return fmt.Errorf("failed to retrive host info [%v]", id)
 	}
 	info = calcInteractionUpdate(info, interactionType, success, uint64(time.Now().Unix()))
-
-	if err := shm.storageHostTree.HostInfoUpdate(info); err != nil {
+	// Evaluate the score and update the host info
+	score := shm.hostEvaluator.Evaluate(info)
+	if err := shm.storageHostTree.HostInfoUpdate(info, score); err != nil {
 		return fmt.Errorf("failed to update host info: %v", err)
 	}
 	return nil

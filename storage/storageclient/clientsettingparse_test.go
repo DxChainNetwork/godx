@@ -6,12 +6,13 @@ package storageclient
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/unit"
-	"github.com/DxChainNetwork/godx/storage"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 func TestStorageClient_ParseClientSetting(t *testing.T) {
@@ -72,60 +73,6 @@ func TestParseStorageHosts(t *testing.T) {
 	}
 }
 
-func TestParseExpectedUpload(t *testing.T) {
-	var tables = []struct {
-		dataSize string
-		parsed   uint64
-	}{
-		{"256b", 256 / storage.BlocksPerMonth},
-		{"1000 b", 1000 / storage.BlocksPerMonth},
-		{"431 KB", 431 * 1e3 / storage.BlocksPerMonth},
-		{"486 mB", 486 * 1e6 / storage.BlocksPerMonth},
-		{"1025 gb", 1025 * 1e9 / storage.BlocksPerMonth},
-		{"3 tB", 3 * 1e12 / storage.BlocksPerMonth},
-		{"431 mib", 431 * 1 << 20 / storage.BlocksPerMonth},
-		{"572 tib", 572 * 1 << 40 / storage.BlocksPerMonth},
-	}
-
-	for _, table := range tables {
-		result, err := parseExpectedUpload(table.dataSize)
-		if err != nil {
-			t.Fatalf("error parsing the expected upload: %s", err.Error())
-		}
-
-		if result != table.parsed {
-			t.Errorf("error parsing: expected parsed upload size %+v, got %+v",
-				table.parsed, result)
-		}
-	}
-}
-
-func TestParseExpectedRedundancy(t *testing.T) {
-	var tables = []struct {
-		redundancy string
-		parsed     float64
-		err        bool
-	}{
-		{"3.5", 3.5, false},
-		{"4.0", 4.0, false},
-		{"abcdefg", 0, true},
-	}
-
-	for _, table := range tables {
-		result, err := parseExpectedRedundancy(table.redundancy)
-		if err != nil && table.err {
-			continue
-		} else if err != nil {
-			t.Fatalf("error parsing the expected redundancy: %s", err.Error())
-		}
-
-		if result != table.parsed {
-			t.Errorf("error parsing: expected parsed redundancy %+v, got %+v",
-				table.parsed, result)
-		}
-	}
-}
-
 func randomSettings() (settings map[string]string, err error) {
 	var keys map[string]string
 
@@ -180,14 +127,6 @@ func randomValue(selectedKeys map[string]string) (settings map[string]string, er
 			value = rand.Uint64()
 			granularity = unit.TimeUnit[rand.Intn(len(unit.TimeUnit))]
 			break
-		case key == "storage" || key == "upload" || key == "download":
-			value = rand.Uint64()
-			granularity = unit.DataSizeUnit[rand.Intn(len(unit.DataSizeUnit))]
-			break
-		case key == "redundancy":
-			value = rand.Float64()
-			granularity = ""
-			break
 		case key == "violation":
 			value = rand.Intn(2) == 0
 			granularity = ""
@@ -220,9 +159,6 @@ func clientSettingValidation(key string, prevSetting storage.ClientSetting, curr
 		return
 	case "period":
 		valid = currentSetting.RentPayment.Period == prevSetting.RentPayment.Period
-		return
-	case "renew":
-		valid = currentSetting.RentPayment.RenewWindow == prevSetting.RentPayment.RenewWindow
 		return
 	case "storage":
 		valid = currentSetting.RentPayment.ExpectedStorage == prevSetting.RentPayment.ExpectedStorage

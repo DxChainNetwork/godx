@@ -224,6 +224,9 @@ func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Has
 	number = block.NumberU64()
 	txs := block.Transactions()
 	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
 		p, ok := precompiled[*tx.To()]
 		if !ok {
 			continue

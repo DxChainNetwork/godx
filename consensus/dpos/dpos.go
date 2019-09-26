@@ -362,7 +362,7 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 }
 
 // accumulateRewards add the block award to Coinbase of validator
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db ethdb.Database, genesis *types.Header) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := frontierBlockReward
 	if config.IsByzantium(header.Number) {
@@ -410,7 +410,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
-	accumulateRewards(chain.Config(), state, header, d.db, genesis)
+	accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis)
 
 	if d.Mode == ModeFake {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -619,7 +619,6 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 }
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
-func getPreEpochSnapshotDelegateTrie(db ethdb.Database, root common.Hash) (*trie.Trie, error) {
-	trieDb := trie.NewDatabase(db)
-	return types.NewDelegateTrie(root, trieDb)
+func getPreEpochSnapshotDelegateTrie(db *trie.Database, root common.Hash) (*trie.Trie, error) {
+	return types.NewDelegateTrie(root, db)
 }
