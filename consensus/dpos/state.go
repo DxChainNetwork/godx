@@ -9,6 +9,7 @@ import (
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 )
 
 type stateDB interface {
@@ -17,6 +18,7 @@ type stateDB interface {
 	ForEachStorage(addr common.Address, cb func(common.Hash, common.Hash) bool) error
 	Exist(addr common.Address) bool
 	CreateAccount(addr common.Address)
+	GetNonce(common.Address) uint64
 	SetNonce(addr common.Address, nonce uint64)
 	GetBalance(addr common.Address) *big.Int
 }
@@ -46,6 +48,12 @@ var (
 
 	// PrefixThawingAssets is the prefix recording the amount to be thawed in a specified epoch
 	PrefixThawingAssets = []byte("thawing-assets")
+
+	// KeyPreEpochSnapshotDelegateTrieRoot is the key of block number where snapshot delegate trie
+	KeyPreEpochSnapshotDelegateTrieRoot = common.BytesToHash([]byte("pre-epoch-dtr"))
+
+	// KeyValueCommonAddress is the address for some common key-value storage
+	KeyValueCommonAddress = common.BigToAddress(big.NewInt(0))
 )
 
 // getCandidateDeposit get the candidates deposit of the addr from the state
@@ -206,4 +214,19 @@ func setVoteLastEpoch(state stateDB, addr common.Address, value common.BigInt) {
 // If this is the case, simply leave the address there.
 func removeAddressInState(state stateDB, addr common.Address) {
 	state.SetNonce(addr, 0)
+}
+
+// getPreEpochSnapshotDelegateTrieRoot get the block number of snapshot delegate trie
+func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) common.Hash {
+	h := state.GetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot)
+	if h == types.EmptyHash {
+		h = genesis.DposContext.DelegateRoot
+	}
+	return h
+}
+
+// setPreEpochSnapshotDelegateTrieRoot set the block number of snapshot delegate trie
+func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
+	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
+	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
 }

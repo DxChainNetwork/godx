@@ -266,7 +266,7 @@ func TestStreamUncleBlock(t *testing.T) {
 
 	select {
 	case <-taskCh:
-	case <-time.NewTimer(time.Second).C:
+	case <-time.NewTimer(5 * time.Second).C:
 		t.Error("new task timeout")
 	}
 }
