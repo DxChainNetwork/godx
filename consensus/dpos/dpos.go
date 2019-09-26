@@ -371,13 +371,13 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		blockReward = constantinopleBlockReward
 	}
 	// retrieve the total vote weight of header's validator
-	voteCount := getTotalVote(state, header.Validator)
+	voteCount := GetTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward.BigIntPtr())
 		return
 	}
 	// get ratio of reward between validator and its delegator
-	rewardRatioNumerator := getRewardRatioNumeratorLastEpoch(state, header.Validator)
+	rewardRatioNumerator := GetRewardRatioNumeratorLastEpoch(state, header.Validator)
 	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
 	// Loop over the delegators to add delegator rewards
@@ -386,7 +386,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	for delegatorIterator.Next() {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
 		// get the votes of delegator to vote for delegate
-		delegatorVote := getVoteLastEpoch(state, delegator)
+		delegatorVote := GetVoteLastEpoch(state, delegator)
 		// calculate reward of each delegator due to it's vote(stake) percent
 		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
 		state.AddBalance(delegator, delegatorReward.BigIntPtr())

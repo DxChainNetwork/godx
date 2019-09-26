@@ -22,14 +22,14 @@ func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Addr
 		return err
 	}
 	// After validation, the candidates deposit could not decrease. Update the frozen asset field
-	prevDeposit := getCandidateDeposit(state, addr)
+	prevDeposit := GetCandidateDeposit(state, addr)
 	if deposit.Cmp(prevDeposit) > 0 {
 		diff := deposit.Sub(prevDeposit)
-		addFrozenAssets(state, addr, diff)
+		AddFrozenAssets(state, addr, diff)
 	}
 	// Apply the candidates settings
-	setCandidateDeposit(state, addr, deposit)
-	setRewardRatioNumerator(state, addr, rewardRatio)
+	SetCandidateDeposit(state, addr, deposit)
+	SetRewardRatioNumerator(state, addr, rewardRatio)
 	return nil
 }
 
@@ -40,11 +40,11 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 		return err
 	}
 	// Mark the thawing address in the future
-	prevDeposit := getCandidateDeposit(state, addr)
+	prevDeposit := GetCandidateDeposit(state, addr)
 	currentEpochID := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
 	// set the candidates deposit to 0
-	setCandidateDeposit(state, addr, common.BigInt0)
+	SetCandidateDeposit(state, addr, common.BigInt0)
 	return nil
 }
 
@@ -63,13 +63,13 @@ func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, 
 	}
 
 	// previous candidate's deposit validation
-	prevDeposit := getCandidateDeposit(state, candidateAddress)
+	prevDeposit := GetCandidateDeposit(state, candidateAddress)
 	if data.Deposit.Cmp(prevDeposit) < 0 {
 		return errCandidateDecreasingDeposit
 	}
 
 	// previous candidate's reward distribution ratio validation
-	prevRewardRatio := getRewardRatioNumerator(state, candidateAddress)
+	prevRewardRatio := GetRewardRatioNumerator(state, candidateAddress)
 	if data.RewardRatio < prevRewardRatio {
 		return errCandidateDecreasingRewardRatio
 	}
@@ -81,7 +81,7 @@ func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, 
 // by checking the candidate deposit
 func IsCandidate(candidateAddress common.Address, state stateDB) bool {
 	// check if the candidate deposit is not zero
-	candidateDeposit := getCandidateDeposit(state, candidateAddress)
+	candidateDeposit := GetCandidateDeposit(state, candidateAddress)
 	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
 		return false
 	}
@@ -94,7 +94,7 @@ func IsCandidate(candidateAddress common.Address, state stateDB) bool {
 // candidates himself and the delegated votes from delegator
 func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
 	// Calculate the candidates deposit and delegatedVote
-	candidateDeposit := getCandidateDeposit(state, candidateAddr)
+	candidateDeposit := GetCandidateDeposit(state, candidateAddr)
 	delegatedVote := calcCandidateDelegatedVotes(state, candidateAddr, delegateTrie)
 	// return the sum of candidates deposit and delegated vote
 	return candidateDeposit.Add(delegatedVote)
@@ -108,7 +108,7 @@ func calcCandidateDelegatedVotes(state stateDB, candidateAddr common.Address, dt
 	for delegateIterator.Next() {
 		delegatorAddr := common.BytesToAddress(delegateIterator.Value)
 		// Get the weighted vote
-		vote := getVoteDeposit(state, delegatorAddr)
+		vote := GetVoteDeposit(state, delegatorAddr)
 		// add the weightedVote
 		delegatorVotes = delegatorVotes.Add(vote)
 	}
@@ -139,12 +139,12 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 		return errCandidateInvalidRewardRatio
 	}
 	// Deposit should be only increasing
-	prevDeposit := getCandidateDeposit(state, candidateAddr)
+	prevDeposit := GetCandidateDeposit(state, candidateAddr)
 	if deposit.Cmp(prevDeposit) < 0 {
 		return errCandidateDecreasingDeposit
 	}
 	// Reward ratio should also forbid decreasing
-	prevRewardRatio := getRewardRatioNumerator(state, candidateAddr)
+	prevRewardRatio := GetRewardRatioNumerator(state, candidateAddr)
 	if rewardRatio < prevRewardRatio {
 		return errCandidateDecreasingRewardRatio
 	}

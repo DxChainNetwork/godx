@@ -116,7 +116,7 @@ func TestProcessCancelCandidate(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Check deposit
-	if deposit := getCandidateDeposit(state, addr); deposit.Cmp(common.BigInt0) != 0 {
+	if deposit := GetCandidateDeposit(state, addr); deposit.Cmp(common.BigInt0) != 0 {
 		t.Fatalf("after cancel candidates, the candidates deposit not zero: %v", deposit)
 	}
 }
@@ -214,10 +214,10 @@ func addOrigCandidateInState(state *state.StateDB, c candidate) {
 	addr := c.address
 	addAccountInState(state, addr, c.balance, c.frozenAssets)
 	if c.prevDeposit.Cmp(common.BigInt0) != 0 {
-		setCandidateDeposit(state, addr, c.prevDeposit)
+		SetCandidateDeposit(state, addr, c.prevDeposit)
 	}
 	if c.prevRewardRatio != uint64(0) {
-		setRewardRatioNumerator(state, addr, c.prevRewardRatio)
+		SetRewardRatioNumerator(state, addr, c.prevRewardRatio)
 	}
 }
 
@@ -231,11 +231,11 @@ func checkProcessAddCandidate(state *state.StateDB, ctx *types.DposContext, addr
 		return fmt.Errorf("addr not in candidates trie")
 	}
 	// Check expectedRewardRatio
-	if rewardRatio := getRewardRatioNumerator(state, addr); rewardRatio != expectedRewardRatio {
+	if rewardRatio := GetRewardRatioNumerator(state, addr); rewardRatio != expectedRewardRatio {
 		return fmt.Errorf("reward ratio not expected. Got %v, Expect %v", rewardRatio, expectedRewardRatio)
 	}
 	// Check expectedDeposit
-	if deposit := getCandidateDeposit(state, addr); deposit.Cmp(expectedDeposit) != 0 {
+	if deposit := GetCandidateDeposit(state, addr); deposit.Cmp(expectedDeposit) != 0 {
 		return fmt.Errorf("deposit not expected. Got %v, Expect %v", deposit, expectedDeposit)
 	}
 	// Check frozenAssets

@@ -94,8 +94,8 @@ func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Addres
 
 // GetValidatorInfo will return the detailed validator information
 func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, diskdb ethdb.Database, header *types.Header) (common.BigInt, uint64, int64, error) {
-	votes := getTotalVote(stateDb, validatorAddress)
-	rewardDistribution := getRewardRatioNumerator(stateDb, validatorAddress)
+	votes := GetTotalVote(stateDb, validatorAddress)
+	rewardDistribution := GetRewardRatioNumerator(stateDb, validatorAddress)
 	minedCount, err := getMinedBlocksCount(diskdb, header, validatorAddress)
 	if err != nil {
 		return common.BigInt0, 0, 0, err
@@ -108,7 +108,7 @@ func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, d
 // GetCandidateInfo will return the detailed candidates information
 func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
 	// get detailed candidates information
-	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
+	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 
 	// get the candidateTrie
 	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
@@ -116,7 +116,7 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
 	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
-	rewardDistribution := getRewardRatioNumerator(stateDb, candidateAddress)
+	rewardDistribution := GetRewardRatioNumerator(stateDb, candidateAddress)
 
 	return candidateDeposit, candidateVotes, rewardDistribution, nil
 }

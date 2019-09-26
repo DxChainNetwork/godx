@@ -90,14 +90,14 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// set vote deposit and weight ratio for delegator
 	validator := candidates[1]
-	setVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
+	SetVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
 
 	// set validator reward ratio
 	var rewardRatioNumerator uint64 = 50
-	setRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
+	SetRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
 
 	// set the total vote weight for validator
-	setTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
+	SetTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
 
 	stateDbCopy := stateDB.Copy()
 
