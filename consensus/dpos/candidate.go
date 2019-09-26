@@ -7,6 +7,7 @@ package dpos
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/trie"
 )
 
@@ -48,49 +49,30 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	return nil
 }
 
-// CandidateTxDepositValidation will validate the candidate apply transaction before sending it
-func CandidateTxDepositValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
-	// deposit validation
-	if data.Deposit.Cmp(minDeposit) < 0 {
-		return errCandidateInsufficientDeposit
-	}
-
-	// available balance validation
-	candidateBalance := common.PtrBigInt(state.GetBalance(candidateAddress))
-	candidateAvailableBalance := candidateBalance.Sub(GetFrozenAssets(state, candidateAddress))
-	if candidateAvailableBalance.Cmp(data.Deposit) < 0 {
-		return errCandidateInsufficientBalance
-	}
-
-	// previous candidate's deposit validation
-	prevDeposit := GetCandidateDeposit(state, candidateAddress)
-	if data.Deposit.Cmp(prevDeposit) < 0 {
-		return errCandidateDecreasingDeposit
-	}
-
-	// previous candidate's reward distribution ratio validation
-	prevRewardRatio := GetRewardRatioNumerator(state, candidateAddress)
-	if data.RewardRatio < prevRewardRatio {
-		return errCandidateDecreasingRewardRatio
-	}
-
-	return nil
+// CandidateTxDataValidation will validate the candidate apply transaction before sending it
+func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
+	return checkValidCandidate(state, candidateAddress, data.Deposit, data.RewardRatio)
 }
 
 // IsCandidate will check whether or not the given address is a candidate address
-// by checking the candidate deposit
-func IsCandidate(candidateAddress common.Address, state stateDB) bool {
-	// check if the candidate deposit is not zero
-	candidateDeposit := GetCandidateDeposit(state, candidateAddress)
-	if candidateDeposit.Cmp(common.BigInt0) <= 0 {
+func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
+	// re-construct trieDB and get the candidateTrie
+	trieDb := trie.NewDatabase(diskDB)
+	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
+	if err != nil {
 		return false
 	}
 
-	// if the candidate deposit is not 0, meaning it is the candidate
+	// check if the candidate exists
+	if value, err := candidateTrie.TryGet(candidateAddress.Bytes()); err != nil || value == nil {
+		return false
+	}
+
+	// otherwise, it means the candidate exists
 	return true
 }
 
-// calcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
+// CalcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
 // candidates himself and the delegated votes from delegator
 func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
 	// Calculate the candidates deposit and delegatedVote

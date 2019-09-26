@@ -3684,9 +3684,9 @@ var outputBigNumberFormatter = function (number) {
 };
 
 var outputBalanceFormatter = function (object) {
-    totalBalance = utils.toBigNumber(object.TotalBalance)
-    availableBalance = utils.toBigNumber(object.AvailableBalance)
-    frozenAssets = utils.toBigNumber(object.FrozenAssets)
+    totalBalance = utils.toBigNumber(object.total_balance)
+    availableBalance = utils.toBigNumber(object.available_balance)
+    frozenAssets = utils.toBigNumber(object.frozen_assets)
 
     return {TotalBalance:totalBalance, AvailableBalance: availableBalance, FrozenAssets: frozenAssets}
 };
@@ -3710,6 +3710,12 @@ var inputBlockNumberFormatter = function (blockNumber) {
     }
     return utils.toHex(blockNumber);
 };
+
+/*
+var inputAddressBlockNumberFormatter = function (address, blockNumber) {
+    return inputBlockNumberFormatter(blockNumber);
+};
+*/
 
 /**
  * Formats the input of a transaction and converts all values to HEX
@@ -3946,6 +3952,7 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    // inputAddressBlockNumberFormatter: inputAddressBlockNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,

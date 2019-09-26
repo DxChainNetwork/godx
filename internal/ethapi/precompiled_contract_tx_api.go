@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 )
@@ -123,8 +123,7 @@ func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
 // SendApplyCandidateTx submit a apply candidate tx.
 // the parameter ratio is the award distribution ratio that candidate state.
 func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{13})
+	to := vm.ApplyCandidateContractAddress
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -133,7 +132,7 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 	}
 
 	// parse precompile contract tx args
-	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB)
+	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -147,20 +146,20 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 
 // SendCancelCandidateTx submit a cancel candidate tx
 func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{14})
+	to := vm.CancelCandidateContractAddress
 	ctx := context.Background()
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
+	// get the latest block header
+	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if header == nil || err != nil {
 		return common.Hash{}, err
 	}
 
 	// check if the address is the candidate address
-	if !dpos.IsCandidate(args.From, stateDB) {
+	if !dpos.IsCandidate(args.From, header, pd.b.ChainDb()) {
 		return common.Hash{}, ErrNotCandidate
 	}
 
@@ -174,8 +173,7 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 
 // SendVoteTx submit a vote tx
 func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{15})
+	to := vm.VoteContractAddress
 	ctx := context.Background()
 
 	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
@@ -184,7 +182,7 @@ func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, er
 	}
 
 	// parse precompile contract tx args
-	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB)
+	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -198,20 +196,20 @@ func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, er
 
 // SendCancelVoteTx submit a cancel vote tx
 func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
-	to := common.Address{}
-	to.SetBytes([]byte{16})
+	to := vm.CancelVoteContractAddress
 	ctx := context.Background()
 
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
+	// get the latest block header
+	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if header == nil || err != nil {
 		return common.Hash{}, err
 	}
 
-	// check has voted
-	if !dpos.HasVoted(args.From, stateDB) {
+	// check if the delegator has voted before
+	if !dpos.HasVoted(args.From, header, pd.b.ChainDb()) {
 		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
 	}
 
