@@ -410,7 +410,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
-	accumulateRewards(chain.Config(), state, header, dposContext.DB(), genesis)
+	accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis)
 
 	if d.Mode == ModeFake {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
