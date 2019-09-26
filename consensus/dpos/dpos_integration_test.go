@@ -367,6 +367,39 @@ func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 	return nil
 }
 
+func (tec *testEpochContext) checkThawingConsistency() error {
+	// only check the thawing effected epoch
+	curEpoch := CalculateEpochID(tec.curTime)
+	thawEpoch := calcThawingEpoch(curEpoch)
+	for epoch := curEpoch + 1; epoch <= thawEpoch; epoch++ {
+		thawMap := tec.ec.thawing[epoch]
+		expect := make(map[common.Address]common.BigInt)
+		for addr, thaw := range thawMap {
+			expect[addr] = thaw
+		}
+		err := checkThawingAddressAndValue(tec.stateDB, epoch, expect)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tec *testEpochContext) checkFrozenAssetsConsistency() error {
+	for addr := range tec.ec.userRecords {
+		frozenAssets, exist := tec.ec.frozenAssets[addr]
+		if !exist {
+			frozenAssets = common.BigInt0
+		}
+		gotFrozenAssets := GetFrozenAssets(tec.stateDB, addr)
+		if gotFrozenAssets.Cmp(frozenAssets) != 0 {
+			return fmt.Errorf("address %x frozen assets not expected: expect %v, got %v", addr,
+				frozenAssets, gotFrozenAssets)
+		}
+	}
+	return nil
+}
+
 func (tec *testEpochContext) checkBalanceConsistency() error {
 	for addr := range tec.ec.userRecords {
 		expectedBalance := tec.ec.getExpectedBalance(addr)
