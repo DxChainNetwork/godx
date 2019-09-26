@@ -6,10 +6,10 @@ package dpos
 
 import (
 	"encoding/binary"
-	"github.com/DxChainNetwork/godx/core/types"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 )
 
 type stateDB interface {
