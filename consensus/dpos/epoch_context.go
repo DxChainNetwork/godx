@@ -82,15 +82,15 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 		// Set rewardRatioLastEpoch for each validator
 		for _, validator := range validators {
-			ratio := getRewardRatioNumerator(ec.stateDB, validator)
-			setRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
+			ratio := GetRewardRatioNumerator(ec.stateDB, validator)
+			SetRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
 		}
 		// Set vote last epoch for all delegators who select the validators.
 		allDelegators := allDelegatorForValidators(ec.DposContext, validators)
 		for delegator := range allDelegators {
 			// get the vote deposit and set it in vote last epoch
-			vote := getVoteDeposit(ec.stateDB, delegator)
-			setVoteLastEpoch(ec.stateDB, delegator, vote)
+			vote := GetVoteDeposit(ec.stateDB, delegator)
+			SetVoteLastEpoch(ec.stateDB, delegator, vote)
 		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
@@ -115,11 +115,11 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 		hasCandidate = true
 		candidateAddr := common.BytesToAddress(iterCandidate.Value)
 		// sanity check
-		// Calculate the candidates votes
-		totalVotes := ec.calcCandidateTotalVotes(candidateAddr)
+		// calculate the candidates votes
+		totalVotes := CalcCandidateTotalVotes(candidateAddr, ec.stateDB, ec.DposContext.DelegateTrie())
 		// write the totalVotes to result and state
 		votes = append(votes, &randomSelectorEntry{addr: candidateAddr, vote: totalVotes})
-		setTotalVote(statedb, candidateAddr, totalVotes)
+		SetTotalVote(statedb, candidateAddr, totalVotes)
 	}
 	// if there are no candidates, return error
 	if !hasCandidate {
@@ -163,10 +163,10 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
-		deposit := getCandidateDeposit(ec.stateDB, validator.address)
+		deposit := GetCandidateDeposit(ec.stateDB, validator.address)
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
 		// set candidates deposit to 0
-		setCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
+		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidates", "prevEpochID", epoch, "candidates", validator.address.String(), "minedCnt", validator.cnt)

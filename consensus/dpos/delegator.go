@@ -7,6 +7,8 @@ package dpos
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/trie"
 )
 
 // ProcessVote process the process request for state and dpos context
@@ -25,7 +27,7 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	// Compare the new deposit with the previous deposit. Different strategy is applied for
 	// different condition. Note if previous deposit is the same as the new deposit, no frozen
 	// or thawing fields need to be updated
-	prevDeposit := getVoteDeposit(state, addr)
+	prevDeposit := GetVoteDeposit(state, addr)
 	if deposit.Cmp(prevDeposit) < 0 {
 		// If new deposit is smaller than previous deposit, the diff will be thawed after
 		// ThawingEpochDuration
@@ -36,10 +38,10 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 		// If the new deposit is larger than previous deposit, the diff will be added directly
 		// to the frozenAssets
 		diff := deposit.Sub(prevDeposit)
-		addFrozenAssets(state, addr, diff)
+		AddFrozenAssets(state, addr, diff)
 	}
 	// Update vote deposit
-	setVoteDeposit(state, addr, deposit)
+	SetVoteDeposit(state, addr, deposit)
 
 	return successVote, nil
 }
@@ -49,11 +51,34 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	if err := ctx.CancelVote(addr); err != nil {
 		return err
 	}
-	prevDeposit := getVoteDeposit(state, addr)
+	prevDeposit := GetVoteDeposit(state, addr)
 	currentEpoch := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
-	setVoteDeposit(state, addr, common.BigInt0)
+	SetVoteDeposit(state, addr, common.BigInt0)
 	return nil
+}
+
+// VoteTxDepositValidation will validate the vote transaction before sending it
+func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
+	return checkValidVote(state, delegatorAddress, voteData.Deposit, voteData.Candidates)
+}
+
+// HasVoted will check whether the provided delegator address is voted
+func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
+	// re-construct trieDB and get the voteTrie
+	trieDb := trie.NewDatabase(diskDB)
+	voteTrie, err := types.NewVoteTrie(header.DposContext.VoteRoot, trieDb)
+	if err != nil {
+		return false
+	}
+
+	// check if the delegator has voted
+	if value, err := voteTrie.TryGet(delegatorAddress.Bytes()); err != nil || value == nil {
+		return false
+	}
+
+	// otherwise, means the delegator has voted
+	return true
 }
 
 // checkValidVote checks whether the input argument is valid for a vote transaction
@@ -68,9 +93,9 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.
 		return errVoteTooManyCandidates
 	}
 	// The delegator should have enough balance for vote if he want to increase the deposit
-	prevVoteDeposit := getVoteDeposit(state, delegatorAddr)
+	prevVoteDeposit := GetVoteDeposit(state, delegatorAddr)
 	if deposit.Cmp(prevVoteDeposit) > 0 {
-		availableBalance := getAvailableBalance(state, delegatorAddr)
+		availableBalance := GetAvailableBalance(state, delegatorAddr)
 		diff := deposit.Sub(prevVoteDeposit)
 		if availableBalance.Cmp(diff) < 0 {
 			return errVoteInsufficientBalance

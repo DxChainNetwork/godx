@@ -53,10 +53,9 @@ const (
 
 // AccountBalance is an object that is used to show detailed account information
 type AccountBalance struct {
-	TotalBalance     *big.Int
-	AvailableBalance *big.Int
-	VoteDeposit      *big.Int
-	CandidateDeposit *big.Int
+	TotalBalance     *hexutil.Big `json:"total_balance"`
+	AvailableBalance *hexutil.Big `json:"available_balance"`
+	FrozenAssets     *hexutil.Big `json:"frozen_assets"`
 }
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
@@ -519,17 +518,14 @@ func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Add
 		return AccountBalance{}, err
 	}
 
-	accountBalance := state.GetBalance(address)
-	candidateDeposit := state.GetState(address, dpos.KeyCandidateDeposit)
-	voteDeposit := state.GetState(address, dpos.KeyVoteDeposit)
-	availableBalance := new(big.Int).Sub(accountBalance, candidateDeposit.Big())
-	availableBalance = new(big.Int).Sub(availableBalance, voteDeposit.Big())
+	totalBalance := dpos.GetBalance(state, address)
+	availableBalance := dpos.GetAvailableBalance(state, address)
+	frozenAssets := dpos.GetFrozenAssets(state, address)
 
 	return AccountBalance{
-		TotalBalance:     accountBalance,
-		AvailableBalance: availableBalance,
-		VoteDeposit:      voteDeposit.Big(),
-		CandidateDeposit: candidateDeposit.Big(),
+		TotalBalance:     (*hexutil.Big)(totalBalance.BigIntPtr()),
+		AvailableBalance: (*hexutil.Big)(availableBalance.BigIntPtr()),
+		FrozenAssets:     (*hexutil.Big)(frozenAssets.BigIntPtr()),
 	}, nil
 }
 

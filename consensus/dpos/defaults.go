@@ -39,7 +39,7 @@ const (
 	BlockInterval = int64(10)
 
 	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(86400)
+	EpochInterval = int64(180)
 
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
@@ -56,6 +56,6 @@ var (
 	// Block reward in camel for successfully mining a block upward from Constantinople
 	constantinopleBlockReward = common.NewBigIntUint64(1e18).MultInt64(2)
 
-	// minDeposit defines the minimum deposit of candidates
-	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1000)
+	// minDeposit defines the minimum deposit of candidate
+	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1)
 )

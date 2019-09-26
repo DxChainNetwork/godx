@@ -106,7 +106,7 @@ func TestThawAllFrozenAssetsInEpochError(t *testing.T) {
 	epoch := int64(100)
 	randomMarkThawAddresses(state, addresses, epoch)
 	// Hard code to set the frozen assets to 0, which should incur error
-	setFrozenAssets(state, addr, common.BigInt0)
+	SetFrozenAssets(state, addr, common.BigInt0)
 	// thaw the asset, which should trigger errInsufficientFrozenAssets error
 	epoch = calcThawingEpoch(epoch)
 	err = thawAllFrozenAssetsInEpoch(state, epoch)
@@ -123,7 +123,7 @@ func randomMarkThawAddresses(stateDB *state.StateDB, addresses []common.Address,
 	for _, addr := range addresses {
 		ta := common.RandomBigInt()
 		markThawingAddressAndValue(stateDB, addr, epoch, ta)
-		addFrozenAssets(stateDB, addr, ta)
+		AddFrozenAssets(stateDB, addr, ta)
 		m[addr] = ta
 	}
 	_, err := stateDB.Commit(true)
@@ -143,7 +143,7 @@ func checkThawingAddressAndValue(state *state.StateDB, epoch int64, expect map[c
 			internalErr = fmt.Errorf("address %x not in map", addr)
 			return
 		}
-		gotTa := getThawingAssets(state, addr, epoch)
+		gotTa := GetThawingAssets(state, addr, epoch)
 		if gotTa.Cmp(expectTa) != 0 {
 			internalErr = fmt.Errorf("address %x thawing assets not expected", addr)
 			return

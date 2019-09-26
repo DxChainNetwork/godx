@@ -225,7 +225,7 @@ func TestCheckValidVote(t *testing.T) {
 			t.Fatal(err)
 		}
 		addAccountInState(state, addr, test.balance, test.frozenAssets)
-		setVoteDeposit(state, addr, test.prevDeposit)
+		SetVoteDeposit(state, addr, test.prevDeposit)
 		err = checkValidVote(state, addr, test.deposit, test.candidates)
 		if err != test.expectedErr {
 			t.Errorf("Test %d: error expect [%v], got [%v]", i, test.expectedErr, err)
@@ -267,7 +267,7 @@ func checkProcessVote(state *state.StateDB, ctx *types.DposContext, addr common.
 		}
 	}
 	// Check the vote deposit
-	voteDeposit := getVoteDeposit(state, addr)
+	voteDeposit := GetVoteDeposit(state, addr)
 	if voteDeposit.Cmp(expectedDeposit) != 0 {
 		return fmt.Errorf("vote deposit not expected. Got %v, Expect %v", voteDeposit, expectedDeposit)
 	}
