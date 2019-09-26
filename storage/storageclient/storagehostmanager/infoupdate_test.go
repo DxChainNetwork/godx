@@ -36,9 +36,11 @@ func TestStorageHostManager_hostInfoUpdate_modify(t *testing.T) {
 	shm := &StorageHostManager{blockHeight: 1000000}
 	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
 	shm.hostEvaluator = evaluator
-	shm.storageHostTree = storagehosttree.New(evaluator)
+	shm.storageHostTree = storagehosttree.New()
 
-	if err := shm.storageHostTree.Insert(storage.HostInfo{EnodeID: enodeID}); err != nil {
+	hostInfo := storage.HostInfo{EnodeID: enodeID}
+	score := evaluator.Evaluate(hostInfo)
+	if err := shm.storageHostTree.Insert(storage.HostInfo{EnodeID: enodeID}, score); err != nil {
 		t.Fatalf("cannot insert the host info")
 	}
 
@@ -70,10 +72,11 @@ func TestStorageHostManager_hostInfoUpdate_remove(t *testing.T) {
 	shm := &StorageHostManager{blockHeight: 1000000}
 	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
 	shm.hostEvaluator = evaluator
-	shm.storageHostTree = storagehosttree.New(evaluator)
+	shm.storageHostTree = storagehosttree.New()
 
 	info := storage.HostInfo{EnodeID: enodeID, FirstSeen: 0, AccumulatedUptime: 30, AccumulatedDowntime: 0}
-	if err := shm.storageHostTree.Insert(info); err != nil {
+	score := evaluator.Evaluate(info)
+	if err := shm.storageHostTree.Insert(info, score); err != nil {
 		t.Fatalf("cannot insert into the storageHostTree: %v", err)
 	}
 	newInfo := storage.HostInfo{EnodeID: enodeID}
@@ -93,10 +96,11 @@ func TestStorageHostManager_hostInfoUpdate_offline(t *testing.T) {
 	shm := &StorageHostManager{blockHeight: 1000000}
 	evaluator := newDefaultEvaluator(shm, storage.RentPayment{})
 	shm.hostEvaluator = evaluator
-	shm.storageHostTree = storagehosttree.New(evaluator)
+	shm.storageHostTree = storagehosttree.New()
 
 	info := storage.HostInfo{EnodeID: enodeID, FirstSeen: 0, AccumulatedUptime: 30, AccumulatedDowntime: 0}
-	if err := shm.storageHostTree.Insert(info); err != nil {
+	score := evaluator.Evaluate(info)
+	if err := shm.storageHostTree.Insert(info, score); err != nil {
 		t.Fatalf("cannot insert into the storageHostTree: %v", err)
 	}
 

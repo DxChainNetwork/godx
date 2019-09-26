@@ -125,6 +125,11 @@ func (h *HostPrivateAPI) GetPaymentAddress() string {
 	return fmt.Sprintf("Current address: %v", common.Bytes2Hex(addr[:]))
 }
 
+// GetProofWindow return the proof window size
+func (h *HostPrivateAPI) GetProofWindow() string {
+	return unit.FormatTime(storage.ProofWindowSize)
+}
+
 // AddStorageFolder add a storage folder with a specified size
 func (h *HostPrivateAPI) AddStorageFolder(path string, sizeStr string) (string, error) {
 	size, err := unit.ParseStorage(sizeStr)
@@ -166,7 +171,6 @@ var hostSetterCallbacks = map[string]func(*HostPrivateAPI, string) error{
 	"maxDownloadBatchSize":   (*HostPrivateAPI).setMaxDownloadBatchSize,
 	"maxDuration":            (*HostPrivateAPI).setMaxDuration,
 	"maxReviseBatchSize":     (*HostPrivateAPI).setMaxReviseBatchSize,
-	"windowSize":             (*HostPrivateAPI).setWindowSize,
 	"paymentAddress":         (*HostPrivateAPI).setPaymentAddress,
 	"deposit":                (*HostPrivateAPI).setDeposit,
 	"depositBudget":          (*HostPrivateAPI).setDepositBudget,
@@ -208,7 +212,12 @@ func (h *HostPrivateAPI) SetConfig(config map[string]string) (string, error) {
 	if err = h.storageHost.syncConfig(); err != nil {
 		return "", err
 	}
-	return "Successfully set the host config", nil
+	return `Successfully set the host config. Next please use 
+
+	shost.announce()
+
+to broadcast the config changes.
+`, nil
 }
 
 // setAcceptingContracts set host AcceptingContracts to val specified by valStr
@@ -248,16 +257,6 @@ func (h *HostPrivateAPI) setMaxReviseBatchSize(str string) error {
 		return fmt.Errorf("invalid size string: %v", err)
 	}
 	h.storageHost.config.MaxReviseBatchSize = val
-	return nil
-}
-
-// setWindowSize set host WindowSize to value
-func (h *HostPrivateAPI) setWindowSize(str string) error {
-	val, err := unit.ParseTime(str)
-	if err != nil {
-		return fmt.Errorf("invalid time duration string: %v", err)
-	}
-	h.storageHost.config.WindowSize = val
 	return nil
 }
 

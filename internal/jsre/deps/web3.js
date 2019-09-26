@@ -5588,142 +5588,6 @@ module.exports = Net;
 
 },{"../../utils/utils":20,"../property":45}],
 
-    200: [function(require,module,exports){
-
-        "use strict";
-
-        var Method = require('../method');
-        var Property = require('../property');
-
-        function sclient(web3){
-            this._requestManager = web3._requestManager;
-
-            var self = this;
-
-            methods().forEach(function(method) {
-                method.attachToObject(self);
-                method.setRequestManager(self._requestManager);
-            });
-
-            properties().forEach(function(property){
-              property.attachToObject(self);
-              property.setRequestManager(self._requestManager);
-            });
-        }
-
-        var properties = function () {
-          return [
-              new Property({
-                  name: 'config',
-                  getter: 'sclient_config',
-              }),
-
-              new Property({
-                  name: 'host.ls',
-                  getter: 'sclient_hosts',
-              }),
-
-              new Property({
-                  name: 'host.rank',
-                  getter: 'sclient_hostRank',
-              }),
-
-              new Property({
-                 name: 'contracts',
-                 getter: 'sclient_contracts',
-              }),
-
-              new Property({
-                 name: 'paymentAddr',
-                 getter: 'sclient_paymentAddress'
-              }),
-
-              new Property({
-                  name: 'file.ls',
-                  getter: 'clientfiles_fileList'
-              }),
-
-              new Property({
-                  name: 'periodCost',
-                  getter: 'sclient_periodCost'
-              })
-          ];
-        }
-
-        var methods = function () {
-
-            var host = new Method({
-                name: 'host.info',
-                call: 'sclient_host',
-                params: 1,
-            });
-
-            var contract = new Method({
-                name: 'contract',
-                call: 'sclient_contract',
-                params: 1,
-            });
-
-            var setconfig = new Method({
-                name: 'setConfig',
-                call: 'sclient_setConfig',
-                params: 1,
-            });
-
-            var setPaymentAddress = new Method({
-                name: 'setPaymentAddr',
-                call: 'sclient_setPaymentAddress',
-                params: 1,
-            });
-
-
-            var upload = new Method({
-                name: 'upload',
-                call: 'sclient_upload',
-                params: 2,
-            });
-
-            var download = new Method({
-                name: 'download',
-                call: 'sclient_downloadSync',
-                params: 2,
-            });
-
-            var fileInfo = new Method({
-                name: 'file.info',
-                call: 'clientfiles_detailedFileInfo',
-                params: 1,
-            });
-
-            var rename = new Method({
-                name: 'file.rename',
-                call: 'clientfiles_rename',
-                params: 2,
-            });
-
-            var deletion = new Method({
-                name: 'file.delete',
-                call: 'clientfiles_delete',
-                params: 1,
-            });
-
-
-            return [
-                host,
-                contract,
-                setconfig,
-                download,
-                upload,
-                setPaymentAddress,
-                fileInfo,
-                rename,
-                deletion,
-            ];
-        };
-
-        module.exports = sclient;
-    }, {"../method":36, "../property":45}],
-
     40:[function(require,module,exports){
 /*
     This file is part of web3.js.
@@ -13775,6 +13639,147 @@ module.exports = Web3;
 
 },{"./lib/web3":22}],
 
+  200: [function(require,module,exports){
+
+    "use strict";
+
+    var Method = require('../method');
+    var Property = require('../property');
+
+    function sclient(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(property){
+        property.attachToObject(self);
+        property.setRequestManager(self._requestManager);
+      });
+    }
+
+    var properties = function () {
+      return [
+        new Property({
+          name: 'config',
+          getter: 'sclient_config',
+        }),
+
+        new Property({
+          name: 'host.ls',
+          getter: 'sclient_hosts',
+        }),
+
+        new Property({
+          name: 'host.rank',
+          getter: 'sclient_hostRank',
+        }),
+
+        new Property({
+          name: 'contracts',
+          getter: 'sclient_contracts',
+        }),
+
+        new Property({
+          name: 'paymentAddr',
+          getter: 'sclient_paymentAddress'
+        }),
+
+        new Property({
+          name: 'file.ls',
+          getter: 'clientfiles_fileList'
+        }),
+
+        new Property({
+          name: 'periodCost',
+          getter: 'sclient_periodCost'
+        }),
+
+        new Property({
+          name: 'renewWindow',
+          getter: 'sclient_getRenewWindow'
+        })
+      ];
+    }
+
+    var methods = function () {
+
+      var host = new Method({
+        name: 'host.info',
+        call: 'sclient_host',
+        params: 1,
+      });
+
+      var contract = new Method({
+        name: 'contract',
+        call: 'sclient_contract',
+        params: 1,
+      });
+
+      var setconfig = new Method({
+        name: 'setConfig',
+        call: 'sclient_setConfig',
+        params: 1,
+      });
+
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddr',
+        call: 'sclient_setPaymentAddress',
+        params: 1,
+      });
+
+
+      var upload = new Method({
+        name: 'upload',
+        call: 'sclient_upload',
+        params: 2,
+      });
+
+      var download = new Method({
+        name: 'download',
+        call: 'sclient_downloadSync',
+        params: 2,
+      });
+
+      var fileInfo = new Method({
+        name: 'file.info',
+        call: 'clientfiles_detailedFileInfo',
+        params: 1,
+      });
+
+      var rename = new Method({
+        name: 'file.rename',
+        call: 'clientfiles_rename',
+        params: 2,
+      });
+
+      var deletion = new Method({
+        name: 'file.delete',
+        call: 'clientfiles_delete',
+        params: 1,
+      });
+
+
+      return [
+        host,
+        contract,
+        setconfig,
+        download,
+        upload,
+        setPaymentAddress,
+        fileInfo,
+        rename,
+        deletion,
+      ];
+    };
+
+    module.exports = sclient;
+  }, {"../method":36, "../property":45}],
+
   213: [function(require,module,exports) {
     "use strict";
 
@@ -13865,7 +13870,12 @@ module.exports = Web3;
         new Property({
             name: 'paymentAddr',
             getter: 'shost_getPaymentAddress',
-        })
+        }),
+
+        new Property({
+            name: 'proofWindow',
+            getter: 'shost_getProofWindow',
+        }),
 
     ];
     }

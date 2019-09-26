@@ -49,7 +49,7 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 
 		// for contract that is about to expire, it will be added to the priorityRenews
 		// calculate the renewCostEstimation and update the priorityRenews
-		if currentBlockHeight+rentPayment.RenewWindow >= contract.EndHeight {
+		if currentBlockHeight+storage.RenewWindow >= contract.EndHeight {
 			estimateContractRenewCost := cm.renewCostEstimation(host, contract, currentBlockHeight, rentPayment)
 			closeToExpireRenews = append(closeToExpireRenews, contractRenewRecord{
 				id:   contract.ID,
@@ -66,7 +66,8 @@ func (cm *ContractManager) checkForContractRenew(rentPayment storage.RentPayment
 		totalSectorCost := sectorUploadBandwidthCost.Add(sectorDownloadBandwidthCost).Add(sectorStorageCost)
 		remainingBalancePercentage := contract.ContractBalance.DivWithFloatResult(contract.TotalCost)
 
-		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(3)) < 0 || remainingBalancePercentage < minContractPaymentRenewalThreshold {
+		if contract.ContractBalance.Cmp(totalSectorCost.MultUint64(minContractSectorRenewThreshold)) < 0 ||
+			remainingBalancePercentage < minContractPaymentRenewalThreshold {
 			insufficientFundingRenews = append(insufficientFundingRenews, contractRenewRecord{
 				id:   contract.ID,
 				cost: contract.TotalCost.MultUint64(2),
@@ -114,7 +115,7 @@ func (cm *ContractManager) prepareContractRenew(renewRecords []contractRenewReco
 	// get the data needed
 	cm.lock.RLock()
 	currentPeriod := cm.currentPeriod
-	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
+	contractEndHeight := cm.currentPeriod + rentPayment.Period + storage.RenewWindow
 	cm.lock.RUnlock()
 
 	// initialize remaining fund first
@@ -354,7 +355,7 @@ func (cm *ContractManager) handleRenewFailed(failedContract *contractset.Contrac
 	blockHeight := cm.blockHeight
 	cm.lock.RUnlock()
 
-	secondHalfRenewWindow := blockHeight+rentPayment.RenewWindow/2 >= failedContract.Metadata().EndHeight
+	secondHalfRenewWindow := blockHeight+storage.RenewWindow/2 >= failedContract.Metadata().EndHeight
 	contractReplace := numFailed >= consecutiveRenewFailsBeforeReplacement
 
 	// if the contract has been failed before, passed the second half renew window, and need replacement

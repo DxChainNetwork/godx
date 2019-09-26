@@ -12,6 +12,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
@@ -63,12 +64,11 @@ func createNewContractManager() (cm *ContractManager, err error) {
 var testRentPayment = storage.RentPayment{
 	Fund:         common.NewBigIntUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615),
 	StorageHosts: 50,
-	Period:       3 * storage.BlocksPerMonth,
-	RenewWindow:  storage.BlocksPerMonth,
+	Period:       3 * unit.BlocksPerMonth,
 
-	ExpectedStorage:    1e12,                                   // 1 TB
-	ExpectedUpload:     uint64(200e9) / storage.BlocksPerMonth, // 200 GB per month
-	ExpectedDownload:   uint64(100e9) / storage.BlocksPerMonth, // 100 GB per month
+	ExpectedStorage:    1e12,                                // 1 TB
+	ExpectedUpload:     uint64(200e9) / unit.BlocksPerMonth, // 200 GB per month
+	ExpectedDownload:   uint64(100e9) / unit.BlocksPerMonth, // 100 GB per month
 	ExpectedRedundancy: 3.0,
 }
 

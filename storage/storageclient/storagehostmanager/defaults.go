@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // StorageHostManager related constant
@@ -21,7 +22,7 @@ const (
 // Scan related constants
 const (
 	scanOnlineCheckDuration = 30 * time.Second
-	scanCheckDuration       = time.Second
+	scanCheckDuration       = 200 * time.Millisecond
 	scanQuantity            = 2500
 	maxScanSleep            = 6 * time.Hour
 	minScanSleep            = time.Hour + time.Minute*30
@@ -137,3 +138,25 @@ const (
 	// parameter, the slower the criteria function approaching asymptote y = 1.
 	critRemoveBase = unit.BlocksPerDay * 3
 )
+
+// host market related constants
+const (
+	// priceUpdateInterval is the time to be passed before the host market price shall be
+	// updated.
+	priceUpdateInterval = 1 * time.Minute
+
+	// floorRatio is the ratio below which the price does not count for the average
+	floorRatio float64 = 0.2
+
+	// ceilRatio is the ratio of total where the highest price does not count for the average
+	ceilRatio float64 = 0.2
+)
+
+var defaultMarketPrice = storage.MarketPrice{
+	ContractPrice: storage.DefaultContractPrice,
+	StoragePrice:  storage.DefaultStoragePrice,
+	UploadPrice:   storage.DefaultUploadBandwidthPrice,
+	DownloadPrice: storage.DefaultDownloadBandwidthPrice,
+	Deposit:       storage.DefaultDeposit,
+	MaxDeposit:    storage.DefaultMaxDeposit,
+}
