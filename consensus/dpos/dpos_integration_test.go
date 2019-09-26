@@ -238,7 +238,7 @@ func executeTestAddCandidate(tec *testEpochContext, addr common.Address) error {
 		prevDeposit, prevRewardRatio = prevCandidateRecord.deposit, prevCandidateRecord.rewardRatio
 		prevVotes = prevCandidateRecord.votes
 	}
-	newDeposit := prevDeposit.Add(getAvailableBalance(tec.stateDB, addr).DivUint64(10))
+	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.stateDB, addr).DivUint64(10))
 	newRewardRatio := (RewardRatioDenominator-prevRewardRatio)/4 + prevRewardRatio
 	// Process Add candidate
 	if err := ProcessAddCandidate(tec.stateDB, tec.ctx, addr, newDeposit, newRewardRatio); err != nil {
@@ -272,7 +272,7 @@ func executeTestVoteIncreaseDeposit(tec *testEpochContext, addr common.Address) 
 		prevDeposit = prevVoteRecord.deposit
 	}
 	// Create the params for the new vote transaction.
-	newDeposit := prevDeposit.Add(getAvailableBalance(tec.stateDB, addr).DivUint64(100))
+	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, 30)
 	if _, err := ProcessVote(tec.stateDB, tec.ctx, addr, newDeposit, votes, tec.curTime); err != nil {
 		return err
@@ -403,7 +403,7 @@ func (tec *testEpochContext) checkFrozenAssetsConsistency() error {
 func (tec *testEpochContext) checkBalanceConsistency() error {
 	for addr := range tec.ec.userRecords {
 		expectedBalance := tec.ec.getExpectedBalance(addr)
-		gotBalance := getBalance(tec.stateDB, addr)
+		gotBalance := GetBalance(tec.stateDB, addr)
 		if expectedBalance.Cmp(gotBalance) != 0 {
 			return fmt.Errorf("balance not expected. %x: expect %v; got %v", addr, expectedBalance, gotBalance)
 		}
@@ -492,11 +492,11 @@ func (ec *expectContext) checkCandidateRecord(stateDB *state.StateDB, ctx *types
 
 // checkEmptyCandidate checks in stateDB and ctx whether the addr is an empty candidate
 func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
-	candidateDeposit := getCandidateDeposit(stateDB, addr)
+	candidateDeposit := GetCandidateDeposit(stateDB, addr)
 	if candidateDeposit.Cmp(common.BigInt0) != 0 {
 		return fmt.Errorf("non candidate address %x have non-zero candidate deposit %v", addr, candidateDeposit)
 	}
-	rewardRatio := getRewardRatioNumerator(stateDB, addr)
+	rewardRatio := GetRewardRatioNumerator(stateDB, addr)
 	if rewardRatio != 0 {
 		return fmt.Errorf("non candidate address %x have non-zero reward ratio %v", addr, rewardRatio)
 	}
@@ -520,12 +520,12 @@ func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr co
 func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address,
 	record candidateRecord) error {
 
-	candidateDeposit := getCandidateDeposit(stateDB, addr)
+	candidateDeposit := GetCandidateDeposit(stateDB, addr)
 	if candidateDeposit.Cmp(record.deposit) != 0 {
 		return fmt.Errorf("candidate %x does not have expected deposit. Got %v, Expect %v", addr,
 			candidateDeposit, record.deposit)
 	}
-	rewardRatio := getRewardRatioNumerator(stateDB, addr)
+	rewardRatio := GetRewardRatioNumerator(stateDB, addr)
 	if rewardRatio != record.rewardRatio {
 		return fmt.Errorf("candidate %x does not have expected reward ratio. Got %v, Expect %v", addr,
 			rewardRatio, record.rewardRatio)
@@ -551,7 +551,7 @@ func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 
 func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx *types.DposContext, addr common.Address) error {
 	record := ec.candidateRecordsLastEpoch[addr]
-	gotRewardRatio := getRewardRatioNumeratorLastEpoch(state, addr)
+	gotRewardRatio := GetRewardRatioNumeratorLastEpoch(state, addr)
 	if gotRewardRatio != record.rewardRatio {
 		return fmt.Errorf("candidate %x last epoch reward ratio not expected. Got %v, Expect %v", addr, gotRewardRatio, record.rewardRatio)
 	}
@@ -560,7 +560,7 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(state *state.StateDB, ctx
 	for delegator := range record.votes {
 		expectTotalVotes = expectTotalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
 	}
-	gotTotalVotes := getTotalVote(state, addr)
+	gotTotalVotes := GetTotalVote(state, addr)
 	if expectTotalVotes.Cmp(gotTotalVotes) != 0 {
 		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
 	}
@@ -583,7 +583,7 @@ func checkEmptyDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr co
 		return fmt.Errorf("empty delegator %x should not be in vote trie", addr)
 	}
 	// check delegator deposit
-	gotDeposit := getVoteDeposit(stateDB, addr)
+	gotDeposit := GetVoteDeposit(stateDB, addr)
 	if gotDeposit.Cmp(common.BigInt0) != 0 {
 		return fmt.Errorf("empty delegator %x should have deposit 0, but got %v", addr, gotDeposit)
 	}
@@ -617,7 +617,7 @@ func checkDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 
 func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
 	record := ec.delegatorRecordsLastEpoch[addr]
-	gotDeposit := getVoteLastEpoch(stateDB, addr)
+	gotDeposit := GetVoteLastEpoch(stateDB, addr)
 	if gotDeposit.Cmp(record.deposit) != 0 {
 		return fmt.Errorf("delegator %x last epoch deposit: expect %v, got %v", addr, gotDeposit, record.deposit)
 	}
