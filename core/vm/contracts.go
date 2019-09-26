@@ -58,6 +58,20 @@ const (
 	CancelVote = "CancelVote"
 )
 
+var (
+	// ApplyCandidateContractAddress is pre-compiled apply candidate contract address
+	ApplyCandidateContractAddress = common.BytesToAddress([]byte{13})
+
+	// CancelCandidateContractAddress is pre-compiled cancel candidate contract address
+	CancelCandidateContractAddress = common.BytesToAddress([]byte{14})
+
+	// VoteContractAddress is pre-compiled vote contract address
+	VoteContractAddress = common.BytesToAddress([]byte{15})
+
+	// CancelVoteContractAddress is pre-compiled cancel vote contract address
+	CancelVoteContractAddress = common.BytesToAddress([]byte{16})
+)
+
 // PrecompiledStorageContracts currently contains the transaction types required for four storage contracts
 var PrecompiledStorageContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
@@ -68,10 +82,10 @@ var PrecompiledStorageContracts = map[common.Address]string{
 
 // PrecompiledDPoSContracts contains some tx types required for DPoS consensus
 var PrecompiledDPoSContracts = map[common.Address]string{
-	common.BytesToAddress([]byte{13}): ApplyCandidate,
-	common.BytesToAddress([]byte{14}): CancelCandidate,
-	common.BytesToAddress([]byte{15}): Vote,
-	common.BytesToAddress([]byte{16}): CancelVote,
+	ApplyCandidateContractAddress:  ApplyCandidate,
+	CancelCandidateContractAddress: CancelCandidate,
+	VoteContractAddress:            Vote,
+	CancelVoteContractAddress:      CancelVote,
 }
 
 type PrecompiledContract interface {

@@ -7,7 +7,6 @@ package dpos
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"testing"
 	"time"
@@ -77,34 +76,47 @@ func TestUpdateMinedCnt(t *testing.T) {
 }
 
 func TestAccumulateRewards(t *testing.T) {
-	var (
-		delegator = common.HexToAddress("0xaaa")
-	)
-
+	delegator := common.HexToAddress("0xaaa")
 	db := ethdb.NewMemDatabase()
-	dposContext, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
+	dposCtx, candidates, err := mockDposContext(db, time.Now().Unix(), delegator)
 	if err != nil {
 		t.Fatalf("failed to mock dpos context,error: %v", err)
 	}
+
+	_, err = dposCtx.Commit()
+	assert.Nil(t, err)
 
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db))
 
 	// set vote deposit and weight ratio for delegator
 	validator := candidates[1]
-	stateDB.SetState(delegator, KeyVoteDeposit, common.BigToHash(big.NewInt(100000)))
-
-	bits := math.Float64bits(0.5)
-	fbytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(fbytes, bits)
-	stateDB.SetState(delegator, KeyVoteWeight, common.BytesToHash(fbytes))
+	SetVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
 
 	// set validator reward ratio
-	var rewardRatioNumerator uint8 = 50
-	stateDB.SetState(validator, KeyRewardRatioNumerator, common.BytesToHash([]byte{rewardRatioNumerator}))
+	var rewardRatioNumerator uint64 = 50
+	SetRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
 
 	// set the total vote weight for validator
-	stateDB.SetState(validator, KeyTotalVote, common.BigToHash(new(big.Int).SetInt64(100000*0.5)))
+	SetTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
+
 	stateDbCopy := stateDB.Copy()
+
+	dposEng := &Dpos{
+		db: db,
+	}
+
+	testChain := testChainReader{
+		headers: make(map[uint64]*testHeader, 0),
+	}
+
+	for i := uint64(0); i < ConsensusSize; i++ {
+		hash := common.BigToHash(new(big.Int).SetUint64(i))
+		if i == 0 {
+			testChain.insertGenesis(hash, uint64(10*i+1000), dposCtx)
+			continue
+		}
+		testChain.insert(hash, i, uint64(10*i+1000), dposEng, dposCtx)
+	}
 
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
@@ -112,7 +124,7 @@ func TestAccumulateRewards(t *testing.T) {
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
-	accumulateRewards(params.MainnetChainConfig, stateDB, header, dposContext)
+	accumulateRewards(params.MainnetChainConfig, stateDB, header, db, testChain.GetHeaderByNumber(0))
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
 	validatorBalance := stateDB.GetBalance(validator)
@@ -127,7 +139,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// mock block sync
 	headerCopy := header
-	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, dposContext)
+	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, db, testChain.GetHeaderByNumber(0))
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
 	if header.Root != headerCopy.Root {
@@ -253,10 +265,10 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 					for i := uint64(0); i < ConsensusSize; i++ {
 						hash := common.BigToHash(new(big.Int).SetUint64(i))
 						if i == 0 {
-							testChain.insertGenesis(hash, uint64(10*i+1000))
+							testChain.insertGenesis(hash, uint64(10*i+1000), nil)
 							continue
 						}
-						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng, nil)
 						if err != nil {
 							return 0, err
 						}
@@ -281,10 +293,10 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 					for i := uint64(0); i < MaxValidatorSize+5; i++ {
 						hash := common.BigToHash(new(big.Int).SetUint64(i))
 						if i == 0 {
-							testChain.insertGenesis(hash, uint64(10*i+1000))
+							testChain.insertGenesis(hash, uint64(10*i+1000), nil)
 							continue
 						}
-						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng)
+						err := testChain.insert(hash, i, uint64(10*i+1000), dposEng, nil)
 						if err != nil {
 							return 0, err
 						}
@@ -292,7 +304,7 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 
 					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
 				},
-				wantConfirmedBlockNum: (MaxValidatorSize + 5) * 2 / 3,
+				wantConfirmedBlockNum: (MaxValidatorSize + 5) - ConsensusSize,
 			},
 		}
 	)
@@ -311,11 +323,12 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 }
 
 type testHeader struct {
-	hash      common.Hash
-	number    uint64
-	parent    *testHeader
-	time      uint64
-	validator common.Address
+	hash        common.Hash
+	number      uint64
+	parent      *testHeader
+	time        uint64
+	validator   common.Address
+	DposContext *types.DposContextRoot
 }
 
 type testChainReader struct {
@@ -373,10 +386,11 @@ func (test testChainReader) GetHeaderByNumber(number uint64) *types.Header {
 	}
 
 	return &types.Header{
-		ParentHash: parentHash,
-		Number:     new(big.Int).SetUint64(number),
-		Time:       new(big.Int).SetUint64(timeStamp),
-		Validator:  validator,
+		ParentHash:  parentHash,
+		Number:      new(big.Int).SetUint64(number),
+		Time:        new(big.Int).SetUint64(timeStamp),
+		Validator:   validator,
+		DposContext: test.headers[number].DposContext,
 	}
 }
 
@@ -385,13 +399,15 @@ func (test testChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
 		return nil
 	}
 
-	var parentHash common.Hash
+	parentHash := common.Hash{}
 	var number uint64
 	var timeStamp uint64
 	var validator common.Address
 	for _, header := range test.headers {
 		if header.hash == hash {
-			parentHash = header.parent.hash
+			if header.number != 0 {
+				parentHash = header.parent.hash
+			}
 			number = header.number
 			timeStamp = header.time
 			validator = header.validator
@@ -411,27 +427,37 @@ func (test testChainReader) GetBlock(hash common.Hash, number uint64) *types.Blo
 	return nil
 }
 
-func (test testChainReader) insertGenesis(hash common.Hash, time uint64) {
+func (test testChainReader) insertGenesis(hash common.Hash, time uint64, dposCtx *types.DposContext) {
+	var dposCtxRoot *types.DposContextRoot
+	if dposCtx != nil {
+		dposCtxRoot = dposCtx.ToRoot()
+	}
 	header := &testHeader{
-		hash:      hash,
-		number:    0,
-		parent:    nil,
-		time:      time,
-		validator: common.BigToAddress(new(big.Int).SetUint64(0)),
+		hash:        hash,
+		number:      0,
+		parent:      nil,
+		time:        time,
+		validator:   common.BigToAddress(new(big.Int).SetUint64(0)),
+		DposContext: dposCtxRoot,
 	}
 	test.headers[0] = header
 	test.currentHash = hash
 	test.currentNum = 0
 }
 
-func (test testChainReader) insert(hash common.Hash, number uint64, time uint64, dposEng *Dpos) error {
+func (test testChainReader) insert(hash common.Hash, number uint64, time uint64, dposEng *Dpos, dposCtx *types.DposContext) error {
 	parent := test.headers[number-1]
+	var dposCtxRoot *types.DposContextRoot
+	if dposCtx != nil {
+		dposCtxRoot = dposCtx.ToRoot()
+	}
 	header := &testHeader{
-		hash:      hash,
-		number:    number,
-		parent:    parent,
-		time:      time,
-		validator: common.BigToAddress(new(big.Int).SetUint64(number)),
+		hash:        hash,
+		number:      number,
+		parent:      parent,
+		time:        time,
+		validator:   common.BigToAddress(new(big.Int).SetUint64(number)),
+		DposContext: dposCtxRoot,
 	}
 
 	test.headers[number] = header
@@ -451,7 +477,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		return nil, nil, err
 	}
 
-	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidate as validator
+	// mock MaxValidatorSize+5 candidates, and the prev MaxValidatorSize candidates as validator
 	var candidates []common.Address
 	for i := 0; i < MaxValidatorSize+5; i++ {
 		str := fmt.Sprintf("%d", i+1)
@@ -459,7 +485,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 		candidates = append(candidates, addr)
 	}
 
-	// update candidate trie and delegate trie
+	// update candidates trie and delegate trie
 	for _, can := range candidates {
 		err = dposContext.CandidateTrie().TryUpdate(can.Bytes(), can.Bytes())
 		if err != nil {
@@ -532,7 +558,7 @@ func getMinedCnt(epochID int64, candidate common.Address, minedCntTrie *trie.Tri
 	cntBytes := minedCntTrie.Get(append(key, candidate.Bytes()...))
 	if cntBytes == nil {
 		return 0
-	} else {
-		return int64(binary.BigEndian.Uint64(cntBytes))
 	}
+
+	return int64(binary.BigEndian.Uint64(cntBytes))
 }

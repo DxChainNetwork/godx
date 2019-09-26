@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -397,7 +399,6 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 			return fmt.Errorf("failed to delete old votes from delegateTrie,err: %v", err)
 		}
 	}
-
 	// delete vote records from voteTrie
 	err = dc.voteTrie.TryDelete(delegator)
 	if err != nil {
@@ -521,7 +522,10 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 // GetMinedCnt get mined block count in the minedCntTrie
 func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
 	key := makeMinedCntKey(epoch, addr)
-	cntBytes := dc.minedCntTrie.Get(key)
+	cntBytes, err := dc.minedCntTrie.TryGet(key)
+	if err != nil || cntBytes == nil || len(cntBytes) < 8 {
+		return 0
+	}
 	cnt := int64(binary.BigEndian.Uint64(cntBytes))
 	return cnt
 }
@@ -545,4 +549,71 @@ func makeMinedCntKey(epoch int64, validatorAddr common.Address) []byte {
 	binary.BigEndian.PutUint64(key, uint64(epoch))
 	key = append(key, validatorAddr.Bytes()...)
 	return key
+}
+
+// DPOS related transaction data.
+type (
+	// AddCandidateTxData is the data field for AddCandidateTx
+	AddCandidateTxData struct {
+		Deposit     common.BigInt
+		RewardRatio uint64
+	}
+
+	// addCandidateTxRLPData is the rlp data structure used for rlp encoding/decoding for
+	// AddCandidateTx
+	addCandidateTxRLPData struct {
+		Deposit     *big.Int
+		RewardRatio uint64
+	}
+
+	// VoteTxData is the data field for VoteTx
+	VoteTxData struct {
+		Deposit    common.BigInt
+		Candidates []common.Address
+	}
+
+	// voteTxRLPData is the rlp data structure used for rlp encoding/decoding for
+	// VoteTxData
+	voteTxRLPData struct {
+		Deposit    *big.Int
+		Candidates []common.Address
+	}
+)
+
+// EncodeRLP defines the rlp encoding rule for AddCandidateTxData
+func (data *AddCandidateTxData) EncodeRLP(w io.Writer) error {
+	rlpData := addCandidateTxRLPData{
+		Deposit:     data.Deposit.BigIntPtr(),
+		RewardRatio: data.RewardRatio,
+	}
+	return rlp.Encode(w, rlpData)
+}
+
+// DecodeRLP defines the rlp decoding rule for AddCandidateTxData
+func (data *AddCandidateTxData) DecodeRLP(s *rlp.Stream) error {
+	var rlpData addCandidateTxRLPData
+	if err := s.Decode(&rlpData); err != nil {
+		return err
+	}
+	data.RewardRatio, data.Deposit = rlpData.RewardRatio, common.PtrBigInt(rlpData.Deposit)
+	return nil
+}
+
+// EncodeRLP defines the rlp encoding rule for VoteTxData
+func (data *VoteTxData) EncodeRLP(w io.Writer) error {
+	rlpData := voteTxRLPData{
+		Deposit:    data.Deposit.BigIntPtr(),
+		Candidates: data.Candidates,
+	}
+	return rlp.Encode(w, rlpData)
+}
+
+// DecodeRLP defines the rlp decoding rule for VoteTxData
+func (data *VoteTxData) DecodeRLP(s *rlp.Stream) error {
+	var rlpData voteTxRLPData
+	if err := s.Decode(&rlpData); err != nil {
+		return err
+	}
+	data.Deposit, data.Candidates = common.PtrBigInt(rlpData.Deposit), rlpData.Candidates
+	return nil
 }

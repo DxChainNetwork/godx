@@ -204,28 +204,6 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-
-	// retrieve the caller's candidate deposit and vote deposit
-	balance := evm.StateDB.GetBalance(caller.Address())
-	candidateDeposit := new(big.Int).SetInt64(0)
-	voteDeposit := new(big.Int).SetInt64(0)
-	candidateDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyCandidateDeposit)
-	if candidateDepositHash != (common.Hash{}) {
-		candidateDeposit = candidateDepositHash.Big()
-	}
-
-	voteDepositHash := evm.StateDB.GetState(caller.Address(), dpos.KeyVoteDeposit)
-	if voteDepositHash != (common.Hash{}) {
-		voteDeposit = voteDepositHash.Big()
-	}
-
-	// if caller has candidate deposit or vote deposit, check whether left balance enough the transfer value
-	allowedBal := new(big.Int).Sub(balance, candidateDeposit)
-	allowedBal.Sub(allowedBal, voteDeposit)
-	if value.Cmp(allowedBal) > 0 {
-		return nil, gas, ErrFrozenAssetsCannotBeUsed
-	}
-
 	var (
 		to       = AccountRef(addr)
 		snapshot = evm.StateDB.Snapshot()
@@ -537,11 +515,11 @@ func (evm *EVM) ApplyDposTransaction(txType string, dposContext *types.DposConte
 
 	switch txType {
 	case ApplyCandidate:
-		return evm.CandidateTx(from, data, gas, value, dposContext)
+		return evm.CandidateTx(from, data, gas, dposContext)
 	case CancelCandidate:
 		return evm.CandidateCancelTx(from, gas, dposContext)
 	case Vote:
-		return evm.VoteTx(from, dposContext, data, gas, value)
+		return evm.VoteTx(from, dposContext, data, gas)
 	case CancelVote:
 		return evm.CancelVoteTx(from, dposContext, gas)
 	default:
@@ -791,17 +769,22 @@ func Uint64ToBytes(i uint64) []byte {
 }
 
 // CandidateTx campaign becomes a candidate and pledges part of the assets.
-func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, value *big.Int, dposContext *types.DposContext) ([]byte, uint64, error) {
+func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
 	log.Trace("Enter candidate tx executing ... ")
+	var voteData *types.AddCandidateTxData
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &voteData)
+	errDec, _ := resultDec[0].(error)
+	if errDec != nil {
+		return nil, gasRemainDec, errDec
+	}
 	// Add candidate in dpos
-	rewardRatio := binary.BigEndian.Uint64(data)
-	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, common.PtrBigInt(value), rewardRatio); err != nil {
-		return nil, gas, err
+	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, voteData.Deposit, voteData.RewardRatio); err != nil {
+		return nil, gasRemainDec, err
 	}
 	// defines that dposCtx.BecomeCandidate and SetState all cost params.SstoreSetGas
-	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*3)
+	ok, gasRemain := DeductGas(gasRemainDec, params.SstoreSetGas*3)
 	if !ok {
-		return nil, gas, ErrOutOfGas
+		return nil, gasRemainDec, ErrOutOfGas
 	}
 
 	log.Trace("Candidate tx execution done")
@@ -814,7 +797,7 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 	if err := dpos.ProcessCancelCandidate(evm.StateDB, dposContext, caller, evm.Time.Int64()); err != nil {
 		return nil, gas, err
 	}
-	// defines that dposCtx.KickoutCandidate and MarkThawingAddress all cost params.SstoreSetGas
+	// defines that dposCtx.KickoutCandidate and markThawingAddress all cost params.SstoreSetGas
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
 	if !ok {
 		return nil, gas, ErrOutOfGas
@@ -824,15 +807,15 @@ func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext
 }
 
 // VoteTx handles a new vote to some candidates that will remove last vote records
-func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64, value *big.Int) ([]byte, uint64, error) {
+func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data []byte, gas uint64) ([]byte, uint64, error) {
 	log.Trace("Enter vote tx executing ... ")
-	var candidateList []common.Address
-	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &candidateList)
+	var voteData *types.VoteTxData
+	gasRemainDec, resultDec := RemainGas(gas, rlp.DecodeBytes, data, &voteData)
 	errDec, _ := resultDec[0].(error)
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
-	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, common.PtrBigInt(value), candidateList, evm.Time.Int64())
+	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, voteData.Deposit, voteData.Candidates, evm.Time.Int64())
 	if err != nil {
 		return nil, gasRemainDec, err
 	}

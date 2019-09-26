@@ -5,31 +5,43 @@
 package dpos
 
 import (
-	"math"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/trie"
 )
 
 // ProcessVote process the process request for state and dpos context
 func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
 	candidates []common.Address, time int64) (int, error) {
-	prevDeposit := getVoteDeposit(state, addr)
-	// If previously voted, cannot vote again
-	if prevDeposit.Cmp(common.BigInt0) != 0 {
-		return 0, ErrAlreadyVote
+
+	// Validation: voting with 0 deposit is not allowed
+	if err := checkValidVote(state, addr, deposit, candidates); err != nil {
+		return 0, err
 	}
 	// Vote the candidates
 	successVote, err := ctx.Vote(addr, candidates)
 	if err != nil {
 		return 0, err
 	}
+	// Compare the new deposit with the previous deposit. Different strategy is applied for
+	// different condition. Note if previous deposit is the same as the new deposit, no frozen
+	// or thawing fields need to be updated
+	prevDeposit := GetVoteDeposit(state, addr)
+	if deposit.Cmp(prevDeposit) < 0 {
+		// If new deposit is smaller than previous deposit, the diff will be thawed after
+		// ThawingEpochDuration
+		diff := prevDeposit.Sub(deposit)
+		epoch := CalculateEpochID(time)
+		markThawingAddressAndValue(state, addr, epoch, diff)
+	} else if deposit.Cmp(prevDeposit) > 0 {
+		// If the new deposit is larger than previous deposit, the diff will be added directly
+		// to the frozenAssets
+		diff := deposit.Sub(prevDeposit)
+		AddFrozenAssets(state, addr, diff)
+	}
 	// Update vote deposit
-	setVoteDeposit(state, addr, deposit)
-	setLastVoteTime(state, addr, time)
-	// Calculate and apply the vote weight
-	weight := calcVoteWeightForDelegator(state, addr, time)
-	setVoteWeight(state, addr, weight)
+	SetVoteDeposit(state, addr, deposit)
 
 	return successVote, nil
 }
@@ -39,44 +51,55 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	if err := ctx.CancelVote(addr); err != nil {
 		return err
 	}
+	prevDeposit := GetVoteDeposit(state, addr)
 	currentEpoch := CalculateEpochID(time)
-	MarkThawingAddress(state, addr, currentEpoch, PrefixVoteThawing)
+	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
+	SetVoteDeposit(state, addr, common.BigInt0)
 	return nil
 }
 
-// calcVoteWeightForDelegator calculate the vote weight by address
-func calcVoteWeightForDelegator(state stateDB, delegatorAddr common.Address, curTime int64) float64 {
-	timeLastVote := getLastVoteTime(state, delegatorAddr)
-	return calcVoteWeight(timeLastVote, curTime)
+// VoteTxDepositValidation will validate the vote transaction before sending it
+func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
+	return checkValidVote(state, delegatorAddress, voteData.Deposit, voteData.Candidates)
 }
 
-// calcVoteWeight calculate the the vote weight. The vote weight decays at a rate of AttenuationRatioPerEpoch
-// per epoch
-func calcVoteWeight(timeLastVote, curTime int64) float64 {
-	lastVoteEpoch := CalculateEpochID(timeLastVote)
-	currentEpoch := CalculateEpochID(curTime)
-	// Calculate the decay
-	epochPassed := currentEpoch - lastVoteEpoch
-	if epochPassed <= 0 {
-		return 1
+// HasVoted will check whether the provided delegator address is voted
+func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
+	// re-construct trieDB and get the voteTrie
+	trieDb := trie.NewDatabase(diskDB)
+	voteTrie, err := types.NewVoteTrie(header.DposContext.VoteRoot, trieDb)
+	if err != nil {
+		return false
 	}
-	weight := math.Pow(AttenuationRatioPerEpoch, float64(epochPassed))
-	if weight < MinVoteWeightRatio {
-		weight = MinVoteWeightRatio
+
+	// check if the delegator has voted
+	if value, err := voteTrie.TryGet(delegatorAddress.Bytes()); err != nil || value == nil {
+		return false
 	}
-	return weight
+
+	// otherwise, means the delegator has voted
+	return true
 }
 
-// getVoteWithWeight get the vote after applying the voteWeight for a delegator addr
-func getVoteWithWeight(state stateDB, delegatorAddr common.Address) common.BigInt {
-	// get the vote deposit
-	voteDeposit := getVoteDeposit(state, delegatorAddr)
-	// get the voteWeight
-	voteWeight := getVoteWeight(state, delegatorAddr)
-	if voteWeight == 0 {
-		return common.BigInt0
+// checkValidVote checks whether the input argument is valid for a vote transaction
+func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.BigInt, candidates []common.Address) error {
+	if deposit.Cmp(common.BigInt0) <= 0 {
+		return errVoteZeroOrNegativeDeposit
 	}
-	// apply vote weight and return the actual vote deposit
-	weightedVote := voteDeposit.MultFloat64(voteWeight)
-	return weightedVote
+	if len(candidates) == 0 {
+		return errVoteZeroCandidates
+	}
+	if len(candidates) > MaxVoteCount {
+		return errVoteTooManyCandidates
+	}
+	// The delegator should have enough balance for vote if he want to increase the deposit
+	prevVoteDeposit := GetVoteDeposit(state, delegatorAddr)
+	if deposit.Cmp(prevVoteDeposit) > 0 {
+		availableBalance := GetAvailableBalance(state, delegatorAddr)
+		diff := deposit.Sub(prevVoteDeposit)
+		if availableBalance.Cmp(diff) < 0 {
+			return errVoteInsufficientBalance
+		}
+	}
+	return nil
 }

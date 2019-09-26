@@ -50,7 +50,7 @@ type DposConfig struct {
 
 type ValidatorConfig struct {
 	Deposit     common.BigInt `json:"deposit" gencodec:"required"`
-	RewardRatio uint8         `json:"rewardRatio"`
+	RewardRatio uint64        `json:"rewardRatio"`
 }
 
 func DefaultDposConfig() *DposConfig {
@@ -74,7 +74,7 @@ func (d *DposConfig) String() string {
 func (vc ValidatorConfig) MarshalJSON() ([]byte, error) {
 	type ValidatorConfig struct {
 		Deposit     *math.HexOrDecimal256 `json:"deposit" gencodec:"required"`
-		RewardRatio uint8                 `json:"rewardRatio"`
+		RewardRatio uint64                `json:"rewardRatio"`
 	}
 	var enc ValidatorConfig
 	enc.Deposit = (*math.HexOrDecimal256)(vc.Deposit.BigIntPtr())
@@ -85,7 +85,7 @@ func (vc ValidatorConfig) MarshalJSON() ([]byte, error) {
 func (vc *ValidatorConfig) UnmarshalJSON(input []byte) error {
 	type ValidatorConfig struct {
 		Deposit     *math.HexOrDecimal256 `json:"deposit" gencodec:"required"`
-		RewardRatio uint8                 `json:"rewardRatio"`
+		RewardRatio uint64                `json:"rewardRatio"`
 	}
 	var devc ValidatorConfig
 	if err := json.Unmarshal(input, &devc); err != nil {

@@ -60,7 +60,24 @@ func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Addres
 	return dposContext.GetValidators()
 }
 
-// GetCandidates will return the candidate list based on the block header provided
+// IsValidator checks if the given address is a validator address
+func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Address) error {
+	validators, err := GetValidators(diskdb, header)
+	if err != nil {
+		return err
+	}
+
+	// check if the address is the validator address
+	for _, validator := range validators {
+		if validator == addr {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("the given address %s is not a validator's address", addr.String())
+}
+
+// GetCandidates will return the candidates list based on the block header provided
 func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the candidateTrie
 	trieDb := trie.NewDatabase(diskdb)
@@ -76,26 +93,33 @@ func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Addres
 }
 
 // GetValidatorInfo will return the detailed validator information
-func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, diskdb ethdb.Database, header *types.Header) (common.BigInt, uint64, int64, error) {
-	votes := getTotalVote(stateDb, validatorAddress)
-	rewardDistribution := getCandidateRewardRatioNumerator(stateDb, validatorAddress)
+func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, diskdb ethdb.Database, header *types.Header) (common.BigInt, uint64, int64, int64, error) {
+	votes := GetTotalVote(stateDb, validatorAddress)
+	rewardRatio := GetRewardRatioNumeratorLastEpoch(stateDb, validatorAddress)
 	minedCount, err := getMinedBlocksCount(diskdb, header, validatorAddress)
+	epochID := CalculateEpochID(header.Time.Int64())
 	if err != nil {
-		return common.BigInt0, 0, 0, err
+		return common.BigInt0, 0, 0, 0, err
 	}
 
 	// return validator information
-	return votes, rewardDistribution, minedCount, nil
+	return votes, rewardRatio, minedCount, epochID, nil
 }
 
-// GetCandidateInfo will return the detailed candidate information
-func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address) (common.BigInt, common.BigInt, uint64) {
-	// get detailed candidate information
-	candidateDeposit := getCandidateDeposit(stateDb, candidateAddress)
-	candidateVotes := getTotalVote(stateDb, candidateAddress)
-	rewardDistribution := getCandidateRewardRatioNumerator(stateDb, candidateAddress)
+// GetCandidateInfo will return the detailed candidates information
+func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
+	// get detailed candidates information
+	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 
-	return candidateDeposit, candidateVotes, rewardDistribution
+	// get the candidateTrie
+	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
+	if err != nil {
+		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
+	}
+	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
+	rewardRatio := GetRewardRatioNumeratorLastEpoch(stateDb, candidateAddress)
+
+	return candidateDeposit, candidateVotes, rewardRatio, nil
 }
 
 // getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch

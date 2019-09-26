@@ -4,23 +4,9 @@
 
 package dpos
 
-import (
-	"errors"
-)
+import "github.com/DxChainNetwork/godx/consensus"
 
 var timeOfFirstBlock = int64(0)
-
-const (
-	// BlockInterval indicates that a block will be produced every 10 seconds
-	BlockInterval = int64(10)
-
-	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(86400)
-)
-
-var (
-	ErrInvalidMinedBlockTime = errors.New("invalid time to mined the block")
-)
 
 // expectedBlocksPerValidatorInEpoch return the expected number of blocks to be produced
 // for each validator in an epoch. The input timeFirstBlock and curTime is passed in to
@@ -44,20 +30,12 @@ func expectedBlocksInEpoch(timeFirstBlock int64, curTime int64) int64 {
 	return epochDuration / BlockInterval
 }
 
-// calcBlockEpochIDAndSlot calculate the block epoch ID and slot from the block time.
-// If invalid block time stamp, ErrInvalidMinedBlockTime is returned.
-func calcBlockEpochIDAndSlot(blockTime int64) (epoch, slot int64, err error) {
-	epoch = CalculateEpochID(blockTime)
-	slot, err = calcBlockSlot(blockTime)
-	return
-}
-
-// calcBlockSlot calculate the epoch ID and slot ID for the block time stamp.
-// If not a valid slot, ErrInvalidMinedBlockTime will be returned.
+// calcBlockSlot calculate slot ID for the block time stamp.
+// If not a valid slot, errInvalidMinedBlockTime will be returned.
 func calcBlockSlot(blockTime int64) (int64, error) {
 	offset := blockTime % EpochInterval
 	if offset%BlockInterval != 0 {
-		return 0, ErrInvalidMinedBlockTime
+		return 0, errInvalidMinedBlockTime
 	}
 
 	slot := offset / BlockInterval
@@ -67,4 +45,13 @@ func calcBlockSlot(blockTime int64) (int64, error) {
 // CalculateEpochID calculate the epoch ID given the block time
 func CalculateEpochID(blockTime int64) int64 {
 	return blockTime / EpochInterval
+}
+
+// updateTimeOfFirstBlockIfNecessary update the value of timeOfFirstBlock if the value is not assigned
+func updateTimeOfFirstBlockIfNecessary(chain consensus.ChainReader) {
+	if timeOfFirstBlock == 0 {
+		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
+			timeOfFirstBlock = firstBlockHeader.Time.Int64()
+		}
+	}
 }

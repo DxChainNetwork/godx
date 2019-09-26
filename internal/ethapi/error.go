@@ -9,7 +9,7 @@ import "errors"
 var (
 	// ErrBalanceNotEnoughCandidateThreshold is returned if the balance of caller is
 	// less than candidate threshold
-	ErrBalanceNotEnoughCandidateThreshold = errors.New("balance not enough candidate threshold")
+	ErrBalanceNotEnoughCandidateThreshold = errors.New("balance is not enough, failed to reach candidate deposit threshold")
 
 	// ErrDepositValueNotSuitable is returned if the specified value of transaction is
 	// not suitable to deposit

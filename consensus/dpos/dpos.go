@@ -41,76 +41,13 @@ const (
 	ModeFake
 )
 
-const (
-	extraVanity        = 32   // Fixed number of extra-data prefix bytes reserved for signer vanity
-	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
-	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
-
-	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 4
-
-	// SafeSize indicates that the least number of validators in dpos consensus
-	SafeSize = MaxValidatorSize*2/3 + 1
-
-	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
-	ConsensusSize = MaxValidatorSize*2/3 + 1
-
-	// RewardRatioDenominator is the max value of reward ratio
-	RewardRatioDenominator uint64 = 100
-)
-
 var (
-	// MinVoteWeightRatio is the minimum vote weight ration
-	MinVoteWeightRatio = 0.5
-
-	// AttenuationRatioPerEpoch is the ratio of attenuation per epoch
-	AttenuationRatioPerEpoch = 0.98
-
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
-
-	// PrefixCandidateThawing is the prefix thawing string of candidate thawing key
-	PrefixCandidateThawing = "candidate_"
-
-	// PrefixVoteThawing is the prefix thawing string of vote thawing key
-	PrefixVoteThawing = "vote_"
-
-	// EmptyHash is the empty hash for judgement of empty value
-	EmptyHash = common.Hash{}
-
-	frontierBlockReward       = common.NewBigIntUint64(5e+18) // Block reward in camel for successfully mining a block
-	byzantiumBlockReward      = common.NewBigIntUint64(3e+18) // Block reward in camel for successfully mining a block upward from Byzantium
-	constantinopleBlockReward = common.NewBigIntUint64(2e+18) // Block reward in camel for successfully mining a block upward from Constantinople
 
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
 
-var (
-	// errUnknownBlock is returned when the list of signers is requested for a block
-	// that is not part of the local blockchain.
-	errUnknownBlock = errors.New("unknown block")
-	// errMissingVanity is returned if a block's extra-data section is shorter than
-	// 32 bytes, which is required to store the signer vanity.
-	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
-	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a 65 byte secp256k1 signature.
-	errMissingSignature = errors.New("extra-data 65 byte suffix signature missing")
-	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
-	errInvalidMixDigest = errors.New("non-zero mix digest")
-	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
-	errInvalidUncleHash  = errors.New("non empty uncle hash")
-	errInvalidDifficulty = errors.New("invalid difficulty")
-
-	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
-	ErrInvalidTimestamp           = errors.New("invalid timestamp")
-	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
-	ErrMinedFutureBlock           = errors.New("mined the future block")
-	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
-	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-
-	ErrNilBlockHeader = errors.New("nil block header returned")
-)
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
 )
@@ -131,6 +68,7 @@ type Dpos struct {
 	Mode Mode
 }
 
+// SignerFn is the function for signature
 type SignerFn func(accounts.Account, []byte) ([]byte, error)
 
 // NOTE: sigHash was copy from clique
@@ -356,22 +294,19 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	}
 
 	curHeader := chain.CurrentHeader()
-	epoch := int64(-1)
+
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-		curEpoch := CalculateEpochID(curHeader.Time.Int64())
-		if curEpoch != epoch {
-			epoch = curEpoch
-			validatorMap = make(map[common.Address]bool)
-		}
+
 		// fast return
-		// if block number difference less consensusSize-witnessNum
+		// if block number difference less consensusSize-witnessNum,
 		// there is no need to check block is confirmed
 		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
 			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
 			return nil
 		}
+
 		validatorMap[curHeader.Validator] = true
 		if len(validatorMap) >= ConsensusSize {
 			d.confirmedBlockHeader = curHeader
@@ -381,6 +316,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 			log.Debug("Dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
 			return nil
 		}
+
 		curHeader = chain.GetHeaderByHash(curHeader.ParentHash)
 		if curHeader == nil {
 			return ErrNilBlockHeader
@@ -426,7 +362,7 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 }
 
 // accumulateRewards add the block award to Coinbase of validator
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, dposContext *types.DposContext) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db ethdb.Database, genesis *types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := frontierBlockReward
 	if config.IsByzantium(header.Number) {
@@ -435,33 +371,35 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsConstantinople(header.Number) {
 		blockReward = constantinopleBlockReward
 	}
-
 	// retrieve the total vote weight of header's validator
-	voteCount := getTotalVote(state, header.Validator)
+	voteCount := GetTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(header.Coinbase, blockReward.BigIntPtr())
 		return
 	}
-
-	// get ratio of reward between validator and its delegators
-	rewardRatioNumerator := getCandidateRewardRatioNumerator(state, header.Validator)
-	delegatorReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
+	// get ratio of reward between validator and its delegator
+	rewardRatioNumerator := GetRewardRatioNumeratorLastEpoch(state, header.Validator)
+	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
 
-	delegateTrie := dposContext.DelegateTrie()
+	// Loop over the delegators to add delegator rewards
+	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
+	if err != nil {
+		log.Error("couldn't get snapshot delegate trie, error:", err)
+		return
+	}
+
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
 	for delegatorIterator.Next() {
 		delegator := common.BytesToAddress(delegatorIterator.Value)
-
 		// get the votes of delegator to vote for delegate
-		realVoteWeight := getVoteWithWeight(state, delegator)
-
+		delegatorVote := GetVoteLastEpoch(state, delegator)
 		// calculate reward of each delegator due to it's vote(stake) percent
-		percentReward := realVoteWeight.Mult(delegatorReward).Div(voteCount)
-		state.AddBalance(delegator, percentReward.BigIntPtr())
-		assignedReward = assignedReward.Add(percentReward)
+		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
+		state.AddBalance(delegator, delegatorReward.BigIntPtr())
+		assignedReward = assignedReward.Add(delegatorReward)
 	}
-
 	// accumulate the rest rewards for the validator
 	validatorReward := blockReward.Sub(assignedReward)
 	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())
@@ -470,9 +408,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
+	// Accumulate block rewards and commit the final state root
+	genesis := chain.GetHeaderByNumber(0)
+	accumulateRewards(chain.Config(), state, header, d.db, genesis)
+
 	if d.Mode == ModeFake {
-		// Accumulate block rewards and commit the final state root
-		accumulateRewards(chain.Config(), state, header, dposContext)
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 		return types.NewBlock(header, txs, uncles, receipts), nil
 	}
@@ -483,14 +423,10 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 		DposContext: dposContext,
 		TimeStamp:   header.Time.Int64(),
 	}
-	if timeOfFirstBlock == 0 {
-		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
-			timeOfFirstBlock = firstBlockHeader.Time.Int64()
-		}
-	}
+	// update the value of timeOfFirstBlock if the value is 0
+	updateTimeOfFirstBlockIfNecessary(chain)
 
 	// try to elect, if current block is the first one in a new epoch, then elect new epoch
-	genesis := chain.GetHeaderByNumber(0)
 	err := epochContext.tryElect(genesis, parent)
 	if err != nil {
 		return nil, fmt.Errorf("got error when elect next epoch, err: %s", err)
@@ -502,9 +438,6 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 		return nil, err
 	}
 	header.DposContext = dposContext.ToRoot()
-
-	// Accumulate block rewards and commit the final state root
-	accumulateRewards(chain.Config(), state, header, dposContext)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	return types.NewBlock(header, txs, uncles, receipts), nil
@@ -603,6 +536,7 @@ func (d *Dpos) Authorize(signer common.Address, signFn SignerFn) {
 	d.mu.Unlock()
 }
 
+// APIs implemented Engine interface which includes DPOS API
 func (d *Dpos) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "dpos",
@@ -656,7 +590,6 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMinedCnt update counts in minedCntTrie for the miner of newBlock
-// TODO: fix this
 func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
 	currentMinedCntTrie := dposContext.MinedCntTrie()
 	currentEpoch := CalculateEpochID(parentBlockTime)
@@ -668,11 +601,9 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
 		iter := trie.NewIterator(currentMinedCntTrie.NodeIterator(currentEpochBytes))
-
 		// when current is not genesis, read last count from the MinedCntTrie
 		if iter.Next() {
 			cntBytes := currentMinedCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
-
 			// not the first time to mined
 			if cntBytes != nil {
 				cnt = int64(binary.BigEndian.Uint64(cntBytes)) + 1
@@ -685,4 +616,10 @@ func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Ad
 	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
 	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
 	return dposContext.MinedCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+}
+
+// getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
+func getPreEpochSnapshotDelegateTrie(db ethdb.Database, root common.Hash) (*trie.Trie, error) {
+	trieDb := trie.NewDatabase(db)
+	return types.NewDelegateTrie(root, trieDb)
 }

@@ -3683,6 +3683,14 @@ var outputBigNumberFormatter = function (number) {
     return utils.toBigNumber(number);
 };
 
+var outputBalanceFormatter = function (object) {
+    totalBalance = utils.toBigNumber(object.total_balance)
+    availableBalance = utils.toBigNumber(object.available_balance)
+    frozenAssets = utils.toBigNumber(object.frozen_assets)
+
+    return {TotalBalance:totalBalance, AvailableBalance: availableBalance, FrozenAssets: frozenAssets}
+};
+
 var isPredefinedBlockNumber = function (blockNumber) {
     return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest';
 };
@@ -3702,6 +3710,12 @@ var inputBlockNumberFormatter = function (blockNumber) {
     }
     return utils.toHex(blockNumber);
 };
+
+/*
+var inputAddressBlockNumberFormatter = function (address, blockNumber) {
+    return inputBlockNumberFormatter(blockNumber);
+};
+*/
 
 /**
  * Formats the input of a transaction and converts all values to HEX
@@ -3938,11 +3952,13 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    // inputAddressBlockNumberFormatter: inputAddressBlockNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
     inputPostFormatter: inputPostFormatter,
     outputBigNumberFormatter: outputBigNumberFormatter,
+    outputBalanceFormatter: outputBalanceFormatter,
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
@@ -5261,6 +5277,7 @@ var methods = function () {
         params: 2,
         inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
         // outputFormatter: formatters.outputBigNumberFormatter
+        outputFormatter: formatters.outputBalanceFormatter
     });
 
     var getStorageAt = new Method({

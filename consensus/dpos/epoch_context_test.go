@@ -5,17 +5,15 @@
 package dpos
 
 import (
-	"encoding/binary"
-	"math"
+	"fmt"
 	"math/big"
-	"strconv"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
 )
@@ -46,8 +44,8 @@ func TestLookupValidator(t *testing.T) {
 	}
 
 	_, err = mockEpochContext.lookupValidator(BlockInterval - 1)
-	if err != ErrInvalidMinedBlockTime {
-		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", ErrInvalidMinedBlockTime, err)
+	if err != errInvalidMinedBlockTime {
+		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", errInvalidMinedBlockTime, err)
 	}
 }
 
@@ -86,7 +84,7 @@ func Test_CountVotes(t *testing.T) {
 		addrBytes := addr.Bytes()
 		err := epochContext.DposContext.CandidateTrie().TryUpdate(addrBytes, addrBytes)
 		if err != nil {
-			t.Fatalf("Failed to update candidate,error: %v", err)
+			t.Fatalf("Failed to update candidates,error: %v", err)
 		}
 
 		for j := 0; j < len(addresses); j++ {
@@ -102,7 +100,7 @@ func Test_CountVotes(t *testing.T) {
 			t.Fatalf("Failed to commit mock dpos context,error: %v", err)
 		}
 
-		// set candidate deposit
+		// set candidates deposit
 		candidateDeposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
 		stateDB.SetState(addr, KeyCandidateDeposit, common.BytesToHash(candidateDeposit.Bytes()))
 
@@ -110,11 +108,6 @@ func Test_CountVotes(t *testing.T) {
 		voteDeposit := new(big.Int).SetInt64(int64(1e6 * (i + 1)))
 		stateDB.SetState(addr, KeyVoteDeposit, common.BytesToHash(voteDeposit.Bytes()))
 
-		ratio := float64(1.0)
-		bits := math.Float64bits(ratio)
-		ratioBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, KeyVoteWeight, common.BytesToHash(ratioBytes))
 		_, err = stateDB.Commit(false)
 		if err != nil {
 			t.Fatalf("Failed to commit state,error: %v", err)
@@ -129,90 +122,13 @@ func Test_CountVotes(t *testing.T) {
 
 	// check vote weight without attenuation
 	expectedVoteWeightWithoutAttenuation := int64(15e6)
-	for addr, weight := range votes {
+	for _, entry := range votes {
+		addr, weight := entry.addr, entry.vote
 		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
 		wantTotalVoteWeight := expectedVoteWeightWithoutAttenuation + candidateDeposit.Int64()
 		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight)) != 0 {
 			t.Errorf("%s wanted vote weight: %d,got %v", addr.String(), wantTotalVoteWeight, weight)
 		}
-	}
-
-	// set vote attenuation ratio
-	for i, addr := range addresses {
-		ratio := float64(i+1) / 10
-		bits := math.Float64bits(ratio)
-		ratioBytes := make([]byte, 8)
-		binary.BigEndian.PutUint64(ratioBytes, bits)
-		stateDB.SetState(addr, KeyVoteWeight, common.BytesToHash(ratioBytes))
-	}
-	votes, err = epochContext.countVotes()
-	if err != nil {
-		t.Errorf("Failed to count votes,error: %v", err)
-	}
-
-	// check vote weight with attenuation
-	expectedVoteWeightWithAttenuation := int64(5.5e6)
-	for addr, weight := range votes {
-		candidateDeposit := stateDB.GetState(addr, KeyCandidateDeposit).Big()
-		wantTotalVoteWeight := expectedVoteWeightWithAttenuation + candidateDeposit.Int64()
-		// TODO: Error happens during common.BigInt.MultFloat64: 3000000 * 0.3 = 899999.
-		//  Need to be fixed by mzhang
-		if weight.Cmp(common.NewBigInt(wantTotalVoteWeight).Sub(common.BigInt1)) != 0 {
-			t.Errorf("%s wanted vote weight: %d,got %v", addr.String(), wantTotalVoteWeight, weight)
-		}
-	}
-}
-
-func TestLuckyTurntable(t *testing.T) {
-
-	// test 1: candidates less than maxValidatorSize
-	// mock some vote proportion
-	voteProportions := make(sortableVoteProportions, 0)
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		voteProportion := sortableVoteProportion{
-			address:    common.HexToAddress("0x" + str),
-			proportion: float64(i+1) / 10,
-		}
-		voteProportions = append(voteProportions, &voteProportion)
-	}
-
-	// make random seed
-	blockHash := common.HexToAddress("0xb7c653791455fdb56fca714c0090c8dffa83a50c546b1dc4ab4dd73b91639b38")
-	epochID := int64(1001)
-	seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(blockHash.Bytes()))) + epochID
-	result := LuckyTurntable(voteProportions, seed)
-
-	// check result
-	if len(result) != MaxValidatorSize-1 {
-		t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize-1, len(result))
-	}
-
-	for i, addr := range result {
-		str := strconv.FormatUint(uint64(i+1), 10)
-		if addr != common.HexToAddress("0x"+str) {
-			t.Errorf("LuckyTurntable candidates with the number of maxValidatorSize - 1,want elected addr: %s,got: %s", common.HexToAddress("0x"+str).String(), addr.String())
-		}
-	}
-
-	// test 2: candidates more than maxValidatorSize
-	// add another maxValidatorSize-1 candidates
-	for i := 0; i < MaxValidatorSize-1; i++ {
-		str := strconv.FormatUint(uint64(i+MaxValidatorSize-1), 10)
-		voteProportion := sortableVoteProportion{
-			address:    common.HexToAddress("0x" + str),
-			proportion: float64(i+1) / 10,
-		}
-		voteProportions = append(voteProportions, &voteProportion)
-	}
-
-	for _, votePro := range voteProportions {
-		votePro.proportion /= 2
-	}
-
-	result = LuckyTurntable(voteProportions, seed)
-	if len(result) != MaxValidatorSize {
-		t.Errorf("candidates with the number of maxValidatorSize - 1,want result length: %d,got: %d", MaxValidatorSize, len(result))
 	}
 }
 
@@ -256,7 +172,7 @@ func Test_KickoutValidators(t *testing.T) {
 	for i := 0; i < MaxValidatorSize/3; i++ {
 		canFromTrie := epochContext.DposContext.CandidateTrie().Get(candidates[i].Bytes())
 		if canFromTrie != nil {
-			t.Errorf("failed to delete the kick out one from candidate trie: %s", candidates[i].String())
+			t.Errorf("failed to delete the kick out one from candidates trie: %s", candidates[i].String())
 		}
 
 		delegatorFromTrie := epochContext.DposContext.DelegateTrie().Get(append(candidates[i].Bytes(), delegator.Bytes()...))
@@ -281,86 +197,107 @@ func Test_KickoutValidators(t *testing.T) {
 	}
 }
 
-func TestMarkThawingAddress(t *testing.T) {
-	db := ethdb.NewMemDatabase()
-	sdb := state.NewDatabase(db)
-	stateDB, _ := state.New(common.Hash{}, sdb)
-
-	addr := common.HexToAddress("0x1")
-	currentEpochID := int64(123)
-
-	// set candidate deposit
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
-
-	// check candidate thawing flag
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		t.Error("no this thawing address")
+// TestAllDelegatorForValidators test the function allDelegatorForValidators
+func TestAllDelegatorForValidators(t *testing.T) {
+	stateDB, ctx, candidates, err := newStateAndDposContextWithCandidate(1000)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	key := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
-	canThawingFlag := stateDB.GetState(thawingAddress, common.BytesToHash(key))
-	if canThawingFlag != common.BytesToHash(key) {
-		t.Errorf("wanted candidate thawing flag %v,got %v", common.BytesToHash(key), canThawingFlag)
+	// randomly pick 21 validators from the 1000 candidates
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	validators, validatorMap := randomSelectWithListAndMapFromAddress(candidates, 21, r)
+	// selectedDelegators are a map of delegators who select the validators in candidates
+	selectedDelegators := make(map[common.Address]struct{})
+	votedCandidates := make(map[common.Address]struct{})
+	numDelegators, deposit, curTime := 10000, dx.MultInt64(100), time.Now().Unix()
+	// Vote numDelegators delegator
+	for i := 0; i != numDelegators; i++ {
+		// at 1/100 ratio, the vote come from an existing candidates
+		addr := randomAddress()
+		if r.Intn(100) == 0 {
+			c := candidates[r.Intn(len(candidates))]
+			if _, exist := votedCandidates[c]; !exist {
+				votedCandidates[c] = struct{}{}
+				addr = c
+			}
+		}
+		selected, err := randomProcessVote(stateDB, ctx, addr, deposit, candidates, validatorMap, curTime, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected {
+			selectedDelegators[addr] = struct{}{}
+		}
 	}
-
-	// set vote deposit
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
-
-	key = append([]byte(PrefixVoteThawing), addr.Bytes()...)
-	voteThawingFlag := stateDB.GetState(thawingAddress, common.BytesToHash(key))
-	if voteThawingFlag != common.BytesToHash(key) {
-		t.Errorf("wanted vote thawing flag %v,got %v", common.BytesToHash(key), voteThawingFlag)
+	// Execute the function
+	res := allDelegatorForValidators(ctx, validators)
+	// Check the results. The result should be exactly the same as selectedDelegators
+	if err = checkSetsEqual(selectedDelegators, res); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestThawingDeposit(t *testing.T) {
-	db := ethdb.NewMemDatabase()
-	sdb := state.NewDatabase(db)
-	stateDB, _ := state.New(common.Hash{}, sdb)
+// randomProcessVote use the input arguments as vote parameters, randomly select 30 voting candidates from candidates
+// and vote. If one or more of the selected candidates exist in validators, return true and error. Else return false.
+func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt, candidates []common.Address,
+	validators map[common.Address]struct{}, time int64, r *rand.Rand) (bool, error) {
 
-	addr := common.HexToAddress("0x1")
-	currentEpochID := int64(123)
-	deposit := new(big.Int).SetInt64(100000)
-
-	// mark candidate deposit as thawing flag
-	stateDB.SetState(addr, KeyCandidateDeposit, common.BigToHash(deposit))
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixCandidateThawing)
-
-	// mark candidate deposit as thawing flag
-	stateDB.SetState(addr, KeyVoteDeposit, common.BigToHash(deposit))
-	MarkThawingAddress(stateDB, addr, currentEpochID, PrefixVoteThawing)
-	stateDB.Commit(true)
-
-	ThawingDeposit(stateDB, currentEpochID+ThawingEpochDuration)
-
-	// check whether deposit is thawed
-	epochIDStr := strconv.FormatInt(currentEpochID, 10)
-	thawingAddress := common.BytesToAddress([]byte(PrefixThawingAddr + epochIDStr))
-	if !stateDB.Exist(thawingAddress) {
-		t.Error("no this thawing address")
+	selected := false
+	stateDB.AddBalance(addr, deposit.BigIntPtr())
+	votedCandidates := randomSelectFromAddress(candidates, 30, r)
+	for _, c := range votedCandidates {
+		if _, exist := validators[c]; exist {
+			selected = true
+			break
+		}
 	}
-	key := append([]byte(PrefixCandidateThawing), addr.Bytes()...)
-	canThawingDeposit := stateDB.GetState(thawingAddress, common.BytesToHash(key))
-	if canThawingDeposit != (common.Hash{}) {
-		t.Errorf("failed to thaw candidate deposit")
+	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, time); err != nil {
+		return false, err
 	}
+	return selected, nil
+}
 
-	canDeposit := stateDB.GetState(addr, KeyCandidateDeposit)
-	if canDeposit != (common.Hash{}) {
-		t.Errorf("candidate deposit not return back")
+func randomSelectWithListAndMapFromAddress(source []common.Address, num int, r *rand.Rand) ([]common.Address, map[common.Address]struct{}) {
+	validators := randomSelectFromAddress(source, num, r)
+	vm := make(map[common.Address]struct{})
+	for _, v := range validators {
+		vm[v] = struct{}{}
 	}
+	return validators, vm
+}
 
-	key = append([]byte(PrefixVoteThawing), addr.Bytes()...)
-	voteThawingDeposit := stateDB.GetState(thawingAddress, common.BytesToHash(key))
-	if voteThawingDeposit != (common.Hash{}) {
-		t.Errorf("failed to thaw vote deposit")
+func randomSelectFromAddress(rawList []common.Address, num int, r *rand.Rand) []common.Address {
+	length := len(rawList)
+	if length <= num {
+		return rawList
 	}
-
-	voteDeposit := stateDB.GetState(addr, KeyVoteDeposit)
-	if voteDeposit != (common.Hash{}) {
-		t.Errorf("vote deposit not return back")
+	res := make([]common.Address, 0, num)
+	list := make([]common.Address, length)
+	copy(list, rawList)
+	// Randomly select num of addresses from the list
+	for i := 0; i != num; i++ {
+		index := r.Intn(length)
+		res = append(res, list[index])
+		list[index] = list[length-1]
+		length--
 	}
+	return res
+}
 
+func checkSetsEqual(m1, m2 map[common.Address]struct{}) error {
+	// Copy m2
+	m2Copy := make(map[common.Address]struct{})
+	for k, v := range m2 {
+		m2Copy[k] = v
+	}
+	for k1 := range m1 {
+		if _, exist := m2Copy[k1]; !exist {
+			return fmt.Errorf("key %v exist in m1 not in m2", k1)
+		}
+		delete(m2Copy, k1)
+	}
+	if len(m2Copy) != 0 {
+		return fmt.Errorf("m2 contains more key than m1: %v", m2Copy)
+	}
+	return nil
 }
