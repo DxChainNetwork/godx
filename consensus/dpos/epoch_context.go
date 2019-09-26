@@ -94,6 +94,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
+
+	// Finally, set the snapshot delegate trie root for accumulateRewards
+	setPreEpochSnapshotDelegateTrieRoot(ec.stateDB, ec.DposContext.DelegateTrie().Hash())
 	return nil
 }
 

@@ -17,14 +17,6 @@ import (
 
 var dx = common.NewBigIntUint64(1e18)
 
-type delegator struct {
-	addr         common.Address
-	balance      common.BigInt
-	frozenAssets common.BigInt
-	deposit      common.BigInt
-	candidates   []common.Address
-}
-
 // TestProcessVoteIncreaseDeposit test function ProcessDeposit of previously not a delegator
 func TestProcessVoteNewDelegator(t *testing.T) {
 	addr := randomAddress()
@@ -296,19 +288,19 @@ func checkProcessVote(state *state.StateDB, ctx *types.DposContext, addr common.
 }
 
 func newStateAndDposContextWithCandidate(num int) (*state.StateDB, *types.DposContext, []common.Address, error) {
-	state, ctx, err := newStateAndDposContext()
+	stateDB, ctx, err := newStateAndDposContext()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	var addresses []common.Address
 	for i := 0; i != num; i++ {
 		addr := common.BigToAddress(common.NewBigIntUint64(uint64(i)).BigIntPtr())
-		addAccountInState(state, addr, minDeposit, common.BigInt0)
-		err = ProcessAddCandidate(state, ctx, addr, minDeposit, uint64(50))
+		addAccountInState(stateDB, addr, minDeposit, common.BigInt0)
+		err = ProcessAddCandidate(stateDB, ctx, addr, minDeposit, uint64(50))
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		addresses = append(addresses, addr)
 	}
-	return state, ctx, addresses, nil
+	return stateDB, ctx, addresses, nil
 }
