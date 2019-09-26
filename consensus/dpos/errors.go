@@ -93,4 +93,7 @@ var (
 
 	// errUnknownRandomAddressSelectorType is the error type for unknown randomAddressSelector type.
 	errUnknownRandomAddressSelectorType = errors.New("unknown randomAddressSelector type")
+
+	// errDelegatorInsufficientBalance indicates the delegator does not have enough balance to pay for the vote deposit
+	errDelegatorInsufficientBalance = errors.New("delegator does not have enough balance to pay for the vote deposit")
 )

@@ -90,14 +90,14 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// set vote deposit and weight ratio for delegator
 	validator := candidates[1]
-	setVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
+	SetVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
 
 	// set validator reward ratio
 	var rewardRatioNumerator uint64 = 50
-	setRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
+	SetRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
 
 	// set the total vote weight for validator
-	setTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
+	SetTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
 
 	stateDbCopy := stateDB.Copy()
 
@@ -304,7 +304,7 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 
 					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
 				},
-				wantConfirmedBlockNum: (MaxValidatorSize + 5) * 2 / 3,
+				wantConfirmedBlockNum: (MaxValidatorSize + 5) - ConsensusSize,
 			},
 		}
 	)
@@ -399,13 +399,15 @@ func (test testChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
 		return nil
 	}
 
-	var parentHash common.Hash
+	parentHash := common.Hash{}
 	var number uint64
 	var timeStamp uint64
 	var validator common.Address
 	for _, header := range test.headers {
 		if header.hash == hash {
-			parentHash = header.parent.hash
+			if header.number != 0 {
+				parentHash = header.parent.hash
+			}
 			number = header.number
 			timeStamp = header.time
 			validator = header.validator
@@ -556,7 +558,7 @@ func getMinedCnt(epochID int64, candidate common.Address, minedCntTrie *trie.Tri
 	cntBytes := minedCntTrie.Get(append(key, candidate.Bytes()...))
 	if cntBytes == nil {
 		return 0
-	} else {
-		return int64(binary.BigEndian.Uint64(cntBytes))
 	}
+
+	return int64(binary.BigEndian.Uint64(cntBytes))
 }

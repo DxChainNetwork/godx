@@ -64,7 +64,7 @@ func newStateDBWithAccounts(db ethdb.Database, num int) (*state.StateDB, []commo
 func addAccountInState(state *state.StateDB, addr common.Address, balance common.BigInt, frozenAssets common.BigInt) {
 	state.CreateAccount(addr)
 	state.SetBalance(addr, balance.BigIntPtr())
-	setFrozenAssets(state, addr, frozenAssets)
+	SetFrozenAssets(state, addr, frozenAssets)
 }
 
 func newStateDB(db ethdb.Database) (*state.StateDB, error) {

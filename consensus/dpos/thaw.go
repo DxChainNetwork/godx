@@ -15,7 +15,7 @@ import (
 func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int64, diff common.BigInt) {
 	thawingEpoch := calcThawingEpoch(curEpoch)
 	// Add the diff value to thawing assets to be thawed
-	addThawingAssets(state, addr, thawingEpoch, diff)
+	AddThawingAssets(state, addr, thawingEpoch, diff)
 	// Mark the address in the thawing address
 	markThawingAddress(state, addr, thawingEpoch)
 }
@@ -38,8 +38,8 @@ func thawAllFrozenAssetsInEpoch(state stateDB, epoch int64) error {
 	var err error
 	// For each thawing address, thaw specified amount, and remove the related storage fields.
 	forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {
-		thawValue := getThawingAssets(state, addr, epoch)
-		err = subFrozenAssets(state, addr, thawValue)
+		thawValue := GetThawingAssets(state, addr, epoch)
+		err = SubFrozenAssets(state, addr, thawValue)
 		if err != nil {
 			// If error happens, this is a really critical error, meaning the system is
 			// not consistent with itself. Thus no need to report every error.

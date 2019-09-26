@@ -154,7 +154,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'validator',
 			call: 'dpos_validator',
-			params: 1,
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		
 		new web3._extend.Method({
@@ -167,7 +168,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'candidate',
 			call: 'dpos_candidate',
-			params: 1,
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
@@ -226,6 +228,13 @@ web3._extend({
 			name: 'candidateVotes',
 			call: 'dpos_getCandidatesVote',
 			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'epochID',
+			call: 'dpos_epochID',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 	]
 });
