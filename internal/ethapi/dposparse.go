@@ -6,16 +6,16 @@ package ethapi
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/DxChainNetwork/godx/accounts"
-	"github.com/DxChainNetwork/godx/log"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -28,6 +28,11 @@ func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields 
 	} else {
 		candidateAddress = defaultAccount(account)
 		log.Info("Candidate account is automatically configured", "candidateAccount", account)
+	}
+
+	// validate candidateAddress
+	if reflect.DeepEqual(candidateAddress, common.Address{}) {
+		return nil, fmt.Errorf("the address used for apply candidate cannot be empty")
 	}
 
 	// form candidate tx data
@@ -59,6 +64,11 @@ func ParseAndValidateVoteTxArgs(to common.Address, gas uint64, fields map[string
 	} else {
 		delegatorAddress = defaultAccount(account)
 		log.Info("Vote account is automatically configured", "voteAccount", account)
+	}
+
+	// validate delegatorAddress
+	if reflect.DeepEqual(delegatorAddress, common.Address{}) {
+		return nil, fmt.Errorf("the address used for voting cannot be empty")
 	}
 
 	// form the vote tx data
