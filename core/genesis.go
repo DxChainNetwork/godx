@@ -456,6 +456,7 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 
 		// set deposit and frozen assets
 		validatorConfig := g.Config.Dpos.Validators[validator]
+		stateDB.AddBalance(validator, validatorConfig.Deposit.BigIntPtr())
 		dpos.SetCandidateDeposit(stateDB, validator, validatorConfig.Deposit)
 		dpos.SetFrozenAssets(stateDB, validator, validatorConfig.Deposit)
 
