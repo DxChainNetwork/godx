@@ -422,9 +422,6 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	// get validators from the genesis DPOS config
 	validators := g.Config.Dpos.ParseValidators()
 
-	// confirmed sorted validator list
-	validators = SortValidators(validators)
-
 	// set initial genesis epoch validators
 	err = dc.SetValidators(validators)
 	if err != nil {
@@ -432,49 +429,23 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	// just let genesis initial validator voted themselves
-	for _, validator := range validators {
-		err = dc.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes())
-		if err != nil {
-			return nil, err
-		}
+	for _, validator := range g.Config.Dpos.Validators {
+		validatorAddr := validator.Address
 
-		err = dc.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes())
-		if err != nil {
-			return nil, err
-		}
-
-		votedList := []common.Address{validator}
-		votedBytes, err := rlp.EncodeToBytes(votedList)
-		if err != nil {
-			return nil, err
-		}
-
-		err = dc.VoteTrie().TryUpdate(validator.Bytes(), votedBytes)
+		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
 		if err != nil {
 			return nil, err
 		}
 
 		// set deposit and frozen assets
-		validatorConfig := g.Config.Dpos.Validators[validator]
-		dpos.SetCandidateDeposit(stateDB, validator, validatorConfig.Deposit)
-		dpos.SetFrozenAssets(stateDB, validator, validatorConfig.Deposit)
+		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
+		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
+		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
 
 		// set reward ratio
-		dpos.SetRewardRatioNumerator(stateDB, validator, validatorConfig.RewardRatio)
-		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validator, validatorConfig.RewardRatio)
+		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
+		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
 	}
 
 	return dc, nil
-}
-
-// SortValidators sort validators after ParseValidators
-func SortValidators(validators []common.Address) []common.Address {
-	for i := 0; i < len(validators); i++ {
-		for j := i + 1; j < len(validators); j++ {
-			if validators[i].String() < validators[j].String() {
-				validators[i], validators[j] = validators[j], validators[i]
-			}
-		}
-	}
-	return validators
 }
