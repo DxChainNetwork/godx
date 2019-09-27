@@ -38,13 +38,19 @@ func TestUpdateMinedCnt(t *testing.T) {
 	miner := common.HexToAddress("0xab")
 	blockTime := int64(EpochInterval + BlockInterval)
 
-	beforeUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	beforeUpdateCnt, err := getMinedCnt(dposContext.MinedCntTrie(), blockTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	assert.Equal(t, int64(0), beforeUpdateCnt)
-	assert.Equal(t, int64(1), afterUpdateCnt)
+	afterUpdateCnt, err := getMinedCnt(dposContext.MinedCntTrie(), blockTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, uint64(0), beforeUpdateCnt)
+	assert.Equal(t, uint64(1), afterUpdateCnt)
 
 	// new block still in the same epoch with current block, and newMiner has mined block before in the epoch
 	err = setMinedCntTrie(blockTime/EpochInterval, miner, dposContext.MinedCntTrie(), int64(1))
@@ -55,24 +61,36 @@ func TestUpdateMinedCnt(t *testing.T) {
 	blockTime = EpochInterval + BlockInterval*4
 
 	// currentBlock has recorded the count for the newMiner before updateMinedCnt
-	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	beforeUpdateCnt, err = getMinedCnt(dposContext.MinedCntTrie(), blockTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	assert.Equal(t, int64(1), beforeUpdateCnt)
-	assert.Equal(t, int64(2), afterUpdateCnt)
+	afterUpdateCnt, err = getMinedCnt(dposContext.MinedCntTrie(), blockTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, uint64(1), beforeUpdateCnt)
+	assert.Equal(t, uint64(2), afterUpdateCnt)
 
 	// new block come to a new epoch
 	blockTime = EpochInterval * 2
 
-	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
+	beforeUpdateCnt, err = getMinedCnt(dposContext.MinedCntTrie(), lastTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
-	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	assert.Equal(t, int64(0), beforeUpdateCnt)
-	assert.Equal(t, int64(1), afterUpdateCnt)
+	afterUpdateCnt, err = getMinedCnt(dposContext.MinedCntTrie(), lastTime/EpochInterval, miner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, uint64(2), beforeUpdateCnt)
+	assert.Equal(t, uint64(3), afterUpdateCnt)
 }
 
 func TestAccumulateRewards(t *testing.T) {
@@ -550,15 +568,4 @@ func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie *trie
 		return err
 	}
 	return nil
-}
-
-func getMinedCnt(epochID int64, candidate common.Address, minedCntTrie *trie.Trie) int64 {
-	key := make([]byte, 8)
-	binary.BigEndian.PutUint64(key, uint64(epochID))
-	cntBytes := minedCntTrie.Get(append(key, candidate.Bytes()...))
-	if cntBytes == nil {
-		return 0
-	}
-
-	return int64(binary.BigEndian.Uint64(cntBytes))
 }
