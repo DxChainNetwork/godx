@@ -273,6 +273,9 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if err != nil {
 		panic(err)
 	}
+	if _, err = dposContext.Commit(); err != nil {
+		panic(err)
+	}
 
 	err = statedb.Database().TrieDB().Commit(root, true)
 	if err != nil {
