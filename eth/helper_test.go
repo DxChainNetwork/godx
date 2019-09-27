@@ -3,12 +3,13 @@ package eth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
-	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"io/ioutil"
 	"math/big"
 	"sort"
 	"sync"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
@@ -39,7 +40,7 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		db     = ethdb.NewMemDatabase()
 		gspec  = &core.Genesis{
 			Config: params.DposChainConfig,
-			Alloc:  core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}},
+			Alloc:  makeAlloc(core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}}),
 		}
 		genesis       = gspec.MustCommit(db)
 		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
@@ -235,4 +236,12 @@ func (p *testPeer) handshake(t *testing.T, td *big.Int, head common.Hash, genesi
 // manager of termination.
 func (p *testPeer) close() {
 	p.app.Close()
+}
+
+func makeAlloc(accounts core.GenesisAlloc) core.GenesisAlloc {
+	prevAlloc := core.DefaultGenesisBlock().Alloc
+	for addr, account := range accounts {
+		prevAlloc[addr] = account
+	}
+	return prevAlloc
 }
