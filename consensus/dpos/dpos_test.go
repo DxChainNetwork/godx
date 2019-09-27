@@ -39,7 +39,7 @@ func TestUpdateMinedCnt(t *testing.T) {
 	blockTime := int64(EpochInterval + BlockInterval)
 
 	beforeUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
 	afterUpdateCnt := getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
@@ -56,7 +56,7 @@ func TestUpdateMinedCnt(t *testing.T) {
 
 	// currentBlock has recorded the count for the newMiner before updateMinedCnt
 	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
 	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
@@ -67,7 +67,7 @@ func TestUpdateMinedCnt(t *testing.T) {
 	blockTime = EpochInterval * 2
 
 	beforeUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
-	err = updateMinedCnt(lastTime, blockTime, miner, dposContext)
+	err = updateMinedCnt(lastTime, miner, dposContext)
 	assert.Nil(t, err)
 
 	afterUpdateCnt = getMinedCnt(blockTime/EpochInterval, miner, dposContext.MinedCntTrie())
