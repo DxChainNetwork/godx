@@ -438,13 +438,13 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		}
 
 		// set deposit and frozen assets
-		stateDB.AddBalance(validator, validator.Deposit.BigIntPtr())
-		dpos.SetCandidateDeposit(stateDB, validator, validator.Deposit)
-		dpos.SetFrozenAssets(stateDB, validator, validator.Deposit)
+		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
+		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
+		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
 
 		// set reward ratio
-		dpos.SetRewardRatioNumerator(stateDB, validator, validator.RewardRatio)
-		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validator, validator.RewardRatio)
+		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
+		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
 	}
 
 	return dc, nil
