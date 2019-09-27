@@ -438,7 +438,9 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		}
 
 		// set deposit and frozen assets
-		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
+		if balance := common.PtrBigInt(stateDB.GetBalance(validator)); balance.Cmp(validator.Deposit) < 0 {
+			return nil, fmt.Errorf("during initializing for genesis, validator %x has not enough balance for deposit", validator)
+		}
 		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
 		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
 
