@@ -449,15 +449,3 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 
 	return dc, nil
 }
-
-// SortValidators sort validators after ParseValidators
-func SortValidators(validators []common.Address) []common.Address {
-	for i := 0; i < len(validators); i++ {
-		for j := i + 1; j < len(validators); j++ {
-			if validators[i].String() < validators[j].String() {
-				validators[i], validators[j] = validators[j], validators[i]
-			}
-		}
-	}
-	return validators
-}
