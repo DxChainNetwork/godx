@@ -243,10 +243,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
-	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
-	statedb.SetNonce(dpos.KeyValueCommonAddress, 1)
-	statedb.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dposContext.DelegateTrie().Hash())
-
 	root := statedb.IntermediateRoot(false)
 	dcProto := dposContext.ToRoot()
 	head := &types.Header{
@@ -466,6 +462,10 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		dpos.SetRewardRatioNumerator(stateDB, validator, validatorConfig.RewardRatio)
 		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validator, validatorConfig.RewardRatio)
 	}
+
+	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
+	stateDB.SetNonce(dpos.KeyValueCommonAddress, 1)
+	stateDB.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dc.DelegateTrie().Hash())
 
 	return dc, nil
 }
