@@ -438,14 +438,26 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		}
 
 		// set deposit and frozen assets
-		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
-		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
-		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
+		stateDB.AddBalance(validator, validator.Deposit.BigIntPtr())
+		dpos.SetCandidateDeposit(stateDB, validator, validator.Deposit)
+		dpos.SetFrozenAssets(stateDB, validator, validator.Deposit)
 
 		// set reward ratio
-		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
-		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
+		dpos.SetRewardRatioNumerator(stateDB, validator, validator.RewardRatio)
+		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validator, validator.RewardRatio)
 	}
 
 	return dc, nil
+}
+
+// SortValidators sort validators after ParseValidators
+func SortValidators(validators []common.Address) []common.Address {
+	for i := 0; i < len(validators); i++ {
+		for j := i + 1; j < len(validators); j++ {
+			if validators[i].String() < validators[j].String() {
+				validators[i], validators[j] = validators[j], validators[i]
+			}
+		}
+	}
+	return validators
 }
