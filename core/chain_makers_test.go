@@ -42,7 +42,10 @@ func ExampleGenerateChain() {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config: params.DposChainConfig,
-		Alloc:  makeAlloc(GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}}),
+		Alloc: MakeAlloc(
+			GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+			params.DposChainConfig,
+		),
 	}
 	genesis := gspec.MustCommit(db)
 
