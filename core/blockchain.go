@@ -1786,3 +1786,32 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) event.Subscription {
 	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
 }
+
+// MakeAlloc make the add the validator deposit from ChainConfig to the input allocation accounts.
+// The function is only used in test cases
+func MakeAlloc(accounts GenesisAlloc, config *params.ChainConfig) GenesisAlloc {
+	return MakeAllocFromDposConfig(accounts, config.Dpos)
+}
+
+// MakeAllocFromDposConfig add the validator deposit from dposConfig to the input allocation accounts.
+// The function is only used in test cases
+func MakeAllocFromDposConfig(accounts GenesisAlloc, dpos *params.DposConfig) GenesisAlloc {
+	for _, validatorConfig := range dpos.Validators {
+		addr := validatorConfig.Address
+		account, exist := accounts[addr]
+		if !exist {
+			account = GenesisAccount{
+				Balance: common.BigInt0.BigIntPtr(),
+			}
+		}
+		newBalance := new(big.Int).Add(account.Balance, validatorConfig.Deposit.BigIntPtr())
+		accounts[addr] = GenesisAccount{
+			Code:       account.Code,
+			Storage:    account.Storage,
+			Balance:    newBalance,
+			Nonce:      account.Nonce,
+			PrivateKey: account.PrivateKey,
+		}
+	}
+	return accounts
+}

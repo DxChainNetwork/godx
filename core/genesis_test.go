@@ -44,9 +44,10 @@ func TestSetupGenesis(t *testing.T) {
 		customghash = common.HexToHash("0x05437750fc2970dda33840351e2e5448e70b6185594d57943f72cc8bf05747ae")
 		customg     = Genesis{
 			Config: params.DposChainConfig,
-			Alloc: GenesisAlloc{
-				{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
-			},
+			Alloc: MakeAlloc(
+				GenesisAlloc{{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}}},
+				params.DposChainConfig,
+			),
 		}
 		oldcustomg = customg
 	)

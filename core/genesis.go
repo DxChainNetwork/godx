@@ -333,7 +333,8 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
-	return &Genesis{
+	// TODO: Finalize pre allocates when settle down default validators
+	g := &Genesis{
 		Config:     params.DposChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x4478436861696e204e6574776f726b20546573746e657420302e372e32"),
@@ -343,11 +344,17 @@ func DefaultGenesisBlock() *Genesis {
 			common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
 		},
 	}
+	for _, vc := range params.DefaultValidators {
+		g.Alloc[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+	return g
 }
 
 // DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
-	return &Genesis{
+	g := &Genesis{
 		Config:     params.TestnetChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
@@ -355,11 +362,17 @@ func DefaultTestnetGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1048576),
 		Alloc:      decodePrealloc(testnetAllocData),
 	}
+	for _, vc := range params.DefaultValidators {
+		g.Alloc[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+	return g
 }
 
 // DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
 func DefaultRinkebyGenesisBlock() *Genesis {
-	return &Genesis{
+	g := &Genesis{
 		Config:     params.RinkebyChainConfig,
 		Timestamp:  1492009146,
 		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
@@ -367,6 +380,12 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
+	for _, vc := range params.DefaultValidators {
+		g.Alloc[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+	return g
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
@@ -429,8 +448,14 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	// just let genesis initial validator voted themselves
+	// vMap is the structure to check the duplication of the validators
+	vMap := make(map[common.Address]struct{})
 	for _, validator := range g.Config.Dpos.Validators {
 		validatorAddr := validator.Address
+		if _, exist := vMap[validatorAddr]; exist {
+			return nil, fmt.Errorf("duplicate validator address %x", validatorAddr)
+		}
+		vMap[validatorAddr] = struct{}{}
 
 		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
 		if err != nil {
@@ -438,7 +463,9 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		}
 
 		// set deposit and frozen assets
-		stateDB.AddBalance(validatorAddr, validator.Deposit.BigIntPtr())
+		if balance := common.PtrBigInt(stateDB.GetBalance(validatorAddr)); balance.Cmp(validator.Deposit) < 0 {
+			return nil, fmt.Errorf("during initializing for genesis, validator %x has not enough balance for deposit", validatorAddr)
+		}
 		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
 		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
 
