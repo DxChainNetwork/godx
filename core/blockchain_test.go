@@ -604,6 +604,7 @@ func testInsertNonceError(t *testing.T, full bool) {
 // classical full block processing.
 func TestFastVsFullChains(t *testing.T) {
 	// Configure and generate a sample block chain
+
 	var (
 		gendb   = ethdb.NewMemDatabase()
 		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -611,7 +612,10 @@ func TestFastVsFullChains(t *testing.T) {
 		funds   = big.NewInt(1000000000)
 		gspec   = &Genesis{
 			Config: params.DposChainConfig,
-			Alloc:  GenesisAlloc{address: {Balance: funds}},
+			Alloc: MakeAlloc(
+				map[common.Address]GenesisAccount{address: {Balance: funds}},
+				params.DposChainConfig,
+			),
 		}
 		genesis = gspec.MustCommit(gendb)
 		signer  = types.NewEIP155Signer(gspec.Config.ChainID)
@@ -781,11 +785,14 @@ func TestChainTxReorgs(t *testing.T) {
 		gspec   = &Genesis{
 			Config:   params.DposChainConfig,
 			GasLimit: 3141592,
-			Alloc: GenesisAlloc{
-				addr1: {Balance: big.NewInt(1000000)},
-				addr2: {Balance: big.NewInt(1000000)},
-				addr3: {Balance: big.NewInt(1000000)},
-			},
+			Alloc: MakeAlloc(
+				GenesisAlloc{
+					addr1: {Balance: big.NewInt(1000000)},
+					addr2: {Balance: big.NewInt(1000000)},
+					addr3: {Balance: big.NewInt(1000000)},
+				},
+				params.DposChainConfig,
+			),
 		}
 		genesis = gspec.MustCommit(db)
 		signer  = types.NewEIP155Signer(gspec.Config.ChainID)
@@ -891,8 +898,14 @@ func TestLogReorgs(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		db      = ethdb.NewMemDatabase()
 		// this code generates a log
-		code    = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
-		gspec   = &Genesis{Config: params.DposChainConfig, Alloc: GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}}}
+		code  = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+		gspec = &Genesis{
+			Config: params.DposChainConfig,
+			Alloc: MakeAlloc(
+				GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}},
+				params.DposChainConfig,
+			),
+		}
 		genesis = gspec.MustCommit(db)
 		signer  = types.NewEIP155Signer(gspec.Config.ChainID)
 	)
@@ -938,7 +951,10 @@ func TestReorgSideEvent(t *testing.T) {
 		addr1   = crypto.PubkeyToAddress(key1.PublicKey)
 		gspec   = &Genesis{
 			Config: params.DposChainConfig,
-			Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}},
+			Alloc: MakeAlloc(
+				GenesisAlloc{addr1: {Balance: big.NewInt(10000000000000)}},
+				params.DposChainConfig,
+			),
 		}
 		genesis = gspec.MustCommit(db)
 		signer  = types.NewEIP155Signer(gspec.Config.ChainID)
@@ -1070,7 +1086,10 @@ func TestEIP155Transition(t *testing.T) {
 		deleteAddr = common.Address{1}
 		gspec      = &Genesis{
 			Config: params.DposChainConfig,
-			Alloc:  GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
+			Alloc: MakeAlloc(
+				GenesisAlloc{address: {Balance: funds}, deleteAddr: {Balance: new(big.Int)}},
+				params.DposChainConfig,
+			),
 		}
 		genesis = gspec.MustCommit(db)
 	)
@@ -1179,7 +1198,10 @@ func TestEIP161AccountRemoval(t *testing.T) {
 				EIP158Block:    big.NewInt(2),
 				Dpos:           params.DefaultDposConfig(),
 			},
-			Alloc: GenesisAlloc{address: {Balance: funds}},
+			Alloc: MakeAllocFromDposConfig(
+				GenesisAlloc{address: {Balance: funds}},
+				params.DefaultDposConfig(),
+			),
 		}
 		genesis = gspec.MustCommit(db)
 	)

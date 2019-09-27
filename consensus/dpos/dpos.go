@@ -6,7 +6,6 @@ package dpos
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -426,17 +425,17 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	// update the value of timeOfFirstBlock if the value is 0
 	updateTimeOfFirstBlockIfNecessary(chain)
 
+	//update mined count trie
+	err := updateMinedCnt(parent.Time.Int64(), header.Validator, dposContext)
+	if err != nil {
+		return nil, err
+	}
 	// try to elect, if current block is the first one in a new epoch, then elect new epoch
-	err := epochContext.tryElect(genesis, parent)
+	err = epochContext.tryElect(genesis, parent)
 	if err != nil {
 		return nil, fmt.Errorf("got error when elect next epoch, err: %s", err)
 	}
 
-	//update mined count trie
-	err = updateMinedCnt(parent.Time.Int64(), header.Time.Int64(), header.Validator, dposContext)
-	if err != nil {
-		return nil, err
-	}
 	header.DposContext = dposContext.ToRoot()
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -590,35 +589,44 @@ func NextSlot(now int64) int64 {
 }
 
 // updateMinedCnt update counts in minedCntTrie for the miner of newBlock
-func updateMinedCnt(parentBlockTime, currentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
-	currentMinedCntTrie := dposContext.MinedCntTrie()
-	currentEpoch := CalculateEpochID(parentBlockTime)
-	currentEpochBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
-
-	cnt := int64(1)
-	newEpoch := CalculateEpochID(currentBlockTime)
-	// still during the currentEpochID
-	if currentEpoch == newEpoch {
-		iter := trie.NewIterator(currentMinedCntTrie.NodeIterator(currentEpochBytes))
-		// when current is not genesis, read last count from the MinedCntTrie
-		if iter.Next() {
-			cntBytes := currentMinedCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
-			// not the first time to mined
-			if cntBytes != nil {
-				cnt = int64(binary.BigEndian.Uint64(cntBytes)) + 1
-			}
-		}
+func updateMinedCnt(parentBlockTime int64, validator common.Address, dposContext *types.DposContext) error {
+	mct := dposContext.MinedCntTrie()
+	// The updated mined count belong to the parent epoch
+	epoch := CalculateEpochID(parentBlockTime)
+	cnt, err := getMinedCnt(mct, epoch, validator)
+	if err != nil {
+		return err
 	}
-
-	newCntBytes := make([]byte, 8)
-	newEpochBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(newEpochBytes, uint64(newEpoch))
-	binary.BigEndian.PutUint64(newCntBytes, uint64(cnt))
-	return dposContext.MinedCntTrie().TryUpdate(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+	cnt++
+	return setMinedCnt(mct, epoch, validator, cnt)
 }
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
 func getPreEpochSnapshotDelegateTrie(db *trie.Database, root common.Hash) (*trie.Trie, error) {
 	return types.NewDelegateTrie(root, db)
+}
+
+func setMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address, value uint64) error {
+	keyBytes := makeMinedCntKey(epoch, validator)
+	valueBytes := common.Uint64ToByte(value)
+	return minedCntTrie.TryUpdate(keyBytes, valueBytes)
+}
+
+// getMinedCnt get the mined count of a specified validator in a certain epoch from the minedCntTrie
+func getMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address) (uint64, error) {
+	key := makeMinedCntKey(epoch, validator)
+	cntBytes, err := minedCntTrie.TryGet(key)
+	if err != nil {
+		return 0, err
+	}
+	var cnt uint64
+	if cntBytes != nil && len(cntBytes) != 0 {
+		cnt = common.BytesToUint64(cntBytes)
+	}
+	return cnt, nil
+}
+
+func makeMinedCntKey(epoch int64, addr common.Address) []byte {
+	epochBytes := common.Uint64ToByte(uint64(epoch))
+	return append(epochBytes, addr.Bytes()...)
 }

@@ -17,23 +17,36 @@
 package core
 
 import (
+	"runtime"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"runtime"
-	"testing"
-	"time"
 )
+
+var DefaultAllocates GenesisAlloc
+
+func init() {
+	// Initialize DefaultAllocates align with DefaultValidators
+	DefaultAllocates = make(GenesisAlloc)
+	for _, vc := range params.DefaultValidators {
+		DefaultAllocates[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+}
 
 // Tests that simple header verification works, for both good and bad blocks.
 func TestHeaderVerification(t *testing.T) {
 	// Create a simple chain to verify
 	var (
 		testdb    = ethdb.NewMemDatabase()
-		gspec     = &Genesis{Config: params.DposChainConfig}
+		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil)
 	)
@@ -87,7 +100,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
 		testdb    = ethdb.NewMemDatabase()
-		gspec     = &Genesis{Config: params.DposChainConfig}
+		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil)
 	)
@@ -156,7 +169,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	// Create a simple chain to verify
 	var (
 		testdb    = ethdb.NewMemDatabase()
-		gspec     = &Genesis{Config: params.DposChainConfig}
+		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
 		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 1024, nil)
 	)

@@ -78,7 +78,11 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 	)
-
+	for _, validatorConfig := range chainConfig.Dpos.Validators {
+		gspec.Alloc[validatorConfig.Address] = core.GenesisAccount{
+			Balance: validatorConfig.Deposit.BigIntPtr(),
+		}
+	}
 	switch engine.(type) {
 	case *dpos.Dpos:
 	default:
