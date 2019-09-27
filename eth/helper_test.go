@@ -9,9 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -40,7 +39,7 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		db     = ethdb.NewMemDatabase()
 		gspec  = &core.Genesis{
 			Config: params.DposChainConfig,
-			Alloc:  core.makeAlloc(core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}}, params.DposChainConfig),
+			Alloc:  core.MakeAlloc(core.GenesisAlloc{testBank: {Balance: big.NewInt(1000000)}}, params.DposChainConfig),
 		}
 		genesis       = gspec.MustCommit(db)
 		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
