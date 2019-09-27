@@ -448,8 +448,14 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	}
 
 	// just let genesis initial validator voted themselves
+	// vMap is the structure to check the duplication of the validators
+	vMap := make(map[common.Address]struct{})
 	for _, validator := range g.Config.Dpos.Validators {
 		validatorAddr := validator.Address
+		if _, exist := vMap[validatorAddr]; exist {
+			return nil, fmt.Errorf("duplicate validator address %x", validatorAddr)
+		}
+		vMap[validatorAddr] = struct{}{}
 
 		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
 		if err != nil {
