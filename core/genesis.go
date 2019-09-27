@@ -292,12 +292,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
 
-	// commit dpos context into memory
-	_, err := block.DposCtx().Commit()
-	if err != nil {
-		return nil, err
-	}
-
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
