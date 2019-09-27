@@ -18,13 +18,14 @@ package core
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
 )
 
 func ExampleGenerateChain() {
@@ -41,7 +42,7 @@ func ExampleGenerateChain() {
 	// Ensure that key1 has some funds in the genesis block.
 	gspec := &Genesis{
 		Config: params.DposChainConfig,
-		Alloc:  GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
+		Alloc:  makeAlloc(GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}}),
 	}
 	genesis := gspec.MustCommit(db)
 
