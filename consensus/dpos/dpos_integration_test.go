@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/hexutil"
-	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -40,6 +38,12 @@ var (
 	errNoEntriesInDelegateTrie = errors.New("no entries in delegate trie")
 
 	maxNumValidators = 21
+
+	maxVotes = 30
+
+	emptyAddress common.Address
+
+	emptyHash common.Hash
 )
 
 type (
@@ -63,7 +67,6 @@ type (
 		userRecords userRecords
 
 		// expected fields
-		// TODO: add check validators consistency
 		validators                []common.Address
 		candidateRecords          candidateRecords
 		candidateRecordsLastEpoch candidateRecords
@@ -102,13 +105,105 @@ func TestDPOSIntegration(t *testing.T) {
 
 }
 
-func TestDposIntegrationGenesis(t *testing.T) {
+func TestDposIntegrationInitializeGenesis(t *testing.T) {
 	genesis := getGenesis()
-	tec, err := newTestEpochContext(10000, genesis)
+	tec, err := newTestEpochContext(1000, genesis)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err = tec.checkConsistency(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDposIntegrationCandidate(t *testing.T) {
+	genesis := getGenesis()
+	tec, err := newTestEpochContext(1000, genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCandidate := tec.ec.pickPotentialCandidate().addr
+	if newCandidate == emptyAddress {
+		t.Fatal("no potential candidate found")
+	}
+	if err = tec.executeAddCandidate(newCandidate); err != nil {
+		t.Fatal(err)
+	}
+	existCandidate, _ := tec.ec.pickCandidate()
+	if existCandidate == emptyAddress {
+		t.Fatal("no candidate found")
+	}
+	if err = tec.executeAddCandidate(existCandidate); err != nil {
+		t.Fatal(err)
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
+		t.Fatal(err)
+	}
+	// Cancel a candidate
+	existCandidate, _ = tec.ec.pickCandidate()
+	if existCandidate == emptyAddress {
+		t.Fatal("no candidate found")
+	}
+	if err = tec.executeCancelCandidate(existCandidate); err != nil {
+		t.Fatal(err)
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDposIntegrationVote(t *testing.T) {
+	genesis := getGenesis()
+	tec, err := newTestEpochContext(1000, genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// First case, a new delegator with 21 votes
+	newDelegator := tec.ec.pickPotentialDelegator().addr
+	if newDelegator == emptyAddress {
+		t.Fatal("no potential delegator found")
+	}
+	if err := tec.executeVoteIncreaseDeposit(newDelegator); err != nil {
+		t.Fatal(err)
+	}
+	if len(tec.ec.delegatorRecords[newDelegator].votes) != len(tec.ec.candidateRecords) {
+		t.Fatal(fmt.Errorf("vote with only 21 candidate gives delegator of votes %v", len(tec.ec.delegatorRecords[newDelegator].votes)))
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
+		t.Fatal(err)
+	}
+	// Second case, a delegator with 30 votes
+	numCandidates := 50
+	for i := 0; i != numCandidates; i++ {
+		newCandidate := tec.ec.pickPotentialCandidate().addr
+		if newCandidate == emptyAddress {
+			t.Fatal("no potential candidate found")
+		}
+		if err := tec.executeAddCandidate(newCandidate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tec.executeVoteIncreaseDeposit(newDelegator); err != nil {
+		t.Fatal(err)
+	}
+	if gotVotes := len(tec.ec.delegatorRecords[newDelegator].votes); gotVotes != maxVotes {
+		t.Fatal(fmt.Errorf("vote 30 candidates gives delegator of votes %v", gotVotes))
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
+		t.Fatal(err)
+	}
+	// Third, decrease vote deposit
+	if err := tec.executeVoteDecreaseDeposit(newDelegator); err != nil {
+		t.Fatal(err)
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
+		t.Fatal(err)
+	}
+	// Fourth, cancel votes
+	if err := tec.executeCancelVote(newDelegator); err != nil {
+		t.Fatal(err)
+	}
+	if err := tec.commitAndCheckConsistency(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -139,15 +234,14 @@ func newTestEpochContext(num int, genesisConfig *genesisConfig) (*testEpochConte
 		ctx:     ctx,
 		ec:      ec,
 	}
-	// initialize with genesis
-	tec.ec.setGenesis(genesisConfig)
 	// Add random users and give them some money
 	numUsersToAdd := num - len(genesisConfig.config.Dpos.Validators)
 	users := makeUsers(numUsersToAdd)
-	for addr := range users {
+	for addr, user := range users {
 		statedb.CreateAccount(addr)
 		statedb.SetBalance(addr, minDeposit.MultInt64(100).BigIntPtr())
 		tec.ec.balance[addr] = minDeposit.MultInt64(100)
+		tec.ec.userRecords[addr] = user
 	}
 	return tec, nil
 }
@@ -222,7 +316,7 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	}
 	// Create the params for the new vote transaction.
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.stateDB, addr).DivUint64(100))
-	votes := randomPickCandidates(tec.ec.candidateRecords, 30)
+	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	if _, err := ProcessVote(tec.stateDB, tec.ctx, addr, newDeposit, votes, tec.curTime); err != nil {
 		return err
 	}
@@ -241,7 +335,7 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	prevDeposit := prevVoteRecord.deposit
 	// Create params for the new params and vote
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
-	votes := randomPickCandidates(tec.ec.candidateRecords, 30)
+	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	if _, err := ProcessVote(tec.stateDB, tec.ctx, addr, newDeposit, votes, tec.curTime); err != nil {
 		return err
 	}
@@ -263,10 +357,27 @@ func (tec *testEpochContext) executeCancelVote(addr common.Address) error {
 	return nil
 }
 
+// commitAndCheckConsistency commit all data structure and check for consistency
+func (tec *testEpochContext) commitAndCheckConsistency() error {
+	if _, err := tec.stateDB.Commit(true); err != nil {
+		return err
+	}
+	if _, err := tec.ctx.Commit(); err != nil {
+		return err
+	}
+	if err := tec.checkConsistency(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // checkConsistent checks whether the expected context is consistent with the state and context.
 func (tec *testEpochContext) checkConsistency() error {
 	if err := tec.ec.checkSelfConsistency(); err != nil {
 		return fmt.Errorf("check expect context self consistency: %v", err)
+	}
+	if err := tec.checkValidatorsConsistency(); err != nil {
+		return fmt.Errorf("check validators consistency: %v", err)
 	}
 	if err := tec.checkCandidateRecordsConsistency(); err != nil {
 		return fmt.Errorf("check candidate records consistency: %v", err)
@@ -292,6 +403,25 @@ func (tec *testEpochContext) checkConsistency() error {
 	return nil
 }
 
+// checkValidatorsConsistency checks the consistency of validators
+func (tec *testEpochContext) checkValidatorsConsistency() error {
+	gotValidators, err := tec.ctx.GetValidators()
+	if err != nil {
+		return fmt.Errorf("cannot get validators: %v", err)
+	}
+	exectValidators := tec.ec.getValidators()
+	if len(exectValidators) != len(gotValidators) {
+		return fmt.Errorf("size of validators not same. Got %d, Expect %d", len(gotValidators), len(exectValidators))
+	}
+	for i := range exectValidators {
+		gotValidator, expectValidator := gotValidators[i], exectValidators[i]
+		if gotValidator != expectValidator {
+			return fmt.Errorf("validators[%d] not equal %x != %x", i, gotValidator, expectValidator)
+		}
+	}
+	return nil
+}
+
 // checkCandidateRecordsConsistency checks the consistency for candidateRecords
 func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
 	for addr := range tec.ec.userRecords {
@@ -308,7 +438,7 @@ func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
 func (tec *testEpochContext) checkCandidateRecordsLastEpochConsistency() error {
 	// for last epoch, only check for exist entries
 	for addr := range tec.ec.candidateRecordsLastEpoch {
-		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.validators)
+		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.getValidators())
 		if err != nil {
 			return err
 		}
@@ -331,7 +461,7 @@ func (tec *testEpochContext) checkDelegatorRecordsConsistency() error {
 // in expectContext
 func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 	for addr := range tec.ec.delegatorRecordsLastEpoch {
-		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.validators)
+		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.getValidators())
 		if err != nil {
 			return err
 		}
@@ -388,7 +518,7 @@ func (tec *testEpochContext) checkBalanceConsistency() error {
 }
 
 // newExpectedContextWithGenesis create the expectContext that conform with the given genesis
-func newExpectedContextWithGenesis(genesisConfig *core.Genesis) *expectContext {
+func newExpectedContextWithGenesis(genesis *genesisConfig) *expectContext {
 	ec := &expectContext{
 		userRecords:               make(userRecords),
 		validators:                make([]common.Address, 0, maxNumValidators),
@@ -401,33 +531,92 @@ func newExpectedContextWithGenesis(genesisConfig *core.Genesis) *expectContext {
 		balance:                   make(map[common.Address]common.BigInt),
 	}
 
-	for addr, account := range genesisConfig.Alloc {
+	for addr, balance := range genesis.alloc {
 		ec.userRecords[addr] = makeUserRecord()
-		ec.balance[addr] = common.PtrBigInt(account.Balance)
+		ec.balance[addr] = balance
 	}
 	// Set the genesis
-	ec.setGenesis(genesisConfig)
+	ec.setGenesis(genesis)
 	return ec
 }
 
 // setGenesis add the genesis data to the expectContext
-func (ec *expectContext) setGenesis(genesis *core.Genesis) {
+func (ec *expectContext) setGenesis(genesis *genesisConfig) {
 	// Add allocates
-	for addr, account := range genesis.Alloc {
+	for addr, balance := range genesis.alloc {
 		ec.userRecords[addr] = makeUserRecord()
-		ec.balance[addr] = common.PtrBigInt(account.Balance)
+		ec.balance[addr] = balance
 	}
 	// Add validators
-	for _, vc := range genesis.Config.Dpos.Validators {
-		cRecord := candidateRecord{
+	validators := make([]common.Address, 0, len(genesis.config.Dpos.Validators))
+	for _, vc := range genesis.config.Dpos.Validators {
+		validators = append(validators, vc.Address)
+		ec.candidateRecords[vc.Address] = candidateRecord{
 			deposit:     vc.Deposit,
 			rewardRatio: vc.RewardRatio,
 			votes:       make(map[common.Address]struct{}),
 		}
-		ec.candidateRecords[vc.Address] = cRecord
-		ec.candidateRecordsLastEpoch[vc.Address] = cRecord
+		ec.candidateRecordsLastEpoch[vc.Address] = candidateRecord{
+			deposit:     vc.Deposit,
+			rewardRatio: vc.RewardRatio,
+			votes:       make(map[common.Address]struct{}),
+		}
 		ec.frozenAssets[vc.Address] = vc.Deposit
 	}
+	ec.setValidators(validators)
+}
+
+// pickUser randomly pick a user from userRecords
+func (ec *expectContext) pickUser() userRecord {
+	var randomUser userRecord
+	for _, randomUser = range ec.userRecords {
+		break
+	}
+	return randomUser
+}
+
+// pickPotentialCandidate randomly pick a potential candidate from userRecords
+func (ec *expectContext) pickPotentialCandidate() userRecord {
+	var randomUser userRecord
+	var addr common.Address
+	for addr, randomUser = range ec.userRecords {
+		if _, exist := ec.candidateRecords[addr]; !exist && randomUser.isCandidate {
+			return randomUser
+		}
+	}
+	return userRecord{}
+}
+
+// pickPotentialDelegator randomly pick a potential delegator
+func (ec *expectContext) pickPotentialDelegator() userRecord {
+	var randomUser userRecord
+	var addr common.Address
+	for addr, randomUser = range ec.userRecords {
+		if _, exist := ec.delegatorRecords[addr]; !exist && randomUser.isDelegator {
+			break
+		}
+	}
+	return randomUser
+}
+
+// pickCandidate randomly pick a candidate
+func (ec *expectContext) pickCandidate() (common.Address, candidateRecord) {
+	var candidateRecord candidateRecord
+	var addr common.Address
+	for addr, candidateRecord = range ec.candidateRecords {
+		break
+	}
+	return addr, candidateRecord
+}
+
+// pickDelegator randomly pick a delegator
+func (ec *expectContext) pickDelegator() (common.Address, delegatorRecord) {
+	var addr common.Address
+	var record delegatorRecord
+	for addr, record = range ec.delegatorRecords {
+		break
+	}
+	return addr, record
 }
 
 // kickoutCandidate kicks out a candidate out. It does the same logic as cancelCandidate
@@ -448,7 +637,7 @@ func (ec *expectContext) addCandidate(candidate common.Address, newDeposit commo
 		rewardRatio: rewardRatio,
 		votes:       prevVote,
 	}
-	ec.addFrozenAssets(candidate, newDeposit.Sub(newDeposit.Sub(prevDeposit)))
+	ec.addFrozenAssets(candidate, newDeposit.Sub(prevDeposit))
 }
 
 // cancelCandidate update expectContext of canceling a candidate
@@ -555,10 +744,6 @@ func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr co
 	candidateDeposit := GetCandidateDeposit(stateDB, addr)
 	if candidateDeposit.Cmp(common.BigInt0) != 0 {
 		return fmt.Errorf("non candidate address %x have non-zero candidate deposit %v", addr, candidateDeposit)
-	}
-	rewardRatio := GetRewardRatioNumerator(stateDB, addr)
-	if rewardRatio != 0 {
-		return fmt.Errorf("non candidate address %x have non-zero reward ratio %v", addr, rewardRatio)
 	}
 	// check candidate trie
 	b, err := ctx.CandidateTrie().TryGet(addr.Bytes())
@@ -789,6 +974,9 @@ func (ec *expectContext) addThawing(addr common.Address, diff common.BigInt, cur
 	if !exist {
 		prevThawing = common.BigInt0
 	}
+	if _, exist := ec.thawing[thawEpoch]; !exist {
+		ec.thawing[thawEpoch] = make(map[common.Address]common.BigInt)
+	}
 	ec.thawing[thawEpoch][addr] = prevThawing.Add(diff)
 }
 
@@ -818,6 +1006,20 @@ func (ec *expectContext) addBalance(addr common.Address, diff common.BigInt) {
 		prevBalance = common.BigInt0
 	}
 	ec.balance[addr] = prevBalance.Add(diff)
+}
+
+// setValidators set validators to the expected value
+func (ec *expectContext) setValidators(validators []common.Address) {
+	ec.validators = validators
+}
+
+// getValidators returns a copy of the validatos
+func (ec *expectContext) getValidators() []common.Address {
+	validators := make([]common.Address, 0, len(ec.validators))
+	for _, v := range ec.validators {
+		validators = append(validators, v)
+	}
+	return validators
 }
 
 // forEachDelegatorForCandidate iterate over the delegator trie from dpos context for the candidate
@@ -872,9 +1074,9 @@ func getGenesis() *genesisConfig {
 	}
 	alloc := make(genesisAlloc)
 	// Add some extra balance for the validators
-	for addr, balance := range alloc {
-		newBalance := balance.Add(minDeposit.MultInt64(100)))
-		alloc[addr] = newBalance
+	for _, vc := range genesisValidators {
+		newBalance := minDeposit.MultInt64(100)
+		alloc[vc.Address] = newBalance
 	}
 	return &genesisConfig{
 		config: chainConfig,
@@ -886,13 +1088,42 @@ func getGenesis() *genesisConfig {
 func (g *genesisConfig) toBlock(db ethdb.Database) *types.Block {
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
 	for addr, balance := range g.alloc {
-		statedb.AddBalance(addr, balance.BigIntPtr())
+		statedb.CreateAccount(addr)
+		statedb.SetBalance(addr, balance.BigIntPtr())
 	}
 	dc, err := dposContextWithGenesis(statedb, g, db)
 	if err != nil {
 		panic(err)
 	}
-
+	dcProto := dc.ToRoot()
+	root, err := statedb.Commit(true)
+	if err != nil {
+		panic(err)
+	}
+	if _, err = dc.Commit(); err != nil {
+		panic(err)
+	}
+	err = statedb.Database().TrieDB().Commit(root, false)
+	if err != nil {
+		panic(err)
+	}
+	head := &types.Header{
+		Number:      new(big.Int).SetUint64(0),
+		Nonce:       types.EncodeNonce(0),
+		Time:        new(big.Int).SetUint64(0),
+		ParentHash:  common.Hash{},
+		Extra:       []byte{},
+		GasLimit:    0,
+		GasUsed:     0,
+		Difficulty:  new(big.Int).SetInt64(0),
+		MixDigest:   common.Hash{},
+		Coinbase:    common.Address{},
+		Root:        root,
+		DposContext: dcProto,
+	}
+	block := types.NewBlock(head, nil, nil, nil)
+	block.SetDposCtx(dc)
+	return block
 }
 
 // dposContextWithGenesis parse the genesis to dposContext
@@ -913,6 +1144,7 @@ func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.D
 		SetRewardRatioNumerator(statedb, validatorAddr, vc.RewardRatio)
 		SetRewardRatioNumeratorLastEpoch(statedb, validatorAddr, vc.RewardRatio)
 	}
+
 	if err = dc.SetValidators(validators); err != nil {
 		return nil, err
 	}
@@ -964,7 +1196,7 @@ func (user *userRecord) availOpList(ec *expectContext) []opType {
 	ops = append(ops, opTypeDoNothing)
 	if user.isCandidate {
 		ops = append(ops, opTypeAddCandidate)
-		if _, exist := ec.candidateRecords[user.addr]; exist {
+		if _, exist := ec.candidateRecords[user.addr]; exist && len(ec.candidateRecords) > maxNumValidators {
 			ops = append(ops, opTypeCancelCandidate)
 		}
 	}
@@ -1015,4 +1247,31 @@ func checkAddressListConsistentToMap(list []common.Address, m map[common.Address
 		}
 	}
 	return nil
+}
+
+func (ec *expectContext) dumpUser(s string) {
+	fmt.Println("================== " + s + " dumping user" + " ==================")
+	for addr, user := range ec.userRecords {
+		fmt.Printf("user %x: %+v\n", addr, struct{ isCandidate, isDelegator bool }{user.isCandidate, user.isDelegator})
+	}
+	fmt.Println("=============================================")
+	fmt.Println()
+}
+
+func (ec *expectContext) dumpBalance(s string) {
+	fmt.Println("================== " + s + " dumping balance " + " ==================")
+	for addr, balance := range ec.balance {
+		fmt.Printf("balance %x: %v\n", addr, balance)
+	}
+	fmt.Println("=============================================")
+	fmt.Println()
+}
+
+func (ec *expectContext) dumpCandidate(s string) {
+	fmt.Println("================== " + s + " dumping candidate " + " ==================")
+	for addr, record := range ec.candidateRecords {
+		fmt.Printf("balance %x: %+v\n", addr, record)
+	}
+	fmt.Println("=============================================")
+	fmt.Println()
 }
