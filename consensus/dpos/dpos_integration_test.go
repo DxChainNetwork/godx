@@ -55,11 +55,10 @@ type (
 	genesisAlloc map[common.Address]common.BigInt
 
 	testEpochContext struct {
-		genesis *types.Header
-		curTime int64
-		stateDB *state.StateDB
-		ctx     *types.DposContext
-		ec      *expectContext
+		genesis       *types.Header
+		epc           EpochContext
+		ec            *expectContext
+		currentHeader *types.Header
 	}
 
 	expectContext struct {
@@ -226,13 +225,13 @@ func newTestEpochContext(num int, genesisConfig *genesisConfig) (*testEpochConte
 	ctx := genesisBlock.DposCtx()
 	// initialize ec with genesis
 	ec := newExpectedContextWithGenesis(genesisConfig)
+	epc := EpochContext{TimeStamp: curTime, DposContext: ctx, stateDB: statedb}
 	// construct the epoch context
 	tec := &testEpochContext{
-		genesis: genesisHeader,
-		curTime: curTime,
-		stateDB: statedb,
-		ctx:     ctx,
-		ec:      ec,
+		genesis:       genesisHeader,
+		epc:           epc,
+		ec:            ec,
+		currentHeader: genesisHeader,
 	}
 	// Add random users and give them some money
 	numUsersToAdd := num - len(genesisConfig.config.Dpos.Validators)
@@ -281,10 +280,10 @@ func (tec *testEpochContext) executeAddCandidate(addr common.Address) error {
 		prevDeposit = prevCandidateRecord.deposit
 		prevRewardRatio = prevCandidateRecord.rewardRatio
 	}
-	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.stateDB, addr).DivUint64(10))
+	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(10))
 	newRewardRatio := (RewardRatioDenominator-prevRewardRatio)/4 + prevRewardRatio
 	// Process Add candidate
-	if err := ProcessAddCandidate(tec.stateDB, tec.ctx, addr, newDeposit, newRewardRatio); err != nil {
+	if err := ProcessAddCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, newRewardRatio); err != nil {
 		return err
 	}
 	// Update the expected result
@@ -298,11 +297,11 @@ func (tec *testEpochContext) executeCancelCandidate(addr common.Address) error {
 	if !exist {
 		return fmt.Errorf("address %x not previously in candidateRecords", addr)
 	}
-	if err := ProcessCancelCandidate(tec.stateDB, tec.ctx, addr, tec.curTime); err != nil {
+	if err := ProcessCancelCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
 		return err
 	}
 	// Update the expected result
-	tec.ec.cancelCandidate(addr, tec.curTime)
+	tec.ec.cancelCandidate(addr, tec.epc.TimeStamp)
 	return nil
 }
 
@@ -315,9 +314,9 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 		prevDeposit = prevVoteRecord.deposit
 	}
 	// Create the params for the new vote transaction.
-	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.stateDB, addr).DivUint64(100))
+	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
-	if _, err := ProcessVote(tec.stateDB, tec.ctx, addr, newDeposit, votes, tec.curTime); err != nil {
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
 		return err
 	}
 	// Update expected context
@@ -336,11 +335,11 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	// Create params for the new params and vote
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
-	if _, err := ProcessVote(tec.stateDB, tec.ctx, addr, newDeposit, votes, tec.curTime); err != nil {
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
 		return err
 	}
 	// Update expected context
-	tec.ec.voteDecreaseDeposit(addr, newDeposit, votes, tec.curTime)
+	tec.ec.voteDecreaseDeposit(addr, newDeposit, votes, tec.epc.TimeStamp)
 	return nil
 }
 
@@ -350,19 +349,19 @@ func (tec *testEpochContext) executeCancelVote(addr common.Address) error {
 	if !exist {
 		return errors.New("vote record previously not in record map")
 	}
-	if err := ProcessCancelVote(tec.stateDB, tec.ctx, addr, tec.curTime); err != nil {
+	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
 		return err
 	}
-	tec.ec.cancelVote(addr, tec.curTime)
+	tec.ec.cancelVote(addr, tec.epc.TimeStamp)
 	return nil
 }
 
 // commitAndCheckConsistency commit all data structure and check for consistency
 func (tec *testEpochContext) commitAndCheckConsistency() error {
-	if _, err := tec.stateDB.Commit(true); err != nil {
+	if _, err := tec.epc.stateDB.(*state.StateDB).Commit(true); err != nil {
 		return err
 	}
-	if _, err := tec.ctx.Commit(); err != nil {
+	if _, err := tec.epc.DposContext.Commit(); err != nil {
 		return err
 	}
 	if err := tec.checkConsistency(); err != nil {
@@ -405,7 +404,7 @@ func (tec *testEpochContext) checkConsistency() error {
 
 // checkValidatorsConsistency checks the consistency of validators
 func (tec *testEpochContext) checkValidatorsConsistency() error {
-	gotValidators, err := tec.ctx.GetValidators()
+	gotValidators, err := tec.epc.DposContext.GetValidators()
 	if err != nil {
 		return fmt.Errorf("cannot get validators: %v", err)
 	}
@@ -425,7 +424,7 @@ func (tec *testEpochContext) checkValidatorsConsistency() error {
 // checkCandidateRecordsConsistency checks the consistency for candidateRecords
 func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
 	for addr := range tec.ec.userRecords {
-		err := tec.ec.checkCandidateRecord(tec.stateDB, tec.ctx, addr)
+		err := tec.ec.checkCandidateRecord(tec.epc.stateDB, tec.epc.DposContext, addr)
 		if err != nil {
 			return err
 		}
@@ -438,7 +437,7 @@ func (tec *testEpochContext) checkCandidateRecordsConsistency() error {
 func (tec *testEpochContext) checkCandidateRecordsLastEpochConsistency() error {
 	// for last epoch, only check for exist entries
 	for addr := range tec.ec.candidateRecordsLastEpoch {
-		err := tec.ec.checkCandidateRecordLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.getValidators())
+		err := tec.ec.checkCandidateRecordLastEpoch(tec.epc.stateDB, tec.epc.DposContext, addr, tec.genesis, tec.ec.getValidators())
 		if err != nil {
 			return err
 		}
@@ -449,7 +448,7 @@ func (tec *testEpochContext) checkCandidateRecordsLastEpochConsistency() error {
 // checkDelegatorRecordsConsistency checks the consistency for delegatorRecords
 func (tec *testEpochContext) checkDelegatorRecordsConsistency() error {
 	for addr := range tec.ec.userRecords {
-		err := tec.ec.checkDelegatorRecord(tec.stateDB, tec.ctx, addr)
+		err := tec.ec.checkDelegatorRecord(tec.epc.stateDB, tec.epc.DposContext, addr)
 		if err != nil {
 			return err
 		}
@@ -461,7 +460,7 @@ func (tec *testEpochContext) checkDelegatorRecordsConsistency() error {
 // in expectContext
 func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 	for addr := range tec.ec.delegatorRecordsLastEpoch {
-		err := tec.ec.checkDelegatorLastEpoch(tec.stateDB, tec.ctx, addr, tec.genesis, tec.ec.getValidators())
+		err := tec.ec.checkDelegatorLastEpoch(tec.epc.stateDB, tec.epc.DposContext, addr, tec.genesis, tec.ec.getValidators())
 		if err != nil {
 			return err
 		}
@@ -473,7 +472,7 @@ func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 // in state
 func (tec *testEpochContext) checkThawingConsistency() error {
 	// only check the thawing effected epoch
-	curEpoch := CalculateEpochID(tec.curTime)
+	curEpoch := CalculateEpochID(tec.epc.TimeStamp)
 	thawEpoch := calcThawingEpoch(curEpoch)
 	for epoch := curEpoch + 1; epoch <= thawEpoch; epoch++ {
 		thawMap := tec.ec.thawing[epoch]
@@ -481,7 +480,7 @@ func (tec *testEpochContext) checkThawingConsistency() error {
 		for addr, thaw := range thawMap {
 			expect[addr] = thaw
 		}
-		err := checkThawingAddressAndValue(tec.stateDB, epoch, expect)
+		err := checkThawingAddressAndValue(tec.epc.stateDB, epoch, expect)
 		if err != nil {
 			return err
 		}
@@ -496,7 +495,7 @@ func (tec *testEpochContext) checkFrozenAssetsConsistency() error {
 		if !exist {
 			frozenAssets = common.BigInt0
 		}
-		gotFrozenAssets := GetFrozenAssets(tec.stateDB, addr)
+		gotFrozenAssets := GetFrozenAssets(tec.epc.stateDB, addr)
 		if gotFrozenAssets.Cmp(frozenAssets) != 0 {
 			return fmt.Errorf("address %x frozen assets not expected: expect %v, got %v", addr,
 				frozenAssets, gotFrozenAssets)
@@ -509,7 +508,7 @@ func (tec *testEpochContext) checkFrozenAssetsConsistency() error {
 func (tec *testEpochContext) checkBalanceConsistency() error {
 	for addr := range tec.ec.userRecords {
 		expectedBalance := tec.ec.getBalance(addr)
-		gotBalance := GetBalance(tec.stateDB, addr)
+		gotBalance := GetBalance(tec.epc.stateDB, addr)
 		if expectedBalance.Cmp(gotBalance) != 0 {
 			return fmt.Errorf("balance not expected. %x: expect %v; got %v", addr, expectedBalance, gotBalance)
 		}
@@ -731,7 +730,7 @@ func checkRecordsConsistency(cRecords candidateRecords, dRecords delegatorRecord
 }
 
 // checkCandidateRecord checks whether a candidate is consistent in state and ctx
-func (ec *expectContext) checkCandidateRecord(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func (ec *expectContext) checkCandidateRecord(stateDB stateDB, ctx *types.DposContext, addr common.Address) error {
 	record, exist := ec.candidateRecords[addr]
 	if !exist {
 		return checkEmptyCandidate(stateDB, ctx, addr)
@@ -740,7 +739,7 @@ func (ec *expectContext) checkCandidateRecord(stateDB *state.StateDB, ctx *types
 }
 
 // checkEmptyCandidate checks in stateDB and ctx whether the addr is an empty candidate
-func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func checkEmptyCandidate(stateDB stateDB, ctx *types.DposContext, addr common.Address) error {
 	candidateDeposit := GetCandidateDeposit(stateDB, addr)
 	if candidateDeposit.Cmp(common.BigInt0) != 0 {
 		return fmt.Errorf("non candidate address %x have non-zero candidate deposit %v", addr, candidateDeposit)
@@ -763,7 +762,7 @@ func checkEmptyCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr co
 }
 
 // checkCandidate checks in stateDB and ctx whether the addr is consistent to record
-func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address,
+func checkCandidate(stateDB stateDB, ctx *types.DposContext, addr common.Address,
 	record candidateRecord) error {
 
 	candidateDeposit := GetCandidateDeposit(stateDB, addr)
@@ -800,7 +799,7 @@ func checkCandidate(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 }
 
 // checkCandidateRecordLastEpoch checks the candidate last epoch for addr
-func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB *state.StateDB, ctx *types.DposContext,
+func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB stateDB, ctx *types.DposContext,
 	addr common.Address, genesis *types.Header, validators []common.Address) error {
 
 	// if the candidate is not in validators, skip checking
@@ -855,7 +854,7 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB *state.StateDB, c
 }
 
 // checkDelegatorRecord checks whether a delegator is consistent in state and ctx
-func (ec *expectContext) checkDelegatorRecord(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func (ec *expectContext) checkDelegatorRecord(stateDB stateDB, ctx *types.DposContext, addr common.Address) error {
 	record, exist := ec.delegatorRecords[addr]
 	if !exist {
 		return checkEmptyDelegator(stateDB, ctx, addr)
@@ -864,7 +863,7 @@ func (ec *expectContext) checkDelegatorRecord(stateDB *state.StateDB, ctx *types
 }
 
 // checkEmptyDelegator is a helper function that checks whether a delegator is empty in stateDb and ctx
-func checkEmptyDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address) error {
+func checkEmptyDelegator(stateDB stateDB, ctx *types.DposContext, addr common.Address) error {
 	// delegator should not in vote trie
 	candidatesByte, err := ctx.VoteTrie().TryGet(addr.Bytes())
 	if err == nil && candidatesByte != nil && len(candidatesByte) != 0 {
@@ -880,7 +879,7 @@ func checkEmptyDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr co
 
 // checkDelegator is a helper function that checks whether a delegator is consistent to record
 // in statedb and ctx
-func checkDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, record delegatorRecord) error {
+func checkDelegator(stateDB stateDB, ctx *types.DposContext, addr common.Address, record delegatorRecord) error {
 	// delegator should be in vote trie and have candidates in record
 	candidatesByte, err := ctx.VoteTrie().TryGet(addr.Bytes())
 	if err != nil || candidatesByte == nil || len(candidatesByte) == 0 {
@@ -906,7 +905,7 @@ func checkDelegator(stateDB *state.StateDB, ctx *types.DposContext, addr common.
 }
 
 // checkDelegatorLastEpoch checks whether a delegator in last epoch is consistent to stateDB and ctx
-func (ec *expectContext) checkDelegatorLastEpoch(stateDB *state.StateDB, ctx *types.DposContext,
+func (ec *expectContext) checkDelegatorLastEpoch(stateDB stateDB, ctx *types.DposContext,
 	addr common.Address, genesis *types.Header, validators []common.Address) error {
 
 	// If the delegator has not voted validator, skip the checking
@@ -990,6 +989,19 @@ func (ec *expectContext) addFrozenAssets(addr common.Address, diff common.BigInt
 	ec.frozenAssets[addr] = newFrozenAssets
 }
 
+// subFrozenAssets sub the frozen assets of an address of diff amount
+func (ec *expectContext) subFrozenAssets(addr common.Address, diff common.BigInt) error {
+	prevFrozenAssets, exist := ec.frozenAssets[addr]
+	if !exist {
+		return fmt.Errorf("the address has no frozen assets")
+	}
+	if prevFrozenAssets.Cmp(diff) < 0 {
+		return fmt.Errorf("the address has not enough frozenAssets to substrate from")
+	}
+	ec.frozenAssets[addr] = ec.frozenAssets[addr].Sub(diff)
+	return nil
+}
+
 // getBalance get the expected balance from expectContext
 func (ec *expectContext) getBalance(addr common.Address) common.BigInt {
 	balance, exist := ec.balance[addr]
@@ -1013,13 +1025,100 @@ func (ec *expectContext) setValidators(validators []common.Address) {
 	ec.validators = validators
 }
 
-// getValidators returns a copy of the validatos
+// getValidators returns a copy of the validators
 func (ec *expectContext) getValidators() []common.Address {
 	validators := make([]common.Address, 0, len(ec.validators))
 	for _, v := range ec.validators {
 		validators = append(validators, v)
 	}
 	return validators
+}
+
+// getBlockProducer return the block producer of the give time slot
+func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, error) {
+	slot, err := calcBlockSlot(blockTime)
+	if err != nil {
+		return common.Address{}, err
+	}
+	return ec.validators[int(slot)%len(ec.validators)], nil
+}
+
+// accumulateRewards distribute the reward among validators and delegators
+func (ec *expectContext) accumulateRewards(state *state.StateDB, validator, coinbase common.Address,
+	db *ethdb.Database, genesis *types.Header) {
+
+	blockReward := byzantiumBlockReward
+	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
+	totalVotes := ec.getTotalVotesLastEpoch(validator)
+	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
+	// Distribute the reward
+	sharedReward := blockReward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
+	assignedReward := common.BigInt0
+	for delegator, votes := range delegatorVotes {
+		delegatorReward := sharedReward.Mult(votes).Div(totalVotes)
+		ec.addBalance(delegator, delegatorReward)
+		assignedReward = assignedReward.Add(delegatorReward)
+	}
+	ec.addBalance(validator, blockReward.Sub(assignedReward))
+}
+
+// getTotalVotesLastEpoch get the total votes in the last epoch
+func (ec *expectContext) getTotalVotesLastEpoch(candidate common.Address) common.BigInt {
+	totalVotes := ec.candidateRecordsLastEpoch[candidate].deposit
+	for delegator := range ec.candidateRecordsLastEpoch[candidate].votes {
+		totalVotes = totalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
+	}
+	return totalVotes
+}
+
+// countDelegateVotesForCandidate count the delegator votes for a candidate
+func (ec *expectContext) countDelegateVotesForCandidate(candidate common.Address) map[common.Address]common.BigInt {
+	m := make(map[common.Address]common.BigInt)
+	for delegator := range ec.candidateRecordsLastEpoch[candidate].votes {
+		deposit := ec.delegatorRecordsLastEpoch[delegator].deposit
+		m[delegator] = deposit
+	}
+	return m
+}
+
+// try elect elect for the validators in the new epoch
+// TODO: add kick out candidate with low mined count logic
+func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, time int64, epc EpochContext) error {
+	prevEpoch := CalculateEpochID(parent.Time.Int64())
+	currentEpoch := CalculateEpochID(time)
+	if prevEpoch == currentEpoch {
+		return nil
+	}
+	if err := ec.thawInEpoch(currentEpoch); err != nil {
+		return err
+	}
+	// we use EpochContext.countVotes to count the votes since we do not know how the delegate trie
+	// iterates.
+	votes, err := epc.countVotes()
+	if err != nil {
+		return err
+	}
+	seed := makeSeed(parent.Hash(), 0)
+	validators, err := selectValidator(votes, seed)
+	ec.setValidators(validators)
+	// Save the current maps to maps in last epoch
+	ec.candidateRecordsLastEpoch = copyCandidateRecords(ec.candidateRecords)
+	ec.delegatorRecordsLastEpoch = copyDelegatorRecords(ec.delegatorRecords)
+	return nil
+}
+
+// thawInEpoch thaw all frozen assets to be thawed in an epoch
+func (ec *expectContext) thawInEpoch(epochID int64) error {
+	thawings, exist := ec.thawing[epochID]
+	if !exist {
+		return nil
+	}
+	for addr, thaw := range thawings {
+		if err := ec.subFrozenAssets(addr, thaw); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // forEachDelegatorForCandidate iterate over the delegator trie from dpos context for the candidate
@@ -1247,6 +1346,72 @@ func checkAddressListConsistentToMap(list []common.Address, m map[common.Address
 		}
 	}
 	return nil
+}
+
+// copyCandidateRecords makes a deep copy of candidateRecords
+func copyCandidateRecords(m map[common.Address]candidateRecord) map[common.Address]candidateRecord {
+	res := make(map[common.Address]candidateRecord)
+	for addr, cRecord := range m {
+		vMap := make(map[common.Address]struct{})
+		for delegator := range cRecord.votes {
+			vMap[delegator] = struct{}{}
+		}
+		res[addr] = candidateRecord{
+			deposit:     cRecord.deposit,
+			rewardRatio: cRecord.rewardRatio,
+			votes:       vMap,
+		}
+	}
+	return res
+}
+
+// copyDelegatorRecords makes a deep copy of delegatorRecords
+func copyDelegatorRecords(m map[common.Address]delegatorRecord) map[common.Address]delegatorRecord {
+	res := make(map[common.Address]delegatorRecord)
+	for addr, dRecord := range m {
+		vMap := make(map[common.Address]struct{})
+		for candidate := range dRecord.votes {
+			vMap[candidate] = struct{}{}
+		}
+		res[addr] = delegatorRecord{
+			deposit: dRecord.deposit,
+			votes:   vMap,
+		}
+	}
+	return res
+}
+
+// makeHeader makes a header for testing.
+func makeHeader(parentHash common.Hash, validator common.Address, statedb *state.StateDB, ctx *types.DposContext,
+	bn uint64, time int64) (*types.Header, error) {
+
+	root, err := statedb.Commit(true)
+	if err != nil {
+		return nil, err
+	}
+	dposRoot, err := ctx.Commit()
+	if err != nil {
+		return nil, err
+	}
+	return &types.Header{
+		ParentHash:  parentHash,
+		UncleHash:   types.EmptyUncleHash,
+		Validator:   validator,
+		Coinbase:    validator,
+		Root:        root,
+		TxHash:      types.EmptyRootHash,
+		ReceiptHash: types.EmptyRootHash,
+		DposContext: dposRoot,
+		Bloom:       types.Bloom{},
+		Difficulty:  common.Big1,
+		Number:      new(big.Int).SetUint64(bn),
+		GasLimit:    0,
+		GasUsed:     0,
+		Time:        new(big.Int).SetInt64(time),
+		Extra:       []byte{},
+		MixDigest:   emptyHash,
+		Nonce:       types.BlockNonce{},
+	}, nil
 }
 
 func (ec *expectContext) dumpUser(s string) {

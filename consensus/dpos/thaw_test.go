@@ -134,7 +134,7 @@ func randomMarkThawAddresses(stateDB *state.StateDB, addresses []common.Address,
 }
 
 // checkThawingAddressAndValue checks the result of markThawingAddressAndValue
-func checkThawingAddressAndValue(state *state.StateDB, epoch int64, expect map[common.Address]common.BigInt) error {
+func checkThawingAddressAndValue(state stateDB, epoch int64, expect map[common.Address]common.BigInt) error {
 	thawingAddress := getThawingAddress(epoch)
 	var internalErr error
 	err := forEachEntryInThawingAddress(state, thawingAddress, func(addr common.Address) {

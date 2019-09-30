@@ -67,7 +67,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return errors.New("too few candidates")
 		}
 		// Create the seed and pseudo-randomly select the validators
-		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i
+		seed := makeSeed(parent.Hash(), i)
 		validators, err := selectValidator(candidateVotes, seed)
 		if err != nil {
 			return err
@@ -258,4 +258,9 @@ func (a addressesByCnt) Less(i, j int) bool {
 		return a[i].cnt < a[j].cnt
 	}
 	return a[i].address.String() < a[j].address.String()
+}
+
+// makeSeed makes the seed for random selection in try elect
+func makeSeed(h common.Hash, i int64) int64 {
+	return int64(binary.LittleEndian.Uint32(crypto.Keccak512(h.Bytes()))) + i
 }
