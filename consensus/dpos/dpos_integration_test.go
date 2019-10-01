@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -96,6 +97,7 @@ type (
 		thawing                   map[int64]map[common.Address]common.BigInt
 		frozenAssets              map[common.Address]common.BigInt
 		balance                   map[common.Address]common.BigInt
+		minedCnt                  map[common.Address]int
 	}
 
 	candidateRecords map[common.Address]candidateRecord
@@ -123,7 +125,7 @@ type (
 )
 
 func init() {
-	l = newTestLog(false)
+	l = newTestLog(true)
 }
 
 func TestDPOSIntegration(t *testing.T) {
@@ -143,6 +145,12 @@ func TestDPOSIntegration(t *testing.T) {
 			if err := tec.executeRandomOperation(); err != nil {
 				t.Fatal(err)
 			}
+		}
+		// at a rate of 1/3, the validator will not produce a block
+		if r.Intn(3) == 0 {
+			tec.epc.TimeStamp += BlockInterval
+			bn--
+			continue
 		}
 		b, err := tec.finalize(dpos)
 		if err != nil {
@@ -594,9 +602,15 @@ func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, err := statedb.Commit(true); err != nil {
+		return nil, err
+	}
+	if _, err := tec.epc.DposContext.Commit(); err != nil {
+		return nil, err
+	}
 	// Update expect context
-	tec.ec.accumulateRewards(tec.epc.stateDB, validator, validator, tec.db, tec.genesis)
-	if err := tec.ec.tryElect(tec.genesis, parentHeader, tec.epc.TimeStamp, tec.epc); err != nil {
+	tec.ec.accumulateRewards(tec.epc.stateDB, validator, tec.db, tec.genesis)
+	if err := tec.ec.tryElect(tec.cr, tec.genesis, parentHeader, tec.epc.TimeStamp, tec.epc); err != nil {
 		return nil, err
 	}
 	return b, nil
@@ -614,6 +628,7 @@ func newExpectedContextWithGenesis(genesis *genesisConfig) *expectContext {
 		thawing:                   make(map[int64]map[common.Address]common.BigInt),
 		frozenAssets:              make(map[common.Address]common.BigInt),
 		balance:                   make(map[common.Address]common.BigInt),
+		minedCnt:                  make(map[common.Address]int),
 	}
 	// Set the genesis
 	ec.setGenesis(genesis)
@@ -701,6 +716,7 @@ func (ec *expectContext) pickDelegator() (common.Address, delegatorRecord) {
 
 // kickoutCandidate kicks out a candidate out. It does the same logic as cancelCandidate
 func (ec *expectContext) kickOutCandidate(candidate common.Address, curTime int64) {
+	fmt.Printf("kicking out %x ==================\n", candidate)
 	ec.cancelCandidate(candidate, curTime)
 }
 
@@ -1125,7 +1141,7 @@ func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, erro
 }
 
 // accumulateRewards distribute the reward among validators and delegators
-func (ec *expectContext) accumulateRewards(state stateDB, validator, coinbase common.Address,
+func (ec *expectContext) accumulateRewards(state stateDB, validator common.Address,
 	db ethdb.Database, genesis *types.Header) {
 
 	blockReward := byzantiumBlockReward
@@ -1141,6 +1157,8 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator, coinbase co
 		assignedReward = assignedReward.Add(delegatorReward)
 	}
 	ec.addBalance(validator, blockReward.Sub(assignedReward))
+	// Update mined count
+	ec.incrementMinedCnt(validator)
 }
 
 // getTotalVotesLastEpoch get the total votes in the last epoch
@@ -1163,8 +1181,7 @@ func (ec *expectContext) countDelegateVotesForCandidate(candidate common.Address
 }
 
 // try elect elect for the validators in the new epoch
-// TODO: add kick out candidate with low mined count logic
-func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, time int64, epc EpochContext) error {
+func (ec *expectContext) tryElect(cr consensus.ChainReader, genesis *types.Header, parent *types.Header, time int64, epc EpochContext) error {
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(time)
 	if prevEpoch == currentEpoch || prevEpoch == 0 {
@@ -1173,6 +1190,9 @@ func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, t
 	if err := ec.thawInEpoch(currentEpoch); err != nil {
 		return err
 	}
+	// kick out irresponsible validators
+	ec.kickOutValidators(cr, time)
+
 	// we use EpochContext.countVotes to count the votes since we do not know how the delegate trie
 	// iterates.
 	votes, err := epc.countVotes()
@@ -1186,6 +1206,50 @@ func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, t
 	ec.candidateRecordsLastEpoch = copyCandidateRecords(ec.candidateRecords)
 	ec.delegatorRecordsLastEpoch = copyDelegatorRecords(ec.delegatorRecords)
 	return nil
+}
+
+// kickOutValidators kick out the validators in current time
+func (ec *expectContext) kickOutValidators(cr consensus.ChainReader, time int64) {
+	ineligibleValidators := ec.getIneligibleValidators(cr, time)
+	numCandidates := len(ec.candidateRecords)
+	for _, v := range ineligibleValidators {
+		if numCandidates <= SafeSize {
+			break
+		}
+		addr := v.address
+		ec.kickOutCandidate(addr, time)
+		numCandidates--
+	}
+	return
+}
+
+func (ec *expectContext) getIneligibleValidators(cr consensus.ChainReader, curTime int64) addressesByCnt {
+	firstHeader := cr.GetHeaderByNumber(1)
+	if firstHeader == nil {
+		return addressesByCnt{}
+	}
+	timeFirstBlock := firstHeader.Time.Int64()
+	expectBlocks := expectedBlocksPerValidatorInEpoch(timeFirstBlock, curTime)
+	// Iterate over the validators
+	var ineligibleValidators addressesByCnt
+	for _, addr := range ec.validators {
+		minedCnt := int64(ec.minedCnt[addr])
+		if !isEligibleValidator(minedCnt, expectBlocks) {
+			ineligibleValidators = append(ineligibleValidators, &addressByCnt{addr, minedCnt})
+		}
+	}
+	sort.Sort(ineligibleValidators)
+	return ineligibleValidators
+}
+
+// incrementMinedCnt increment the mined count for the validator
+func (ec *expectContext) incrementMinedCnt(validator common.Address) {
+	prevMinedCnt, exist := ec.minedCnt[validator]
+	if !exist {
+		prevMinedCnt = 0
+	}
+	prevMinedCnt++
+	ec.minedCnt[validator] = prevMinedCnt
 }
 
 // thawInEpoch thaw all frozen assets to be thawed in an epoch
@@ -1319,6 +1383,7 @@ func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.D
 		if err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes()); err != nil {
 			return nil, err
 		}
+		l.Printf("User %x genesis add candidate %v\n", validatorAddr, vc.Deposit)
 		SetCandidateDeposit(statedb, validatorAddr, vc.Deposit)
 		SetFrozenAssets(statedb, validatorAddr, vc.Deposit)
 		SetRewardRatioNumerator(statedb, validatorAddr, vc.RewardRatio)
