@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -55,10 +56,12 @@ type (
 	genesisAlloc map[common.Address]common.BigInt
 
 	testEpochContext struct {
-		genesis       *types.Header
-		epc           EpochContext
-		ec            *expectContext
-		currentHeader *types.Header
+		genesis     *types.Header
+		blockNumber uint64
+		epc         EpochContext
+		ec          *expectContext
+		cr          consensus.ChainReader
+		db          ethdb.Database
 	}
 
 	expectContext struct {
@@ -101,7 +104,34 @@ type (
 )
 
 func TestDPOSIntegration(t *testing.T) {
-
+	genesis := getGenesis()
+	tec, err := newTestEpochContext(10000, genesis)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dpos := New(genesis.config.Dpos, tec.db)
+	opPerBlock := 50
+	numBlocks := 1000
+	for bn := 1; bn != numBlocks; bn++ {
+		fmt.Println(bn)
+		for opIndex := 0; opIndex != opPerBlock; opIndex++ {
+			if err := tec.executeRandomOperation(); err != nil {
+				t.Fatal(err)
+			}
+		}
+		fmt.Println(len(tec.ec.validators))
+		b, err := tec.finalize(dpos)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// insert into fake chain
+		tec.cr.(*fakeChainReaderForIntegration).insertBlock(b)
+		if err = tec.checkConsistency(); err != nil {
+			t.Fatal(err)
+		}
+		tec.blockNumber++
+		tec.epc.TimeStamp += BlockInterval
+	}
 }
 
 func TestDposIntegrationInitializeGenesis(t *testing.T) {
@@ -223,15 +253,18 @@ func newTestEpochContext(num int, genesisConfig *genesisConfig) (*testEpochConte
 		return nil, fmt.Errorf("cannot create a new stateDB: %v", err)
 	}
 	ctx := genesisBlock.DposCtx()
+	cr := newFakeChainReaderForIntegration(genesisConfig.config, genesisBlock)
 	// initialize ec with genesis
 	ec := newExpectedContextWithGenesis(genesisConfig)
 	epc := EpochContext{TimeStamp: curTime, DposContext: ctx, stateDB: statedb}
 	// construct the epoch context
 	tec := &testEpochContext{
-		genesis:       genesisHeader,
-		epc:           epc,
-		ec:            ec,
-		currentHeader: genesisHeader,
+		genesis:     genesisHeader,
+		epc:         epc,
+		ec:          ec,
+		cr:          cr,
+		db:          db,
+		blockNumber: 1,
 	}
 	// Add random users and give them some money
 	numUsersToAdd := num - len(genesisConfig.config.Dpos.Validators)
@@ -317,6 +350,8 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
+		fmt.Printf("%x\n", addr)
+
 		return err
 	}
 	// Update expected context
@@ -514,6 +549,30 @@ func (tec *testEpochContext) checkBalanceConsistency() error {
 		}
 	}
 	return nil
+}
+
+// finalize does all the finalize job for both dposContext and expectContext
+func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
+	validator, err := tec.epc.lookupValidator(tec.epc.TimeStamp)
+	if err != nil {
+		return nil, err
+	}
+	// Update dposContext
+	statedb := tec.epc.stateDB.(*state.StateDB)
+	parentHeader := tec.cr.CurrentHeader()
+	newHeader, err := makeHeader(parentHeader.Hash(), validator, statedb, tec.epc.DposContext,
+		tec.blockNumber, tec.epc.TimeStamp)
+	b, err := dpos.Finalize(tec.cr, newHeader, statedb, []*types.Transaction{}, []*types.Header{},
+		[]*types.Receipt{}, tec.epc.DposContext)
+	if err != nil {
+		return nil, err
+	}
+	// Update expect context
+	tec.ec.accumulateRewards(tec.epc.stateDB, validator, validator, tec.db, tec.genesis)
+	if err := tec.ec.tryElect(tec.genesis, parentHeader, tec.epc.TimeStamp, tec.epc); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // newExpectedContextWithGenesis create the expectContext that conform with the given genesis
@@ -1044,8 +1103,8 @@ func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, erro
 }
 
 // accumulateRewards distribute the reward among validators and delegators
-func (ec *expectContext) accumulateRewards(state *state.StateDB, validator, coinbase common.Address,
-	db *ethdb.Database, genesis *types.Header) {
+func (ec *expectContext) accumulateRewards(state stateDB, validator, coinbase common.Address,
+	db ethdb.Database, genesis *types.Header) {
 
 	blockReward := byzantiumBlockReward
 	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
@@ -1086,7 +1145,8 @@ func (ec *expectContext) countDelegateVotesForCandidate(candidate common.Address
 func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, time int64, epc EpochContext) error {
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(time)
-	if prevEpoch == currentEpoch {
+	fmt.Println("in expect try elect", prevEpoch, currentEpoch)
+	if prevEpoch == currentEpoch || prevEpoch == 0 {
 		return nil
 	}
 	if err := ec.thawInEpoch(currentEpoch); err != nil {
@@ -1098,8 +1158,10 @@ func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, t
 	if err != nil {
 		return err
 	}
-	seed := makeSeed(parent.Hash(), 0)
-	validators, err := selectValidator(votes, seed)
+	fmt.Printf("in got, parent hash: %x\n", parent.Hash())
+	seed := makeSeed(parent.Hash(), prevEpoch)
+	validators, err := randomSelectAddress(typeLuckyWheel, votes, seed, MaxValidatorSize)
+	fmt.Println("seed from expectC", seed)
 	ec.setValidators(validators)
 	// Save the current maps to maps in last epoch
 	ec.candidateRecordsLastEpoch = copyCandidateRecords(ec.candidateRecords)
@@ -1148,7 +1210,7 @@ func forEachDelegatorForCandidateFromTrie(delegateTrie *trie.Trie, candidate com
 
 // getGenesis return the genesis config for the integration test
 func getGenesis() *genesisConfig {
-	genesisValidators := make([]params.ValidatorConfig, 0, maxNumValidators)
+	genesisValidators := make([]params.ValidatorConfig, 0, MaxValidatorSize)
 	for i := 0; i != maxNumValidators; i++ {
 		genesisValidators = append(genesisValidators, params.ValidatorConfig{
 			Address:     randomAddress(),
@@ -1439,4 +1501,68 @@ func (ec *expectContext) dumpCandidate(s string) {
 	}
 	fmt.Println("=============================================")
 	fmt.Println()
+}
+
+// fakeChainReaderForIntegration is the fake chain reader for integration test usage
+type fakeChainReaderForIntegration struct {
+	config        *params.ChainConfig
+	blocks        []*types.Block
+	numberToBlock map[uint64]*types.Block
+	hashToBlock   map[common.Hash]*types.Block
+}
+
+// newFakeChainReaderForIntegration creates a new fakeChainReaderForIntegration
+func newFakeChainReaderForIntegration(genesisConfig *params.ChainConfig, genesisBlock *types.Block) *fakeChainReaderForIntegration {
+	cr := &fakeChainReaderForIntegration{
+		config:        genesisConfig,
+		numberToBlock: make(map[uint64]*types.Block),
+		hashToBlock:   make(map[common.Hash]*types.Block),
+	}
+	cr.insertBlock(genesisBlock)
+	return cr
+}
+
+func (cr *fakeChainReaderForIntegration) Config() *params.ChainConfig {
+	return cr.config
+}
+
+func (cr *fakeChainReaderForIntegration) CurrentHeader() *types.Header {
+	return cr.blocks[len(cr.blocks)-1].Header()
+}
+
+func (cr *fakeChainReaderForIntegration) GetHeaderByNumber(num uint64) *types.Header {
+	b, exist := cr.numberToBlock[num]
+	if !exist {
+		return nil
+	}
+	fmt.Println("read genesis", cr.numberToBlock[0].Time())
+	return b.Header()
+}
+
+func (cr *fakeChainReaderForIntegration) GetHeader(hash common.Hash, number uint64) *types.Header {
+	b, exist := cr.hashToBlock[hash]
+	if !exist {
+		return nil
+	}
+	return b.Header()
+}
+
+func (cr *fakeChainReaderForIntegration) GetHeaderByHash(hash common.Hash) *types.Header {
+	b, exist := cr.hashToBlock[hash]
+	if !exist {
+		return nil
+	}
+	return b.Header()
+}
+
+func (cr *fakeChainReaderForIntegration) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return cr.hashToBlock[hash]
+}
+
+func (cr *fakeChainReaderForIntegration) insertBlock(b *types.Block) {
+	bCopy := types.NewBlockWithHeader(b.Header())
+	bCopy.SetDposCtx(b.DposCtx())
+	cr.blocks = append(cr.blocks, bCopy)
+	cr.numberToBlock[b.NumberU64()] = bCopy
+	cr.hashToBlock[b.Hash()] = bCopy
 }
