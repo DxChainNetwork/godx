@@ -409,7 +409,6 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
-	fmt.Println("genesis", CalculateEpochID(genesis.Time.Int64()))
 	accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis)
 
 	if d.Mode == ModeFake {

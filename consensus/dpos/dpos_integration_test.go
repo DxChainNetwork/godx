@@ -33,18 +33,37 @@ const (
 	opTypeCancelVote
 )
 
+func (t opType) String() string {
+	switch t {
+	case opTypeDoNothing:
+		return "do nothing"
+	case opTypeAddCandidate:
+		return "add candidate"
+	case opTypeCancelCandidate:
+		return "cancel candidate"
+	case opTypeVoteIncreaseDeposit:
+		return "increase vote"
+	case opTypeVoteDecreaseDeposit:
+		return "decrease vote"
+	case opTypeCancelVote:
+		return "cancel vote"
+	default:
+	}
+	return "do nothing"
+}
+
 var (
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	errNoEntriesInDelegateTrie = errors.New("no entries in delegate trie")
-
-	maxNumValidators = 21
 
 	maxVotes = 30
 
 	emptyAddress common.Address
 
 	emptyHash common.Hash
+
+	l *testLog
 )
 
 type (
@@ -103,23 +122,28 @@ type (
 	}
 )
 
+func init() {
+	l = newTestLog(false)
+}
+
 func TestDPOSIntegration(t *testing.T) {
 	genesis := getGenesis()
-	tec, err := newTestEpochContext(10000, genesis)
+	tec, err := newTestEpochContext(1000, genesis)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dpos := New(genesis.config.Dpos, tec.db)
 	opPerBlock := 50
-	numBlocks := 1000
+	numBlocks := 300
+	if testing.Short() {
+		numBlocks = 50
+	}
 	for bn := 1; bn != numBlocks; bn++ {
-		fmt.Println(bn)
 		for opIndex := 0; opIndex != opPerBlock; opIndex++ {
 			if err := tec.executeRandomOperation(); err != nil {
 				t.Fatal(err)
 			}
 		}
-		fmt.Println(len(tec.ec.validators))
 		b, err := tec.finalize(dpos)
 		if err != nil {
 			t.Fatal(err)
@@ -315,6 +339,7 @@ func (tec *testEpochContext) executeAddCandidate(addr common.Address) error {
 	}
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(10))
 	newRewardRatio := (RewardRatioDenominator-prevRewardRatio)/4 + prevRewardRatio
+	l.Printf("User %x add candidate (%v / %v) -> (%v / %v)\n", addr, prevDeposit, prevRewardRatio, newDeposit, newRewardRatio)
 	// Process Add candidate
 	if err := ProcessAddCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, newRewardRatio); err != nil {
 		return err
@@ -330,6 +355,7 @@ func (tec *testEpochContext) executeCancelCandidate(addr common.Address) error {
 	if !exist {
 		return fmt.Errorf("address %x not previously in candidateRecords", addr)
 	}
+	l.Printf("User %x cancel candidate\n", addr)
 	if err := ProcessCancelCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
 		return err
 	}
@@ -349,9 +375,8 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	// Create the params for the new vote transaction.
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
+	l.Printf("User %x increase vote deposit %v -> %v\n", addr, prevDeposit, newDeposit)
 	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
-		fmt.Printf("%x\n", addr)
-
 		return err
 	}
 	// Update expected context
@@ -359,7 +384,7 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	return nil
 }
 
-// executeVoteDecreaseDeposit execute vote wiht decreasing deposit.
+// executeVoteDecreaseDeposit execute vote with decreasing deposit.
 func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) error {
 	// Get the previous info
 	prevVoteRecord, exist := tec.ec.delegatorRecords[addr]
@@ -370,6 +395,7 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	// Create params for the new params and vote
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
+	l.Printf("User %x decrease deposit %v -> %v\n", addr, prevDeposit, newDeposit)
 	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
 		return err
 	}
@@ -384,6 +410,7 @@ func (tec *testEpochContext) executeCancelVote(addr common.Address) error {
 	if !exist {
 		return errors.New("vote record previously not in record map")
 	}
+	l.Printf("User %x cancel vote\n", addr)
 	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
 		return err
 	}
@@ -579,7 +606,7 @@ func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
 func newExpectedContextWithGenesis(genesis *genesisConfig) *expectContext {
 	ec := &expectContext{
 		userRecords:               make(userRecords),
-		validators:                make([]common.Address, 0, maxNumValidators),
+		validators:                make([]common.Address, 0, MaxValidatorSize),
 		candidateRecords:          make(candidateRecords),
 		candidateRecordsLastEpoch: make(candidateRecords),
 		delegatorRecords:          make(delegatorRecords),
@@ -587,11 +614,6 @@ func newExpectedContextWithGenesis(genesis *genesisConfig) *expectContext {
 		thawing:                   make(map[int64]map[common.Address]common.BigInt),
 		frozenAssets:              make(map[common.Address]common.BigInt),
 		balance:                   make(map[common.Address]common.BigInt),
-	}
-
-	for addr, balance := range genesis.alloc {
-		ec.userRecords[addr] = makeUserRecord()
-		ec.balance[addr] = balance
 	}
 	// Set the genesis
 	ec.setGenesis(genesis)
@@ -602,7 +624,7 @@ func newExpectedContextWithGenesis(genesis *genesisConfig) *expectContext {
 func (ec *expectContext) setGenesis(genesis *genesisConfig) {
 	// Add allocates
 	for addr, balance := range genesis.alloc {
-		ec.userRecords[addr] = makeUserRecord()
+		ec.userRecords[addr] = makeUserRecord(addr)
 		ec.balance[addr] = balance
 	}
 	// Add validators
@@ -1145,7 +1167,6 @@ func (ec *expectContext) countDelegateVotesForCandidate(candidate common.Address
 func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, time int64, epc EpochContext) error {
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(time)
-	fmt.Println("in expect try elect", prevEpoch, currentEpoch)
 	if prevEpoch == currentEpoch || prevEpoch == 0 {
 		return nil
 	}
@@ -1158,10 +1179,8 @@ func (ec *expectContext) tryElect(genesis *types.Header, parent *types.Header, t
 	if err != nil {
 		return err
 	}
-	fmt.Printf("in got, parent hash: %x\n", parent.Hash())
 	seed := makeSeed(parent.Hash(), prevEpoch)
 	validators, err := randomSelectAddress(typeLuckyWheel, votes, seed, MaxValidatorSize)
-	fmt.Println("seed from expectC", seed)
 	ec.setValidators(validators)
 	// Save the current maps to maps in last epoch
 	ec.candidateRecordsLastEpoch = copyCandidateRecords(ec.candidateRecords)
@@ -1211,7 +1230,7 @@ func forEachDelegatorForCandidateFromTrie(delegateTrie *trie.Trie, candidate com
 // getGenesis return the genesis config for the integration test
 func getGenesis() *genesisConfig {
 	genesisValidators := make([]params.ValidatorConfig, 0, MaxValidatorSize)
-	for i := 0; i != maxNumValidators; i++ {
+	for i := 0; i != MaxValidatorSize; i++ {
 		genesisValidators = append(genesisValidators, params.ValidatorConfig{
 			Address:     randomAddress(),
 			Deposit:     minDeposit.MultInt64(r.Int63n(10) + 1),
@@ -1318,14 +1337,17 @@ func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.D
 func makeUsers(num int) userRecords {
 	records := make(userRecords)
 	for i := 0; i != num; i++ {
-		record := makeUserRecord()
+		record := makeUserRecord(emptyAddress)
 		records[record.addr] = record
 	}
 	return records
 }
 
 // makeUserRecord make a random userRecord
-func makeUserRecord() userRecord {
+func makeUserRecord(addr common.Address) userRecord {
+	if addr == emptyAddress {
+		addr = randomAddress()
+	}
 	// at ratio 4/5, the user will become a delegator
 	n := r.Intn(5)
 	var isDelegator bool
@@ -1339,7 +1361,7 @@ func makeUserRecord() userRecord {
 		isCandidate = true
 	}
 	return userRecord{
-		addr:        randomAddress(),
+		addr:        addr,
 		isCandidate: isCandidate,
 		isDelegator: isDelegator,
 	}
@@ -1357,7 +1379,7 @@ func (user *userRecord) availOpList(ec *expectContext) []opType {
 	ops = append(ops, opTypeDoNothing)
 	if user.isCandidate {
 		ops = append(ops, opTypeAddCandidate)
-		if _, exist := ec.candidateRecords[user.addr]; exist && len(ec.candidateRecords) > maxNumValidators {
+		if _, exist := ec.candidateRecords[user.addr]; exist && len(ec.candidateRecords) > MaxValidatorSize {
 			ops = append(ops, opTypeCancelCandidate)
 		}
 	}
@@ -1535,7 +1557,6 @@ func (cr *fakeChainReaderForIntegration) GetHeaderByNumber(num uint64) *types.He
 	if !exist {
 		return nil
 	}
-	fmt.Println("read genesis", cr.numberToBlock[0].Time())
 	return b.Header()
 }
 
@@ -1565,4 +1586,24 @@ func (cr *fakeChainReaderForIntegration) insertBlock(b *types.Block) {
 	cr.blocks = append(cr.blocks, bCopy)
 	cr.numberToBlock[b.NumberU64()] = bCopy
 	cr.hashToBlock[b.Hash()] = bCopy
+}
+
+type testLog struct {
+	print bool
+}
+
+func newTestLog(print bool) *testLog {
+	return &testLog{print}
+}
+
+func (l *testLog) Printf(s string, v ...interface{}) {
+	if l.print {
+		fmt.Printf(s, v...)
+	}
+}
+
+func (l *testLog) Println(v ...interface{}) {
+	if l.print {
+		fmt.Println(v...)
+	}
 }

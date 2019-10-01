@@ -29,34 +29,26 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	genesisEpoch := CalculateEpochID(genesis.Time.Int64())
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(ec.TimeStamp)
-	fmt.Println("in dpos try elect ", prevEpoch, currentEpoch)
-
 	// if current block does not reach new epoch, directly return
 	if prevEpoch == currentEpoch {
-		fmt.Println("return 1")
 		return nil
 	}
-
 	// thawing some deposit for currentEpoch-2
 	if err := thawAllFrozenAssetsInEpoch(ec.stateDB, currentEpoch); err != nil {
-		fmt.Println("thawing")
 		return fmt.Errorf("system not consistent: %v", err)
 	}
 
 	// if previous epoch is genesis epoch, return directly
 	if prevEpoch == genesisEpoch {
-		fmt.Println(prevEpoch, genesisEpoch)
-		fmt.Println("previous is genesis")
 		return nil
 	}
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
 	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
-	fmt.Println("here")
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
-		// if prevEpoch is not genesis, kickout not active candidates
+		// if prevEpoch is not genesis, kick out not active candidates
 		if iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
 				return err
@@ -72,9 +64,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return errors.New("too few candidates")
 		}
 		// Create the seed and pseudo-randomly select the validators
-		fmt.Printf("in got, parent hash: %x\n", parent.Hash())
 		seed := makeSeed(parent.Hash(), i)
-		fmt.Println("seed from try elect", seed)
 		validators, err := selectValidator(candidateVotes, seed)
 		if err != nil {
 			return err
