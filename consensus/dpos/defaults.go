@@ -17,7 +17,7 @@ const (
 	inmemorySignatures = 4096
 
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 4
+	MaxValidatorSize = 21
 
 	// SafeSize indicates that the least number of validators in dpos consensus
 	SafeSize = MaxValidatorSize*2/3 + 1
@@ -39,7 +39,7 @@ const (
 	BlockInterval = int64(10)
 
 	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(180)
+	EpochInterval = int64(86400)
 
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
@@ -57,5 +57,5 @@ var (
 	constantinopleBlockReward = common.NewBigIntUint64(1e18).MultInt64(2)
 
 	// minDeposit defines the minimum deposit of candidate
-	minDeposit = common.NewBigIntUint64(1e18).MultInt64(1)
+	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
 )
