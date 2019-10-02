@@ -29,12 +29,10 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	genesisEpoch := CalculateEpochID(genesis.Time.Int64())
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(ec.TimeStamp)
-
 	// if current block does not reach new epoch, directly return
 	if prevEpoch == currentEpoch {
 		return nil
 	}
-
 	// thawing some deposit for currentEpoch-2
 	if err := thawAllFrozenAssetsInEpoch(ec.stateDB, currentEpoch); err != nil {
 		return fmt.Errorf("system not consistent: %v", err)
@@ -48,10 +46,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
 	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
-
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
-		// if prevEpoch is not genesis, kickout not active candidates
+		// if prevEpoch is not genesis, kick out not active candidates
 		if iter.Next() {
 			if err := ec.kickoutValidators(prevEpoch); err != nil {
 				return err
@@ -67,7 +64,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return errors.New("too few candidates")
 		}
 		// Create the seed and pseudo-randomly select the validators
-		seed := int64(binary.LittleEndian.Uint32(crypto.Keccak512(parent.Hash().Bytes()))) + i
+		seed := makeSeed(parent.Hash(), i)
 		validators, err := selectValidator(candidateVotes, seed)
 		if err != nil {
 			return err
@@ -158,6 +155,11 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 			log.Info("No more candidates can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
+		// If the candidate has already canceled candidate, continue to the next
+		// validator
+		if !isCandidate(ec.DposContext.CandidateTrie(), validator.address) {
+			continue
+		}
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
 			return err
 		}
@@ -167,6 +169,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
+		SetRewardRatioNumerator(ec.stateDB, validator.address, 0)
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidates", "prevEpochID", epoch, "candidates", validator.address.String(), "minedCnt", validator.cnt)
@@ -258,4 +261,9 @@ func (a addressesByCnt) Less(i, j int) bool {
 		return a[i].cnt < a[j].cnt
 	}
 	return a[i].address.String() < a[j].address.String()
+}
+
+// makeSeed makes the seed for random selection in try elect
+func makeSeed(h common.Hash, i int64) int64 {
+	return int64(binary.LittleEndian.Uint32(crypto.Keccak512(h.Bytes()))) + i
 }
