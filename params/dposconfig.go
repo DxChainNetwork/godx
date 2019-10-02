@@ -16,29 +16,19 @@ import (
 var (
 	DefaultValidators = []ValidatorConfig{
 		{
-			Address:     common.HexToAddress("0x60c8947134be7c0604a866a0462542eb0dcf71f9"),
+			Address:     common.HexToAddress("0xadee32fbde84bf5074d692bc68fc4b94d5e42f63"),
 			Deposit:     common.NewBigIntUint64(100000),
 			RewardRatio: 80,
 		},
 		{
-			Address:     common.HexToAddress("0x58a366c3c1a735bf3d09f2a48a014a8ebc64457c"),
+			Address:     common.HexToAddress("0xdd8808c715d360bbb92b125baeb655be9bf05c22"),
 			Deposit:     common.NewBigIntUint64(200000),
 			RewardRatio: 70,
 		},
 		{
-			Address:     common.HexToAddress("0x801ee9587ea0d52fe477755a3e91d7244e6556a3"),
+			Address:     common.HexToAddress("0x5286ca348e924330dbea9b388303458092a600d7"),
 			Deposit:     common.NewBigIntUint64(300000),
 			RewardRatio: 85,
-		},
-		{
-			Address:     common.HexToAddress("0xcde55147efd18f79774676d5a8674d94d00b4c9a"),
-			Deposit:     common.NewBigIntUint64(400000),
-			RewardRatio: 75,
-		},
-		{
-			Address:     common.HexToAddress("0x31de5dbe50885d9632935dec507f806baf1027c0"),
-			Deposit:     common.NewBigIntUint64(500000),
-			RewardRatio: 100,
 		},
 	}
 )

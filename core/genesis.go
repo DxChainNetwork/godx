@@ -243,10 +243,6 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
-	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
-	statedb.SetNonce(dpos.KeyValueCommonAddress, 1)
-	statedb.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dposContext.DelegateTrie().Hash())
-
 	root := statedb.IntermediateRoot(false)
 	dcProto := dposContext.ToRoot()
 	head := &types.Header{
@@ -294,12 +290,6 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
-	}
-
-	// commit dpos context into memory
-	_, err := block.DposCtx().Commit()
-	if err != nil {
-		return nil, err
 	}
 
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
@@ -476,6 +466,10 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
 		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
 	}
+
+	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
+	stateDB.SetNonce(dpos.KeyValueCommonAddress, 1)
+	stateDB.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dc.DelegateTrie().Hash())
 
 	return dc, nil
 }
