@@ -360,11 +360,7 @@ func DefaultGenesisBlock() *Genesis {
 			common.HexToAddress("0x816f4378aca62e72d75ead38495bb896f72eefce"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
 		},
 	}
-	for _, vc := range params.DefaultValidators {
-		g.Alloc[vc.Address] = GenesisAccount{
-			Balance: vc.Deposit.BigIntPtr(),
-		}
-	}
+
 	return g
 }
 
