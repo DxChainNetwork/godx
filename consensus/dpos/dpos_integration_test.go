@@ -346,6 +346,9 @@ func (tec *testEpochContext) executeAddCandidate(addr common.Address) error {
 		prevRewardRatio = prevCandidateRecord.rewardRatio
 	}
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(10))
+	if newDeposit.Cmp(minDeposit) < 0 {
+		return nil
+	}
 	newRewardRatio := (RewardRatioDenominator-prevRewardRatio)/4 + prevRewardRatio
 	l.Printf("User %x add candidate (%v / %v) -> (%v / %v)\n", addr, prevDeposit, prevRewardRatio, newDeposit, newRewardRatio)
 	// Process Add candidate
@@ -545,11 +548,13 @@ func (tec *testEpochContext) checkThawingConsistency() error {
 	curEpoch := CalculateEpochID(tec.epc.TimeStamp)
 	thawEpoch := calcThawingEpoch(curEpoch)
 	for epoch := curEpoch + 1; epoch <= thawEpoch; epoch++ {
+		l.Println("expect epoch", epoch)
 		thawMap := tec.ec.thawing[epoch]
 		expect := make(map[common.Address]common.BigInt)
 		for addr, thaw := range thawMap {
 			expect[addr] = thaw
 		}
+		l.Println("check thawing", epoch)
 		err := checkThawingAddressAndValue(tec.epc.stateDB, epoch, expect)
 		if err != nil {
 			return err
@@ -610,6 +615,7 @@ func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
 	}
 	// Update expect context
 	tec.ec.accumulateRewards(tec.epc.stateDB, validator, tec.db, tec.genesis)
+	l.Printf("validator mined a block %x\n", validator)
 	if err := tec.ec.tryElect(tec.cr, tec.genesis, parentHeader, tec.epc.TimeStamp, tec.epc); err != nil {
 		return nil, err
 	}
@@ -716,7 +722,7 @@ func (ec *expectContext) pickDelegator() (common.Address, delegatorRecord) {
 
 // kickoutCandidate kicks out a candidate out. It does the same logic as cancelCandidate
 func (ec *expectContext) kickOutCandidate(candidate common.Address, curTime int64) {
-	fmt.Printf("kicking out %x ==================\n", candidate)
+	l.Printf("kicking out %x\n", candidate)
 	ec.cancelCandidate(candidate, curTime)
 }
 
@@ -1190,6 +1196,7 @@ func (ec *expectContext) tryElect(cr consensus.ChainReader, genesis *types.Heade
 	if err := ec.thawInEpoch(currentEpoch); err != nil {
 		return err
 	}
+	l.Println("new epoch")
 	// kick out irresponsible validators
 	ec.kickOutValidators(cr, time)
 
@@ -1205,6 +1212,7 @@ func (ec *expectContext) tryElect(cr consensus.ChainReader, genesis *types.Heade
 	// Save the current maps to maps in last epoch
 	ec.candidateRecordsLastEpoch = copyCandidateRecords(ec.candidateRecords)
 	ec.delegatorRecordsLastEpoch = copyDelegatorRecords(ec.delegatorRecords)
+	ec.minedCnt = make(map[common.Address]int)
 	return nil
 }
 
@@ -1217,6 +1225,9 @@ func (ec *expectContext) kickOutValidators(cr consensus.ChainReader, time int64)
 			break
 		}
 		addr := v.address
+		if _, exist := ec.candidateRecords[addr]; !exist {
+			continue
+		}
 		ec.kickOutCandidate(addr, time)
 		numCandidates--
 	}
@@ -1234,6 +1245,7 @@ func (ec *expectContext) getIneligibleValidators(cr consensus.ChainReader, curTi
 	var ineligibleValidators addressesByCnt
 	for _, addr := range ec.validators {
 		minedCnt := int64(ec.minedCnt[addr])
+		l.Printf("test mine %x: %v\n", addr, minedCnt)
 		if !isEligibleValidator(minedCnt, expectBlocks) {
 			ineligibleValidators = append(ineligibleValidators, &addressByCnt{addr, minedCnt})
 		}
@@ -1250,6 +1262,7 @@ func (ec *expectContext) incrementMinedCnt(validator common.Address) {
 	}
 	prevMinedCnt++
 	ec.minedCnt[validator] = prevMinedCnt
+	l.Printf("expect update mined cnt %x", validator)
 }
 
 // thawInEpoch thaw all frozen assets to be thawed in an epoch
@@ -1383,7 +1396,6 @@ func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.D
 		if err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes()); err != nil {
 			return nil, err
 		}
-		l.Printf("User %x genesis add candidate %v\n", validatorAddr, vc.Deposit)
 		SetCandidateDeposit(statedb, validatorAddr, vc.Deposit)
 		SetFrozenAssets(statedb, validatorAddr, vc.Deposit)
 		SetRewardRatioNumerator(statedb, validatorAddr, vc.RewardRatio)

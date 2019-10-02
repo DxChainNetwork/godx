@@ -6,7 +6,6 @@ package dpos
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -229,7 +228,6 @@ func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) c
 
 // setPreEpochSnapshotDelegateTrieRoot set the block number of snapshot delegate trie
 func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
-	fmt.Printf("save root: %x\n", value)
 	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
 	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
 }

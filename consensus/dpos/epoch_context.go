@@ -161,6 +161,9 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := GetCandidateDeposit(ec.stateDB, validator.address)
+		if deposit.Cmp(common.BigInt0) == 0 {
+			continue
+		}
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
@@ -186,6 +189,7 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 	var ineligibleValidators addressesByCnt
 	for _, validator := range validators {
 		cnt := ctx.GetMinedCnt(epoch, validator)
+		fmt.Printf("dpos mine %x: %v\n", validator, cnt)
 		if !isEligibleValidator(cnt, expectedBlockPerValidator) {
 			ineligibleValidators = append(ineligibleValidators, &addressByCnt{validator, cnt})
 		}
