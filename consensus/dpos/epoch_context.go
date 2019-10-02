@@ -155,15 +155,17 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 			log.Info("No more candidates can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
+		// If the candidate has already canceled candidate, continue to the next
+		// validator
+		if !isCandidate(ec.DposContext.CandidateTrie(), validator) {
+			continue
+		}
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
 			return err
 		}
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := GetCandidateDeposit(ec.stateDB, validator.address)
-		if deposit.Cmp(common.BigInt0) == 0 {
-			continue
-		}
 		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)

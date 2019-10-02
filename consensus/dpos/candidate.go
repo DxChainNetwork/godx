@@ -63,13 +63,15 @@ func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB e
 	if err != nil {
 		return false
 	}
+	return isCandidate(candidateTrie, candidateAddress)
+}
 
+// isCandidate determines whether the addr is a candidate from a candidateTrie
+func isCandidate(candidateTrie *trie.Trie, addr common.Address) bool {
 	// check if the candidate exists
-	if value, err := candidateTrie.TryGet(candidateAddress.Bytes()); err != nil || value == nil {
+	if value, err := candidateTrie.TryGet(addr.Bytes()); err != nil || value == nil {
 		return false
 	}
-
-	// otherwise, it means the candidate exists
 	return true
 }
 
