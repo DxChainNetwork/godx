@@ -254,7 +254,6 @@ func checkProcessVote(state *state.StateDB, ctx *types.DposContext, addr common.
 	}
 	if addrInTrie {
 		if err != nil || candidateBytes == nil || len(candidateBytes) == 0 {
-			fmt.Println(addrInTrie)
 			return fmt.Errorf("address %x not in vote trie", addr)
 		}
 		// check whether the candidates are written to voteTrie

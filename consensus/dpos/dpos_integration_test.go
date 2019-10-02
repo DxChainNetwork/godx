@@ -125,7 +125,7 @@ type (
 )
 
 func init() {
-	l = newTestLog(true)
+	l = newTestLog(false)
 }
 
 func TestDPOSIntegration(t *testing.T) {
@@ -1191,6 +1191,9 @@ func (ec *expectContext) tryElect(cr consensus.ChainReader, genesis *types.Heade
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(time)
 	if prevEpoch == currentEpoch || prevEpoch == 0 {
+		if prevEpoch == 0 {
+			ec.minedCnt = make(map[common.Address]int)
+		}
 		return nil
 	}
 	if err := ec.thawInEpoch(currentEpoch); err != nil {

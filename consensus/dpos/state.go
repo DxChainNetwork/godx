@@ -222,7 +222,6 @@ func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) c
 	if h == types.EmptyHash {
 		h = genesis.DposContext.DelegateRoot
 	}
-	//fmt.Printf("get root: %x\n", h)
 	return h
 }
 

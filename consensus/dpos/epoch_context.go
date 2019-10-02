@@ -189,7 +189,6 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 	var ineligibleValidators addressesByCnt
 	for _, validator := range validators {
 		cnt := ctx.GetMinedCnt(epoch, validator)
-		fmt.Printf("dpos mine %x: %v\n", validator, cnt)
 		if !isEligibleValidator(cnt, expectedBlockPerValidator) {
 			ineligibleValidators = append(ineligibleValidators, &addressByCnt{validator, cnt})
 		}
