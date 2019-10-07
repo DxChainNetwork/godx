@@ -296,9 +296,9 @@ func (fs *fileSystem) calculateMetadataAndApply(update *dirMetadataUpdate) {
 // 5. Unlock fs.lock if necessary
 // 6. Notify thread manager this goroutine is done.
 func (update *dirMetadataUpdate) cleanUp(fs *fileSystem, origErr error) {
+	// Set the updateInProgress value to 0, notifying this goroutine is over
+	atomic.StoreUint32(&update.updateInProgress, 0)
 	defer func() {
-		// Set the updateInProgress value to 0, notifying this goroutine is over
-		atomic.StoreUint32(&update.updateInProgress, 0)
 		// Unlock fs.lock if fs.lock is locked previously
 		if origErr == nil {
 			fs.lock.Unlock()
