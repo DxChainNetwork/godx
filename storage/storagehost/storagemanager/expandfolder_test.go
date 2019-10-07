@@ -62,7 +62,7 @@ func TestExpandFolderNormal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// shutdown the sm and check wal
-	sm.shutdown(t, 100*time.Millisecond)
+	sm.shutdown(t, time.Second)
 	if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestExpandFolderDisrupt(t *testing.T) {
 			t.Fatal(err)
 		}
 		// shutdown the sm and check wal
-		sm.shutdown(t, 100*time.Millisecond)
+		sm.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatal(err)
 		}
@@ -203,7 +203,7 @@ func TestExpandFolderStop(t *testing.T) {
 			t.Fatal(err)
 		}
 		// shutdown the sm and check wal
-		newSM.shutdown(t, 100*time.Millisecond)
+		newSM.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(newSM.persistDir, walFileName), 0); err != nil {
 			t.Fatal(err)
 		}
