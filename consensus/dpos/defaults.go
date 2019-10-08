@@ -17,7 +17,7 @@ const (
 	inmemorySignatures = 4096
 
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 21
+	MaxValidatorSize = 4
 
 	// SafeSize indicates that the least number of validators in dpos consensus
 	SafeSize = MaxValidatorSize*2/3 + 1
