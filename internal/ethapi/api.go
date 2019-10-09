@@ -30,6 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -49,6 +50,13 @@ import (
 const (
 	defaultGasPrice = params.GWei
 )
+
+// AccountBalance is an object that is used to show detailed account information
+type AccountBalance struct {
+	TotalBalance     *hexutil.Big `json:"total_balance"`
+	AvailableBalance *hexutil.Big `json:"available_balance"`
+	FrozenAssets     *hexutil.Big `json:"frozen_assets"`
+}
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
@@ -500,12 +508,25 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (AccountBalance, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
-		return nil, err
+		return AccountBalance{}, err
 	}
-	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+
+	if state.Error() != nil {
+		return AccountBalance{}, err
+	}
+
+	totalBalance := dpos.GetBalance(state, address)
+	availableBalance := dpos.GetAvailableBalance(state, address)
+	frozenAssets := dpos.GetFrozenAssets(state, address)
+
+	return AccountBalance{
+		TotalBalance:     (*hexutil.Big)(totalBalance.BigIntPtr()),
+		AvailableBalance: (*hexutil.Big)(availableBalance.BigIntPtr()),
+		FrozenAssets:     (*hexutil.Big)(frozenAssets.BigIntPtr()),
+	}, nil
 }
 
 // Result structs for GetProof
@@ -614,7 +635,7 @@ func (s *PublicBlockChainAPI) GetStorageContractByBlockHash(ctx context.Context,
 // blockToStorageContract return all transactions related to the storage contract on the block.
 func blockToStorageContract(block *types.Block) (map[string]interface{}, error) {
 	fields := make(map[string]interface{})
-	precompiled := vm.PrecompiledEVMStorageContracts
+	precompiled := vm.PrecompiledStorageContracts
 	txs := block.Transactions()
 	for _, tx := range txs {
 		if tx.To() == nil {
@@ -777,7 +798,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	res, gas, failed, err := core.ApplyMessage(evm, msg, gp)
+	dposContext := s.b.CurrentBlock().DposCtx()
+	res, gas, failed, err := core.ApplyMessage(evm, msg, gp, dposContext)
 	if err := vmError(); err != nil {
 		return nil, 0, false, err
 	}
@@ -915,7 +937,8 @@ func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]inter
 		"sha3Uncles":       head.UncleHash,
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
-		"miner":            head.Coinbase,
+		"validator":        head.Validator,
+		"coinbase":         head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
 		"size":             hexutil.Uint64(b.Size()),
@@ -1160,10 +1183,11 @@ func (s *PublicTransactionPoolAPI) GetStorageContractByTransactionHash(ctx conte
 
 // transactionToStorageContract return storage contract info.
 func transactionToStorageContract(transaction *types.Transaction) (map[string]interface{}, error) {
-	precompiled := vm.PrecompiledEVMStorageContracts
+	precompiled := vm.PrecompiledStorageContracts
 	if transaction.To() == nil {
 		return nil, errors.New("this is a deployment contract transaction")
 	}
+
 	p, ok := precompiled[*transaction.To()]
 	if !ok {
 		return nil, errors.New("not a storage contract related transaction")

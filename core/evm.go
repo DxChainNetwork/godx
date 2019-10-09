@@ -19,6 +19,8 @@ package core
 import (
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/consensus/dpos"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -36,13 +38,13 @@ type ChainContext interface {
 }
 
 // NewEVMContext creates a new context for use in the EVM.
-func NewEVMContext(msg Message, header *types.Header, chain ChainContext, author *common.Address) vm.Context {
+func NewEVMContext(msg Message, header *types.Header, chain ChainContext, coinbase *common.Address) vm.Context {
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	var beneficiary common.Address
-	if author == nil {
-		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+	if coinbase == nil {
+		beneficiary, _ = chain.Engine().Coinbase(header) // Ignore error, we're past header validation
 	} else {
-		beneficiary = *author
+		beneficiary = *coinbase
 	}
 	return vm.Context{
 		CanTransfer: CanTransfer,
@@ -87,7 +89,10 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
-	return db.GetBalance(addr).Cmp(amount) >= 0
+	frozen := dpos.GetFrozenAssets(db, addr).BigIntPtr()
+	balance := db.GetBalance(addr)
+	available := new(big.Int).Sub(balance, frozen)
+	return available.Cmp(amount) >= 0
 }
 
 // Transfer subtracts amount from sender and adds amount to recipient using the given Db

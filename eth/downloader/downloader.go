@@ -1647,6 +1647,12 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions, result.Uncles)
+
+	// sync dpos context state at the start of pivot block
+	if err := d.syncDposContextState(block.Header().DposContext); err != nil {
+		return err
+	}
+
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 	if _, err := d.blockchain.InsertReceiptChain([]*types.Block{block}, []types.Receipts{result.Receipts}); err != nil {
 		return err
@@ -1776,4 +1782,21 @@ func (d *Downloader) requestTTL() time.Duration {
 		ttl = ttlLimit
 	}
 	return ttl
+}
+
+// syncDposContextState sync dpos context state
+func (d *Downloader) syncDposContextState(context *types.DposContextRoot) error {
+	roots := []common.Hash{
+		context.CandidateRoot,
+		context.DelegateRoot,
+		context.VoteRoot,
+		context.EpochRoot,
+		context.MinedCntRoot,
+	}
+	for _, root := range roots {
+		if err := d.syncState(root).Wait(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -19,14 +19,15 @@ package core
 import (
 	"context"
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/core/rawdb"
-	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"math/big"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/rawdb"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 // Runs multiple tests with randomized parameters.
@@ -49,6 +50,11 @@ func TestChainIndexerWithChildren(t *testing.T) {
 // are randomized.
 func testChainIndexer(t *testing.T, count int) {
 	db := ethdb.NewMemDatabase()
+	dposCtx, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("falied to new dpos context: %v", err)
+	}
+
 	defer db.Close()
 
 	// Create a chain of indexers and ensure they all report empty
@@ -91,7 +97,7 @@ func testChainIndexer(t *testing.T, count int) {
 	}
 	// inject inserts a new random canonical header into the database directly
 	inject := func(number uint64) {
-		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes()}
+		header := &types.Header{Number: big.NewInt(int64(number)), Extra: big.NewInt(rand.Int63()).Bytes(), DposContext: dposCtx.ToRoot()}
 		if number > 0 {
 			header.ParentHash = rawdb.ReadCanonicalHash(db, number-1)
 		}

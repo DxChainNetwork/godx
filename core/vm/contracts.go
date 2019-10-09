@@ -42,14 +42,50 @@ const (
 	CommitRevisionTransaction = "CommitRevision"
 	//StorageProofTransaction host storage proof  transaction tag
 	StorageProofTransaction = "StorageProof"
+
+	// DPoS consensus transaction tags
+
+	// ApplyCandidate is the tx type of applying for candidate
+	ApplyCandidate = "ApplyCandidate"
+
+	// CancelCandidate is the tx type of canceling being candidate
+	CancelCandidate = "CancelCandidate"
+
+	// Vote is the tx type of voting some candidates
+	Vote = "Vote"
+
+	// CancelVote is the tx type of canceling all vote
+	CancelVote = "CancelVote"
 )
 
-//PrecompiledEVMStorageContracts currently contains the transaction types required for four storage contracts
-var PrecompiledEVMStorageContracts = map[common.Address]string{
+var (
+	// ApplyCandidateContractAddress is pre-compiled apply candidate contract address
+	ApplyCandidateContractAddress = common.BytesToAddress([]byte{13})
+
+	// CancelCandidateContractAddress is pre-compiled cancel candidate contract address
+	CancelCandidateContractAddress = common.BytesToAddress([]byte{14})
+
+	// VoteContractAddress is pre-compiled vote contract address
+	VoteContractAddress = common.BytesToAddress([]byte{15})
+
+	// CancelVoteContractAddress is pre-compiled cancel vote contract address
+	CancelVoteContractAddress = common.BytesToAddress([]byte{16})
+)
+
+// PrecompiledStorageContracts currently contains the transaction types required for four storage contracts
+var PrecompiledStorageContracts = map[common.Address]string{
 	common.BytesToAddress([]byte{9}):  HostAnnounceTransaction,
 	common.BytesToAddress([]byte{10}): ContractCreateTransaction,
 	common.BytesToAddress([]byte{11}): CommitRevisionTransaction,
 	common.BytesToAddress([]byte{12}): StorageProofTransaction,
+}
+
+// PrecompiledDPoSContracts contains some tx types required for DPoS consensus
+var PrecompiledDPoSContracts = map[common.Address]string{
+	ApplyCandidateContractAddress:  ApplyCandidate,
+	CancelCandidateContractAddress: CancelCandidate,
+	VoteContractAddress:            Vote,
+	CancelVoteContractAddress:      CancelVote,
 }
 
 type PrecompiledContract interface {

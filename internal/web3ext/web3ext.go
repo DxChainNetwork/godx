@@ -32,6 +32,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
+	"dpos":       Dpos_JS,
 }
 
 const Chequebook_JS = `
@@ -134,6 +135,106 @@ web3._extend({
 			name: 'submitHashRate',
 			call: 'ethash_submitHashRate',
 			params: 2,
+		}),
+	]
+});
+`
+
+const Dpos_JS = `
+web3._extend({
+	property: 'dpos',
+	methods: [
+		new web3._extend.Method({
+			name: 'validators',
+			call: 'dpos_validators',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'validator',
+			call: 'dpos_validator',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		
+		new web3._extend.Method({
+			name: 'candidates',
+			call: 'dpos_candidates',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'candidate',
+			call: 'dpos_candidate',
+			params: 2,
+			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'candidateDeposit',
+			call: 'dpos_candidateDeposit',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'voteDeposit',
+			call: 'dpos_voteDeposit',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'getConfirmedBlockNumber',
+			call: 'dpos_getConfirmedBlockNumber',
+			params: 0,
+			outputFormatter: web3._extend.utils.toBigNumber
+		}),
+
+		new web3._extend.Method({
+			name: 'getVotedCandidatesByAddress',
+			call: 'getVotedCandidatesByAddress',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'applyCandidate',
+			call: 'dpos_sendApplyCandidateTx',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'cancelCandidate',
+			call: 'dpos_sendCancelCandidateTx',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'vote',
+			call: 'dpos_sendVoteTx',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'cancelVote',
+			call: 'dpos_sendCancelVoteTx',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'candidateVotes',
+			call: 'dpos_getCandidatesVote',
+			params: 1,
+		}),
+
+		new web3._extend.Method({
+			name: 'epochID',
+			call: 'dpos_epochID',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 	]
 });
@@ -543,8 +644,14 @@ web3._extend({
 			call: 'miner_stop'
 		}),
 		new web3._extend.Method({
-			name: 'setEtherbase',
-			call: 'miner_setEtherbase',
+			name: 'setValidator',
+			call: 'miner_setValidator',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'setCoinbase',
+			call: 'miner_setCoinbase',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
@@ -558,11 +665,6 @@ web3._extend({
 			call: 'miner_setGasPrice',
 			params: 1,
 			inputFormatter: [web3._extend.utils.fromDecimal]
-		}),
-		new web3._extend.Method({
-			name: 'setRecommitInterval',
-			call: 'miner_setRecommitInterval',
-			params: 1,
 		}),
 		new web3._extend.Method({
 			name: 'getHashrate',

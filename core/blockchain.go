@@ -31,6 +31,7 @@ import (
 	"github.com/DxChainNetwork/godx/common/mclock"
 	"github.com/DxChainNetwork/godx/common/prque"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -955,6 +956,12 @@ func (bc *BlockChain) WriteBlockWithState(block *types.Block, receipts []*types.
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	// commit dpos context to local db
+	_, err = block.DposCtx().Commit()
+	if err != nil {
+		return NonStatTy, err
+	}
+
 	root, err := state.Commit(bc.chainConfig.IsEIP158(block.Number()))
 	if err != nil {
 		return NonStatTy, err
@@ -1208,6 +1215,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		if parent == nil {
 			parent = bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
 		}
+
+		// construct dpos context from parent's dpos context root
+		dposCtx, err := types.NewDposContextFromProto(bc.db, parent.Header().DposContext)
+		if err != nil {
+			return it.index, events, coalescedLogs, err
+		}
+		block.SetDposCtx(dposCtx)
+
 		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
@@ -1225,6 +1240,23 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			bc.reportBlock(block, receipts, err)
 			return it.index, events, coalescedLogs, err
 		}
+
+		// validate the dpos state using the default validator firstly
+		// check whether the signature of given block is right secondly if it is dpos engine
+		if dposEngine, ok := bc.engine.(*dpos.Dpos); ok {
+			err = bc.Validator().ValidateDposState(block)
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				return it.index, events, coalescedLogs, err
+			}
+
+			err = dposEngine.VerifySeal(bc, block.Header())
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				return it.index, events, coalescedLogs, err
+			}
+		}
+
 		t2 := time.Now()
 		proctime := time.Since(start)
 
@@ -1753,4 +1785,33 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 
 func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) event.Subscription {
 	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
+}
+
+// MakeAlloc make the add the validator deposit from ChainConfig to the input allocation accounts.
+// The function is only used in test cases
+func MakeAlloc(accounts GenesisAlloc, config *params.ChainConfig) GenesisAlloc {
+	return MakeAllocFromDposConfig(accounts, config.Dpos)
+}
+
+// MakeAllocFromDposConfig add the validator deposit from dposConfig to the input allocation accounts.
+// The function is only used in test cases
+func MakeAllocFromDposConfig(accounts GenesisAlloc, dpos *params.DposConfig) GenesisAlloc {
+	for _, validatorConfig := range dpos.Validators {
+		addr := validatorConfig.Address
+		account, exist := accounts[addr]
+		if !exist {
+			account = GenesisAccount{
+				Balance: common.BigInt0.BigIntPtr(),
+			}
+		}
+		newBalance := new(big.Int).Add(account.Balance, validatorConfig.Deposit.BigIntPtr())
+		accounts[addr] = GenesisAccount{
+			Code:       account.Code,
+			Storage:    account.Storage,
+			Balance:    newBalance,
+			Nonce:      account.Nonce,
+			PrivateKey: account.PrivateKey,
+		}
+	}
+	return accounts
 }

@@ -2,13 +2,14 @@ package trie
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/metrics"
 	"github.com/allegro/bigcache"
-	"sync"
-	"time"
 )
 
 // Database.go defines the struct Database and its method

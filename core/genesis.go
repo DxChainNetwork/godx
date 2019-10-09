@@ -28,6 +28,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -155,7 +156,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 }
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, constantinopleOverride *big.Int) (*params.ChainConfig, common.Hash, error) {
 	if genesis != nil && genesis.Config == nil {
-		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
+		return params.DposChainConfig, common.Hash{}, errGenesisNoConfig
 	}
 
 	// Just commit the new block if there is no stored genesis block.
@@ -215,12 +216,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	switch {
 	case g != nil:
 		return g.Config
-	case ghash == params.MainnetGenesisHash:
-		return params.MainnetChainConfig
-	case ghash == params.TestnetGenesisHash:
-		return params.TestnetChainConfig
 	default:
-		return params.AllEthashProtocolChanges
+		return params.DposChainConfig
 	}
 }
 
@@ -239,19 +236,28 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 			statedb.SetState(addr, key, value)
 		}
 	}
+
+	// init genesis block dpos context
+	dposContext, err := initGenesisDposContext(statedb, g, db)
+	if err != nil {
+		panic(err)
+	}
+
 	root := statedb.IntermediateRoot(false)
+	dcProto := dposContext.ToRoot()
 	head := &types.Header{
-		Number:     new(big.Int).SetUint64(g.Number),
-		Nonce:      types.EncodeNonce(g.Nonce),
-		Time:       new(big.Int).SetUint64(g.Timestamp),
-		ParentHash: g.ParentHash,
-		Extra:      g.ExtraData,
-		GasLimit:   g.GasLimit,
-		GasUsed:    g.GasUsed,
-		Difficulty: g.Difficulty,
-		MixDigest:  g.Mixhash,
-		Coinbase:   g.Coinbase,
-		Root:       root,
+		Number:      new(big.Int).SetUint64(g.Number),
+		Nonce:       types.EncodeNonce(g.Nonce),
+		Time:        new(big.Int).SetUint64(g.Timestamp),
+		ParentHash:  g.ParentHash,
+		Extra:       g.ExtraData,
+		GasLimit:    g.GasLimit,
+		GasUsed:     g.GasUsed,
+		Difficulty:  g.Difficulty,
+		MixDigest:   g.Mixhash,
+		Coinbase:    g.Coinbase,
+		Root:        root,
+		DposContext: dcProto,
 	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
@@ -259,10 +265,23 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	statedb.Commit(false)
-	statedb.Database().TrieDB().Commit(root, true)
+	_, err = statedb.Commit(false)
+	if err != nil {
+		panic(err)
+	}
+	if _, err = dposContext.Commit(); err != nil {
+		panic(err)
+	}
 
-	return types.NewBlock(head, nil, nil, nil)
+	err = statedb.Database().TrieDB().Commit(root, true)
+	if err != nil {
+		panic(err)
+	}
+
+	block := types.NewBlock(head, nil, nil, nil)
+	block.SetDposCtx(dposContext)
+
+	return block
 }
 
 // Commit writes the block and state of a genesis specification to the database.
@@ -272,6 +291,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if block.Number().Sign() != 0 {
 		return nil, fmt.Errorf("can't commit genesis block with number > 0")
 	}
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), g.Difficulty)
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)
@@ -281,7 +301,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 
 	config := g.Config
 	if config == nil {
-		config = params.AllEthashProtocolChanges
+		config = params.DposChainConfig
 	}
 	rawdb.WriteChainConfig(db, block.Hash(), config)
 	return block, nil
@@ -299,27 +319,54 @@ func (g *Genesis) MustCommit(db ethdb.Database) *types.Block {
 
 // GenesisBlockForTesting creates and writes a block in which addr has the given wei balance.
 func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
-	g := Genesis{Alloc: GenesisAlloc{addr: {Balance: balance}}}
+	g := DefaultGenesisBlock()
+	g.Alloc[addr] = GenesisAccount{Balance: balance}
 	return g.MustCommit(db)
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
-	return &Genesis{
-		Config:     params.MainnetChainConfig,
+	g := &Genesis{
+		Config:     params.DposChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x4478436861696e204e6574776f726b20546573746e657420302e372e32"),
 		GasLimit:   3141592,
 		Difficulty: big.NewInt(1048576),
 		Alloc: map[common.Address]GenesisAccount{
-			common.HexToAddress("0x855d8a98d11449a8e22c0a94763415ba8a3def39"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
+			// faucet
+			common.HexToAddress("0x5747595e5fe0ff31df1c4feb7ae6110a34f4714a"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
+
+			// validators
+			common.HexToAddress("0xccdfb5a54db1d805ca24a33b8b15f49d8945bb4b"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x116204ed3e5749ab6c1318314300dbabf5aa972b"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xa60e0361cffc636da87ea8cb246e7926870621c9"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xf6a0da1f0b9a8d4e6b4392fe60a5e1f99c6aa873"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x08edc1328ba5236b151d273f7ad4703c1585def1"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x11720ac932723d5df4221dad1420ea6695acc68a"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x4a83c1c000ac1d1a8c06e8d18dc641c8530e0625"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x9374268a703851b2302b35d4de62c2f498099514"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x7d038901709e9d8cdb040e52e54c493bc726a05d"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x944eb166879a0b9a5e3c7a0512836a4d22a0bb47"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xf7925a26ebf873cea35fbe2f8278a8cc94fad801"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x31423da09afc3202844131da5888f9acd5593c6f"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x8fd7c0503e27b35ee6ef79c21559b4195536b780"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x9c0d5b2713ebebfa9ec0819186809cbd510554e8"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x18cead672df01dbd808fcc7e0e988bdc67551de5"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x2f03b5b4416e7ce86773f1908939291787cb8086"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xe61aa6815e667f1dff7d257ad2c1f30d02bcf3da"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xdfb1cca8d7299b0210086745dc7dad14a03ce2d3"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xc8c85cae16d18076741e2f94528d6ffaa5960fa1"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xbbb1244fd311481e68253f9995a02715ac22ece6"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x816f4378aca62e72d75ead38495bb896f72eefce"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
 		},
 	}
+
+	return g
 }
 
 // DefaultTestnetGenesisBlock returns the Ropsten network genesis block.
 func DefaultTestnetGenesisBlock() *Genesis {
-	return &Genesis{
+	g := &Genesis{
 		Config:     params.TestnetChainConfig,
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x3535353535353535353535353535353535353535353535353535353535353535"),
@@ -327,11 +374,17 @@ func DefaultTestnetGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1048576),
 		Alloc:      decodePrealloc(testnetAllocData),
 	}
+	for _, vc := range params.DefaultValidators {
+		g.Alloc[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+	return g
 }
 
 // DefaultRinkebyGenesisBlock returns the Rinkeby network genesis block.
 func DefaultRinkebyGenesisBlock() *Genesis {
-	return &Genesis{
+	g := &Genesis{
 		Config:     params.RinkebyChainConfig,
 		Timestamp:  1492009146,
 		ExtraData:  hexutil.MustDecode("0x52657370656374206d7920617574686f7269746168207e452e436172746d616e42eb768f2244c8811c63729a21a3569731535f067ffc57839b00206d1ad20c69a1981b489f772031b279182d99e65703f0076e4812653aab85fca0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
@@ -339,6 +392,12 @@ func DefaultRinkebyGenesisBlock() *Genesis {
 		Difficulty: big.NewInt(1),
 		Alloc:      decodePrealloc(rinkebyAllocData),
 	}
+	for _, vc := range params.DefaultValidators {
+		g.Alloc[vc.Address] = GenesisAccount{
+			Balance: vc.Deposit.BigIntPtr(),
+		}
+	}
+	return g
 }
 
 // DeveloperGenesisBlock returns the 'geth --dev' genesis block. Note, this must
@@ -378,4 +437,58 @@ func decodePrealloc(data string) GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
+}
+
+// initGenesisDposContext returns the dpos context of given genesis block
+func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
+	dc, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
+	if err != nil {
+		return nil, err
+	}
+
+	if g.Config == nil || g.Config.Dpos == nil || g.Config.Dpos.Validators == nil {
+		return nil, errors.New("invalid dpos config for genesis")
+	}
+
+	// get validators from the genesis DPOS config
+	validators := g.Config.Dpos.ParseValidators()
+
+	// set initial genesis epoch validators
+	err = dc.SetValidators(validators)
+	if err != nil {
+		return nil, err
+	}
+
+	// just let genesis initial validator voted themselves
+	// vMap is the structure to check the duplication of the validators
+	vMap := make(map[common.Address]struct{})
+	for _, validator := range g.Config.Dpos.Validators {
+		validatorAddr := validator.Address
+		if _, exist := vMap[validatorAddr]; exist {
+			return nil, fmt.Errorf("duplicate validator address %x", validatorAddr)
+		}
+		vMap[validatorAddr] = struct{}{}
+
+		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
+		if err != nil {
+			return nil, err
+		}
+
+		// set deposit and frozen assets
+		if balance := common.PtrBigInt(stateDB.GetBalance(validatorAddr)); balance.Cmp(validator.Deposit) < 0 {
+			return nil, fmt.Errorf("during initializing for genesis, validator %x has not enough balance for deposit", validatorAddr)
+		}
+		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
+		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
+
+		// set reward ratio
+		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
+		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
+	}
+
+	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
+	stateDB.SetNonce(dpos.KeyValueCommonAddress, 1)
+	stateDB.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dc.DelegateTrie().Hash())
+
+	return dc, nil
 }
