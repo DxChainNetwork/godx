@@ -501,7 +501,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
-		dposContext := api.eth.CurrentBlock().DposCtx()
+		dposContext := parent.DposCtx()
 		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext); err != nil {
 			failed = err
 			break
@@ -599,7 +599,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
-		dposContext := api.eth.CurrentBlock().DposCtx()
+		dposContext := parent.DposCtx()
 		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext)
 
 		if dump != nil {

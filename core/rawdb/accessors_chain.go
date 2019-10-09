@@ -19,7 +19,6 @@ package rawdb
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -150,7 +149,6 @@ func ReadHeader(db DatabaseReader, hash common.Hash, number uint64) *types.Heade
 	header := new(types.Header)
 	if err := rlp.Decode(bytes.NewReader(data), header); err != nil {
 		log.Error("Invalid block header RLP", "hash", hash, "err", err)
-		fmt.Printf("Invalid block header RLP, %v", err)
 		return nil
 	}
 	return header
