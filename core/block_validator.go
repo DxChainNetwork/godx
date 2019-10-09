@@ -18,9 +18,9 @@ package core
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/consensus/dpos"
 
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/params"
@@ -104,7 +104,7 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 
 // ValidateDposState validates that the dpos context of given block is not changed
 func (v *BlockValidator) ValidateDposState(block *types.Block) error {
-	if e,ok := v.engine.(*dpos.Dpos); ok && e.Mode == dpos.ModeFake {
+	if e, ok := v.engine.(*dpos.Dpos); ok && e.Mode == dpos.ModeFake {
 		return nil
 	}
 

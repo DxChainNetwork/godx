@@ -19,10 +19,9 @@ package core
 import (
 	"math/big"
 
-	"github.com/DxChainNetwork/godx/consensus/dpos"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 )
@@ -89,9 +88,7 @@ func GetHashFn(ref *types.Header, chain ChainContext) func(n uint64) common.Hash
 // CanTransfer checks whether there are enough funds in the address' account to make a transfer.
 // This does not take the necessary gas in to account to make the transfer valid.
 func CanTransfer(db vm.StateDB, addr common.Address, amount *big.Int) bool {
-	frozen := dpos.GetFrozenAssets(db, addr).BigIntPtr()
-	balance := db.GetBalance(addr)
-	available := new(big.Int).Sub(balance, frozen)
+	available := dpos.GetAvailableBalance(db, addr).BigIntPtr()
 	return available.Cmp(amount) >= 0
 }
 
