@@ -134,7 +134,7 @@ func (fs *fileSystem) Close() error {
 		fullErr = common.ErrCompose(fullErr, err)
 	}
 	fs.lock.Unlock()
-	return common.ErrCompose(fullErr, fs.tm.Stop())
+	return nil
 }
 
 // RootDir returns the root directory for the files

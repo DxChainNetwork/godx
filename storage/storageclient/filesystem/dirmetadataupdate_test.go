@@ -145,7 +145,6 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 		tests = tests[:len(tests)-1]
 	}
 	for index, test := range tests {
-		fmt.Println(index)
 		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, newStandardDisrupter())
 		test.rootMetadata.RootPath = fs.fileRootDir
 		commonPath := randomDxPath(t, 2)
