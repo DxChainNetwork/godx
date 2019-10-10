@@ -370,6 +370,12 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	if config.IsConstantinople(header.Number) {
 		blockReward = constantinopleBlockReward
 	}
+
+	// deduct tax for every new block reward，and add it to tax account
+	tax := blockReward.MultUint64(TaxRatio).DivUint64(RewardRatioDenominator)
+	state.AddBalance(taxAccount, tax.BigIntPtr())
+	blockReward = blockReward.Sub(tax)
+
 	// retrieve the total vote weight of header's validator
 	voteCount := GetTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
@@ -385,7 +391,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
-		log.Error("couldn't get snapshot delegate trie, error:", err)
+		log.Error("Couldn't get snapshot delegate trie, error:", err)
 		return
 	}
 
