@@ -1151,6 +1151,12 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 	db ethdb.Database, genesis *types.Header) {
 
 	blockReward := byzantiumBlockReward
+
+	// deduct tax for every new block reward，and add it to tax account
+	tax := blockReward.MultUint64(TaxRatio).DivUint64(RewardRatioDenominator)
+	ec.addBalance(taxAccount, tax)
+	blockReward = blockReward.Sub(tax)
+
 	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
 	totalVotes := ec.getTotalVotesLastEpoch(validator)
 	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
