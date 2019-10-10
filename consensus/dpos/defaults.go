@@ -44,6 +44,9 @@ const (
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
 	MaxVoteCount = 30
+
+	// TaxRatio is the value of tax ratio for every new block reward
+	TaxRatio = uint64(2)
 )
 
 var (
@@ -58,4 +61,8 @@ var (
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
+
+	// TODO: specify the real tax account address
+	// taxAccount is the address that tax of every new block reward is sent to
+	taxAccount = common.HexToAddress("0xabc")
 )
