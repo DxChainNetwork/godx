@@ -507,16 +507,6 @@ func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	if number == 0 {
 		return errUnknownBlock
 	}
-	//now := time.Now().Unix()
-	//delay := NextSlot(now) - now
-	//if delay > 0 {
-	//	select {
-	//	case <-stop:
-	//		return nil
-	//	case <-time.After(time.Duration(delay) * time.Second):
-	//	}
-	//}
-	//block.Header().Time.SetInt64(time.Now().Unix())
 
 	// time's up, sign the block
 	sighash, err := d.signFn(accounts.Account{Address: d.signer}, sigHash(header).Bytes())
