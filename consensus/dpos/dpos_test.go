@@ -138,8 +138,9 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
-	expectedDelegatorReward := big.NewInt(1.5e+18)
-	expectedValidatorReward := big.NewInt(1.5e+18)
+	totalReward := common.NewBigInt(1.5e+18)
+	expectedDelegatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
+	expectedValidatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
 
 	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))
