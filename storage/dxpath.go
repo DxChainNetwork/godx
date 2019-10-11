@@ -42,6 +42,16 @@ func NewDxPath(s string) (DxPath, error) {
 	return newDxPath(s)
 }
 
+// NewDxPathForce creates a DxPath with provided s string.
+// If validation is not passed, the function will panic.
+func NewDxPathForce(s string) DxPath {
+	path, err := newDxPath(s)
+	if err != nil {
+		panic(err)
+	}
+	return path
+}
+
 // newDxPath is the function to be used for NewDxPath
 // It takes the input string, and clear prefix and suffix / character.
 // Then it check whether the input s is valid. If not valid, return an error.
@@ -106,7 +116,7 @@ func (dp DxPath) Parent() (DxPath, error) {
 	if par == "." {
 		return RootDxPath(), nil
 	}
-	return DxPath{par}, nil
+	return newDxPath(par)
 }
 
 // RootDxPath return the special root DxPath which has Path as empty string
