@@ -19,7 +19,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storagehost"
 )
 
-func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
+func ContractUploadHandler(np Protocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var negotiateErr error
 	var nd uploadNegotiationData
 	defer handleNegotiationErr(&negotiateErr, sp, np)
@@ -68,7 +68,7 @@ func ContractUploadHandler(np NegotiationProtocol, sp storage.Peer, uploadReqMsg
 // decodeUploadReqAndGetSr will decode the upload request and get the storage responsibility
 // based on the storage id. In the end, the storage responsibility will be snapshot and stored
 // in the upload negotiation data
-func decodeUploadReqAndGetSr(np NegotiationProtocol, nd *uploadNegotiationData, uploadReqMsg p2p.Msg) (storage.UploadRequest, storagehost.StorageResponsibility, error) {
+func decodeUploadReqAndGetSr(np Protocol, nd *uploadNegotiationData, uploadReqMsg p2p.Msg) (storage.UploadRequest, storagehost.StorageResponsibility, error) {
 	var uploadReq storage.UploadRequest
 	// decode upload request
 	if err := uploadReqMsg.Decode(&uploadReq); err != nil {
@@ -116,7 +116,7 @@ func parseAndHandleUploadActions(uploadReq storage.UploadRequest, nd *uploadNego
 
 // constructAndVerifyNewRevision will construct a new storage contract revision
 // and verify the new revision
-func constructAndVerifyNewRevision(np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, uploadReq storage.UploadRequest, hostConfig storage.HostIntConfig) (types.StorageContractRevision, error) {
+func constructAndVerifyNewRevision(np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, uploadReq storage.UploadRequest, hostConfig storage.HostIntConfig) (types.StorageContractRevision, error) {
 	// get the latest revision and update the revision
 	currentRev := sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1]
 	newRev := currentRev
@@ -178,7 +178,7 @@ func merkleProofNegotiation(sp storage.Peer, nd *uploadNegotiationData, sr stora
 	return waitAndHandleClientRevSignResp(sp)
 }
 
-func hostSignAndUpdateRevision(np NegotiationProtocol, newRev *types.StorageContractRevision, clientRevisionSign []byte) error {
+func hostSignAndUpdateRevision(np Protocol, newRev *types.StorageContractRevision, clientRevisionSign []byte) error {
 	// get the wallet
 	account := accounts.Account{Address: newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Address}
 	wallet, err := np.FindWallet(account)
@@ -197,7 +197,7 @@ func hostSignAndUpdateRevision(np NegotiationProtocol, newRev *types.StorageCont
 	return nil
 }
 
-func hostRevisionSignNegotiation(sp storage.Peer, np NegotiationProtocol, hostConfig storage.HostIntConfig, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, newRev types.StorageContractRevision) error {
+func hostRevisionSignNegotiation(sp storage.Peer, np Protocol, hostConfig storage.HostIntConfig, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, newRev types.StorageContractRevision) error {
 	// get the host revision sign from the new revision, and send the upload host revision sign
 	hostRevSign := newRev.Signatures[hostSignIndex]
 	if err := sp.SendUploadHostRevisionSign(hostRevSign); err != nil {
@@ -208,7 +208,7 @@ func hostRevisionSignNegotiation(sp storage.Peer, np NegotiationProtocol, hostCo
 	return waitAndHandleClientCommitRespUpload(sp, np, nd, sr, hostConfig, newRev)
 }
 
-func waitAndHandleClientCommitRespUpload(sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func waitAndHandleClientCommitRespUpload(sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	// wait for storage host's response
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
@@ -224,7 +224,7 @@ func waitAndHandleClientCommitRespUpload(sp storage.Peer, np NegotiationProtocol
 }
 
 // handleClientUploadCommitResp will handle client's response based on the message code
-func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	switch msg.Code {
 	case storage.ClientCommitSuccessMsg:
 		return handleClientUploadSuccessCommit(sp, np, nd, sr, hostConfig, newRev)
@@ -237,7 +237,7 @@ func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np NegotiationPr
 	}
 }
 
-func handleClientUploadSuccessCommit(sp storage.Peer, np NegotiationProtocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func handleClientUploadSuccessCommit(sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	// update and modify the storage responsibility
 	sr = updateStorageResponsibilityUpload(nd, sr, hostConfig, newRev)
 	if err := np.ModifyStorageResponsibility(sr, nil, nd.sectorGained, nd.gainedSectorData); err != nil {

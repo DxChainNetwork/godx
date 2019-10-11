@@ -20,7 +20,7 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
+func ContractCreateRenewHandler(np Protocol, sp storage.Peer, contractCreateReqMsg p2p.Msg) {
 	var negotiateErr error
 	var nd contractNegotiationData
 	defer handleNegotiationErr(&negotiateErr, sp, np)
@@ -61,7 +61,7 @@ func ContractCreateRenewHandler(np NegotiationProtocol, sp storage.Peer, contrac
 }
 
 // decodeAndValidateReq will decode and validate the contract create request
-func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, nd *contractNegotiationData) (storage.ContractCreateRequest, error) {
+func decodeAndValidateReq(np Protocol, contractCreateReqMsg p2p.Msg, nd *contractNegotiationData) (storage.ContractCreateRequest, error) {
 	// decode the contract create request, if failed, the error
 	// should be categorized as client's error
 	var req storage.ContractCreateRequest
@@ -95,7 +95,7 @@ func decodeAndValidateReq(np NegotiationProtocol, contractCreateReqMsg p2p.Msg, 
 
 // signAndValidateContract will have the contract signed by the storage contract, update the contract
 // and then perform a bunch of validation on the updated contract
-func signAndValidateContract(nd *contractNegotiationData, req storage.ContractCreateRequest, np NegotiationProtocol) (types.StorageContract, error) {
+func signAndValidateContract(nd *contractNegotiationData, req storage.ContractCreateRequest, np Protocol) (types.StorageContract, error) {
 	// extract data
 	sc := req.StorageContract
 	clientSign := req.Sign
@@ -140,7 +140,7 @@ func contractCreateNegotiation(sp storage.Peer, sc types.StorageContract) ([]byt
 	return waitAndHandleClientRevSignResp(sp)
 }
 
-func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc types.StorageContract, nd contractNegotiationData, clientRevSign []byte, req storage.ContractCreateRequest) error {
+func contractRevisionNegotiation(np Protocol, sp storage.Peer, sc types.StorageContract, nd contractNegotiationData, clientRevSign []byte, req storage.ContractCreateRequest) error {
 	// construct and update the storage contract revision
 	contractRev := constructContractRevision(sc, nd.clientPubKey, nd.hostPubKey)
 	updatedContractRev, err := signAndUpdateContractRevision(contractRev, nd, clientRevSign)
@@ -174,7 +174,7 @@ func contractRevisionNegotiation(np NegotiationProtocol, sp storage.Peer, sc typ
 	return nil
 }
 
-func waitAndHandleClientCommitRespContractCrate(sp storage.Peer, np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
+func waitAndHandleClientCommitRespContractCrate(sp storage.Peer, np Protocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
 		err = fmt.Errorf("waitAndHandleClientCommitResp failed, host failed to wait for client commit response: %s", err.Error())
@@ -194,7 +194,7 @@ func waitAndHandleClientCommitRespContractCrate(sp storage.Peer, np NegotiationP
 	return storagehost.StorageResponsibility{}, fmt.Errorf("waitAndHandleClientCommitResp failed, client sent back a negotiation error message")
 }
 
-func clientCommitSuccessHandle(np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
+func clientCommitSuccessHandle(np Protocol, req storage.ContractCreateRequest, sc types.StorageContract, contractRevision types.StorageContractRevision) (storagehost.StorageResponsibility, error) {
 	// get the block number
 	blockNumber := np.GetBlockHeight()
 	hostConfig := np.GetHostConfig()
@@ -253,7 +253,7 @@ func constructStorageResponsibility(contractPrice common.BigInt, blockNumber uin
 	}
 }
 
-func updateStorageResponsibilityContractCreate(np NegotiationProtocol, req storage.ContractCreateRequest, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig) storagehost.StorageResponsibility {
+func updateStorageResponsibilityContractCreate(np Protocol, req storage.ContractCreateRequest, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig) storagehost.StorageResponsibility {
 	// try to get storage responsibility first
 	oldSr, err := np.GetStorageResponsibility(req.OldContractID)
 	if err == nil {
@@ -268,7 +268,7 @@ func updateStorageResponsibilityContractCreate(np NegotiationProtocol, req stora
 	return sr
 }
 
-func updateHostContractRecord(sp storage.Peer, np NegotiationProtocol, contractID common.Hash) error {
+func updateHostContractRecord(sp storage.Peer, np Protocol, contractID common.Hash) error {
 	// get the peer node
 	node := sp.PeerNode()
 	if node == nil {

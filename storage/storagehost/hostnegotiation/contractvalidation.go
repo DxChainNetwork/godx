@@ -21,7 +21,7 @@ import (
 )
 
 // contractValidation will validate the storage contract sent by the storage client
-func contractValidation(np NegotiationProtocol, req storage.ContractCreateRequest, sc types.StorageContract, hostPubKey, clientPubKey *ecdsa.PublicKey) error {
+func contractValidation(np Protocol, req storage.ContractCreateRequest, sc types.StorageContract, hostPubKey, clientPubKey *ecdsa.PublicKey) error {
 	// get needed data
 	blockHeight := np.GetBlockHeight()
 	hostConfig := np.GetHostConfig()
@@ -166,7 +166,7 @@ func oldAndNewRevisionValidation(oldRev, newRev types.StorageContractRevision) e
 
 // hostAddressValidation is used to validate the host address obtained from the storage contract sent
 // by the storage host
-func hostAddressValidation(hostAddress common.Address, nd *contractNegotiationData, np NegotiationProtocol) error {
+func hostAddressValidation(hostAddress common.Address, nd *contractNegotiationData, np Protocol) error {
 	// trying to get the wallet based on the hostAddress parsed from the
 	account := accounts.Account{Address: hostAddress}
 	wallet, err := np.FindWallet(account)
@@ -183,7 +183,7 @@ func hostAddressValidation(hostAddress common.Address, nd *contractNegotiationDa
 
 // hostBalanceValidation validates the host balance to see if the host is able to pay
 // the deposit
-func hostBalanceValidation(np NegotiationProtocol, hostAddress common.Address, hostDeposit *big.Int) error {
+func hostBalanceValidation(np Protocol, hostAddress common.Address, hostDeposit *big.Int) error {
 	// get the stateDB
 	stateDB, err := np.GetStateDB()
 	if err != nil {
@@ -224,7 +224,7 @@ func contractCreateValidation(sc types.StorageContract, hostConfig storage.HostI
 // 	1. file information validation
 // 	2. contract payback validation
 //  3. deposit and payout validation
-func contractRenewValidation(np NegotiationProtocol, oldContractID common.Hash, sc types.StorageContract, hostConfig storage.HostIntConfig, lockedStorageDeposit common.BigInt) error {
+func contractRenewValidation(np Protocol, oldContractID common.Hash, sc types.StorageContract, hostConfig storage.HostIntConfig, lockedStorageDeposit common.BigInt) error {
 	// try to get storage responsibility first
 	sr, err := np.GetStorageResponsibility(oldContractID)
 	if err != nil {

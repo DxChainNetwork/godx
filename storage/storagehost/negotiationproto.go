@@ -44,7 +44,6 @@ func (h *StorageHost) GetStorageResponsibility(storageContractID common.Hash) (S
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	return getStorageResponsibility(h.db, storageContractID)
-
 }
 
 func (h *StorageHost) FindWallet(account accounts.Account) (accounts.Wallet, error) {
@@ -119,6 +118,14 @@ func (h *StorageHost) CheckAndSetStaticConnection(sp storage.Peer) {
 	}
 }
 
+// RollbackUploadStorageResponsibility will roll back the upload storage responsibility in case the storage client
+// failed to commit the information locally
 func (h *StorageHost) RollbackUploadStorageResponsibility(oldSr StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error {
 	return h.rollbackStorageResponsibility(oldSr, sectorsGained, sectorsRemoved, removedSectorData)
+}
+
+// ReadSector fetches the data requested by the storage client locally based
+// on the data sector root
+func (h *StorageHost) ReadSector(sectorRoot common.Hash) ([]byte, error) {
+	return h.ReadSector(sectorRoot)
 }

@@ -134,11 +134,6 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 
 	newRevision.Signatures = [][]byte{req.Signature, hostSig}
 
-	// update the storage responsibility.
-	paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
-	so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
-	so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
-
 	// fetch the requested data from host local storage
 	sectorData, err := h.ReadSector(sec.MerkleRoot)
 	if err != nil {
@@ -167,6 +162,7 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	}
 
 	resp.Signature = hostSig
+
 	if err := sp.SendContractDownloadData(resp); err != nil {
 		log.Error("failed to send the contract download data message", "err", err)
 		return
@@ -180,6 +176,10 @@ func DownloadHandler(h *StorageHost, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	}
 
 	if msg.Code == storage.ClientCommitSuccessMsg {
+		// update the storage responsibility.
+		paymentTransfer := common.NewBigInt(currentRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(newRevision.NewValidProofOutputs[0].Value.Int64()))
+		so.PotentialDownloadRevenue = so.PotentialDownloadRevenue.Add(paymentTransfer)
+		so.StorageContractRevisions = append(so.StorageContractRevisions, newRevision)
 		err = h.modifyStorageResponsibility(so, nil, nil, nil)
 		if err != nil {
 			_ = sp.SendHostCommitFailedMsg()
@@ -230,12 +230,6 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 		return errBadContractOutputCounts
 	}
 
-	// Check that the time to finalize and submit the file contract revision
-	// has not already passed.
-	if existingRevision.NewWindowStart-PostponedExecutionBuffer <= blockHeight {
-		return errLateRevision
-	}
-
 	// Host payout addresses shouldn't change
 	if paymentRevision.NewValidProofOutputs[1].Address != existingRevision.NewValidProofOutputs[1].Address {
 		return errors.New("host payout address changed during downloading")
@@ -252,35 +246,6 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	// Determine the amount that was transferred from the client.
 	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(existingRevision.NewValidProofOutputs[0].Value) > 0 {
 		return ExtendErr("client increased its valid proof output during downloading: ", errHighClientValidOutput)
-	}
-
-	// Verify that enough money was transferred.
-	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
-	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
-		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
-		return ExtendErr(s, errHighClientValidOutput)
-	}
-
-	// Determine the amount of money that was transferred to the host.
-	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
-		return ExtendErr("host valid proof output was decreased during downloading: ", errLowHostValidOutput)
-	}
-
-	// Verify that enough money was transferred.
-	toHost := common.NewBigInt(paymentRevision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(existingRevision.NewValidProofOutputs[1].Value.Int64()))
-	if toHost.Cmp(fromClient) != 0 {
-		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred during downloading: ", fromClient, toHost)
-		return ExtendErr(s, errLowHostValidOutput)
-	}
-
-	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
-	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
-		return ExtendErr("client has incentive to see host fail during downloading: ", errHighClientMissedOutput)
-	}
-
-	// Check that the revision count has increased.
-	if paymentRevision.NewRevisionNumber <= existingRevision.NewRevisionNumber {
-		return errBadRevisionNumber
 	}
 
 	// Check that all of the non-volatile fields are the same.
@@ -304,6 +269,42 @@ func verifyPaymentRevision(existingRevision, paymentRevision types.StorageContra
 	}
 	if paymentRevision.NewUnlockHash != existingRevision.NewUnlockHash {
 		return errBadUnlockHash
+	}
+	// Determine the amount of money that was transferred to the host.
+	if existingRevision.NewValidProofOutputs[1].Value.Cmp(paymentRevision.NewValidProofOutputs[1].Value) > 0 {
+		return ExtendErr("host valid proof output was decreased during downloading: ", errLowHostValidOutput)
+	}
+
+	// Avoid that client has incentive to see the host fail. in that case, client maybe purposely set larger missed output
+	if paymentRevision.NewValidProofOutputs[0].Value.Cmp(paymentRevision.NewMissedProofOutputs[0].Value) > 0 {
+		return ExtendErr("client has incentive to see host fail during downloading: ", errHighClientMissedOutput)
+	}
+
+	// Verify that enough money was transferred.
+	fromClient := common.NewBigInt(existingRevision.NewValidProofOutputs[0].Value.Int64()).Sub(common.NewBigInt(paymentRevision.NewValidProofOutputs[0].Value.Int64()))
+	if fromClient.BigIntPtr().Cmp(expectedTransfer) < 0 {
+		s := fmt.Sprintf("expected at least %v to be exchanged, but %v was exchanged during downloading: ", expectedTransfer, fromClient)
+		return ExtendErr(s, errHighClientValidOutput)
+	}
+
+	// Verify that enough money was transferred.
+	toHost := common.NewBigInt(paymentRevision.NewValidProofOutputs[1].Value.Int64()).Sub(common.NewBigInt(existingRevision.NewValidProofOutputs[1].Value.Int64()))
+	if toHost.Cmp(fromClient) != 0 {
+		s := fmt.Sprintf("expected exactly %v to be transferred to the host, but %v was transferred during downloading: ", fromClient, toHost)
+		return ExtendErr(s, errLowHostValidOutput)
+	}
+
+	// ======= // ======= // ======= // ====== // ======= // ======= // ======= // ====== //
+
+	// Check that the time to finalize and submit the file contract revision
+	// has not already passed.
+	if existingRevision.NewWindowStart-PostponedExecutionBuffer <= blockHeight {
+		return errLateRevision
+	}
+
+	// Check that the revision count has increased.
+	if paymentRevision.NewRevisionNumber <= existingRevision.NewRevisionNumber {
+		return errBadRevisionNumber
 	}
 
 	return nil

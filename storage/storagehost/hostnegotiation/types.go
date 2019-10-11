@@ -7,6 +7,8 @@ package hostnegotiation
 import (
 	"crypto/ecdsa"
 
+	"github.com/DxChainNetwork/godx/core/types"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -17,7 +19,7 @@ import (
 
 // NegotiationProtocol contains methods that are used in contract negotiation
 // upload negotiation and download negotiation
-type NegotiationProtocol interface {
+type Protocol interface {
 	GetFinancialMetrics() storagehost.HostFinancialMetrics
 	GetHostConfig() storage.HostIntConfig
 	GetStateDB() (*state.StateDB, error)
@@ -34,6 +36,7 @@ type NegotiationProtocol interface {
 	ModifyStorageResponsibility(sr storagehost.StorageResponsibility, sectorsRemoved []common.Hash, sectorsGained []common.Hash, gainedSectorData [][]byte) error
 	CheckAndSetStaticConnection(sp storage.Peer)
 	RollbackUploadStorageResponsibility(oldSr storagehost.StorageResponsibility, sectorsGained []common.Hash, sectorsRemoved []common.Hash, removedSectorData [][]byte) error
+	ReadSector(sectorRoot common.Hash) ([]byte, error)
 }
 
 type contractNegotiationData struct {
@@ -56,5 +59,7 @@ type uploadNegotiationData struct {
 	merkleProof      storage.UploadMerkleProof
 }
 
-type downloadNegotiationData struct {
+type DownloadSession struct {
+	SrSnapshot storagehost.StorageResponsibility
+	NewRev     types.StorageContractRevision
 }

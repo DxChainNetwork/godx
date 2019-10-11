@@ -15,7 +15,7 @@ import (
 //  1. no error          -> return directly
 //  2. ErrHostCommit     -> send host commit, after getting response from client, send host ack message
 //  3. other error types -> send host negotiation error
-func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np NegotiationProtocol) {
+func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np Protocol) {
 	// return directly if there are no errors
 	if negotiateErr == nil {
 		return
@@ -36,7 +36,6 @@ func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np NegotiationPr
 		_ = sp.SendHostNegotiateErrorMsg()
 		np.CheckAndUpdateConnection(sp.PeerNode())
 	}
-
 }
 
 func waitAndHandleClientRevSignResp(sp storage.Peer) ([]byte, error) {
