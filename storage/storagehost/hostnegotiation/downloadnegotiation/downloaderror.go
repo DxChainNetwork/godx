@@ -40,4 +40,5 @@ var (
 	errSectorLength            = downloadNegotiationError("errSectorLength-the requested download data sector's length cannot be 0")
 	errSectorMerkle            = downloadNegotiationError("errSectorMerkle-the requested download data sector's length and offset must be multiples of the segment size when requesting a merkle proof")
 	errBadReqPaybackCount      = downloadNegotiationError("errBadReqPaybackCount-the proof payback contained in the request does not match with number of paybacks in the old contract revision")
+	errEmptyContract           = downloadNegotiationError("errEmptyContract-contract saved in the storage responsibility is empty")
 )

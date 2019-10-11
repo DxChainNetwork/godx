@@ -5,7 +5,6 @@
 package downloadnegotiation
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -23,7 +22,7 @@ func ContractHandler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMs
 	defer handleNegotiationErr(np, sp, &negotiateErr)
 
 	// 1. decode the download request and get the storage responsibility
-	req, sr, err := getDownloadRequestAndStorageResponsibility(np, &session, downloadReqMsg)
+	req, sr, err := getDownloadReqAndStorageResponsibility(np, &session, downloadReqMsg)
 	if err != nil {
 		negotiateErr = err
 		return
@@ -64,23 +63,23 @@ func ContractHandler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMs
 
 // getDownloadRequestAndStorageResponsibility will decode the downloadReqMsg and based on the information
 // acquired, get the corresponded storage responsibility
-func getDownloadRequestAndStorageResponsibility(np hostnegotiation.Protocol, session *hostnegotiation.DownloadSession, downloadReqMsg p2p.Msg) (storage.DownloadRequest, storagehost.StorageResponsibility, error) {
+func getDownloadReqAndStorageResponsibility(np hostnegotiation.Protocol, session *hostnegotiation.DownloadSession, downloadReqMsg p2p.Msg) (storage.DownloadRequest, storagehost.StorageResponsibility, error) {
 	// decode the download request
 	var req storage.DownloadRequest
 	if err := downloadReqMsg.Decode(&req); err != nil {
-		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, err
+		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, downloadNegotiationError(err.Error())
 	}
 
 	// get the storage responsibility
 	sr, err := np.GetStorageResponsibility(req.StorageContractID)
 	if err != nil {
-		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, err
+		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, downloadNegotiationError(err.Error())
 	}
 	session.SrSnapshot = sr
 
 	// validate the storage responsibility, and make a snapshot
 	if reflect.DeepEqual(sr.OriginStorageContract, types.StorageContract{}) {
-		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, fmt.Errorf("contract saved in the storage responsibility is empty")
+		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, errEmptyContract
 	}
 	session.SrSnapshot = sr
 	return req, sr, nil
