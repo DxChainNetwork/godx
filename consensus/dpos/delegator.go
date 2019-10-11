@@ -5,6 +5,8 @@
 package dpos
 
 import (
+	time2 "time"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -13,7 +15,7 @@ import (
 
 // ProcessVote process the process request for state and dpos context
 func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
-	candidates []common.Address, time int64) (int, error) {
+	candidates []common.Address, duration uint64, time int64) (int, error) {
 
 	// Validation: voting with 0 deposit is not allowed
 	if err := checkValidVote(state, addr, deposit, candidates); err != nil {
@@ -42,6 +44,9 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	}
 	// Update vote deposit
 	SetVoteDeposit(state, addr, deposit)
+
+	// store vote duration
+	SetVoteDuration(state, addr, duration+uint64(time2.Now().Unix()))
 
 	return successVote, nil
 }

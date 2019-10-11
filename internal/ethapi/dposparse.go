@@ -105,6 +105,19 @@ func formVoteTxData(fields map[string]string) (data types.VoteTxData, err error)
 		return types.VoteTxData{}, fmt.Errorf("failed to form voteTxData, vote candidates is not provided")
 	}
 
+	// get duration
+	durationStr, ok := fields["duration"]
+	if !ok {
+		return types.VoteTxData{}, fmt.Errorf("failed to form voteTxData, vote duration is not provided")
+	}
+
+	// parse duration
+	data.Duration, err = unit.ParseTime(durationStr)
+	if err != nil {
+		return types.VoteTxData{}, err
+	}
+	data.Duration *= uint64(dpos.BlockInterval)
+
 	// parse candidates
 	if data.Candidates, err = parseCandidates(candidatesStr); err != nil {
 		return types.VoteTxData{}, err

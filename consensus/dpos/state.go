@@ -27,6 +27,9 @@ var (
 	// KeyVoteDeposit is the key of vote deposit
 	KeyVoteDeposit = common.BytesToHash([]byte("vote-deposit"))
 
+	// KeyVoteDuration is the key of vote duration
+	KeyVoteDuration = common.BytesToHash([]byte("vote-duration"))
+
 	// KeyCandidateDeposit is the key of candidates deposit
 	KeyCandidateDeposit = common.BytesToHash([]byte("candidates-deposit"))
 
@@ -229,4 +232,16 @@ func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) c
 func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
 	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
 	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
+}
+
+// GetVoteDuration get the vote duration of the addr from the state
+func GetVoteDuration(state stateDB, addr common.Address) uint64 {
+	durationHash := state.GetState(addr, KeyVoteDuration)
+	return durationHash.Big().Uint64()
+}
+
+// SetVoteDuration set the vote lock end line of the addr in the state
+func SetVoteDuration(state stateDB, addr common.Address, duration uint64) {
+	hash := common.BigToHash(common.NewBigIntUint64(duration).BigIntPtr())
+	state.SetState(addr, KeyVoteDuration, hash)
 }

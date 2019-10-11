@@ -570,6 +570,7 @@ type (
 	VoteTxData struct {
 		Deposit    common.BigInt
 		Candidates []common.Address
+		Duration   uint64
 	}
 
 	// voteTxRLPData is the rlp data structure used for rlp encoding/decoding for
@@ -577,6 +578,7 @@ type (
 	voteTxRLPData struct {
 		Deposit    *big.Int
 		Candidates []common.Address
+		Duration   uint64
 	}
 )
 
@@ -604,6 +606,7 @@ func (data *VoteTxData) EncodeRLP(w io.Writer) error {
 	rlpData := voteTxRLPData{
 		Deposit:    data.Deposit.BigIntPtr(),
 		Candidates: data.Candidates,
+		Duration:   data.Duration,
 	}
 	return rlp.Encode(w, rlpData)
 }
@@ -614,6 +617,6 @@ func (data *VoteTxData) DecodeRLP(s *rlp.Stream) error {
 	if err := s.Decode(&rlpData); err != nil {
 		return err
 	}
-	data.Deposit, data.Candidates = common.PtrBigInt(rlpData.Deposit), rlpData.Candidates
+	data.Deposit, data.Candidates, data.Duration = common.PtrBigInt(rlpData.Deposit), rlpData.Candidates, rlpData.Duration
 	return nil
 }

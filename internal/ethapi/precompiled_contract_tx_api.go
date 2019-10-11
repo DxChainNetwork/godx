@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -202,15 +203,21 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 	// construct args
 	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
-	// get the latest block header
-	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if header == nil || err != nil {
+	// get the latest block header and stateDB
+	stateDB, header, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if stateDB == nil || header == nil || err != nil {
 		return common.Hash{}, err
 	}
 
 	// check if the delegator has voted before
 	if !dpos.HasVoted(args.From, header, pd.b.ChainDb()) {
 		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
+	}
+
+	// check whether the given delegator remains in locked duration
+	lockEndline := dpos.GetVoteDuration(stateDB, from)
+	if lockEndline >= uint64(time.Now().Unix()) {
+		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction for remaining in locked duration")
 	}
 
 	// send the contract transaction
