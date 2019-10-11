@@ -5,6 +5,7 @@
 package storage
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/DxChainNetwork/godx/rlp"
@@ -69,7 +70,7 @@ func TestDxPath_Parent(t *testing.T) {
 			dp = RootDxPath()
 		} else {
 			var err error
-			dp, err = NewDxPath(test.s)
+			dp, err = NewDxPath(filepath.FromSlash(test.s))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +84,7 @@ func TestDxPath_Parent(t *testing.T) {
 		if test.expect == "" {
 			expect = RootDxPath()
 		} else {
-			expect, err = NewDxPath(test.expect)
+			expect, err = NewDxPath(filepath.FromSlash(test.expect))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -99,7 +100,7 @@ func TestSysPath_Join(t *testing.T) {
 		sp     SysPath
 		dp     DxPath
 		extra  []string
-		expect SysPath
+		expect string
 	}{
 		{"/usr/bin/data", DxPath{"test"}, []string{".dxdir"}, "/usr/bin/data/test/.dxdir"},
 		{"", RootDxPath(), []string{""}, ""},
@@ -107,8 +108,8 @@ func TestSysPath_Join(t *testing.T) {
 	}
 	for i, test := range tests {
 		got := test.sp.Join(test.dp, test.extra...)
-		if got != test.expect {
-			t.Errorf("test %d: Expect %v, Got %v", i, test.expect, got)
+		if string(got) != filepath.FromSlash(test.expect) {
+			t.Errorf("test %d: Expect %v, Got %v", i, filepath.FromSlash(test.expect), got)
 		}
 	}
 }

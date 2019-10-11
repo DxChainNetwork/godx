@@ -1,0 +1,22 @@
+=============== Oct 10, 2019 (PDT) ===============
+15:19:56.853748 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+15:19:56.933150 db@open opening
+15:19:56.935149 version@stat F·[] S·0B[] Sc·[]
+15:19:57.002309 db@janitor F·2 G·0
+15:19:57.002309 db@open done T·69.1591ms
+15:19:57.733517 db@close closing
+15:19:57.735516 db@close done T·1.999ms
+=============== Oct 10, 2019 (PDT) ===============
+16:43:06.655877 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+=============== Oct 10, 2019 (PDT) ===============
+16:43:06.664874 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+16:43:06.703939 version@stat F·[] S·0B[] Sc·[]
+16:43:06.725927 db@open opening
+16:43:06.725927 journal@recovery F·1
+16:43:06.732923 journal@recovery recovering @1
+16:43:06.788909 memdb@flush created L0@2 N·8 S·307B "Sto..\xf5\xa5\xbb,d8":"hei..\x0fBF,v7"
+16:43:06.791888 version@stat F·[1] S·307B[307B] Sc·[0.25]
+16:43:06.817337 db@janitor F·3 G·0
+16:43:06.817337 db@open done T·91.4097ms
+16:43:07.049442 db@close closing
+16:43:07.051461 db@close done T·2.0191ms
