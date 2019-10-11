@@ -47,6 +47,9 @@ const (
 
 	// TaxRatio is the value of tax ratio for every new block reward
 	TaxRatio = uint64(2)
+
+	// MinVoteLockDuration is the minimum vote locked duration
+	MinVoteLockDuration = uint64(EpochInterval)
 )
 
 var (

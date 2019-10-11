@@ -96,4 +96,7 @@ var (
 
 	// errDelegatorInsufficientBalance indicates the delegator does not have enough balance to pay for the vote deposit
 	errDelegatorInsufficientBalance = errors.New("delegator does not have enough balance to pay for the vote deposit")
+
+	// errVoteLockDurationTooLow indicates that the vote tx set a too small duration
+	errVoteLockDurationTooLow = errors.New("vote transaction with too small lock duration")
 )
