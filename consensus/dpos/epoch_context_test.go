@@ -251,7 +251,7 @@ func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr comm
 			break
 		}
 	}
-	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, time); err != nil {
+	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, uint64(0), time); err != nil {
 		return false, err
 	}
 	return selected, nil
