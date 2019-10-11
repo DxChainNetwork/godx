@@ -27,7 +27,7 @@ func TestProcessVoteNewDelegator(t *testing.T) {
 	deposit, curTime := dx.MultInt64(10), time.Now().Unix()
 	addAccountInState(stateDB, addr, deposit, common.BigInt0)
 	// Process vote
-	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, uint64(0), curTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,13 +50,13 @@ func TestProcessVoteIncreasingDeposit(t *testing.T) {
 	addAccountInState(stateDB, addr, dx.MultInt64(10), common.BigInt0)
 	// Vote the first time
 	prevDeposit, prevCandidates, prevTime := dx, candidates[:30], time.Now().AddDate(0, 0, -1).Unix()
-	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, prevTime)
+	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, uint64(0), prevTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Vote the second time
 	curDeposit, curCandidates, curTime := dx.MultInt64(10), candidates[20:], time.Now().Unix()
-	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, uint64(0), curTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,13 +80,13 @@ func TestProcessVoteDecreasingDeposit(t *testing.T) {
 	addAccountInState(stateDB, addr, dx.MultInt64(10), common.BigInt0)
 	// Vote the first time
 	prevDeposit, prevCandidates, prevTime := dx.MultInt64(10), candidates[:30], time.Now().AddDate(0, 0, -1).Unix()
-	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, prevTime)
+	_, err = ProcessVote(stateDB, ctx, addr, prevDeposit, prevCandidates, uint64(0), prevTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Vote the second time
 	curDeposit, curCandidates, curTime := dx.MultInt64(1), candidates[20:], time.Now().Unix()
-	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, curDeposit, curCandidates, uint64(0), curTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestProcessVoteErr(t *testing.T) {
 	curTime := time.Now().Unix()
 	thawingEpoch := calcThawingEpoch(CalculateEpochID(curTime))
 	// Error 1: error from checkValidVote
-	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(11), candidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(11), candidates, uint64(0), curTime)
 	if err == nil {
 		t.Fatal("should raise error not enough balance")
 	}
@@ -125,7 +125,7 @@ func TestProcessVoteErr(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Error 2: no valid candidates
-	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(1), []common.Address{randomAddress()}, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, dx.MultInt64(1), []common.Address{randomAddress()}, uint64(0), curTime)
 	if err == nil {
 		t.Fatal("should raise no candidate voted error")
 	}
@@ -149,7 +149,7 @@ func TestProcessCancelVote(t *testing.T) {
 	addAccountInState(stateDB, addr, dx.MultInt64(10), prevFrozen)
 	thawingEpoch := calcThawingEpoch(CalculateEpochID(curTime))
 	// Process Vote
-	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, curTime)
+	_, err = ProcessVote(stateDB, ctx, addr, deposit, candidates, uint64(0), curTime)
 	if err != nil {
 		t.Fatal(err)
 	}

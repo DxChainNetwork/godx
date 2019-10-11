@@ -387,7 +387,7 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x increase vote deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, uint64(0), tec.epc.TimeStamp); err != nil {
 		return err
 	}
 	// Update expected context
@@ -407,7 +407,7 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x decrease deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, uint64(0), tec.epc.TimeStamp); err != nil {
 		return err
 	}
 	// Update expected context
