@@ -7,13 +7,14 @@ package downloadnegotiation
 import (
 	"math/bits"
 
-	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 )
 
+// calcExpectedDownloadCost calculates the expected download cost, which is the sum of
+// downloadBandwidthCost, downloadSectorAccessCost, and baseRPCPrice
 func calcExpectedDownloadCost(np hostnegotiation.Protocol, dataSector storage.DownloadRequestSector) common.BigInt {
 	// 1. get storage host config
 	hostConfig := np.GetHostConfig()
@@ -27,6 +28,7 @@ func calcExpectedDownloadCost(np hostnegotiation.Protocol, dataSector storage.Do
 	return downloadCost
 }
 
+// calcDownloadBandwidthCost calculates the download bandwidth cost
 func calcDownloadBandwidthCost(downloadBandwidthPrice common.BigInt, sectorLength uint64) common.BigInt {
 	hashesPerProof := 2 * bits.Len64(storage.SectorSize/merkle.LeafSize)
 	bandwidth := sectorLength + uint64(hashesPerProof*storage.HashSize)
@@ -34,6 +36,7 @@ func calcDownloadBandwidthCost(downloadBandwidthPrice common.BigInt, sectorLengt
 	return bandwidthCost
 }
 
+// calcDownloadSectorAccessCost calculates the download sector access cost
 func calcDownloadSectorAccessCost(sectorAccessPrice common.BigInt, sectorRoot [32]byte) common.BigInt {
 	sectorAccesses := make(map[common.Hash]struct{})
 	sectorAccesses[sectorRoot] = struct{}{}

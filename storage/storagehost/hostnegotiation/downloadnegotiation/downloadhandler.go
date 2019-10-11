@@ -8,56 +8,55 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
-
 	"github.com/DxChainNetwork/godx/common"
-
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 )
 
-func ContractDownloadHandler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMsg p2p.Msg) {
+// ContractHandler handles the download negotiation process
+func ContractHandler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	var negotiateErr error
-	var nd hostnegotiation.DownloadSession
-	defer handleNegotiationErr(&negotiateErr, sp, np)
+	var session hostnegotiation.DownloadSession
+	defer handleNegotiationErr(np, sp, &negotiateErr)
 
 	// 1. decode the download request and get the storage responsibility
-	req, sr, err := getDownloadRequestAndStorageResponsibility(np, &nd, downloadReqMsg)
+	req, sr, err := getDownloadRequestAndStorageResponsibility(np, &session, downloadReqMsg)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// 2. validate the download request
-	latestRevision := sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1]
-	if err := downloadRequestValidation(req, latestRevision); err != nil {
+	oldRev := sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1]
+	if err := downloadRequestValidation(req, oldRev); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// 3. construct new contract revision and validate the new revision
-	newRevision := constructNewRevision(latestRevision, req)
-	if err := downloadRevisionValidation(np, latestRevision, newRevision, req.Sector); err != nil {
+	newRevision := constructNewRevision(oldRev, req)
+	if err := downloadRevisionValidation(np, oldRev, newRevision, req.Sector); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// 4. send the download request data
-	if err := sendDownloadResp(np, sp, &nd, req, newRevision); err != nil {
+	if err := sendDownloadResp(np, sp, &session, req, newRevision); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// 5. handle storage client's response
-	if err := clientDownloadRespHandle(np, sp, nd, sr, latestRevision); err != nil {
+	if err := clientDownloadRespHandle(np, sp, session, sr, oldRev); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// 6. update connection and send ack
-	if err := updateConnAndSendACK(np, sp, nd.SrSnapshot); err != nil {
+	if err := updateConnAndSendACK(np, sp, session.SrSnapshot); err != nil {
 		negotiateErr = err
 		return
 	}
@@ -65,7 +64,7 @@ func ContractDownloadHandler(np hostnegotiation.Protocol, sp storage.Peer, downl
 
 // getDownloadRequestAndStorageResponsibility will decode the downloadReqMsg and based on the information
 // acquired, get the corresponded storage responsibility
-func getDownloadRequestAndStorageResponsibility(np hostnegotiation.Protocol, nd *hostnegotiation.DownloadSession, downloadReqMsg p2p.Msg) (storage.DownloadRequest, storagehost.StorageResponsibility, error) {
+func getDownloadRequestAndStorageResponsibility(np hostnegotiation.Protocol, session *hostnegotiation.DownloadSession, downloadReqMsg p2p.Msg) (storage.DownloadRequest, storagehost.StorageResponsibility, error) {
 	// decode the download request
 	var req storage.DownloadRequest
 	if err := downloadReqMsg.Decode(&req); err != nil {
@@ -77,13 +76,13 @@ func getDownloadRequestAndStorageResponsibility(np hostnegotiation.Protocol, nd 
 	if err != nil {
 		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, err
 	}
-	nd.SrSnapshot = sr
+	session.SrSnapshot = sr
 
 	// validate the storage responsibility, and make a snapshot
 	if reflect.DeepEqual(sr.OriginStorageContract, types.StorageContract{}) {
 		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, fmt.Errorf("contract saved in the storage responsibility is empty")
 	}
-	nd.SrSnapshot = sr
+	session.SrSnapshot = sr
 	return req, sr, nil
 }
 
@@ -159,9 +158,9 @@ func downloadRevisionValidation(np hostnegotiation.Protocol, oldRev, newRev type
 
 // sendDownloadResp send the requested data sector, update the storage revision, and etc. back to the
 // storage client
-func sendDownloadResp(np hostnegotiation.Protocol, sp storage.Peer, nd *hostnegotiation.DownloadSession, req storage.DownloadRequest, newRev types.StorageContractRevision) error {
+func sendDownloadResp(np hostnegotiation.Protocol, sp storage.Peer, session *hostnegotiation.DownloadSession, req storage.DownloadRequest, newRev types.StorageContractRevision) error {
 	// sign and update the download revision
-	err := signAndUpdateDownloadRevision(np, nd, newRev, req.Signature)
+	err := signAndUpdateDownloadRevision(np, session, newRev, req.Signature)
 	if err != nil {
 		return err
 	}
@@ -182,7 +181,7 @@ func sendDownloadResp(np hostnegotiation.Protocol, sp storage.Peer, nd *hostnego
 
 // clientDownloadRespHandle handles the response from the storage client after
 // sent the data requested by the storage client
-func clientDownloadRespHandle(np hostnegotiation.Protocol, sp storage.Peer, nd hostnegotiation.DownloadSession, sr storagehost.StorageResponsibility, oldRev types.StorageContractRevision) error {
+func clientDownloadRespHandle(np hostnegotiation.Protocol, sp storage.Peer, session hostnegotiation.DownloadSession, sr storagehost.StorageResponsibility, oldRev types.StorageContractRevision) error {
 	// wait for the client response message
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
@@ -191,7 +190,7 @@ func clientDownloadRespHandle(np hostnegotiation.Protocol, sp storage.Peer, nd h
 
 	// based on the message code, handle it differently
 	if msg.Code == storage.ClientCommitSuccessMsg {
-		return updateHostResponsibility(np, sp, nd, sr, oldRev)
+		return updateHostResponsibility(np, sp, session, sr, oldRev)
 	} else if msg.Code == storage.ClientCommitFailedMsg {
 		return storage.ErrClientCommit
 	} else if msg.Code == storage.ClientNegotiateErrorMsg {
@@ -201,6 +200,8 @@ func clientDownloadRespHandle(np hostnegotiation.Protocol, sp storage.Peer, nd h
 	return nil
 }
 
+// updateConnAndSendACK will update the connection and send the host acknowledgement to
+// storage client
 func updateConnAndSendACK(np hostnegotiation.Protocol, sp storage.Peer, srSnapShot storagehost.StorageResponsibility) error {
 	// check if the connection is static, if not, update the connection
 	if !sp.IsStaticConn() {
@@ -225,7 +226,7 @@ func updateConnAndSendACK(np hostnegotiation.Protocol, sp storage.Peer, srSnapSh
 //  1. no error          -> return directly
 //  2. ErrHostCommit     -> send host commit, after getting response from client, send host ack message
 //  3. other error types -> send host negotiation error
-func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np hostnegotiation.Protocol) {
+func handleNegotiationErr(np hostnegotiation.Protocol, sp storage.Peer, negotiateErr *error) {
 	// return directly if there are no errors
 	if negotiateErr == nil {
 		return
@@ -250,11 +251,11 @@ func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np hostnegotiati
 
 // updateHostResponsibility will update the host's storage responsibility and commit
 // the information locally
-func updateHostResponsibility(np hostnegotiation.Protocol, sp storage.Peer, nd hostnegotiation.DownloadSession, sr storagehost.StorageResponsibility, oldRev types.StorageContractRevision) error {
+func updateHostResponsibility(np hostnegotiation.Protocol, sp storage.Peer, session hostnegotiation.DownloadSession, sr storagehost.StorageResponsibility, oldRev types.StorageContractRevision) error {
 	// update the storage responsibility
-	downloadRevenue := common.PtrBigInt(nd.NewRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value).Sub(common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value))
+	downloadRevenue := common.PtrBigInt(session.NewRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value).Sub(common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value))
 	sr.PotentialDownloadRevenue = sr.PotentialDownloadRevenue.Add(downloadRevenue)
-	sr.StorageContractRevisions = append(sr.StorageContractRevisions, nd.NewRev)
+	sr.StorageContractRevisions = append(sr.StorageContractRevisions, session.NewRev)
 	if err := np.ModifyStorageResponsibility(sr, nil, nil, nil); err == nil {
 		return nil
 	}

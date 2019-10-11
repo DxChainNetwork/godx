@@ -36,4 +36,8 @@ var (
 	errFetchData               = downloadNegotiationError("errFetchData-storage host failed to get the data sector requested by the storage client locally")
 	errFetchMerkleProof        = downloadNegotiationError("errFetchMerkleProof-storage host failed to construct merkle proof")
 	errCommitFailed            = downloadNegotiationError("errCommitFailed-storage host failed to commit the modified storage responsibility")
+	errSectorSize              = downloadNegotiationError("errDataSize-the download requested data sector is greater than the required data sector size")
+	errSectorLength            = downloadNegotiationError("errSectorLength-the requested download data sector's length cannot be 0")
+	errSectorMerkle            = downloadNegotiationError("errSectorMerkle-the requested download data sector's length and offset must be multiples of the segment size when requesting a merkle proof")
+	errBadReqPaybackCount      = downloadNegotiationError("errBadReqPaybackCount-the proof payback contained in the request does not match with number of paybacks in the old contract revision")
 )

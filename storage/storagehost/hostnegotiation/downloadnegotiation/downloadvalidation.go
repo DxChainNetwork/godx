@@ -5,7 +5,6 @@
 package downloadnegotiation
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -22,33 +21,30 @@ import (
 func downloadSectorValidation(dataSector storage.DownloadRequestSector, merkleProof bool) error {
 	// 1. validate data sector size
 	if uint64(dataSector.Offset)+uint64(dataSector.Length) > storage.SectorSize {
-		return fmt.Errorf("the download requested data sector is greater than the required data sector size")
+		return errSectorSize
 	}
 
 	// 2. validate the sector length
 	if dataSector.Length == 0 {
-		return fmt.Errorf("the download data sector's length cannot be 0")
+		return errSectorLength
 	}
 
 	// 3. validate sector against segment size if merkleProof is requested
 	if merkleProof {
 		if dataSector.Offset%storage.SegmentSize != 0 || dataSector.Length%storage.SegmentSize != 0 {
-			return fmt.Errorf("the download data sector's length and offset must be multiples of the segment size when requesting a merkle proof")
+			return errSectorMerkle
 		}
 	}
 
 	return nil
 }
 
-func downloadRequestPaybackValidation(validProofPaybacks, missedProofPaybacks []*big.Int, latestRevision types.StorageContractRevision) error {
-	// validate the number of valid proof paybacks
-	if len(validProofPaybacks) != len(latestRevision.NewValidProofOutputs) {
-		return fmt.Errorf("the number of new valid proof paybacks does not match with the number of old valid proof paybacks")
-	}
-
-	// validate the number of missed proof paybacks
-	if len(missedProofPaybacks) != len(latestRevision.NewMissedProofOutputs) {
-		return fmt.Errorf("the number of new missed proof paybacks does not match with the number of old missed proof paybacks")
+// downloadRequestPaybackValidation validates the download request's valid proof paybacks and
+// missed proof paybacks
+func downloadRequestPaybackValidation(validProofPaybacks, missedProofPaybacks []*big.Int, oldRev types.StorageContractRevision) error {
+	// validate the number of valid proof paybacks and number of missed proof paybacks
+	if len(validProofPaybacks) != len(oldRev.NewValidProofOutputs) || len(missedProofPaybacks) != len(oldRev.NewMissedProofOutputs) {
+		return errBadReqPaybackCount
 	}
 
 	return nil

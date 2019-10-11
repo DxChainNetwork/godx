@@ -15,7 +15,7 @@ import (
 
 // signDownloadRevision will retrieve the host's wallet information, which will be used
 // to sign the new constructed download contract revision
-func signAndUpdateDownloadRevision(np hostnegotiation.Protocol, ds *hostnegotiation.DownloadSession, newRev types.StorageContractRevision, clientSign []byte) error {
+func signAndUpdateDownloadRevision(np hostnegotiation.Protocol, session *hostnegotiation.DownloadSession, newRev types.StorageContractRevision, clientSign []byte) error {
 	// retrieve the wallet information
 	account := accounts.Account{Address: newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Address}
 	wallet, err := np.FindWallet(account)
@@ -31,7 +31,7 @@ func signAndUpdateDownloadRevision(np hostnegotiation.Protocol, ds *hostnegotiat
 
 	// update and return the new revision
 	newRev.Signatures = [][]byte{clientSign, hostSign}
-	ds.NewRev = newRev
+	session.NewRev = newRev
 	return nil
 }
 
@@ -69,6 +69,7 @@ func fetchDownloadData(np hostnegotiation.Protocol, dataSector storage.DownloadR
 	return sectorData[dataSector.Offset : dataSector.Offset+dataSector.Length], nil
 }
 
+// constructMerkleProof constructs merkle proof is the storage client requestd
 func constructMerkleProof(req storage.DownloadRequest, dataSector storage.DownloadRequestSector, dataRequested []byte) ([]common.Hash, error) {
 	// construct the merkle proof is requested
 	if req.MerkleProof {
