@@ -6,7 +6,6 @@ package dpos
 
 import (
 	"fmt"
-	time2 "time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -15,15 +14,14 @@ import (
 )
 
 // ProcessVote process the process request for state and dpos context
-func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
-	candidates []common.Address, duration uint64, time int64) (int, error) {
+func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, voteData *types.VoteTxData, currentBlockTime, voteTime int64) (int, error) {
 
 	// Validation: voting with 0 deposit is not allowed
-	if err := checkValidVote(state, addr, deposit, candidates, duration); err != nil {
+	if err := checkValidVote(state, addr, voteData.Deposit, voteData.Candidates, voteData.Duration); err != nil {
 		return 0, err
 	}
 	// Vote the candidates
-	successVote, err := ctx.Vote(addr, candidates)
+	successVote, err := ctx.Vote(addr, voteData.Candidates)
 	if err != nil {
 		return 0, err
 	}
@@ -31,35 +29,34 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	// different condition. Note if previous deposit is the same as the new deposit, no frozen
 	// or thawing fields need to be updated
 	prevDeposit := GetVoteDeposit(state, addr)
-	if deposit.Cmp(prevDeposit) < 0 {
+	if voteData.Deposit.Cmp(prevDeposit) < 0 {
 		// If new deposit is smaller than previous deposit, the diff will be thawed after
 		// ThawingEpochDuration
-		diff := prevDeposit.Sub(deposit)
-		epoch := CalculateEpochID(time)
+		diff := prevDeposit.Sub(voteData.Deposit)
+		epoch := CalculateEpochID(currentBlockTime)
 		markThawingAddressAndValue(state, addr, epoch, diff)
-	} else if deposit.Cmp(prevDeposit) > 0 {
+	} else if voteData.Deposit.Cmp(prevDeposit) > 0 {
 		// If the new deposit is larger than previous deposit, the diff will be added directly
 		// to the frozenAssets
-		diff := deposit.Sub(prevDeposit)
+		diff := voteData.Deposit.Sub(prevDeposit)
 		AddFrozenAssets(state, addr, diff)
 	}
 	// Update vote deposit
-	SetVoteDeposit(state, addr, deposit)
+	SetVoteDeposit(state, addr, voteData.Deposit)
 
 	// store vote duration and vote time
-	SetVoteDuration(state, addr, duration)
-	SetVoteTime(state, addr, uint64(time2.Now().Unix()))
+	SetVoteDuration(state, addr, voteData.Duration)
+	SetVoteTime(state, addr, uint64(voteTime))
 
 	return successVote, nil
 }
 
 // ProcessCancelVote process the cancel vote request for state and dpos context
-func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
+func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, currentBlockTime, now int64) error {
 	// check whether the given delegator remains in locked duration
 	duration := GetVoteDuration(state, addr)
 	voteTime := GetVoteTime(state, addr)
-	now := uint64(time2.Now().Unix())
-	if (voteTime + duration) >= now {
+	if (voteTime + duration) >= uint64(now) {
 		return fmt.Errorf("failed to process cancel vote for remaining in locked duration")
 	}
 
@@ -67,12 +64,12 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 		return err
 	}
 	prevDeposit := GetVoteDeposit(state, addr)
-	currentEpoch := CalculateEpochID(time)
+	currentEpoch := CalculateEpochID(currentBlockTime)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	SetVoteDeposit(state, addr, common.BigInt0)
 
 	// calculate the deposit bonus sent by dx reward account
-	bonus := calculateDepositReward(state, addr, now, voteTime)
+	bonus := calculateDepositReward(state, addr, uint64(now), voteTime)
 
 	// TODO: if reward account balance is not enough for paying bonus, just skip transferring ??
 	// transfer from reward account to delegator
