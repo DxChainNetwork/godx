@@ -17,7 +17,7 @@ import (
 func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, voteData *types.VoteTxData, currentBlockTime, voteTime int64) (int, error) {
 
 	// Validation: voting with 0 deposit is not allowed
-	if err := checkValidVote(state, addr, voteData.Deposit, voteData.Candidates, voteData.Duration); err != nil {
+	if err := checkValidVote(state, addr, *voteData); err != nil {
 		return 0, err
 	}
 	// Vote the candidates
@@ -73,7 +73,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 
 	// TODO: if reward account balance is not enough for paying bonus, just skip transferring ??
 	// transfer from reward account to delegator
-	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) == -1 {
+	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
 		state.SubBalance(rewardAccount, bonus.BigIntPtr())
 		state.AddBalance(addr, bonus.BigIntPtr())
 	}
@@ -86,7 +86,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 
 // VoteTxDepositValidation will validate the vote transaction before sending it
 func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, voteData types.VoteTxData) error {
-	return checkValidVote(state, delegatorAddress, voteData.Deposit, voteData.Candidates, voteData.Duration)
+	return checkValidVote(state, delegatorAddress, voteData)
 }
 
 // HasVoted will check whether the provided delegator address is voted
@@ -108,28 +108,28 @@ func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethd
 }
 
 // checkValidVote checks whether the input argument is valid for a vote transaction
-func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.BigInt, candidates []common.Address, duration uint64) error {
-	if deposit.Cmp(common.BigInt0) <= 0 {
+func checkValidVote(state stateDB, delegatorAddr common.Address, voteData types.VoteTxData) error {
+	if voteData.Deposit.Cmp(common.BigInt0) <= 0 {
 		return errVoteZeroOrNegativeDeposit
 	}
-	if len(candidates) == 0 {
+	if len(voteData.Candidates) == 0 {
 		return errVoteZeroCandidates
 	}
-	if len(candidates) > MaxVoteCount {
+	if len(voteData.Candidates) > MaxVoteCount {
 		return errVoteTooManyCandidates
 	}
 	// The delegator should have enough balance for vote if he want to increase the deposit
 	prevVoteDeposit := GetVoteDeposit(state, delegatorAddr)
-	if deposit.Cmp(prevVoteDeposit) > 0 {
+	if voteData.Deposit.Cmp(prevVoteDeposit) > 0 {
 		availableBalance := GetAvailableBalance(state, delegatorAddr)
-		diff := deposit.Sub(prevVoteDeposit)
+		diff := voteData.Deposit.Sub(prevVoteDeposit)
 		if availableBalance.Cmp(diff) < 0 {
 			return errVoteInsufficientBalance
 		}
 	}
 
 	// check if vote duration is too small
-	if duration < MinVoteLockDuration {
+	if voteData.Duration < MinVoteLockDuration {
 		return errVoteLockDurationTooLow
 	}
 
