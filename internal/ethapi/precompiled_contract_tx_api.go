@@ -215,8 +215,9 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 	}
 
 	// check whether the given delegator remains in locked duration
-	lockEndline := dpos.GetVoteLockEndline(stateDB, from)
-	if lockEndline >= uint64(time.Now().Unix()) {
+	duration := dpos.GetVoteDuration(stateDB, from)
+	voteTime := dpos.GetVoteTime(stateDB, from)
+	if (voteTime + duration) >= uint64(time.Now().Unix()) {
 		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction for remaining in locked duration")
 	}
 
