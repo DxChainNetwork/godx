@@ -12,10 +12,72 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
 var dx = common.NewBigIntUint64(1e18)
+
+// TestCalculateDepositReward test the function of calculateDepositReward
+func TestCalculateDepositReward(t *testing.T) {
+	tests := []struct {
+		name      string
+		deposit   common.BigInt
+		fn        func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt
+		wantBonus common.BigInt
+	}{
+		{
+			name:    "deposit < 1e3 dx",
+			deposit: common.NewBigInt(1e18).MultInt64(200),
+			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
+				SetVoteLastEpoch(state, addr, deposit)
+				return calculateDepositReward(state, addr, uint64(EpochInterval))
+			},
+			wantBonus: minRewardPerEpoch,
+		},
+		{
+			name:    "1e3 dx <= deposit < 1e6 dx",
+			deposit: common.NewBigInt(1e18).MultInt64(1200),
+			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
+				SetVoteLastEpoch(state, addr, deposit)
+				return calculateDepositReward(state, addr, uint64(EpochInterval))
+			},
+			wantBonus: minRewardPerEpoch.MultInt64(10),
+		},
+		{
+			name:    "1e6 dx <= deposit < 1e9 dx",
+			deposit: common.NewBigInt(1e18).MultInt64(3e7),
+			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
+				SetVoteLastEpoch(state, addr, deposit)
+				return calculateDepositReward(state, addr, uint64(EpochInterval))
+			},
+			wantBonus: minRewardPerEpoch.MultInt64(100),
+		},
+		{
+			name:    "deposit >= 1e9 dx",
+			deposit: common.NewBigInt(1e18).MultInt64(1e10),
+			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
+				SetVoteLastEpoch(state, addr, deposit)
+				return calculateDepositReward(state, addr, uint64(EpochInterval))
+			},
+			wantBonus: minRewardPerEpoch.MultInt64(1000),
+		},
+	}
+
+	addr := common.HexToAddress("0xa")
+	db := ethdb.NewMemDatabase()
+	stateDB, err := newStateDB(db)
+	if err != nil {
+		t.Fatalf("failed to create stateDB,error: %v", err)
+	}
+
+	for _, test := range tests {
+		bonus := test.fn(stateDB, addr, test.deposit)
+		if bonus.Cmp(test.wantBonus) != 0 {
+			t.Errorf("the case[%s] got deposit reward: %v,wanted %v", test.name, bonus, test.wantBonus)
+		}
+	}
+}
 
 // TestProcessVoteIncreaseDeposit test function ProcessDeposit of previously not a delegator
 func TestProcessVoteNewDelegator(t *testing.T) {
