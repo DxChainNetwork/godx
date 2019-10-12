@@ -325,7 +325,12 @@ func TestCheckValidVote(t *testing.T) {
 		}
 		addAccountInState(state, addr, test.balance, test.frozenAssets)
 		SetVoteDeposit(state, addr, test.prevDeposit)
-		err = checkValidVote(state, addr, test.deposit, test.candidates, uint64(EpochInterval))
+		voteData := types.VoteTxData{
+			Deposit:    test.deposit,
+			Candidates: test.candidates,
+			Duration:   uint64(EpochInterval),
+		}
+		err = checkValidVote(state, addr, voteData)
 		if err != test.expectedErr {
 			t.Errorf("Test %d: error expect [%v], got [%v]", i, test.expectedErr, err)
 		}
