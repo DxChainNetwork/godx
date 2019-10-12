@@ -5,6 +5,7 @@
 package dpos
 
 import (
+	"fmt"
 	time2 "time"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -46,13 +47,19 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	SetVoteDeposit(state, addr, deposit)
 
 	// store vote duration
-	SetVoteDuration(state, addr, duration+uint64(time2.Now().Unix()))
+	SetVoteLockEndline(state, addr, duration+uint64(time2.Now().Unix()))
 
 	return successVote, nil
 }
 
 // ProcessCancelVote process the cancel vote request for state and dpos context
 func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
+	// check whether the given delegator remains in locked duration
+	lockEndline := GetVoteLockEndline(state, addr)
+	if lockEndline >= uint64(time2.Now().Unix()) {
+		return fmt.Errorf("failed to process cancel vote for remaining in locked duration")
+	}
+
 	if err := ctx.CancelVote(addr); err != nil {
 		return err
 	}
@@ -60,6 +67,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	currentEpoch := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	SetVoteDeposit(state, addr, common.BigInt0)
+	SetVoteLockEndline(state, addr, 0)
 	return nil
 }
 
