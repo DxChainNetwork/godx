@@ -21,6 +21,8 @@ type stateDB interface {
 	GetNonce(common.Address) uint64
 	SetNonce(addr common.Address, nonce uint64)
 	GetBalance(addr common.Address) *big.Int
+	AddBalance(addr common.Address, amount *big.Int)
+	SubBalance(addr common.Address, amount *big.Int)
 }
 
 var (
@@ -29,6 +31,9 @@ var (
 
 	// KeyVoteDuration is the key of vote duration
 	KeyVoteDuration = common.BytesToHash([]byte("vote-duration"))
+
+	// KeyVoteTime is the key of vote time
+	KeyVoteTime = common.BytesToHash([]byte("vote-time"))
 
 	// KeyCandidateDeposit is the key of candidates deposit
 	KeyCandidateDeposit = common.BytesToHash([]byte("candidates-deposit"))
@@ -234,14 +239,26 @@ func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
 	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
 }
 
-// GetVoteLockEndline get the vote lock end line of the addr from the state
-func GetVoteLockEndline(state stateDB, addr common.Address) uint64 {
+// GetVoteDuration get the vote duration of the addr from the state
+func GetVoteDuration(state stateDB, addr common.Address) uint64 {
 	durationHash := state.GetState(addr, KeyVoteDuration)
-	return durationHash.Big().Uint64()
+	return hashToUint64(durationHash)
 }
 
-// SetVoteLockEndline set the vote lock end line of the addr in the state
-func SetVoteLockEndline(state stateDB, addr common.Address, duration uint64) {
-	hash := common.BigToHash(common.NewBigIntUint64(duration).BigIntPtr())
+// SetVoteDuration set the vote duration of the addr in the state
+func SetVoteDuration(state stateDB, addr common.Address, duration uint64) {
+	hash := uint64ToHash(duration)
 	state.SetState(addr, KeyVoteDuration, hash)
+}
+
+// GetVoteTime get the vote time of the addr from the state
+func GetVoteTime(state stateDB, addr common.Address) uint64 {
+	timeHash := state.GetState(addr, KeyVoteTime)
+	return hashToUint64(timeHash)
+}
+
+// SetVoteTime set the vote time of the addr in the state
+func SetVoteTime(state stateDB, addr common.Address, voteTime uint64) {
+	hash := uint64ToHash(voteTime)
+	state.SetState(addr, KeyVoteTime, hash)
 }

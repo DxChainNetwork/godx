@@ -68,4 +68,11 @@ var (
 	// TODO: specify the real tax account address
 	// taxAccount is the address that tax of every new block reward is sent to
 	taxAccount = common.HexToAddress("0xabc")
+
+	// TODO: specify the real reward account address
+	// rewardAccount is the address which will send rewarded dx to some users
+	rewardAccount = common.HexToAddress("0xbcd")
+
+	// minRewardPerEpoch defines the minimum reward for deposit every epoch
+	minRewardPerEpoch = common.NewBigIntUint64(1e18)
 )

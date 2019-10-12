@@ -46,8 +46,9 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 	// Update vote deposit
 	SetVoteDeposit(state, addr, deposit)
 
-	// store vote duration
-	SetVoteLockEndline(state, addr, duration+uint64(time2.Now().Unix()))
+	// store vote duration and vote time
+	SetVoteDuration(state, addr, duration)
+	SetVoteTime(state, addr, uint64(time2.Now().Unix()))
 
 	return successVote, nil
 }
@@ -55,8 +56,10 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, dep
 // ProcessCancelVote process the cancel vote request for state and dpos context
 func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
 	// check whether the given delegator remains in locked duration
-	lockEndline := GetVoteLockEndline(state, addr)
-	if lockEndline >= uint64(time2.Now().Unix()) {
+	duration := GetVoteDuration(state, addr)
+	voteTime := GetVoteTime(state, addr)
+	now := uint64(time2.Now().Unix())
+	if (voteTime + duration) >= now {
 		return fmt.Errorf("failed to process cancel vote for remaining in locked duration")
 	}
 
@@ -67,7 +70,20 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	currentEpoch := CalculateEpochID(time)
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	SetVoteDeposit(state, addr, common.BigInt0)
-	SetVoteLockEndline(state, addr, 0)
+
+	// calculate the deposit bonus sent by dx reward account
+	bonus := calculateDepositReward(state, addr, now, voteTime)
+
+	// TODO: if reward account balance is not enough for paying bonus, just skip transferring ??
+	// transfer from reward account to delegator
+	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) == -1 {
+		state.SubBalance(rewardAccount, bonus.BigIntPtr())
+		state.AddBalance(addr, bonus.BigIntPtr())
+	}
+
+	// set vote duration and time to 0
+	SetVoteDuration(state, addr, 0)
+	SetVoteTime(state, addr, 0)
 	return nil
 }
 
@@ -121,4 +137,34 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, deposit common.
 	}
 
 	return nil
+}
+
+// calculateDepositReward calculate the deposit bonus sent by dx reward account
+func calculateDepositReward(state stateDB, addr common.Address, now, voteTime uint64) common.BigInt {
+	deposit := GetVoteLastEpoch(state, addr)
+	realDepositDuration := now - voteTime
+	rewardPerEpoch := common.NewBigInt(0)
+	passedEpochs := realDepositDuration / uint64(EpochInterval)
+
+	/*
+		deposit < 1e3 dx: rewardPerEpoch = 1 dx
+		deposit < 1e6 dx: rewardPerEpoch = 10 dx
+		deposit < 1e9 dx: rewardPerEpoch = 100 dx
+		deposit >= 1e9 dx: rewardPerEpoch = 1000 dx
+	*/
+	switch {
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
+		rewardPerEpoch = minRewardPerEpoch
+		break
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
+		rewardPerEpoch = minRewardPerEpoch.MultInt64(10)
+		break
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
+		rewardPerEpoch = minRewardPerEpoch.MultInt64(100)
+		break
+	default:
+		rewardPerEpoch = minRewardPerEpoch.MultInt64(1000)
+	}
+
+	return rewardPerEpoch.MultUint64(passedEpochs)
 }
