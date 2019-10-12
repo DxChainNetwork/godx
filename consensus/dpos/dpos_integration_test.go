@@ -387,7 +387,14 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x increase vote deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, uint64(0), tec.epc.TimeStamp); err != nil {
+
+	voteData := &types.VoteTxData{
+		Deposit:    newDeposit,
+		Candidates: votes,
+		Duration:   uint64(EpochInterval),
+	}
+	_, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, voteData, tec.epc.TimeStamp, time.Now().Unix())
+	if err != nil {
 		return err
 	}
 	// Update expected context
@@ -407,7 +414,14 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x decrease deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, uint64(0), tec.epc.TimeStamp); err != nil {
+
+	voteData := &types.VoteTxData{
+		Deposit:    newDeposit,
+		Candidates: votes,
+		Duration:   uint64(EpochInterval),
+	}
+	_, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, voteData, tec.epc.TimeStamp, time.Now().Unix())
+	if err != nil {
 		return err
 	}
 	// Update expected context
@@ -422,7 +436,7 @@ func (tec *testEpochContext) executeCancelVote(addr common.Address) error {
 		return errors.New("vote record previously not in record map")
 	}
 	l.Printf("User %x cancel vote\n", addr)
-	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
+	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp, time.Now().Unix()+EpochInterval+3); err != nil {
 		return err
 	}
 	tec.ec.cancelVote(addr, tec.epc.TimeStamp)
