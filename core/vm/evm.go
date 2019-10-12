@@ -815,7 +815,7 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
-	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, voteData.Deposit, voteData.Candidates, voteData.Duration, evm.Time.Int64())
+	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, voteData, evm.Time.Int64(), time.Now().Unix())
 	if err != nil {
 		return nil, gasRemainDec, err
 	}
@@ -833,7 +833,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	log.Trace("Enter cancel vote tx executing ... ")
 
 	// remove all vote record from dpos context
-	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64()); err != nil {
+	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64(), time.Now().Unix()); err != nil {
 		return nil, gas, err
 	}
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)
