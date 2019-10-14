@@ -18,8 +18,8 @@ import (
 
 var dx = common.NewBigIntUint64(1e18)
 
-// TestCalculateDepositReward test the function of calculateDelegatorDepositReward
-func TestCalculateDepositReward(t *testing.T) {
+// TestCalculateDelegatorDepositReward test the function of calculateDelegatorDepositReward
+func TestCalculateDelegatorDepositReward(t *testing.T) {
 	tests := []struct {
 		name      string
 		deposit   common.BigInt
