@@ -2,10 +2,12 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package hostnegotiation
+package uploadnegotiation
 
 import (
 	"fmt"
+
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
@@ -15,7 +17,7 @@ import (
 //  1. no error          -> return directly
 //  2. ErrHostCommit     -> send host commit, after getting response from client, send host ack message
 //  3. other error types -> send host negotiation error
-func handleNegotiationErr(negotiateErr *error, sp storage.Peer, np Protocol) {
+func handleNegotiationErr(np hostnegotiation.Protocol, sp storage.Peer, negotiateErr *error) {
 	// return directly if there are no errors
 	if negotiateErr == nil {
 		return

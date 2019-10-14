@@ -16,7 +16,7 @@ import (
 )
 
 // ContractHandler handles the download negotiation process
-func ContractHandler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMsg p2p.Msg) {
+func Handler(np hostnegotiation.Protocol, sp storage.Peer, downloadReqMsg p2p.Msg) {
 	var negotiateErr error
 	var session hostnegotiation.DownloadSession
 	defer handleNegotiationErr(np, sp, &negotiateErr)

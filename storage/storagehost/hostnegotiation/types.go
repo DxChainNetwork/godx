@@ -46,17 +46,17 @@ type ContractCreateSession struct {
 	Wallet       accounts.Wallet
 }
 
-type uploadNegotiationData struct {
-	srSnapshot       storagehost.StorageResponsibility
-	newRoots         []common.Hash
-	sectorsChanged   map[uint64]struct{}
-	bandwidthRevenue common.BigInt
-	sectorGained     []common.Hash
-	gainedSectorData [][]byte
-	storageRevenue   common.BigInt
-	newDeposit       common.BigInt
-	newMerkleRoot    common.Hash
-	merkleProof      storage.UploadMerkleProof
+type UploadSession struct {
+	SrSnapshot       storagehost.StorageResponsibility
+	NewRoots         []common.Hash
+	SectorsChanged   map[uint64]struct{}
+	BandwidthRevenue common.BigInt
+	SectorGained     []common.Hash
+	GainedSectorData [][]byte
+	StorageRevenue   common.BigInt
+	NewDeposit       common.BigInt
+	NewMerkleRoot    common.Hash
+	MerkleProof      storage.UploadMerkleProof
 }
 
 type DownloadSession struct {

@@ -2,30 +2,29 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package hostnegotiation
+package uploadnegotiation
 
 import (
 	"fmt"
 	"sort"
 
 	"github.com/DxChainNetwork/godx/accounts"
-
-	"github.com/DxChainNetwork/godx/core/types"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 )
 
-func ContractUploadHandler(np Protocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
+func Handler(np hostnegotiation.Protocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
 	var negotiateErr error
-	var nd uploadNegotiationData
-	defer handleNegotiationErr(&negotiateErr, sp, np)
+	var session hostnegotiation.UploadSession
+	defer handleNegotiationErr(np, sp, &negotiateErr)
 
 	// decode the upload request and get the storage responsibility
-	uploadReq, sr, err := decodeUploadReqAndGetSr(np, &nd, uploadReqMsg)
+	uploadReq, sr, err := decodeUploadReqAndGetSr(np, &session, uploadReqMsg)
 	if err != nil {
 		negotiateErr = err
 		return
@@ -33,33 +32,33 @@ func ContractUploadHandler(np Protocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
 
 	// get the storage host configuration and start to parse and handle the upload actions
 	hostConfig := np.GetHostConfig()
-	if err := parseAndHandleUploadActions(uploadReq, &nd, sr, hostConfig.UploadBandwidthPrice); err != nil {
+	if err := parseAndHandleUploadActions(uploadReq, &session, sr, hostConfig.UploadBandwidthPrice); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// construct and verify new contract revision
-	newRevision, err := constructAndVerifyNewRevision(np, &nd, sr, uploadReq, hostConfig)
+	newRevision, err := constructAndVerifyNewRevision(np, &session, sr, uploadReq, hostConfig)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// merkleProof Negotiation
-	clientRevisionSign, err := merkleProofNegotiation(sp, &nd, sr)
+	clientRevisionSign, err := merkleProofNegotiation(sp, &session, sr)
 	if err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// host sign and update revision
-	if err := hostSignAndUpdateRevision(np, &newRevision, clientRevisionSign); err != nil {
+	if err := signAndUpdateRevision(np, &newRevision, clientRevisionSign); err != nil {
 		negotiateErr = err
 		return
 	}
 
 	// host revision sign negotiation
-	if err := hostRevisionSignNegotiation(sp, np, hostConfig, &nd, sr, newRevision); err != nil {
+	if err := hostRevisionSignNegotiation(sp, np, hostConfig, &session, sr, newRevision); err != nil {
 		negotiateErr = err
 		return
 	}
@@ -68,7 +67,7 @@ func ContractUploadHandler(np Protocol, sp storage.Peer, uploadReqMsg p2p.Msg) {
 // decodeUploadReqAndGetSr will decode the upload request and get the storage responsibility
 // based on the storage id. In the end, the storage responsibility will be snapshot and stored
 // in the upload negotiation data
-func decodeUploadReqAndGetSr(np Protocol, nd *uploadNegotiationData, uploadReqMsg p2p.Msg) (storage.UploadRequest, storagehost.StorageResponsibility, error) {
+func decodeUploadReqAndGetSr(np hostnegotiation.Protocol, session *hostnegotiation.UploadSession, uploadReqMsg p2p.Msg) (storage.UploadRequest, storagehost.StorageResponsibility, error) {
 	var uploadReq storage.UploadRequest
 	// decode upload request
 	if err := uploadReqMsg.Decode(&uploadReq); err != nil {
@@ -84,7 +83,7 @@ func decodeUploadReqAndGetSr(np Protocol, nd *uploadNegotiationData, uploadReqMs
 	}
 
 	// snapshot the storage responsibility, and return
-	nd.srSnapshot = sr
+	session.SrSnapshot = sr
 	return uploadReq, sr, nil
 }
 
@@ -96,16 +95,16 @@ func decodeUploadReqAndGetSr(np Protocol, nd *uploadNegotiationData, uploadReqMs
 //  3. gainedSectorData
 //  4. sectorsChanged
 //  5. bandwidthRevenue
-func parseAndHandleUploadActions(uploadReq storage.UploadRequest, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, uploadBandwidthPrice common.BigInt) error {
+func parseAndHandleUploadActions(uploadReq storage.UploadRequest, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, uploadBandwidthPrice common.BigInt) error {
 	// data preparation
-	nd.newRoots = append(nd.newRoots, sr.SectorRoots...)
-	nd.sectorsChanged = make(map[uint64]struct{})
+	session.NewRoots = append(session.NewRoots, sr.SectorRoots...)
+	session.SectorsChanged = make(map[uint64]struct{})
 
 	// loop and handle each action
 	for _, action := range uploadReq.Actions {
 		switch action.Type {
 		case storage.UploadActionAppend:
-			handleUploadAppendType(action, nd, uploadBandwidthPrice)
+			handleUploadAppendType(action, session, uploadBandwidthPrice)
 		default:
 			return fmt.Errorf("failed to parse the upload action, unknown upload action type: %s", action.Type)
 		}
@@ -116,7 +115,7 @@ func parseAndHandleUploadActions(uploadReq storage.UploadRequest, nd *uploadNego
 
 // constructAndVerifyNewRevision will construct a new storage contract revision
 // and verify the new revision
-func constructAndVerifyNewRevision(np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, uploadReq storage.UploadRequest, hostConfig storage.HostIntConfig) (types.StorageContractRevision, error) {
+func constructAndVerifyNewRevision(np hostnegotiation.Protocol, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, uploadReq storage.UploadRequest, hostConfig storage.HostIntConfig) (types.StorageContractRevision, error) {
 	// get the latest revision and update the revision
 	currentRev := sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1]
 	newRev := currentRev
@@ -124,46 +123,25 @@ func constructAndVerifyNewRevision(np Protocol, nd *uploadNegotiationData, sr st
 
 	// update contract revision
 	updateRevisionFileSize(&newRev, uploadReq)
-	calcAndUpdateRevisionMerkleRoot(nd, &newRev)
-	updateRevisionMissedAndValidPayback(nd, &newRev, currentRev, uploadReq)
+	calcAndUpdateRevisionMerkleRoot(session, &newRev)
+	updateRevisionMissedAndValidPayback(&newRev, currentRev, uploadReq)
 
 	// contract revision validation
 	blockHeight := np.GetBlockHeight()
-	hostRevenue := calcHostRevenue(nd, sr, blockHeight, hostConfig)
-	sr.SectorRoots, nd.newRoots = nd.newRoots, sr.SectorRoots
+	hostRevenue := calcHostRevenue(session, sr, blockHeight, hostConfig)
+	sr.SectorRoots, session.NewRoots = session.NewRoots, sr.SectorRoots
 	if err := uploadRevisionValidation(sr, newRev, blockHeight, hostRevenue); err != nil {
 		return types.StorageContractRevision{}, err
 	}
-	sr.SectorRoots, nd.newRoots = nd.newRoots, sr.SectorRoots
+	sr.SectorRoots, session.NewRoots = session.NewRoots, sr.SectorRoots
 
 	// after validation, return the new revision
 	return newRev, nil
 }
 
-func constructUploadMerkleProof(nd *uploadNegotiationData, sr storagehost.StorageResponsibility) (storage.UploadMerkleProof, error) {
-	proofRanges := calcAndSortProofRanges(sr, *nd)
-	leafHashes := calcLeafHashes(proofRanges, sr)
-	oldHashSet, err := calcOldHashSet(sr, proofRanges)
-	if err != nil {
-		err = fmt.Errorf("failed to construct upload merkle proof: %s", err.Error())
-		return storage.UploadMerkleProof{}, err
-	}
-
-	// construct the merkle proof
-	merkleProof := storage.UploadMerkleProof{
-		OldSubtreeHashes: oldHashSet,
-		OldLeafHashes:    leafHashes,
-		NewMerkleRoot:    nd.newMerkleRoot,
-	}
-
-	// update uploadNegotiationData for merkle proof
-	nd.merkleProof = merkleProof
-	return merkleProof, nil
-}
-
-func merkleProofNegotiation(sp storage.Peer, nd *uploadNegotiationData, sr storagehost.StorageResponsibility) ([]byte, error) {
+func merkleProofNegotiation(sp storage.Peer, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility) ([]byte, error) {
 	// construct merkle proof
-	merkleProof, err := constructUploadMerkleProof(nd, sr)
+	merkleProof, err := constructUploadMerkleProof(session, sr)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -178,7 +156,28 @@ func merkleProofNegotiation(sp storage.Peer, nd *uploadNegotiationData, sr stora
 	return waitAndHandleClientRevSignResp(sp)
 }
 
-func hostSignAndUpdateRevision(np Protocol, newRev *types.StorageContractRevision, clientRevisionSign []byte) error {
+func constructUploadMerkleProof(session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility) (storage.UploadMerkleProof, error) {
+	proofRanges := calcAndSortProofRanges(sr, *session)
+	leafHashes := calcLeafHashes(proofRanges, sr)
+	oldHashSet, err := calcOldHashSet(sr, proofRanges)
+	if err != nil {
+		err = fmt.Errorf("failed to construct upload merkle proof: %s", err.Error())
+		return storage.UploadMerkleProof{}, err
+	}
+
+	// construct the merkle proof
+	merkleProof := storage.UploadMerkleProof{
+		OldSubtreeHashes: oldHashSet,
+		OldLeafHashes:    leafHashes,
+		NewMerkleRoot:    session.NewMerkleRoot,
+	}
+
+	// update uploadNegotiationData for merkle proof
+	session.MerkleProof = merkleProof
+	return merkleProof, nil
+}
+
+func signAndUpdateRevision(np hostnegotiation.Protocol, newRev *types.StorageContractRevision, clientRevisionSign []byte) error {
 	// get the wallet
 	account := accounts.Account{Address: newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Address}
 	wallet, err := np.FindWallet(account)
@@ -197,7 +196,7 @@ func hostSignAndUpdateRevision(np Protocol, newRev *types.StorageContractRevisio
 	return nil
 }
 
-func hostRevisionSignNegotiation(sp storage.Peer, np Protocol, hostConfig storage.HostIntConfig, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, newRev types.StorageContractRevision) error {
+func hostRevisionSignNegotiation(sp storage.Peer, np hostnegotiation.Protocol, hostConfig storage.HostIntConfig, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, newRev types.StorageContractRevision) error {
 	// get the host revision sign from the new revision, and send the upload host revision sign
 	hostRevSign := newRev.Signatures[hostSignIndex]
 	if err := sp.SendUploadHostRevisionSign(hostRevSign); err != nil {
@@ -205,10 +204,10 @@ func hostRevisionSignNegotiation(sp storage.Peer, np Protocol, hostConfig storag
 	}
 
 	// storage host wait and handle the client's response
-	return waitAndHandleClientCommitRespUpload(sp, np, nd, sr, hostConfig, newRev)
+	return waitAndHandleClientCommitRespUpload(sp, np, session, sr, hostConfig, newRev)
 }
 
-func waitAndHandleClientCommitRespUpload(sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func waitAndHandleClientCommitRespUpload(sp storage.Peer, np hostnegotiation.Protocol, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	// wait for storage host's response
 	msg, err := sp.HostWaitContractResp()
 	if err != nil {
@@ -216,7 +215,7 @@ func waitAndHandleClientCommitRespUpload(sp storage.Peer, np Protocol, nd *uploa
 	}
 
 	// based on the message code, handle the client's upload commit response
-	if err := handleClientUploadCommitResp(msg, sp, np, nd, sr, hostConfig, newRev); err != nil {
+	if err := handleClientUploadCommitResp(msg, sp, np, session, sr, hostConfig, newRev); err != nil {
 		return err
 	}
 
@@ -224,10 +223,10 @@ func waitAndHandleClientCommitRespUpload(sp storage.Peer, np Protocol, nd *uploa
 }
 
 // handleClientUploadCommitResp will handle client's response based on the message code
-func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np hostnegotiation.Protocol, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	switch msg.Code {
 	case storage.ClientCommitSuccessMsg:
-		return handleClientUploadSuccessCommit(sp, np, nd, sr, hostConfig, newRev)
+		return handleClientUploadSuccessCommit(sp, np, session, sr, hostConfig, newRev)
 	case storage.ClientCommitFailedMsg:
 		return storage.ErrClientCommit
 	case storage.ClientNegotiateErrorMsg:
@@ -237,10 +236,10 @@ func handleClientUploadCommitResp(msg p2p.Msg, sp storage.Peer, np Protocol, nd 
 	}
 }
 
-func handleClientUploadSuccessCommit(sp storage.Peer, np Protocol, nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
+func handleClientUploadSuccessCommit(sp storage.Peer, np hostnegotiation.Protocol, session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) error {
 	// update and modify the storage responsibility
-	sr = updateStorageResponsibilityUpload(nd, sr, hostConfig, newRev)
-	if err := np.ModifyStorageResponsibility(sr, nil, nd.sectorGained, nd.gainedSectorData); err != nil {
+	sr = updateStorageResponsibilityUpload(session, sr, hostConfig, newRev)
+	if err := np.ModifyStorageResponsibility(sr, nil, session.SectorGained, session.GainedSectorData); err != nil {
 		return storage.ErrHostCommit
 	}
 
@@ -249,21 +248,21 @@ func handleClientUploadSuccessCommit(sp storage.Peer, np Protocol, nd *uploadNeg
 
 	// at the end, send the storage host ack message
 	if err := sp.SendHostAckMsg(); err != nil {
-		_ = np.RollbackUploadStorageResponsibility(nd.srSnapshot, nd.sectorGained, nil, nil)
+		_ = np.RollbackUploadStorageResponsibility(session.SrSnapshot, session.SectorGained, nil, nil)
 		return fmt.Errorf("failed to send the host ack message at the end during the upload, negotiation failed: %s", err.Error())
 	}
 
 	return nil
 }
 
-func updateStorageResponsibilityUpload(nd *uploadNegotiationData, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) storagehost.StorageResponsibility {
+func updateStorageResponsibilityUpload(session *hostnegotiation.UploadSession, sr storagehost.StorageResponsibility, hostConfig storage.HostIntConfig, newRev types.StorageContractRevision) storagehost.StorageResponsibility {
 	// calculate the bandwidthRevenue after added merkle proof
-	bandwidthRevenue := calcBandwidthRevenueForProof(nd, len(nd.merkleProof.OldSubtreeHashes), len(nd.merkleProof.OldLeafHashes), hostConfig.DownloadBandwidthPrice)
+	bandwidthRevenue := calcBandwidthRevenueForProof(session, len(session.MerkleProof.OldSubtreeHashes), len(session.MerkleProof.OldLeafHashes), hostConfig.DownloadBandwidthPrice)
 
 	// update the storage responsibility
-	sr.SectorRoots = nd.newRoots
-	sr.PotentialStorageRevenue = sr.PotentialStorageRevenue.Add(nd.storageRevenue)
-	sr.RiskedStorageDeposit = sr.RiskedStorageDeposit.Add(nd.newDeposit)
+	sr.SectorRoots = session.NewRoots
+	sr.PotentialStorageRevenue = sr.PotentialStorageRevenue.Add(session.StorageRevenue)
+	sr.RiskedStorageDeposit = sr.RiskedStorageDeposit.Add(session.NewDeposit)
 	sr.PotentialUploadRevenue = sr.PotentialUploadRevenue.Add(bandwidthRevenue)
 	sr.StorageContractRevisions = append(sr.StorageContractRevisions, newRev)
 
@@ -271,11 +270,11 @@ func updateStorageResponsibilityUpload(nd *uploadNegotiationData, sr storagehost
 	return sr
 }
 
-func calcAndSortProofRanges(sr storagehost.StorageResponsibility, nd uploadNegotiationData) []merkle.SubTreeLimit {
+func calcAndSortProofRanges(sr storagehost.StorageResponsibility, session hostnegotiation.UploadSession) []merkle.SubTreeLimit {
 	// calculate proof ranges
 	oldNumSectors := uint64(len(sr.SectorRoots))
 	var proofRanges []merkle.SubTreeLimit
-	for i := range nd.sectorsChanged {
+	for i := range session.SectorsChanged {
 		if i < oldNumSectors {
 			proofRange := merkle.SubTreeLimit{
 				Left:  i,
@@ -321,15 +320,15 @@ func updateRevisionFileSize(newRev *types.StorageContractRevision, uploadReq sto
 
 // calcAndUpdateRevisionMerkleRoot will calculate the new file merkle root for storage contract revision
 // and update both new revision and uploadNegotiationData
-func calcAndUpdateRevisionMerkleRoot(nd *uploadNegotiationData, newRev *types.StorageContractRevision) {
+func calcAndUpdateRevisionMerkleRoot(session *hostnegotiation.UploadSession, newRev *types.StorageContractRevision) {
 	// calculate the new merkle roots and update the new revision
-	nd.newMerkleRoot = merkle.Sha256CachedTreeRoot2(nd.newRoots)
-	newRev.NewFileMerkleRoot = nd.newMerkleRoot
+	session.NewMerkleRoot = merkle.Sha256CachedTreeRoot2(session.NewRoots)
+	newRev.NewFileMerkleRoot = session.NewMerkleRoot
 }
 
 // updateRevisionMissedAndValidPayback will update the new contract revision missed and valid
 // proof payback
-func updateRevisionMissedAndValidPayback(nd *uploadNegotiationData, newRev *types.StorageContractRevision, currentRev types.StorageContractRevision, uploadReq storage.UploadRequest) {
+func updateRevisionMissedAndValidPayback(newRev *types.StorageContractRevision, currentRev types.StorageContractRevision, uploadReq storage.UploadRequest) {
 	// update the revision valid proof outputs
 	for i := range currentRev.NewValidProofOutputs {
 		validProofOutput := types.DxcoinCharge{
@@ -347,16 +346,4 @@ func updateRevisionMissedAndValidPayback(nd *uploadNegotiationData, newRev *type
 		}
 		newRev.NewMissedProofOutputs = append(newRev.NewMissedProofOutputs, missedProofOutput)
 	}
-}
-
-// handleUploadAppendType will handle the upload action with the type UploadAppendAction
-// by handing it, a bunch of data will be calculated and recorded in the uploadNegotiationData
-func handleUploadAppendType(action storage.UploadAction, nd *uploadNegotiationData, uploadBandwidthPrice common.BigInt) {
-	// update upload negotiation data
-	newRoot := merkle.Sha256MerkleTreeRoot(action.Data)
-	nd.newRoots = append(nd.newRoots, newRoot)
-	nd.sectorGained = append(nd.sectorGained, newRoot)
-	nd.gainedSectorData = append(nd.gainedSectorData, action.Data)
-	nd.sectorsChanged[uint64(len(nd.newRoots)-1)] = struct{}{}
-	nd.bandwidthRevenue = nd.bandwidthRevenue.Add(uploadBandwidthPrice.MultUint64(storage.SectorSize))
 }
