@@ -5,8 +5,6 @@
 package uploadnegotiation
 
 import (
-	"fmt"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto/merkle"
@@ -19,12 +17,12 @@ func uploadRevisionValidation(sr storagehost.StorageResponsibility, newRevision 
 	oldRevision := sr.StorageContractRevisions[len(sr.StorageContractRevisions)-1]
 	hostAddress := oldRevision.NewValidProofOutputs[validProofPaybackHostAddressIndex].Address
 	if err := contractPaybackValidation(hostAddress, newRevision.NewValidProofOutputs, newRevision.NewMissedProofOutputs); err != nil {
-		return fmt.Errorf("storage host failed to validate the new revision's payback: %s", err.Error())
+		return err
 	}
 
 	// validate the expiration block height
 	if sr.Expiration()-storagehost.PostponedExecutionBuffer <= blockHeight {
-		return fmt.Errorf("storage client is requesting revision afer the reivision deadline")
+		return errReachDeadline
 	}
 
 	// compare old revision and new revision
@@ -50,52 +48,26 @@ func uploadRevisionValidation(sr storagehost.StorageResponsibility, newRevision 
 	return nil
 }
 
-func uploadMerkleRootAndFileSizeValidation(newRev types.StorageContractRevision, sectorRoots []common.Hash) error {
-	// validate the merkle root
-	if newRev.NewFileMerkleRoot != merkle.Sha256CachedTreeRoot(sectorRoots, sectorHeight) {
-		return fmt.Errorf("merkle root validation failed: revision contains bad file merkle root")
+// contractPaybackValidation validates both contractValidProof payback and contractMissedProof payback
+func contractPaybackValidation(hostAddress common.Address, validProofPayback, missedProofPayback []types.DxcoinCharge) error {
+	// validate the amount of valid proof payback
+	if len(validProofPayback) != expectedValidProofPaybackCounts {
+		return errBadValidPaybackCounts
 	}
 
-	// validate the file size
-	if newRev.NewFileSize != uint64(len(sectorRoots))*storage.SectorSize {
-		return fmt.Errorf("file size validation failed: contract revision contains bad file size")
+	// validate the amount of missed proof payback
+	if len(missedProofPayback) != expectedMissedProofPaybackCounts {
+		return errBadMissedPaybackCounts
 	}
 
-	return nil
-}
-
-func uploadPaymentValidation(oldRev, newRev types.StorageContractRevision, expectedHostRevenue common.BigInt) error {
-	// validate payment from the storage client
-	paymentFromClient := common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value).Sub(common.PtrBigInt(newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value))
-	if paymentFromClient.Cmp(expectedHostRevenue) < 0 {
-		return fmt.Errorf("uploadPaymentValidation failed: expected client to pay at least %v, insteand paied: %s", expectedHostRevenue, paymentFromClient)
+	// validate the validProofPayback host address
+	if validProofPayback[validProofPaybackHostAddressIndex].Address != hostAddress {
+		return errBadValidHostAddress
 	}
 
-	// validate money transferred to storage host
-	paymentToHost := common.PtrBigInt(newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value).Sub(common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value))
-	if paymentToHost.Cmp(paymentFromClient) != 0 {
-		return fmt.Errorf("uploadPaymentValidation failed: payment from storage client does not equivalent to payment to the storage hsot")
-	}
-
-	return nil
-}
-
-func uploadRevisionPaybackValidation(oldRev, newRev types.StorageContractRevision) error {
-	// check if the client's validProofPayback is greater than missedProofPayback
-	// if so, return error
-	if newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value.Cmp(newRev.NewMissedProofOutputs[missedProofPaybackClientAddressIndex].Value) > 0 {
-		return fmt.Errorf("uploadRevisionPaybackValidation failed: high client missed payback")
-	}
-
-	// check if the new revision client's valid payback is greater than old revision valid payback
-	if newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value.Cmp(oldRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value) > 0 {
-		return fmt.Errorf("uploadRevisionPaybackValidation failed: new revision client's validProofPayback should be smaller than old revision validProofPayback")
-	}
-
-	// check if host's old revision valid proof payback is greater than new revision valid proof payback
-	// if so, return error
-	if oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value.Cmp(newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value) > 0 {
-		return fmt.Errorf("uploadRevisionPaybackValidation failed: host's new revision validProofPayback should be greater than old revision validProofPayback")
+	// validate the missedProofPayback host address
+	if missedProofPayback[missedProofPaybackHostAddressIndex].Address != hostAddress {
+		return errBadMissedHostAddress
 	}
 
 	return nil
@@ -106,56 +78,86 @@ func uploadRevisionPaybackValidation(oldRev, newRev types.StorageContractRevisio
 func oldAndNewRevisionValidation(oldRev, newRev types.StorageContractRevision) error {
 	// parentID validation
 	if oldRev.ParentID != newRev.ParentID {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: parentID are not equivalent")
+		return errBadParentID
 	}
 
 	// unlock conditions validation
 	if oldRev.UnlockConditions.UnlockHash() != newRev.UnlockConditions.UnlockHash() {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: unlock conditions are not equivalent")
+		return errBadUnlockCondition
 	}
 
 	//revision number validation
 	if oldRev.NewRevisionNumber >= newRev.NewRevisionNumber {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: the revision number from old revision must be smaller than reviison number from new revision")
+		return errSmallRevisionNumber
 	}
 
 	// window start and window end validation
 	if oldRev.NewWindowStart != newRev.NewWindowStart {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: the newWindowStart are not equivalent")
+		return errBadWindowStart
 	}
 
 	if oldRev.NewWindowEnd != newRev.NewWindowEnd {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: the newWindowEnd are not equivalent")
+		return errBadWindowEnd
 	}
 
 	// unlock hash validation
 	if oldRev.NewUnlockHash != newRev.NewUnlockHash {
-		return fmt.Errorf("oldAndNewRevisionValidation failed: unlock hash are not equivalent")
+		return errBadUnlockHash
 	}
 
 	return nil
 }
 
-// contractPaybackValidation validates both contractValidProof payback and contractMissedProof payback
-func contractPaybackValidation(hostAddress common.Address, validProofPayback, missedProofPayback []types.DxcoinCharge) error {
-	// validate the amount of valid proof payback
-	if len(validProofPayback) != expectedValidProofPaybackCounts {
-		return fmt.Errorf("something wrong")
+// uploadRevisionPaybackValidation validates the revision's payback, including both
+// missedProofPayback and validProofPayback
+func uploadRevisionPaybackValidation(oldRev, newRev types.StorageContractRevision) error {
+	// check if the client's validProofPayback is greater than missedProofPayback
+	// if so, return error
+	if newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value.Cmp(newRev.NewMissedProofOutputs[missedProofPaybackClientAddressIndex].Value) > 0 {
+		return errHighClientMissedPayback
 	}
 
-	// validate the amount of missed proof payback
-	if len(missedProofPayback) != expectedMissedProofPaybackCounts {
-		return fmt.Errorf("something wrong")
+	// check if the new revision client's valid payback is greater than old revision valid payback
+	if newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value.Cmp(oldRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value) > 0 {
+		return errSmallerClientValidPayback
 	}
 
-	// validate the validProofPayback host address
-	if validProofPayback[validProofPaybackHostAddressIndex].Address != hostAddress {
-		return fmt.Errorf("something wrong")
+	// check if host's old revision valid proof payback is greater than new revision valid proof payback
+	// if so, return error
+	if oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value.Cmp(newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value) > 0 {
+		return errSmallHostValidPayback
 	}
 
-	// validate the missedProofPayback host address
-	if missedProofPayback[missedProofPaybackHostAddressIndex].Address != hostAddress {
-		return fmt.Errorf("something wrong")
+	return nil
+}
+
+// uploadPaymentValidation validates the upload payment that storage client paid to the storage host
+func uploadPaymentValidation(oldRev, newRev types.StorageContractRevision, expectedHostRevenue common.BigInt) error {
+	// validate payment from the storage client
+	paymentFromClient := common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value).Sub(common.PtrBigInt(newRev.NewValidProofOutputs[validProofPaybackClientAddressIndex].Value))
+	if paymentFromClient.Cmp(expectedHostRevenue) < 0 {
+		return errClientPayment
+	}
+
+	// validate money transferred to storage host
+	paymentToHost := common.PtrBigInt(newRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value).Sub(common.PtrBigInt(oldRev.NewValidProofOutputs[validProofPaybackHostAddressIndex].Value))
+	if paymentToHost.Cmp(paymentFromClient) != 0 {
+		return errHostPaymentReceived
+	}
+
+	return nil
+}
+
+// uploadMerkleRootAndFileSizeValidation validates the merkle root and the file size
+func uploadMerkleRootAndFileSizeValidation(newRev types.StorageContractRevision, sectorRoots []common.Hash) error {
+	// validate the merkle root
+	if newRev.NewFileMerkleRoot != merkle.Sha256CachedTreeRoot(sectorRoots, sectorHeight) {
+		return errBadMerkleRoot
+	}
+
+	// validate the file size
+	if newRev.NewFileSize != uint64(len(sectorRoots))*storage.SectorSize {
+		return errBadFileSize
 	}
 
 	return nil

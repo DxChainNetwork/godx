@@ -47,16 +47,18 @@ type ContractCreateSession struct {
 }
 
 type UploadSession struct {
-	SrSnapshot       storagehost.StorageResponsibility
-	NewRoots         []common.Hash
-	SectorsChanged   map[uint64]struct{}
+	SrSnapshot        storagehost.StorageResponsibility
+	SectorRoots       []common.Hash
+	SectorRootsGained []common.Hash
+	SectorDataGained  [][]byte
+	SectorsCount      map[uint64]struct{}
+
+	MerkleProof storage.UploadMerkleProof
+
 	BandwidthRevenue common.BigInt
-	SectorGained     []common.Hash
-	GainedSectorData [][]byte
 	StorageRevenue   common.BigInt
 	NewDeposit       common.BigInt
 	NewMerkleRoot    common.Hash
-	MerkleProof      storage.UploadMerkleProof
 }
 
 type DownloadSession struct {

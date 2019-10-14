@@ -16,7 +16,6 @@ const (
 	missedProofPaybackHostAddressIndex   = 1
 	validProofPaybackClientAddressIndex  = 0
 	missedProofPaybackClientAddressIndex = 0
-	contractRequiredSignatures           = 2
 	hostSignIndex                        = 1
 )
 

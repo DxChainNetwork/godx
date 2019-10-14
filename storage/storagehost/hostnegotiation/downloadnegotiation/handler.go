@@ -75,7 +75,6 @@ func getDownloadReqAndStorageResponsibility(np hostnegotiation.Protocol, session
 	if err != nil {
 		return storage.DownloadRequest{}, storagehost.StorageResponsibility{}, downloadNegotiationError(err.Error())
 	}
-	session.SrSnapshot = sr
 
 	// validate the storage responsibility, and make a snapshot
 	if reflect.DeepEqual(sr.OriginStorageContract, types.StorageContract{}) {
