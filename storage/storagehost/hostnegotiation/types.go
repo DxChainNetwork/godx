@@ -39,11 +39,11 @@ type Protocol interface {
 	ReadSector(sectorRoot common.Hash) ([]byte, error)
 }
 
-type contractNegotiationData struct {
-	clientPubKey *ecdsa.PublicKey
-	hostPubKey   *ecdsa.PublicKey
-	account      accounts.Account
-	wallet       accounts.Wallet
+type ContractCreateSession struct {
+	ClientPubKey *ecdsa.PublicKey
+	HostPubKey   *ecdsa.PublicKey
+	Account      accounts.Account
+	Wallet       accounts.Wallet
 }
 
 type uploadNegotiationData struct {

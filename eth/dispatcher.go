@@ -7,6 +7,8 @@ package eth
 import (
 	"errors"
 
+	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation/contractcreatenegotiation"
+
 	"github.com/DxChainNetwork/godx/storage/storagehost/hostnegotiation"
 
 	"github.com/DxChainNetwork/godx/log"
@@ -15,7 +17,7 @@ import (
 )
 
 var hostHandlers = map[uint64]func(np hostnegotiation.Protocol, sp storage.Peer, msg p2p.Msg){
-	storage.ContractCreateReqMsg: hostnegotiation.ContractCreateRenewHandler,
+	storage.ContractCreateReqMsg: contractcreatenegotiation.Handler,
 	storage.ContractUploadReqMsg: hostnegotiation.ContractUploadHandler,
 	//storage.ContractDownloadReqMsg: storagehost.DownloadHandler,
 }
