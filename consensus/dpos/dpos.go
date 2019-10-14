@@ -407,6 +407,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 	// accumulate the rest rewards for the validator
 	validatorReward := blockReward.Sub(assignedReward)
+
+	// if current epoch remains in the previous 100 epochs from genesis epoch,
+	// calculate additional reward from DX Fund committee and transfer it to validator
+	genesisEpochID := CalculateEpochID(genesis.Time.Int64())
+	currentEpochID := CalculateEpochID(header.Time.Int64())
+	if currentEpochID <= genesisEpochID+AdditionalRewardEpochCount {
+		additionalReward := calculateValidatorDepositReward(state, header.Validator)
+		state.SubBalance(rewardAccount, additionalReward.BigIntPtr())
+		validatorReward = validatorReward.Add(additionalReward)
+	}
+
 	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())
 }
 

@@ -18,7 +18,7 @@ import (
 
 var dx = common.NewBigIntUint64(1e18)
 
-// TestCalculateDepositReward test the function of calculateDepositReward
+// TestCalculateDepositReward test the function of calculateDelegatorDepositReward
 func TestCalculateDepositReward(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -31,7 +31,7 @@ func TestCalculateDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDepositReward(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
 			},
 			wantBonus: minRewardPerEpoch,
 		},
@@ -40,7 +40,7 @@ func TestCalculateDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(1200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDepositReward(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(10),
 		},
@@ -49,7 +49,7 @@ func TestCalculateDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(3e7),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDepositReward(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(100),
 		},
@@ -58,7 +58,7 @@ func TestCalculateDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(1e10),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDepositReward(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(1000),
 		},

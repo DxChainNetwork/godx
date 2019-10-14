@@ -50,6 +50,9 @@ const (
 
 	// MinVoteLockDuration is the minimum vote locked duration
 	MinVoteLockDuration = uint64(EpochInterval)
+
+	// AdditionalRewardEpochCount defines that the validators of previous 100 epochs will be rewarded additionally
+	AdditionalRewardEpochCount = int64(100)
 )
 
 var (
@@ -75,4 +78,7 @@ var (
 
 	// minRewardPerEpoch defines the minimum reward for deposit every epoch
 	minRewardPerEpoch = common.NewBigIntUint64(1e18)
+
+	// minRewardPerBlock defines the minimum reward for deposit every block
+	minRewardPerBlock = common.NewBigIntUint64(1e18)
 )
