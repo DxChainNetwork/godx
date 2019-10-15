@@ -693,7 +693,12 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if block = api.eth.blockchain.GetBlockByNumber(block.NumberU64() + 1); block == nil {
 			return nil, fmt.Errorf("block #%d not found", block.NumberU64()+1)
 		}
-		_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
+		dposCtx, err := api.eth.blockchain.DposCtxAt(block.Header().DposContext)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open dposContext: %v", err)
+		}
+		block.SetDposCtx(dposCtx)
+		_, _, _, err = api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
