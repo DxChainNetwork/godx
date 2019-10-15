@@ -43,7 +43,7 @@ func (shm *StorageHostManager) saveSettings() error {
 func (shm *StorageHostManager) persistUpdate() (persist persistence) {
 	return persistence{
 		StorageHostsInfo: shm.storageHostTree.All(),
-		BlockHeight:      shm.blockHeight,
+		BlockHeight:      shm.getBlockHeight(),
 		IPViolationCheck: shm.ipViolationCheck,
 		FilteredHosts:    shm.filteredHosts,
 		FilterMode:       shm.filterMode,
@@ -92,7 +92,8 @@ func (shm *StorageHostManager) loadSettings() error {
 	}
 
 	// assign those values to StorageHostManager
-	shm.blockHeight = persist.BlockHeight
+	shm.setBlockHeight(persist.BlockHeight)
+
 	shm.ipViolationCheck = persist.IPViolationCheck
 	shm.filteredHosts = persist.FilteredHosts
 	shm.filterMode = persist.FilterMode
@@ -109,7 +110,7 @@ func (shm *StorageHostManager) loadSettings() error {
 
 		// start storage host scanning based on the scan records
 		if len(info.ScanRecords) < 2 {
-			shm.scanValidation(info)
+			shm.startScanning(info)
 		}
 	}
 

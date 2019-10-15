@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -97,6 +98,21 @@ func (v *BlockValidator) ValidateState(block, parent *types.Block, statedb *stat
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(v.config.IsEIP158(header.Number)); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+	}
+	return nil
+}
+
+// ValidateDposState validates that the dpos context of given block is not changed
+func (v *BlockValidator) ValidateDposState(block *types.Block) error {
+	if e,ok := v.engine.(*dpos.Dpos); ok && e.Mode == dpos.ModeFake {
+		return nil
+	}
+
+	header := block.Header()
+	localRoot := block.DposCtx().Root()
+	remoteRoot := header.DposContext.Root()
+	if remoteRoot != localRoot {
+		return fmt.Errorf("invalid dpos root (remote: %x local: %x)", remoteRoot, localRoot)
 	}
 	return nil
 }

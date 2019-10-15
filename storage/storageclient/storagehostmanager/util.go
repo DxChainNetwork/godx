@@ -13,14 +13,13 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
-	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
 	"github.com/Pallinder/go-randomdata"
 )
 
 // StorageHostRank will be used to show the rankings of the storage host
 // learnt by the storage client
 type StorageHostRank struct {
-	storagehosttree.EvaluationDetail
+	EvaluationDetail
 	EnodeID string
 }
 
@@ -32,9 +31,10 @@ func hostInfoGenerator() storage.HostInfo {
 		HostExtConfig: storage.HostExtConfig{
 			AcceptingContracts:     true,
 			Deposit:                common.NewBigInt(100),
+			MaxDeposit:             common.RandomBigInt(),
 			ContractPrice:          common.RandomBigInt(),
-			DownloadBandwidthPrice: common.RandomBigInt(),
 			StoragePrice:           common.RandomBigInt(),
+			DownloadBandwidthPrice: common.RandomBigInt(),
 			UploadBandwidthPrice:   common.RandomBigInt(),
 			SectorAccessPrice:      common.RandomBigInt(),
 			RemainingStorage:       100,
@@ -106,7 +106,7 @@ func hostInfoGeneratorHighEvaluation(id enode.ID) storage.HostInfo {
 	return storage.HostInfo{
 		HostExtConfig: storage.HostExtConfig{
 			AcceptingContracts:     true,
-			Deposit:                common.NewBigIntUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615).MultUint64(18446744073709551615),
+			Deposit:                common.NewBigIntUint64(18446744073709551615),
 			ContractPrice:          common.BigInt1,
 			DownloadBandwidthPrice: common.BigInt1,
 			StoragePrice:           common.BigInt1,
@@ -115,18 +115,22 @@ func hostInfoGeneratorHighEvaluation(id enode.ID) storage.HostInfo {
 			RemainingStorage:       200 * 20e10,
 			MaxDeposit:             common.PtrBigInt(new(big.Int).Exp(big.NewInt(1000), big.NewInt(1000), nil)).MultUint64(10e10),
 		},
-		IP:       ip,
-		EnodeID:  id,
-		EnodeURL: fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
+		IP:                          ip,
+		SuccessfulInteractionFactor: 1e6,
+		FailedInteractionFactor:     0,
+		LastInteractionTime:         uint64(time.Now().AddDate(0, 0, -1).Unix()),
+		AccumulatedUptime:           1e8,
+		AccumulatedDowntime:         0,
+		LastCheckTime:               uint64(time.Now().AddDate(0, 0, -1).Unix()),
+		EnodeID:                     id,
+		EnodeURL:                    fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
 		ScanRecords: storage.HostPoolScans{
 			storage.HostPoolScan{
 				Timestamp: time.Now(),
 				Success:   true,
 			},
 		},
-		HistoricSuccessfulInteractions: 500,
-		HistoricFailedInteractions:     0,
-		FirstSeen:                      0,
+		FirstSeen: 0,
 	}
 }
 
@@ -145,12 +149,16 @@ func hostInfoGeneratorLowEvaluation(id enode.ID) storage.HostInfo {
 			SectorAccessPrice:      common.NewBigInt(1000 * 20003e10),
 			RemainingStorage:       1,
 		},
-		IP:                             ip,
-		EnodeID:                        id,
-		EnodeURL:                       fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
-		HistoricSuccessfulInteractions: 0,
-		HistoricFailedInteractions:     500,
-		FirstSeen:                      0,
+		IP:                          ip,
+		SuccessfulInteractionFactor: 30,
+		FailedInteractionFactor:     1e6,
+		LastInteractionTime:         uint64(time.Now().AddDate(0, 0, -1).Unix()),
+		AccumulatedUptime:           0,
+		AccumulatedDowntime:         1e8,
+		LastCheckTime:               uint64(time.Now().AddDate(0, 0, -1).Unix()),
+		EnodeID:                     id,
+		EnodeURL:                    fmt.Sprintf("enode://%s:%s:3030", id.String(), ip),
+		FirstSeen:                   0,
 	}
 }
 

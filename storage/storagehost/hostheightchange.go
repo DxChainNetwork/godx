@@ -215,7 +215,7 @@ func (h *StorageHost) revertedBlockHashesStorageResponsibility(blocks []common.H
 //getAllStorageContractIDsWithBlockHash analyze the block structure and get three kinds of transaction collections: contractCreate, revision, and proof、block height.
 func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Hash) (ContractCreateIDs []common.Hash, revisionIDs map[common.Hash]uint64, storageProofIDs []common.Hash, number uint64, errGet error) {
 	revisionIDs = make(map[common.Hash]uint64)
-	precompiled := vm.PrecompiledEVMFileContracts
+	precompiled := vm.PrecompiledStorageContracts
 	block, err := h.ethBackend.GetBlockByHash(blockHash)
 	if err != nil {
 		errGet = err
@@ -224,6 +224,9 @@ func (h *StorageHost) getAllStorageContractIDsWithBlockHash(blockHash common.Has
 	number = block.NumberU64()
 	txs := block.Transactions()
 	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
 		p, ok := precompiled[*tx.To()]
 		if !ok {
 			continue

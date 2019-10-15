@@ -10,19 +10,17 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/DxChainNetwork/godx/p2p"
-
-	"github.com/DxChainNetwork/godx/crypto/merkle"
-
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
-	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
-
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
+	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 // draftStorageContractNegotiate will negotiate the storage contract drafted by storage client with
@@ -145,15 +143,31 @@ func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID 
 	return meta, nil
 }
 
+func (cm *ContractManager) handleContractCreateErr(err *error, hostID enode.ID, sp storage.Peer) {
+	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionCreateContract)
+}
+
+func (cm *ContractManager) handleContractRenewErr(err *error, hostID enode.ID, sp storage.Peer) {
+	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionRenewContract)
+}
+
+func (cm *ContractManager) handleContractUploadErr(err *error, hostID enode.ID, sp storage.Peer) {
+	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionUpload)
+}
+
+func (cm *ContractManager) handleContractDownloadErr(err *error, hostID enode.ID, sp storage.Peer) {
+	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionDownload)
+}
+
 // Special Types Error:
 // 1. ErrClientNegotiate   ->  send negotiation failed message, wait response
 // 2. ErrClientCommit      ->  send commit failed message, wait response
 // 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
 // 4. ErrHostNegotiate     ->  punish host, check and update the connection
-func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp storage.Peer) {
+func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp storage.Peer, it storagehostmanager.InteractionType) {
 	// if no error, reward the host and return directly
 	if err == nil {
-		cm.hostManager.IncrementSuccessfulInteractions(hostID)
+		cm.hostManager.IncrementSuccessfulInteractions(hostID, it)
 		return
 	}
 
@@ -164,12 +178,12 @@ func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp 
 	case common.ErrContains(*err, storage.ErrClientCommit):
 		_ = sp.SendClientCommitFailedMsg()
 	case common.ErrContains(*err, storage.ErrHostNegotiate):
-		cm.hostManager.IncrementFailedInteractions(hostID)
+		cm.hostManager.IncrementFailedInteractions(hostID, it)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		return
 	case common.ErrContains(*err, storage.ErrHostCommit):
 		_ = sp.SendClientAckMsg()
-		cm.hostManager.IncrementFailedInteractions(hostID)
+		cm.hostManager.IncrementFailedInteractions(hostID, it)
 		cm.b.CheckAndUpdateConnection(sp.PeerNode())
 		_ = sp.SendClientAckMsg()
 	default:

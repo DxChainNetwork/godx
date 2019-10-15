@@ -80,7 +80,6 @@ func RentPaymentGenerator() (rentPayment storage.RentPayment) {
 		Fund:               common.RandomBigInt(),
 		StorageHosts:       randUint64(),
 		Period:             randUint64(),
-		RenewWindow:        randUint64(),
 		ExpectedStorage:    randUint64(),
 		ExpectedUpload:     randUint64(),
 		ExpectedDownload:   randUint64(),

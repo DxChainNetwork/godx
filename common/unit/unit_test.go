@@ -5,8 +5,9 @@
 package unit
 
 import (
-	"github.com/DxChainNetwork/godx/common"
 	"testing"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 func TestParseFund(t *testing.T) {
@@ -59,7 +60,7 @@ func TestParseTime(t *testing.T) {
 		err    bool
 	}{
 		{"100 d", 100 * BlocksPerDay, false},
-		{"182 h", 182 * BlockPerHour, false},
+		{"182 h", 182 * BlocksPerHour, false},
 		{"179 W", 179 * BlocksPerWeek, false},
 		{"3000 M", 3000 * BlocksPerMonth, false},
 		{"10 y", 10 * BlocksPerYear, false},

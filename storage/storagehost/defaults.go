@@ -5,11 +5,10 @@
 package storagehost
 
 import (
-	"math/big"
 	"strconv"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/storage"
 )
@@ -34,8 +33,12 @@ const (
 
 	//prefixStorageResponsibility db prefix for StorageResponsibility
 	prefixStorageResponsibility = "StorageResponsibility-"
+
 	//prefixHeight db prefix for task
 	prefixHeight = "height-"
+
+	//Total time to sign the contract
+	PostponedExecutionBuffer = 12 * unit.BlocksPerHour
 )
 
 var (
@@ -44,51 +47,29 @@ var (
 		Version: "V1.0",
 	}
 
-	// persistence default value
-	defaultMaxDuration          = storage.BlocksPerDay * 30 // 30 days
-	defaultMaxDownloadBatchSize = 17 * (1 << 20)            // 17 MB
-	defaultMaxReviseBatchSize   = 17 * (1 << 20)            // 17 MB
-	defaultWindowSize           = 5 * storage.BlockPerHour  // 5 hours
-
-	// deposit defaults value
-	defaultDeposit       = common.PtrBigInt(math.BigPow(10, 3))  // 173 dx per TB per month
-	defaultDepositBudget = common.PtrBigInt(math.BigPow(10, 22)) // 10000 DX
-	defaultMaxDeposit    = common.PtrBigInt(math.BigPow(10, 20)) // 100 DX
-
-	// prices
-	defaultBaseRPCPrice           = common.PtrBigInt(math.BigPow(10, 11))                                   // 100 nDX
-	defaultContractPrice          = common.PtrBigInt(new(big.Int).Mul(math.BigPow(10, 15), big.NewInt(50))) // 50mDX
-	defaultDownloadBandwidthPrice = common.PtrBigInt(math.BigPow(10, 8))                                    // 100 DX per TB
-	defaultSectorAccessPrice      = common.PtrBigInt(math.BigPow(10, 13))                                   // 10 uDX
-	defaultStoragePrice           = common.PtrBigInt(math.BigPow(10, 3))                                    // Same as deposit
-	defaultUploadBandwidthPrice   = common.PtrBigInt(math.BigPow(10, 7))                                    // 10 DX per TB
-
 	//Storage contract should not be empty
 	emptyStorageContract = types.StorageContract{}
-
-	// PostponedExecutionBuffer indicates total time to sign the contract
-	PostponedExecutionBuffer = storage.BlocksPerDay
 )
 
 // defaultConfig loads the default setting when
 // it is the first time use the host service, or cannot find the setting file
 func defaultConfig() storage.HostIntConfig {
 	return storage.HostIntConfig{
-		MaxDownloadBatchSize: uint64(defaultMaxDownloadBatchSize),
-		MaxDuration:          uint64(defaultMaxDuration),
-		MaxReviseBatchSize:   uint64(defaultMaxReviseBatchSize),
-		WindowSize:           uint64(defaultWindowSize),
+		MaxDownloadBatchSize: uint64(storage.DefaultMaxDownloadBatchSize),
+		MaxDuration:          uint64(storage.DefaultMaxDuration),
+		MaxReviseBatchSize:   uint64(storage.DefaultMaxReviseBatchSize),
+		WindowSize:           uint64(storage.ProofWindowSize),
 
-		Deposit:       defaultDeposit,
-		DepositBudget: defaultDepositBudget,
-		MaxDeposit:    defaultMaxDeposit,
+		Deposit:       storage.DefaultDeposit,
+		DepositBudget: storage.DefaultDepositBudget,
+		MaxDeposit:    storage.DefaultMaxDeposit,
 
-		BaseRPCPrice:           defaultBaseRPCPrice,
-		ContractPrice:          defaultContractPrice,
-		DownloadBandwidthPrice: defaultDownloadBandwidthPrice,
-		SectorAccessPrice:      defaultSectorAccessPrice,
-		StoragePrice:           defaultStoragePrice,
-		UploadBandwidthPrice:   defaultUploadBandwidthPrice,
+		BaseRPCPrice:           storage.DefaultBaseRPCPrice,
+		ContractPrice:          storage.DefaultContractPrice,
+		DownloadBandwidthPrice: storage.DefaultDownloadBandwidthPrice,
+		SectorAccessPrice:      storage.DefaultSectorAccessPrice,
+		StoragePrice:           storage.DefaultStoragePrice,
+		UploadBandwidthPrice:   storage.DefaultUploadBandwidthPrice,
 	}
 }
 

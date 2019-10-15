@@ -9,12 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/contractmanager/simulation"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	"github.com/Pallinder/go-randomdata"
@@ -488,7 +487,7 @@ func TestContractManager_checkContractStatus(t *testing.T) {
 	}
 
 	// base line for the storage host evaluation
-	baseline := common.NewBigIntFloat64(10)
+	baseline := int64(10)
 
 	// insert contract, host does not exist
 	var hostNotExistsContract []storage.ContractMetaData

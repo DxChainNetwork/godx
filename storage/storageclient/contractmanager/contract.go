@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
@@ -440,23 +439,23 @@ func (cm *ContractManager) markNewlyFormedContractStats(id storage.ContractID) (
 
 // calculateMinEvaluation will get the minimum evaluation from a list of hosts, which is used to
 // evaluate the current hosts that client signed the contract with.
-func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (minEval common.BigInt) {
+func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (minEval int64) {
 	// if there are no hosts passed in, return 0 directly
 	if len(hosts) == 0 {
-		return common.BigInt0
+		return 0
 	}
 
 	// get the minimum evaluation
-	minEval = cm.hostManager.Evaluation(hosts[0])
+	minEval = cm.hostManager.Evaluate(hosts[0])
 	for i := 1; i < len(hosts); i++ {
-		eval := cm.hostManager.Evaluation(hosts[i])
-		if eval.Cmp(minEval) < 0 {
+		eval := cm.hostManager.Evaluate(hosts[i])
+		if eval < minEval {
 			minEval = eval
 		}
 	}
 
-	// divided by 100
-	minEval = minEval.DivUint64(evalFactor)
+	// divided by 5
+	minEval = minEval / evalFactor
 	return
 }
 
@@ -470,7 +469,7 @@ func (cm *ContractManager) calculateMinEvaluation(hosts []storage.HostInfo) (min
 // 		not good for uploading and renewing
 // 		5. if the contract has been renewed already, mark the upload ability to false
 // 		6. lastly, if the client does not have enough money left, mark the upload ability as false
-func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData, evalBaseline common.BigInt) (stats storage.ContractStatus) {
+func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData, evalBaseline int64) (stats storage.ContractStatus) {
 	stats = contract.Status
 
 	// mark upload and renew ability as true, if the contract is not canceled
@@ -489,10 +488,10 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 
 	// check the storage host's evaluation, if the evaluation is smaller than baseline, mark
 	// the upload and renew ability to be false
-	eval := cm.hostManager.Evaluation(host)
+	eval := cm.hostManager.Evaluate(host)
 
 	// if the baseline is bigger than 0 and the host evaluation is smaller than the baseline
-	if eval.Cmp(evalBaseline) < 0 && evalBaseline.Cmp(common.BigInt0) > 0 {
+	if eval < evalBaseline && evalBaseline > 0 {
 		stats.UploadAbility = false
 		stats.RenewAbility = false
 		return
@@ -508,7 +507,7 @@ func (cm *ContractManager) checkContractStatus(contract storage.ContractMetaData
 	// check if the contract should be renewed, if so, mark the contract upload ability to be false
 	cm.lock.RLock()
 	blockHeight := cm.blockHeight
-	renewWindow := cm.rentPayment.RenewWindow
+	renewWindow := storage.RenewWindow
 	period := cm.rentPayment.Period
 	cm.lock.RUnlock()
 

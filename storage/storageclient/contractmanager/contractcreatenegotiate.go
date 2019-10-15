@@ -54,7 +54,7 @@ func (cm *ContractManager) ContractCreateNegotiate(params storage.ContractParams
 	}
 
 	// handleNegotiationErr will handle the errors occurred in the negotiation process
-	defer cm.handleNegotiationErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer cm.handleContractCreateErr(&negotiateErr, hostInfo.EnodeID, sp)
 
 	// 2. draft storage contract negotiation
 	if storageContract, err = draftStorageContractNegotiate(sp, account, wallet, storageContract, types.StorageContractRevision{}); err != nil {

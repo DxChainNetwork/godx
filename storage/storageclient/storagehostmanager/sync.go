@@ -5,13 +5,14 @@
 package storagehostmanager
 
 import (
+	"time"
+
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehosttree"
-	"time"
 )
 
 // subscribeChainChangeEvent will receive changes on the blockchain (blocks added / reverted)
@@ -45,16 +46,16 @@ func (shm *StorageHostManager) analyzeChainEventChange(change core.ChainChangeEv
 	// update the block height
 	shm.lock.Lock()
 	for i := 0; i < revert; i++ {
-		shm.blockHeight--
-		if shm.blockHeight < 0 {
+		shm.decrementBlockHeight()
+		if shm.getBlockHeight() < 0 {
 			shm.log.Error("the block height stores in StorageHostManager should be positive")
-			shm.blockHeight = 0
+			shm.setBlockHeight(0)
 			break
 		}
 	}
 
 	for i := 0; i < apply; i++ {
-		shm.blockHeight++
+		shm.incrementBlockHeight()
 	}
 	shm.lock.Unlock()
 
@@ -102,13 +103,18 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 	if !exists {
 		// if not existed before, modify the FirstSeen and insert into storage host manager,
 		// start the scan loop
-		info.FirstSeen = shm.blockHeight
+		info.FirstSeen = shm.getBlockHeight()
+		// Initiate the uptime and interaction related fields
+		uptimeInitiate(&info)
+		interactionInitiate(&info)
+
 		if err := shm.insert(info); err != nil {
 			shm.log.Error("unable to insert the storage host information", "err", err.Error())
+			return
 		}
 
 		// start the scan
-		shm.scanValidation(info)
+		shm.startScanning(info)
 		return
 	}
 
@@ -132,7 +138,7 @@ func (shm *StorageHostManager) insertStorageHostInformation(info storage.HostInf
 	}
 
 	// start the scan
-	shm.scanValidation(oldInfo)
+	shm.startScanning(oldInfo)
 }
 
 // parseHostAnnouncement will parse the storage host announcement into storage.HostInfo type

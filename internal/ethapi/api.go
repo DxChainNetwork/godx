@@ -30,6 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
 	"github.com/DxChainNetwork/godx/common/math"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/ethash"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -49,6 +50,13 @@ import (
 const (
 	defaultGasPrice = params.GWei
 )
+
+// AccountBalance is an object that is used to show detailed account information
+type AccountBalance struct {
+	TotalBalance     *hexutil.Big `json:"total_balance"`
+	AvailableBalance *hexutil.Big `json:"available_balance"`
+	FrozenAssets     *hexutil.Big `json:"frozen_assets"`
+}
 
 // PublicEthereumAPI provides an API to access Ethereum related information.
 // It offers only methods that operate on public data that is freely available to anyone.
@@ -500,12 +508,25 @@ func (s *PublicBlockChainAPI) BlockNumber() hexutil.Uint64 {
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (*hexutil.Big, error) {
+func (s *PublicBlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNr rpc.BlockNumber) (AccountBalance, error) {
 	state, _, err := s.b.StateAndHeaderByNumber(ctx, blockNr)
 	if state == nil || err != nil {
-		return nil, err
+		return AccountBalance{}, err
 	}
-	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+
+	if state.Error() != nil {
+		return AccountBalance{}, err
+	}
+
+	totalBalance := dpos.GetBalance(state, address)
+	availableBalance := dpos.GetAvailableBalance(state, address)
+	frozenAssets := dpos.GetFrozenAssets(state, address)
+
+	return AccountBalance{
+		TotalBalance:     (*hexutil.Big)(totalBalance.BigIntPtr()),
+		AvailableBalance: (*hexutil.Big)(availableBalance.BigIntPtr()),
+		FrozenAssets:     (*hexutil.Big)(frozenAssets.BigIntPtr()),
+	}, nil
 }
 
 // Result structs for GetProof
@@ -599,6 +620,45 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, blockHash comm
 		return s.rpcOutputBlock(block, true, fullTx)
 	}
 	return nil, err
+}
+
+// GetStorageContractByBlockHash get block information from the hash of the block
+// and return all transactions related to the storage contract on the block.
+func (s *PublicBlockChainAPI) GetStorageContractByBlockHash(ctx context.Context, blockHash common.Hash) (map[string]interface{}, error) {
+	block, err := s.b.GetBlock(ctx, blockHash)
+	if block != nil {
+		return blockToStorageContract(block)
+	}
+	return nil, err
+}
+
+// blockToStorageContract return all transactions related to the storage contract on the block.
+func blockToStorageContract(block *types.Block) (map[string]interface{}, error) {
+	fields := make(map[string]interface{})
+	precompiled := vm.PrecompiledStorageContracts
+	txs := block.Transactions()
+	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.ContractCreateTransaction:
+			fields[tx.Hash().String()] = vm.ContractCreateTransaction
+		case vm.CommitRevisionTransaction:
+			fields[tx.Hash().String()] = vm.CommitRevisionTransaction
+		case vm.StorageProofTransaction:
+			fields[tx.Hash().String()] = vm.StorageProofTransaction
+		case vm.HostAnnounceTransaction:
+			fields[tx.Hash().String()] = vm.HostAnnounceTransaction
+		default:
+			continue
+		}
+	}
+	return fields, nil
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
@@ -738,7 +798,8 @@ func (s *PublicBlockChainAPI) doCall(ctx context.Context, args CallArgs, blockNr
 	// Setup the gas pool (also for unmetered requests)
 	// and apply the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)
-	res, gas, failed, err := core.ApplyMessage(evm, msg, gp)
+	dposContext := s.b.CurrentBlock().DposCtx()
+	res, gas, failed, err := core.ApplyMessage(evm, msg, gp, dposContext)
 	if err := vmError(); err != nil {
 		return nil, 0, false, err
 	}
@@ -876,7 +937,8 @@ func RPCMarshalBlock(b *types.Block, inclTx bool, fullTx bool) (map[string]inter
 		"sha3Uncles":       head.UncleHash,
 		"logsBloom":        head.Bloom,
 		"stateRoot":        head.Root,
-		"miner":            head.Coinbase,
+		"validator":        head.Validator,
+		"coinbase":         head.Coinbase,
 		"difficulty":       (*hexutil.Big)(head.Difficulty),
 		"extraData":        hexutil.Bytes(head.Extra),
 		"size":             hexutil.Uint64(b.Size()),
@@ -1103,6 +1165,74 @@ func (s *PublicTransactionPoolAPI) GetTransactionByHash(ctx context.Context, has
 	}
 	// Transaction unknown, return as such
 	return nil
+}
+
+// GetStorageContractByTransactionHash returns the transaction for the given hash
+func (s *PublicTransactionPoolAPI) GetStorageContractByTransactionHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	// Try to return an already finalized transaction
+	if tx, _, _, _ := rawdb.ReadTransaction(s.b.ChainDb(), hash); tx != nil {
+		return transactionToStorageContract(tx)
+	}
+	// No finalized transaction, try to retrieve it from the pool
+	if tx := s.b.GetPoolTransaction(hash); tx != nil {
+		return transactionToStorageContract(tx)
+	}
+	// Transaction unknown, return as such
+	return nil, errors.New("transaction unknown")
+}
+
+// transactionToStorageContract return storage contract info.
+func transactionToStorageContract(transaction *types.Transaction) (map[string]interface{}, error) {
+	precompiled := vm.PrecompiledStorageContracts
+	if transaction.To() == nil {
+		return nil, errors.New("this is a deployment contract transaction")
+	}
+
+	p, ok := precompiled[*transaction.To()]
+	if !ok {
+		return nil, errors.New("not a storage contract related transaction")
+	}
+
+	fields := make(map[string]interface{})
+	switch p {
+	case vm.ContractCreateTransaction:
+		fields[transaction.Hash().String()] = vm.ContractCreateTransaction
+		var sc types.StorageContract
+		err := rlp.DecodeBytes(transaction.Data(), &sc)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = sc.RLPHash()
+		fields["StorageContract"] = sc
+	case vm.CommitRevisionTransaction:
+		fields[transaction.Hash().String()] = vm.CommitRevisionTransaction
+		var scr types.StorageContractRevision
+		err := rlp.DecodeBytes(transaction.Data(), &scr)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = scr.ParentID
+		fields["StorageContractRevision"] = scr
+	case vm.StorageProofTransaction:
+		fields[transaction.Hash().String()] = vm.StorageProofTransaction
+		var spf types.StorageProof
+		err := rlp.DecodeBytes(transaction.Data(), &spf)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["ContractID"] = spf.ParentID
+		fields["StorageContractStorageProof"] = spf
+	case vm.HostAnnounceTransaction:
+		fields[transaction.Hash().String()] = vm.HostAnnounceTransaction
+		var ha types.HostAnnouncement
+		err := rlp.DecodeBytes(transaction.Data(), &ha)
+		if err != nil {
+			return fields, errors.New("the data field in the transaction is decoded abnormally")
+		}
+		fields["HostAnnouncement"] = ha
+	default:
+	}
+	return fields, nil
 }
 
 // GetRawTransactionByHash returns the bytes of the transaction for the given hash.

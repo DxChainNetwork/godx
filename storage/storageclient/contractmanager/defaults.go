@@ -27,15 +27,29 @@ const (
 	// divided by the calculated min evaluation, which
 	// is used to determine if the contract should be
 	// prohibited to upload and renew
-	evalFactor                         = uint64(100)
+	evalFactor                         = int64(5)
 	minClientBalanceUploadThreshold    = float64(0.05)
 	minContractPaymentRenewalThreshold = float64(0.06)
 	minContractPaymentFactor           = float64(0.15)
 	maturityDelay                      = uint64(5)
 
+	// minContractSectorRenewThreshold is the minimum sectors storage + upload
+	// + download that a contract fund should support. If cannot, the contract
+	// should be renewed.
+	minContractSectorRenewThreshold = uint64(3)
+
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
 	extraRatio                             = 0.02
+)
+
+// rentPayment related constants
+const (
+	// rent payment size ratios. The contract fund are split according to these ratio
+	// params.
+	storageSizeRatio  float64 = 1
+	uploadSizeRatio   float64 = 1
+	downloadSizeRatio float64 = 1
 )
 
 // variables below are used to calculate the maxHostStoragePrice and maxHostDeposit, which set

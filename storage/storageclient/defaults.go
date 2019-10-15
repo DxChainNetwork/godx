@@ -71,5 +71,4 @@ var (
 	UploadFailureCoolDown = 3 * time.Second
 )
 
-var keys = []string{"fund", "hosts", "period", "renew", "storage", "upload", "download",
-	"redundancy", "violation", "uploadspeed", "downloadspeed"}
+var keys = []string{"fund", "hosts", "period", "violation", "uploadspeed", "downloadspeed"}

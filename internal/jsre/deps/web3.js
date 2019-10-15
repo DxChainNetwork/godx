@@ -1884,33 +1884,10 @@ var sha3 = require('./sha3.js');
 var utf8 = require('utf8');
 
 var unitMap = {
-    'noether':      '0',
-    'wei':          '1',
-    'kwei':         '1000',
-    'Kwei':         '1000',
-    'babbage':      '1000',
-    'femtoether':   '1000',
-    'mwei':         '1000000',
-    'Mwei':         '1000000',
-    'lovelace':     '1000000',
-    'picoether':    '1000000',
-    'gwei':         '1000000000',
-    'Gwei':         '1000000000',
-    'shannon':      '1000000000',
-    'nanoether':    '1000000000',
-    'nano':         '1000000000',
-    'szabo':        '1000000000000',
-    'microether':   '1000000000000',
-    'micro':        '1000000000000',
-    'finney':       '1000000000000000',
-    'milliether':    '1000000000000000',
-    'milli':         '1000000000000000',
-    'ether':        '1000000000000000000',
-    'kether':       '1000000000000000000000',
-    'grand':        '1000000000000000000000',
-    'mether':       '1000000000000000000000000',
-    'gether':       '1000000000000000000000000000',
-    'tether':       '1000000000000000000000000000000'
+    'nodx':      '0',
+    'camel':     '1',
+    'gcamel':    '1000000000',
+    'dx':        '1000000000000000000',
 };
 
 /**
@@ -2129,7 +2106,7 @@ var toHex = function (val) {
  * @throws error if the unit is not correct:w
  */
 var getValueOfUnit = function (unit) {
-    unit = unit ? unit.toLowerCase() : 'ether';
+    unit = unit ? unit.toLowerCase() : 'dx';
     var unitValue = unitMap[unit];
     if (unitValue === undefined) {
         throw new Error('This unit doesn\'t exists, please use the one of the following units' + JSON.stringify(unitMap, null, 2));
@@ -2181,12 +2158,12 @@ var fromWei = function(number, unit) {
  * - gether
  * - tether
  *
- * @method toWei
+ * @method toCamel
  * @param {Number|String|BigNumber} number can be a number, number string or a HEX of a decimal
  * @param {String} unit the unit to convert from, default ether
  * @return {String|Object} When given a BigNumber object it returns one as well, otherwise a number
 */
-var toWei = function(number, unit) {
+var toCamel = function(number, unit) {
     var returnValue = toBigNumber(number).times(getValueOfUnit(unit));
 
     return isBigNumber(number) ? returnValue : returnValue.toString(10);
@@ -2453,7 +2430,7 @@ module.exports = {
     transformToFullName: transformToFullName,
     extractDisplayName: extractDisplayName,
     extractTypeName: extractTypeName,
-    toWei: toWei,
+    toCamel: toCamel,
     fromWei: fromWei,
     toBigNumber: toBigNumber,
     toTwosComplement: toTwosComplement,
@@ -2583,7 +2560,7 @@ Web3.prototype.fromUtf8 = utils.fromUtf8;
 Web3.prototype.toDecimal = utils.toDecimal;
 Web3.prototype.fromDecimal = utils.fromDecimal;
 Web3.prototype.toBigNumber = utils.toBigNumber;
-Web3.prototype.toWei = utils.toWei;
+Web3.prototype.toCamel = utils.toCamel;
 Web3.prototype.fromWei = utils.fromWei;
 Web3.prototype.isAddress = utils.isAddress;
 Web3.prototype.isChecksumAddress = utils.isChecksumAddress;
@@ -3706,6 +3683,14 @@ var outputBigNumberFormatter = function (number) {
     return utils.toBigNumber(number);
 };
 
+var outputBalanceFormatter = function (object) {
+    totalBalance = utils.toBigNumber(object.total_balance)
+    availableBalance = utils.toBigNumber(object.available_balance)
+    frozenAssets = utils.toBigNumber(object.frozen_assets)
+
+    return {TotalBalance:totalBalance, AvailableBalance: availableBalance, FrozenAssets: frozenAssets}
+};
+
 var isPredefinedBlockNumber = function (blockNumber) {
     return blockNumber === 'latest' || blockNumber === 'pending' || blockNumber === 'earliest';
 };
@@ -3725,6 +3710,12 @@ var inputBlockNumberFormatter = function (blockNumber) {
     }
     return utils.toHex(blockNumber);
 };
+
+/*
+var inputAddressBlockNumberFormatter = function (address, blockNumber) {
+    return inputBlockNumberFormatter(blockNumber);
+};
+*/
 
 /**
  * Formats the input of a transaction and converts all values to HEX
@@ -3961,11 +3952,13 @@ var outputSyncingFormatter = function(result) {
 module.exports = {
     inputDefaultBlockNumberFormatter: inputDefaultBlockNumberFormatter,
     inputBlockNumberFormatter: inputBlockNumberFormatter,
+    // inputAddressBlockNumberFormatter: inputAddressBlockNumberFormatter,
     inputCallFormatter: inputCallFormatter,
     inputTransactionFormatter: inputTransactionFormatter,
     inputAddressFormatter: inputAddressFormatter,
     inputPostFormatter: inputPostFormatter,
     outputBigNumberFormatter: outputBigNumberFormatter,
+    outputBalanceFormatter: outputBalanceFormatter,
     outputTransactionFormatter: outputTransactionFormatter,
     outputTransactionReceiptFormatter: outputTransactionReceiptFormatter,
     outputBlockFormatter: outputBlockFormatter,
@@ -5283,7 +5276,8 @@ var methods = function () {
         call: 'eth_getBalance',
         params: 2,
         inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
-        outputFormatter: formatters.outputBigNumberFormatter
+        // outputFormatter: formatters.outputBigNumberFormatter
+        outputFormatter: formatters.outputBalanceFormatter
     });
 
     var getStorageAt = new Method({
@@ -5477,6 +5471,10 @@ var properties = function () {
             getter: 'eth_coinbase'
         }),
         new Property({
+          name: 'validator',
+          getter: 'eth_validator'
+        }),
+        new Property({
             name: 'mining',
             getter: 'eth_mining'
         }),
@@ -5589,142 +5587,6 @@ var properties = function () {
 module.exports = Net;
 
 },{"../../utils/utils":20,"../property":45}],
-
-    200: [function(require,module,exports){
-
-        "use strict";
-
-        var Method = require('../method');
-        var Property = require('../property');
-
-        function sclient(web3){
-            this._requestManager = web3._requestManager;
-
-            var self = this;
-
-            methods().forEach(function(method) {
-                method.attachToObject(self);
-                method.setRequestManager(self._requestManager);
-            });
-
-            properties().forEach(function(property){
-              property.attachToObject(self);
-              property.setRequestManager(self._requestManager);
-            });
-        }
-
-        var properties = function () {
-          return [
-              new Property({
-                  name: 'config',
-                  getter: 'sclient_config',
-              }),
-
-              new Property({
-                  name: 'host.ls',
-                  getter: 'sclient_hosts',
-              }),
-
-              new Property({
-                  name: 'host.rank',
-                  getter: 'sclient_hostRank',
-              }),
-
-              new Property({
-                 name: 'contracts',
-                 getter: 'sclient_contracts',
-              }),
-
-              new Property({
-                 name: 'paymentAddr',
-                 getter: 'sclient_paymentAddress'
-              }),
-
-              new Property({
-                  name: 'file.ls',
-                  getter: 'clientfiles_fileList'
-              }),
-
-              new Property({
-                  name: 'periodCost',
-                  getter: 'sclient_periodCost'
-              })
-          ];
-        }
-
-        var methods = function () {
-
-            var host = new Method({
-                name: 'host.info',
-                call: 'sclient_host',
-                params: 1,
-            });
-
-            var contract = new Method({
-                name: 'contract',
-                call: 'sclient_contract',
-                params: 1,
-            });
-
-            var setconfig = new Method({
-                name: 'setConfig',
-                call: 'sclient_setConfig',
-                params: 1,
-            });
-
-            var setPaymentAddress = new Method({
-                name: 'setPaymentAddr',
-                call: 'sclient_setPaymentAddress',
-                params: 1,
-            });
-
-
-            var upload = new Method({
-                name: 'upload',
-                call: 'sclient_upload',
-                params: 2,
-            });
-
-            var download = new Method({
-                name: 'download',
-                call: 'sclient_downloadSync',
-                params: 2,
-            });
-
-            var fileInfo = new Method({
-                name: 'file.info',
-                call: 'clientfiles_detailedFileInfo',
-                params: 1,
-            });
-
-            var rename = new Method({
-                name: 'file.rename',
-                call: 'clientfiles_rename',
-                params: 2,
-            });
-
-            var deletion = new Method({
-                name: 'file.delete',
-                call: 'clientfiles_delete',
-                params: 1,
-            });
-
-
-            return [
-                host,
-                contract,
-                setconfig,
-                download,
-                upload,
-                setPaymentAddress,
-                fileInfo,
-                rename,
-                deletion,
-            ];
-        };
-
-        module.exports = sclient;
-    }, {"../method":36, "../property":45}],
 
     40:[function(require,module,exports){
 /*
@@ -13777,6 +13639,147 @@ module.exports = Web3;
 
 },{"./lib/web3":22}],
 
+  200: [function(require,module,exports){
+
+    "use strict";
+
+    var Method = require('../method');
+    var Property = require('../property');
+
+    function sclient(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(property){
+        property.attachToObject(self);
+        property.setRequestManager(self._requestManager);
+      });
+    }
+
+    var properties = function () {
+      return [
+        new Property({
+          name: 'config',
+          getter: 'sclient_config',
+        }),
+
+        new Property({
+          name: 'host.ls',
+          getter: 'sclient_hosts',
+        }),
+
+        new Property({
+          name: 'host.rank',
+          getter: 'sclient_hostRank',
+        }),
+
+        new Property({
+          name: 'contracts',
+          getter: 'sclient_contracts',
+        }),
+
+        new Property({
+          name: 'paymentAddr',
+          getter: 'sclient_paymentAddress'
+        }),
+
+        new Property({
+          name: 'file.ls',
+          getter: 'clientfiles_fileList'
+        }),
+
+        new Property({
+          name: 'periodCost',
+          getter: 'sclient_periodCost'
+        }),
+
+        new Property({
+          name: 'renewWindow',
+          getter: 'sclient_getRenewWindow'
+        })
+      ];
+    }
+
+    var methods = function () {
+
+      var host = new Method({
+        name: 'host.info',
+        call: 'sclient_host',
+        params: 1,
+      });
+
+      var contract = new Method({
+        name: 'contract',
+        call: 'sclient_contract',
+        params: 1,
+      });
+
+      var setconfig = new Method({
+        name: 'setConfig',
+        call: 'sclient_setConfig',
+        params: 1,
+      });
+
+      var setPaymentAddress = new Method({
+        name: 'setPaymentAddr',
+        call: 'sclient_setPaymentAddress',
+        params: 1,
+      });
+
+
+      var upload = new Method({
+        name: 'upload',
+        call: 'sclient_upload',
+        params: 2,
+      });
+
+      var download = new Method({
+        name: 'download',
+        call: 'sclient_downloadSync',
+        params: 2,
+      });
+
+      var fileInfo = new Method({
+        name: 'file.info',
+        call: 'clientfiles_detailedFileInfo',
+        params: 1,
+      });
+
+      var rename = new Method({
+        name: 'file.rename',
+        call: 'clientfiles_rename',
+        params: 2,
+      });
+
+      var deletion = new Method({
+        name: 'file.delete',
+        call: 'clientfiles_delete',
+        params: 1,
+      });
+
+
+      return [
+        host,
+        contract,
+        setconfig,
+        download,
+        upload,
+        setPaymentAddress,
+        fileInfo,
+        rename,
+        deletion,
+      ];
+    };
+
+    module.exports = sclient;
+  }, {"../method":36, "../property":45}],
+
   213: [function(require,module,exports) {
     "use strict";
 
@@ -13867,7 +13870,12 @@ module.exports = Web3;
         new Property({
             name: 'paymentAddr',
             getter: 'shost_getPaymentAddress',
-        })
+        }),
+
+        new Property({
+            name: 'proofWindow',
+            getter: 'shost_getProofWindow',
+        }),
 
     ];
     }

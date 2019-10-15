@@ -2,6 +2,7 @@ package trie
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/log"
 )

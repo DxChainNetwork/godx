@@ -123,6 +123,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Version:   "1.0",
 			Service:   NewPrivateStorageContractTxAPI(apiBackend, nonceLock),
 			Public:    false,
+		}, {
+			Namespace: "dpos",
+			Version:   "1.0",
+			Service:   NewPublicDposTxAPI(apiBackend, nonceLock),
+			Public:    true,
 		},
 	}
 }

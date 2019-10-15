@@ -6,10 +6,10 @@ package storageclient
 
 import (
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/unit"
 	"github.com/DxChainNetwork/godx/storage"
-	"strconv"
 )
 
 // parseClientSetting will take client settings in a map format, where both key and value are strings. Then, those value will be parsed
@@ -47,51 +47,6 @@ func parseClientSetting(settings map[string]string, prevSetting storage.ClientSe
 				break
 			}
 			clientSetting.RentPayment.Period = period
-
-		case key == "renew":
-			var renew uint64
-			renew, err = unit.ParseTime(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the renew value: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.RenewWindow = renew
-
-		case key == "storage":
-			var expectedStorage uint64
-			expectedStorage, err = unit.ParseStorage(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected storage: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedStorage = expectedStorage
-
-		case key == "upload":
-			var expectedUpload uint64
-			expectedUpload, err = parseExpectedUpload(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected upload: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedUpload = expectedUpload
-
-		case key == "download":
-			var expectedDownload uint64
-			expectedDownload, err = parseExpectedDownload(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the expected download: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedDownload = expectedDownload
-
-		case key == "redundancy":
-			var redundancy float64
-			redundancy, err = parseExpectedRedundancy(value)
-			if err != nil {
-				err = fmt.Errorf("failed to parse the redundancy: %s", err.Error())
-				break
-			}
-			clientSetting.RentPayment.ExpectedRedundancy = redundancy
 
 		case key == "violation":
 			var status bool
@@ -140,38 +95,6 @@ func parseStorageHosts(hosts string) (parsed uint64, err error) {
 	return unit.ParseUint64(hosts, 1, "")
 }
 
-// parseExpectedUpload will parse the string into the form of rentPayment.ExpectedUpload
-func parseExpectedUpload(upload string) (parsed uint64, err error) {
-	if parsed, err = unit.ParseStorage(upload); err != nil {
-		return
-	}
-
-	// in terms of bytes / month
-	parsed = parsed / storage.BlocksPerMonth
-	return
-}
-
-// parseExpectedDownload will parse the string into the form of rentPayment.ExpectedDownload
-func parseExpectedDownload(download string) (parsed uint64, err error) {
-	if parsed, err = unit.ParseStorage(download); err != nil {
-		return
-	}
-
-	// in terms of bytes / month
-	parsed = parsed / storage.BlocksPerMonth
-	return
-}
-
-// parseExpectedRedundancy will parse the string into the form of rentPayment.ExpectedRedundancy
-func parseExpectedRedundancy(redundancy string) (parsed float64, err error) {
-	if parsed, err = strconv.ParseFloat(redundancy, 64); err != nil {
-		err = fmt.Errorf("error parsing the redundancy into float64: %s", err.Error())
-		return
-	}
-
-	return
-}
-
 // clientSettingGetDefault will take the clientSetting and check if any filed in the RentPayment is zero
 // if so, set the value to default value
 func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.ClientSetting) {
@@ -185,10 +108,6 @@ func clientSettingGetDefault(setting storage.ClientSetting) (newSetting storage.
 
 	if setting.RentPayment.Period == 0 {
 		setting.RentPayment.Period = storage.DefaultRentPayment.Period
-	}
-
-	if setting.RentPayment.RenewWindow == 0 {
-		setting.RentPayment.RenewWindow = storage.DefaultRentPayment.RenewWindow
 	}
 
 	if setting.RentPayment.ExpectedStorage == 0 {

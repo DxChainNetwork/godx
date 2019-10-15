@@ -2,7 +2,6 @@ package rawdb
 
 import (
 	"bytes"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"testing"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 /**
@@ -27,9 +27,13 @@ import (
 // Tests block header storage and retrieval operations.
 func TestHeaderStorage(t *testing.T) {
 	db := ethdb.NewMemDatabase()
+	dposCtx, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to new dpos context: %v", err)
+	}
 
 	// Create a test header to move around the database and make sure it's really new
-	header := &types.Header{Number: big.NewInt(42), Extra: []byte("test header")}
+	header := &types.Header{Number: big.NewInt(42), Extra: []byte("test header"), DposContext: dposCtx.ToRoot()}
 	if entry := ReadHeader(db, header.Hash(), header.Number.Uint64()); entry != nil {
 		t.Fatalf("Non existent header returned: %v", entry)
 	}
@@ -60,9 +64,13 @@ func TestHeaderStorage(t *testing.T) {
 // Tests block body storage and retrieval operations.
 func TestBodyStorage(t *testing.T) {
 	db := ethdb.NewMemDatabase()
+	dposCtx, err := types.NewDposContext(db)
+	if err != nil {
+		t.Fatalf("failed to new dpos context: %v", err)
+	}
 
 	// Create a test body to move around the database and make sure it's really new
-	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header")}}}
+	body := &types.Body{Uncles: []*types.Header{{Extra: []byte("test header"), DposContext: dposCtx.ToRoot()}}}
 
 	hasher := sha3.NewLegacyKeccak256()
 	rlp.Encode(hasher, body)

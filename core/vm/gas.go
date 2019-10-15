@@ -66,6 +66,15 @@ func callGas(gasTable params.GasTable, availableGas, base uint64, callCost *big.
 	return callCost.Uint64(), nil
 }
 
+//DeductGas deduct the cost gas from current remain gas
+func DeductGas(gasRemain, gasUsed uint64) (bool, uint64) {
+	if gasRemain >= gasUsed {
+		gasRemain -= gasUsed
+		return true, gasRemain
+	}
+	return false, gasRemain
+}
+
 // RemainGas calculate the gas of storage contract execution
 func RemainGas(args ...interface{}) (uint64, []interface{}) {
 	result := make([]interface{}, 0)

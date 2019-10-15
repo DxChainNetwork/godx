@@ -60,7 +60,7 @@ func (cm *ContractManager) DownloadNegotiate(sp storage.Peer, downloadData io.Wr
 
 	// update the download request
 	downloadReq = updateDownloadRequest(downloadReq, clientRevisionSign, downloadRevision)
-	defer cm.handleNegotiationErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer cm.handleContractDownloadErr(&negotiateErr, hostInfo.EnodeID, sp)
 
 	// start download request negotiation, get the storage host sign
 	hostRevisionSign, err := downloadRequestNegotiation(sp, downloadReq, downloadData)

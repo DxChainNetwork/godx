@@ -5,193 +5,56 @@
 package storagehostmanager
 
 import (
-	"math"
+	"fmt"
 	"time"
 
-	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-// hostInfoUpdate will update the storage host information based on the external settings
-func (shm *StorageHostManager) hostInfoUpdate(hi storage.HostInfo, err error) {
-
-	if err != nil && !shm.b.Online() {
-		return
-	}
-
-	// get the storage host from the tree and update the storage host information
-	storedInfo, exists := shm.storageHostTree.RetrieveHostInfo(hi.EnodeID)
-	if exists {
-		storedInfo.HostExtConfig = hi.HostExtConfig
-		storedInfo.IPNetwork = hi.IPNetwork
-		storedInfo.LastIPNetWorkChange = hi.LastIPNetWorkChange
-	} else {
-		storedInfo = hi
-	}
-
-	// update the recent interaction status
-	if err != nil {
-		storedInfo.RecentFailedInteractions++
-	} else {
-		storedInfo.RecentSuccessfulInteractions++
-	}
-
-	// update scan record, make sure the scan record has at least two scans
-	if len(storedInfo.ScanRecords) < 2 {
-		earliestScanTime := time.Now().Add(time.Hour * 7 * 24 * -1)
-		suggestedScanTime := time.Now().Add(time.Minute * 10 * time.Duration(shm.blockHeight-hi.FirstSeen+1) * -1)
-		if suggestedScanTime.Before(earliestScanTime) {
-			suggestedScanTime = earliestScanTime
-		}
-
-		storedInfo.ScanRecords = storage.HostPoolScans{
-			{Timestamp: suggestedScanTime, Success: err == nil},
-			{Timestamp: time.Now(), Success: err == nil},
-		}
-	} else {
-		currentTimeStamp := time.Now()
-		prevScanTime := storedInfo.ScanRecords[len(storedInfo.ScanRecords)-1].Timestamp
-		if prevScanTime.After(currentTimeStamp) {
-			currentTimeStamp = prevScanTime.Add(time.Second)
-		}
-		newestScan := storage.HostPoolScan{Timestamp: currentTimeStamp, Success: err == nil}
-		storedInfo.ScanRecords = append(storedInfo.ScanRecords, newestScan)
-	}
-
-	// if the host is not upp and the exceed the max host downtime, then remove it and return
-	recentUp := err == nil
-	if !recentUp && len(storedInfo.ScanRecords) > minScans &&
-		time.Now().Sub(storedInfo.ScanRecords[0].Timestamp) > maxDowntime {
-		err := shm.remove(storedInfo.EnodeID)
-		if err != nil {
-			log.Error("failed to remove the storage host from the tree", "hostID", storedInfo.EnodeID.String(), "err", err.Error())
-		}
-		return
-	}
-
-	// update the scan records, for record that stayed for long time, add it to
-	// update the historic uptime and historic downtime, and remove them from the
-	// scan records
-	for len(storedInfo.ScanRecords) > minScans &&
-		time.Now().Sub(storedInfo.ScanRecords[0].Timestamp) > maxDowntime {
-		timePassed := storedInfo.ScanRecords[1].Timestamp.Sub(storedInfo.ScanRecords[0].Timestamp)
-		if storedInfo.ScanRecords[0].Success {
-			storedInfo.HistoricUptime += timePassed
-		} else {
-			storedInfo.HistoricUptime += timePassed
-		}
-
-		storedInfo.ScanRecords = storedInfo.ScanRecords[1:]
-	}
-
-	// update the storage host tree
-	if !exists {
-		err := shm.insert(storedInfo)
-		if err != nil {
-			log.Error("failed to insert the storage host information", "err", err.Error())
-		}
-	} else {
-		err := shm.modify(storedInfo)
-		if err != nil {
-			log.Error("failed to modify the storage host information", "err", err.Error())
-		}
-	}
-
+// onlineBackend is the backend that gets whether the backend is online or not
+type onlineBackend interface {
+	Online() bool
 }
 
-// hostHistoricInteractionsUpdate will update storage host historical interactions
-func hostHistoricInteractionsUpdate(hi *storage.HostInfo, blockHeight uint64) {
-	// avoid update that happened in the future
-	// and avoid update that complete already
-	if hi.LastHistoricUpdate >= blockHeight {
-		return
+// hostInfoUpdate try to update the host config info.
+// It will update the uptime fields as well as the interaction fields.
+func (shm *StorageHostManager) hostInfoUpdate(info storage.HostInfo, b onlineBackend, err error) error {
+	// if error happens due to the backend is not online, directly return
+	if err != nil && !b.Online() {
+		return nil
 	}
-
-	// at least one block is passed, apply decay for the block
-	hsi := hi.HistoricSuccessfulInteractions
-	hfi := hi.HistoricFailedInteractions
-	hsi *= historicInteractionDecay
-	hfi *= historicInteractionDecay
-
-	// to avoid downgrade the influence of recent interactions, adjustments need to be made
-	rsi := float64(hi.RecentSuccessfulInteractions)
-	rfi := float64(hi.RecentFailedInteractions)
-	if hsi+hfi > historicInteractionDecayLimit {
-		if rsi+rfi > recentInteractionWeightLimit {
-			adjustment := recentInteractionWeightLimit * (hsi + hfi) / (rsi + rfi)
-			rsi *= adjustment
-			rfi *= adjustment
-		}
-	} else {
-		if rsi+rfi > recentInteractionWeightLimit*historicInteractionDecayLimit {
-			adjustment := recentInteractionWeightLimit * historicInteractionDecayLimit / (rsi + rfi)
-			rsi *= adjustment
-			rfi *= adjustment
-		}
+	// get the host info from the tree
+	storedInfo, exist := shm.storageHostTree.RetrieveHostInfo(info.EnodeID)
+	if !exist {
+		return fmt.Errorf("host info %v not exist in tree", info.EnodeID)
 	}
+	info = applyInfoToStoredHostInfo(info, storedInfo)
+	success := err == nil
+	info = calcUptimeUpdate(info, success, uint64(time.Now().Unix()))
+	info = calcInteractionUpdate(info, InteractionGetConfig, success, uint64(time.Now().Unix()))
 
-	hsi += rsi
-	rfi += rfi
-
-	// check how many blocks it passed by since the last update
-	blocks := blockHeight - hi.LastHistoricUpdate
-	if blocks > 1 && hsi+hfi > historicInteractionDecayLimit {
-		decay := math.Pow(historicInteractionDecay, float64(blocks-1))
-		hsi *= decay
-		hfi *= decay
+	// Check whether to remove the host
+	remove := whetherRemoveHost(info, shm.getBlockHeight())
+	if remove {
+		return shm.remove(info.EnodeID)
 	}
-
-	// update the storage host interaction information
-	hi.HistoricSuccessfulInteractions = hsi
-	hi.HistoricFailedInteractions = hfi
-	hi.RecentSuccessfulInteractions = 0
-	hi.RecentFailedInteractions = 0
-
-	hi.LastHistoricUpdate = blockHeight
+	return shm.modify(info)
 }
 
-// IncrementSuccessfulInteractions will update both storage host's historical interactions
-// and recent successful interactions
-func (shm *StorageHostManager) IncrementSuccessfulInteractions(id enode.ID) {
-	shm.lock.Lock()
-	defer shm.lock.Unlock()
-
-	// get the storage host
-	host, exists := shm.storageHostTree.RetrieveHostInfo(id)
-	if !exists {
-		shm.log.Warn("failed to get the storage host information while trying to increase the successful interactions")
-		return
+// whetherRemoveHost decide whether to remove the host from host manager with the given host info.
+// The decision is made upon whether the uprate is above the a certain criteria
+func whetherRemoveHost(info storage.HostInfo, currentBlockHeight uint64) bool {
+	upRate := getHostUpRate(info)
+	criteria := calcHostRemoveCriteria(info, currentBlockHeight)
+	if upRate > criteria {
+		return false
 	}
-	// update the historical interactions
-	hostHistoricInteractionsUpdate(&host, shm.blockHeight)
-
-	// update the recent successful interactions, recalculate the storage host evaluation
-	host.RecentSuccessfulInteractions++
-
-	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
-		shm.log.Error("failed to update successful interactions", "err", err.Error())
-	}
+	return true
 }
 
-// IncrementFailedInteractions will update both storage host's historical interactions
-// and recent failed interactions
-func (shm *StorageHostManager) IncrementFailedInteractions(id enode.ID) {
-	shm.lock.Lock()
-	defer shm.lock.Unlock()
-
-	// get the storage host information
-	host, exists := shm.storageHostTree.RetrieveHostInfo(id)
-	if !exists || !shm.b.Online() {
-		return
-	}
-
-	// update the historical interactions
-	hostHistoricInteractionsUpdate(&host, shm.blockHeight)
-
-	// update the recent failed interactions, recalculate the storage host evaluation
-	host.RecentFailedInteractions++
-	if err := shm.storageHostTree.HostInfoUpdate(host); err != nil {
-		shm.log.Error("failed to increment the failed interactions", "err", err.Error())
-	}
+// calcHostRemoveCriteria calculate the criteria for removing a host
+func calcHostRemoveCriteria(info storage.HostInfo, currentBlockHeight uint64) float64 {
+	timeDiff := float64(currentBlockHeight - info.FirstSeen)
+	criteria := uptimeCap - (uptimeCap-critIntercept)/(timeDiff/float64(critRemoveBase)+1)
+	return criteria
 }

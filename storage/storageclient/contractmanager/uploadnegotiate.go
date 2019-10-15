@@ -42,7 +42,7 @@ func (cm *ContractManager) UploadNegotiate(sp storage.Peer, actions []storage.Up
 	}
 
 	// handle the negotiation error
-	defer cm.handleNegotiationErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer cm.handleContractUploadErr(&negotiateErr, hostInfo.EnodeID, sp)
 
 	// form the upload request and start upload request negotiation
 	uploadMerkleProof, err := uploadRequestNegotiation(sp, latestContractRevision.ParentID, uploadRevision, actions)

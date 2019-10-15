@@ -7,16 +7,34 @@ package contractmanager
 import (
 	"errors"
 	"fmt"
-	"github.com/DxChainNetwork/godx/storage"
 	"reflect"
+
+	"github.com/DxChainNetwork/godx/common/unit"
+	"github.com/DxChainNetwork/godx/storage"
 )
+
+var (
+	// erasure code related parameters. Default to params set in storage module.
+	// The values are redeclared here only for test cases
+	defaultMinSectors = storage.DefaultMinSectors
+	defaultNumSectors = storage.DefaultNumSectors
+)
+
+// hostMarket is the interface implemented by storageHostManager
+type hostMarket interface {
+	GetMarketPrice() storage.MarketPrice
+}
 
 // SetRentPayment will set the rent payment to the value passed in by the user
 // through the command line interface
-func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) {
+func (cm *ContractManager) SetRentPayment(rent storage.RentPayment, market hostMarket) (err error) {
 	if cm.b.Syncing() {
 		return errors.New("setRentPayment can only be done once the block chain finished syncing")
 	}
+
+	// Calculate the expected sizes in rent payment.
+	prices := market.GetMarketPrice()
+	rent = estimateRentPaymentSizes(rent, prices)
 
 	// validate the rentPayment, making sure that fields are not empty
 	if err = RentPaymentValidation(rent); err != nil {
@@ -46,7 +64,7 @@ func (cm *ContractManager) SetRentPayment(rent storage.RentPayment) (err error) 
 	if reflect.DeepEqual(oldRent, storage.RentPayment{}) {
 		// update the current period
 		cm.lock.Lock()
-		cm.currentPeriod = cm.blockHeight - rent.RenewWindow
+		cm.currentPeriod = cm.blockHeight
 		cm.lock.Unlock()
 
 		// reuse the active canceled contracts
@@ -100,19 +118,37 @@ func RentPaymentValidation(rent storage.RentPayment) (err error) {
 		return errors.New("amount of storage hosts cannot be set to 0")
 	case rent.Period == 0:
 		return errors.New("storage period cannot be set to 0")
-	case rent.RenewWindow == 0:
-		return errors.New("renew window cannot be set to 0")
-	case rent.ExpectedStorage == 0:
-		return errors.New("expected storage cannot be set to 0")
-	case rent.ExpectedUpload == 0:
-		return errors.New("expectedUpload cannot be set to 0")
-	case rent.ExpectedDownload == 0:
-		return errors.New("expectedDownload cannot be set to 0")
-	case rent.ExpectedRedundancy == 0:
-		return errors.New("expectedRedundancy cannot be set to 0")
-	case rent.RenewWindow > rent.Period:
-		return errors.New("renew window cannot be larger than the period")
+	case storage.RenewWindow > rent.Period:
+		return fmt.Errorf("storage period must be greater than %v", unit.FormatTime(storage.RenewWindow))
 	default:
 		return
 	}
+}
+
+// estimateRentPaymentSizes estimate the sizes in rent payment based on fund settings and the
+// input market price. Currently, the contract fund are split among the storage fund, upload
+// fund and download fund. The sizes follows the ratio defined in defaults.go
+func estimateRentPaymentSizes(rent storage.RentPayment, prices storage.MarketPrice) storage.RentPayment {
+	// Estimate the redundancy
+	redundancy := float64(defaultNumSectors) / float64(defaultMinSectors)
+
+	// Estimate the sizes
+	fundPerContract := rent.Fund.DivUint64(rent.StorageHosts)
+	storageRatio := prices.StoragePrice.MultFloat64(redundancy).MultUint64(rent.Period).MultFloat64(storageSizeRatio)
+	downloadRatio := prices.DownloadPrice.MultFloat64(uploadSizeRatio)
+	uploadRatio := prices.UploadPrice.MultFloat64(downloadSizeRatio)
+	ratioSum := storageRatio.Add(downloadRatio).Add(uploadRatio)
+
+	// Calculate the sizes
+	sizeBase := fundPerContract.Div(ratioSum).Float64()
+	expectedStorage := uint64(sizeBase * storageSizeRatio * redundancy)
+	expectedDownload := uint64(sizeBase * downloadSizeRatio)
+	expectedUpload := uint64(sizeBase * uploadSizeRatio)
+
+	// Apply the calculated values to rent Payment
+	rent.ExpectedRedundancy = redundancy
+	rent.ExpectedStorage = expectedStorage
+	rent.ExpectedUpload = expectedUpload
+	rent.ExpectedDownload = expectedDownload
+	return rent
 }

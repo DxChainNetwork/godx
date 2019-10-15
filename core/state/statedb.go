@@ -491,20 +491,30 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 // ForEachStorage will apply the callback function on all storage code for the given address
 // It will iterate over the storage trie for the address, and apply the callback on the key value pair for storage trie.
 // If dirtyStorage contains the key, then update the dirtyStorage. If not contain the key, update the value in trie value
-func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) {
+func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
 	so := s.getStateObject(addr)
 	if so == nil {
-		return
+		return nil
 	}
 	it := trie.NewIterator(so.getTrie(s.db).NodeIterator(nil))
 	for it.Next() {
 		key := common.BytesToHash(s.trie.GetKey(it.Key))
 		if value, dirty := so.dirtyStorage[key]; dirty {
-			cb(key, value)
-			continue
+			if !cb(key, value) {
+				continue
+			}
 		}
-		cb(key, common.BytesToHash(it.Value))
+		if len(it.Value) > 0 {
+			_, content, _, err := rlp.Split(it.Value)
+			if err != nil {
+				return err
+			}
+			if !cb(key, common.BytesToHash(content)) {
+				return nil
+			}
+		}
 	}
+	return nil
 }
 
 // Copy creates a deep, independent copy of the state.

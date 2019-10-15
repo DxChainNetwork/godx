@@ -22,7 +22,7 @@ func (cm *ContractManager) prepareCreateContract(neededContracts int, clientRema
 
 	cm.lock.RLock()
 	contractFund := rentPayment.Fund.DivUint64(rentPayment.StorageHosts).DivUint64(3)
-	contractEndHeight := cm.currentPeriod + rentPayment.Period + rentPayment.RenewWindow
+	contractEndHeight := cm.currentPeriod + rentPayment.Period + storage.RenewWindow
 	cm.lock.RUnlock()
 
 	// loop through each host and try to form contract with them

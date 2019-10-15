@@ -17,8 +17,12 @@
 package miner
 
 import (
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/DxChainNetwork/godx/consensus"
-	"github.com/DxChainNetwork/godx/consensus/ethash"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
@@ -26,15 +30,12 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/event"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"testing"
-	"time"
 )
 
 var (
 	// Test chain configurations
-	testTxPoolConfig  core.TxPoolConfig
-	ethashChainConfig *params.ChainConfig
+	testTxPoolConfig core.TxPoolConfig
+	dposChainConfig  *params.ChainConfig
 
 	// Test accounts
 	testBankKey, _  = crypto.GenerateKey()
@@ -52,7 +53,7 @@ var (
 func init() {
 	testTxPoolConfig = core.DefaultTxPoolConfig
 	testTxPoolConfig.Journal = ""
-	ethashChainConfig = params.TestChainConfig
+	dposChainConfig = params.DposChainConfig
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, testUserAddress, big.NewInt(1000), params.TxGas, nil, nil), types.HomesteadSigner{}, testBankKey)
 	pendingTxs = append(pendingTxs, tx1)
@@ -77,9 +78,13 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 			Alloc:  core.GenesisAlloc{testBankAddress: {Balance: testBankFunds}},
 		}
 	)
-
+	for _, validatorConfig := range chainConfig.Dpos.Validators {
+		gspec.Alloc[validatorConfig.Address] = core.GenesisAccount{
+			Balance: validatorConfig.Deposit.BigIntPtr(),
+		}
+	}
 	switch engine.(type) {
-	case *ethash.Ethash:
+	case *dpos.Dpos:
 	default:
 		t.Fatalf("unexpected consensus engine type: %T", engine)
 	}
@@ -123,12 +128,12 @@ func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	backend := newTestWorkerBackend(t, chainConfig, engine, blocks)
 	backend.txPool.AddLocals(pendingTxs)
 	w := newWorker(chainConfig, engine, backend, new(event.TypeMux), time.Second, params.GenesisGasLimit, params.GenesisGasLimit, nil)
-	w.setEtherbase(testBankAddress)
+	w.setCoinbase(testBankAddress)
 	return w, backend
 }
 
 func TestPendingStateAndBlockEthash(t *testing.T) {
-	testPendingStateAndBlock(t, ethashChainConfig, ethash.NewFaker())
+	testPendingStateAndBlock(t, dposChainConfig, dpos.NewDposFaker())
 }
 
 func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
@@ -156,11 +161,11 @@ func testPendingStateAndBlock(t *testing.T, chainConfig *params.ChainConfig, eng
 	}
 }
 
-func TestEmptyWorkEthash(t *testing.T) {
-	testEmptyWork(t, ethashChainConfig, ethash.NewFaker())
+func TestCheckDposBalance(t *testing.T) {
+	testCheckDposBalance(t, dposChainConfig, dpos.NewDposFaker())
 }
 
-func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+func testCheckDposBalance(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
 	defer engine.Close()
 
 	w, _ := newTestWorker(t, chainConfig, engine, 0)
@@ -173,7 +178,7 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 
 	checkEqual := func(t *testing.T, task *task, index int) {
 		receiptLen, balance := 0, big.NewInt(0)
-		if index == 1 {
+		if index == 0 {
 			receiptLen, balance = 1, big.NewInt(1000)
 		}
 		if len(task.receipts) != receiptLen {
@@ -204,20 +209,20 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	}
 
 	w.start()
-	for i := 0; i < 2; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(2 * time.Second).C:
-			t.Error("new task timeout")
-		}
+
+	select {
+	case <-taskCh:
+	case <-time.NewTimer(2 * time.Second).C:
+		t.Error("new task timeout")
 	}
+
 }
 
 func TestStreamUncleBlock(t *testing.T) {
-	ethash := ethash.NewFaker()
-	defer ethash.Close()
+	dposEngine := dpos.NewDposFaker()
+	defer dposEngine.Close()
 
-	w, b := newTestWorker(t, ethashChainConfig, ethash, 1)
+	w, b := newTestWorker(t, dposChainConfig, dposEngine, 1)
 	defer w.close()
 
 	var taskCh = make(chan struct{})
@@ -227,7 +232,7 @@ func TestStreamUncleBlock(t *testing.T) {
 		if task.block.NumberU64() == 2 {
 			if taskIndex == 2 {
 				have := task.block.Header().UncleHash
-				want := types.CalcUncleHash([]*types.Header{b.uncleBlock.Header()})
+				want := types.EmptyUncleHash
 				if have != want {
 					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
 				}
@@ -256,21 +261,22 @@ func TestStreamUncleBlock(t *testing.T) {
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
+
 	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
 
 	select {
 	case <-taskCh:
-	case <-time.NewTimer(time.Second).C:
+	case <-time.NewTimer(10 * time.Second).C:
 		t.Error("new task timeout")
 	}
 }
 
 func TestRegenerateMiningBlockEthash(t *testing.T) {
-	testRegenerateMiningBlock(t, ethashChainConfig, ethash.NewFaker())
+	testRegenerateMiningBlock(t, dposChainConfig, dpos.NewDposFaker())
 }
 
 func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
@@ -316,7 +322,7 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 	for i := 0; i < 2; i += 1 {
 		select {
 		case <-taskCh:
-		case <-time.NewTimer(time.Second).C:
+		case <-time.NewTimer(10 * time.Second).C:
 			t.Error("new task timeout")
 		}
 	}
@@ -327,103 +333,5 @@ func testRegenerateMiningBlock(t *testing.T, chainConfig *params.ChainConfig, en
 	case <-taskCh:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("new task timeout")
-	}
-}
-
-func TestAdjustIntervalEthash(t *testing.T) {
-	testAdjustInterval(t, ethashChainConfig, ethash.NewFaker())
-}
-
-func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
-	defer engine.Close()
-
-	w, _ := newTestWorker(t, chainConfig, engine, 0)
-	defer w.close()
-
-	w.skipSealHook = func(task *task) bool {
-		return true
-	}
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-	var (
-		progress = make(chan struct{}, 10)
-		result   = make([]float64, 0, 10)
-		index    = 0
-		start    = false
-	)
-	w.resubmitHook = func(minInterval time.Duration, recommitInterval time.Duration) {
-		// Short circuit if interval checking hasn't started.
-		if !start {
-			return
-		}
-		var wantMinInterval, wantRecommitInterval time.Duration
-
-		switch index {
-		case 0:
-			wantMinInterval, wantRecommitInterval = 3*time.Second, 3*time.Second
-		case 1:
-			origin := float64(3 * time.Second.Nanoseconds())
-			estimate := origin*(1-intervalAdjustRatio) + intervalAdjustRatio*(origin/0.8+intervalAdjustBias)
-			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(estimate)*time.Nanosecond
-		case 2:
-			estimate := result[index-1]
-			min := float64(3 * time.Second.Nanoseconds())
-			estimate = estimate*(1-intervalAdjustRatio) + intervalAdjustRatio*(min-intervalAdjustBias)
-			wantMinInterval, wantRecommitInterval = 3*time.Second, time.Duration(estimate)*time.Nanosecond
-		case 3:
-			wantMinInterval, wantRecommitInterval = time.Second, time.Second
-		}
-
-		// Check interval
-		if minInterval != wantMinInterval {
-			t.Errorf("resubmit min interval mismatch: have %v, want %v ", minInterval, wantMinInterval)
-		}
-		if recommitInterval != wantRecommitInterval {
-			t.Errorf("resubmit interval mismatch: have %v, want %v", recommitInterval, wantRecommitInterval)
-		}
-		result = append(result, float64(recommitInterval.Nanoseconds()))
-		index += 1
-		progress <- struct{}{}
-	}
-	// Ensure worker has finished initialization
-	for {
-		b := w.pendingBlock()
-		if b != nil && b.NumberU64() == 1 {
-			break
-		}
-	}
-
-	w.start()
-
-	time.Sleep(time.Second)
-
-	start = true
-	w.setRecommitInterval(3 * time.Second)
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
-	}
-
-	w.setRecommitInterval(500 * time.Millisecond)
-	select {
-	case <-progress:
-	case <-time.NewTimer(time.Second).C:
-		t.Error("interval reset timeout")
 	}
 }
