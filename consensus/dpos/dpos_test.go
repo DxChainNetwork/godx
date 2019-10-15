@@ -137,7 +137,7 @@ func TestAccumulateRewards(t *testing.T) {
 	}
 
 	// Byzantium
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator, Time: new(big.Int).SetInt64(100000000)}
 	totalReward := common.NewBigInt(1.5e+18)
 	expectedDelegatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
 	expectedValidatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()

@@ -146,22 +146,22 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 // calculateValidatorDepositReward calculates the deposit bonus for validator when producing a new block
 func calculateValidatorDepositReward(state stateDB, addr common.Address) common.BigInt {
 	rewardPerBlock := common.NewBigInt(0)
-	frozenAssets := GetFrozenAssets(state, addr)
+	deposit := GetValidatorDepositLastEpoch(state, addr)
 
 	/*
-		totalDeposit < 1e3 dx: rewardPerBlock = 1 dx
-		totalDeposit < 1e6 dx: rewardPerBlock = 2 dx
-		totalDeposit < 1e9 dx: rewardPerBlock = 3 dx
-		totalDeposit >= 1e9 dx: rewardPerBlock = 5 dx
+		deposit < 1e3 dx: rewardPerBlock = 1 dx
+		deposit < 1e6 dx: rewardPerBlock = 2 dx
+		deposit < 1e9 dx: rewardPerBlock = 3 dx
+		deposit >= 1e9 dx: rewardPerBlock = 5 dx
 	*/
 	switch {
-	case frozenAssets.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
 		rewardPerBlock = minRewardPerBlock
 		break
-	case frozenAssets.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
 		rewardPerBlock = minRewardPerBlock.MultInt64(2)
 		break
-	case frozenAssets.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
+	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
 		rewardPerBlock = minRewardPerBlock.MultInt64(3)
 		break
 	default:
