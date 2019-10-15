@@ -170,6 +170,10 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		SetRewardRatioNumerator(ec.stateDB, validator.address, 0)
+
+		// deduct penalty from validator and delegator
+		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), validator.address)
+
 		// if kickout success, candidateCount minus 1
 		candidateCount--
 		log.Info("Kickout candidates", "prevEpochID", epoch, "candidates", validator.address.String(), "minedCnt", validator.cnt)
@@ -266,4 +270,26 @@ func (a addressesByCnt) Less(i, j int) bool {
 // makeSeed makes the seed for random selection in try elect
 func makeSeed(h common.Hash, i int64) int64 {
 	return int64(binary.LittleEndian.Uint32(crypto.Keccak512(h.Bytes()))) + i
+}
+
+// deductPenaltyForValidatorAndDelegator deduct penalty from validator and delegator to penaltyAccount
+func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Trie, validator common.Address) {
+
+	// NOTE: At now, the deposit and froze assets of validator or delegator is just marked in stateDB,
+	// and it's actually not deducted from their balance.
+	// So, we can directly transfer penalty amount from the balance of validator or delegator to penaltyAccount.
+
+	validatorFrozenAssets := GetFrozenAssets(state, validator)
+	validatorPenalty := validatorFrozenAssets.MultUint64(ValidatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+	state.AddBalance(penaltyAccount, validatorPenalty.BigIntPtr())
+	state.SubBalance(validator, validatorPenalty.BigIntPtr())
+
+	delegatorIter := trie.NewIterator(delegateTrie.PrefixIterator(validator.Bytes()))
+	for delegatorIter.Next() {
+		delegator := common.BytesToAddress(delegatorIter.Value)
+		delegatorFrozenAssets := GetFrozenAssets(state, delegator)
+		delegatorPenalty := delegatorFrozenAssets.MultUint64(DelegatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+		state.AddBalance(penaltyAccount, delegatorPenalty.BigIntPtr())
+		state.SubBalance(delegator, delegatorPenalty.BigIntPtr())
+	}
 }
