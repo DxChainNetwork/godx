@@ -77,10 +77,14 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return err
 		}
 
-		// Set rewardRatioLastEpoch for each validator
+		// Set rewardRatioLastEpoch and depositLastEpoch for each validator
 		for _, validator := range validators {
 			ratio := GetRewardRatioNumerator(ec.stateDB, validator)
 			SetRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
+
+			// get the validator deposit and set it in last epoch
+			deposit := GetCandidateDeposit(ec.stateDB, validator)
+			SetValidatorDepositLastEpoch(ec.stateDB, validator, deposit)
 		}
 		// Set vote last epoch for all delegators who select the validators.
 		allDelegators := allDelegatorForValidators(ec.DposContext, validators)

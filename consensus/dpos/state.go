@@ -48,6 +48,9 @@ var (
 	// KeyVoteLastEpoch is the vote deposit in the last epoch
 	KeyVoteLastEpoch = common.BytesToHash([]byte("vote-last-epoch"))
 
+	// KeyValidatorDepositLastEpoch is the validator deposit in the last epoch
+	KeyValidatorDepositLastEpoch = common.BytesToHash([]byte("validator-deposit-last-epoch"))
+
 	// KeyTotalVote is the key of total vote for each candidates
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
 
@@ -261,4 +264,16 @@ func GetVoteTime(state stateDB, addr common.Address) uint64 {
 func SetVoteTime(state stateDB, addr common.Address, voteTime uint64) {
 	hash := uint64ToHash(voteTime)
 	state.SetState(addr, KeyVoteTime, hash)
+}
+
+// SetValidatorDepositLastEpoch set the validator deposit of last epoch for the given validator
+func SetValidatorDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
+	hash := common.BigToHash(deposit.BigIntPtr())
+	state.SetState(addr, KeyValidatorDepositLastEpoch, hash)
+}
+
+// GetValidatorDepositLastEpoch get the validator deposit of last epoch for the given validator
+func GetValidatorDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
+	hash := state.GetState(addr, KeyValidatorDepositLastEpoch)
+	return common.PtrBigInt(hash.Big())
 }
