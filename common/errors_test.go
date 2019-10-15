@@ -35,7 +35,7 @@ func TestErrExtend(t *testing.T) {
 	}
 
 	err = ErrExtend(err4, errCompose)
-	expectedOutput = fmt.Sprintf("{%s; %s; %s; %s}", err4.Error(), err1.Error(), err2.Error(), err3.Error())
+	expectedOutput = fmt.Sprintf("{%s; %s; %s; %s; %s}", err4.Error(), err1.Error(), err2.Error(), err3.Error(), err4.Error())
 	if err.Error() != expectedOutput {
 		t.Errorf("output does not match with expectiation: expected: %s, got %s", expectedOutput, err.Error())
 	}

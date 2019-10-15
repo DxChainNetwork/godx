@@ -11,7 +11,7 @@ type ErrorSet struct {
 
 // Error implements the error interface
 // convert error into a string
-func (es ErrorSet) Error() string {
+func (es *ErrorSet) Error() string {
 	s := "{"
 	for i, err := range es.ErrSet {
 		if i != 0 {
@@ -36,7 +36,7 @@ func ErrCompose(errs ...error) error {
 		return nil
 	}
 
-	return es
+	return &es
 }
 
 // ErrExtend combine multiple errors into one error set
@@ -50,11 +50,11 @@ func ErrExtend(err, extension error) error {
 		return err
 	}
 
-	var es ErrorSet
+	var es = new(ErrorSet)
 
 	// check the original error
 	switch e := err.(type) {
-	case ErrorSet:
+	case *ErrorSet:
 		es = e
 	default:
 		es.ErrSet = []error{e}
@@ -62,7 +62,7 @@ func ErrExtend(err, extension error) error {
 
 	// check the extension
 	switch e := extension.(type) {
-	case ErrorSet:
+	case *ErrorSet:
 		es.ErrSet = append(es.ErrSet, e.ErrSet...)
 	default:
 		es.ErrSet = append(es.ErrSet, error(e))
@@ -86,7 +86,7 @@ func ErrContains(src, tar error) bool {
 		return true
 	}
 	switch e := src.(type) {
-	case ErrorSet:
+	case *ErrorSet:
 		for _, err := range e.ErrSet {
 			if ErrContains(err, tar) {
 				return true
