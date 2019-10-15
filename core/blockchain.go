@@ -619,11 +619,6 @@ func (bc *BlockChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	if block == nil {
 		return nil
 	}
-	dposCtx, err := types.NewDposContextFromProto(bc.db, block.Header().DposContext)
-	if err != nil {
-		return nil
-	}
-	block.SetDposCtx(dposCtx)
 	// Cache the found block for next time and return
 	bc.blockCache.Add(block.Hash(), block)
 	return block
