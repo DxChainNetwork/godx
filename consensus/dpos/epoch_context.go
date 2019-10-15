@@ -164,9 +164,15 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		if !isCandidate(ec.DposContext.CandidateTrie(), validator.address) {
 			continue
 		}
+
+		// deduct penalty from validator and delegator
+		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), validator.address)
+
+		// kick out records about validator in dpos context
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
 			return err
 		}
+
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := GetCandidateDeposit(ec.stateDB, validator.address)
@@ -174,9 +180,6 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		SetRewardRatioNumerator(ec.stateDB, validator.address, 0)
-
-		// deduct penalty from validator and delegator
-		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), validator.address)
 
 		// if kickout success, candidateCount minus 1
 		candidateCount--
