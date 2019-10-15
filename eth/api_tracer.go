@@ -159,7 +159,6 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 		}
 	}
 	statedb, err := state.New(start.Root(), database)
-	dposCtx := start.DposCtx()
 	if err != nil {
 		// If the starting state is missing, allow some number of blocks to be reexecuted
 		reexec := defaultTraceReexec
@@ -175,7 +174,6 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			if statedb, err = state.New(start.Root(), database); err == nil {
 				break
 			}
-			dposCtx = start.DposCtx()
 		}
 		// If we still don't have the state available, bail out
 		if err != nil {
@@ -186,6 +184,11 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				return nil, err
 			}
 		}
+	}
+	// dposCtx is not cached and shall not be reexecuted
+	dposCtx, err := api.eth.blockchain.DposCtxAt(start.Header().DposContext)
+	if err != nil {
+		return nil, err
 	}
 	// Execute all the transaction contained within the chain concurrently for each block
 	blocks := int(end.NumberU64() - origin)
@@ -466,7 +469,10 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	if err != nil {
 		return nil, err
 	}
-	dposCtx := parent.DposCtx()
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
+	if err != nil {
+		return nil, err
+	}
 	// Execute all the transaction contained within the block concurrently
 	var (
 		signer = types.MakeSigner(api.config, block.Number())
@@ -511,8 +517,11 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
-		dposContext := parent.DposCtx()
-		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext); err != nil {
+		dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
+		if err != nil {
+			return nil, err
+		}
+		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposCtx); err != nil {
 			failed = err
 			break
 		}
@@ -558,6 +567,10 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		reexec = *config.Reexec
 	}
 	statedb, err := api.computeStateDB(parent, reexec)
+	if err != nil {
+		return nil, err
+	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
 	if err != nil {
 		return nil, err
 	}
@@ -609,8 +622,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
-		dposContext := parent.DposCtx()
-		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext)
+		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposCtx)
 
 		if dump != nil {
 			dump.Close()
@@ -795,7 +807,10 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 	if err != nil {
 		return nil, vm.Context{}, nil, nil, err
 	}
-	dposCtx := parent.DposCtx()
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
+	if err != nil {
+		return nil, vm.Context{}, nil, nil, err
+	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(api.config, block.Number())
 
