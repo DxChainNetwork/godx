@@ -672,6 +672,11 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(block.Header().DposContext)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open dposContext: %v", err)
+	}
+	block.SetDposCtx(dposCtx)
 	// State was available at historical point, regenerate
 	var (
 		start  = time.Now()
