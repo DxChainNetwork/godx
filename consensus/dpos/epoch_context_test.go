@@ -16,7 +16,64 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/rlp"
+	"github.com/DxChainNetwork/godx/trie"
 )
+
+func TestDeductPenaltyForValidatorAndDelegator(t *testing.T) {
+
+	// mock state db
+	db := ethdb.NewMemDatabase()
+	sdb := state.NewDatabase(db)
+	stateDB, err := state.New(common.Hash{}, sdb)
+	if err != nil {
+		t.Fatalf("failed to create state db,error: %v", err)
+	}
+
+	// mock validator and delegator account
+	validator := common.HexToAddress("0x1")
+	delegator := common.HexToAddress("0x2")
+	stateDB.CreateAccount(validator)
+	balance := common.NewBigInt(1e18).MultInt64(1e9)
+	stateDB.AddBalance(validator, balance.BigIntPtr())
+	stateDB.CreateAccount(delegator)
+	stateDB.AddBalance(delegator, balance.BigIntPtr())
+
+	// mock frozen asset
+	SetFrozenAssets(stateDB, validator, common.NewBigInt(1e18).MultInt64(1e6))
+	SetFrozenAssets(stateDB, delegator, common.NewBigInt(1e18).MultInt64(1e8))
+
+	// mock delegator trie
+	delegateTrie, err := types.NewDelegateTrie(common.Hash{}, trie.NewDatabase(db))
+	if err != nil {
+		t.Fatalf("failed to create delegate trie,error: %v", err)
+	}
+
+	err = delegateTrie.TryUpdate(append(validator.Bytes(), delegator.Bytes()...), delegator.Bytes())
+	if err != nil {
+		t.Fatalf("failed to write vote records into delegate trie,error: %v", err)
+	}
+
+	deductPenaltyForValidatorAndDelegator(stateDB, delegateTrie, validator)
+
+	validatorBal := stateDB.GetBalance(validator)
+	delegatorBal := stateDB.GetBalance(delegator)
+	penaltyAccountBal := stateDB.GetBalance(penaltyAccount)
+	wantedValidatorPenalty := common.NewBigInt(1e18).MultInt64(1e6).MultUint64(ValidatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+	wantedDelegatorPenalty := common.NewBigInt(1e18).MultInt64(1e8).MultUint64(DelegatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+
+	// check validator\delegator\penaltyAccount balance
+	if validatorBal.Cmp(balance.Sub(wantedValidatorPenalty).BigIntPtr()) != 0 {
+		t.Errorf("[validator balance not right]wanted %v,got %v", balance.Sub(wantedValidatorPenalty).BigIntPtr(), validatorBal)
+	}
+
+	if delegatorBal.Cmp(balance.Sub(wantedDelegatorPenalty).BigIntPtr()) != 0 {
+		t.Errorf("[delegator balance not right]wanted %v,got %v", balance.Sub(wantedDelegatorPenalty).BigIntPtr(), delegatorBal)
+	}
+
+	if penaltyAccountBal.Cmp(wantedDelegatorPenalty.Add(wantedValidatorPenalty).BigIntPtr()) != 0 {
+		t.Errorf("[penalty account balance not right]wanted %v,got %v", wantedDelegatorPenalty.Add(wantedValidatorPenalty).BigIntPtr(), penaltyAccountBal)
+	}
+}
 
 func TestLookupValidator(t *testing.T) {
 	db := ethdb.NewMemDatabase()
