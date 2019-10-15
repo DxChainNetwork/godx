@@ -9,6 +9,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storagehost"
@@ -229,6 +230,8 @@ func handleNegotiationErr(np hostnegotiation.Protocol, sp storage.Peer, negotiat
 	if negotiateErr == nil {
 		return
 	}
+
+	log.Error("Host Download Negotiation Error", "err", np)
 
 	// check and handle other negotiation errors
 	if common.ErrContains(*negotiateErr, storage.ErrHostCommit) {
