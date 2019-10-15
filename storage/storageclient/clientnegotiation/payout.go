@@ -2,18 +2,17 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package contractmanager
+package clientnegotiation
 
 import (
 	"fmt"
 
-	"github.com/DxChainNetwork/godx/storage"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/storage"
 )
 
 // calculatePayouts calculates both storage client and storage host payouts
-func calculatePayoutsAndHostDeposit(hostInfo storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseDeposit common.BigInt, startHeight uint64, endHeight uint64, rentPayment storage.RentPayment) (clientPayout common.BigInt, hostPayout common.BigInt, hostDeposit common.BigInt, err error) {
+func CalculatePayoutsAndHostDeposit(hostInfo storage.HostInfo, funding common.BigInt, basePrice common.BigInt, baseDeposit common.BigInt, startHeight uint64, endHeight uint64, rentPayment storage.RentPayment) (clientPayout common.BigInt, hostPayout common.BigInt, hostDeposit common.BigInt, err error) {
 	// calculate the period and expectedStorage
 	period := endHeight - startHeight
 	expectedStorage := rentPayment.ExpectedStorage / rentPayment.StorageHosts

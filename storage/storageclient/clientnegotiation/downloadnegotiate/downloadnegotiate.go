@@ -2,12 +2,16 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package contractmanager
+package downloadnegotiate
 
 import (
 	"fmt"
 	"io"
 	"math/bits"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation"
+	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
@@ -17,24 +21,22 @@ import (
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 )
 
-func (cm *ContractManager) DownloadNegotiate(sp storage.Peer, downloadData io.Writer, downloadReq storage.DownloadRequest, hostInfo storage.HostInfo) (negotiateErr error) {
+func Handler(dp clientnegotiation.DownloadProtocol, sp storage.Peer, downloadData io.Writer, downloadReq storage.DownloadRequest, hostInfo storage.HostInfo) (negotiateErr error) {
 	// validate the download request
 	if err := downloadRequestValidation(downloadReq); err != nil {
-		cm.log.Error("Client download negotiation failed, failed to validate the download request", "err", err.Error())
 		negotiateErr = err
 		return
 	}
 
 	// get the contract based on the hostID
-	contract, err := cm.GetContractBasedOnHostID(hostInfo.EnodeID)
+	contract, err := dp.GetContractBasedOnHostID(hostInfo.EnodeID)
 	if err != nil {
-		cm.log.Error("Client download negotiation failed, failed to get the contract", "err", err.Error())
 		negotiateErr = fmt.Errorf("download negotiation failed, failed to get the contract: %s", err.Error())
 		return
 	}
 
 	// return the contract at the end
-	defer cm.ContractReturn(contract)
+	defer dp.ContractReturn(contract)
 
 	// calculate and validate the download price
 	downloadPrice, err := calculateAndValidateSectorDownloadPrice(downloadReq, hostInfo, contract.Header().LatestContractRevision)
@@ -45,27 +47,24 @@ func (cm *ContractManager) DownloadNegotiate(sp storage.Peer, downloadData io.Wr
 	// form new download contract revision
 	downloadRevision, err := formDownloadContractRevision(contract, downloadPrice)
 	if err != nil {
-		cm.log.Error("Client download negotiation failed, failed to form the download contract revision", "err", err.Error())
 		negotiateErr = fmt.Errorf("download negotiation failed, failed to form the download contract reivision: %s", err.Error())
 		return
 	}
 
 	// client sign the download contract revision
-	clientRevisionSign, err := clientSignDownloadContractRevision(cm.b.AccountManager(), downloadRevision)
+	clientRevisionSign, err := clientSignDownloadContractRevision(dp.GetAccountManager(), downloadRevision)
 	if err != nil {
-		cm.log.Error("Client download negotiation failed, failed to create client download contract revision sign", "err", err.Error())
 		negotiateErr = fmt.Errorf("download negotiation failed, failed to create client download contract reivision sign: %s", err.Error())
 		return
 	}
 
 	// update the download request
 	downloadReq = updateDownloadRequest(downloadReq, clientRevisionSign, downloadRevision)
-	defer cm.handleContractDownloadErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer handleContractDownloadErr(dp, &negotiateErr, hostInfo.EnodeID, sp)
 
 	// start download request negotiation, get the storage host sign
 	hostRevisionSign, err := downloadRequestNegotiation(sp, downloadReq, downloadData)
 	if err != nil {
-		cm.log.Error("Client download negotiation failed, failed to negotiate the download request: %s", err.Error())
 		negotiateErr = err
 		return
 	}
@@ -245,4 +244,8 @@ func calculateAndValidateSectorDownloadPrice(downloadReq storage.DownloadRequest
 	// increase the price by 0.2% to mitigate small errors
 	downloadPrice = downloadPrice.MultFloat64(1 + extraRatio)
 	return downloadPrice, nil
+}
+
+func handleContractDownloadErr(dp clientnegotiation.DownloadProtocol, err *error, hostID enode.ID, sp storage.Peer) {
+	handleNegotiationErr(dp, err, hostID, sp, storagehostmanager.InteractionDownload)
 }

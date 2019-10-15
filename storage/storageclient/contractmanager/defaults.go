@@ -40,7 +40,6 @@ const (
 
 	// if a contract failed to renew for 12 times, consider to replace the contract
 	consecutiveRenewFailsBeforeReplacement = 12
-	extraRatio                             = 0.02
 )
 
 // rentPayment related constants

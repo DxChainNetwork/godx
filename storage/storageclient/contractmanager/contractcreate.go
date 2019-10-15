@@ -7,6 +7,8 @@ package contractmanager
 import (
 	"fmt"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation/contractcreatenegotiate"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/storage"
@@ -123,7 +125,7 @@ func (cm *ContractManager) createContract(host storage.HostInfo, contractFund co
 	}
 
 	// 3. create the contract
-	if newlyCreatedContract, err = cm.ContractCreateNegotiate(params); err != nil {
+	if newlyCreatedContract, err = contractcreatenegotiate.Handler(cm, params); err != nil {
 		formCost = common.BigInt0
 		err = fmt.Errorf("failed to create the contract: %s", err.Error())
 		return

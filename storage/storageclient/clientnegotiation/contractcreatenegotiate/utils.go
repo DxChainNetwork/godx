@@ -2,22 +2,21 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package contractmanager
+package contractcreatenegotiate
 
 import (
 	"fmt"
-	"math/big"
 	"reflect"
-	"sort"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/crypto/merkle"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/storage"
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
 	"github.com/DxChainNetwork/godx/storage/storageclient/storagehostmanager"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -78,7 +77,7 @@ func storageContractRevisionNegotiate(sp storage.Peer, storageContract types.Sto
 // sendStorageContractCreateTx will encode the storage contract and send it as the transaction
 // error belongs to storage client negotiate error
 // Error belongs to clientNegotiationError
-func sendStorageContractCreateTx(storageContract types.StorageContract, clientPaymentAddress common.Address, b storage.ContractManagerBackend) error {
+func sendStorageContractCreateTx(storageContract types.StorageContract, clientPaymentAddress common.Address, cp clientnegotiation.ContractCreateProtocol) error {
 	// rlp encode the storage contract
 	scEncode, err := rlp.EncodeToBytes(storageContract)
 	if err != nil {
@@ -87,7 +86,7 @@ func sendStorageContractCreateTx(storageContract types.StorageContract, clientPa
 
 	// send the transaction, if error, it should be classified as
 	// client negotiate error
-	if _, err := b.SendStorageContractCreateTx(clientPaymentAddress, scEncode); err != nil {
+	if _, err := cp.SendStorageContractCreateTx(clientPaymentAddress, scEncode); err != nil {
 		return common.ErrCompose(err, storage.ErrClientNegotiate)
 	}
 
@@ -101,7 +100,7 @@ func sendStorageContractCreateTx(storageContract types.StorageContract, clientPa
 // 2. if the oldContract is not nil, meaning the merkle roots can be acquired from the old contract
 // 3. save the header information locally
 // 4. send success message and handle the response from the storage host
-func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID enode.ID, startHeight uint64, funding common.BigInt, contractPrice common.BigInt, contractID common.Hash, contractRevision types.StorageContractRevision, oldContract *contractset.Contract) (storage.ContractMetaData, error) {
+func clientStorageContractCommit(cp clientnegotiation.ContractCreateProtocol, sp storage.Peer, enodeID enode.ID, startHeight uint64, funding common.BigInt, contractPrice common.BigInt, contractID common.Hash, contractRevision types.StorageContractRevision, oldContract *contractset.Contract) (storage.ContractMetaData, error) {
 	// 1. form the contract header
 	header := contractset.ContractHeader{
 		ID:                     storage.ContractID(contractID),
@@ -131,32 +130,16 @@ func (cm *ContractManager) clientStorageContractCommit(sp storage.Peer, enodeID 
 	}
 
 	// 3. save the header information locally
-	meta, err := cm.GetStorageContractSet().InsertContract(header, oldRoots)
+	meta, err := cp.InsertContract(header, oldRoots)
 	if err != nil {
 		return storage.ContractMetaData{}, common.ErrCompose(err, storage.ErrClientCommit)
 	}
 
 	// 4. send the success message and handle the response sent from the storage host
-	if err := sendSuccessMsgAndHandleResp(sp, cm.GetStorageContractSet(), header.ID); err != nil {
+	if err := sendSuccessMsgAndHandleResp(sp, cp.GetStorageContractSet(), header.ID); err != nil {
 		return storage.ContractMetaData{}, err
 	}
 	return meta, nil
-}
-
-func (cm *ContractManager) handleContractCreateErr(err *error, hostID enode.ID, sp storage.Peer) {
-	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionCreateContract)
-}
-
-func (cm *ContractManager) handleContractRenewErr(err *error, hostID enode.ID, sp storage.Peer) {
-	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionRenewContract)
-}
-
-func (cm *ContractManager) handleContractUploadErr(err *error, hostID enode.ID, sp storage.Peer) {
-	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionUpload)
-}
-
-func (cm *ContractManager) handleContractDownloadErr(err *error, hostID enode.ID, sp storage.Peer) {
-	cm.handleNegotiationErr(err, hostID, sp, storagehostmanager.InteractionDownload)
 }
 
 // Special Types Error:
@@ -164,10 +147,10 @@ func (cm *ContractManager) handleContractDownloadErr(err *error, hostID enode.ID
 // 2. ErrClientCommit      ->  send commit failed message, wait response
 // 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
 // 4. ErrHostNegotiate     ->  punish host, check and update the connection
-func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp storage.Peer, it storagehostmanager.InteractionType) {
+func handleNegotiationErr(np clientnegotiation.NegotiationError, err *error, hostID enode.ID, sp storage.Peer, it storagehostmanager.InteractionType) {
 	// if no error, reward the host and return directly
 	if err == nil {
-		cm.hostManager.IncrementSuccessfulInteractions(hostID, it)
+		np.IncrementSuccessfulInteractions(hostID, it)
 		return
 	}
 
@@ -178,13 +161,13 @@ func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp 
 	case common.ErrContains(*err, storage.ErrClientCommit):
 		_ = sp.SendClientCommitFailedMsg()
 	case common.ErrContains(*err, storage.ErrHostNegotiate):
-		cm.hostManager.IncrementFailedInteractions(hostID, it)
-		cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		np.IncrementFailedInteractions(hostID, it)
+		np.CheckAndUpdateConnection(sp.PeerNode())
 		return
 	case common.ErrContains(*err, storage.ErrHostCommit):
 		_ = sp.SendClientAckMsg()
-		cm.hostManager.IncrementFailedInteractions(hostID, it)
-		cm.b.CheckAndUpdateConnection(sp.PeerNode())
+		np.IncrementFailedInteractions(hostID, it)
+		np.CheckAndUpdateConnection(sp.PeerNode())
 		_ = sp.SendClientAckMsg()
 	default:
 		return
@@ -192,7 +175,7 @@ func (cm *ContractManager) handleNegotiationErr(err *error, hostID enode.ID, sp 
 
 	// wait until host sent back ACK message
 	if msg, respErr := sp.ClientWaitContractResp(); respErr != nil || msg.Code != storage.HostAckMsg {
-		cm.log.Error("handleNegotiateErr error", "type", err, "err", respErr, "msgCode", msg.Code)
+		log.Error("handleNegotiateErr error", "type", err, "err", respErr, "msgCode", msg.Code)
 	}
 }
 
@@ -338,129 +321,4 @@ func rollbackContractSet(contractSet *contractset.StorageContractSet, id storage
 		}
 	}
 	return nil
-}
-
-func newContractRevision(current types.StorageContractRevision, cost *big.Int) types.StorageContractRevision {
-	rev := current
-
-	rev.NewValidProofOutputs = make([]types.DxcoinCharge, 2)
-	rev.NewMissedProofOutputs = make([]types.DxcoinCharge, 2)
-
-	for i, v := range current.NewValidProofOutputs {
-		rev.NewValidProofOutputs[i] = types.DxcoinCharge{
-			Address: v.Address,
-			Value:   big.NewInt(v.Value.Int64()),
-		}
-	}
-
-	for i, v := range current.NewMissedProofOutputs {
-		rev.NewMissedProofOutputs[i] = types.DxcoinCharge{
-			Address: v.Address,
-			Value:   big.NewInt(v.Value.Int64()),
-		}
-	}
-
-	// move valid payout from client to host
-	rev.NewValidProofOutputs[0].Value.Sub(current.NewValidProofOutputs[0].Value, cost)
-	rev.NewValidProofOutputs[1].Value.Add(current.NewValidProofOutputs[1].Value, cost)
-
-	// move missed payout from client to void, mean that will burn missed payout of client
-	rev.NewMissedProofOutputs[0].Value.Sub(current.NewMissedProofOutputs[0].Value, cost)
-
-	// increment revision number
-	rev.NewRevisionNumber++
-
-	return rev
-}
-
-// storageContractRevisionCommit will commit the storage upload contract revision
-func storageContractRevisionCommit(sp storage.Peer, contractRevision types.StorageContractRevision, contract *contractset.Contract, prices ...common.BigInt) error {
-	// commit the upload contract revision
-	unCommitContractHeader := contract.Header()
-	if err := contract.CommitRevision(contractRevision, prices...); err != nil {
-		err = fmt.Errorf("client failed to commit the contract revision while uploading/downloading: %s", err.Error())
-		return common.ErrCompose(storage.ErrClientCommit, err)
-	}
-	return sendAndHandleClientCommitSuccessMsg(sp, contract, unCommitContractHeader)
-
-}
-
-// sendAndHandleClientCommitSuccessMsg will send the message to storage host which indicates that
-// storageClient has successfully committed the upload storage revision
-func sendAndHandleClientCommitSuccessMsg(sp storage.Peer, contract *contractset.Contract, contractHeader contractset.ContractHeader) error {
-	// client send the commit success message
-	_ = sp.SendClientCommitSuccessMsg()
-
-	// wait for host acknowledgement message until timeout
-	msg, err := sp.ClientWaitContractResp()
-	if err != nil {
-		_ = contract.RollbackUndoMem(contractHeader)
-		return fmt.Errorf("after client commit success message was sent, failed to get message from host: %s", err.Error())
-	}
-
-	// handle the message based on its' code
-	switch msg.Code {
-	case storage.HostAckMsg:
-		return nil
-	default:
-		_ = contract.RollbackUndoMem(contractHeader)
-		return storage.ErrHostCommit
-	}
-}
-
-// CalculateProofRanges will calculate the proof ranges which is used to verify a
-// pre-modification Merkle diff proof for the specified actions.
-func calculateProofRanges(actions []storage.UploadAction, oldNumSectors uint64) []merkle.SubTreeLimit {
-	newNumSectors := oldNumSectors
-	sectorsChanged := make(map[uint64]struct{})
-	for _, action := range actions {
-		switch action.Type {
-		case storage.UploadActionAppend:
-			sectorsChanged[newNumSectors] = struct{}{}
-			newNumSectors++
-		}
-	}
-
-	oldRanges := make([]merkle.SubTreeLimit, 0, len(sectorsChanged))
-	for sectorNum := range sectorsChanged {
-		if sectorNum < oldNumSectors {
-			oldRanges = append(oldRanges, merkle.SubTreeLimit{
-				Left:  sectorNum,
-				Right: sectorNum + 1,
-			})
-		}
-	}
-	sort.Slice(oldRanges, func(i, j int) bool {
-		return oldRanges[i].Left < oldRanges[j].Left
-	})
-
-	return oldRanges
-}
-
-// ModifyProofRanges will modify the proof ranges produced by calculateProofRanges
-// to verify a post-modification Merkle diff proof for the specified actions.
-func modifyProofRanges(proofRanges []merkle.SubTreeLimit, actions []storage.UploadAction, numSectors uint64) []merkle.SubTreeLimit {
-	for _, action := range actions {
-		switch action.Type {
-		case storage.UploadActionAppend:
-			proofRanges = append(proofRanges, merkle.SubTreeLimit{
-				Left:  numSectors,
-				Right: numSectors + 1,
-			})
-			numSectors++
-		}
-	}
-	return proofRanges
-}
-
-// ModifyLeaves will modify the leaf hashes of a Merkle diff proof to verify a
-// post-modification Merkle diff proof for the specified actions.
-func modifyLeaves(leafHashes []common.Hash, actions []storage.UploadAction, numSectors uint64) []common.Hash {
-	for _, action := range actions {
-		switch action.Type {
-		case storage.UploadActionAppend:
-			leafHashes = append(leafHashes, merkle.Sha256MerkleTreeRoot(action.Data))
-		}
-	}
-	return leafHashes
 }

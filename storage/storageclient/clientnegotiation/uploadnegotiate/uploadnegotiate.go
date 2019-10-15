@@ -2,11 +2,13 @@
 // Use of this source code is governed by an Apache
 // License 2.0 that can be found in the LICENSE file
 
-package contractmanager
+package uploadnegotiate
 
 import (
 	"errors"
 	"fmt"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation"
 
 	"github.com/DxChainNetwork/godx/accounts"
 
@@ -19,35 +21,32 @@ import (
 	"github.com/DxChainNetwork/godx/storage"
 )
 
-func (cm *ContractManager) UploadNegotiate(sp storage.Peer, actions []storage.UploadAction, hostInfo storage.HostInfo) (negotiateErr error) {
+func Handler(up clientnegotiation.UploadProtocol, sp storage.Peer, actions []storage.UploadAction, hostInfo storage.HostInfo) (negotiateErr error) {
 	// get the contract based on hostID, return at the end
-	contract, err := cm.GetContractBasedOnHostID(hostInfo.EnodeID)
+	contract, err := up.GetContractBasedOnHostID(hostInfo.EnodeID)
 	if err != nil {
-		cm.log.Error("Client upload negotiation failed, failed to get the contract", "err", err.Error())
 		return fmt.Errorf("upload neogtiation failed, failed to get the contract: %s", err.Error())
 	}
 
 	// return the contract at the end
-	defer cm.ContractReturn(contract)
+	defer up.ContractReturn(contract)
 
 	// form the new upload contract revision
-	currentBlockHeight := cm.GetBlockHeight()
+	currentBlockHeight := up.GetBlockHeight()
 	latestContractRevision := contract.Header().LatestContractRevision
 	bandwidthPrice, storagePrice, deposit, newFileSize := calculatePricesAndNewFileSize(latestContractRevision, currentBlockHeight, hostInfo, actions)
 	uploadRevision, err := formUploadContractRevision(hostInfo, latestContractRevision, bandwidthPrice, storagePrice, deposit, newFileSize)
 	if err != nil {
-		cm.log.Error("Client upload negotiation failed, failed to create upload contract revision", "err", err.Error())
 		negotiateErr = err
 		return
 	}
 
 	// handle the negotiation error
-	defer cm.handleContractUploadErr(&negotiateErr, hostInfo.EnodeID, sp)
+	defer handleContractUploadErr(up, &negotiateErr, hostInfo.EnodeID, sp)
 
 	// form the upload request and start upload request negotiation
 	uploadMerkleProof, err := uploadRequestNegotiation(sp, latestContractRevision.ParentID, uploadRevision, actions)
 	if err != nil {
-		cm.log.Error("Client upload negotiation failed, failed to negotiate upload request", "err", err.Error())
 		negotiateErr = err
 		return
 	}
@@ -55,15 +54,13 @@ func (cm *ContractManager) UploadNegotiate(sp storage.Peer, actions []storage.Up
 	// verify merkle proof and form new merkle root
 	uploadRevision, err = verifyAndUpdateMerkleRoot(latestContractRevision, actions, uploadMerkleProof, uploadRevision)
 	if err != nil {
-		cm.log.Error("Client upload negotiation failed, failed to verify the merkle root", "err", err.Error())
 		negotiateErr = err
 		return
 	}
 
 	// client sign the upload revision and negotiate the signed revision
-	uploadRevision, err = uploadContractRevisionNegotiation(sp, uploadRevision, cm.b.AccountManager())
+	uploadRevision, err = uploadContractRevisionNegotiation(sp, uploadRevision, up.GetAccountManager())
 	if err != nil {
-		cm.log.Error("Client upload negotiation failed, failed to negotiate uploadContractRevision", "err", err.Error())
 		negotiateErr = err
 		return
 	}

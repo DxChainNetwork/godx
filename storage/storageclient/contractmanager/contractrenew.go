@@ -7,6 +7,8 @@ package contractmanager
 import (
 	"fmt"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation/renewnegotiate"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/storage"
 	"github.com/DxChainNetwork/godx/storage/storageclient/contractset"
@@ -312,7 +314,7 @@ func (cm *ContractManager) renew(renewContract *contractset.Contract, rentPaymen
 	}
 
 	// 4. contract renew
-	if renewedContract, err = cm.ContractRenewNegotiate(renewContract, params); err != nil {
+	if renewedContract, err = renewnegotiate.Handler(cm, renewContract, params); err != nil {
 		return
 	}
 

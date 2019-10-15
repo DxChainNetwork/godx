@@ -16,6 +16,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation/downloadnegotiate"
+
+	"github.com/DxChainNetwork/godx/storage/storageclient/clientnegotiation/uploadnegotiate"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/threadmanager"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -300,7 +304,7 @@ func (client *StorageClient) setBandwidthLimits(downloadSpeedLimit, uploadSpeedL
 
 // Append will send the given data to host and return the merkle root of data
 func (client *StorageClient) Append(sp storage.Peer, data []byte, hostInfo storage.HostInfo) (common.Hash, error) {
-	err := client.contractManager.UploadNegotiate(sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
+	err := uploadnegotiate.Handler(client.contractManager, sp, []storage.UploadAction{{Type: storage.UploadActionAppend, Data: data}}, hostInfo)
 	return merkle.Sha256MerkleTreeRoot(data), err
 }
 
@@ -318,7 +322,7 @@ func (client *StorageClient) Download(sp storage.Peer, root common.Hash, offset,
 		MerkleProof: true,
 	}
 	var buf bytes.Buffer
-	err := client.contractManager.DownloadNegotiate(sp, &buf, req, *hostInfo)
+	err := downloadnegotiate.Handler(client.contractManager, sp, &buf, req, *hostInfo)
 	time.Sleep(1 * time.Second)
 
 	return buf.Bytes(), err
