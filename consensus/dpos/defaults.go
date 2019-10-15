@@ -53,6 +53,12 @@ const (
 
 	// AdditionalRewardEpochCount defines that the validators of previous 100 epochs will be rewarded additionally
 	AdditionalRewardEpochCount = int64(100)
+
+	// DelegatorPenaltyRatio is the value of penalty ratio for delegator
+	DelegatorPenaltyRatio = uint64(10)
+
+	// ValidatorPenaltyRatio is the value of penalty ratio for validator
+	ValidatorPenaltyRatio = uint64(20)
 )
 
 var (
@@ -75,6 +81,10 @@ var (
 	// TODO: specify the real reward account address
 	// rewardAccount is the address which will send rewarded dx to some users
 	rewardAccount = common.HexToAddress("0xbcd")
+
+	// TODO: specify the real penalty account address
+	// penaltyAccount is the address that some penalty will be sent to
+	penaltyAccount = common.HexToAddress("0xcde")
 
 	// minRewardPerEpoch defines the minimum reward for deposit every epoch
 	minRewardPerEpoch = common.NewBigIntUint64(1e18)
