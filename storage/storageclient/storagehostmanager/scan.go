@@ -106,7 +106,7 @@ func (shm *StorageHostManager) autoScan() {
 
 		// sleep for a random amount of time, then schedule scan again
 		rand.Seed(time.Now().UTC().UnixNano())
-		randomSleepTime := time.Duration(rand.Intn(int(maxScanSleep-minScanSleep)) + int(minScanSleep))
+		randomSleepTime := time.Duration(rand.Int63n(int64(maxScanSleep-minScanSleep)) + int64(minScanSleep))
 		shm.log.Debug("Random Sleep Time:", randomSleepTime)
 
 		// sleep random amount of time
