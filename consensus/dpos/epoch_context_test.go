@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -18,6 +19,59 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
 )
+
+func TestRewardSubstituteCandidates(t *testing.T) {
+
+	// mock state DB
+	db := ethdb.NewMemDatabase()
+	state, err := newStateDB(db)
+	if err != nil {
+		t.Fatalf("failed to create stateDB,error: %v", err)
+	}
+
+	// mock 60 randomSelectorEntries
+	substituteCandidates := make(randomSelectorEntries, 0)
+	for i := 0; i < 60; i++ {
+		addrStr := strconv.FormatUint(uint64(i+1), 10)
+		addr := common.HexToAddress("0x" + addrStr)
+		entry := &randomSelectorEntry{
+			addr: addr,
+		}
+		substituteCandidates = append(substituteCandidates, entry)
+		SetCandidateDeposit(state, addr, common.NewBigInt(1e18).MultUint64(uint64(i+1)))
+	}
+
+	// reward substitute candidates
+	rewardSubstituteCandidates(state, substituteCandidates)
+
+	// check the balance whether is right
+	for i := 0; i < 60; i++ {
+		addrStr := strconv.FormatUint(uint64(i+1), 10)
+		addr := common.HexToAddress("0x" + addrStr)
+		gotBal := state.GetBalance(addr)
+		wantedBal := common.NewBigInt(0)
+		if i < 50 {
+			deposit := GetCandidateDeposit(state, addr)
+			switch {
+			case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
+				wantedBal = minCandidateReward
+				break
+			case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
+				wantedBal = minCandidateReward.MultInt64(10)
+				break
+			case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
+				wantedBal = minCandidateReward.MultInt64(100)
+				break
+			default:
+				wantedBal = minCandidateReward.MultInt64(1000)
+			}
+		}
+
+		if gotBal.Cmp(wantedBal.BigIntPtr()) != 0 {
+			t.Errorf("balance is not right,got %v,wanted %v", gotBal, wantedBal)
+		}
+	}
+}
 
 func TestDeductPenaltyForValidatorAndDelegator(t *testing.T) {
 
