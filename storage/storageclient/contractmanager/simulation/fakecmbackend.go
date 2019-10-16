@@ -5,8 +5,6 @@
 package simulation
 
 import (
-	"fmt"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/event"
@@ -49,20 +47,11 @@ func (fc *FakeContractManagerBackend) GetPaymentAddress() (common.Address, error
 }
 
 func (fc *FakeContractManagerBackend) AccountManager() storage.ClientAccountManager {
-	return &FakeAccountManager{}
+	return nil
 }
 
 func (fc *FakeContractManagerBackend) SetupConnection(enodeURL string) (storage.Peer, error) {
-	// simulate the situation on failed to set up the storage connection
-	if _, exist := fc.steps[FakeSetUpConnectionFailed]; exist {
-		return nil, fmt.Errorf("storage client failed to setup the storage connection")
-	}
-
-	// create a fake storage peer used for simulating the storage connection
-	fs := NewFakeStoragePeer()
-	fs.SetSendMsg(fc.sendMsg)
-	fs.SetTestSteps(fs.steps)
-	return fs, nil
+	return nil, nil
 }
 
 func (fc *FakeContractManagerBackend) SendStorageContractCreateTx(clientAddr common.Address, input []byte) (common.Hash, error) {
