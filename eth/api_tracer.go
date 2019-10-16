@@ -511,16 +511,10 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	for i, tx := range txs {
 		// Send the trace task over for execution
 		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i, dposCtx: dposCtx.Copy()}
-
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer)
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
-
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
-		dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
-		if err != nil {
-			return nil, err
-		}
 		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposCtx); err != nil {
 			failed = err
 			break
