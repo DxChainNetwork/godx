@@ -59,6 +59,9 @@ const (
 
 	// ValidatorPenaltyRatio is the value of penalty ratio for validator
 	ValidatorPenaltyRatio = uint64(20)
+
+	// RewardedCandidateCount is how many candidates that not became validator should be rewarded
+	RewardedCandidateCount = 50
 )
 
 var (
@@ -91,4 +94,7 @@ var (
 
 	// minRewardPerBlock defines the minimum reward for deposit every block
 	minRewardPerBlock = common.NewBigIntUint64(1e18)
+
+	// minCandidateReward defines the minimum reward for candidate without being validator
+	minCandidateReward = common.NewBigIntUint64(1e18)
 )
