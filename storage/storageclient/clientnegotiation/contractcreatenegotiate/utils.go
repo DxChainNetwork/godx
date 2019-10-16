@@ -147,24 +147,27 @@ func clientStorageContractCommit(cp clientnegotiation.ContractCreateProtocol, sp
 // 2. ErrClientCommit      ->  send commit failed message, wait response
 // 3. ErrHostCommit		   ->  sendACK, wait response, punish host, check and update the connection
 // 4. ErrHostNegotiate     ->  punish host, check and update the connection
-func handleNegotiationErr(np clientnegotiation.NegotiationError, err *error, hostID enode.ID, sp storage.Peer, it storagehostmanager.InteractionType) {
+func handleNegotiationErr(np clientnegotiation.NegotiationError, err error, hostID enode.ID, sp storage.Peer, it storagehostmanager.InteractionType) {
 	// if no error, reward the host and return directly
 	if err == nil {
+		fmt.Println("NO ERRORRRRR")
 		np.IncrementSuccessfulInteractions(hostID, it)
 		return
 	}
 
+	fmt.Println(err)
+
 	// otherwise, based on the error type, handle it differently
 	switch {
-	case common.ErrContains(*err, storage.ErrClientNegotiate):
+	case common.ErrContains(err, storage.ErrClientNegotiate):
 		_ = sp.SendClientNegotiateErrorMsg()
-	case common.ErrContains(*err, storage.ErrClientCommit):
+	case common.ErrContains(err, storage.ErrClientCommit):
 		_ = sp.SendClientCommitFailedMsg()
-	case common.ErrContains(*err, storage.ErrHostNegotiate):
+	case common.ErrContains(err, storage.ErrHostNegotiate):
 		np.IncrementFailedInteractions(hostID, it)
 		np.CheckAndUpdateConnection(sp.PeerNode())
 		return
-	case common.ErrContains(*err, storage.ErrHostCommit):
+	case common.ErrContains(err, storage.ErrHostCommit):
 		_ = sp.SendClientAckMsg()
 		np.IncrementFailedInteractions(hostID, it)
 		np.CheckAndUpdateConnection(sp.PeerNode())

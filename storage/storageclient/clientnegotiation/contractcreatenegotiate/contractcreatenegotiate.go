@@ -54,7 +54,7 @@ func Handler(cp clientnegotiation.ContractCreateProtocol, params storage.Contrac
 	}
 
 	// handleNegotiationErr will handle the errors occurred in the negotiation process
-	defer handleContractCreateErr(cp, &negotiateErr, hostInfo.EnodeID, sp)
+	defer func(err error) { handleContractCreateErr(cp, err, hostInfo.EnodeID, sp) }(negotiateErr)
 
 	// 2. draft storage contract negotiation
 	if storageContract, err = draftStorageContractNegotiate(sp, account, wallet, storageContract, types.StorageContractRevision{}); err != nil {
@@ -129,6 +129,6 @@ func formUnlockCondition(clientPaymentAddress common.Address, hostPaymentAddress
 	return uc
 }
 
-func handleContractCreateErr(cp clientnegotiation.ContractCreateProtocol, err *error, hostID enode.ID, sp storage.Peer) {
+func handleContractCreateErr(cp clientnegotiation.ContractCreateProtocol, err error, hostID enode.ID, sp storage.Peer) {
 	handleNegotiationErr(cp, err, hostID, sp, storagehostmanager.InteractionCreateContract)
 }
