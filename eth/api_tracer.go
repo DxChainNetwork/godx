@@ -284,6 +284,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = fmt.Errorf("block #%d not found", number)
 				break
 			}
+			block.SetDposCtx(dposCtx)
+
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			if number > origin {
 				txs := block.Transactions()
@@ -301,6 +303,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
+			dposCtx = block.DposCtx()
 			// Finalize the state so any modifications are written to the trie
 			root, err := statedb.Commit(true)
 			if err != nil {
