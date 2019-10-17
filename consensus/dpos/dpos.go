@@ -372,7 +372,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// deduct tax for every new block reward，and add it to tax account
-	tax := blockReward.MultUint64(TaxRatio).DivUint64(RewardRatioDenominator)
+	tax := blockReward.MultUint64(TaxRatio).DivUint64(PercentageDenominator)
 	state.AddBalance(config.Dpos.TaxAccount, tax.BigIntPtr())
 	blockReward = blockReward.Sub(tax)
 

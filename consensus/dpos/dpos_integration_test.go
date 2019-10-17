@@ -1167,7 +1167,7 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 	blockReward := byzantiumBlockReward
 
 	// deduct tax for every new block reward，and add it to tax account
-	tax := blockReward.MultUint64(TaxRatio).DivUint64(RewardRatioDenominator)
+	tax := blockReward.MultUint64(TaxRatio).DivUint64(PercentageDenominator)
 	taxAccount := common.HexToAddress("0xaaa")
 	ec.addBalance(taxAccount, tax)
 	blockReward = blockReward.Sub(tax)

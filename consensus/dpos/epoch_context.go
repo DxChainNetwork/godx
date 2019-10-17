@@ -293,7 +293,7 @@ func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Tri
 	// So, we can directly transfer penalty amount from the balance of validator or delegator to penaltyAccount.
 
 	validatorFrozenAssets := GetFrozenAssets(state, validator)
-	validatorPenalty := validatorFrozenAssets.MultUint64(ValidatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+	validatorPenalty := validatorFrozenAssets.MultUint64(ValidatorPenaltyRatio).DivUint64(PercentageDenominator)
 	state.AddBalance(penaltyAccount, validatorPenalty.BigIntPtr())
 	state.SubBalance(validator, validatorPenalty.BigIntPtr())
 
@@ -301,7 +301,7 @@ func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Tri
 	for delegatorIter.Next() {
 		delegator := common.BytesToAddress(delegatorIter.Value)
 		delegatorFrozenAssets := GetFrozenAssets(state, delegator)
-		delegatorPenalty := delegatorFrozenAssets.MultUint64(DelegatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+		delegatorPenalty := delegatorFrozenAssets.MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 		state.AddBalance(penaltyAccount, delegatorPenalty.BigIntPtr())
 		state.SubBalance(delegator, delegatorPenalty.BigIntPtr())
 	}
