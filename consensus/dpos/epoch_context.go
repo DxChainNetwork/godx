@@ -337,6 +337,10 @@ func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntr
 		default:
 			additionalReward = minCandidateReward.MultInt64(1000)
 		}
-		state.AddBalance(candidate, additionalReward.BigIntPtr())
+
+		if additionalReward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
+			state.SubBalance(rewardAccount, additionalReward.BigIntPtr())
+			state.AddBalance(candidate, additionalReward.BigIntPtr())
+		}
 	}
 }

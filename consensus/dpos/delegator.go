@@ -71,7 +71,6 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	// calculate the deposit bonus sent by dx reward account
 	bonus := calculateDelegatorDepositReward(state, addr, uint64(now)-voteTime)
 
-	// TODO: if reward account balance is not enough for paying bonus, just skip transferring ??
 	// transfer from reward account to delegator
 	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
 		state.SubBalance(rewardAccount, bonus.BigIntPtr())
