@@ -31,7 +31,8 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
+				SetVoteDuration(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerEpoch,
 		},
@@ -40,7 +41,8 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(1200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
+				SetVoteDuration(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(10),
 		},
@@ -49,7 +51,8 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(3e7),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
+				SetVoteDuration(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(100),
 		},
@@ -58,7 +61,8 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 			deposit: common.NewBigInt(1e18).MultInt64(1e10),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
 				SetVoteLastEpoch(state, addr, deposit)
-				return calculateDelegatorDepositReward(state, addr, uint64(EpochInterval))
+				SetVoteDuration(state, addr, uint64(EpochInterval))
+				return calculateDelegatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerEpoch.MultInt64(1000),
 		},
