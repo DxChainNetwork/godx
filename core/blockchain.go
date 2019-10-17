@@ -405,6 +405,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache)
 }
 
+// DposCtxAt returns a dposCtx based on a particular point in time.
+func (bc *BlockChain) DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error) {
+	return types.NewDposContextFromProto(bc.db, root)
+}
+
 // StateCache returns the caching database underpinning the blockchain instance.
 func (bc *BlockChain) StateCache() state.Database {
 	return bc.stateCache

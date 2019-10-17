@@ -78,10 +78,11 @@ type txTraceResult struct {
 // blockTraceTask represents a single block trace task when an entire chain is
 // being traced.
 type blockTraceTask struct {
-	statedb *state.StateDB   // Intermediate state prepped for tracing
-	block   *types.Block     // Block to trace the transactions from
-	rootref common.Hash      // Trie root reference held for this task
-	results []*txTraceResult // Trace results procudes by the task
+	statedb     *state.StateDB     // Intermediate state prepped for tracing
+	dposContext *types.DposContext // Intermediate dpos context for tracing
+	block       *types.Block       // Block to trace the transactions from
+	rootref     common.Hash        // Trie root reference held for this task
+	results     []*txTraceResult   // Trace results procudes by the task
 }
 
 // blockTraceResult represets the results of tracing a single block when an entire
@@ -95,8 +96,9 @@ type blockTraceResult struct {
 // txTraceTask represents a single transaction trace task when an entire block
 // is being traced.
 type txTraceTask struct {
-	statedb *state.StateDB // Intermediate state prepped for tracing
-	index   int            // Transaction offset in the block
+	statedb *state.StateDB     // Intermediate state prepped for tracing
+	dposCtx *types.DposContext // Intermediate dposContext for tracing
+	index   int                // Transaction offset in the block
 }
 
 // TraceChain returns the structured logs created during the execution of EVM
@@ -147,7 +149,8 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 
 	// Ensure we have a valid starting state before doing any work
 	origin := start.NumberU64()
-	database := state.NewDatabaseWithCache(api.eth.ChainDb(), 16) // Chain tracing will probably start at genesis
+	ethdb := api.eth.ChainDb()
+	database := state.NewDatabaseWithCache(ethdb, 16) // Chain tracing will probably start at genesis
 
 	if number := start.NumberU64(); number > 0 {
 		start = api.eth.blockchain.GetBlock(start.ParentHash(), start.NumberU64()-1)
@@ -182,6 +185,11 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			}
 		}
 	}
+	// dposCtx is not cached and shall not be reexecuted
+	dposCtx, err := api.eth.blockchain.DposCtxAt(start.Header().DposContext)
+	if err != nil {
+		return nil, err
+	}
 	// Execute all the transaction contained within the chain concurrently for each block
 	blocks := int(end.NumberU64() - origin)
 
@@ -208,7 +216,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 					msg, _ := tx.AsMessage(signer)
 					vmctx := core.NewEVMContext(msg, task.block.Header(), api.eth.blockchain, nil)
 
-					res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config)
+					res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config, task.dposContext)
 					if err != nil {
 						task.results[i] = &txTraceResult{Error: err.Error()}
 						log.Warn("Tracing failed", "hash", tx.Hash(), "block", task.block.NumberU64(), "err", err)
@@ -276,12 +284,14 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = fmt.Errorf("block #%d not found", number)
 				break
 			}
+			block.SetDposCtx(dposCtx)
+
 			// Send the block over to the concurrent tracers (if not in the fast-forward phase)
 			if number > origin {
 				txs := block.Transactions()
 
 				select {
-				case tasks <- &blockTraceTask{statedb: statedb.Copy(), block: block, rootref: proot, results: make([]*txTraceResult, len(txs))}:
+				case tasks <- &blockTraceTask{statedb: statedb.Copy(), block: block, rootref: proot, results: make([]*txTraceResult, len(txs)), dposContext: dposCtx.Copy()}:
 				case <-notifier.Closed():
 					return
 				}
@@ -293,6 +303,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				failed = err
 				break
 			}
+			dposCtx = block.DposCtx()
 			// Finalize the state so any modifications are written to the trie
 			root, err := statedb.Commit(true)
 			if err != nil {
@@ -300,6 +311,10 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 				break
 			}
 			if err := statedb.Reset(root); err != nil {
+				failed = err
+				break
+			}
+			if _, err = dposCtx.Commit(); err != nil {
 				failed = err
 				break
 			}
@@ -333,7 +348,7 @@ func (api *PrivateDebugAPI) traceChain(ctx context.Context, start, end *types.Bl
 			}
 			done[uint64(result.Block)] = result
 
-			// Dereference any paret tries held in memory by this task
+			// Dereference any parent tries held in memory by this task
 			database.TrieDB().Dereference(res.rootref)
 
 			// Stream completed traces to the user, aborting on the first error
@@ -457,6 +472,10 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	if err != nil {
 		return nil, err
 	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
+	if err != nil {
+		return nil, err
+	}
 	// Execute all the transaction contained within the block concurrently
 	var (
 		signer = types.MakeSigner(api.config, block.Number())
@@ -481,7 +500,7 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 				msg, _ := txs[task.index].AsMessage(signer)
 				vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 
-				res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config)
+				res, err := api.traceTx(ctx, msg, vmctx, task.statedb, config, task.dposCtx)
 				if err != nil {
 					results[task.index] = &txTraceResult{Error: err.Error()}
 					continue
@@ -494,15 +513,12 @@ func (api *PrivateDebugAPI) traceBlock(ctx context.Context, block *types.Block, 
 	var failed error
 	for i, tx := range txs {
 		// Send the trace task over for execution
-		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i}
-
+		jobs <- &txTraceTask{statedb: statedb.Copy(), index: i, dposCtx: dposCtx.Copy()}
 		// Generate the next state snapshot fast without tracing
 		msg, _ := tx.AsMessage(signer)
 		vmctx := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
-
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{})
-		dposContext := api.eth.CurrentBlock().DposCtx()
-		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext); err != nil {
+		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposCtx); err != nil {
 			failed = err
 			break
 		}
@@ -548,6 +564,10 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		reexec = *config.Reexec
 	}
 	statedb, err := api.computeStateDB(parent, reexec)
+	if err != nil {
+		return nil, err
+	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
 	if err != nil {
 		return nil, err
 	}
@@ -599,8 +619,7 @@ func (api *PrivateDebugAPI) standardTraceBlockToFile(ctx context.Context, block 
 		}
 		// Execute the transaction and flush any traces to disk
 		vmenv := vm.NewEVM(vmctx, statedb, api.config, vmConf)
-		dposContext := api.eth.CurrentBlock().DposCtx()
-		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposContext)
+		_, _, _, err = core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(msg.Gas()), dposCtx)
 
 		if dump != nil {
 			dump.Close()
@@ -650,6 +669,11 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 			return nil, err
 		}
 	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(block.Header().DposContext)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open dposContext: %v", err)
+	}
+	block.SetDposCtx(dposCtx)
 	// State was available at historical point, regenerate
 	var (
 		start  = time.Now()
@@ -666,7 +690,12 @@ func (api *PrivateDebugAPI) computeStateDB(block *types.Block, reexec uint64) (*
 		if block = api.eth.blockchain.GetBlockByNumber(block.NumberU64() + 1); block == nil {
 			return nil, fmt.Errorf("block #%d not found", block.NumberU64()+1)
 		}
-		_, _, _, err := api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
+		dposCtx, err := api.eth.blockchain.DposCtxAt(block.Header().DposContext)
+		if err != nil {
+			return nil, fmt.Errorf("cannot open dposContext: %v", err)
+		}
+		block.SetDposCtx(dposCtx)
+		_, _, _, err = api.eth.blockchain.Processor().Process(block, statedb, vm.Config{})
 		if err != nil {
 			return nil, fmt.Errorf("processing block %d failed: %v", block.NumberU64(), err)
 		}
@@ -701,18 +730,18 @@ func (api *PrivateDebugAPI) TraceTransaction(ctx context.Context, hash common.Ha
 	if config != nil && config.Reexec != nil {
 		reexec = *config.Reexec
 	}
-	msg, vmctx, statedb, err := api.computeTxEnv(blockHash, int(index), reexec)
+	msg, vmctx, statedb, dposCtx, err := api.computeTxEnv(blockHash, int(index), reexec)
 	if err != nil {
 		return nil, err
 	}
 	// Trace the transaction and return
-	return api.traceTx(ctx, msg, vmctx, statedb, config)
+	return api.traceTx(ctx, msg, vmctx, statedb, config, dposCtx)
 }
 
 // traceTx configures a new tracer according to the provided configuration, and
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
-func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig) (interface{}, error) {
+func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, vmctx vm.Context, statedb *state.StateDB, config *TraceConfig, dposCtx *types.DposContext) (interface{}, error) {
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer vm.Tracer
@@ -748,8 +777,7 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 	// Run the transaction with tracing enabled.
 	vmenv := vm.NewEVM(vmctx, statedb, api.config, vm.Config{Debug: true, Tracer: tracer})
 
-	dposContext := api.eth.CurrentBlock().DposCtx()
-	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), dposContext)
+	ret, gas, failed, err := core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas()), dposCtx)
 	if err != nil {
 		return nil, fmt.Errorf("tracing failed: %v", err)
 	}
@@ -772,19 +800,23 @@ func (api *PrivateDebugAPI) traceTx(ctx context.Context, message core.Message, v
 }
 
 // computeTxEnv returns the execution environment of a certain transaction.
-func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, reexec uint64) (core.Message, vm.Context, *state.StateDB, error) {
+func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, reexec uint64) (core.Message, vm.Context, *state.StateDB, *types.DposContext, error) {
 	// Create the parent state database
 	block := api.eth.blockchain.GetBlockByHash(blockHash)
 	if block == nil {
-		return nil, vm.Context{}, nil, fmt.Errorf("block %#x not found", blockHash)
+		return nil, vm.Context{}, nil, nil, fmt.Errorf("block %#x not found", blockHash)
 	}
 	parent := api.eth.blockchain.GetBlock(block.ParentHash(), block.NumberU64()-1)
 	if parent == nil {
-		return nil, vm.Context{}, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
+		return nil, vm.Context{}, nil, nil, fmt.Errorf("parent %#x not found", block.ParentHash())
 	}
 	statedb, err := api.computeStateDB(parent, reexec)
 	if err != nil {
-		return nil, vm.Context{}, nil, err
+		return nil, vm.Context{}, nil, nil, err
+	}
+	dposCtx, err := api.eth.blockchain.DposCtxAt(parent.Header().DposContext)
+	if err != nil {
+		return nil, vm.Context{}, nil, nil, err
 	}
 	// Recompute transactions up to the target index.
 	signer := types.MakeSigner(api.config, block.Number())
@@ -794,16 +826,15 @@ func (api *PrivateDebugAPI) computeTxEnv(blockHash common.Hash, txIndex int, ree
 		msg, _ := tx.AsMessage(signer)
 		context := core.NewEVMContext(msg, block.Header(), api.eth.blockchain, nil)
 		if idx == txIndex {
-			return msg, context, statedb, nil
+			return msg, context, statedb, dposCtx, nil
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, statedb, api.config, vm.Config{})
-		dposContext := api.eth.CurrentBlock().DposCtx()
-		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), dposContext); err != nil {
-			return nil, vm.Context{}, nil, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
+		if _, _, _, err := core.ApplyMessage(vmenv, msg, new(core.GasPool).AddGas(tx.Gas()), dposCtx); err != nil {
+			return nil, vm.Context{}, nil, dposCtx, fmt.Errorf("transaction %#x failed: %v", tx.Hash(), err)
 		}
 		// Ensure any modifications are committed to the state
 		statedb.Finalise(true)
 	}
-	return nil, vm.Context{}, nil, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, blockHash)
+	return nil, vm.Context{}, nil, dposCtx, fmt.Errorf("transaction index %d out of range for block %#x", txIndex, blockHash)
 }

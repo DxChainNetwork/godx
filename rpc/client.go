@@ -207,7 +207,6 @@ func DialContext(ctx context.Context, rawurl string) (*Client, error) {
 	case "":
 		return DialIPC(ctx, rawurl)
 	default:
-		fmt.Println("ERROR")
 		return nil, fmt.Errorf("no known transport for URL scheme %q", u.Scheme)
 	}
 }
