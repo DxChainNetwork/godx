@@ -107,7 +107,8 @@ func TestDeductPenaltyForValidatorAndDelegator(t *testing.T) {
 		t.Fatalf("failed to write vote records into delegate trie,error: %v", err)
 	}
 
-	deductPenaltyForValidatorAndDelegator(stateDB, delegateTrie, validator)
+	penaltyAccount := common.HexToAddress("0xccc")
+	deductPenaltyForValidatorAndDelegator(stateDB, delegateTrie, penaltyAccount, validator)
 
 	validatorBal := stateDB.GetBalance(validator)
 	delegatorBal := stateDB.GetBalance(delegator)
