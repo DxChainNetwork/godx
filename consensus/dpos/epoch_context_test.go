@@ -113,8 +113,8 @@ func TestDeductPenaltyForValidatorAndDelegator(t *testing.T) {
 	validatorBal := stateDB.GetBalance(validator)
 	delegatorBal := stateDB.GetBalance(delegator)
 	penaltyAccountBal := stateDB.GetBalance(penaltyAccount)
-	wantedValidatorPenalty := common.NewBigInt(1e18).MultInt64(1e6).MultUint64(ValidatorPenaltyRatio).DivUint64(RewardRatioDenominator)
-	wantedDelegatorPenalty := common.NewBigInt(1e18).MultInt64(1e8).MultUint64(DelegatorPenaltyRatio).DivUint64(RewardRatioDenominator)
+	wantedValidatorPenalty := common.NewBigInt(1e18).MultInt64(1e6).MultUint64(ValidatorPenaltyRatio).DivUint64(PercentageDenominator)
+	wantedDelegatorPenalty := common.NewBigInt(1e18).MultInt64(1e8).MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 
 	// check validator\delegator\penaltyAccount balance
 	if validatorBal.Cmp(balance.Sub(wantedValidatorPenalty).BigIntPtr()) != 0 {
