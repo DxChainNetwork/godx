@@ -69,7 +69,7 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	SetVoteDeposit(state, addr, common.BigInt0)
 
 	// calculate the deposit bonus sent by dx reward account
-	bonus := calculateDelegatorDepositReward(state, addr, uint64(now)-voteTime)
+	bonus := calculateDelegatorDepositReward(state, addr)
 
 	// transfer from reward account to delegator
 	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
@@ -136,10 +136,11 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, voteData types.
 }
 
 // calculateDelegatorDepositReward calculate the deposit bonus for delegator
-func calculateDelegatorDepositReward(state stateDB, addr common.Address, realDepositDuration uint64) common.BigInt {
+func calculateDelegatorDepositReward(state stateDB, addr common.Address) common.BigInt {
 	deposit := GetVoteLastEpoch(state, addr)
 	rewardPerEpoch := common.NewBigInt(0)
-	passedEpochs := realDepositDuration / uint64(EpochInterval)
+	duration := GetVoteDuration(state, addr)
+	passedEpochs := duration / uint64(EpochInterval)
 
 	/*
 		deposit < 1e3 dx: rewardPerEpoch = 1 dx
