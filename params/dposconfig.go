@@ -121,12 +121,21 @@ var (
 			RewardRatio: 30,
 		},
 	}
+
+	// TODO: specify the real tax account address
+	// DefaultTaxAccount is the address that receive some taxation when producing a new block
+	DefaultTaxAccount = common.HexToAddress("0xabc")
+
+	// TODO: specify the real penalty account address
+	// DefaultPenaltyAccount is the address that receive some penalty
+	DefaultPenaltyAccount = common.HexToAddress("0xcde")
 )
 
 // DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
 type DposConfig struct {
-	//Validators []common.Address `json:"validators"` // Genesis validator list
-	Validators []ValidatorConfig `json:"validators"` // Genesis validator list
+	Validators     []ValidatorConfig `json:"validators"`     // Genesis validator list
+	TaxAccount     common.Address    `json:"taxAccount"`     // address for receiving taxation
+	PenaltyAccount common.Address    `json:"penaltyAccount"` // address for receiving penalty
 }
 
 type ValidatorConfig struct {
@@ -137,7 +146,9 @@ type ValidatorConfig struct {
 
 func DefaultDposConfig() *DposConfig {
 	return &DposConfig{
-		Validators: DefaultValidators,
+		Validators:     DefaultValidators,
+		TaxAccount:     DefaultTaxAccount,
+		PenaltyAccount: DefaultPenaltyAccount,
 	}
 }
 

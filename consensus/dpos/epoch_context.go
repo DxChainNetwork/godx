@@ -19,9 +19,10 @@ import (
 
 // EpochContext define current epoch context for dpos consensus
 type EpochContext struct {
-	TimeStamp   int64
-	DposContext *types.DposContext
-	stateDB     stateDB
+	TimeStamp      int64
+	DposContext    *types.DposContext
+	stateDB        stateDB
+	PenaltyAccount common.Address
 }
 
 // tryElect will process election at the beginning of current epoch
@@ -171,7 +172,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 
 		// deduct penalty from validator and delegator
-		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), validator.address)
+		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), ec.PenaltyAccount, validator.address)
 
 		// kick out records about validator in dpos context
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
@@ -285,7 +286,7 @@ func makeSeed(h common.Hash, i int64) int64 {
 }
 
 // deductPenaltyForValidatorAndDelegator deduct penalty from validator and delegator to penaltyAccount
-func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Trie, validator common.Address) {
+func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAccount, validator common.Address) {
 
 	// NOTE: At now, the deposit and froze assets of validator or delegator is just marked in stateDB,
 	// and it's actually not deducted from their balance.
