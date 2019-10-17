@@ -53,9 +53,6 @@ func TestCreateDecodeWalOp(t *testing.T) {
 // TestFileSystem_UpdatesUnderSameDirectory test the scenario of updating a single file or multiple files
 // under different contractManager under the same directory.
 func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipped for short tests")
-	}
 	// fileSize: 11 segments for erasure params 10 / 30
 	fileSize := uint64(1 << 22 * 10 * 10)
 	tests := []struct {
@@ -143,6 +140,9 @@ func TestFileSystem_UpdatesUnderSameDirectory(t *testing.T) {
 				DxPath:    storage.RootDxPath(),
 			},
 		},
+	}
+	if testing.Short() {
+		tests = tests[:len(tests)-1]
 	}
 	for index, test := range tests {
 		fs := newEmptyTestFileSystem(t, strconv.Itoa(index), test.contractor, newStandardDisrupter())
@@ -422,9 +422,6 @@ func TestFileSystem_SingleFail(t *testing.T) {
 // TestFileSystem_ConsecutiveFails test the scenario of when updating a file, the file fails
 // three times. In this case, the dxdir metadata will not be updated and have the default value
 func TestFileSystem_ConsecutiveFails(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip for short")
-	}
 	// make the disrupter. Always fails
 	dr := newStandardDisrupter().registerDisruptFunc("cmaa1", func() bool { return true })
 	cdr := newCounterDisrupter(dr)

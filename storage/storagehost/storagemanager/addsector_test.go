@@ -54,7 +54,7 @@ func TestAddSector(t *testing.T) {
 	if err = checkFoldersHasExpectedSectors(sm, 1); err != nil {
 		t.Fatal(err)
 	}
-	sm.shutdown(t, 10*time.Millisecond)
+	sm.shutdown(t, time.Second)
 	if err = checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestDisruptedPhysicalAddSector(t *testing.T) {
 		if err := checkFoldersHasExpectedSectors(sm, 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		sm.shutdown(t, 10*time.Millisecond)
+		sm.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
@@ -127,7 +127,7 @@ func TestDisruptedVirtualAddSector(t *testing.T) {
 		if err := checkFoldersHasExpectedSectors(sm, 1); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		sm.shutdown(t, 10*time.Millisecond)
+		sm.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
@@ -157,7 +157,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 			t.Fatalf("test %v: errStop should not give error: %v", test.keyWord, err)
 		}
 		id := sm.calculateSectorID(root)
-		sm.shutdown(t, 100*time.Millisecond)
+		sm.shutdown(t, time.Second)
 		// The update should not be released
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
@@ -178,7 +178,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		if err := checkFoldersHasExpectedSectors(newSM, 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		newSM.shutdown(t, 100*time.Millisecond)
+		newSM.shutdown(t,time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
@@ -210,7 +210,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		if err := sm.AddSector(root, data); err != nil {
 			t.Fatalf("test %v: errStop should not give error: %v", test.keyWord, err)
 		}
-		sm.shutdown(t, 100*time.Millisecond)
+		sm.shutdown(t, time.Second)
 		// The update should not be released
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), test.numTxn); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
@@ -231,7 +231,7 @@ func TestAddSectorsStopRecoverVirtual(t *testing.T) {
 		if err := checkFoldersHasExpectedSectors(newSM, 1); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		newSM.shutdown(t, 100*time.Millisecond)
+		newSM.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}

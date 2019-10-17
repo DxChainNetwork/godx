@@ -5,6 +5,7 @@
 package common
 
 import (
+	"runtime"
 	"testing"
 	"time"
 )
@@ -29,6 +30,15 @@ var testData = person{
 	Age:  30,
 }
 
+func init() {
+	if runtime.GOOS == "windows" {
+		testFile = "./testdata/windows/test.json"
+		persistFile = "./testdata/windows/persist.json"
+		corruptedFile = "./testdata/windows/corrupted.json"
+		manualFile = "./testdata/windows/manual.json"
+	}
+}
+
 // test simple save and load data
 func TestJSONCompat(t *testing.T) {
 	err := SaveDxJSON(metadata, testFile, testData)
@@ -48,8 +58,8 @@ func TestJSONCompat(t *testing.T) {
 // test hash value unequal error
 func TestCorruptedFile(t *testing.T) {
 	err := LoadDxJSON(metadata, corruptedFile, testData)
-	if err.Error() != ErrCorrupted.Error() {
-		t.Errorf("error: %s \n", err.Error())
+	if err == nil || err.Error() != ErrCorrupted.Error() {
+		t.Errorf("error: %v", err)
 	}
 }
 

@@ -112,12 +112,11 @@ func TestPublicFileSystemAPI_Rename(t *testing.T) {
 	if err = df.Close(); err != nil {
 		t.Fatal(err)
 	}
-
 	res := api.Rename(prevPath.Path, newPath.Path)
 	if !strings.Contains(res, "File") || !strings.Contains(res, "renamed to") {
 		t.Fatalf("unexpected response message: %v", res)
 	}
-	if err := fs.waitForUpdatesComplete(1 * time.Second); err != nil {
+	if err := fs.waitForUpdatesComplete(10 * time.Second); err != nil {
 		t.Fatal(err)
 	}
 	// three dxdirs to check: 1. old path dxdir 2. new path dxdir 3. root dxdir

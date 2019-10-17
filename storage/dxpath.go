@@ -106,7 +106,7 @@ func (dp DxPath) Parent() (DxPath, error) {
 	if par == "." {
 		return RootDxPath(), nil
 	}
-	return DxPath{par}, nil
+	return newDxPath(par)
 }
 
 // RootDxPath return the special root DxPath which has Path as empty string

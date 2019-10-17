@@ -120,6 +120,9 @@ func (fs *fileSystem) Start() error {
 // Close will terminate all threads opened by file system
 func (fs *fileSystem) Close() error {
 	var fullErr error
+	if err := fs.tm.Stop(); err != nil {
+		fullErr = common.ErrCompose(fullErr, err)
+	}
 	fs.lock.Lock()
 	// close wal
 	err := fs.fileWal.Close()
@@ -131,7 +134,7 @@ func (fs *fileSystem) Close() error {
 		fullErr = common.ErrCompose(fullErr, err)
 	}
 	fs.lock.Unlock()
-	return common.ErrCompose(fullErr, fs.tm.Stop())
+	return nil
 }
 
 // RootDir returns the root directory for the files

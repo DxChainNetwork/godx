@@ -80,7 +80,7 @@ func TestAddStorageFolderRecover(t *testing.T) {
 	if err := sm.AddStorageFolder(path, size); err != nil {
 		t.Fatal(err)
 	}
-	sm.shutdown(t, 100*time.Millisecond)
+	sm.shutdown(t, time.Second)
 	// restart the storage manager
 	newsm, err := New(sm.persistDir)
 	if err != nil {

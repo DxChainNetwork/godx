@@ -140,6 +140,9 @@ func TestFileSystem_RandomStuckDirectory(t *testing.T) {
 		if err = dir.Close(); err != nil {
 			t.Fatal(err)
 		}
+		if err = fs.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

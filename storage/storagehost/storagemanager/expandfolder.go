@@ -42,9 +42,6 @@ type (
 
 // expandFolder expand the folder to target Num Sectors size
 func (sm *storageManager) expandFolder(folderPath string, size uint64) (err error) {
-	// keep the storage manager lock until finished
-	sm.lock.Lock()
-	defer sm.lock.Unlock()
 	// Create and process the request
 	update := sm.createExpandFolderUpdate(folderPath, size)
 	if err = update.recordIntent(sm); err != nil {

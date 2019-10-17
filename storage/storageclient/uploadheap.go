@@ -316,7 +316,7 @@ func (client *StorageClient) createAndPushSegments(files []*dxfile.FileSetEntryW
 		client.lock.Unlock()
 
 		if len(unfinishedUploadSegments) == 0 {
-			client.log.Info("no unfinished upload segments returned")
+			client.log.Debug("no unfinished upload segments returned")
 			continue
 		}
 
@@ -363,7 +363,7 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 
 	// Check if any files were selected from directory
 	if len(files) == 0 {
-		client.log.Info("No files pulled to build the upload heap", "dxpath", dxPath)
+		client.log.Debug("No files pulled to build the upload heap", "dxpath", dxPath)
 		return
 	}
 
@@ -374,7 +374,7 @@ func (client *StorageClient) pushDirOrFileToSegmentHeap(dxPath storage.DxPath, d
 		client.log.Info("Adding stuck segment to heap")
 		client.createAndPushRandomSegment(files, hosts, target, hostHealthInfoTable)
 	case targetUnstuckSegments:
-		client.log.Info("Adding unstuck segments to heap")
+		client.log.Debug("Adding unstuck segments to heap")
 		client.createAndPushSegments(files, hosts, target, hostHealthInfoTable)
 	default:
 		client.log.Info("target not recognized", "target", target)
