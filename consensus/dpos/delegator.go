@@ -53,11 +53,10 @@ func ProcessVote(state stateDB, ctx *types.DposContext, addr common.Address, vot
 
 // ProcessCancelVote process the cancel vote request for state and dpos context
 func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Address, currentBlockTime, now int64) error {
+
 	// check whether the given delegator remains in locked duration
-	duration := GetVoteDuration(state, addr)
-	voteTime := GetVoteTime(state, addr)
-	if (voteTime + duration) >= uint64(now) {
-		return fmt.Errorf("failed to process cancel vote for remaining in locked duration")
+	if err := CheckVoteDuration(state, addr, uint64(now)); err != nil {
+		return fmt.Errorf("failed to process cancel vote transaction, error: %v", err)
 	}
 
 	if err := ctx.CancelVote(addr); err != nil {
@@ -163,4 +162,14 @@ func calculateDelegatorDepositReward(state stateDB, addr common.Address) common.
 	}
 
 	return rewardPerEpoch.MultUint64(passedEpochs)
+}
+
+// CheckVoteDuration check whether now remains in locked duration
+func CheckVoteDuration(state stateDB, addr common.Address, now uint64) error {
+	duration := GetVoteDuration(state, addr)
+	voteTime := GetVoteTime(state, addr)
+	if (voteTime + duration) >= now {
+		return fmt.Errorf("delegator remains in locked duration")
+	}
+	return nil
 }
