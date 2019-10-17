@@ -373,7 +373,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	// deduct tax for every new block reward，and add it to tax account
 	tax := blockReward.MultUint64(TaxRatio).DivUint64(RewardRatioDenominator)
-	state.AddBalance(taxAccount, tax.BigIntPtr())
+	state.AddBalance(config.Dpos.TaxAccount, tax.BigIntPtr())
 	blockReward = blockReward.Sub(tax)
 
 	// retrieve the total vote weight of header's validator
@@ -437,9 +437,10 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
-		stateDB:     state,
-		DposContext: dposContext,
-		TimeStamp:   header.Time.Int64(),
+		stateDB:        state,
+		DposContext:    dposContext,
+		TimeStamp:      header.Time.Int64(),
+		PenaltyAccount: d.config.PenaltyAccount,
 	}
 	// update the value of timeOfFirstBlock if the value is 0
 	updateTimeOfFirstBlockIfNecessary(chain)
