@@ -122,8 +122,8 @@ func ExampleTrie_Commit() {
 	// After change trie2, trie1 have key value: doom -> [].
 }
 
-// Trie is a content based storage. Two tries using the same database will not effect each other
-// as long as you get the root correct.
+// ExampleTrie_ContentBasedStorage aims to illustrate the following point: Trie is a content based storage.
+// Two tries using the same database will not effect each other as long as you get the root correct.
 func ExampleTrie_ContentBasedStorage() {
 	key := []byte("my key")
 	value1 := []byte("value 1")
@@ -167,4 +167,36 @@ func ExampleTrie_ContentBasedStorage() {
 	// updating trie 2
 	// recovered [value 1], got [value 1]
 	// recovered [value 2], got [value 3]
+}
+
+// ExampleTrieIterator_ContentBasedStorage aimes to illustrate the following point: trie iterator will only iterate
+// over the value stored in the trie. Updating in any other tries will not effect the iterator behaviour in the
+// target trie.
+func ExampleTrieIterator_ContentBasedStorage() {
+	db := NewDatabase(ethdb.NewMemDatabase())
+	t1, _ := New(common.Hash{}, db)
+	t1.insertKeyValue(100)
+
+	t2, _ := New(common.Hash{}, db)
+	t2.insertKeyValue(200)
+
+	it := NewIterator(t1.NodeIterator(nil))
+	count := 0
+	for it.Next() {
+		count++
+	}
+	fmt.Printf("t1 have %v entries.\n", count)
+	// Output:
+	// t1 have 100 entries.
+}
+
+// insertKeyValue inserts a set of predefined key-value pair to the trie
+func (t *Trie) insertKeyValue(count int) {
+	if count > 256 {
+		panic("count is not allowed to be greater than 256")
+	}
+	for i := 0; i != count; i++ {
+		keyAndValue := []byte{byte(i)}
+		t.TryUpdate(keyAndValue, keyAndValue)
+	}
 }
