@@ -137,7 +137,7 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 
 // kickoutValidators will kick out irresponsible validators of last epoch at the beginning of current epoch
 func (ec *EpochContext) kickoutValidators(epoch int64) error {
-	needKickoutValidators, err := getIneligibleValidators(ec.DposContext, epoch, ec.TimeStamp)
+	needKickoutValidators, err := getIneligibleValidators(ec, epoch, ec.TimeStamp)
 	if err != nil {
 		return err
 	}
@@ -171,13 +171,18 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 			continue
 		}
 
-		// deduct penalty from validator and delegator
-		deductPenaltyForValidatorAndDelegator(ec.stateDB, ec.DposContext.DelegateTrie(), ec.PenaltyAccount, validator.address)
+		// snapshot before kicking out validators
+		dposSnap := ec.DposContext.Snapshot()
 
 		// kick out records about validator in dpos context
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
+			ec.DposContext.RevertToSnapShot(dposSnap)
 			return err
 		}
+
+		// only after successfully kicking out validator, we can deduct penalty from delegator.
+		// using the snapshot dpos context, just because it has been changed in KickoutCandidate.
+		deductPenaltyForDelegator(ec.stateDB, dposSnap.DelegateTrie(), ec.PenaltyAccount, validator.address, epoch)
 
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
@@ -196,8 +201,8 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 
 // getIneligibleValidators return the ineligible validators in a certain epoch. An ineligible validator is
 // defined as a validator who produced blocks less than half as expected
-func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64) (addressesByCnt, error) {
-	validators, err := ctx.GetValidators()
+func getIneligibleValidators(ctx *EpochContext, epoch int64, curTime int64) (addressesByCnt, error) {
+	validators, err := ctx.DposContext.GetValidators()
 	if err != nil {
 		return addressesByCnt{}, fmt.Errorf("failed to get validator: %s", err)
 	}
@@ -207,7 +212,14 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 	expectedBlockPerValidator := expectedBlocksPerValidatorInEpoch(timeOfFirstBlock, curTime)
 	var ineligibleValidators addressesByCnt
 	for _, validator := range validators {
-		cnt := ctx.GetMinedCnt(epoch, validator)
+		cnt := ctx.DposContext.GetMinedCnt(epoch, validator)
+
+		// calculate penalty based on count of lost blocks for given validator
+		diff := expectedBlockPerValidator - cnt
+		if diff > 0 {
+			deductPenaltyForValidator(ctx.stateDB, validator, ctx.PenaltyAccount, epoch, diff, expectedBlockPerValidator)
+		}
+
 		if !isEligibleValidator(cnt, expectedBlockPerValidator) {
 			ineligibleValidators = append(ineligibleValidators, &addressByCnt{validator, cnt})
 		}
@@ -285,25 +297,70 @@ func makeSeed(h common.Hash, i int64) int64 {
 	return int64(binary.LittleEndian.Uint32(crypto.Keccak512(h.Bytes()))) + i
 }
 
-// deductPenaltyForValidatorAndDelegator deduct penalty from validator and delegator to penaltyAccount
-func deductPenaltyForValidatorAndDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAccount, validator common.Address) {
-
-	// NOTE: At now, the deposit and froze assets of validator or delegator is just marked in stateDB,
-	// and it's actually not deducted from their balance.
-	// So, we can directly transfer penalty amount from the balance of validator or delegator to penaltyAccount.
-
+// deductPenaltyForValidator deduct penalty from validator to penaltyAccount
+func deductPenaltyForValidator(state stateDB, validator, penaltyAccount common.Address,
+	epochID, countLostBlocks, expectedBlockPerValidator int64) {
 	validatorFrozenAssets := GetFrozenAssets(state, validator)
-	validatorPenalty := validatorFrozenAssets.MultUint64(ValidatorPenaltyRatio).DivUint64(PercentageDenominator)
+
+	/*
+		countLostBlocks < expectedBlockPerValidator * 1/16 : penaltyRatio = ValidatorPenaltyRatio * 1/16
+		countLostBlocks < expectedBlockPerValidator * 1/8 : penaltyRatio = ValidatorPenaltyRatio * 1/8
+		countLostBlocks < expectedBlockPerValidator * 1/4 : penaltyRatio = ValidatorPenaltyRatio * 1/4
+		countLostBlocks <= expectedBlockPerValidator * 1/2 : penaltyRatio = ValidatorPenaltyRatio * 1/2
+		countLostBlocks > expectedBlockPerValidator * 1/2 : penaltyRatio = ValidatorPenaltyRatio
+	*/
+	penaltyRatio := float64(1.0)
+	switch {
+	case countLostBlocks < expectedBlockPerValidator*1/16:
+		penaltyRatio = ValidatorPenaltyRatio * 1 / 16
+		break
+	case countLostBlocks < expectedBlockPerValidator*1/8:
+		penaltyRatio = ValidatorPenaltyRatio * 1 / 8
+		break
+	case countLostBlocks < expectedBlockPerValidator*1/4:
+		penaltyRatio = ValidatorPenaltyRatio * 1 / 4
+		break
+	case countLostBlocks <= expectedBlockPerValidator*1/2:
+		penaltyRatio = ValidatorPenaltyRatio * 1 / 2
+		break
+	default:
+		penaltyRatio = ValidatorPenaltyRatio
+	}
+	validatorPenalty := validatorFrozenAssets.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 	state.AddBalance(penaltyAccount, validatorPenalty.BigIntPtr())
+
+	// firstly, we should deduct from total balance
 	state.SubBalance(validator, validatorPenalty.BigIntPtr())
 
+	// NOTE: we must keep the balance that frozenAsset = deposit + thawingAsset,
+	// secondly, we should deduct frozenAsset、deposit、thawingAsset by the same penalty ratio.
+	currentDeposit := GetCandidateDeposit(state, validator)
+	currentThawingAsset := GetThawingAssets(state, validator, epochID)
+	SetCandidateDeposit(state, validator, currentDeposit.MultFloat64(float64(PercentageDenominator)-penaltyRatio).DivUint64(PercentageDenominator))
+	SetThawingAssets(state, validator, epochID, currentThawingAsset.MultFloat64(float64(PercentageDenominator)-penaltyRatio).DivUint64(PercentageDenominator))
+	SetFrozenAssets(state, validator, validatorFrozenAssets.MultFloat64(float64(PercentageDenominator)-penaltyRatio).DivUint64(PercentageDenominator))
+}
+
+// deductPenaltyForDelegator deduct penalty from delegator to penaltyAccount,
+// if validators voted by this delegator are kick out
+func deductPenaltyForDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAccount, validator common.Address, epochID int64) {
 	delegatorIter := trie.NewIterator(delegateTrie.PrefixIterator(validator.Bytes()))
 	for delegatorIter.Next() {
 		delegator := common.BytesToAddress(delegatorIter.Value)
 		delegatorFrozenAssets := GetFrozenAssets(state, delegator)
 		delegatorPenalty := delegatorFrozenAssets.MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 		state.AddBalance(penaltyAccount, delegatorPenalty.BigIntPtr())
+
+		// firstly, we should deduct from total balance
 		state.SubBalance(delegator, delegatorPenalty.BigIntPtr())
+
+		// NOTE: we must keep the balance that frozenAsset = deposit + thawingAsset,
+		// secondly, we should deduct frozenAsset、deposit、thawingAsset by the same penalty ratio.
+		currentDeposit := GetVoteDeposit(state, delegator)
+		currentThawingAsset := GetThawingAssets(state, delegator, epochID)
+		SetVoteDeposit(state, delegator, currentDeposit.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
+		SetThawingAssets(state, delegator, epochID, currentThawingAsset.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
+		SetFrozenAssets(state, delegator, delegatorFrozenAssets.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
 	}
 }
 
