@@ -61,7 +61,7 @@ const (
 	DelegatorPenaltyRatio = uint64(10)
 
 	// ValidatorPenaltyRatio is the value of penalty ratio for validator
-	ValidatorPenaltyRatio = uint64(20)
+	ValidatorPenaltyRatio = float64(20)
 
 	// RewardedCandidateCount is how many candidates that not became validator should be rewarded
 	RewardedCandidateCount = 50
