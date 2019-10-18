@@ -1,6 +1,11 @@
 package trie
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/ethdb"
+)
 
 var testData = []struct{ k, v string }{
 	{"do", "verb"},
@@ -115,4 +120,51 @@ func ExampleTrie_Commit() {
 	//
 	// The new trie have a different hash from the original.
 	// After change trie2, trie1 have key value: doom -> [].
+}
+
+// Trie is a content based storage. Two tries using the same database will not effect each other
+// as long as you get the root correct.
+func ExampleTrie_ContentBasedStorage() {
+	key := []byte("my key")
+	value1 := []byte("value 1")
+	value2 := []byte("value 2")
+	newValue2 := []byte("value 3")
+
+	db := NewDatabase(ethdb.NewMemDatabase())
+	t1, _ := New(common.Hash{}, db)
+	t1.TryUpdate(key, value1)
+	root1, _ := t1.Commit(nil)
+
+	t2, _ := New(common.Hash{}, db)
+	t2.TryUpdate(key, value2)
+	root2, _ := t2.Commit(nil)
+
+	recoveredT1, _ := New(root1, db)
+	recoveredV1, _ := recoveredT1.TryGet(key)
+	fmt.Printf("recovered [value 1], got [%v]\n", string(recoveredV1))
+
+	recoveredT2, _ := New(root2, db)
+	recoveredV2, _ := recoveredT2.TryGet(key)
+	fmt.Printf("recovered [value 2], got [%v]\n", string(recoveredV2))
+
+	// Updating t2 shall not effect t1
+	fmt.Println("\nupdating trie 2")
+
+	t2.TryUpdate(key, newValue2)
+	newRoot2, _ := t2.Commit(nil)
+
+	recoveredT1, _ = New(root1, db)
+	recoveredV1, _ = recoveredT1.TryGet(key)
+	fmt.Printf("recovered [value 1], got [%v]\n", string(recoveredV1))
+
+	recoveredT2, _ = New(newRoot2, db)
+	recoveredV2, _ = recoveredT2.TryGet(key)
+	fmt.Printf("recovered [value 2], got [%v]\n", string(recoveredV2))
+	// Output:
+	// recovered [value 1], got [value 1]
+	// recovered [value 2], got [value 2]
+	//
+	// updating trie 2
+	// recovered [value 1], got [value 1]
+	// recovered [value 2], got [value 3]
 }
