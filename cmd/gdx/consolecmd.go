@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -127,6 +128,8 @@ func remoteConsole(ctx *cli.Context) error {
 				endpoint = fmt.Sprintf("%s/gdx.ipc", path)
 			} else if ctx.GlobalBool(utils.RinkebyFlag.Name) {
 				path = filepath.Join(path, "rinkeby")
+				endpoint = fmt.Sprintf("%s/gdx.ipc", path)
+			} else if runtime.GOOS != "windows" {
 				endpoint = fmt.Sprintf("%s/gdx.ipc", path)
 			}
 		}
