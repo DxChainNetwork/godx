@@ -73,60 +73,204 @@ func TestRewardSubstituteCandidates(t *testing.T) {
 	}
 }
 
-func TestDeductPenaltyForValidatorAndDelegator(t *testing.T) {
+func TestDeductPenaltyForValidator(t *testing.T) {
+
+	// mock some const parameters
+	epochID := int64(1000)
+	initBalance := common.NewBigInt(1e18).MultInt64(1e9)
+	initFrozenAsset := common.NewBigInt(1e18).MultInt64(1e6)
+	initDeposit := common.NewBigInt(1e18).MultInt64(1e5)
+	initThawingAsset := common.NewBigInt(1e18).MultInt64(9e5)
+	expectedBlockPerValidator := int64(480)
+
+	tests := []struct {
+		name string
+		fn   func(state stateDB, validator, penaltyAccount common.Address,
+			epochID, expectedBlockPerValidator int64) (common.BigInt, float64)
+	}{
+		{
+			name: "countLostBlocks < expectedBlockPerValidator * 1/16",
+			fn: func(state stateDB, validator, penaltyAccount common.Address,
+				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
+				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 25, expectedBlockPerValidator)
+				penaltyRatio := ValidatorPenaltyRatio * 1 / 16
+				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
+				return penalty, penaltyRatio
+			},
+		},
+		{
+			name: "countLostBlocks < expectedBlockPerValidator * 1/8",
+			fn: func(state stateDB, validator, penaltyAccount common.Address,
+				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
+				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 55, expectedBlockPerValidator)
+				penaltyRatio := ValidatorPenaltyRatio * 1 / 8
+				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
+				return penalty, penaltyRatio
+			},
+		},
+		{
+			name: "countLostBlocks < expectedBlockPerValidator * 1/4",
+			fn: func(state stateDB, validator, penaltyAccount common.Address,
+				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
+				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 110, expectedBlockPerValidator)
+				penaltyRatio := ValidatorPenaltyRatio * 1 / 4
+				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
+				return penalty, penaltyRatio
+			},
+		},
+		{
+			name: "countLostBlocks <= expectedBlockPerValidator * 1/2",
+			fn: func(state stateDB, validator, penaltyAccount common.Address,
+				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
+				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 240, expectedBlockPerValidator)
+				penaltyRatio := ValidatorPenaltyRatio * 1 / 2
+				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
+				return penalty, penaltyRatio
+			},
+		},
+		{
+			name: "countLostBlocks > expectedBlockPerValidator * 1/2",
+			fn: func(state stateDB, validator, penaltyAccount common.Address,
+				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
+				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 300, expectedBlockPerValidator)
+				penaltyRatio := ValidatorPenaltyRatio
+				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
+				return penalty, penaltyRatio
+			},
+		},
+	}
+
+	for _, test := range tests {
+
+		// mock state db
+		db := ethdb.NewMemDatabase()
+		sdb := state.NewDatabase(db)
+		state, err := state.New(common.Hash{}, sdb)
+		if err != nil {
+			t.Fatalf("failed to create state db,error: %v", err)
+		}
+
+		// mock validator and delegator account
+		validator := common.HexToAddress("0x1")
+		penaltyAccount := common.HexToAddress("0xccc")
+		state.CreateAccount(validator)
+		state.AddBalance(validator, initBalance.BigIntPtr())
+
+		// mock frozen asset
+
+		SetFrozenAssets(state, validator, initFrozenAsset)
+		SetCandidateDeposit(state, validator, initDeposit)
+		SetThawingAssets(state, validator, epochID, initThawingAsset)
+
+		validatorPenalty, penaltyRatio := test.fn(state, validator, penaltyAccount, epochID, expectedBlockPerValidator)
+		validatorBal := state.GetBalance(validator)
+		penaltyAccountBal := state.GetBalance(penaltyAccount)
+		validatorFrozenAsset := GetFrozenAssets(state, validator)
+		validatorDeposit := GetCandidateDeposit(state, validator)
+		validatorThawingAsset := GetThawingAssets(state, validator, epochID)
+
+		// check validator\delegator\penaltyAccount balance
+		if validatorBal.Cmp(initBalance.Sub(validatorPenalty).BigIntPtr()) != 0 {
+			t.Errorf("the case [%s] wanted validator balance %v,got %v", test.name, initBalance.Sub(validatorPenalty), validatorBal)
+		}
+
+		if penaltyAccountBal.Cmp(validatorPenalty.BigIntPtr()) != 0 {
+			t.Errorf("the case [%s] wanted penalty account balance %v,got %v", test.name, validatorPenalty, penaltyAccountBal)
+		}
+
+		wantedDeposit := initDeposit.MultFloat64(float64(PercentageDenominator) - penaltyRatio).DivUint64(PercentageDenominator)
+		if wantedDeposit.Cmp(validatorDeposit) != 0 {
+			t.Errorf("the case [%s] wanted validator deposit %v,got %v", test.name, wantedDeposit, validatorDeposit)
+		}
+
+		wantedThawingAsset := initThawingAsset.MultFloat64(float64(PercentageDenominator) - penaltyRatio).DivUint64(PercentageDenominator)
+		if wantedThawingAsset.Cmp(validatorThawingAsset) != 0 {
+			t.Errorf("the case [%s] wanted validator thawing asset %v,got %v", test.name, wantedThawingAsset, validatorThawingAsset)
+		}
+
+		wantedFrozenAsset := initFrozenAsset.MultFloat64(float64(PercentageDenominator) - penaltyRatio).DivUint64(PercentageDenominator)
+		if wantedFrozenAsset.Cmp(validatorFrozenAsset) != 0 {
+			t.Errorf("the case [%s] wanted validator frozen asset %v,got %v", test.name, wantedFrozenAsset, validatorFrozenAsset)
+		}
+
+		if validatorDeposit.Add(validatorThawingAsset).Cmp(validatorFrozenAsset) != 0 {
+			t.Errorf("the case [%s] forzenAsset[%v] != deposit[%v] + thawingAsset[%v]", test.name, validatorFrozenAsset, validatorDeposit, validatorThawingAsset)
+		}
+	}
+}
+
+func TestDeductPenaltyForDelegator(t *testing.T) {
+
+	// mock some const parameters
+	epochID := int64(1000)
 
 	// mock state db
 	db := ethdb.NewMemDatabase()
 	sdb := state.NewDatabase(db)
-	stateDB, err := state.New(common.Hash{}, sdb)
+	state, err := state.New(common.Hash{}, sdb)
 	if err != nil {
 		t.Fatalf("failed to create state db,error: %v", err)
 	}
 
 	// mock validator and delegator account
 	validator := common.HexToAddress("0x1")
-	delegator := common.HexToAddress("0x2")
-	stateDB.CreateAccount(validator)
-	balance := common.NewBigInt(1e18).MultInt64(1e9)
-	stateDB.AddBalance(validator, balance.BigIntPtr())
-	stateDB.CreateAccount(delegator)
-	stateDB.AddBalance(delegator, balance.BigIntPtr())
+	penaltyAccount := common.HexToAddress("0xccc")
 
-	// mock frozen asset
-	SetFrozenAssets(stateDB, validator, common.NewBigInt(1e18).MultInt64(1e6))
-	SetFrozenAssets(stateDB, delegator, common.NewBigInt(1e18).MultInt64(1e8))
-
-	// mock delegator trie
 	delegateTrie, err := types.NewDelegateTrie(common.Hash{}, trie.NewDatabase(db))
 	if err != nil {
 		t.Fatalf("failed to create delegate trie,error: %v", err)
 	}
 
-	err = delegateTrie.TryUpdate(append(validator.Bytes(), delegator.Bytes()...), delegator.Bytes())
-	if err != nil {
-		t.Fatalf("failed to write vote records into delegate trie,error: %v", err)
+	// mock some delegate records
+	for i := int64(0); i < 3; i++ {
+		str := strconv.FormatInt(i+1, 10)
+		delegatorAddr := common.HexToAddress("0x" + str)
+		err = delegateTrie.TryUpdate(append(validator.Bytes(), delegatorAddr.Bytes()...), delegatorAddr.Bytes())
+		if err != nil {
+			t.Fatalf("failed to update delegate trie,error: %v", err)
+		}
+
+		initBalance := common.NewBigInt(1e18).MultInt64((i + 1) * 1e9)
+		initFrozenAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6)
+		initDeposit := common.NewBigInt(1e18).MultInt64((i + 1) * 1e5)
+		initThawingAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 9e5)
+		state.AddBalance(delegatorAddr, initBalance.BigIntPtr())
+		SetFrozenAssets(state, delegatorAddr, initFrozenAsset)
+		SetVoteDeposit(state, delegatorAddr, initDeposit)
+		SetThawingAssets(state, delegatorAddr, epochID, initThawingAsset)
 	}
 
-	penaltyAccount := common.HexToAddress("0xccc")
-	deductPenaltyForValidatorAndDelegator(stateDB, delegateTrie, penaltyAccount, validator)
+	deductPenaltyForDelegator(state, delegateTrie, penaltyAccount, validator, epochID)
 
-	validatorBal := stateDB.GetBalance(validator)
-	delegatorBal := stateDB.GetBalance(delegator)
-	penaltyAccountBal := stateDB.GetBalance(penaltyAccount)
-	wantedValidatorPenalty := common.NewBigInt(1e18).MultInt64(1e6).MultUint64(ValidatorPenaltyRatio).DivUint64(PercentageDenominator)
-	wantedDelegatorPenalty := common.NewBigInt(1e18).MultInt64(1e8).MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+	// check delegator and penalty account balance
+	for i := int64(0); i < 3; i++ {
+		str := strconv.FormatInt(i+1, 10)
+		delegatorAddr := common.HexToAddress("0x" + str)
+		penalty := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedBalance := common.NewBigInt(1e18).MultInt64((i + 1) * 1e9).Sub(penalty)
+		wantedFrozenAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedDeposit := common.NewBigInt(1e18).MultInt64((i + 1) * 1e5).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedThawingAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 9e5).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		delBal := state.GetBalance(delegatorAddr)
+		delFrozenAsset := GetFrozenAssets(state, delegatorAddr)
+		delDeposit := GetVoteDeposit(state, delegatorAddr)
+		delThawingAsset := GetThawingAssets(state, delegatorAddr, epochID)
 
-	// check validator\delegator\penaltyAccount balance
-	if validatorBal.Cmp(balance.Sub(wantedValidatorPenalty).BigIntPtr()) != 0 {
-		t.Errorf("[validator balance not right]wanted %v,got %v", balance.Sub(wantedValidatorPenalty).BigIntPtr(), validatorBal)
-	}
+		if delBal.Cmp(wantedBalance.BigIntPtr()) != 0 {
+			t.Errorf("wanted balance %v,got %v", wantedBalance, delBal)
+		}
 
-	if delegatorBal.Cmp(balance.Sub(wantedDelegatorPenalty).BigIntPtr()) != 0 {
-		t.Errorf("[delegator balance not right]wanted %v,got %v", balance.Sub(wantedDelegatorPenalty).BigIntPtr(), delegatorBal)
-	}
+		if delFrozenAsset.Cmp(wantedFrozenAsset) != 0 {
+			t.Errorf("wanted frozen asset %v,got %v", wantedFrozenAsset, delFrozenAsset)
+		}
 
-	if penaltyAccountBal.Cmp(wantedDelegatorPenalty.Add(wantedValidatorPenalty).BigIntPtr()) != 0 {
-		t.Errorf("[penalty account balance not right]wanted %v,got %v", wantedDelegatorPenalty.Add(wantedValidatorPenalty).BigIntPtr(), penaltyAccountBal)
+		if delDeposit.Cmp(wantedDeposit) != 0 {
+			t.Errorf("wanted deposit %v,got %v", wantedDeposit, delDeposit)
+		}
+
+		if delThawingAsset.Cmp(wantedThawingAsset) != 0 {
+			t.Errorf("wanted thawing asset %v,got %v", wantedThawingAsset, delThawingAsset)
+		}
 	}
 }
 
