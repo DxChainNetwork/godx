@@ -210,7 +210,9 @@ type (
 	records map[testPrefix]map[testKey]struct{}
 )
 
-func ExampleTrieIterator_Prefix_ContentBasedStorage() {
+// ExampleTriePrefixIterator_ContentBasedStorage shows that we do not depend on the prefix field in trie to
+// use prefix iterator.
+func ExampleTriePrefixIterator_ContentBasedStorage() {
 	db := NewDatabase(ethdb.NewMemDatabase())
 	numPrefix, numKeys := 100, 10
 	prefixes := makeRandomPrefixes(numPrefix)
