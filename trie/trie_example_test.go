@@ -1,6 +1,7 @@
 package trie
 
 import (
+	"crypto/rand"
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -199,4 +200,129 @@ func (t *Trie) insertKeyValue(count int) {
 		keyAndValue := []byte{byte(i)}
 		t.TryUpdate(keyAndValue, keyAndValue)
 	}
+}
+
+type (
+	testPrefix [32]byte
+
+	testKey [64]byte
+
+	records map[testPrefix]map[testKey]struct{}
+)
+
+func ExampleTrieIterator_Prefix_ContentBasedStorage() {
+	db := NewDatabase(ethdb.NewMemDatabase())
+	numPrefix, numKeys := 100, 10
+	prefixes := makeRandomPrefixes(numPrefix)
+
+	r1, expect1, err := makePrefixTestTrie(db, prefixes, numKeys)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	r2, expect2, err := makePrefixTestTrie(db, prefixes, numKeys)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if err = checkTriePrefixIterator(r1, db, expect1); err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err = checkTriePrefixIterator(r2, db, expect2); err != nil {
+		fmt.Println(err)
+		return
+	}
+	// Output:
+}
+
+func makeRandomPrefixes(numPrefix int) []testPrefix {
+	prefixes := make([]testPrefix, 0, numPrefix)
+	var prefix testPrefix
+	for i := 0; i != numPrefix; i++ {
+		rand.Read(prefix[:])
+		prefixes = append(prefixes, prefix)
+	}
+	return prefixes
+}
+
+func makePrefixTestTrie(db *Database, prefixes []testPrefix, numPerPrefix int) (common.Hash, records, error) {
+	t, err := New(common.Hash{}, db)
+	if err != nil {
+		return common.Hash{}, make(records), err
+	}
+	expect, err := insertKeyValueWithPrefixes(t, prefixes, numPerPrefix)
+	if err != nil {
+		return common.Hash{}, make(records), err
+	}
+	root, err := t.Commit(nil)
+	if err != nil {
+		return common.Hash{}, make(records), err
+	}
+	return root, expect, err
+}
+
+func checkTriePrefixIterator(root common.Hash, db *Database, expect records) error {
+	t, err := New(root, db)
+	if err != nil {
+		return err
+	}
+	for prefix, entries := range expect {
+		it := NewIterator(newPrefixIterator(t, prefix[:]))
+		for it.Next() {
+			key := it.Key
+			if _, exist := entries[byteToTestKey(key)]; !exist {
+				return fmt.Errorf("key not expected")
+			}
+			delete(entries, byteToTestKey(key))
+		}
+		if len(entries) != 0 {
+			return fmt.Errorf("entries not enough")
+		}
+	}
+	return nil
+}
+
+func insertKeyValueWithPrefixes(t *Trie, prefixes []testPrefix, numPerPrefix int) (records, error) {
+	expect := make(records)
+	for _, prefix := range prefixes {
+		if err := insertKeyValueWithPrefix(t, prefix, numPerPrefix, expect); err != nil {
+			return make(records), err
+		}
+	}
+	return expect, nil
+}
+
+func insertKeyValueWithPrefix(t *Trie, prefix testPrefix, count int, expect records) error {
+	if expect[prefix] == nil {
+		expect[prefix] = make(map[testKey]struct{})
+	}
+	for i := 0; i != count; i++ {
+		keyAndValue := makeTestKeyWithPrefix(prefix)
+		if err := t.TryUpdate(keyAndValue[:], keyAndValue[:]); err != nil {
+			return err
+		}
+		expect[prefix][keyAndValue] = struct{}{}
+	}
+	return nil
+}
+
+// makeTestKeyWithPrefix makes a key of size 64 of specified prefix
+func makeTestKeyWithPrefix(prefix testPrefix) testKey {
+	var res testKey
+	copy(res[:], prefix[:])
+	rand.Read(res[len(prefix):])
+	return res
+}
+
+func byteToTestKey(b []byte) testKey {
+	var key testKey
+	if len(b) >= len(key) {
+		copy(key[:], b[:len(key)])
+	} else {
+		copy(key[:], b[:])
+	}
+	return key
 }
