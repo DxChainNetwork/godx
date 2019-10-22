@@ -54,17 +54,11 @@ const (
 	// MinVoteLockDuration is the minimum vote locked duration
 	MinVoteLockDuration = uint64(EpochInterval)
 
-	// AdditionalRewardEpochCount defines that the validators of previous 100 epochs will be rewarded additionally
-	AdditionalRewardEpochCount = int64(100)
-
 	// DelegatorPenaltyRatio is the value of penalty ratio for delegator
 	DelegatorPenaltyRatio = uint64(10)
 
 	// ValidatorPenaltyRatio is the value of penalty ratio for validator
 	ValidatorPenaltyRatio = float64(20)
-
-	// RewardedCandidateCount is how many candidates that not became validator should be rewarded
-	RewardedCandidateCount = 50
 )
 
 var (
@@ -79,17 +73,4 @@ var (
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
-
-	// TODO: specify the real reward account address
-	// rewardAccount is the address which will send rewarded dx to some users
-	rewardAccount = common.HexToAddress("0xbcd")
-
-	// minRewardPerEpoch defines the minimum reward for deposit every epoch
-	minRewardPerEpoch = common.NewBigIntUint64(1e18)
-
-	// minRewardPerBlock defines the minimum reward for deposit every block
-	minRewardPerBlock = common.NewBigIntUint64(1e18)
-
-	// minCandidateReward defines the minimum reward for candidate without being validator
-	minCandidateReward = common.NewBigIntUint64(1e18)
 )

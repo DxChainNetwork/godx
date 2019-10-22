@@ -27,67 +27,6 @@ type candidate struct {
 	prevRewardRatio uint64
 }
 
-// TestCalculateValidatorDepositReward test the function of calculateValidatorDepositReward
-func TestCalculateValidatorDepositReward(t *testing.T) {
-	tests := []struct {
-		name      string
-		deposit   common.BigInt
-		fn        func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt
-		wantBonus common.BigInt
-	}{
-		{
-			name:    "deposit < 1e3 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(200),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetCandidateDepositLastEpoch(state, addr, deposit)
-				return calculateValidatorDepositReward(state, addr)
-			},
-			wantBonus: minRewardPerBlock,
-		},
-		{
-			name:    "1e3 dx <= deposit < 1e6 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(1200),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetCandidateDepositLastEpoch(state, addr, deposit)
-				return calculateValidatorDepositReward(state, addr)
-			},
-			wantBonus: minRewardPerBlock.MultInt64(2),
-		},
-		{
-			name:    "1e6 dx <= deposit < 1e9 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(3e7),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetCandidateDepositLastEpoch(state, addr, deposit)
-				return calculateValidatorDepositReward(state, addr)
-			},
-			wantBonus: minRewardPerBlock.MultInt64(3),
-		},
-		{
-			name:    "deposit >= 1e9 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(1e10),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetCandidateDepositLastEpoch(state, addr, deposit)
-				return calculateValidatorDepositReward(state, addr)
-			},
-			wantBonus: minRewardPerBlock.MultInt64(5),
-		},
-	}
-
-	addr := common.HexToAddress("0xa")
-	db := ethdb.NewMemDatabase()
-	stateDB, err := newStateDB(db)
-	if err != nil {
-		t.Fatalf("failed to create stateDB,error: %v", err)
-	}
-
-	for _, test := range tests {
-		bonus := test.fn(stateDB, addr, test.deposit)
-		if bonus.Cmp(test.wantBonus) != 0 {
-			t.Errorf("the case[%s] got deposit reward: %v,wanted %v", test.name, bonus, test.wantBonus)
-		}
-	}
-}
-
 // TestProcessAddCandidate test the normal case of ProcessAddCandidate.
 // Two scenarios are tests: 1. a new candidates 2. previously already a candidates
 func TestProcessAddCandidate(t *testing.T) {

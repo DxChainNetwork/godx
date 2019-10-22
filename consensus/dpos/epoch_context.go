@@ -87,8 +87,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 		// sort the left candidate list by descending order,
 		// and choose the previous 50 candidates as the ones to be rewarded additionally
-		sort.Sort(candidateVotes)
-		rewardSubstituteCandidates(ec.stateDB, candidateVotes)
+		// sort.Sort(candidateVotes)
+		// SetSubstituteCandidates(candidateVotes)
 
 		// Set rewardRatioLastEpoch and depositLastEpoch for each validator
 		for _, validator := range validators {
@@ -364,44 +364,5 @@ func deductPenaltyForDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAc
 		SetVoteDeposit(state, delegator, currentDeposit.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
 		SetThawingAssets(state, delegator, epochID, currentThawingAsset.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
 		SetFrozenAssets(state, delegator, delegatorFrozenAssets.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
-	}
-}
-
-// rewardSubstituteCandidates reward substitute candidates that not became validator
-func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntries) {
-	rewardedCandidates := make([]common.Address, 0)
-	if len(candidateVotes) < RewardedCandidateCount {
-		rewardedCandidates = candidateVotes.listAddresses()
-	} else {
-		rewardedCandidates = candidateVotes.listAddresses()[:RewardedCandidateCount]
-	}
-
-	additionalReward := common.NewBigInt(0)
-	for _, candidate := range rewardedCandidates {
-		deposit := GetCandidateDeposit(state, candidate)
-		/*
-			deposit < 1e3 dx: additionalReward = 1 dx
-			deposit < 1e6 dx: additionalReward = 10 dx
-			deposit < 1e9 dx: additionalReward = 100 dx
-			deposit >= 1e9 dx: additionalReward = 1000 dx
-		*/
-		switch {
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
-			additionalReward = minCandidateReward
-			break
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
-			additionalReward = minCandidateReward.MultInt64(10)
-			break
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
-			additionalReward = minCandidateReward.MultInt64(100)
-			break
-		default:
-			additionalReward = minCandidateReward.MultInt64(1000)
-		}
-
-		if additionalReward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
-			state.SubBalance(rewardAccount, additionalReward.BigIntPtr())
-			state.AddBalance(candidate, additionalReward.BigIntPtr())
-		}
 	}
 }
