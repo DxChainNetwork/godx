@@ -266,14 +266,14 @@ func SetVoteTime(state stateDB, addr common.Address, voteTime uint64) {
 	state.SetState(addr, KeyVoteTime, hash)
 }
 
-// SetValidatorDepositLastEpoch set the validator deposit of last epoch for the given validator
-func SetValidatorDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
+// SetCandidateDepositLastEpoch set the validator deposit of last epoch for the given validator
+func SetCandidateDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
 	hash := common.BigToHash(deposit.BigIntPtr())
 	state.SetState(addr, KeyValidatorDepositLastEpoch, hash)
 }
 
-// GetValidatorDepositLastEpoch get the validator deposit of last epoch for the given validator
-func GetValidatorDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
+// GetCandidateDepositLastEpoch get the validator deposit of last epoch for the given validator
+func GetCandidateDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
 	hash := state.GetState(addr, KeyValidatorDepositLastEpoch)
 	return common.PtrBigInt(hash.Big())
 }
