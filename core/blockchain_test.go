@@ -1159,7 +1159,7 @@ func TestEIP155Transition(t *testing.T) {
 	}
 
 	// generate an invalid chain id transaction
-	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int)}
+	config := &params.ChainConfig{ChainID: big.NewInt(2), EIP155Block: big.NewInt(2), HomesteadBlock: new(big.Int), Dpos: params.DefaultDposConfig()}
 	blocks, _ = GenerateChain(config, blocks[len(blocks)-1], dpos.NewDposFaker(), db, 4, func(i int, block *BlockGen) {
 		var (
 			tx      *types.Transaction
