@@ -146,7 +146,7 @@ func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit co
 // calculateValidatorDepositReward calculates the deposit bonus for validator when producing a new block
 func calculateValidatorDepositReward(state stateDB, addr common.Address) common.BigInt {
 	rewardPerBlock := common.NewBigInt(0)
-	deposit := GetValidatorDepositLastEpoch(state, addr)
+	deposit := GetCandidateDepositLastEpoch(state, addr)
 
 	/*
 		deposit < 1e3 dx: rewardPerBlock = 1 dx

@@ -39,7 +39,7 @@ func TestCalculateValidatorDepositReward(t *testing.T) {
 			name:    "deposit < 1e3 dx",
 			deposit: common.NewBigInt(1e18).MultInt64(200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetValidatorDepositLastEpoch(state, addr, deposit)
+				SetCandidateDepositLastEpoch(state, addr, deposit)
 				return calculateValidatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerBlock,
@@ -48,7 +48,7 @@ func TestCalculateValidatorDepositReward(t *testing.T) {
 			name:    "1e3 dx <= deposit < 1e6 dx",
 			deposit: common.NewBigInt(1e18).MultInt64(1200),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetValidatorDepositLastEpoch(state, addr, deposit)
+				SetCandidateDepositLastEpoch(state, addr, deposit)
 				return calculateValidatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerBlock.MultInt64(2),
@@ -57,7 +57,7 @@ func TestCalculateValidatorDepositReward(t *testing.T) {
 			name:    "1e6 dx <= deposit < 1e9 dx",
 			deposit: common.NewBigInt(1e18).MultInt64(3e7),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetValidatorDepositLastEpoch(state, addr, deposit)
+				SetCandidateDepositLastEpoch(state, addr, deposit)
 				return calculateValidatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerBlock.MultInt64(3),
@@ -66,7 +66,7 @@ func TestCalculateValidatorDepositReward(t *testing.T) {
 			name:    "deposit >= 1e9 dx",
 			deposit: common.NewBigInt(1e18).MultInt64(1e10),
 			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetValidatorDepositLastEpoch(state, addr, deposit)
+				SetCandidateDepositLastEpoch(state, addr, deposit)
 				return calculateValidatorDepositReward(state, addr)
 			},
 			wantBonus: minRewardPerBlock.MultInt64(5),

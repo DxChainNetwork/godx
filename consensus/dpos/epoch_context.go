@@ -64,6 +64,13 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		if len(candidateVotes) < SafeSize {
 			return errors.New("too few candidates")
 		}
+
+		// get all candidate deposit and set it in last epoch
+		for _, can := range candidateVotes {
+			deposit := GetCandidateDeposit(ec.stateDB, can.addr)
+			SetCandidateDepositLastEpoch(ec.stateDB, can.addr, deposit)
+		}
+
 		// Create the seed and pseudo-randomly select the validators
 		seed := makeSeed(parent.Hash(), i)
 		validators, err := selectValidator(candidateVotes, seed)
@@ -87,10 +94,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		for _, validator := range validators {
 			ratio := GetRewardRatioNumerator(ec.stateDB, validator)
 			SetRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
-
-			// get the validator deposit and set it in last epoch
-			deposit := GetCandidateDeposit(ec.stateDB, validator)
-			SetValidatorDepositLastEpoch(ec.stateDB, validator, deposit)
 		}
 		// Set vote last epoch for all delegators who select the validators.
 		allDelegators := allDelegatorForValidators(ec.DposContext, validators)
