@@ -85,10 +85,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return err
 		}
 
-		// sort the left candidate list by descending order,
-		// and choose the previous 50 candidates as the ones to be rewarded additionally
-		sort.Sort(candidateVotes)
-		rewardSubstituteCandidates(ec.stateDB, candidateVotes)
+		// if current epoch remains in the previous 100 epochs from first epoch,
+		// calculate additional reward and add it to substitute candidate's balance directly
+		rewardSubstituteCandidates(ec.stateDB, candidateVotes, currentEpoch, validators)
 
 		// Set rewardRatioLastEpoch and depositLastEpoch for each validator
 		for _, validator := range validators {
@@ -368,17 +367,38 @@ func deductPenaltyForDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAc
 }
 
 // rewardSubstituteCandidates reward substitute candidates that not became validator
-func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntries) {
+func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntries, currentEpoch int64, validators []common.Address) {
+	epochIDOfFirstBlock := CalculateEpochID(timeOfFirstBlock)
+	if currentEpoch > epochIDOfFirstBlock+AdditionalRewardEpochCount {
+		return
+	}
+
+	// retrieve the left substitute candidates
+	substituteCandidates := make(randomSelectorEntries, len(candidateVotes))
+	copy(substituteCandidates, candidateVotes)
+	for _, addr := range validators {
+		for i, entry := range substituteCandidates {
+			if entry.addr == addr {
+				substituteCandidates.RemoveEntry(i)
+			}
+		}
+	}
+
+	// sort the left candidate list by descending order
+	sort.Sort(substituteCandidates)
+
+	// choose the previous 50 candidates as the ones to be rewarded additionally
 	rewardedCandidates := make([]common.Address, 0)
 	if len(candidateVotes) < RewardedCandidateCount {
-		rewardedCandidates = candidateVotes.listAddresses()
+		rewardedCandidates = substituteCandidates.listAddresses()
 	} else {
-		rewardedCandidates = candidateVotes.listAddresses()[:RewardedCandidateCount]
+		rewardedCandidates = substituteCandidates.listAddresses()[:RewardedCandidateCount]
 	}
 
 	reward := common.NewBigInt(0)
 	for _, candidate := range rewardedCandidates {
 		deposit := GetCandidateDeposit(state, candidate)
+
 		/*
 			deposit < 1e3 dx: reward = 1 dx
 			deposit < 1e6 dx: reward = 10 dx

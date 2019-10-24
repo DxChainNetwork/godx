@@ -170,3 +170,14 @@ func (entries randomSelectorEntries) Less(i, j int) bool {
 	}
 	return entries[i].addr.String() > entries[j].addr.String()
 }
+
+// RemoveEntry remove the entry with the given index
+func (entries randomSelectorEntries) RemoveEntry(index int) {
+	length := entries.Len()
+	pre := entries[:index]
+	suff := make(randomSelectorEntries, 0)
+	if index != length {
+		suff = entries[index+1:]
+	}
+	entries = append(pre, suff...)
+}
