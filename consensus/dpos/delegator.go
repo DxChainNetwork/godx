@@ -144,7 +144,7 @@ func calculateDelegatorDepositReward(state stateDB, addr common.Address) common.
 	duration := GetVoteDuration(state, addr)
 
 	/*
-		duration >= 160 epoch : rewardRatio = 8%
+		duration >= 100 epoch : rewardRatio = 8%
 		duration >= 80 epoch : rewardRatio = 6%
 		duration >= 40 epoch : rewardRatio = 4%
 		duration >= 20 epoch : rewardRatio = 2%
@@ -152,8 +152,8 @@ func calculateDelegatorDepositReward(state stateDB, addr common.Address) common.
 		duration >= 5 epoch : rewardRatio = 0.5%
 	*/
 	switch {
-	case duration >= Epoch160:
-		rewardRatio = Ratio160
+	case duration >= Epoch100:
+		rewardRatio = Ratio100
 		break
 	case duration >= Epoch80:
 		rewardRatio = Ratio80

@@ -96,7 +96,7 @@ var (
 const (
 
 	// different duration grades
-	Epoch160 = uint64(160 * EpochInterval)
+	Epoch100 = uint64(100 * EpochInterval)
 	Epoch80  = uint64(80 * EpochInterval)
 	Epoch40  = uint64(40 * EpochInterval)
 	Epoch20  = uint64(20 * EpochInterval)
@@ -104,7 +104,7 @@ const (
 	Epoch5   = uint64(5 * EpochInterval)
 
 	// different reward ratio
-	Ratio160 = 0.08
+	Ratio100 = 0.08
 	Ratio80  = 0.06
 	Ratio40  = 0.04
 	Ratio20  = 0.02
