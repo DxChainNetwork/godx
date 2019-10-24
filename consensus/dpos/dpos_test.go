@@ -116,6 +116,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// set the total vote weight for validator
 	SetTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
+	SetCandidateDepositLastEpoch(stateDB, validator, common.NewBigInt(1e18).MultUint64(100000))
 
 	stateDbCopy := stateDB.Copy()
 
@@ -137,10 +138,13 @@ func TestAccumulateRewards(t *testing.T) {
 	}
 
 	// Byzantium
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator, Time: new(big.Int).SetInt64(100000000)}
-	totalReward := common.NewBigInt(1.5e+18)
-	expectedDelegatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
-	expectedValidatorReward := totalReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator, Time: new(big.Int).SetInt64(10000)}
+	blockReward := common.NewBigInt(1.5e+18)
+	expectedDelegatorReward := blockReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator).BigIntPtr()
+
+	expectedValidatorBlockReward := blockReward.MultUint64(100 - TaxRatio).DivUint64(RewardRatioDenominator)
+	expectedValidatorDepositReward := minRewardPerBlock.MultInt64(2)
+	expectedValidatorReward := expectedValidatorBlockReward.Add(expectedValidatorDepositReward).BigIntPtr()
 
 	// allocate the block reward among validator and its delegators
 	accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))

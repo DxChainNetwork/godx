@@ -29,20 +29,21 @@ func TestRewardSubstituteCandidates(t *testing.T) {
 		t.Fatalf("failed to create stateDB,error: %v", err)
 	}
 
-	// mock 60 randomSelectorEntries
+	// mock 60 randomSelectorEntries, and already sorted as deposit by descending
 	substituteCandidates := make(randomSelectorEntries, 0)
 	for i := 0; i < 60; i++ {
 		addrStr := strconv.FormatUint(uint64(i+1), 10)
 		addr := common.HexToAddress("0x" + addrStr)
 		entry := &randomSelectorEntry{
 			addr: addr,
+			vote: common.NewBigInt(1e18).MultUint64(uint64(60 - i)),
 		}
 		substituteCandidates = append(substituteCandidates, entry)
 		SetCandidateDeposit(state, addr, common.NewBigInt(1e18).MultUint64(uint64(i+1)))
 	}
 
 	// reward substitute candidates
-	rewardSubstituteCandidates(state, substituteCandidates)
+	rewardSubstituteCandidates(state, substituteCandidates, int64(10), nil)
 
 	// check the balance whether is right
 	for i := 0; i < 60; i++ {

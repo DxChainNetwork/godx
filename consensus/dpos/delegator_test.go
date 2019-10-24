@@ -20,51 +20,67 @@ var dx = common.NewBigIntUint64(1e18)
 
 // TestCalculateDelegatorDepositReward test the function of calculateDelegatorDepositReward
 func TestCalculateDelegatorDepositReward(t *testing.T) {
+	deposit := common.NewBigInt(1e18).MultInt64(1000)
 	tests := []struct {
 		name      string
-		deposit   common.BigInt
-		fn        func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt
+		fn        func(state stateDB, addr common.Address) common.BigInt
 		wantBonus common.BigInt
 	}{
 		{
-			name:    "deposit < 1e3 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(200),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetVoteLastEpoch(state, addr, deposit)
-				SetVoteDuration(state, addr, uint64(EpochInterval))
+			name: "duration >= 160 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*170))
 				return calculateDelegatorDepositReward(state, addr)
 			},
-			wantBonus: minRewardPerEpoch,
+			wantBonus: deposit.MultFloat64(Ratio160),
 		},
 		{
-			name:    "1e3 dx <= deposit < 1e6 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(1200),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetVoteLastEpoch(state, addr, deposit)
-				SetVoteDuration(state, addr, uint64(EpochInterval))
+			name: "duration >= 80 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*90))
 				return calculateDelegatorDepositReward(state, addr)
 			},
-			wantBonus: minRewardPerEpoch.MultInt64(10),
+			wantBonus: deposit.MultFloat64(Ratio80),
 		},
 		{
-			name:    "1e6 dx <= deposit < 1e9 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(3e7),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetVoteLastEpoch(state, addr, deposit)
-				SetVoteDuration(state, addr, uint64(EpochInterval))
+			name: "duration >= 40 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*50))
 				return calculateDelegatorDepositReward(state, addr)
 			},
-			wantBonus: minRewardPerEpoch.MultInt64(100),
+			wantBonus: deposit.MultFloat64(Ratio40),
 		},
 		{
-			name:    "deposit >= 1e9 dx",
-			deposit: common.NewBigInt(1e18).MultInt64(1e10),
-			fn: func(state stateDB, addr common.Address, deposit common.BigInt) common.BigInt {
-				SetVoteLastEpoch(state, addr, deposit)
-				SetVoteDuration(state, addr, uint64(EpochInterval))
+			name: "duration >= 20 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*30))
 				return calculateDelegatorDepositReward(state, addr)
 			},
-			wantBonus: minRewardPerEpoch.MultInt64(1000),
+			wantBonus: deposit.MultFloat64(Ratio20),
+		},
+		{
+			name: "duration >= 10 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*15))
+				return calculateDelegatorDepositReward(state, addr)
+			},
+			wantBonus: deposit.MultFloat64(Ratio10),
+		},
+		{
+			name: "duration >= 5 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*7))
+				return calculateDelegatorDepositReward(state, addr)
+			},
+			wantBonus: deposit.MultFloat64(Ratio5),
+		},
+		{
+			name: "duration < 5 epoch",
+			fn: func(state stateDB, addr common.Address) common.BigInt {
+				SetVoteDuration(state, addr, uint64(EpochInterval*3))
+				return calculateDelegatorDepositReward(state, addr)
+			},
+			wantBonus: common.NewBigInt(0),
 		},
 	}
 
@@ -75,8 +91,9 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 		t.Fatalf("failed to create stateDB,error: %v", err)
 	}
 
+	SetVoteLastEpoch(stateDB, addr, deposit)
 	for _, test := range tests {
-		bonus := test.fn(stateDB, addr, test.deposit)
+		bonus := test.fn(stateDB, addr)
 		if bonus.Cmp(test.wantBonus) != 0 {
 			t.Errorf("the case[%s] got deposit reward: %v,wanted %v", test.name, bonus, test.wantBonus)
 		}

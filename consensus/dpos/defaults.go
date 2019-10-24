@@ -80,9 +80,6 @@ var (
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
 
-	// minRewardPerEpoch defines the minimum reward for deposit every epoch
-	minRewardPerEpoch = common.NewBigIntUint64(1e18)
-
 	// minRewardPerBlock defines the minimum reward for deposit every block
 	minRewardPerBlock = common.NewBigIntUint64(1e18)
 
