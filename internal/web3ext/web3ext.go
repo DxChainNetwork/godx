@@ -593,8 +593,19 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getDposTransactionsByBlockNumber',
+			call: 'eth_getDposTransactionsByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
 			name: 'getStorageContractByTransactionHash',
 			call: 'eth_getStorageContractByTransactionHash',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'getDposOperationByTransactionHash',
+			call: 'eth_getDposOperationByTransactionHash',
 			params: 1
 		}),
 		new web3._extend.Method({

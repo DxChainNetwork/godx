@@ -661,6 +661,44 @@ func blockToStorageContract(block *types.Block) (map[string]interface{}, error) 
 	return fields, nil
 }
 
+// GetDposTransactionsByBlockNumber get all dpos transaction hashes in the given block by number
+func (s *PublicBlockChainAPI) GetDposTransactionsByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) (map[string]string, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNr)
+	if block != nil {
+		return getDposTransactionsFromBlock(block)
+	}
+	return nil, err
+}
+
+// getDposTransactionsFromBlock return all transaction hashes related to dpos operation in the block.
+func getDposTransactionsFromBlock(block *types.Block) (map[string]string, error) {
+	fields := make(map[string]string)
+	precompiled := vm.PrecompiledDPoSContracts
+	txs := block.Transactions()
+	for _, tx := range txs {
+		if tx.To() == nil {
+			continue
+		}
+		p, ok := precompiled[*tx.To()]
+		if !ok {
+			continue
+		}
+		switch p {
+		case vm.ApplyCandidate:
+			fields[tx.Hash().String()] = vm.ApplyCandidate
+		case vm.CancelCandidate:
+			fields[tx.Hash().String()] = vm.CancelCandidate
+		case vm.Vote:
+			fields[tx.Hash().String()] = vm.Vote
+		case vm.CancelVote:
+			fields[tx.Hash().String()] = vm.CancelVote
+		default:
+			continue
+		}
+	}
+	return fields, nil
+}
+
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index. When fullTx is true
 // all transactions in the block are returned in full detail, otherwise only the transaction hash is returned.
 func (s *PublicBlockChainAPI) GetUncleByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (map[string]interface{}, error) {
@@ -1230,6 +1268,70 @@ func transactionToStorageContract(transaction *types.Transaction) (map[string]in
 			return fields, errors.New("the data field in the transaction is decoded abnormally")
 		}
 		fields["HostAnnouncement"] = ha
+	default:
+	}
+	return fields, nil
+}
+
+// GetDposOperationByTransactionHash returns the detail dpos operation transaction for the given tx hash
+func (s *PublicTransactionPoolAPI) GetDposOperationByTransactionHash(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
+	// Try to return an already finalized transaction
+	if tx, _, _, _ := rawdb.ReadTransaction(s.b.ChainDb(), hash); tx != nil {
+		return getDposOperationDetails(tx, hash)
+	}
+	// Not finalized transaction, try to retrieve it from the pool
+	if tx := s.b.GetPoolTransaction(hash); tx != nil {
+		return getDposOperationDetails(tx, hash)
+	}
+	// Transaction unknown, return as such
+	return nil, errors.New("transaction unknown")
+}
+
+// getDposOperationDetails return storage contract info.
+func getDposOperationDetails(tx *types.Transaction, hash common.Hash) (map[string]interface{}, error) {
+	precompiled := vm.PrecompiledDPoSContracts
+	if tx.To() == nil {
+		return nil, errors.New("this is a deployment contract tx")
+	}
+
+	p, ok := precompiled[*tx.To()]
+	if !ok {
+		return nil, errors.New("not a tx related dpos operation")
+	}
+
+	var signer types.Signer = types.FrontierSigner{}
+	if tx.Protected() {
+		signer = types.NewEIP155Signer(tx.ChainId())
+	}
+	from, _ := types.Sender(signer, tx)
+
+	fields := make(map[string]interface{})
+	switch p {
+	case vm.ApplyCandidate:
+		fields[hash.String()] = vm.ApplyCandidate
+		var candidateData *types.AddCandidateTxData
+		err := rlp.DecodeBytes(tx.Data(), &candidateData)
+		if err != nil {
+			return fields, errors.New("failed to rlp decode tx data into AddCandidateTxData")
+		}
+		fields["deposit"] = candidateData.Deposit
+		fields["rewardRatio"] = candidateData.RewardRatio
+	case vm.CancelCandidate:
+		fields[hash.String()] = vm.CancelCandidate
+		fields["candidateAddr"] = from
+	case vm.Vote:
+		fields[hash.String()] = vm.Vote
+		var voteData *types.VoteTxData
+		err := rlp.DecodeBytes(tx.Data(), &voteData)
+		if err != nil {
+			return fields, errors.New("failed to rlp decode tx data into VoteTxData")
+		}
+		fields["deposit"] = voteData.Deposit
+		fields["duration"] = voteData.Duration
+		fields["candidates"] = voteData.Candidates
+	case vm.CancelVote:
+		fields[hash.String()] = vm.CancelVote
+		fields["delegatorAddr"] = from
 	default:
 	}
 	return fields, nil
