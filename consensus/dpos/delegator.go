@@ -67,11 +67,17 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	markThawingAddressAndValue(state, addr, currentEpoch, prevDeposit)
 	SetVoteDeposit(state, addr, common.BigInt0)
 
-	// calculate the deposit bonus sent by dx reward account
-	bonus := calculateDelegatorDepositReward(state, addr)
+	// if current epoch remains in the previous 100 epochs from first epoch,
+	// calculate additional reward and add it to delegator's balance directly
+	epochIDOfFirstBlock := CalculateEpochID(timeOfFirstBlock)
+	if currentEpoch <= epochIDOfFirstBlock+AdditionalRewardEpochCount {
 
-	// directly add reward to delegator, just like adding block reward to validator
-	state.AddBalance(addr, bonus.BigIntPtr())
+		// calculate the deposit bonus sent by dx reward account
+		bonus := calculateDelegatorDepositReward(state, addr)
+
+		// directly add reward to delegator, just like adding block reward to validator
+		state.AddBalance(addr, bonus.BigIntPtr())
+	}
 
 	// set vote duration and time to 0
 	SetVoteDuration(state, addr, 0)
