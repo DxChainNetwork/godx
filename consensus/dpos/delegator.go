@@ -136,32 +136,40 @@ func checkValidVote(state stateDB, delegatorAddr common.Address, voteData types.
 
 // calculateDelegatorDepositReward calculate the deposit bonus for delegator
 func calculateDelegatorDepositReward(state stateDB, addr common.Address) common.BigInt {
+	rewardRatio := float64(0)
 	deposit := GetVoteLastEpoch(state, addr)
-	rewardPerEpoch := common.NewBigInt(0)
 	duration := GetVoteDuration(state, addr)
-	passedEpochs := duration / uint64(EpochInterval)
 
 	/*
-		deposit < 1e3 dx: rewardPerEpoch = 1 dx
-		deposit < 1e6 dx: rewardPerEpoch = 10 dx
-		deposit < 1e9 dx: rewardPerEpoch = 100 dx
-		deposit >= 1e9 dx: rewardPerEpoch = 1000 dx
+		duration >= 160 epoch : rewardRatio = 8%
+		duration >= 80 epoch : rewardRatio = 6%
+		duration >= 40 epoch : rewardRatio = 4%
+		duration >= 20 epoch : rewardRatio = 2%
+		duration >= 10 epoch : rewardRatio = 1%
+		duration >= 5 epoch : rewardRatio = 0.5%
 	*/
 	switch {
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
-		rewardPerEpoch = minRewardPerEpoch
+	case duration >= Epoch160:
+		rewardRatio = Ratio160
 		break
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
-		rewardPerEpoch = minRewardPerEpoch.MultInt64(10)
+	case duration >= Epoch80:
+		rewardRatio = Ratio80
 		break
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
-		rewardPerEpoch = minRewardPerEpoch.MultInt64(100)
+	case duration >= Epoch40:
+		rewardRatio = Ratio40
 		break
-	default:
-		rewardPerEpoch = minRewardPerEpoch.MultInt64(1000)
+	case duration >= Epoch20:
+		rewardRatio = Ratio20
+		break
+	case duration >= Epoch10:
+		rewardRatio = Ratio10
+		break
+	case duration >= Epoch5:
+		rewardRatio = Ratio5
+		break
 	}
 
-	return rewardPerEpoch.MultUint64(passedEpochs)
+	return deposit.MultFloat64(rewardRatio)
 }
 
 // CheckVoteDuration check whether now remains in locked duration

@@ -93,3 +93,23 @@ var (
 	// minCandidateReward defines the minimum reward for candidate without being validator
 	minCandidateReward = common.NewBigIntUint64(1e18)
 )
+
+// constants about reward ratio evaluation for deposit duration
+const (
+
+	// different duration grades
+	Epoch160 = uint64(160 * EpochInterval)
+	Epoch80  = uint64(80 * EpochInterval)
+	Epoch40  = uint64(40 * EpochInterval)
+	Epoch20  = uint64(20 * EpochInterval)
+	Epoch10  = uint64(10 * EpochInterval)
+	Epoch5   = uint64(5 * EpochInterval)
+
+	// different reward ratio
+	Ratio160 = 0.08
+	Ratio80  = 0.06
+	Ratio40  = 0.04
+	Ratio20  = 0.02
+	Ratio10  = 0.01
+	Ratio5   = 0.005
+)
