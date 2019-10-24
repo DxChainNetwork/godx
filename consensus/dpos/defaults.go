@@ -80,10 +80,6 @@ var (
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
 
-	// TODO: specify the real reward account address
-	// rewardAccount is the address which will send rewarded dx to some users
-	rewardAccount = common.HexToAddress("0xbcd")
-
 	// minRewardPerEpoch defines the minimum reward for deposit every epoch
 	minRewardPerEpoch = common.NewBigIntUint64(1e18)
 

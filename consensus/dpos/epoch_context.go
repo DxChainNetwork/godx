@@ -399,9 +399,7 @@ func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntr
 			reward = minCandidateReward.MultInt64(1000)
 		}
 
-		if reward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
-			state.SubBalance(rewardAccount, reward.BigIntPtr())
-			state.AddBalance(candidate, reward.BigIntPtr())
-		}
+		// directly add reward to substitute candidate, just like adding block reward to validator
+		state.AddBalance(candidate, reward.BigIntPtr())
 	}
 }

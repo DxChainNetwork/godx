@@ -70,11 +70,8 @@ func ProcessCancelVote(state stateDB, ctx *types.DposContext, addr common.Addres
 	// calculate the deposit bonus sent by dx reward account
 	bonus := calculateDelegatorDepositReward(state, addr)
 
-	// transfer from reward account to delegator
-	if bonus.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
-		state.SubBalance(rewardAccount, bonus.BigIntPtr())
-		state.AddBalance(addr, bonus.BigIntPtr())
-	}
+	// directly add reward to delegator, just like adding block reward to validator
+	state.AddBalance(addr, bonus.BigIntPtr())
 
 	// set vote duration and time to 0
 	SetVoteDuration(state, addr, 0)

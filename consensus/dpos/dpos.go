@@ -414,10 +414,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	currentEpochID := CalculateEpochID(header.Time.Int64())
 	if currentEpochID <= genesisEpochID+AdditionalRewardEpochCount {
 		additionalReward := calculateValidatorDepositReward(state, header.Validator)
-		if additionalReward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
-			state.SubBalance(rewardAccount, additionalReward.BigIntPtr())
-			validatorReward = validatorReward.Add(additionalReward)
-		}
+		validatorReward = validatorReward.Add(additionalReward)
 	}
 
 	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())
