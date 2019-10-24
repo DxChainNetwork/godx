@@ -376,32 +376,32 @@ func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntr
 		rewardedCandidates = candidateVotes.listAddresses()[:RewardedCandidateCount]
 	}
 
-	additionalReward := common.NewBigInt(0)
+	reward := common.NewBigInt(0)
 	for _, candidate := range rewardedCandidates {
 		deposit := GetCandidateDeposit(state, candidate)
 		/*
-			deposit < 1e3 dx: additionalReward = 1 dx
-			deposit < 1e6 dx: additionalReward = 10 dx
-			deposit < 1e9 dx: additionalReward = 100 dx
-			deposit >= 1e9 dx: additionalReward = 1000 dx
+			deposit < 1e3 dx: reward = 1 dx
+			deposit < 1e6 dx: reward = 10 dx
+			deposit < 1e9 dx: reward = 100 dx
+			deposit >= 1e9 dx: reward = 1000 dx
 		*/
 		switch {
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
-			additionalReward = minCandidateReward
+		case deposit.Cmp(dx1e3) == -1:
+			reward = minCandidateReward
 			break
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
-			additionalReward = minCandidateReward.MultInt64(10)
+		case deposit.Cmp(dx1e6) == -1:
+			reward = minCandidateReward.MultInt64(10)
 			break
-		case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
-			additionalReward = minCandidateReward.MultInt64(100)
+		case deposit.Cmp(dx1e9) == -1:
+			reward = minCandidateReward.MultInt64(100)
 			break
 		default:
-			additionalReward = minCandidateReward.MultInt64(1000)
+			reward = minCandidateReward.MultInt64(1000)
 		}
 
-		if additionalReward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
-			state.SubBalance(rewardAccount, additionalReward.BigIntPtr())
-			state.AddBalance(candidate, additionalReward.BigIntPtr())
+		if reward.BigIntPtr().Cmp(state.GetBalance(rewardAccount)) != 1 {
+			state.SubBalance(rewardAccount, reward.BigIntPtr())
+			state.AddBalance(candidate, reward.BigIntPtr())
 		}
 	}
 }

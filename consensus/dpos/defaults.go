@@ -92,6 +92,11 @@ var (
 
 	// minCandidateReward defines the minimum reward for candidate without being validator
 	minCandidateReward = common.NewBigIntUint64(1e18)
+
+	// different deposit grades
+	dx1e3 = common.NewBigInt(1e18).MultInt64(1e3)
+	dx1e6 = common.NewBigInt(1e18).MultInt64(1e6)
+	dx1e9 = common.NewBigInt(1e18).MultInt64(1e9)
 )
 
 // constants about reward ratio evaluation for deposit duration

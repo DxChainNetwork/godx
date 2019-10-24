@@ -155,13 +155,13 @@ func calculateValidatorDepositReward(state stateDB, addr common.Address) common.
 		deposit >= 1e9 dx: rewardPerBlock = 5 dx
 	*/
 	switch {
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e3)) == -1:
+	case deposit.Cmp(dx1e3) == -1:
 		rewardPerBlock = minRewardPerBlock
 		break
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e6)) == -1:
+	case deposit.Cmp(dx1e6) == -1:
 		rewardPerBlock = minRewardPerBlock.MultInt64(2)
 		break
-	case deposit.Cmp(common.NewBigInt(1e18).MultInt64(1e9)) == -1:
+	case deposit.Cmp(dx1e9) == -1:
 		rewardPerBlock = minRewardPerBlock.MultInt64(3)
 		break
 	default:
