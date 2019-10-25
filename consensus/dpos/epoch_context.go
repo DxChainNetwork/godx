@@ -373,26 +373,18 @@ func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntr
 		return
 	}
 
-	// retrieve the left substitute candidates
-	substituteCandidates := make(randomSelectorEntries, len(candidateVotes))
-	copy(substituteCandidates, candidateVotes)
-	for _, addr := range validators {
-		for i, entry := range substituteCandidates {
-			if entry.addr == addr {
-				substituteCandidates.RemoveEntry(i)
-			}
-		}
-	}
+	// sort the total candidate list by descending order
+	sort.Sort(candidateVotes)
 
-	// sort the left candidate list by descending order
-	sort.Sort(substituteCandidates)
+	// retrieve the left substitute candidates
+	substituteCandidates := getSubstituteCandidates(candidateVotes, validators)
 
 	// choose the previous 50 candidates as the ones to be rewarded additionally
 	rewardedCandidates := make([]common.Address, 0)
 	if len(candidateVotes) < RewardedCandidateCount {
-		rewardedCandidates = substituteCandidates.listAddresses()
+		rewardedCandidates = substituteCandidates
 	} else {
-		rewardedCandidates = substituteCandidates.listAddresses()[:RewardedCandidateCount]
+		rewardedCandidates = substituteCandidates[:RewardedCandidateCount]
 	}
 
 	reward := common.NewBigInt(0)
@@ -422,4 +414,25 @@ func rewardSubstituteCandidates(state stateDB, candidateVotes randomSelectorEntr
 		// directly add reward to substitute candidate, just like adding block reward to validator
 		state.AddBalance(candidate, reward.BigIntPtr())
 	}
+}
+
+// getSubstituteCandidates retrieve the left substitute candidates with filtering the given validators
+func getSubstituteCandidates(candidateVotes randomSelectorEntries, validators []common.Address) []common.Address {
+	length := candidateVotes.Len()
+	substituteCandidates := make([]common.Address, candidateVotes.Len())
+	copy(substituteCandidates, candidateVotes.listAddresses())
+	for _, validator := range validators {
+		for i, substitute := range substituteCandidates {
+			if validator == substitute {
+				pre := substituteCandidates[:i]
+				suff := make([]common.Address, 0)
+				if i < length-1 {
+					suff = substituteCandidates[i+1:]
+				}
+				substituteCandidates = append(pre, suff...)
+			}
+		}
+	}
+
+	return substituteCandidates
 }
