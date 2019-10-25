@@ -20,6 +20,23 @@ import (
 	"github.com/DxChainNetwork/godx/trie"
 )
 
+func TestGetSubstituteCandidates(t *testing.T) {
+
+	// mock candidate votes and validators
+	candidateVotes := makeRandomSelectorData(20)
+	validators := make([]common.Address, 0)
+	for i := 0; i < 5; i++ {
+		validators = append(validators, candidateVotes[i].addr)
+	}
+
+	substituteCandidates := getSubstituteCandidates(candidateVotes, validators)
+
+	// check the left substitute candidates
+	if len(substituteCandidates) != candidateVotes.Len()-len(validators) {
+		t.Errorf("the length of substitute candidates is not right,wanted %d,got %d", candidateVotes.Len()-len(validators), len(substituteCandidates))
+	}
+}
+
 func TestRewardSubstituteCandidates(t *testing.T) {
 
 	// mock state DB
