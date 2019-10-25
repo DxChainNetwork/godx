@@ -27,12 +27,12 @@ func TestCalculateDelegatorDepositReward(t *testing.T) {
 		wantBonus common.BigInt
 	}{
 		{
-			name: "duration >= 160 epoch",
+			name: "duration >= 100 epoch",
 			fn: func(state stateDB, addr common.Address) common.BigInt {
 				SetVoteDuration(state, addr, uint64(EpochInterval*170))
 				return calculateDelegatorDepositReward(state, addr)
 			},
-			wantBonus: deposit.MultFloat64(Ratio160),
+			wantBonus: deposit.MultFloat64(Ratio100),
 		},
 		{
 			name: "duration >= 80 epoch",
