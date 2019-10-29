@@ -22,7 +22,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	gonet "net"
 	"time"
+
+	"github.com/DxChainNetwork/godx/p2p/enode"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
@@ -57,6 +60,7 @@ type Network struct {
 	db          *nodeDB // database of known nodes
 	conn        transport
 	netrestrict *netutil.Netlist
+	localNode   *enode.LocalNode
 
 	closed           chan struct{}          // closed when loop is done
 	closeReq         chan struct{}          // 'request to close'
@@ -132,7 +136,7 @@ type timeoutEvent struct {
 	node *Node
 }
 
-func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netrestrict *netutil.Netlist) (*Network, error) {
+func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netrestrict *netutil.Netlist, localNode *enode.LocalNode) (*Network, error) {
 	ourID := PubkeyID(&ourPubkey)
 
 	var db *nodeDB
@@ -147,6 +151,7 @@ func newNetwork(conn transport, ourPubkey ecdsa.PublicKey, dbPath string, netres
 	net := &Network{
 		db:               db,
 		conn:             conn,
+		localNode:        localNode,
 		netrestrict:      netrestrict,
 		tab:              tab,
 		topictab:         newTopicTable(db, tab.self),
@@ -1127,6 +1132,7 @@ func (net *Network) handlePing(n *Node, pkt *ingressPacket) {
 	}
 	ticketToPong(t, pong)
 	net.conn.send(n, pongPacket, pong)
+	net.localNode.UDPEndpointStatement(pkt.remoteAddr, &gonet.UDPAddr{IP: ping.To.IP, Port: int(ping.To.UDP)})
 }
 
 func (net *Network) handleKnownPong(n *Node, pkt *ingressPacket) error {
