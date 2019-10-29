@@ -26,8 +26,8 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 
 # Section 1. Getting Started
 
-* For MacOS or Linux, please click [here](./LINUX.md)
-* For Windows, please click [here](./WINDOWS.md)
+-  For MacOS or Linux, please click [here](./LINUX.md)
+-  For Windows, please click [here](./WINDOWS.md)
 
 # Section 2. Running `gdx`
 
