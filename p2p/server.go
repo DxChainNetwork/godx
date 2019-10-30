@@ -715,9 +715,9 @@ func (srv *Server) setupDiscovery() error {
 		var ntab *discv5.Network
 		var err error
 		if sconn != nil {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, "", srv.NetRestrict)
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, sconn, "", srv.NetRestrict, srv.localnode)
 		} else {
-			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, "", srv.NetRestrict)
+			ntab, err = discv5.ListenUDP(srv.PrivateKey, conn, "", srv.NetRestrict, srv.localnode)
 		}
 		if err != nil {
 			return err

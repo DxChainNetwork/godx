@@ -24,6 +24,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/DxChainNetwork/godx/p2p/enode"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
@@ -230,13 +232,13 @@ type udp struct {
 }
 
 // ListenUDP returns a new table that listens for UDP packets on laddr.
-func ListenUDP(priv *ecdsa.PrivateKey, conn conn, nodeDBPath string, netrestrict *netutil.Netlist) (*Network, error) {
+func ListenUDP(priv *ecdsa.PrivateKey, conn conn, nodeDBPath string, netrestrict *netutil.Netlist, localNode *enode.LocalNode) (*Network, error) {
 	realaddr := conn.LocalAddr().(*net.UDPAddr)
 	transport, err := listenUDP(priv, conn, realaddr)
 	if err != nil {
 		return nil, err
 	}
-	net, err := newNetwork(transport, priv.PublicKey, nodeDBPath, netrestrict, nil)
+	net, err := newNetwork(transport, priv.PublicKey, nodeDBPath, netrestrict, localNode)
 	if err != nil {
 		return nil, err
 	}
