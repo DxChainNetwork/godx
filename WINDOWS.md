@@ -20,7 +20,7 @@ Please follow [this link](https://sourceforge.net/projects/tdm-gcc/) to download
 
 ### 1.4. `make` Command Installation
 
-Please follow [this link](https://sourceforge.net/projects/gnuwin32/files/make/3.81/make-3.81.exe/download?use_mirror=iweb&download=) to install `make` command. After the installation is done, add the path `C:\Program Files (x86)/GnuWin32/bin` into the system environment path. (if you do not know how to set it, you can check [this article](https://www.java.com/en/download/help/path.xml))
+Please follow [this link](https://sourceforge.net/projects/gnuwin32/files/make/3.81/make-3.81.exe/download?use_mirror=iweb&download=) to install `make` command. After the installation is done, add the path `C:\Program Files (x86)/GnuWin32/bin` into the system environment path. (if you do not know how to set it, you can follow [this page](https://www.java.com/en/download/help/path.xml))
 
 ### 1.5. Docker (Optional)
 
@@ -55,3 +55,9 @@ Please run the following command in git bash to build the executable.
 ```shell
 $ make gdx
 ```
+
+### 2.4. Add `gdx` to path
+
+Add `gdx` executable to your path by following [this page](https://www.java.com/en/download/help/path.xml). The path to be added to the path will be `/c/Users/${USERNAME}/go/src/github.com/DxChainNetwork/godx/build/bin/gdx`
+
+> NOTE: please replace  ${USERNAME} with your actual username

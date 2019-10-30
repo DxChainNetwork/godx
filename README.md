@@ -26,6 +26,8 @@ Welcome to the official Go implementation of [DxChain](https://www.dxchain.com) 
 
 # Section 1. Getting Started
 
+To build the project from the source code, please following the following instructions:
+
 -  For MacOS or Linux, please click [here](./LINUX.md)
 -  For Windows, please click [here](./WINDOWS.md)
 
@@ -36,18 +38,6 @@ To run the node, please use the following command:
 ```shell
 $ gdx
 ```
-
-> for windows, please replace gdx with /c/Users/${USERNAME}/go/src/github.com/DxChainNetwork/godx/build/bin/gdx
->  NOTE: please replace  ${USERNAME} with your actual username
-
-To open the gdx console, please run the following command:
-
-```shell
-$ gdx attach
-```
-
-> for windows, please replace gdx with /c/Users/${USERNAME}/go/src/github.com/DxChainNetwork/godx/build/bin/gdx
->  NOTE: please replace  ${USERNAME} with your actual username
 
 # Section 3. Tutorial
 
