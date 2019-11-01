@@ -56,7 +56,7 @@ func (c *lesCommons) makeProtocols(versions []uint) []p2p.Protocol {
 	for i, version := range versions {
 		version := version
 		protos[i] = p2p.Protocol{
-			Name:     "les",
+			Name:     p2p.LightNodeProtocol,
 			Version:  version,
 			Length:   ProtocolLengths[version],
 			NodeInfo: c.nodeInfo,

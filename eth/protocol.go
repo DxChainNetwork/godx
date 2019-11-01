@@ -35,9 +35,6 @@ const (
 	eth64 = 64
 )
 
-// ProtocolName is the official short name of the protocol used during capability negotiation.
-var ProtocolName = "dx"
-
 // ProtocolVersions are the supported versions of the eth protocol (first is primary).
 var ProtocolVersions = []uint{eth64, eth63, eth62}
 

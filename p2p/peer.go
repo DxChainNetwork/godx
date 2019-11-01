@@ -55,6 +55,12 @@ const (
 	pongMsg      = 0x03
 )
 
+const (
+	// protocols supported by the full node and light node
+	FullNodeProtocol  = "dx"
+	LightNodeProtocol = "lightdx"
+)
+
 // protoHandshake is the RLP structure of the protocol handshake.
 type protoHandshake struct {
 	Version    uint64 // 5 by default
@@ -414,10 +420,38 @@ outer:
 	return result
 }
 
+// protocolExclusion checks if the node supports both fullNode
+// and lightNode protocols. If so, the lightNodeProtocol must
+// be excluded
+func (p *Peer) protocolExclusion() bool {
+	if len(p.running) <= 1 {
+		return false
+	}
+
+	// otherwise, check the existence of each protocol
+	var ethProto, lesProto bool
+	for _, proto := range p.running {
+		ethProto = proto.Name == FullNodeProtocol
+		lesProto = proto.Name == LightNodeProtocol
+	}
+
+	// check and return
+	return !(ethProto && lesProto)
+}
+
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
 	p.wg.Add(len(p.running))
+
+	exclusion := p.protocolExclusion()
+
 	// loop through all matched protocol
 	for _, proto := range p.running {
+		// if exclusion is needed and the protocol is lightNodeProtocol
+		// then exclude and do not run the lightNodeProtocol
+		if exclusion && proto.Name == LightNodeProtocol {
+			continue
+		}
+
 		// initialize protoRW
 		proto := proto
 		proto.closed = p.closed
