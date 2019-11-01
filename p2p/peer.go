@@ -56,8 +56,10 @@ const (
 )
 
 const (
-	// protocols supported by the full node and light node
-	FullNodeProtocol  = "dx"
+	// FullNodeProtocol is the protocol supported by full synced nodes
+	FullNodeProtocol = "dx"
+
+	// LightNodeProtocol is the protocol supported by light synced nodes
 	LightNodeProtocol = "lightdx"
 )
 
