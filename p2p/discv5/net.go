@@ -25,12 +25,11 @@ import (
 	gonet "net"
 	"time"
 
-	"github.com/DxChainNetwork/godx/p2p/enode"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p/enode"
 	"github.com/DxChainNetwork/godx/p2p/netutil"
 	"github.com/DxChainNetwork/godx/rlp"
 	"golang.org/x/crypto/sha3"
