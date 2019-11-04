@@ -1057,10 +1057,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
 			}
 		}
-
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-
 		return p.SendTxStatus(req.ReqID, bv, stats)
 
 	case GetTxStatusMsg:
@@ -1081,7 +1079,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-
 		return p.SendTxStatus(req.ReqID, bv, pm.txStatus(req.Hashes))
 
 	case TxStatusMsg:
@@ -1097,7 +1094,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
 	default:
