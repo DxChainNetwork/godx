@@ -433,12 +433,15 @@ func (p *Peer) protocolExclusion() bool {
 	// otherwise, check the existence of each protocol
 	var ethProto, lesProto bool
 	for _, proto := range p.running {
-		ethProto = proto.Name == FullNodeProtocol
-		lesProto = proto.Name == LightNodeProtocol
+		if proto.Name == FullNodeProtocol {
+			ethProto = true
+		} else if proto.Name == LightNodeProtocol {
+			lesProto = true
+		}
 	}
 
 	// check and return
-	return !(ethProto && lesProto)
+	return ethProto && lesProto
 }
 
 func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error) {
