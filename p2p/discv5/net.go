@@ -21,7 +21,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"net"
 	gonet "net"
 	"time"
 
@@ -94,7 +93,7 @@ type Network struct {
 // it is an interface so we can test without opening lots of UDP
 // sockets and without generating a private key.
 type transport interface {
-	sendPing(remote *Node, remoteAddr *net.UDPAddr, topics []Topic) (hash []byte)
+	sendPing(remote *Node, remoteAddr *gonet.UDPAddr, topics []Topic) (hash []byte)
 	sendNeighbours(remote *Node, nodes []*Node)
 	sendFindnodeHash(remote *Node, target common.Hash)
 	sendTopicRegister(remote *Node, topics []Topic, topicIdx int, pong []byte)
@@ -102,7 +101,7 @@ type transport interface {
 
 	send(remote *Node, ptype nodeEvent, p interface{}) (hash []byte)
 
-	localAddr() *net.UDPAddr
+	localAddr() *gonet.UDPAddr
 	Close()
 }
 
@@ -734,7 +733,7 @@ func (net *Network) internNodeFromDB(dbn *Node) *Node {
 	return n
 }
 
-func (net *Network) internNodeFromNeighbours(sender *net.UDPAddr, rn rpcNode) (n *Node, err error) {
+func (net *Network) internNodeFromNeighbours(sender *gonet.UDPAddr, rn rpcNode) (n *Node, err error) {
 	if rn.ID == net.tab.self.ID {
 		return nil, errors.New("is self")
 	}
@@ -1106,7 +1105,7 @@ func (net *Network) abortTimedEvent(n *Node, ev nodeEvent) {
 	}
 }
 
-func (net *Network) ping(n *Node, addr *net.UDPAddr) {
+func (net *Network) ping(n *Node, addr *gonet.UDPAddr) {
 	//fmt.Println("ping", n.addr().String(), n.ID.String(), n.sha.Hex())
 	if n.pingEcho != nil || n.ID == net.tab.self.ID {
 		//fmt.Println(" not sent")
