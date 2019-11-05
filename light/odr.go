@@ -177,3 +177,60 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 		rawdb.WriteBloomBits(db, req.BitIdx, sectionIdx, sectionHead, req.BloomBits[i])
 	}
 }
+
+// DposTrieSpecifier is the specifier for dpos tries, which tell which trie to retrieve
+type DposTrieSpecifier uint8
+
+const (
+	EpochTrieSpec DposTrieSpecifier = iota + 1
+	DelegateTrieSpec
+	CandidateTrieSpec
+	VoteTrieSpec
+	MinedCntTrieSpec
+)
+
+func (spec DposTrieSpecifier) String() string {
+	switch spec {
+	case EpochTrieSpec:
+		return "epoch trie"
+	case DelegateTrieSpec:
+		return "delegate trie"
+	case CandidateTrieSpec:
+		return "candidate trie"
+	case VoteTrieSpec:
+		return "vote trie"
+	case MinedCntTrieSpec:
+		return "mined count trie"
+	default:
+	}
+	return "unknown dpos trie specifier"
+}
+
+// DposTrieID is the ID for DposTries
+type DposTrieID struct {
+	BlockHash   common.Hash
+	BlockNumber uint64
+	Roots       types.DposContextRoot
+}
+
+// DposTrieIDFromHeader returns a DposTrieID from a block header
+func DposTrieIDFromHeader(header *types.Header) *DposTrieID {
+	return &DposTrieID{
+		BlockHash:   header.Hash(),
+		BlockNumber: header.Number.Uint64(),
+		Roots:       *header.DposContext.Copy(),
+	}
+}
+
+// DposTrieRequest is the ODR request type for retrieving dpos related trie
+type DposTrieRequest struct {
+	OdrRequest
+	ID    *DposTrieID
+	Key   []byte
+	Proof *NodeSet
+}
+
+// StoreResult stores the result of DposTrieRequest into the database
+func (req *DposTrieRequest) StoreResult(db ethdb.Database) {
+	req.Proof.Store(db)
+}
