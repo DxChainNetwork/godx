@@ -68,6 +68,8 @@ func LesRequest(req light.OdrRequest) LesOdrRequest {
 		return (*ChtRequest)(r)
 	case *light.BloomRequest:
 		return (*BloomRequest)(r)
+	case *light.DposTrieRequest:
+		return (*DposTrieRequest)(r)
 	default:
 		return nil
 	}
@@ -579,9 +581,50 @@ func (db *readTraceDB) Has(key []byte) (bool, error) {
 	return err == nil, nil
 }
 
-// DposTrieRequest is the ODR request type for dpos trie
+// DposProofReq is the request for dpos proof
+type DposProofReq struct {
+	BlockHash common.Hash
+	TrieSpec  light.DposTrieSpecifier
+	Key       []byte
+	FromLevel uint
+}
+
+// DposTrieRequest is the ODR request type for dpos trie.
+// DposTrieRequest implement LesOdrRequest
 type DposTrieRequest light.DposTrieRequest
 
+// GetCost reeturn the cost of the request
 func (r *DposTrieRequest) GetCost(peer *peer) uint64 {
+	return peer.GetRequestCost(GetDposTrieMsg, 1)
+}
 
+// CanSend tells if a certain peer is suitable for serving the given request
+func (r *DposTrieRequest) CanSend(peer *peer) bool {
+	return peer.HasBlock(r.ID.BlockHash, r.ID.BlockNumber, true)
+}
+
+// Request send the DposTrieRequest
+func (r *DposTrieRequest) Request(reqID uint64, peer *peer) error {
+	peer.Log().Debug("Requesting dpos trie", "trie type", r.ID.TrieSpec, "key", r.Key)
+	req := DposProofReq{
+		BlockHash: r.ID.BlockHash,
+		TrieSpec:  r.ID.TrieSpec,
+		Key:       r.Key,
+	}
+	return peer.RequestDposProof(reqID, r.GetCost(peer), []DposProofReq{req})
+}
+
+// Validate checks the result returned from les server
+func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
+	proofs := msg.Obj.(light.NodeList)
+	nodeSet := proofs.NodeSet()
+	reads := &readTraceDB{db: nodeSet}
+	if _, _, err := trie.VerifyProof(r.ID.TargetRoot(), r.Key, reads); err != nil {
+		return fmt.Errorf("merkle proof verification failed: %v", err)
+	}
+	if len(reads.reads) != nodeSet.KeyCount() {
+		return errUselessNodes
+	}
+	r.Proof = nodeSet
+	return nil
 }

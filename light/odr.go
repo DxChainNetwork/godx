@@ -211,15 +211,35 @@ type DposTrieID struct {
 	BlockHash   common.Hash
 	BlockNumber uint64
 	Roots       types.DposContextRoot
+	TrieSpec    DposTrieSpecifier
 }
 
 // DposTrieIDFromHeader returns a DposTrieID from a block header
-func DposTrieIDFromHeader(header *types.Header) *DposTrieID {
+func DposTrieIDFromHeader(header *types.Header, trieSpec DposTrieSpecifier) *DposTrieID {
 	return &DposTrieID{
 		BlockHash:   header.Hash(),
 		BlockNumber: header.Number.Uint64(),
 		Roots:       *header.DposContext.Copy(),
+		TrieSpec:    trieSpec,
 	}
+}
+
+// TargetRoot return the target root for a DposTrieID
+func (id *DposTrieID) TargetRoot() common.Hash {
+	switch id.TrieSpec {
+	case EpochTrieSpec:
+		return id.Roots.EpochRoot
+	case DelegateTrieSpec:
+		return id.Roots.DelegateRoot
+	case CandidateTrieSpec:
+		return id.Roots.CandidateRoot
+	case VoteTrieSpec:
+		return id.Roots.VoteRoot
+	case MinedCntTrieSpec:
+		return id.Roots.MinedCntRoot
+	default:
+	}
+	return common.Hash{}
 }
 
 // DposTrieRequest is the ODR request type for retrieving dpos related trie

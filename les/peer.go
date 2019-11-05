@@ -356,6 +356,12 @@ func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	}
 }
 
+// RequestDposProof fetches a batch of dpos merkle proofs from a remote node
+func (p *peer) RequestDposProof(reqID, cost uint64, reqs []DposProofReq) error {
+	p.Log().Debug("Fetching batch of Dpos Proofs", "count", len(reqs))
+	return sendRequest(p.rw, GetDposTrieMsg, reqID, cost, reqs)
+}
+
 type keyValueEntry struct {
 	Key   string
 	Value rlp.RawValue
