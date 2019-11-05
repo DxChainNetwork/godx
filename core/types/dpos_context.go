@@ -200,15 +200,26 @@ func (dc *DposContext) ToRoot() *DposContextRoot {
 }
 
 // Root calculates the root hash of 5 tries in DposContext
-func (dcp *DposContextRoot) Root() (h common.Hash) {
+func (dcr *DposContextRoot) Root() (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
-	rlp.Encode(hw, dcp.EpochRoot)
-	rlp.Encode(hw, dcp.DelegateRoot)
-	rlp.Encode(hw, dcp.CandidateRoot)
-	rlp.Encode(hw, dcp.VoteRoot)
-	rlp.Encode(hw, dcp.MinedCntRoot)
+	rlp.Encode(hw, dcr.EpochRoot)
+	rlp.Encode(hw, dcr.DelegateRoot)
+	rlp.Encode(hw, dcr.CandidateRoot)
+	rlp.Encode(hw, dcr.VoteRoot)
+	rlp.Encode(hw, dcr.MinedCntRoot)
 	hw.Sum(h[:0])
 	return h
+}
+
+// Copy makes a copy of the DposContextRoot
+func (dcr *DposContextRoot) Copy() *DposContextRoot {
+	return &DposContextRoot{
+		EpochRoot:     dcr.EpochRoot,
+		DelegateRoot:  dcr.DelegateRoot,
+		CandidateRoot: dcr.CandidateRoot,
+		VoteRoot:      dcr.VoteRoot,
+		MinedCntRoot:  dcr.MinedCntRoot,
+	}
 }
 
 // KickoutCandidate will kick out the given candidate

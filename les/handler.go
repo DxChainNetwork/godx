@@ -324,7 +324,20 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg}
+var reqList = []uint64{
+	GetBlockHeadersMsg,
+	GetBlockBodiesMsg,
+	GetCodeMsg,
+	GetReceiptsMsg,
+	GetProofsV1Msg,
+	SendTxMsg,
+	SendTxV2Msg,
+	GetTxStatusMsg,
+	GetHeaderProofsMsg,
+	GetProofsV2Msg,
+	GetHelperTrieProofsMsg,
+	GetDposTrieMsg,
+}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.

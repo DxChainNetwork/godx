@@ -578,3 +578,10 @@ func (db *readTraceDB) Has(key []byte) (bool, error) {
 	_, err := db.Get(key)
 	return err == nil, nil
 }
+
+// DposTrieRequest is the ODR request type for dpos trie
+type DposTrieRequest light.DposTrieRequest
+
+func (r *DposTrieRequest) GetCost(peer *peer) uint64 {
+
+}
