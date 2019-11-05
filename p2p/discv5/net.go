@@ -1146,6 +1146,11 @@ func (net *Network) handleKnownPong(n *Node, pkt *ingressPacket) error {
 	}
 	n.pingEcho = nil
 	n.pingTopics = nil
+	pong, ok := pkt.data.(*pong)
+	if ok {
+		net.localNode.UDPEndpointStatement(pkt.remoteAddr, &gonet.UDPAddr{IP: pong.To.IP, Port: int(pong.To.UDP)})
+	}
+
 	return err
 }
 
