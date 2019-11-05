@@ -137,7 +137,7 @@ func NewProtocolManager(eth *Ethereum, config *params.ChainConfig, mode download
 		// Compatible; initialise the sub-protocol
 		version := version // Closure for the run
 		manager.SubProtocols = append(manager.SubProtocols, p2p.Protocol{
-			Name:    ProtocolName,
+			Name:    p2p.FullNodeProtocol,
 			Version: version,
 			Length:  ProtocolLengths[i],
 			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {

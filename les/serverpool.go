@@ -181,7 +181,7 @@ func (pool *serverPool) start(server *p2p.Server, topic discv5.Topic) {
 
 // discoverNodes wraps SearchTopic, converting result nodes to enode.Node.
 func (pool *serverPool) discoverNodes() {
-	ch := make(chan *discv5.Node)
+	ch := make(chan *discv5.Node, 100)
 	go func() {
 		pool.server.DiscV5.SearchTopic(pool.topic, pool.discSetPeriod, ch, pool.discLookups)
 		close(ch)

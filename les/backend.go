@@ -261,8 +261,6 @@ func (s *LightEthereum) Start(srvr *p2p.Server) error {
 	s.serverPool.start(srvr, lesTopic(s.blockchain.Genesis().Hash(), protocolVersion))
 	s.protocolManager.Start(s.config.LightPeers)
 
-	// s.storageHost.Start(s)
-
 	return nil
 }
 
@@ -281,7 +279,6 @@ func (s *LightEthereum) Stop() error {
 
 	time.Sleep(time.Millisecond * 200)
 	s.chainDb.Close()
-	s.storageHost.Close()
 	close(s.shutdownChan)
 
 	return nil
