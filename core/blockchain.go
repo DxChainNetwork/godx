@@ -405,6 +405,11 @@ func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
 	return state.New(root, bc.stateCache)
 }
 
+// DposCtx returns a new dposCtx based on the current HEAD block
+func (bc *BlockChain) DposCtx() (*types.DposContext, error) {
+	return bc.DposCtxAt(bc.CurrentHeader().DposContext)
+}
+
 // DposCtxAt returns a dposCtx based on a particular point in time.
 func (bc *BlockChain) DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error) {
 	return types.NewDposContextFromProto(bc.db, root)

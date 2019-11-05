@@ -30,6 +30,7 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/light"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
 )
@@ -595,7 +596,7 @@ type DposTrieRequest light.DposTrieRequest
 
 // GetCost reeturn the cost of the request
 func (r *DposTrieRequest) GetCost(peer *peer) uint64 {
-	return peer.GetRequestCost(GetDposTrieMsg, 1)
+	return peer.GetRequestCost(GetDposProofMsg, 1)
 }
 
 // CanSend tells if a certain peer is suitable for serving the given request
@@ -627,4 +628,17 @@ func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	r.Proof = nodeSet
 	return nil
+}
+
+type dposProofRequestPacket struct {
+	ReqID uint64
+	Reqs  []DposProofReq
+}
+
+func decodeDposProofMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
+	var req dposProofRequestPacket
+	if err := msg.Decode(&req); err != nil {
+		return dposProofRequestPacket{}, err
+	}
+	return req, nil
 }

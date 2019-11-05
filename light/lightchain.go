@@ -215,6 +215,16 @@ func (bc *LightChain) State() (*state.StateDB, error) {
 	return nil, errors.New("not implemented, needs client/server interface split")
 }
 
+// DposCtx returns the dposCtx on the current head block
+func (bc *LightChain) DposCtx() (*types.DposContext, error) {
+	return nil, errors.New("not implemented")
+}
+
+// DposCtxAt returns the dposCtx given the dpos roots
+func (bc *LightChain) DposCtxAt(roots *types.DposContextRoot) (*types.DposContext, error) {
+	return nil, errors.New("not implemented")
+}
+
 // GetBody retrieves a block body (transactions and uncles) from the database
 // or ODR service by hash, caching it if found.
 func (self *LightChain) GetBody(ctx context.Context, hash common.Hash) (*types.Body, error) {

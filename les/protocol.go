@@ -80,8 +80,8 @@ const (
 	GetTxStatusMsg         = 0x14
 	TxStatusMsg            = 0x15
 	// Protocol for Dpos
-	GetDposTrieMsg = 0x16
-	DposTrieMsg    = 0x17
+	GetDposProofMsg = 0x16
+	DposProofMsg    = 0x17
 )
 
 type errCode int

@@ -56,6 +56,7 @@ const (
 	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
 	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
 	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxDposProofsFetch       = 64  // Amount of merkle proof for dpos tries to be fetched per retrieval request
 	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend                = 64  // Amount of transactions to be send per request
 	MaxTxStatus              = 256 // Amount of transactions to queried per request
@@ -75,6 +76,8 @@ type BlockChain interface {
 	CurrentHeader() *types.Header
 	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
+	DposCtx() (*types.DposContext, error)
+	DposCtxAt(*types.DposContextRoot) (*types.DposContext, error)
 	InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
 	GetHeaderByNumber(number uint64) *types.Header
@@ -336,7 +339,7 @@ var reqList = []uint64{
 	GetHeaderProofsMsg,
 	GetProofsV2Msg,
 	GetHelperTrieProofsMsg,
-	GetDposTrieMsg,
+	GetDposProofMsg,
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
@@ -1109,6 +1112,12 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
+	case GetDposProofMsg:
+		p.Log().Trace("Received dpos proof request")
+		return pm.handleGetDposProofMsg(msg, p, costs, reject)
+
+	case DposProofMsg:
+
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -1182,6 +1191,106 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 		}
 	}
 	return stats
+}
+
+func (pm *ProtocolManager) handleGetDposProofMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
+	rawReq, err := decodeDposProofMsg(msg)
+	if err != nil {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	if reject(uint64(len(rawReq.Reqs)), MaxDposProofsFetch) {
+		return errResp(ErrRequestRejected, "")
+	}
+
+	result := calculateDposProofForBatchRequests(pm, rawReq.Reqs, softResponseLimit)
+
+	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(len(rawReq.Reqs))*costs.reqCost)
+	pm.server.fcCostStats.update(msg.Code, uint64(len(rawReq.Reqs)), rcost)
+	return p.SendDposProof(rawReq.ReqID, bv, result.NodeList())
+}
+
+func calculateDposProofForBatchRequests(pm *ProtocolManager, reqs []DposProofReq, resultLimit int) *light.NodeSet {
+	ctx := newDposProofMsgCtx(pm)
+	for _, req := range reqs {
+		calculateDposProofForRequest(ctx, req)
+		if ctx.result.DataSize() >= resultLimit {
+			break
+		}
+	}
+	return ctx.result
+}
+
+func calculateDposProofForRequest(ctx *dposProofMsgCtx, req DposProofReq) {
+	ctx.openDposCtx(req.BlockHash)
+	if ctx.dposCtx == nil {
+		return
+	}
+	t := selectDposTrie(ctx.dposCtx, req.TrieSpec)
+	if t == nil {
+		return
+	}
+	t.Prove(req.Key, req.FromLevel, ctx.result)
+}
+
+// dposProofMsgCtx is the context that caches related data when handling GetDposProofMsg
+type dposProofMsgCtx struct {
+	pm            *ProtocolManager
+	dposCtx       *types.DposContext
+	lastBlockHash common.Hash
+	result        *light.NodeSet
+}
+
+func newDposProofMsgCtx(pm *ProtocolManager) *dposProofMsgCtx {
+	return &dposProofMsgCtx{
+		pm:     pm,
+		result: light.NewNodeSet(),
+	}
+}
+
+func (ctx *dposProofMsgCtx) openDposCtx(blockHash common.Hash) {
+	if blockHash == ctx.lastBlockHash {
+		return
+	}
+	number := rawdb.ReadHeaderNumber(ctx.pm.chainDb, blockHash)
+	if number == nil {
+		ctx.clearCache()
+		return
+	}
+	header := rawdb.ReadHeader(ctx.pm.chainDb, blockHash, *number)
+	if header == nil {
+		ctx.clearCache()
+		return
+	}
+	dposCtx, err := ctx.pm.blockchain.DposCtxAt(header.DposContext)
+	if err != nil || dposCtx == nil {
+		ctx.clearCache()
+		return
+	}
+	ctx.dposCtx = dposCtx
+	ctx.lastBlockHash = blockHash
+}
+
+func (ctx *dposProofMsgCtx) clearCache() {
+	ctx.dposCtx = nil
+	ctx.lastBlockHash = common.Hash{}
+	return
+}
+
+func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) *trie.Trie {
+	switch spec {
+	case light.EpochTrieSpec:
+		return dposCtx.EpochTrie()
+	case light.DelegateTrieSpec:
+		return dposCtx.DelegateTrie()
+	case light.CandidateTrieSpec:
+		return dposCtx.CandidateTrie()
+	case light.VoteTrieSpec:
+		return dposCtx.VoteTrie()
+	case light.MinedCntTrieSpec:
+		return dposCtx.MinedCntTrie()
+	default:
+	}
+	return nil
 }
 
 // downloaderPeerNotify implements peerSetNotify
