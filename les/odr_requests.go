@@ -617,6 +617,9 @@ func (r *DposTrieRequest) Request(reqID uint64, peer *peer) error {
 
 // Validate checks the result returned from les server
 func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
+	if msg.MsgType != MsgDposProofs {
+		return errInvalidMessageType
+	}
 	proofs := msg.Obj.(light.NodeList)
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
@@ -630,12 +633,25 @@ func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	return nil
 }
 
-type dposProofRequestPacket struct {
+type getDposProofRequestPacket struct {
 	ReqID uint64
 	Reqs  []DposProofReq
 }
 
-func decodeDposProofMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
+func decodeGetDposProofMsg(msg p2p.Msg) (getDposProofRequestPacket, error) {
+	var req getDposProofRequestPacket
+	if err := msg.Decode(&req); err != nil {
+		return getDposProofRequestPacket{}, err
+	}
+	return req, nil
+}
+
+type dposProofRequestPacket struct {
+	ReqID, BV uint64
+	Data      light.NodeList
+}
+
+func decodeDposProofRequestMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
 	var req dposProofRequestPacket
 	if err := msg.Decode(&req); err != nil {
 		return dposProofRequestPacket{}, err

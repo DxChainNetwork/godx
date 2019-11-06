@@ -56,7 +56,7 @@ const (
 	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
 	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
 	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxDposProofsFetch       = 64  // Amount of merkle proof for dpos tries to be fetched per retrieval request
+	MaxDposProofsFetch       = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
 	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend                = 64  // Amount of transactions to be send per request
 	MaxTxStatus              = 256 // Amount of transactions to queried per request
@@ -1113,10 +1113,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
 
 	case GetDposProofMsg:
-		p.Log().Trace("Received dpos proof request")
 		return pm.handleGetDposProofMsg(msg, p, costs, reject)
 
 	case DposProofMsg:
+		deliverMsg, err = pm.handleDposProofMsgToDeliverMsg(msg, p)
+		if err != nil {
+			return err
+		}
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1194,7 +1197,8 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 }
 
 func (pm *ProtocolManager) handleGetDposProofMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
-	rawReq, err := decodeDposProofMsg(msg)
+	p.Log().Trace("Received dpos proof request")
+	rawReq, err := decodeGetDposProofMsg(msg)
 	if err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
@@ -1253,27 +1257,18 @@ func (ctx *dposProofMsgCtx) openDposCtx(blockHash common.Hash) {
 	}
 	number := rawdb.ReadHeaderNumber(ctx.pm.chainDb, blockHash)
 	if number == nil {
-		ctx.clearCache()
 		return
 	}
 	header := rawdb.ReadHeader(ctx.pm.chainDb, blockHash, *number)
 	if header == nil {
-		ctx.clearCache()
 		return
 	}
 	dposCtx, err := ctx.pm.blockchain.DposCtxAt(header.DposContext)
 	if err != nil || dposCtx == nil {
-		ctx.clearCache()
 		return
 	}
 	ctx.dposCtx = dposCtx
 	ctx.lastBlockHash = blockHash
-}
-
-func (ctx *dposProofMsgCtx) clearCache() {
-	ctx.dposCtx = nil
-	ctx.lastBlockHash = common.Hash{}
-	return
 }
 
 func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) *trie.Trie {
@@ -1291,6 +1286,23 @@ func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) *t
 	default:
 	}
 	return nil
+}
+
+func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) (*Msg, error) {
+	if pm.odr == nil {
+		return nil, errResp(ErrUnexpectedResponse, "")
+	}
+	p.Log().Trace("Received dpos proofs response")
+	rawResp, err := decodeDposProofRequestMsg(msg)
+	if err != nil {
+		return nil, errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	p.fcServer.GotReply(rawResp.ReqID, rawResp.BV)
+	return &Msg{
+		MsgType: MsgDposProofs,
+		ReqID:   rawResp.ReqID,
+		Obj:     rawResp.Data,
+	}, nil
 }
 
 // downloaderPeerNotify implements peerSetNotify

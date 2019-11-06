@@ -178,7 +178,6 @@ func newTestProtocolManager(lightSync bool, blocks int, generator func(int, *cor
 		}
 		chain = blockchain
 	}
-
 	indexConfig := light.TestServerIndexerConfig
 	if lightSync {
 		indexConfig = light.TestClientIndexerConfig
