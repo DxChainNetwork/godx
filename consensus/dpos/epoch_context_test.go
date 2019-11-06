@@ -40,7 +40,7 @@ func TestDeductPenaltyForValidator(t *testing.T) {
 			fn: func(state stateDB, validator, penaltyAccount common.Address,
 				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
 				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 25, expectedBlockPerValidator)
-				penaltyRatio := ValidatorPenaltyRatio * 1 / 16
+				penaltyRatio := BasedValidatorPenaltyRatio / attenuationCoefficient16
 				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 				return penalty, penaltyRatio
 			},
@@ -50,7 +50,7 @@ func TestDeductPenaltyForValidator(t *testing.T) {
 			fn: func(state stateDB, validator, penaltyAccount common.Address,
 				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
 				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 55, expectedBlockPerValidator)
-				penaltyRatio := ValidatorPenaltyRatio * 1 / 8
+				penaltyRatio := BasedValidatorPenaltyRatio / attenuationCoefficient8
 				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 				return penalty, penaltyRatio
 			},
@@ -60,7 +60,7 @@ func TestDeductPenaltyForValidator(t *testing.T) {
 			fn: func(state stateDB, validator, penaltyAccount common.Address,
 				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
 				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 110, expectedBlockPerValidator)
-				penaltyRatio := ValidatorPenaltyRatio * 1 / 4
+				penaltyRatio := BasedValidatorPenaltyRatio / attenuationCoefficient4
 				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 				return penalty, penaltyRatio
 			},
@@ -70,7 +70,7 @@ func TestDeductPenaltyForValidator(t *testing.T) {
 			fn: func(state stateDB, validator, penaltyAccount common.Address,
 				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
 				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 240, expectedBlockPerValidator)
-				penaltyRatio := ValidatorPenaltyRatio * 1 / 2
+				penaltyRatio := BasedValidatorPenaltyRatio / attenuationCoefficient2
 				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 				return penalty, penaltyRatio
 			},
@@ -80,7 +80,7 @@ func TestDeductPenaltyForValidator(t *testing.T) {
 			fn: func(state stateDB, validator, penaltyAccount common.Address,
 				epochID, expectedBlockPerValidator int64) (common.BigInt, float64) {
 				deductPenaltyForValidator(state, validator, penaltyAccount, epochID, 300, expectedBlockPerValidator)
-				penaltyRatio := ValidatorPenaltyRatio
+				penaltyRatio := BasedValidatorPenaltyRatio
 				penalty := initFrozenAsset.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 				return penalty, penaltyRatio
 			},
@@ -193,11 +193,11 @@ func TestDeductPenaltyForDelegator(t *testing.T) {
 	for i := int64(0); i < 3; i++ {
 		str := strconv.FormatInt(i+1, 10)
 		delegatorAddr := common.HexToAddress("0x" + str)
-		penalty := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		penalty := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 		wantedBalance := common.NewBigInt(1e18).MultInt64((i + 1) * 1e9).Sub(penalty)
-		wantedFrozenAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
-		wantedDeposit := common.NewBigInt(1e18).MultInt64((i + 1) * 1e5).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
-		wantedThawingAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 9e5).MultUint64(PercentageDenominator - DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedFrozenAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 1e6).MultUint64(PercentageDenominator - BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedDeposit := common.NewBigInt(1e18).MultInt64((i + 1) * 1e5).MultUint64(PercentageDenominator - BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		wantedThawingAsset := common.NewBigInt(1e18).MultInt64((i + 1) * 9e5).MultUint64(PercentageDenominator - BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 		delBal := state.GetBalance(delegatorAddr)
 		delFrozenAsset := GetFrozenAssets(state, delegatorAddr)
 		delDeposit := GetVoteDeposit(state, delegatorAddr)

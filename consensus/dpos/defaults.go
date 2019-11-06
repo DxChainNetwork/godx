@@ -54,11 +54,11 @@ const (
 	// MinVoteLockDuration is the minimum vote locked duration
 	MinVoteLockDuration = uint64(EpochInterval)
 
-	// DelegatorPenaltyRatio is the value of penalty ratio for delegator
-	DelegatorPenaltyRatio = uint64(10)
+	// BasedDelegatorPenaltyRatio is the value of penalty ratio for delegator
+	BasedDelegatorPenaltyRatio = uint64(10)
 
-	// ValidatorPenaltyRatio is the value of penalty ratio for validator
-	ValidatorPenaltyRatio = float64(20)
+	// BasedValidatorPenaltyRatio is the value of penalty ratio for validator
+	BasedValidatorPenaltyRatio = float64(20)
 )
 
 var (
@@ -73,4 +73,11 @@ var (
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
+)
+
+const (
+	attenuationCoefficient16 = 16
+	attenuationCoefficient8  = 8
+	attenuationCoefficient4  = 4
+	attenuationCoefficient2  = 2
 )

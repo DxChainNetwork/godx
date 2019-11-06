@@ -306,28 +306,28 @@ func deductPenaltyForValidator(state stateDB, validator, penaltyAccount common.A
 	validatorFrozenAssets := GetFrozenAssets(state, validator)
 
 	/*
-		countLostBlocks < expectedBlockPerValidator * 1/16 : penaltyRatio = ValidatorPenaltyRatio * 1/16
-		countLostBlocks < expectedBlockPerValidator * 1/8 : penaltyRatio = ValidatorPenaltyRatio * 1/8
-		countLostBlocks < expectedBlockPerValidator * 1/4 : penaltyRatio = ValidatorPenaltyRatio * 1/4
-		countLostBlocks <= expectedBlockPerValidator * 1/2 : penaltyRatio = ValidatorPenaltyRatio * 1/2
-		countLostBlocks > expectedBlockPerValidator * 1/2 : penaltyRatio = ValidatorPenaltyRatio
+		countLostBlocks < expectedBlockPerValidator * 1/16 : penaltyRatio = BasedValidatorPenaltyRatio * 1/16
+		countLostBlocks < expectedBlockPerValidator * 1/8 : penaltyRatio = BasedValidatorPenaltyRatio * 1/8
+		countLostBlocks < expectedBlockPerValidator * 1/4 : penaltyRatio = BasedValidatorPenaltyRatio * 1/4
+		countLostBlocks <= expectedBlockPerValidator * 1/2 : penaltyRatio = BasedValidatorPenaltyRatio * 1/2
+		countLostBlocks > expectedBlockPerValidator * 1/2 : penaltyRatio = BasedValidatorPenaltyRatio
 	*/
 	penaltyRatio := float64(1.0)
 	switch {
-	case countLostBlocks < expectedBlockPerValidator*1/16:
-		penaltyRatio = ValidatorPenaltyRatio * 1 / 16
+	case countLostBlocks < expectedBlockPerValidator/attenuationCoefficient16:
+		penaltyRatio = BasedValidatorPenaltyRatio / attenuationCoefficient16
 		break
-	case countLostBlocks < expectedBlockPerValidator*1/8:
-		penaltyRatio = ValidatorPenaltyRatio * 1 / 8
+	case countLostBlocks < expectedBlockPerValidator/attenuationCoefficient8:
+		penaltyRatio = BasedValidatorPenaltyRatio / attenuationCoefficient8
 		break
-	case countLostBlocks < expectedBlockPerValidator*1/4:
-		penaltyRatio = ValidatorPenaltyRatio * 1 / 4
+	case countLostBlocks < expectedBlockPerValidator/attenuationCoefficient4:
+		penaltyRatio = BasedValidatorPenaltyRatio / attenuationCoefficient4
 		break
-	case countLostBlocks <= expectedBlockPerValidator*1/2:
-		penaltyRatio = ValidatorPenaltyRatio * 1 / 2
+	case countLostBlocks <= expectedBlockPerValidator/attenuationCoefficient2:
+		penaltyRatio = BasedValidatorPenaltyRatio / attenuationCoefficient2
 		break
 	default:
-		penaltyRatio = ValidatorPenaltyRatio
+		penaltyRatio = BasedValidatorPenaltyRatio
 	}
 	validatorPenalty := validatorFrozenAssets.MultFloat64(penaltyRatio).DivUint64(PercentageDenominator)
 	state.AddBalance(penaltyAccount, validatorPenalty.BigIntPtr())
@@ -351,7 +351,7 @@ func deductPenaltyForDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAc
 	for delegatorIter.Next() {
 		delegator := common.BytesToAddress(delegatorIter.Value)
 		delegatorFrozenAssets := GetFrozenAssets(state, delegator)
-		delegatorPenalty := delegatorFrozenAssets.MultUint64(DelegatorPenaltyRatio).DivUint64(PercentageDenominator)
+		delegatorPenalty := delegatorFrozenAssets.MultUint64(BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator)
 		state.AddBalance(penaltyAccount, delegatorPenalty.BigIntPtr())
 
 		// firstly, we should deduct from total balance
@@ -361,8 +361,8 @@ func deductPenaltyForDelegator(state stateDB, delegateTrie *trie.Trie, penaltyAc
 		// secondly, we should deduct frozenAsset、deposit、thawingAsset by the same penalty ratio.
 		currentDeposit := GetVoteDeposit(state, delegator)
 		currentThawingAsset := GetThawingAssets(state, delegator, epochID)
-		SetVoteDeposit(state, delegator, currentDeposit.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
-		SetThawingAssets(state, delegator, epochID, currentThawingAsset.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
-		SetFrozenAssets(state, delegator, delegatorFrozenAssets.MultUint64(PercentageDenominator-DelegatorPenaltyRatio).DivUint64(PercentageDenominator))
+		SetVoteDeposit(state, delegator, currentDeposit.MultUint64(PercentageDenominator-BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator))
+		SetThawingAssets(state, delegator, epochID, currentThawingAsset.MultUint64(PercentageDenominator-BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator))
+		SetFrozenAssets(state, delegator, delegatorFrozenAssets.MultUint64(PercentageDenominator-BasedDelegatorPenaltyRatio).DivUint64(PercentageDenominator))
 	}
 }
