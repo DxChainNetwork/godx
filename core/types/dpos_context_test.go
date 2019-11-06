@@ -128,13 +128,13 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	assert.Nil(t, err)
 	delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(candidate.Bytes(), delegator.Bytes()...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
 	voteIter := trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))
 	if assert.True(t, voteIter.Next()) {
-		assert.Equal(t, append(votePrefix, delegator.Bytes()...), voteIter.Key)
+		assert.Equal(t, delegator.Bytes(), voteIter.Key)
 		assert.Equal(t, candidate, common.BytesToAddress(voteIter.Value))
 	}
 
@@ -145,13 +145,13 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	assert.False(t, delegateIter.Next())
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(newCandidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(newCandidate.Bytes(), delegator.Bytes()...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
 	voteIter = trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))
 	if assert.True(t, voteIter.Next()) {
-		assert.Equal(t, append(votePrefix, delegator.Bytes()...), voteIter.Key)
+		assert.Equal(t, delegator.Bytes(), voteIter.Key)
 		assert.Equal(t, newCandidate, common.BytesToAddress(voteIter.Value))
 	}
 

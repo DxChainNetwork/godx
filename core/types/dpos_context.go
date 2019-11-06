@@ -31,32 +31,27 @@ type DposContext struct {
 }
 
 var (
-	epochPrefix     = []byte("epoch-")
-	delegatePrefix  = []byte("delegate-")
-	votePrefix      = []byte("vote-")
-	candidatePrefix = []byte("candidate-")
-	minedCntPrefix  = []byte("minedCnt-")
-	keyValidator    = []byte("validator")
+	keyValidator = []byte("validator")
 )
 
 func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, epochPrefix, db)
+	return trie.New(root, db)
 }
 
 func NewDelegateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, delegatePrefix, db)
+	return trie.New(root, db)
 }
 
 func NewVoteTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, votePrefix, db)
+	return trie.New(root, db)
 }
 
 func NewCandidateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
+	return trie.New(root, db)
 }
 
 func NewMinedCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, minedCntPrefix, db)
+	return trie.New(root, db)
 }
 
 // NewDposContext creates DposContext with the given database
