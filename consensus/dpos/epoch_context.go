@@ -70,7 +70,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			return err
 		}
 		// Set the new validators
-		epochTrie, _ := types.NewEpochTrie(common.Hash{}, ec.DposContext.DB())
+		epochTrie, _ := ec.DposContext.DB().OpenTrie(common.Hash{})
 		ec.DposContext.SetEpoch(epochTrie)
 		err = ec.DposContext.SetValidators(validators)
 		if err != nil {

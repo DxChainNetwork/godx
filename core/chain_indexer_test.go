@@ -50,7 +50,7 @@ func TestChainIndexerWithChildren(t *testing.T) {
 // are randomized.
 func testChainIndexer(t *testing.T, count int) {
 	db := ethdb.NewMemDatabase()
-	dposCtx, err := types.NewDposContext(db)
+	dposCtx, err := types.NewDposContext(types.NewDposDb(db))
 	if err != nil {
 		t.Fatalf("falied to new dpos context: %v", err)
 	}

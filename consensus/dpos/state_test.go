@@ -36,7 +36,7 @@ func newStateAndDposContext() (*state.StateDB, *types.DposContext, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ctx, err := types.NewDposContext(db)
+	ctx, err := types.NewDposContext(types.NewDposDb(db))
 	if err != nil {
 		return nil, nil, err
 	}

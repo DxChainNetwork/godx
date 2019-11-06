@@ -26,7 +26,7 @@ var (
 
 func TestDposContextSnapshot(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 	assert.Nil(t, err)
 
 	snapshot := dposContext.Snapshot()
@@ -46,7 +46,7 @@ func TestDposContextSnapshot(t *testing.T) {
 func TestDposContextBecomeCandidate(t *testing.T) {
 	candidates := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
@@ -67,7 +67,7 @@ func TestDposContextBecomeCandidate(t *testing.T) {
 func TestDposContextKickoutCandidate(t *testing.T) {
 	candidates := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
@@ -108,7 +108,7 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	newCandidate := addresses[1]
 	delegator := addresses[2]
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 	assert.Nil(t, err)
 	assert.Nil(t, dposContext.BecomeCandidate(candidate))
 	assert.Nil(t, dposContext.BecomeCandidate(newCandidate))
@@ -169,7 +169,7 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 func TestDposContextValidators(t *testing.T) {
 	validators := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 
 	assert.Nil(t, err)
 	assert.Nil(t, dposContext.SetValidators(validators))
@@ -190,7 +190,7 @@ func TestDposContextValidators(t *testing.T) {
 
 func TestDposContext_GetVotedCandidatesByAddress(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewDposDb(db))
 	assert.Nil(t, err)
 
 	bytes, err := rlp.EncodeToBytes(addresses)

@@ -250,7 +250,7 @@ func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	dposContext, err := types.NewDposContextFromProto(d.db, parent.DposContext)
+	dposContext, err := types.NewDposContextFromProto(types.NewDposDb(d.db), parent.DposContext)
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 }
 
 // accumulateRewards add the block award to Coinbase of validator
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header) {
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db ethdb.Database, genesis *types.Header) {
 	// Select the correct block reward based on chain progression
 	blockReward := frontierBlockReward
 	if config.IsByzantium(header.Number) {
@@ -383,7 +383,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	// Loop over the delegators to add delegator rewards
 	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
-	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(types.NewDposDb(db), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		log.Error("couldn't get snapshot delegate trie, error:", err)
 		return
@@ -409,7 +409,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
-	accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis)
+	accumulateRewards(chain.Config(), state, header, d.db, genesis)
 
 	if d.Mode == ModeFake {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -465,7 +465,7 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewDposContextFromProto(d.db, lastBlock.Header().DposContext)
+	dposContext, err := types.NewDposContextFromProto(types.NewDposDb(d.db), lastBlock.Header().DposContext)
 	if err != nil {
 		return err
 	}
@@ -602,8 +602,8 @@ func updateMinedCnt(parentBlockTime int64, validator common.Address, dposContext
 }
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
-func getPreEpochSnapshotDelegateTrie(db *trie.Database, root common.Hash) (*trie.Trie, error) {
-	return types.NewDelegateTrie(root, db)
+func getPreEpochSnapshotDelegateTrie(db types.DposDatabase, root common.Hash) (*trie.Trie, error) {
+	return db.OpenTrie(root)
 }
 
 func setMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address, value uint64) error {

@@ -20,7 +20,7 @@ import (
 
 func TestLookupValidator(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposCtx, _ := types.NewDposContext(db)
+	dposCtx, _ := types.NewDposContext(types.NewDposDb(db))
 	mockEpochContext := &EpochContext{
 		DposContext: dposCtx,
 	}
@@ -73,7 +73,7 @@ func Test_CountVotes(t *testing.T) {
 	stateDB, _ = state.New(root, sdb)
 
 	// create epoch context
-	dposCtx, _ := types.NewDposContext(db)
+	dposCtx, _ := types.NewDposContext(types.NewDposDb(db))
 	epochContext := &EpochContext{
 		DposContext: dposCtx,
 		stateDB:     stateDB,
