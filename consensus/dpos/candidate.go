@@ -58,7 +58,7 @@ func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, can
 // IsCandidate will check whether or not the given address is a candidate address
 func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
 	// re-construct trieDB and get the candidateTrie
-	candidateTrie, err := types.NewDposDb(diskDB).OpenTrie(header.DposContext.CandidateRoot)
+	candidateTrie, err := types.NewFullDposDatabase(diskDB).OpenTrie(header.DposContext.CandidateRoot)
 	if err != nil {
 		return false
 	}

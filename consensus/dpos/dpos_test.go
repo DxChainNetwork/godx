@@ -490,7 +490,7 @@ func (test testChainReader) insert(hash common.Hash, number uint64, time uint64,
 }
 
 func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
-	dposContext, err := types.NewDposContextFromProto(types.NewDposDb(db), &types.DposContextRoot{})
+	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, nil, err
 	}

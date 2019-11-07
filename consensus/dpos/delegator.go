@@ -65,7 +65,7 @@ func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, vot
 // HasVoted will check whether the provided delegator address is voted
 func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
 	// re-construct trieDB and get the voteTrie
-	voteTrie, err := types.NewDposDb(diskDB).OpenTrie(header.DposContext.VoteRoot)
+	voteTrie, err := types.NewFullDposDatabase(diskDB).OpenTrie(header.DposContext.VoteRoot)
 	if err != nil {
 		return false
 	}

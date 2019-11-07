@@ -250,7 +250,7 @@ func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	} else {
 		parent = chain.GetHeader(header.ParentHash, number-1)
 	}
-	dposContext, err := types.NewDposContextFromProto(types.NewDposDb(d.db), parent.DposContext)
+	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(d.db), parent.DposContext)
 	if err != nil {
 		return err
 	}
@@ -383,7 +383,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 
 	// Loop over the delegators to add delegator rewards
 	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
-	delegateTrie, err := getPreEpochSnapshotDelegateTrie(types.NewDposDb(db), preEpochSnapshotDelegateTrieRoot)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(types.NewFullDposDatabase(db), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		log.Error("couldn't get snapshot delegate trie, error:", err)
 		return
@@ -465,7 +465,7 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewDposContextFromProto(types.NewDposDb(d.db), lastBlock.Header().DposContext)
+	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(d.db), lastBlock.Header().DposContext)
 	if err != nil {
 		return err
 	}
@@ -603,7 +603,7 @@ func updateMinedCnt(parentBlockTime int64, validator common.Address, dposContext
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
 func getPreEpochSnapshotDelegateTrie(db types.DposDatabase, root common.Hash) (*trie.Trie, error) {
-	return db.OpenTrie(root)
+	return db.OpenEpochTrie(root)
 }
 
 func setMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address, value uint64) error {

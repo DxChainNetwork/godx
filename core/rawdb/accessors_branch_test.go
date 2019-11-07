@@ -23,7 +23,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	//					^|
 	//				header03
 
-	dposCtx, err := types.NewDposContext(types.NewDposDb(db))
+	dposCtx, err := types.NewDposContext(types.NewFullDposDatabase(db))
 	if err != nil {
 		t.Fatalf("failed to new dpos context: %v", err)
 	}

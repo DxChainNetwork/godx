@@ -214,16 +214,6 @@ type DposTrieID struct {
 	TrieSpec    DposTrieSpecifier
 }
 
-// DposTrieIDFromHeader returns a DposTrieID from a block header
-func DposTrieIDFromHeader(header *types.Header, trieSpec DposTrieSpecifier) *DposTrieID {
-	return &DposTrieID{
-		BlockHash:   header.Hash(),
-		BlockNumber: header.Number.Uint64(),
-		Roots:       *header.DposContext.Copy(),
-		TrieSpec:    trieSpec,
-	}
-}
-
 // TargetRoot return the target root for a DposTrieID
 func (id *DposTrieID) TargetRoot() common.Hash {
 	switch id.TrieSpec {

@@ -35,9 +35,14 @@ var (
 )
 
 // DposDatabase is the underlying database under the dposCtx.
-// Implemented by both FullDposDatabase and light.OdrDposDatabase
+// Implemented by both FullDposDatabase and light.DposDatabase
 type DposDatabase interface {
-	OpenTrie(root common.Hash) (*trie.Trie, error)
+	OpenEpochTrie(root common.Hash) (*trie.Trie, error)
+	OpenLastEpochTrie(root common.Hash) (*trie.Trie, error)
+	OpenDelegateTrie(root common.Hash) (*trie.Trie, error)
+	OpenVoteTrie(root common.Hash) (*trie.Trie, error)
+	OpenCandidateTrie(root common.Hash) (*trie.Trie, error)
+	OpenMinedCntTrie(root common.Hash) (*trie.Trie, error)
 }
 
 // FullDposDatabase is the database for full node's dpos contents
@@ -45,40 +50,69 @@ type FullDposDatabase struct {
 	db *trie.Database
 }
 
-// NewDposDb creates a new FullDposDatabase based on a diskdb
-func NewDposDb(diskdb ethdb.Database) *FullDposDatabase {
+// NewFullDposDatabase creates a new FullDposDatabase based on a diskdb
+func NewFullDposDatabase(diskdb ethdb.Database) *FullDposDatabase {
 	tdb := trie.NewDatabase(diskdb)
 	return &FullDposDatabase{tdb}
 }
 
-// OpenTrie opens a trie with the given root
-func (db *FullDposDatabase) OpenTrie(root common.Hash) (*trie.Trie, error) {
+// OpenEpochTrie opens the epochTrie
+func (db *FullDposDatabase) OpenEpochTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+// OpenLastEpochTrie opens the epochTrie in the last epoch
+func (db *FullDposDatabase) OpenLastEpochTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+// OpenDelegateTrie opens the delegateTrie
+func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+// OpenVoteTrie opens the voteTrie
+func (db *FullDposDatabase) OpenVoteTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+// OpenCandidateTrie opens the CandidateTrie
+func (db *FullDposDatabase) OpenCandidateTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+// OpenMinedCntTrie opens the MinedCntTrie
+func (db *FullDposDatabase) OpenMinedCntTrie(root common.Hash) (*trie.Trie, error) {
+	return db.openTrie(root)
+}
+
+func (db *FullDposDatabase) openTrie(root common.Hash) (*trie.Trie, error) {
 	return trie.New(root, db.db)
 }
 
 // NewDposContext creates DposContext with the given database
 func NewDposContext(db DposDatabase) (*DposContext, error) {
-	epochTrie, err := db.OpenTrie(common.Hash{})
+	epochTrie, err := db.OpenEpochTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := db.OpenTrie(common.Hash{})
+	delegateTrie, err := db.OpenDelegateTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := db.OpenTrie(common.Hash{})
+	voteTrie, err := db.OpenVoteTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := db.OpenTrie(common.Hash{})
+	candidateTrie, err := db.OpenCandidateTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	minedCntTrie, err := db.OpenTrie(common.Hash{})
+	minedCntTrie, err := db.OpenMinedCntTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
@@ -95,27 +129,27 @@ func NewDposContext(db DposDatabase) (*DposContext, error) {
 
 // NewDposContextFromProto creates DposContext with database and trie root
 func NewDposContextFromProto(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
-	epochTrie, err := db.OpenTrie(ctxProto.EpochRoot)
+	epochTrie, err := db.OpenEpochTrie(ctxProto.EpochRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := db.OpenTrie(ctxProto.DelegateRoot)
+	delegateTrie, err := db.OpenDelegateTrie(ctxProto.DelegateRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := db.OpenTrie(ctxProto.VoteRoot)
+	voteTrie, err := db.OpenVoteTrie(ctxProto.VoteRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := db.OpenTrie(ctxProto.CandidateRoot)
+	candidateTrie, err := db.OpenCandidateTrie(ctxProto.CandidateRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	minedCntTrie, err := db.OpenTrie(ctxProto.MinedCntRoot)
+	minedCntTrie, err := db.OpenMinedCntTrie(ctxProto.MinedCntRoot)
 	if err != nil {
 		return nil, err
 	}
