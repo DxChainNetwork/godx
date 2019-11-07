@@ -38,8 +38,8 @@ var (
 // Implemented by both FullDposDatabase and light.DposDatabase
 type DposDatabase interface {
 	OpenEpochTrie(root common.Hash) (*trie.Trie, error)
-	OpenLastEpochTrie(root common.Hash) (*trie.Trie, error)
 	OpenDelegateTrie(root common.Hash) (*trie.Trie, error)
+	OpenLastDelegateTrie(root common.Hash) (*trie.Trie, error)
 	OpenVoteTrie(root common.Hash) (*trie.Trie, error)
 	OpenCandidateTrie(root common.Hash) (*trie.Trie, error)
 	OpenMinedCntTrie(root common.Hash) (*trie.Trie, error)
@@ -61,13 +61,13 @@ func (db *FullDposDatabase) OpenEpochTrie(root common.Hash) (*trie.Trie, error) 
 	return db.openTrie(root)
 }
 
-// OpenLastEpochTrie opens the epochTrie in the last epoch
-func (db *FullDposDatabase) OpenLastEpochTrie(root common.Hash) (*trie.Trie, error) {
+// OpenDelegateTrie opens the delegateTrie
+func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (*trie.Trie, error) {
 	return db.openTrie(root)
 }
 
-// OpenDelegateTrie opens the delegateTrie
-func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (*trie.Trie, error) {
+// OpenLastEpochTrie opens the epochTrie in the last epoch
+func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (*trie.Trie, error) {
 	return db.openTrie(root)
 }
 

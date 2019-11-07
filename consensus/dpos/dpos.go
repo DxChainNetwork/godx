@@ -603,7 +603,7 @@ func updateMinedCnt(parentBlockTime int64, validator common.Address, dposContext
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
 func getPreEpochSnapshotDelegateTrie(db types.DposDatabase, root common.Hash) (*trie.Trie, error) {
-	return db.OpenEpochTrie(root)
+	return db.OpenLastDelegateTrie(root)
 }
 
 func setMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address, value uint64) error {

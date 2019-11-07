@@ -59,14 +59,14 @@ func (db *dposOdrDatabase) OpenEpochTrie(root common.Hash) (*odrDposTrie, error)
 	return db.openTrie(EpochTrieSpec)
 }
 
-// OpenLastEpochTrie open the epoch trie in the last epoch
-func (db *dposOdrDatabase) OpenLastEpochTrie(root common.Hash) (*odrDposTrie, error) {
-	return nil, errors.New("light node does not support accumulate reward")
-}
-
 // OpenDelegateTrie open the delegate trie
 func (db *dposOdrDatabase) OpenDelegateTrie(root common.Hash) (*odrDposTrie, error) {
 	return db.openTrie(DelegateTrieSpec)
+}
+
+// OpenLastEpochTrie open the epoch trie in the last epoch
+func (db *dposOdrDatabase) OpenLastDelegateTrie(root common.Hash) (*odrDposTrie, error) {
+	return nil, errors.New("light node does not support accumulate reward")
 }
 
 // OpenVoteTrie open the vote trie
