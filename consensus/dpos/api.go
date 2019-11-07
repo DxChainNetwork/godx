@@ -47,7 +47,7 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 // GetValidators will return the validator list based on the block header provided
 func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the epochTrie
-	epochTrie, err := types.NewFullDposDatabase(diskdb).OpenTrie(header.DposContext.EpochRoot)
+	epochTrie, err := types.NewFullDposDatabase(diskdb).OpenEpochTrie(header.DposContext.EpochRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover the epochTrie based on the root: %s", err.Error())
 	}
@@ -78,7 +78,7 @@ func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Addres
 // GetCandidates will return the candidates list based on the block header provided
 func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the candidateTrie
-	candidateTrie, err := types.NewFullDposDatabase(diskdb).OpenTrie(header.DposContext.CandidateRoot)
+	candidateTrie, err := types.NewFullDposDatabase(diskdb).OpenCandidateTrie(header.DposContext.CandidateRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
@@ -109,7 +109,7 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 
 	// get the candidateTrie
-	delegateTrie, err := types.NewFullDposDatabase(diskdb).OpenTrie(header.DposContext.DelegateRoot)
+	delegateTrie, err := types.NewFullDposDatabase(diskdb).OpenDelegateTrie(header.DposContext.DelegateRoot)
 	if err != nil {
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
@@ -122,7 +122,7 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 // getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch
 func getMinedBlocksCount(diskdb ethdb.Database, header *types.Header, validatorAddress common.Address) (int64, error) {
 	// re-construct the minedCntTrie
-	minedCntTrie, err := types.NewFullDposDatabase(diskdb).OpenTrie(header.DposContext.MinedCntRoot)
+	minedCntTrie, err := types.NewFullDposDatabase(diskdb).OpenMinedCntTrie(header.DposContext.MinedCntRoot)
 	if err != nil {
 		return 0, fmt.Errorf("failed to recover the minedCntTrie based on the root: %s", err.Error())
 	}
