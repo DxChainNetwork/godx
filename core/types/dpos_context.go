@@ -21,11 +21,11 @@ import (
 
 // DposContext wraps 5 tries to store data needed in dpos consensus
 type DposContext struct {
-	epochTrie     *trie.Trie
-	delegateTrie  *trie.Trie
-	voteTrie      *trie.Trie
-	candidateTrie *trie.Trie
-	minedCntTrie  *trie.Trie
+	epochTrie     DposTrie
+	delegateTrie  DposTrie
+	voteTrie      DposTrie
+	candidateTrie DposTrie
+	minedCntTrie  DposTrie
 
 	db DposDatabase
 }
@@ -35,14 +35,28 @@ var (
 )
 
 // DposDatabase is the underlying database under the dposCtx.
-// Implemented by both FullDposDatabase and light.DposDatabase
+// Implemented by both FullDposDatabase and light.dposOdrDatabase
 type DposDatabase interface {
-	OpenEpochTrie(root common.Hash) (*trie.Trie, error)
-	OpenDelegateTrie(root common.Hash) (*trie.Trie, error)
-	OpenLastDelegateTrie(root common.Hash) (*trie.Trie, error)
-	OpenVoteTrie(root common.Hash) (*trie.Trie, error)
-	OpenCandidateTrie(root common.Hash) (*trie.Trie, error)
-	OpenMinedCntTrie(root common.Hash) (*trie.Trie, error)
+	OpenEpochTrie(root common.Hash) (DposTrie, error)
+	OpenDelegateTrie(root common.Hash) (DposTrie, error)
+	OpenLastDelegateTrie(root common.Hash) (DposTrie, error)
+	OpenVoteTrie(root common.Hash) (DposTrie, error)
+	OpenCandidateTrie(root common.Hash) (DposTrie, error)
+	OpenMinedCntTrie(root common.Hash) (DposTrie, error)
+	CopyTrie(DposTrie) DposTrie
+}
+
+// DposTrie is the adapter of trie data structure to be used in dposContext.
+// DposTrie is implemented by
+type DposTrie interface {
+	TryGet(key []byte) ([]byte, error)
+	TryUpdate(key, value []byte) error
+	TryDelete(key []byte) error
+	Commit(onLeaf trie.LeafCallback) (common.Hash, error)
+	Hash() common.Hash
+	NodeIterator(startKey []byte) trie.NodeIterator
+	PrefixIterator(prefix []byte) trie.NodeIterator
+	Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error
 }
 
 // FullDposDatabase is the database for full node's dpos contents
@@ -57,37 +71,48 @@ func NewFullDposDatabase(diskdb ethdb.Database) *FullDposDatabase {
 }
 
 // OpenEpochTrie opens the epochTrie
-func (db *FullDposDatabase) OpenEpochTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenEpochTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
 // OpenDelegateTrie opens the delegateTrie
-func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
 // OpenLastEpochTrie opens the epochTrie in the last epoch
-func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
 // OpenVoteTrie opens the voteTrie
-func (db *FullDposDatabase) OpenVoteTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenVoteTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
 // OpenCandidateTrie opens the CandidateTrie
-func (db *FullDposDatabase) OpenCandidateTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenCandidateTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
 // OpenMinedCntTrie opens the MinedCntTrie
-func (db *FullDposDatabase) OpenMinedCntTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) OpenMinedCntTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
 
-func (db *FullDposDatabase) openTrie(root common.Hash) (*trie.Trie, error) {
+func (db *FullDposDatabase) openTrie(root common.Hash) (DposTrie, error) {
 	return trie.New(root, db.db)
+}
+
+// CopyTrie copies a dpos trie
+func (db *FullDposDatabase) CopyTrie(t DposTrie) DposTrie {
+	switch t := t.(type) {
+	case *trie.Trie:
+		copy := *t
+		return &copy
+	default:
+		panic(fmt.Errorf("unknown trie type %T", t))
+	}
 }
 
 // NewDposContext creates DposContext with the given database

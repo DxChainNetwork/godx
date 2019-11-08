@@ -55,38 +55,53 @@ func dposDatabaseIDToTrieID(id *dposDatabaseID, spec DposTrieSpecifier) *DposTri
 }
 
 // OpenEpochTrie opens the epoch trie
-func (db *dposOdrDatabase) OpenEpochTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenEpochTrie(root common.Hash) (types.DposTrie, error) {
 	return db.openTrie(EpochTrieSpec)
 }
 
 // OpenDelegateTrie open the delegate trie
-func (db *dposOdrDatabase) OpenDelegateTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenDelegateTrie(root common.Hash) (types.DposTrie, error) {
 	return db.openTrie(DelegateTrieSpec)
 }
 
 // OpenLastEpochTrie open the epoch trie in the last epoch
-func (db *dposOdrDatabase) OpenLastDelegateTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenLastDelegateTrie(root common.Hash) (types.DposTrie, error) {
 	return nil, errors.New("light node does not support accumulate reward")
 }
 
 // OpenVoteTrie open the vote trie
-func (db *dposOdrDatabase) OpenVoteTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenVoteTrie(root common.Hash) (types.DposTrie, error) {
 	return db.openTrie(VoteTrieSpec)
 }
 
 // OpenCandidateTrie opens the candidate trie
-func (db *dposOdrDatabase) OpenCandidateTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenCandidateTrie(root common.Hash) (types.DposTrie, error) {
 	return db.openTrie(CandidateTrieSpec)
 }
 
 // OpenMinedCntTrie opens the mined count trie
-func (db *dposOdrDatabase) OpenMinedCntTrie(root common.Hash) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) OpenMinedCntTrie(root common.Hash) (types.DposTrie, error) {
 	return db.openTrie(MinedCntTrieSpec)
 }
 
-func (db *dposOdrDatabase) openTrie(spec DposTrieSpecifier) (*odrDposTrie, error) {
+func (db *dposOdrDatabase) openTrie(spec DposTrieSpecifier) (types.DposTrie, error) {
 	id := dposDatabaseIDToTrieID(db.id, spec)
 	return &odrDposTrie{db: db, id: id}, nil
+}
+
+// CopyTrie copies a dpos trie
+func (db *dposOdrDatabase) CopyTrie(t types.DposTrie) types.DposTrie {
+	switch t := t.(type) {
+	case *odrDposTrie:
+		cpy := &odrDposTrie{db: t.db, id: t.id}
+		if t.trie != nil {
+			cpyTrie := *t.trie
+			cpy.trie = &cpyTrie
+		}
+		return cpy
+	default:
+		panic(fmt.Errorf("unknown trie type %T", t))
+	}
 }
 
 // odrDposTrie is the trie data structure for light node which sits on top of lesOdrBackend that
