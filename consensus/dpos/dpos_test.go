@@ -17,7 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/trie"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -558,7 +557,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 	return dposContext, candidates, nil
 }
 
-func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie *trie.Trie, count int64) error {
+func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie types.DposTrie, count int64) error {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)

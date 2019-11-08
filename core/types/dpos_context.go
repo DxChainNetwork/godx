@@ -191,17 +191,12 @@ func NewDposContextFromProto(db DposDatabase, ctxProto *DposContextRoot) (*DposC
 
 // Copy creates a new DposContext which has the same content with old one
 func (dc *DposContext) Copy() *DposContext {
-	epochTrie := *dc.epochTrie
-	delegateTrie := *dc.delegateTrie
-	voteTrie := *dc.voteTrie
-	candidateTrie := *dc.candidateTrie
-	minedCntTrie := *dc.minedCntTrie
 	return &DposContext{
-		epochTrie:     &epochTrie,
-		delegateTrie:  &delegateTrie,
-		voteTrie:      &voteTrie,
-		candidateTrie: &candidateTrie,
-		minedCntTrie:  &minedCntTrie,
+		epochTrie:     dc.db.CopyTrie(dc.epochTrie),
+		delegateTrie:  dc.db.CopyTrie(dc.delegateTrie),
+		voteTrie:      dc.db.CopyTrie(dc.voteTrie),
+		candidateTrie: dc.db.CopyTrie(dc.candidateTrie),
+		minedCntTrie:  dc.db.CopyTrie(dc.minedCntTrie),
 	}
 }
 
@@ -541,22 +536,25 @@ func (dc *DposContext) Commit() (*DposContextRoot, error) {
 	}, nil
 }
 
-func (dc *DposContext) CandidateTrie() *trie.Trie         { return dc.candidateTrie }
-func (dc *DposContext) DelegateTrie() *trie.Trie          { return dc.delegateTrie }
-func (dc *DposContext) VoteTrie() *trie.Trie              { return dc.voteTrie }
-func (dc *DposContext) EpochTrie() *trie.Trie             { return dc.epochTrie }
-func (dc *DposContext) MinedCntTrie() *trie.Trie          { return dc.minedCntTrie }
-func (dc *DposContext) DB() DposDatabase                  { return dc.db }
-func (dc *DposContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
-func (dc *DposContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
-func (dc *DposContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
-func (dc *DposContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMinedCnt(minedCnt *trie.Trie)   { dc.minedCntTrie = minedCnt }
+func (dc *DposContext) CandidateTrie() DposTrie         { return dc.candidateTrie }
+func (dc *DposContext) DelegateTrie() DposTrie          { return dc.delegateTrie }
+func (dc *DposContext) VoteTrie() DposTrie              { return dc.voteTrie }
+func (dc *DposContext) EpochTrie() DposTrie             { return dc.epochTrie }
+func (dc *DposContext) MinedCntTrie() DposTrie          { return dc.minedCntTrie }
+func (dc *DposContext) DB() DposDatabase                { return dc.db }
+func (dc *DposContext) SetEpoch(epoch DposTrie)         { dc.epochTrie = epoch }
+func (dc *DposContext) SetDelegate(delegate DposTrie)   { dc.delegateTrie = delegate }
+func (dc *DposContext) SetVote(vote DposTrie)           { dc.voteTrie = vote }
+func (dc *DposContext) SetCandidate(candidate DposTrie) { dc.candidateTrie = candidate }
+func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = minedCnt }
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
-	validatorsRLP := dc.epochTrie.Get(keyValidator)
+	validatorsRLP, err := dc.epochTrie.TryGet(keyValidator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator: %v", err)
+	}
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
@@ -571,16 +569,23 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
 	}
 
-	dc.epochTrie.Update(keyValidator, validatorsRLP)
+	err = dc.epochTrie.TryUpdate(keyValidator, validatorsRLP)
+	if err != nil {
+		return fmt.Errorf("failed to set validator: %v", err)
+	}
 	return nil
 }
 
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
-	candidatesRLP := dc.voteTrie.Get(key)
+	candidatesRLP, err := dc.voteTrie.TryGet(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the vote for candidate [%x]: %v", delegator, err)
+	}
+
 	var result []common.Address
-	err := rlp.DecodeBytes(candidatesRLP, &result)
+	err = rlp.DecodeBytes(candidatesRLP, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode vaoted candidates: %s", err)
 	}

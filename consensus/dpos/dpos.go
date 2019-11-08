@@ -602,18 +602,18 @@ func updateMinedCnt(parentBlockTime int64, validator common.Address, dposContext
 }
 
 // getPreEpochSnapshotDelegateTrie get the snapshot delegate trie of pre epoch
-func getPreEpochSnapshotDelegateTrie(db types.DposDatabase, root common.Hash) (*trie.Trie, error) {
+func getPreEpochSnapshotDelegateTrie(db types.DposDatabase, root common.Hash) (types.DposTrie, error) {
 	return db.OpenLastDelegateTrie(root)
 }
 
-func setMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address, value uint64) error {
+func setMinedCnt(minedCntTrie types.DposTrie, epoch int64, validator common.Address, value uint64) error {
 	keyBytes := makeMinedCntKey(epoch, validator)
 	valueBytes := common.Uint64ToByte(value)
 	return minedCntTrie.TryUpdate(keyBytes, valueBytes)
 }
 
 // getMinedCnt get the mined count of a specified validator in a certain epoch from the minedCntTrie
-func getMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address) (uint64, error) {
+func getMinedCnt(minedCntTrie types.DposTrie, epoch int64, validator common.Address) (uint64, error) {
 	key := makeMinedCntKey(epoch, validator)
 	cntBytes, err := minedCntTrie.TryGet(key)
 	if err != nil {

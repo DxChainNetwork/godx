@@ -1291,7 +1291,7 @@ func forEachDelegatorForCandidate(ctx *types.DposContext, candidate common.Addre
 
 // forEachDelegatorForCandidateFromTrie iterate over the delegator votes for the candidate and execute
 //// the cb callback function
-func forEachDelegatorForCandidateFromTrie(delegateTrie *trie.Trie, candidate common.Address, cb func(delegator common.Address) error) error {
+func forEachDelegatorForCandidateFromTrie(delegateTrie types.DposTrie, candidate common.Address, cb func(delegator common.Address) error) error {
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate.Bytes()))
 	var hasEntry bool
 	for delegatorIterator.Next() {
