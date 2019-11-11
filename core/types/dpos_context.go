@@ -550,10 +550,18 @@ func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = mine
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
+	return GetValidatorsFromDposTrie(dc.epochTrie)
+}
+
+// GetValidatorsFromDposTrie get the list of validators from the trie
+func GetValidatorsFromDposTrie(t DposTrie) ([]common.Address, error) {
 	var validators []common.Address
-	validatorsRLP, err := dc.epochTrie.TryGet(keyValidator)
+	validatorsRLP, err := t.TryGet(keyValidator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator: %v", err)
+	}
+	if len(validatorsRLP) == 0 {
+		return nil, fmt.Errorf("empty value for validators, make sure opening the epoch trie")
 	}
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
