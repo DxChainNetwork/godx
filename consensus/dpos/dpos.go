@@ -196,27 +196,48 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, v
 	if parent.Time.Uint64()+uint64(BlockInterval) > header.Time.Uint64() {
 		return ErrInvalidTimestamp
 	}
+	// If the the election happens in this block, force to check seal
+	if IsElectBlock(parent, header) {
+		seal = true
+	}
 	// Short circuit for seal does not need to be verified
 	if !seal {
 		return nil
 	}
-	var vGetter validatorGetter
+	var vGetter validatorHelper
 	if len(validators) == 0 {
-		vGetter = newValidatorGetterFromValidators(validators, header)
+		vGetter = newVHelper(validators, header, d.db)
 	} else {
-		vGetter = newDbValidatorGetter(chain, d.db, parent, header)
+		vGetter = newDBVHelper(d.db, parent, header)
 	}
 	return d.verifySeal(chain, header, vGetter)
 }
 
-// VerifyHeaders verify a batch of headers
-func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, validators []common.Address, seals []bool) (chan<- struct{}, <-chan error) {
-	abort := make(chan struct{})
-	results := make(chan error, len(headers))
+func IsElectBlock(parent, curHeader *types.Header) bool {
+	epoch1 := CalculateEpochID(parent.Time.Int64())
+	epoch2 := CalculateEpochID(curHeader.Time.Int64())
+	return epoch1 != epoch2
+}
 
+// VerifyHeaders verify a batch of headers. The input validatorsSet is the new validators
+// for each header.
+func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, data types.HeaderInsertDataBatch, seals []bool) (chan<- struct{}, <-chan error) {
+	abort := make(chan struct{})
+	results := make(chan error, len(data))
+	headers, validatorsSet := data.Split()
 	go func() {
 		for i, header := range headers {
-			err := d.verifyHeader(chain, header, headers[:i])
+			parents := headers[:i]
+			var validators []common.Address
+			if i != 0 {
+				validators = validatorsSet[i-1]
+			}
+			err := d.verifyHeader(chain, header, validators, parents, seals[i])
+
+			// If validators have been changed, save the validators
+			if err == nil && (i == 0 || IsElectBlock(parents[i-1], header)) {
+				err = types.SaveValidators(validatorsSet[i], d.db)
+			}
 			select {
 			case <-abort:
 				return
@@ -243,18 +264,19 @@ func (d *Dpos) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
 func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
-	validatorGetter, err := newDbValidatorGetterWithoutParent(chain, d.db, header)
+	validatorGetter, err := newDBVHelperNoParent(chain, d.db, header)
 	if err != nil {
 		return err
 	}
 	return d.verifySeal(chain, header, validatorGetter)
 }
 
-func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, validatorGetter validatorGetter) error {
+func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHelper validatorHelper) error {
+
 	if d.Mode == ModeFake {
 		return nil
 	}
-	validator, err := validatorGetter.getValidator()
+	validator, err := vHelper.getValidator()
 	if err != nil {
 		return fmt.Errorf("cannot get validator: %v", err)
 	}
@@ -630,64 +652,95 @@ func makeMinedCntKey(epoch int64, addr common.Address) []byte {
 	return append(epochBytes, addr.Bytes()...)
 }
 
-// validatorGetter is the interface for getting the validator
-type validatorGetter interface {
+// validatorHelper is the interface for getting the validator for a header,
+// and save the validators to db
+type validatorHelper interface {
 	getValidator() (common.Address, error)
+	saveValidators() error
 }
 
-// validatorGetterFromValidators is the validatorGetter from validators
-type validatorGetterFromValidators struct {
+// vHelper is the validatorHelper which gets info from validators
+type vHelper struct {
 	validators []common.Address
 	header     *types.Header
+	db         ethdb.Database
 }
 
-func newValidatorGetterFromValidators(validators []common.Address, header *types.Header) *validatorGetterFromValidators {
-	return &validatorGetterFromValidators{
+func newVHelper(validators []common.Address, header *types.Header, db ethdb.Database) *vHelper {
+	return &vHelper{
 		validators: validators,
 		header:     header,
+		db:         db,
 	}
 }
 
-func (g *validatorGetterFromValidators) getValidator() (common.Address, error) {
+func (g *vHelper) getValidator() (common.Address, error) {
 	return lookupValidator(g.header.Time.Int64(), g.validators)
 }
 
-// dbValidatorGetter get the validator for the header from database
-type dbValidatorGetter struct {
+func (g *vHelper) saveValidators() error {
+	return types.SaveValidators(g.validators, g.db)
+}
+
+// dbVHelper get the validator for the header from database
+type dbVHelper struct {
 	db     ethdb.Database
 	parent *types.Header
 	header *types.Header
+
+	validators []common.Address
 }
 
-func newDbValidatorGetter(chain consensus.ChainReader, db ethdb.Database, parent, header *types.Header) *dbValidatorGetter {
-	return &dbValidatorGetter{
+func newDBVHelper(db ethdb.Database, parent, header *types.Header) *dbVHelper {
+	return &dbVHelper{
 		db:     db,
 		parent: parent,
 		header: header,
 	}
 }
 
-func newDbValidatorGetterWithoutParent(chain consensus.ChainReader, db ethdb.Database, header *types.Header) (*dbValidatorGetter, error) {
+func newDBVHelperNoParent(chain consensus.ChainReader, db ethdb.Database, header *types.Header) (*dbVHelper, error) {
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return nil, fmt.Errorf("header does not exist on chain: %x", header.ParentHash)
 	}
-	return &dbValidatorGetter{
+	return &dbVHelper{
 		db:     db,
 		parent: parent,
 		header: header,
 	}, nil
 }
 
-func (g *dbValidatorGetter) getValidator() (common.Address, error) {
+func (g *dbVHelper) getValidator() (common.Address, error) {
+	validators, err := g.getValidators()
+	if err != nil {
+		return common.Address{}, err
+	}
+	g.validators = validators
+	return lookupValidator(g.header.Time.Int64(), validators)
+}
+
+func (g *dbVHelper) saveValidators() error {
+	validators, err := g.getValidators()
+	if err != nil {
+		return err
+	}
+	return types.SaveValidators(validators, g.db)
+}
+
+func (g *dbVHelper) getValidators() ([]common.Address, error) {
+	if g.validators != nil {
+		return g.validators, nil
+	}
 	dposDb := types.NewFullDposDatabase(g.db)
 	epochTrie, err := dposDb.OpenEpochTrie(g.parent.DposContext.EpochRoot)
 	if err != nil {
-		return common.Address{}, err
+		return []common.Address{}, err
 	}
 	validators, err := types.GetValidatorsFromDposTrie(epochTrie)
 	if err != nil {
-		return common.Address{}, err
+		return []common.Address{}, err
 	}
-	return lookupValidator(g.header.Time.Int64(), validators)
+	g.validators = validators
+	return validators, nil
 }

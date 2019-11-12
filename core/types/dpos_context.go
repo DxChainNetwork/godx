@@ -584,6 +584,19 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 	return nil
 }
 
+// SaveValidators save the validators to db as a trie
+func SaveValidators(validators []common.Address, db ethdb.Database) error {
+	dposCtx, err := NewDposContext(NewFullDposDatabase(db))
+	if err != nil {
+		return err
+	}
+	if err = dposCtx.SetValidators(validators); err != nil {
+		return err
+	}
+	_, err = dposCtx.Commit()
+	return err
+}
+
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
@@ -698,4 +711,41 @@ func (data *VoteTxData) DecodeRLP(s *rlp.Stream) error {
 	}
 	data.Deposit, data.Candidates = common.PtrBigInt(rlpData.Deposit), rlpData.Candidates
 	return nil
+}
+
+// HeaderInsertData is the data structure necessary for header insertion
+type HeaderInsertData struct {
+	Header     *Header
+	Validators []common.Address
+}
+
+// HeaderInsertDataBatch is a batch of HeaderInsertData
+type HeaderInsertDataBatch []HeaderInsertData
+
+// NewHeaderInsertDataBatch return the new HeaderInsertDataBatch
+func NewHeaderInsertDataBatch(headers []*Header, validators [][]common.Address) HeaderInsertDataBatch {
+	if len(validators) == 0 {
+		validators = make([][]common.Address, len(headers))
+	}
+	var data HeaderInsertDataBatch
+	for i, header := range headers {
+		data = append(data, HeaderInsertData{
+			Header:     header,
+			Validators: validators[i],
+		})
+	}
+	return data
+}
+
+// Split split the HeaderInsertDataBatch to two slices:
+// One as a slice of Header, another a slice of validators
+func (hidb HeaderInsertDataBatch) Split() ([]*Header, [][]common.Address) {
+	size := len(hidb)
+	headers := make([]*Header, 0, size)
+	validatorsSet := make([][]common.Address, 0, size)
+	for _, hid := range hidb {
+		headers = append(headers, hid.Header)
+		validatorsSet = append(validatorsSet, hid.Validators)
+	}
+	return headers, validatorsSet
 }

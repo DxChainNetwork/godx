@@ -1160,11 +1160,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		headers[i] = block.Header()
 		seals[i] = verifySeals
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers, nil, seals)
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.Validator())
+	it := newInsertIterator(bc, chain, bc.Validator(), bc.engine)
 
 	block, err := it.next()
 	switch {
@@ -1202,7 +1200,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 	// Some other error occurred, abort
 	case err != nil:
-		stats.ignored += len(it.chain)
+		stats.ignored += len(it.blocks)
 		bc.reportBlock(block, nil, err)
 		return it.index, events, coalescedLogs, err
 	}

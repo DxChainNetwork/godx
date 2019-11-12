@@ -63,7 +63,7 @@ func TestHeaderVerification(t *testing.T) {
 
 			if valid {
 				engine := dpos.NewDposFaker()
-				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, []bool{true})
+				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, nil, []bool{true})
 			} else {
 				engine := ethash.NewFakeFailer(headers[i].Number.Uint64())
 				_, results = engine.VerifyHeaders(chain, []*types.Header{headers[i]}, nil, []bool{true})
@@ -122,7 +122,8 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 
 		if valid {
 			chain, _ := NewBlockChain(testdb, nil, params.DposChainConfig, dpos.NewDposFaker(), vm.Config{}, nil)
-			_, results = chain.engine.VerifyHeaders(chain, headers, nil, seals)
+			data := types.NewHeaderInsertDataBatch(headers, nil)
+			_, results = chain.engine.VerifyHeaders(chain, data, seals)
 			chain.Stop()
 		}
 
@@ -188,7 +189,8 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 	chain, _ := NewBlockChain(testdb, nil, params.DposChainConfig, dpos.NewDposFaker(), vm.Config{}, nil)
 	defer chain.Stop()
 
-	abort, results := chain.engine.VerifyHeaders(chain, headers, nil, seals)
+	data := types.NewHeaderInsertDataBatch(headers, nil)
+	abort, results := chain.engine.VerifyHeaders(chain, data, seals)
 	close(abort)
 
 	// Deplete the results channel

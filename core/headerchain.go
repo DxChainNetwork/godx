@@ -228,7 +228,8 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	}
 	seals[len(seals)-1] = true // Last should always be verified to avoid junk
 
-	abort, results := hc.engine.VerifyHeaders(hc, chain, nil, seals)
+	data := types.NewHeaderInsertDataBatch(chain, nil)
+	abort, results := hc.engine.VerifyHeaders(hc, data, seals)
 	defer close(abort)
 
 	// Iterate over the headers and ensure they all check out
