@@ -47,7 +47,7 @@ import (
 
 const (
 	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
-	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
+	estHeaderRlpSize  = 660             // Approximate size of an RLP encoded block header
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
