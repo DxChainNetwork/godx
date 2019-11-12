@@ -233,11 +233,6 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, data types.HeaderInser
 				validators = validatorsSet[i-1]
 			}
 			err := d.verifyHeader(chain, header, validators, parents, seals[i])
-
-			// If validators have been changed, save the validators
-			if err == nil && (i == 0 || IsElectBlock(parents[i-1], header)) {
-				err = types.SaveValidators(validatorsSet[i], d.db)
-			}
 			select {
 			case <-abort:
 				return

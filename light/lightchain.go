@@ -364,9 +364,9 @@ func (self *LightChain) postChainEvents(events []interface{}) {
 //
 // In the case of a light chain, InsertHeaderChain also creates and posts light
 // chain events when necessary.
-func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (self *LightChain) InsertHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
 	start := time.Now()
-	if i, err := self.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := self.hc.ValidateHeaderChain(data, checkFreq); err != nil {
 		return i, err
 	}
 
@@ -381,11 +381,12 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 	defer self.wg.Done()
 
 	var events []interface{}
-	whFunc := func(header *types.Header) error {
+	whFunc := func(data types.HeaderInsertData) error {
 		self.mu.Lock()
 		defer self.mu.Unlock()
 
-		status, err := self.hc.WriteHeader(header)
+		header := data.Header
+		status, err := self.hc.WriteHeader(data.Header)
 
 		switch status {
 		case core.CanonStatTy:
@@ -396,9 +397,12 @@ func (self *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) 
 			log.Debug("Inserted forked header", "number", header.Number, "hash", header.Hash())
 			events = append(events, core.ChainSideEvent{Block: types.NewBlockWithHeader(header)})
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return self.hc.WriteValidators(data.Validators)
 	}
-	i, err := self.hc.InsertHeaderChain(chain, whFunc, start)
+	i, err := self.hc.InsertHeaderChain(data, whFunc, start)
 	self.postChainEvents(events)
 	return i, err
 }
