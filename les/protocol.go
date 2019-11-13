@@ -194,6 +194,10 @@ type hashOrNumber struct {
 	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
 }
 
+func isHashMode(hon hashOrNumber) bool {
+	return hon.Hash == common.Hash{}
+}
+
 // EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
 // two contained union fields.
 func (hn *hashOrNumber) EncodeRLP(w io.Writer) error {

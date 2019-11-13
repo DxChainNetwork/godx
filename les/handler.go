@@ -77,6 +77,7 @@ type BlockChain interface {
 	GetHeaderByNumber(number uint64) *types.Header
 	GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error)
 	GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error)
+	GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error)
 	CurrentHeader() *types.Header
 	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
