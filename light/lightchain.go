@@ -547,3 +547,9 @@ func (self *LightChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscri
 func (self *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription {
 	return self.scope.Track(new(event.Feed).Subscribe(ch))
 }
+
+// GetValidatorsByHeader retrieve the validators by header
+func (self *LightChain) GetValidatorsByHeader(header *types.Header) ([]common.Address, error) {
+	root := header.DposContext.EpochRoot
+	return self.hc.GetValidators(root)
+}

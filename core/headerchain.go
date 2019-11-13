@@ -26,6 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/DxChainNetwork/godx/trie"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -514,4 +516,13 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return nil
+}
+
+// GetValidators return the validators of the specified root.
+func (hc *HeaderChain) GetValidators(root common.Hash) ([]common.Address, error) {
+	t, err := trie.New(root, trie.NewDatabase(hc.chainDb))
+	if err != nil {
+		return []common.Address{}, err
+	}
+	return types.GetValidatorsFromDposTrie(t)
 }

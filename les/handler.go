@@ -85,6 +85,7 @@ type BlockChain interface {
 	GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64)
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+	GetValidatorsByHeader(header *types.Header) ([]common.Address, error)
 }
 
 type txPool interface {

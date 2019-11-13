@@ -1803,6 +1803,12 @@ func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) even
 	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
 }
 
+// GetValidatorsByHeader retrieve the validators by header
+func (bc *BlockChain) GetValidatorsByHeader(header *types.Header) ([]common.Address, error) {
+	epochRoot := header.DposContext.EpochRoot
+	return bc.hc.GetValidators(epochRoot)
+}
+
 // MakeAlloc make the add the validator deposit from ChainConfig to the input allocation accounts.
 // The function is only used in test cases
 func MakeAlloc(accounts GenesisAlloc, config *params.ChainConfig) GenesisAlloc {
