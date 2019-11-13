@@ -74,6 +74,9 @@ type BlockChain interface {
 	HasHeader(hash common.Hash, number uint64) bool
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
+	GetHeaderByNumber(number uint64) *types.Header
+	GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error)
+	GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error)
 	CurrentHeader() *types.Header
 	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
@@ -81,11 +84,9 @@ type BlockChain interface {
 	DposCtxAt(*types.DposContextRoot) (*types.DposContext, error)
 	InsertHeaderChain(chain types.HeaderInsertDataBatch, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
-	GetHeaderByNumber(number uint64) *types.Header
 	GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64)
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
-	GetValidatorsByHeader(header *types.Header) ([]common.Address, error)
 }
 
 type txPool interface {

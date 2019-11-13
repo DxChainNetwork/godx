@@ -548,8 +548,46 @@ func (self *LightChain) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEven
 	return self.scope.Track(new(event.Feed).Subscribe(ch))
 }
 
+// GetHeaderAndValidatorsByNumber get header and validators by number
+func (self *LightChain) GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error) {
+	header := self.GetHeaderByNumber(number)
+	if header == nil {
+		return types.HeaderInsertData{}, core.ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(self, header)
+}
+
+// GetHeaderAndValidatorsByHash get header and validators by hash
+func (self *LightChain) GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error) {
+	header := self.GetHeaderByHash(hash)
+	if header == nil {
+		return types.HeaderInsertData{}, core.ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(self, header)
+}
+
+// GetHeaderAndValidators get headers and validators with the given hash and number
+func (self *LightChain) GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error) {
+	header := self.GetHeader(hash, number)
+	if header == nil {
+		return types.HeaderInsertData{}, core.ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(self, header)
+}
+
+func headerToHeaderInsertData(lc *LightChain, header *types.Header) (types.HeaderInsertData, error) {
+	validators, err := lc.getValidatorsByHeader(header)
+	if err != nil {
+		return types.HeaderInsertData{}, err
+	}
+	return types.HeaderInsertData{
+		Header:     header,
+		Validators: validators,
+	}, nil
+}
+
 // GetValidatorsByHeader retrieve the validators by header
-func (self *LightChain) GetValidatorsByHeader(header *types.Header) ([]common.Address, error) {
+func (self *LightChain) getValidatorsByHeader(header *types.Header) ([]common.Address, error) {
 	root := header.DposContext.EpochRoot
 	return self.hc.GetValidators(root)
 }

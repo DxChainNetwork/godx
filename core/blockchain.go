@@ -53,7 +53,8 @@ var (
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
 	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
 
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	ErrNoGenesis    = errors.New("Genesis not found in chain")
+	ErrUnknownBlock = errors.New("unknown block")
 )
 
 const (
@@ -1803,10 +1804,48 @@ func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) even
 	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
 }
 
+// GetHeaderAndValidatorsByNumber get header and validators by number
+func (bc *BlockChain) GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error) {
+	header := bc.GetHeaderByNumber(number)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
+// GetHeaderAndValidatorsByHash get header and validators by hash
+func (bc *BlockChain) GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error) {
+	header := bc.GetHeaderByHash(hash)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
+// GetHeaderAndValidators get headers and validators with the given hash and number
+func (bc *BlockChain) GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error) {
+	header := bc.GetHeader(hash, number)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
 // GetValidatorsByHeader retrieve the validators by header
-func (bc *BlockChain) GetValidatorsByHeader(header *types.Header) ([]common.Address, error) {
+func (bc *BlockChain) getValidatorsByHeader(header *types.Header) ([]common.Address, error) {
 	epochRoot := header.DposContext.EpochRoot
 	return bc.hc.GetValidators(epochRoot)
+}
+
+func headerToHeaderInsertData(bc *BlockChain, header *types.Header) (types.HeaderInsertData, error) {
+	validators, err := bc.getValidatorsByHeader(header)
+	if err != nil {
+		return types.HeaderInsertData{}, err
+	}
+	return types.HeaderInsertData{
+		Header:     header,
+		Validators: validators,
+	}, nil
 }
 
 // MakeAlloc make the add the validator deposit from ChainConfig to the input allocation accounts.
