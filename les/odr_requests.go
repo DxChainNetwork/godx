@@ -30,7 +30,6 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/light"
 	"github.com/DxChainNetwork/godx/log"
-	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/trie"
 )
@@ -631,30 +630,4 @@ func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	}
 	r.Proof = nodeSet
 	return nil
-}
-
-type getDposProofRequestPacket struct {
-	ReqID uint64
-	Reqs  []DposProofReq
-}
-
-func decodeGetDposProofMsg(msg p2p.Msg) (getDposProofRequestPacket, error) {
-	var req getDposProofRequestPacket
-	if err := msg.Decode(&req); err != nil {
-		return getDposProofRequestPacket{}, err
-	}
-	return req, nil
-}
-
-type dposProofRequestPacket struct {
-	ReqID, BV uint64
-	Data      light.NodeList
-}
-
-func decodeDposProofRequestMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
-	var req dposProofRequestPacket
-	if err := msg.Decode(&req); err != nil {
-		return dposProofRequestPacket{}, err
-	}
-	return req, nil
 }

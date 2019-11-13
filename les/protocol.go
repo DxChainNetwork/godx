@@ -24,6 +24,9 @@ import (
 	"io"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/light"
+	"github.com/DxChainNetwork/godx/p2p"
+
 	"github.com/DxChainNetwork/godx/core/types"
 
 	"github.com/DxChainNetwork/godx/common"
@@ -82,8 +85,10 @@ const (
 	GetTxStatusMsg         = 0x14
 	TxStatusMsg            = 0x15
 	// Protocol for Dpos
-	GetDposProofMsg = 0x16
-	DposProofMsg    = 0x17
+	GetDposProofMsg                = 0x16
+	DposProofMsg                   = 0x17
+	GetBlockHeaderAndValidatorsMsg = 0x18
+	BlockHeaderAndValidatorsMsg    = 0x19
 )
 
 type errCode int
@@ -104,6 +109,7 @@ const (
 	ErrInvalidResponse
 	ErrTooManyTimeouts
 	ErrMissingKey
+	ErrUnknownValidators
 )
 
 func (e errCode) String() string {
@@ -126,6 +132,7 @@ var errorToString = map[int]string{
 	ErrInvalidResponse:         "Invalid response",
 	ErrTooManyTimeouts:         "Too many request timeouts",
 	ErrMissingKey:              "Key missing from list",
+	ErrUnknownValidators:       "Cannot open epoch trie",
 }
 
 type announceBlock struct {
@@ -228,6 +235,52 @@ type txStatus struct {
 	Status core.TxStatus
 	Lookup *rawdb.TxLookupEntry `rlp:"nil"`
 	Error  string
+}
+
+type getDposProofRequestPacket struct {
+	ReqID uint64
+	Reqs  []DposProofReq
+}
+
+func decodeGetDposProofMsg(msg p2p.Msg) (getDposProofRequestPacket, error) {
+	var req getDposProofRequestPacket
+	if err := msg.Decode(&req); err != nil {
+		return getDposProofRequestPacket{}, err
+	}
+	return req, nil
+}
+
+type dposProofRequestPacket struct {
+	ReqID, BV uint64
+	Data      light.NodeList
+}
+
+func decodeDposProofRequestMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
+	var req dposProofRequestPacket
+	if err := msg.Decode(&req); err != nil {
+		return dposProofRequestPacket{}, err
+	}
+	return req, nil
+}
+
+type getBlockHeaderAndValidatorsRequestWithID struct {
+	ReqID uint64
+	Query getBlockHeaderAndValidatorsRequest
+}
+
+func decodeGetBlockHeaderAndValidatorsRequests(msg p2p.Msg) (getBlockHeaderAndValidatorsRequestWithID, error) {
+	var req getBlockHeaderAndValidatorsRequestWithID
+	if err := msg.Decode(&req); err != nil {
+		return getBlockHeaderAndValidatorsRequestWithID{}, err
+	}
+	return req, nil
+}
+
+type getBlockHeaderAndValidatorsRequest struct {
+	Origin  hashOrNumber
+	Amount  uint64
+	Skip    uint64
+	Reverse bool
 }
 
 // HeaderAndValidatorData is the data structure for BlockHeaderAndValidatorsMsg

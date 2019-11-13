@@ -51,15 +51,16 @@ const (
 
 	ethVersion = 63 // equivalent eth version for the downloader
 
-	MaxHeaderFetch           = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch             = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxDposProofsFetch       = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
-	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxTxSend                = 64  // Amount of transactions to be send per request
-	MaxTxStatus              = 256 // Amount of transactions to queried per request
+	MaxHeaderFetch              = 192 // Amount of block headers to be fetched per retrieval request
+	MaxBodyFetch                = 32  // Amount of block bodies to be fetched per retrieval request
+	MaxReceiptFetch             = 128 // Amount of transaction receipts to allow fetching per request
+	MaxCodeFetch                = 64  // Amount of contract codes to allow fetching per request
+	MaxProofsFetch              = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxDposProofsFetch          = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
+	MaxHelperTrieProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxTxSend                   = 64  // Amount of transactions to be send per request
+	MaxTxStatus                 = 256 // Amount of transactions to queried per request
+	MaxHeaderAndValidatorsFetch = 128 // Amount of headers and validators to be fetched per retrieval request
 
 	disableClientRemovePeer = false
 )
@@ -340,6 +341,7 @@ var reqList = []uint64{
 	GetProofsV2Msg,
 	GetHelperTrieProofsMsg,
 	GetDposProofMsg,
+	GetBlockHeaderAndValidatorsMsg,
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
@@ -1121,6 +1123,9 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return err
 		}
 
+	case GetBlockHeaderAndValidatorsMsg:
+		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p, costs, reject)
+
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -1234,6 +1239,31 @@ func calculateDposProofForRequest(ctx *dposProofMsgCtx, req DposProofReq) {
 		return
 	}
 	t.Prove(req.Key, req.FromLevel, ctx.result)
+}
+
+func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
+	p.Log().Trace("Received block header and validators request")
+	req, err := decodeGetBlockHeaderAndValidatorsRequests(msg)
+	if err != nil {
+		return errResp(ErrDecode, "%v: %v", msg, err)
+	}
+	query := req.Query
+	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
+		return errResp(ErrRequestRejected, "")
+	}
+	data, err := calculateHeaderAndValidatorsFromRequest(pm, query)
+	if err != nil {
+		return err
+	}
+	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
+	pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
+	return p.SendBlockHeaders(req.ReqID, bv, data)
+}
+
+func calculateHeaderAndValidatorsFromRequest(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest) (types.HeaderInsertDataBatch, error) {
+	hashMode := query.Origin.Hash != (common.Hash{})
+	first := true
+	return nil, nil
 }
 
 // dposProofMsgCtx is the context that caches related data when handling GetDposProofMsg
