@@ -273,6 +273,11 @@ func (p *peer) SendDposProof(reqID, bv uint64, proofs light.NodeList) error {
 	return sendResponse(p.rw, DposProofMsg, reqID, bv, proofs)
 }
 
+// SendBlockHeadersAndValidators send a batch of header and validators
+func (p *peer) SendBlockHeadersAndValidators(reqID, bv uint64, data types.HeaderInsertDataBatch) error {
+	return sendResponse(p.rw, BlockHeaderAndValidatorsMsg, reqID, bv, data)
+}
+
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeadersByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
