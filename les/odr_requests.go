@@ -594,7 +594,7 @@ type DposProofReq struct {
 // DposTrieRequest implement LesOdrRequest
 type DposTrieRequest light.DposTrieRequest
 
-// GetCost reeturn the cost of the request
+// GetCost return the cost of the request
 func (r *DposTrieRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetDposProofMsg, 1)
 }
@@ -646,15 +646,15 @@ func decodeGetDposProofMsg(msg p2p.Msg) (getDposProofRequestPacket, error) {
 	return req, nil
 }
 
-type dposProofRequestPacket struct {
+type dposProofResponsePacket struct {
 	ReqID, BV uint64
 	Data      light.NodeList
 }
 
-func decodeDposProofRequestMsg(msg p2p.Msg) (dposProofRequestPacket, error) {
-	var req dposProofRequestPacket
+func decodeDposProofRequestMsg(msg p2p.Msg) (dposProofResponsePacket, error) {
+	var req dposProofResponsePacket
 	if err := msg.Decode(&req); err != nil {
-		return dposProofRequestPacket{}, err
+		return dposProofResponsePacket{}, err
 	}
 	return req, nil
 }
