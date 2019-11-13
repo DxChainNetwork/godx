@@ -1334,7 +1334,7 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 	}
 	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
 	pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
-	return p.SendBlockHeaders(req.ReqID, bv, data)
+	return p.SendBlockHeadersAndValidators(req.ReqID, bv, data)
 }
 
 func calculateHeaderAndValidatorsFromRequest(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) (types.HeaderInsertDataBatch, error) {
