@@ -516,29 +516,29 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
 		return p.SendBlockHeaders(req.ReqID, bv, headers)
 
-	case BlockHeadersMsg:
-		if pm.downloader == nil {
-			return errResp(ErrUnexpectedResponse, "")
-		}
-
-		p.Log().Trace("Received block header response message")
-		// A batch of headers arrived to one of our previous requests
-		var resp struct {
-			ReqID, BV uint64
-			Headers   []*types.Header
-		}
-		if err := msg.Decode(&resp); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		p.fcServer.GotReply(resp.ReqID, resp.BV)
-		if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
-			pm.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
-		} else {
-			err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
-			if err != nil {
-				log.Debug(fmt.Sprint(err))
-			}
-		}
+	//case BlockHeadersMsg:
+	//	if pm.downloader == nil {
+	//		return errResp(ErrUnexpectedResponse, "")
+	//	}
+	//
+	//	p.Log().Trace("Received block header response message")
+	//	// A batch of headers arrived to one of our previous requests
+	//	var resp struct {
+	//		ReqID, BV uint64
+	//		Headers   []*types.Header
+	//	}
+	//	if err := msg.Decode(&resp); err != nil {
+	//		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	//	}
+	//	p.fcServer.GotReply(resp.ReqID, resp.BV)
+	//	if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
+	//		pm.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
+	//	} else {
+	//		err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
+	//		if err != nil {
+	//			log.Debug(fmt.Sprint(err))
+	//		}
+	//	}
 
 	case GetBlockBodiesMsg:
 		p.Log().Trace("Received block bodies request")
