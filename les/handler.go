@@ -1341,18 +1341,18 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 }
 
 func calculateHeaderAndValidatorsFromRequest(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) (types.HeaderInsertDataBatch, error) {
-	ctx := newHeaderAndValidatorsQueryContext(pm, query, p)
-	for ctx.nextQuery() {
-		result, err := ctx.calculateQuery()
+	it := newHeaderAndValidatorsQueryIterator(pm, query, p)
+	for it.nextQuery() {
+		result, err := it.calculateQuery()
 		if err != nil {
-			return ctx.getResults(), err
+			return it.getResults(), err
 		}
-		ctx.storeQueryResult(result)
+		it.storeQueryResult(result)
 	}
-	return ctx.getResults(), nil
+	return it.getResults(), nil
 }
 
-type HeaderAndValidatorsQueryContext struct {
+type HeaderAndValidatorsQueryIterator struct {
 	pm *ProtocolManager
 	p  *peer
 	// original query info
@@ -1367,9 +1367,9 @@ type HeaderAndValidatorsQueryContext struct {
 	result          types.HeaderInsertDataBatch
 }
 
-func newHeaderAndValidatorsQueryContext(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) *HeaderAndValidatorsQueryContext {
+func newHeaderAndValidatorsQueryIterator(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) *HeaderAndValidatorsQueryIterator {
 	maxNonCanonical := uint64(100)
-	return &HeaderAndValidatorsQueryContext{
+	return &HeaderAndValidatorsQueryIterator{
 		pm:              pm,
 		p:               p,
 		query:           query,
@@ -1379,7 +1379,7 @@ func newHeaderAndValidatorsQueryContext(pm *ProtocolManager, query getBlockHeade
 	}
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) nextQuery() bool {
+func (ctx *HeaderAndValidatorsQueryIterator) nextQuery() bool {
 	if ctx.hasEnoughResults() {
 		return false
 	}
@@ -1392,7 +1392,7 @@ func (ctx *HeaderAndValidatorsQueryContext) nextQuery() bool {
 	return ctx.nextQueryNoReverse()
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) firstQuery() bool {
+func (ctx *HeaderAndValidatorsQueryIterator) firstQuery() bool {
 	ctx.first = false
 	var h *types.Header
 	if isHashMode(ctx.query.Origin) {
@@ -1408,11 +1408,11 @@ func (ctx *HeaderAndValidatorsQueryContext) firstQuery() bool {
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) hasEnoughResults() bool {
+func (ctx *HeaderAndValidatorsQueryIterator) hasEnoughResults() bool {
 	return len(ctx.result) < int(ctx.query.Amount) && ctx.bytes < softResponseLimit
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) nextQueryInReverse() bool {
+func (ctx *HeaderAndValidatorsQueryIterator) nextQueryInReverse() bool {
 	ancestor := ctx.query.Skip + 1
 	if ancestor == 0 {
 		return false
@@ -1425,7 +1425,7 @@ func (ctx *HeaderAndValidatorsQueryContext) nextQueryInReverse() bool {
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) nextQueryNoReverse() bool {
+func (ctx *HeaderAndValidatorsQueryIterator) nextQueryNoReverse() bool {
 	nextNumber := ctx.curNumber + ctx.query.Skip + 1
 	if nextNumber <= ctx.curNumber {
 		infos, _ := json.MarshalIndent(ctx.p.Peer.Info(), "", "  ")
@@ -1445,16 +1445,16 @@ func (ctx *HeaderAndValidatorsQueryContext) nextQueryNoReverse() bool {
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) calculateQuery() (types.HeaderInsertData, error) {
+func (ctx *HeaderAndValidatorsQueryIterator) calculateQuery() (types.HeaderInsertData, error) {
 	return ctx.pm.blockchain.GetHeaderAndValidators(ctx.curHash, ctx.curNumber)
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) storeQueryResult(data types.HeaderInsertData) {
+func (ctx *HeaderAndValidatorsQueryIterator) storeQueryResult(data types.HeaderInsertData) {
 	ctx.bytes += estHeaderAndValidatorRlpSize
 	ctx.result = append(ctx.result, data)
 }
 
-func (ctx *HeaderAndValidatorsQueryContext) getResults() types.HeaderInsertDataBatch {
+func (ctx *HeaderAndValidatorsQueryIterator) getResults() types.HeaderInsertDataBatch {
 	return ctx.result
 }
 
