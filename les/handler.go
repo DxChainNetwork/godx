@@ -1123,10 +1123,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return pm.handleGetDposProofMsg(msg, p, costs, reject)
 
 	case DposProofMsg:
-		deliverMsg, err = pm.handleDposProofMsgToDeliverMsg(msg, p)
-		if err != nil {
-			return err
-		}
+		return pm.handleDposProofMsgToDeliverMsg(msg, p)
 
 	case GetBlockHeaderAndValidatorsMsg:
 		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p, costs, reject)
@@ -1140,12 +1137,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 
 	if deliverMsg != nil {
-		err := pm.retriever.deliver(p, deliverMsg)
-		if err != nil {
-			p.responseErrors++
-			if p.responseErrors > maxResponseErrors {
-				return err
-			}
+		return pm.deliverMsgToRetriever(p, deliverMsg)
+	}
+	return nil
+}
+
+func (pm *ProtocolManager) deliverMsgToRetriever(p *peer, msg *Msg) error {
+	err := pm.retriever.deliver(p, msg)
+	if err != nil {
+		p.responseErrors++
+		if p.responseErrors > maxResponseErrors {
+			return err
 		}
 	}
 	return nil
@@ -1316,15 +1318,7 @@ func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) 
 		ReqID:   rawResp.ReqID,
 		Obj:     rawResp.Data,
 	}
-	// TODO: refactor this to a seperate function
-	err = pm.retriever.deliver(p, deliverMsg)
-	if err != nil {
-		p.responseErrors++
-		if p.responseErrors > maxResponseErrors {
-			return err
-		}
-	}
-	return nil
+	return pm.deliverMsgToRetriever(p, deliverMsg)
 }
 
 func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
