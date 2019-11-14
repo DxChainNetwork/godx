@@ -510,6 +510,10 @@ func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types
 	f.deliverChn <- fetchResponse{reqID: reqID, headers: headers, peer: peer}
 }
 
+func (f *lightFetcher) deliverHeaderInsertDataBatch(peer *peer, reqID uint64, batch types.HeaderInsertDataBatch) {
+	// TODO: implement this
+}
+
 // processResponse processes header download request responses, returns true if successful
 func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) bool {
 	if uint64(len(resp.headers)) != req.amount || resp.headers[0].Hash() != req.hash {

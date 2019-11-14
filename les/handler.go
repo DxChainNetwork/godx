@@ -1132,7 +1132,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p, costs, reject)
 
 	case BlockHeaderAndValidatorsMsg:
-		// TODO: add handle...Msg here
+		return pm.handleBlockHeaderAndValidatorsMsg(msg, p)
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1453,6 +1453,30 @@ func (ctx *HeaderAndValidatorsQueryContext) storeQueryResult(data types.HeaderIn
 
 func (ctx *HeaderAndValidatorsQueryContext) getResults() types.HeaderInsertDataBatch {
 	return ctx.result
+}
+
+func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg *p2p.Msg, p *peer) error {
+	if pm.downloader == nil {
+		return errResp(ErrUnexpectedResponse, "")
+	}
+	p.Log().Trace("Received block header and validators response message")
+	var resp struct {
+		ReqID, BV uint64
+		data      types.HeaderInsertDataBatch
+	}
+	if err := msg.Decode(&resp); err != nil {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	p.fcServer.GotReply(resp.ReqID, resp.BV)
+	if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
+		pm.fetcher.deliverHeaderInsertDataBatch(p, resp.ReqID, resp.data)
+	} else {
+		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, resp.data)
+		if err != nil {
+			log.Debug(fmt.Sprint(err))
+		}
+	}
+	return nil
 }
 
 // downloaderPeerNotify implements peerSetNotify
