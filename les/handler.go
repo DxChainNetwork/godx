@@ -1301,21 +1301,30 @@ func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) ty
 	return nil
 }
 
-func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) (*Msg, error) {
+func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) error {
 	if pm.odr == nil {
-		return nil, errResp(ErrUnexpectedResponse, "")
+		return errResp(ErrUnexpectedResponse, "")
 	}
 	p.Log().Trace("Received dpos proofs response")
 	rawResp, err := decodeDposProofRequestMsg(msg)
 	if err != nil {
-		return nil, errResp(ErrDecode, "msg %v: %v", msg, err)
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
 	p.fcServer.GotReply(rawResp.ReqID, rawResp.BV)
-	return &Msg{
+	deliverMsg := &Msg{
 		MsgType: MsgDposProofs,
 		ReqID:   rawResp.ReqID,
 		Obj:     rawResp.Data,
-	}, nil
+	}
+	// TODO: refactor this to a seperate function
+	err = pm.retriever.deliver(p, deliverMsg)
+	if err != nil {
+		p.responseErrors++
+		if p.responseErrors > maxResponseErrors {
+			return err
+		}
+	}
+	return nil
 }
 
 func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {

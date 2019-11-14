@@ -512,6 +512,7 @@ func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types
 
 func (f *lightFetcher) deliverHeaderInsertDataBatch(peer *peer, reqID uint64, batch types.HeaderInsertDataBatch) {
 	// TODO: implement this
+	return nil
 }
 
 // processResponse processes header download request responses, returns true if successful

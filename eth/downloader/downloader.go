@@ -1672,6 +1672,7 @@ func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err err
 
 func (d *Downloader) DeliverHeaderInsertDataBatch(id string, batch types.HeaderInsertDataBatch) (err error) {
 	// TODO: implement this
+	return nil
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
