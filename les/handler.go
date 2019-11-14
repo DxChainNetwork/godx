@@ -1458,7 +1458,7 @@ func (ctx *HeaderAndValidatorsQueryContext) getResults() types.HeaderInsertDataB
 	return ctx.result
 }
 
-func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg *p2p.Msg, p *peer) error {
+func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
 	if pm.downloader == nil {
 		return errResp(ErrUnexpectedResponse, "")
 	}
