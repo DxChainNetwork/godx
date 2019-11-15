@@ -126,12 +126,13 @@ type Downloader struct {
 	committed       int32
 
 	// Channels
-	headerCh      chan dataPack        // [eth/62] Channel receiving inbound block headers
-	bodyCh        chan dataPack        // [eth/62] Channel receiving inbound block bodies
-	receiptCh     chan dataPack        // [eth/63] Channel receiving inbound receipts
-	bodyWakeCh    chan bool            // [eth/62] Channel to signal the block body fetcher of new tasks
-	receiptWakeCh chan bool            // [eth/63] Channel to signal the receipt fetcher of new tasks
-	headerProcCh  chan []*types.Header // [eth/62] Channel to feed the header processor new tasks
+	headerCh         chan dataPack                    // [eth/62] Channel receiving inbound block headers
+	headerDataCh     chan dataPack                    // [eth/62] Channel receiving inbound block header and validators
+	bodyCh           chan dataPack                    // [eth/62] Channel receiving inbound block bodies
+	receiptCh        chan dataPack                    // [eth/63] Channel receiving inbound receipts
+	bodyWakeCh       chan bool                        // [eth/62] Channel to signal the block body fetcher of new tasks
+	receiptWakeCh    chan bool                        // [eth/63] Channel to signal the receipt fetcher of new tasks
+	headerDataProcCh chan types.HeaderInsertDataBatch // [eth/62] Channel to feed the header processor new tasks
 
 	// for stateFetcher
 	stateSyncStart chan *stateSync
@@ -211,25 +212,26 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 	}
 
 	dl := &Downloader{
-		mode:           mode,
-		stateDB:        stateDb,
-		mux:            mux,
-		queue:          newQueue(),
-		peers:          newPeerSet(),
-		rttEstimate:    uint64(rttMaxEstimate),
-		rttConfidence:  uint64(1000000),
-		blockchain:     chain,
-		lightchain:     lightchain,
-		dropPeer:       dropPeer,
-		headerCh:       make(chan dataPack, 1),
-		bodyCh:         make(chan dataPack, 1),
-		receiptCh:      make(chan dataPack, 1),
-		bodyWakeCh:     make(chan bool, 1),
-		receiptWakeCh:  make(chan bool, 1),
-		headerProcCh:   make(chan []*types.Header, 1),
-		quitCh:         make(chan struct{}),
-		stateCh:        make(chan dataPack),
-		stateSyncStart: make(chan *stateSync),
+		mode:             mode,
+		stateDB:          stateDb,
+		mux:              mux,
+		queue:            newQueue(),
+		peers:            newPeerSet(),
+		rttEstimate:      uint64(rttMaxEstimate),
+		rttConfidence:    uint64(1000000),
+		blockchain:       chain,
+		lightchain:       lightchain,
+		dropPeer:         dropPeer,
+		headerCh:         make(chan dataPack, 1),
+		headerDataCh:     make(chan dataPack, 1),
+		bodyCh:           make(chan dataPack, 1),
+		receiptCh:        make(chan dataPack, 1),
+		bodyWakeCh:       make(chan bool, 1),
+		receiptWakeCh:    make(chan bool, 1),
+		headerDataProcCh: make(chan types.HeaderInsertDataBatch, 1),
+		quitCh:           make(chan struct{}),
+		stateCh:          make(chan dataPack),
+		stateSyncStart:   make(chan *stateSync),
 		syncStatsState: stateSyncStats{
 			processed: rawdb.ReadFastTrieProgress(stateDb),
 		},
@@ -371,7 +373,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 		default:
 		}
 	}
-	for _, ch := range []chan dataPack{d.headerCh, d.bodyCh, d.receiptCh} {
+	for _, ch := range []chan dataPack{d.headerCh, d.headerDataCh, d.bodyCh, d.receiptCh} {
 		for empty := false; !empty; {
 			select {
 			case <-ch:
@@ -382,7 +384,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	}
 	for empty := false; !empty; {
 		select {
-		case <-d.headerProcCh:
+		case <-d.headerDataProcCh:
 		default:
 			empty = true
 		}
@@ -868,7 +870,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 	defer timeout.Stop()
 
 	var ttl time.Duration
-	getHeaders := func(from uint64) {
+	getHeadersInsertDataBatch := func(from uint64) {
 		request = time.Now()
 
 		ttl = d.requestTTL()
@@ -876,21 +878,21 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
+			go p.peer.RequestHeaderInsertDataBatchByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			go p.peer.RequestHeadersByNumber(from, MaxHeaderFetch, 0, false)
+			go p.peer.RequestHeaderInsertDataBatchByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
 	// Start pulling the header chain skeleton until all is done
-	getHeaders(from)
+	getHeadersInsertDataBatch(from)
 
 	for {
 		select {
 		case <-d.cancelCh:
 			return errCancelHeaderFetch
 
-		case packet := <-d.headerCh:
+		case packet := <-d.headerDataCh:
 			// Make sure the active peer is giving us the skeleton headers
 			if packet.PeerId() != p.id {
 				log.Debug("Received skeleton from incorrect peer", "peer", packet.PeerId())
@@ -902,7 +904,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 			// If the skeleton's finished, pull any remaining head headers directly from the origin
 			if packet.Items() == 0 && skeleton {
 				skeleton = false
-				getHeaders(from)
+				getHeadersInsertDataBatch(from)
 				continue
 			}
 			// If no more headers are inbound, notify the content fetchers and return
@@ -912,7 +914,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 					p.log.Debug("No headers, waiting for pivot commit")
 					select {
 					case <-time.After(fsHeaderContCheck):
-						getHeaders(from)
+						getHeadersInsertDataBatch(from)
 						continue
 					case <-d.cancelCh:
 						return errCancelHeaderFetch
@@ -921,28 +923,28 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				// Pivot done (or not in fast sync) and no more headers, terminate the process
 				p.log.Debug("No more headers available")
 				select {
-				case d.headerProcCh <- nil:
+				case d.headerDataProcCh <- nil:
 					return nil
 				case <-d.cancelCh:
 					return errCancelHeaderFetch
 				}
 			}
-			headers := packet.(*headerPack).headers
+			batch := packet.(*headerInsertDataPack).batch
 
 			// If we received a skeleton batch, resolve internals concurrently
 			if skeleton {
-				filled, proced, err := d.fillHeaderSkeleton(from, headers)
+				filled, proced, err := d.fillHeaderDataSkeleton(from, batch)
 				if err != nil {
 					p.log.Debug("Skeleton chain invalid", "err", err)
 					return errInvalidChain
 				}
-				headers = filled[proced:]
+				batch = filled[proced:]
 				from += uint64(proced)
 			} else {
 				// If we're closing in on the chain head, but haven't yet reached it, delay
 				// the last few headers so mini reorgs on the head don't cause invalid hash
 				// chain errors.
-				if n := len(headers); n > 0 {
+				if n := len(batch); n > 0 {
 					// Retrieve the current head we're at
 					head := uint64(0)
 					if d.mode == LightSync {
@@ -954,31 +956,31 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 						}
 					}
 					// If the head is way older than this batch, delay the last few headers
-					if head+uint64(reorgProtThreshold) < headers[n-1].Number.Uint64() {
+					if head+uint64(reorgProtThreshold) < batch[n-1].Header.Number.Uint64() {
 						delay := reorgProtHeaderDelay
 						if delay > n {
 							delay = n
 						}
-						headers = headers[:n-delay]
+						batch = batch[:n-delay]
 					}
 				}
 			}
 			// Insert all the new headers and fetch the next batch
-			if len(headers) > 0 {
-				p.log.Trace("Scheduling new headers", "count", len(headers), "from", from)
+			if len(batch) > 0 {
+				p.log.Trace("Scheduling new headers", "count", len(batch), "from", from)
 				select {
-				case d.headerProcCh <- headers:
+				case d.headerDataProcCh <- batch:
 				case <-d.cancelCh:
 					return errCancelHeaderFetch
 				}
-				from += uint64(len(headers))
-				getHeaders(from)
+				from += uint64(len(batch))
+				getHeadersInsertDataBatch(from)
 			} else {
 				// No headers delivered, or all of them being delayed, sleep a bit and retry
 				p.log.Trace("All headers delayed, waiting")
 				select {
 				case <-time.After(fsHeaderContCheck):
-					getHeaders(from)
+					getHeadersInsertDataBatch(from)
 					continue
 				case <-d.cancelCh:
 					return errCancelHeaderFetch
@@ -1005,7 +1007,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				}
 			}
 			select {
-			case d.headerProcCh <- nil:
+			case d.headerDataProcCh <- nil:
 			case <-d.cancelCh:
 			}
 			return errBadPeer
@@ -1013,7 +1015,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 	}
 }
 
-// fillHeaderSkeleton concurrently retrieves headers from all our available peers
+// fillHeaderDataSkeleton concurrently retrieves headers from all our available peers
 // and maps them to the provided skeleton header chain.
 //
 // Any partial results from the beginning of the skeleton is (if possible) forwarded
@@ -1022,14 +1024,15 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 //
 // The method returns the entire filled skeleton and also the number of headers
 // already forwarded for processing.
-func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, int, error) {
+// TODO: modify this
+func (d *Downloader) fillHeaderDataSkeleton(from uint64, skeletonData types.HeaderInsertDataBatch) (types.HeaderInsertDataBatch, int, error) {
 	log.Debug("Filling up skeleton", "from", from)
-	d.queue.ScheduleSkeleton(from, skeleton)
+	d.queue.ScheduleSkeleton(from, skeletonData)
 
 	var (
 		deliver = func(packet dataPack) (int, error) {
-			pack := packet.(*headerPack)
-			return d.queue.DeliverHeaders(pack.peerID, pack.headers, d.headerProcCh)
+			pack := packet.(*headerInsertDataPack)
+			return d.queue.DeliverHeadersInsertData(pack.peerID, pack.batch, d.headerDataProcCh)
 		}
 		expire   = func() map[string]int { return d.queue.ExpireHeaders(d.requestTTL()) }
 		throttle = func() bool { return false }
@@ -1664,15 +1667,16 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 	return nil
 }
 
-// DeliverHeaders injects a new batch of block headers received from a remote
+// DeliverHeadersInsertData injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) (err error) {
 	return d.deliver(id, d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
+// DeliverHeaderInsertDataBatch injects a new batch of block headers insert data batch
+// from a remote node into the download schedule.
 func (d *Downloader) DeliverHeaderInsertDataBatch(id string, batch types.HeaderInsertDataBatch) (err error) {
-	// TODO: implement this
-	return nil
+	return d.deliver(id, d.headerDataCh, &headerInsertDataPack{id, batch}, headerInsertDataInMeter, headerInsertDataDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.

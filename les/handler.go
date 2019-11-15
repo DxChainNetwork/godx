@@ -534,7 +534,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	//	if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
 	//		pm.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
 	//	} else {
-	//		err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
+	//		err := pm.downloader.DeliverHeadersInsertData(p.id, resp.Headers)
 	//		if err != nil {
 	//			log.Debug(fmt.Sprint(err))
 	//		}
@@ -1533,6 +1533,58 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
 			peer.fcServer.QueueRequest(reqID, cost)
 			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return light.ErrNoPeers
+	}
+	return nil
+}
+
+// RequestHeadersAndValidatorsByHash fetches a batch of blocks' headers and validators corresponding to
+// the specified header query, based on the hash of an origin block.
+func (pc *peerConnection) RequestHeaderInsertDataBatchByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeaderInsertDataBatchByHash(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return light.ErrNoPeers
+	}
+	return nil
+}
+
+// RequestHeaderInsertDataBatchByNumber fetches a batch of blocks' headers and validators corresponding to
+// the specified header query, based on the number of an origin block.
+func (pc *peerConnection) RequestHeaderInsertDataBatchByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeaderInsertDataBatchByNumber(reqID, cost, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)

@@ -77,3 +77,12 @@ type statePack struct {
 func (p *statePack) PeerId() string { return p.peerID }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
+
+type headerInsertDataPack struct {
+	peerID string
+	batch  types.HeaderInsertDataBatch
+}
+
+func (p *headerInsertDataPack) PeerId() string { return p.peerID }
+func (p *headerInsertDataPack) Items() int     { return len(p.batch) }
+func (p *headerInsertDataPack) Stats() string  { return fmt.Sprintf("%d", len(p.batch)) }

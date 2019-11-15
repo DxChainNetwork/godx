@@ -28,6 +28,11 @@ var (
 	headerDropMeter    = metrics.NewRegisteredMeter("eth/downloader/headers/drop", nil)
 	headerTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headers/timeout", nil)
 
+	headerInsertDataInMeter      = metrics.NewRegisteredMeter("eth/downloader/headerInsertData/in", nil)
+	headerInsertDataReqTimer     = metrics.NewRegisteredTimer("eth/downloader/headerInsertData/req", nil)
+	headerInsertDataDropMeter    = metrics.NewRegisteredMeter("eth/downloader/headerInsertData/drop", nil)
+	headerInsertDataTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headerInsertData/timeout", nil)
+
 	bodyInMeter      = metrics.NewRegisteredMeter("eth/downloader/bodies/in", nil)
 	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
 	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)

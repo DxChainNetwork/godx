@@ -292,12 +292,24 @@ func (p *peer) RequestHeadersByNumber(reqID, cost, origin uint64, amount int, sk
 	return sendRequest(p.rw, GetBlockHeadersMsg, reqID, cost, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
 }
 
-// RequestHeadersAndValidatorsByHash fetches a batch a blocks' headers correspodning to
+// RequestHeadersAndValidatorsByHash fetches a batch of blocks' headers and validators corresponding to
 // the specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeaderInsertDataBatchByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	return sendRequest(p.rw, GetBlockHeaderAndValidatorsMsg, reqID, cost, &getBlockHeaderAndValidatorsRequest{
 		Origin:  hashOrNumber{Hash: origin},
+		Amount:  uint64(amount),
+		Skip:    uint64(skip),
+		Reverse: reverse,
+	})
+}
+
+// RequestHeaderInsertDataBatchByNumber fetches a batch of blocks' headers and validators corresponding
+// to the specified header query, based on the number of an origin block.
+func (p *peer) RequestHeaderInsertDataBatchByNumber(reqID, cost, origin uint64, amount, skip int, reverse bool) error {
+	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
+	return sendRequest(p.rw, GetBlockHeaderAndValidatorsMsg, reqID, cost, &getBlockHeaderAndValidatorsRequest{
+		Origin:  hashOrNumber{Number: origin},
 		Amount:  uint64(amount),
 		Skip:    uint64(skip),
 		Reverse: reverse,

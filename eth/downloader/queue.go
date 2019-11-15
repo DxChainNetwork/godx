@@ -45,10 +45,10 @@ var (
 
 // fetchRequest is a currently running data retrieval operation.
 type fetchRequest struct {
-	Peer    *peerConnection // Peer to which the request was sent
-	From    uint64          // [eth/62] Requested chain element index (used for skeleton fills only)
-	Headers []*types.Header // [eth/62] Requested headers, sorted by request order
-	Time    time.Time       // Time when the request was made
+	Peer    *peerConnection             // Peer to which the request was sent
+	From    uint64                      // [eth/62] Requested chain element index (used for skeleton fills only)
+	Headers types.HeaderInsertDataBatch // [eth/62] Requested headers, sorted by request order
+	Time    time.Time                   // Time when the request was made
 }
 
 // fetchResult is a struct collecting partial results from data fetchers until
@@ -57,7 +57,7 @@ type fetchResult struct {
 	Pending int         // Number of data fetches still pending
 	Hash    common.Hash // Hash of the header to prevent recalculating
 
-	Header       *types.Header
+	Header       types.HeaderInsertData
 	Uncles       []*types.Header
 	Transactions types.Transactions
 	Receipts     types.Receipts
@@ -68,15 +68,15 @@ type queue struct {
 	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
 
 	// Headers are "special", they download in batches, supported by a skeleton chain
-	headerHead      common.Hash                    // [eth/62] Hash of the last queued header to verify order
-	headerTaskPool  map[uint64]*types.Header       // [eth/62] Pending header retrieval tasks, mapping starting indexes to skeleton headers
-	headerTaskQueue *prque.Prque                   // [eth/62] Priority queue of the skeleton indexes to fetch the filling headers for
-	headerPeerMiss  map[string]map[uint64]struct{} // [eth/62] Set of per-peer header batches known to be unavailable
-	headerPendPool  map[string]*fetchRequest       // [eth/62] Currently pending header retrieval operations
-	headerResults   []*types.Header                // [eth/62] Result cache accumulating the completed headers
-	headerProced    int                            // [eth/62] Number of headers already processed from the results
-	headerOffset    uint64                         // [eth/62] Number of the first header in the result cache
-	headerContCh    chan bool                      // [eth/62] Channel to notify when header download finishes
+	headerHead      common.Hash                       // [eth/62] Hash of the last queued header to verify order
+	headerTaskPool  map[uint64]types.HeaderInsertData // [eth/62] Pending header retrieval tasks, mapping starting indexes to skeleton headers
+	headerTaskQueue *prque.Prque                      // [eth/62] Priority queue of the skeleton indexes to fetch the filling headers for
+	headerPeerMiss  map[string]map[uint64]struct{}    // [eth/62] Set of per-peer header batches known to be unavailable
+	headerPendPool  map[string]*fetchRequest          // [eth/62] Currently pending header retrieval operations
+	headerResults   types.HeaderInsertDataBatch       // [eth/62] Result cache accumulating the completed headers
+	headerProced    int                               // [eth/62] Number of headers already processed from the results
+	headerOffset    uint64                            // [eth/62] Number of the first header in the result cache
+	headerContCh    chan bool                         // [eth/62] Channel to notify when header download finishes
 
 	// All data retrievals below are based on an already assembles header chain
 	blockTaskPool  map[common.Hash]*types.Header // [eth/62] Pending block (body) retrieval tasks, mapping hashes to headers
@@ -267,7 +267,7 @@ func (q *queue) resultSlots(pendPool map[string]*fetchRequest, donePool map[comm
 
 // ScheduleSkeleton adds a batch of header retrieval tasks to the queue to fill
 // up an already retrieved header skeleton.
-func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
+func (q *queue) ScheduleSkeleton(from uint64, skeletonData types.HeaderInsertDataBatch) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -279,12 +279,12 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.headerTaskPool = make(map[uint64]*types.Header)
 	q.headerTaskQueue = prque.New(nil)
 	q.headerPeerMiss = make(map[string]map[uint64]struct{}) // Reset availability to correct invalid chains
-	q.headerResults = make([]*types.Header, len(skeleton)*MaxHeaderFetch)
+	q.headerResults = make([]*types.Header, len(skeletonData)*MaxHeaderFetch)
 	q.headerProced = 0
 	q.headerOffset = from
 	q.headerContCh = make(chan bool, 1)
 
-	for i, header := range skeleton {
+	for i, header := range skeletonData {
 		index := from + uint64(i*MaxHeaderFetch)
 
 		q.headerTaskPool[index] = header
@@ -672,14 +672,14 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 	return expiries
 }
 
-// DeliverHeaders injects a header retrieval response into the header results
+// DeliverHeadersInsertData injects a header retrieval response into the header results
 // cache. This method either accepts all headers it received, or none of them
 // if they do not map correctly to the skeleton.
 //
 // If the headers are accepted, the method makes an attempt to deliver the set
 // of ready headers to the processor to keep the pipeline full. However it will
 // not block to prevent stalling other pending deliveries.
-func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh chan []*types.Header) (int, error) {
+func (q *queue) DeliverHeadersInsertData(id string, dataBatch types.HeaderInsertDataBatch, headerProcCh chan types.HeaderInsertDataBatch) (int, error) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -691,6 +691,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	headerReqTimer.UpdateSince(request.Time)
 	delete(q.headerPendPool, id)
 
+	headers, _ := dataBatch.Split()
 	// Ensure headers can be mapped onto the skeleton chain
 	target := q.headerTaskPool[request.From].Hash()
 
