@@ -735,21 +735,21 @@ func (q *queue) DeliverHeadersInsertData(id string, dataBatch types.HeaderInsert
 		return 0, errors.New("delivery not accepted")
 	}
 	// Clean up a successful fetch and try to deliver any sub-results
-	copy(q.headerResults[request.From-q.headerOffset:], headers)
+	copy(q.headerDataResults[request.From-q.headerOffset:], dataBatch)
 	delete(q.headerTaskPool, request.From)
 
 	ready := 0
-	for q.headerProced+ready < len(q.headerResults) && q.headerResults[q.headerProced+ready] != nil {
+	for q.headerProced+ready < len(q.headerDataResults) && q.headerDataResults[q.headerProced+ready].Header != nil {
 		ready += MaxHeaderFetch
 	}
 	if ready > 0 {
 		// Headers are ready for delivery, gather them and push forward (non blocking)
-		process := make([]*types.Header, ready)
-		copy(process, q.headerResults[q.headerProced:q.headerProced+ready])
+		process := make(types.HeaderInsertDataBatch, ready)
+		copy(process, q.headerDataResults[q.headerProced:q.headerProced+ready])
 
 		select {
 		case headerProcCh <- process:
-			log.Trace("Pre-scheduled new headers", "peer", id, "count", len(process), "from", process[0].Number)
+			log.Trace("Pre-scheduled new headers", "peer", id, "count", len(process), "from", process[0].Header.Number)
 			q.headerProced += len(process)
 		default:
 		}
