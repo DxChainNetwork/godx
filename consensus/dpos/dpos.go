@@ -221,10 +221,10 @@ func IsElectBlock(parent, curHeader *types.Header) bool {
 
 // VerifyHeaders verify a batch of headers. The input validatorsSet is the new validators
 // for each header.
-func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, data types.HeaderInsertDataBatch, seals []bool) (chan<- struct{}, <-chan error) {
+func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, batch types.HeaderInsertDataBatch, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
-	results := make(chan error, len(data))
-	headers, validatorsSet := data.Split()
+	results := make(chan error, len(batch))
+	headers, validatorsSet := batch.Split()
 	go func() {
 		for i, header := range headers {
 			parents := headers[:i]
@@ -232,7 +232,10 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, data types.HeaderInser
 			if i != 0 {
 				validators = validatorsSet[i-1]
 			}
-			err := d.verifyHeader(chain, header, validators, parents, seals[i])
+			err := validateHeaderWithValidators(header)
+			if err != nil {
+				err = d.verifyHeader(chain, header, validators, parents, seals[i])
+			}
 			select {
 			case <-abort:
 				return
@@ -241,6 +244,23 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, data types.HeaderInser
 		}
 	}()
 	return abort, results
+}
+
+//  validateHeaderWithValidators checks whether the validators is consistent with the header
+func validateHeaderWithValidators(header *types.Header, validators []common.Address) error {
+	expectRoot := header.DposContext.EpochRoot
+	dc, err := types.NewDposContext(types.NewFullDposDatabase(nil))
+	if err != nil {
+		return fmt.Errorf("cannot create the dpos context: %v", err)
+	}
+	if err := dc.SetValidators(validators); err != nil {
+		return fmt.Errorf("cannot set validators: %v", err)
+	}
+	gotRoot := dc.EpochTrie().Hash()
+	if expectRoot != gotRoot {
+		return fmt.Errorf("validators not consist with header")
+	}
+	return nil
 }
 
 // VerifyUncles implements consensus.Engine, returning an error if the block has uncles,
