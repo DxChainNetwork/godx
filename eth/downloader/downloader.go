@@ -1049,7 +1049,7 @@ func (d *Downloader) fillHeaderDataSkeleton(from uint64, skeletonData types.Head
 
 	log.Debug("Skeleton fill terminated", "err", err)
 
-	filled, proced := d.queue.RetrieveHeaders()
+	filled, proced := d.queue.RetrieveHeaderDataBatch()
 	return filled, proced, err
 }
 
