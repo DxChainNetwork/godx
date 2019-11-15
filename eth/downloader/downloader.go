@@ -1325,7 +1325,8 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 		case <-d.cancelCh:
 			return errCancelHeaderProcessing
 
-		case headers := <-d.headerProcCh:
+		case dataBatch := <-d.headerDataProcCh:
+			headers, _ := dataBatch.Split()
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
 				// Notify everyone that headers are fully processed
@@ -1386,6 +1387,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					limit = len(headers)
 				}
 				chunk := headers[:limit]
+				insertData := dataBatch[:limit]
 
 				// In case of header only syncing, validate the chunk immediately
 				if d.mode == FastSync || d.mode == LightSync {
@@ -1401,7 +1403,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
 					}
-					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
+					if n, err := d.lightchain.InsertHeaderChain(insertData, frequency); err != nil {
 						// If some headers were inserted, add them too to the rollback list
 						if n > 0 {
 							rollback = append(rollback, chunk[:n]...)
@@ -1433,6 +1435,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					}
 				}
 				headers = headers[limit:]
+				dataBatch = dataBatch[limit:]
 				origin += uint64(limit)
 			}
 

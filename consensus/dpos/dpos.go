@@ -228,12 +228,13 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, batch types.HeaderInse
 	go func() {
 		for i, header := range headers {
 			parents := headers[:i]
-			var validators []common.Address
-			if i != 0 {
-				validators = validatorsSet[i-1]
-			}
-			err := validateHeaderWithValidators(header)
+			err := validateHeaderWithValidators(header, validatorsSet[i])
+
 			if err != nil {
+				var validators []common.Address
+				if i != 0 {
+					validators = validatorsSet[i-1]
+				}
 				err = d.verifyHeader(chain, header, validators, parents, seals[i])
 			}
 			select {
