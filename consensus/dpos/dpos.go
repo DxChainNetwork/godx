@@ -133,11 +133,11 @@ func (d *Dpos) Coinbase(header *types.Header) (common.Address, error) {
 
 // VerifyHeader check the given header whether it's fit for dpos engine
 func (d *Dpos) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
-	return d.verifyHeader(chain, header, nil, nil, seal)
+	return d.verifyHeader(chain, header, nil, nil)
 }
 
 func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, validators []common.Address,
-	parents []*types.Header, seal bool) error {
+	parents []*types.Header) error {
 
 	if d.Mode == ModeFake {
 		var parent *types.Header
@@ -196,27 +196,13 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, v
 	if parent.Time.Uint64()+uint64(BlockInterval) > header.Time.Uint64() {
 		return ErrInvalidTimestamp
 	}
-	// If the the election happens in this block, force to check seal
-	if IsElectBlock(parent, header) {
-		seal = true
-	}
-	// Short circuit for seal does not need to be verified
-	if !seal {
-		return nil
-	}
 	var vGetter validatorHelper
-	if len(validators) == 0 {
-		vGetter = newVHelper(validators, header, d.db)
+	if len(validators) != 0 {
+		vGetter = newVHelper(validators, header)
 	} else {
 		vGetter = newDBVHelper(d.db, parent, header)
 	}
 	return d.verifySeal(chain, header, vGetter)
-}
-
-func IsElectBlock(parent, curHeader *types.Header) bool {
-	epoch1 := CalculateEpochID(parent.Time.Int64())
-	epoch2 := CalculateEpochID(curHeader.Time.Int64())
-	return epoch1 != epoch2
 }
 
 // VerifyHeaders verify a batch of headers. The input validatorsSet is the new validators
@@ -229,13 +215,12 @@ func (d *Dpos) VerifyHeaders(chain consensus.ChainReader, batch types.HeaderInse
 		for i, header := range headers {
 			parents := headers[:i]
 			err := validateHeaderWithValidators(header, validatorsSet[i])
-
 			if err != nil {
 				var validators []common.Address
 				if i != 0 {
 					validators = validatorsSet[i-1]
 				}
-				err = d.verifyHeader(chain, header, validators, parents, seals[i])
+				err = d.verifyHeader(chain, header, validators, parents)
 			}
 			select {
 			case <-abort:
@@ -672,30 +657,23 @@ func makeMinedCntKey(epoch int64, addr common.Address) []byte {
 // and save the validators to db
 type validatorHelper interface {
 	getValidator() (common.Address, error)
-	saveValidators() error
 }
 
 // vHelper is the validatorHelper which gets info from validators
 type vHelper struct {
 	validators []common.Address
 	header     *types.Header
-	db         ethdb.Database
 }
 
-func newVHelper(validators []common.Address, header *types.Header, db ethdb.Database) *vHelper {
+func newVHelper(validators []common.Address, header *types.Header) *vHelper {
 	return &vHelper{
 		validators: validators,
 		header:     header,
-		db:         db,
 	}
 }
 
 func (g *vHelper) getValidator() (common.Address, error) {
 	return lookupValidator(g.header.Time.Int64(), g.validators)
-}
-
-func (g *vHelper) saveValidators() error {
-	return types.SaveValidators(g.validators, g.db)
 }
 
 // dbVHelper get the validator for the header from database
@@ -734,14 +712,6 @@ func (g *dbVHelper) getValidator() (common.Address, error) {
 	}
 	g.validators = validators
 	return lookupValidator(g.header.Time.Int64(), validators)
-}
-
-func (g *dbVHelper) saveValidators() error {
-	validators, err := g.getValidators()
-	if err != nil {
-		return err
-	}
-	return types.SaveValidators(validators, g.db)
 }
 
 func (g *dbVHelper) getValidators() ([]common.Address, error) {
