@@ -198,7 +198,7 @@ func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, v
 	}
 	var vGetter validatorHelper
 	if len(validators) != 0 {
-		vGetter = newVHelper(validators, header, d.db)
+		vGetter = newVHelper(validators, header)
 	} else {
 		vGetter = newDBVHelper(d.db, parent, header)
 	}
@@ -663,14 +663,12 @@ type validatorHelper interface {
 type vHelper struct {
 	validators []common.Address
 	header     *types.Header
-	db         ethdb.Database
 }
 
-func newVHelper(validators []common.Address, header *types.Header, db ethdb.Database) *vHelper {
+func newVHelper(validators []common.Address, header *types.Header) *vHelper {
 	return &vHelper{
 		validators: validators,
 		header:     header,
-		db:         db,
 	}
 }
 
