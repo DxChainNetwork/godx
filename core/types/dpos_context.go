@@ -152,8 +152,8 @@ func NewDposContext(db DposDatabase) (*DposContext, error) {
 	}, nil
 }
 
-// NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
+// NewDposContextFromRoot creates DposContext with database and trie root
+func NewDposContextFromRoot(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
 	epochTrie, err := db.OpenEpochTrie(ctxProto.EpochRoot)
 	if err != nil {
 		return nil, err

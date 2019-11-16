@@ -18,7 +18,7 @@ import (
 // NewDposContext creates a new dposContext
 func NewDposContext(ctx context.Context, header *types.Header, odr OdrBackend) *types.DposContext {
 	db := NewOdrDposDatabase(ctx, header, odr)
-	dposCtx, _ := types.NewDposContextFromProto(db, header.DposContext)
+	dposCtx, _ := types.NewDposContextFromRoot(db, header.DposContext)
 	return dposCtx
 }
 
