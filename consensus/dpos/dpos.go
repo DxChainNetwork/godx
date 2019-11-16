@@ -671,7 +671,6 @@ func makeMinedCntKey(epoch int64, addr common.Address) []byte {
 // and save the validators to db
 type validatorHelper interface {
 	getValidator() (common.Address, error)
-	saveValidators() error
 }
 
 // vHelper is the validatorHelper which gets info from validators
@@ -691,10 +690,6 @@ func newVHelper(validators []common.Address, header *types.Header, db ethdb.Data
 
 func (g *vHelper) getValidator() (common.Address, error) {
 	return lookupValidator(g.header.Time.Int64(), g.validators)
-}
-
-func (g *vHelper) saveValidators() error {
-	return types.SaveValidators(g.validators, g.db)
 }
 
 // dbVHelper get the validator for the header from database
@@ -733,14 +728,6 @@ func (g *dbVHelper) getValidator() (common.Address, error) {
 	}
 	g.validators = validators
 	return lookupValidator(g.header.Time.Int64(), validators)
-}
-
-func (g *dbVHelper) saveValidators() error {
-	validators, err := g.getValidators()
-	if err != nil {
-		return err
-	}
-	return types.SaveValidators(validators, g.db)
 }
 
 func (g *dbVHelper) getValidators() ([]common.Address, error) {
