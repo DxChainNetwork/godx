@@ -1388,7 +1388,7 @@ func (g *genesisConfig) toBlock(db ethdb.Database) *types.Block {
 
 // dposContextWithGenesis parse the genesis to dposContext
 func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
+	dc, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}

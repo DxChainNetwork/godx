@@ -441,7 +441,7 @@ func decodePrealloc(data string) GenesisAlloc {
 
 // initGenesisDposContext returns the dpos context of given genesis block
 func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
+	dc, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}

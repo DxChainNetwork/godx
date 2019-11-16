@@ -413,7 +413,7 @@ func (bc *BlockChain) DposCtx() (*types.DposContext, error) {
 
 // DposCtxAt returns a dposCtx based on a particular point in time.
 func (bc *BlockChain) DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error) {
-	return types.NewDposContextFromProto(types.NewFullDposDatabase(bc.db), root)
+	return types.NewDposContextFromRoot(types.NewFullDposDatabase(bc.db), root)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1226,7 +1226,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 
 		// construct dpos context from parent's dpos context root
-		dposCtx, err := types.NewDposContextFromProto(types.NewFullDposDatabase(bc.db), parent.Header().DposContext)
+		dposCtx, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(bc.db), parent.Header().DposContext)
 		if err != nil {
 			return it.index, events, coalescedLogs, err
 		}

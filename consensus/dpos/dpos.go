@@ -487,7 +487,7 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(d.db), lastBlock.Header().DposContext)
+	dposContext, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(d.db), lastBlock.Header().DposContext)
 	if err != nil {
 		return err
 	}

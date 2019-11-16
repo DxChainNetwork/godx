@@ -26,8 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DxChainNetwork/godx/trie"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/rawdb"
@@ -35,6 +33,7 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/trie"
 	"github.com/hashicorp/golang-lru"
 )
 
