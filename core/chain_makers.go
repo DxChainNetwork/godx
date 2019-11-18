@@ -38,6 +38,7 @@ type BlockGen struct {
 	chain   []*types.Block
 	header  *types.Header
 	statedb *state.StateDB
+	dposCtx *types.DposContext
 
 	gasPool  *GasPool
 	txs      []*types.Transaction
@@ -176,7 +177,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dposCtx *types.DposContext) (*types.Block, types.Receipts) {
-		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
+		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, dposCtx: dposCtx, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
 		// Mutate the state and block according to any hard-fork specs

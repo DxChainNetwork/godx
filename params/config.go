@@ -122,6 +122,21 @@ var (
 		Dpos:           DefaultDposConfig(),
 	}
 
+	// DposChainConfigWithInitialCandidates is the chain parameters to run a node used dpos consensus. Some
+	// predefined candidates are already in the genesis
+	DposChainConfigWithInitialCandidates = &ChainConfig{
+		ChainID:        big.NewInt(5),
+		HomesteadBlock: big.NewInt(0),
+		DAOForkBlock:   nil,
+		DAOForkSupport: false,
+		EIP150Block:    big.NewInt(0),
+		EIP150Hash:     common.Hash{},
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+		Dpos:           TestDposConfigForDpos(),
+	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
