@@ -21,6 +21,8 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/DxChainNetwork/godx/consensus"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
@@ -119,7 +121,8 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// start := time.Now()
 	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	blocks, receipts := core.GenerateChain(params.DposChainConfig, parent, dpos.NewDposFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	engine := dpos.NewDposFaker()
+	blocks, receipts := core.GenerateChain(params.DposChainConfig, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -146,6 +149,11 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// Convert the block-chain into a hash-chain and header/block maps
 	td := new(big.Int).Set(tc.td(parent.Hash()))
 	for i, b := range blocks {
+		b, err := tc.fakeSeal(b, engine)
+		if err != nil {
+			panic(err)
+		}
+
 		td := td.Add(td, b.Difficulty())
 		hash := b.Hash()
 		tc.chain = append(tc.chain, hash)
@@ -160,6 +168,17 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		}
 		tc.validatorsSet[hash] = validators
 	}
+}
+
+func (tc *testChain) fakeSeal(b *types.Block, engine consensus.Engine) (*types.Block, error) {
+	if _, ok := engine.(*dpos.Dpos); !ok {
+		return nil, fmt.Errorf("fake seal should only be allied to dpos engine")
+	}
+	result := make(chan *types.Block)
+	if err := engine.Seal(nil, b, result, nil); err != nil {
+		return nil, err
+	}
+	return <-result, nil
 }
 
 // len returns the total number of blocks in the chain.

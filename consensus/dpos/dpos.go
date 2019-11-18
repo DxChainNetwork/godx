@@ -275,6 +275,14 @@ func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHelper validatorHelper) error {
 
 	if d.Mode == ModeFake {
+		seal := header.Extra[len(header.Extra)-extraSeal:]
+		targetValidator, err := vHelper.getValidator()
+		if err != nil {
+			return fmt.Errorf("cannot get validator: %v", err)
+		}
+		if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
+			return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
+		}
 		return nil
 	}
 	validator, err := vHelper.getValidator()
@@ -509,6 +517,16 @@ func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	if d.Mode == ModeFake {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		header.Extra = make([]byte, extraSeal)
+		validators, err := block.DposCtx().GetValidators()
+		if err != nil {
+			return fmt.Errorf("fake mode get validators error: %v", err)
+		}
+		validator, err := lookupValidator(block.Time().Int64(), validators[:])
+		if err != nil {
+			return fmt.Errorf("fake mode look up validator error: %v", err)
+		}
+		copy(header.Extra, validator[:])
 		select {
 		case results <- block.WithSeal(header):
 		default:
