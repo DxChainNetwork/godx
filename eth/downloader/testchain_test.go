@@ -18,6 +18,9 @@ package downloader
 
 import (
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
@@ -25,8 +28,6 @@ import (
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"sync"
 )
 
 // Test chain parameters.
@@ -54,12 +55,13 @@ func init() {
 }
 
 type testChain struct {
-	genesis  *types.Block
-	chain    []common.Hash
-	headerm  map[common.Hash]*types.Header
-	blockm   map[common.Hash]*types.Block
-	receiptm map[common.Hash][]*types.Receipt
-	tdm      map[common.Hash]*big.Int
+	genesis       *types.Block
+	chain         []common.Hash
+	headerm       map[common.Hash]*types.Header
+	blockm        map[common.Hash]*types.Block
+	receiptm      map[common.Hash][]*types.Receipt
+	tdm           map[common.Hash]*big.Int
+	validatorsSet map[common.Hash][]common.Address
 }
 
 // newTestChain creates a blockchain of the given length.
@@ -151,6 +153,12 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		tc.headerm[hash] = b.Header()
 		tc.receiptm[hash] = receipts[i]
 		tc.tdm[hash] = new(big.Int).Set(td)
+
+		validators, err := b.DposCtx().GetValidators()
+		if err != nil {
+			panic(err)
+		}
+		tc.validatorsSet[hash] = validators
 	}
 }
 
@@ -182,6 +190,26 @@ func (tc *testChain) headersByNumber(origin uint64, amount int, skip int) []*typ
 		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
 			result = append(result, header)
 		}
+	}
+	return result
+}
+
+func (tc *testChain) headersAndValidatorsByHash(origin common.Hash, amount int, skip int) types.HeaderInsertDataBatch {
+	num, _ := tc.hashToNumber(origin)
+	return tc.headersAndValidatorsByNumber(num, amount, skip)
+}
+
+func (tc *testChain) headersAndValidatorsByNumber(origin uint64, amount int, skip int) types.HeaderInsertDataBatch {
+	result := make(types.HeaderInsertDataBatch, 0, amount)
+	for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
+		var data types.HeaderInsertData
+		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+			data.Header = header
+		}
+		if validators, ok := tc.validatorsSet[tc.chain[int(num)]]; ok {
+			data.Validators = validators
+		}
+		result = append(result, data)
 	}
 	return result
 }
