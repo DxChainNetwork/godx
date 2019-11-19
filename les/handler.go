@@ -1214,17 +1214,17 @@ func (pm *ProtocolManager) handleGetDposProofMsg(msg p2p.Msg, p *peer, costs *re
 }
 
 func calculateDposProofForBatchRequests(pm *ProtocolManager, reqs []DposProofReq, resultLimit int) *light.NodeSet {
-	ctx := newDposProofMsgCtx(pm)
+	cache := newDposProofMsgCache(pm)
 	for _, req := range reqs {
-		calculateDposProofForRequest(ctx, req)
-		if ctx.result.DataSize() >= resultLimit {
+		calculateDposProofForRequest(cache, req)
+		if cache.result.DataSize() >= resultLimit {
 			break
 		}
 	}
-	return ctx.result
+	return cache.result
 }
 
-func calculateDposProofForRequest(ctx *dposProofMsgCtx, req DposProofReq) {
+func calculateDposProofForRequest(ctx *dposProofMsgCache, req DposProofReq) {
 	ctx.openDposCtx(req.BlockHash)
 	if ctx.dposCtx == nil {
 		return
@@ -1236,22 +1236,22 @@ func calculateDposProofForRequest(ctx *dposProofMsgCtx, req DposProofReq) {
 	t.Prove(req.Key, req.FromLevel, ctx.result)
 }
 
-// dposProofMsgCtx is the context that caches related data when handling GetDposProofMsg
-type dposProofMsgCtx struct {
+// dposProofMsgCache is the context that caches related data when handling GetDposProofMsg
+type dposProofMsgCache struct {
 	pm            *ProtocolManager
 	dposCtx       *types.DposContext
 	lastBlockHash common.Hash
 	result        *light.NodeSet
 }
 
-func newDposProofMsgCtx(pm *ProtocolManager) *dposProofMsgCtx {
-	return &dposProofMsgCtx{
+func newDposProofMsgCache(pm *ProtocolManager) *dposProofMsgCache {
+	return &dposProofMsgCache{
 		pm:     pm,
 		result: light.NewNodeSet(),
 	}
 }
 
-func (ctx *dposProofMsgCtx) openDposCtx(blockHash common.Hash) {
+func (ctx *dposProofMsgCache) openDposCtx(blockHash common.Hash) {
 	if blockHash == ctx.lastBlockHash {
 		return
 	}
