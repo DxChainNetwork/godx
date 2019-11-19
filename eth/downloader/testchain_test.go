@@ -69,7 +69,6 @@ type testChain struct {
 func newTestChain(length int, genesis *types.Block) *testChain {
 	tc := new(testChain).copy(length)
 	tc.genesis = genesis
-	fmt.Printf("genesis epoch root: %x\n", genesis.Header().DposContext.EpochRoot)
 	tc.chain = append(tc.chain, genesis.Hash())
 	tc.headerm[tc.genesis.Hash()] = tc.genesis.Header()
 	tc.tdm[tc.genesis.Hash()] = tc.genesis.Difficulty()
@@ -122,9 +121,8 @@ func (tc *testChain) copy(newlen int) *testChain {
 // reassembly.
 func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
 	// start := time.Now()
-	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	engine := dpos.NewDposFaker()
+	engine := dpos.NewDposFaker(testDB)
 	blocks, receipts := core.GenerateChain(params.DposChainConfig, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
@@ -152,7 +150,6 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// Convert the block-chain into a hash-chain and header/block maps
 	td := new(big.Int).Set(tc.td(parent.Hash()))
 	for i, b := range blocks {
-		fmt.Printf("block number %v; dpos == nil? %v\n", b.Number(), b.DposCtx() == nil)
 		b, err := tc.fakeSeal(b, engine)
 		if err != nil {
 			panic(err)

@@ -61,18 +61,21 @@ type downloadTester struct {
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
+	db := ethdb.NewMemDatabase()
+	g := testGenesis
 	tester := &downloadTester{
-		genesis:     testGenesis,
+		genesis:     g,
 		peerDb:      testDB,
 		peers:       make(map[string]*downloadTesterPeer),
-		ownHashes:   []common.Hash{testGenesis.Hash()},
-		ownHeaders:  map[common.Hash]*types.Header{testGenesis.Hash(): testGenesis.Header()},
-		ownBlocks:   map[common.Hash]*types.Block{testGenesis.Hash(): testGenesis},
-		ownReceipts: map[common.Hash]types.Receipts{testGenesis.Hash(): nil},
-		ownChainTd:  map[common.Hash]*big.Int{testGenesis.Hash(): testGenesis.Difficulty()},
+		ownHashes:   []common.Hash{g.Hash()},
+		ownHeaders:  map[common.Hash]*types.Header{g.Hash(): g.Header()},
+		ownBlocks:   map[common.Hash]*types.Block{g.Hash(): g},
+		ownReceipts: map[common.Hash]types.Receipts{g.Hash(): nil},
+		ownChainTd:  map[common.Hash]*big.Int{g.Hash(): g.Difficulty()},
 	}
-	tester.stateDb = ethdb.NewMemDatabase()
-	tester.stateDb.Put(testGenesis.Root().Bytes(), []byte{0x00})
+	tester.stateDb = db
+	tester.genesis = g
+	tester.stateDb.Put(g.Root().Bytes(), []byte{0x00})
 	tester.downloader = New(FullSync, tester.stateDb, new(event.TypeMux), tester, nil, tester.dropPeer)
 	return tester
 }
