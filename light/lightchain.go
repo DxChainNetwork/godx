@@ -479,6 +479,7 @@ func (lc *LightChain) GetHeaderByNumberOdr(ctx context.Context, number uint64) (
 // Config retrieves the header chain's chain configuration.
 func (lc *LightChain) Config() *params.ChainConfig { return lc.hc.Config() }
 
+// SyncCht sync the cht
 func (lc *LightChain) SyncCht(ctx context.Context) bool {
 	// If we don't have a CHT indexer, abort
 	if lc.odr.ChtIndexer() == nil {
