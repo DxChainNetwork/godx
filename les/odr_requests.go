@@ -593,7 +593,7 @@ type DposProofReq struct {
 // DposTrieRequest implement LesOdrRequest
 type DposTrieRequest light.DposTrieRequest
 
-// GetCost reeturn the cost of the request
+// GetCost return the cost of the request
 func (r *DposTrieRequest) GetCost(peer *peer) uint64 {
 	return peer.GetRequestCost(GetDposProofMsg, 1)
 }
