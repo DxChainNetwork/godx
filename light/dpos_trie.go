@@ -56,9 +56,26 @@ func dposDatabaseIDToTrieID(id *dposDatabaseID, spec DposTrieSpecifier) *DposTri
 	return &DposTrieID{
 		BlockHash:   id.blockHash,
 		BlockNumber: id.blockNumber,
-		Roots:       id.roots,
+		Root:        getTargetRoot(&id.roots, spec),
 		TrieSpec:    spec,
 	}
+}
+
+func getTargetRoot(roots *types.DposContextRoot, spec DposTrieSpecifier) common.Hash {
+	switch spec {
+	case EpochTrieSpec:
+		return roots.EpochRoot
+	case DelegateTrieSpec:
+		return roots.DelegateRoot
+	case CandidateTrieSpec:
+		return roots.CandidateRoot
+	case VoteTrieSpec:
+		return roots.VoteRoot
+	case MinedCntTrieSpec:
+		return roots.MinedCntRoot
+	default:
+	}
+	return common.Hash{}
 }
 
 // OpenEpochTrie opens the epoch trie
@@ -146,7 +163,7 @@ func (t *odrDposTrie) TryDelete(key []byte) error {
 // Commit commit the trie to trie db
 func (t *odrDposTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
 	if t.trie == nil {
-		return t.id.TargetRoot(), nil
+		return t.id.Root, nil
 	}
 	return t.trie.Commit(onleaf)
 }
@@ -154,7 +171,7 @@ func (t *odrDposTrie) Commit(onleaf trie.LeafCallback) (common.Hash, error) {
 // Hash returns the hash of the trie
 func (t *odrDposTrie) Hash() common.Hash {
 	if t.trie == nil {
-		return t.id.TargetRoot()
+		return t.id.Root
 	}
 	return t.trie.Hash()
 }
@@ -181,7 +198,7 @@ func (t *odrDposTrie) do(key []byte, fn func() error) error {
 	for {
 		var err error
 		if t.trie == nil {
-			t.trie, err = trie.New(t.id.TargetRoot(), trie.NewDatabase(t.db.backend.Database()))
+			t.trie, err = trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database()))
 		}
 		if err == nil {
 			err = fn()
@@ -208,7 +225,7 @@ func newDposPrefixIterator(t *odrDposTrie, prefix []byte) trie.NodeIterator {
 	it := &dposNodeIterator{t: t}
 	if t.trie == nil {
 		it.do(func() error {
-			t, err := trie.New(t.id.TargetRoot(), trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database()))
 			if err == nil {
 				it.t.trie = t
 			}
@@ -227,7 +244,7 @@ func newDposNodeIterator(t *odrDposTrie, start []byte) trie.NodeIterator {
 	it := &dposNodeIterator{t: t}
 	if t.trie == nil {
 		it.do(func() error {
-			t, err := trie.New(t.id.TargetRoot(), trie.NewDatabase(t.db.backend.Database()))
+			t, err := trie.New(t.id.Root, trie.NewDatabase(t.db.backend.Database()))
 			if err == nil {
 				it.t.trie = t
 			}
