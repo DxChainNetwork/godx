@@ -329,7 +329,9 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 func GenesisBlockForDposTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	g := TestGenesisBlockWithInitialCandidates()
 	g.Alloc[addr] = GenesisAccount{Balance: balance}
-	return g.MustCommit(db)
+	b := g.MustCommit(db)
+	fmt.Printf("genesis hash %x\n", b.Hash())
+	return b
 }
 
 // DefaultGenesisBlock returns the Ethereum main net genesis block.

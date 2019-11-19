@@ -115,9 +115,10 @@ func New(config *params.DposConfig, db ethdb.Database) *Dpos {
 }
 
 // NewDposFaker create fake dpos for test
-func NewDposFaker() *Dpos {
+func NewDposFaker(db ethdb.Database) *Dpos {
 	return &Dpos{
 		Mode: ModeFake,
+		db:   db,
 	}
 }
 
@@ -437,6 +438,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
+
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
 	accumulateRewards(chain.Config(), state, header, d.db, genesis)
@@ -456,6 +458,8 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	updateTimeOfFirstBlockIfNecessary(chain)
 
 	//update mined count trie
+	fmt.Println("block number:", header.Number)
+	fmt.Println(parent)
 	err := updateMinedCnt(parent.Time.Int64(), header.Validator, dposContext)
 	if err != nil {
 		return nil, err

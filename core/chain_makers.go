@@ -175,7 +175,10 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		config = params.TestChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := &fakeChainReader{config: config}
+	chainreader := newFakeChainReader(config)
+	if parent.Number().Uint64() == 0 {
+		chainreader.AddBlock(parent)
+	}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dposCtx *types.DposContext) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, dposCtx: dposCtx, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
@@ -210,6 +213,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
+			chainreader.AddBlock(block)
 			return block, b.receipts
 		}
 		return nil, nil
@@ -276,6 +280,20 @@ func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethd
 type fakeChainReader struct {
 	config  *params.ChainConfig
 	genesis *types.Block
+
+	curBlockNumber uint64
+	hashes         map[uint64]common.Hash
+	headers        map[common.Hash]*types.Header
+	blocks         map[common.Hash]*types.Block
+}
+
+func newFakeChainReader(config *params.ChainConfig) *fakeChainReader {
+	return &fakeChainReader{
+		config:  config,
+		hashes:  make(map[uint64]common.Hash),
+		headers: make(map[common.Hash]*types.Header),
+		blocks:  make(map[common.Hash]*types.Block),
+	}
 }
 
 // Config returns the chain configuration.
@@ -283,8 +301,45 @@ func (cr *fakeChainReader) Config() *params.ChainConfig {
 	return cr.config
 }
 
-func (cr *fakeChainReader) CurrentHeader() *types.Header                            { return nil }
-func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header           { return nil }
-func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header          { return nil }
-func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header { return nil }
-func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block   { return nil }
+func (cr *fakeChainReader) CurrentHeader() *types.Header {
+	return cr.headers[cr.hashes[cr.curBlockNumber]]
+}
+
+func (cr *fakeChainReader) GetHeaderByNumber(number uint64) *types.Header {
+	hash, ok := cr.hashes[number]
+	if !ok {
+		return nil
+	}
+	return cr.headers[hash]
+}
+
+func (cr *fakeChainReader) GetHeaderByHash(hash common.Hash) *types.Header {
+	return cr.headers[hash]
+}
+
+func (cr *fakeChainReader) GetHeader(hash common.Hash, number uint64) *types.Header {
+	gotHash, ok := cr.hashes[number]
+	if !ok || gotHash != hash {
+		return nil
+	}
+	return cr.headers[hash]
+}
+
+func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Block {
+	gotHash, ok := cr.hashes[number]
+	if !ok || gotHash != hash {
+		return nil
+	}
+	return cr.blocks[hash]
+}
+
+func (cr *fakeChainReader) AddBlock(block *types.Block) {
+	hash := block.Hash()
+	number := block.Number().Uint64()
+	if number > cr.curBlockNumber {
+		cr.curBlockNumber = number
+	}
+	cr.hashes[block.Number().Uint64()] = hash
+	cr.headers[hash] = block.Header()
+	cr.blocks[hash] = block
+}
