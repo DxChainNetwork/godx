@@ -622,7 +622,7 @@ func (r *DposTrieRequest) Validate(db ethdb.Database, msg *Msg) error {
 	proofs := msg.Obj.(light.NodeList)
 	nodeSet := proofs.NodeSet()
 	reads := &readTraceDB{db: nodeSet}
-	if _, _, err := trie.VerifyProof(r.ID.TargetRoot(), r.Key, reads); err != nil {
+	if _, _, err := trie.VerifyProof(r.ID.Root, r.Key, reads); err != nil {
 		return fmt.Errorf("merkle proof verification failed: %v", err)
 	}
 	if len(reads.reads) != nodeSet.KeyCount() {
