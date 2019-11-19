@@ -561,6 +561,7 @@ func applyGenesisValidator(validatorInfo params.ValidatorConfig, dc *types.DposC
 	dpos.SetFrozenAssets(stateDB, addr, validatorInfo.Deposit)
 	dpos.SetRewardRatioNumerator(stateDB, addr, validatorInfo.RewardRatio)
 	dpos.SetRewardRatioNumeratorLastEpoch(stateDB, addr, validatorInfo.RewardRatio)
+	return nil
 }
 
 func applyGenesisCandidate(candidateInfo params.CandidateConfig, dc *types.DposContext, stateDB *state.StateDB) error {

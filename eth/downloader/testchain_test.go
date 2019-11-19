@@ -70,11 +70,13 @@ type testChain struct {
 func newTestChain(length int, genesis *types.Block) *testChain {
 	tc := new(testChain).copy(length)
 	tc.genesis = genesis
+	fmt.Printf("genesis epoch root: %x\n", genesis.Header().DposContext.EpochRoot)
 	tc.chain = append(tc.chain, genesis.Hash())
 	tc.headerm[tc.genesis.Hash()] = tc.genesis.Header()
 	tc.tdm[tc.genesis.Hash()] = tc.genesis.Difficulty()
 	tc.blockm[tc.genesis.Hash()] = tc.genesis
 	tc.generate(length-1, 0, genesis, false)
+	tc.validatorsSet = make(map[common.Hash][]common.Address)
 	return tc
 }
 
@@ -96,11 +98,12 @@ func (tc *testChain) shorten(length int) *testChain {
 
 func (tc *testChain) copy(newlen int) *testChain {
 	cpy := &testChain{
-		genesis:  tc.genesis,
-		headerm:  make(map[common.Hash]*types.Header, newlen),
-		blockm:   make(map[common.Hash]*types.Block, newlen),
-		receiptm: make(map[common.Hash][]*types.Receipt, newlen),
-		tdm:      make(map[common.Hash]*big.Int, newlen),
+		genesis:       tc.genesis,
+		headerm:       make(map[common.Hash]*types.Header, newlen),
+		blockm:        make(map[common.Hash]*types.Block, newlen),
+		receiptm:      make(map[common.Hash][]*types.Receipt, newlen),
+		tdm:           make(map[common.Hash]*big.Int, newlen),
+		validatorsSet: make(map[common.Hash][]common.Address, newlen),
 	}
 	for i := 0; i < len(tc.chain) && i < newlen; i++ {
 		hash := tc.chain[i]
@@ -109,6 +112,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		cpy.blockm[hash] = tc.blockm[hash]
 		cpy.headerm[hash] = tc.headerm[hash]
 		cpy.receiptm[hash] = tc.receiptm[hash]
+		cpy.validatorsSet[hash] = tc.validatorsSet[hash]
 	}
 	return cpy
 }
@@ -149,11 +153,11 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// Convert the block-chain into a hash-chain and header/block maps
 	td := new(big.Int).Set(tc.td(parent.Hash()))
 	for i, b := range blocks {
+		fmt.Printf("block number %v; dpos == nil? %v\n", b.Number(), b.DposCtx() == nil)
 		b, err := tc.fakeSeal(b, engine)
 		if err != nil {
 			panic(err)
 		}
-
 		td := td.Add(td, b.Difficulty())
 		hash := b.Hash()
 		tc.chain = append(tc.chain, hash)
@@ -174,7 +178,7 @@ func (tc *testChain) fakeSeal(b *types.Block, engine consensus.Engine) (*types.B
 	if _, ok := engine.(*dpos.Dpos); !ok {
 		return nil, fmt.Errorf("fake seal should only be allied to dpos engine")
 	}
-	result := make(chan *types.Block)
+	result := make(chan *types.Block, 1)
 	if err := engine.Seal(nil, b, result, nil); err != nil {
 		return nil, err
 	}

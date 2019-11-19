@@ -347,6 +347,26 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 	return nil
 }
 
+func (dlp *downloadTesterPeer) RequestHeaderInsertDataBatchByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	if reverse {
+		panic("reverse header requests not supported")
+	}
+
+	result := dlp.chain.headersAndValidatorsByHash(origin, amount, skip)
+	go dlp.dl.downloader.DeliverHeaderInsertDataBatch(dlp.id, result)
+	return nil
+}
+
+func (dlp *downloadTesterPeer) RequestHeaderInsertDataBatchByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	if reverse {
+		panic("reverse header requests not supported")
+	}
+
+	result := dlp.chain.headersAndValidatorsByNumber(origin, amount, skip)
+	go dlp.dl.downloader.DeliverHeaderInsertDataBatch(dlp.id, result)
+	return nil
+}
+
 // RequestBodies constructs a getBlockBodies method associated with a particular
 // peer in the download tester. The returned function can be used to retrieve
 // batches of block bodies from the particularly requested peer.
@@ -1452,6 +1472,12 @@ type floodingTestPeer struct {
 func (ftp *floodingTestPeer) Head() (common.Hash, *big.Int) { return ftp.peer.Head() }
 func (ftp *floodingTestPeer) RequestHeadersByHash(hash common.Hash, count int, skip int, reverse bool) error {
 	return ftp.peer.RequestHeadersByHash(hash, count, skip, reverse)
+}
+func (ftp *floodingTestPeer) RequestHeaderInsertDataBatchByHash(h common.Hash, amount int, skip int, reverse bool) error {
+	return ftp.peer.RequestHeaderInsertDataBatchByHash(h, amount, skip, reverse)
+}
+func (ftp *floodingTestPeer) RequestHeaderInsertDataBatchByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	return ftp.peer.RequestHeaderInsertDataBatchByNumber(origin, amount, skip, reverse)
 }
 func (ftp *floodingTestPeer) RequestBodies(hashes []common.Hash) error {
 	return ftp.peer.RequestBodies(hashes)

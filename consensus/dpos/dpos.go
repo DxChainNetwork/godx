@@ -441,10 +441,10 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	genesis := chain.GetHeaderByNumber(0)
 	accumulateRewards(chain.Config(), state, header, d.db, genesis)
 
-	if d.Mode == ModeFake {
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-		return types.NewBlock(header, txs, uncles, receipts), nil
-	}
+	//if d.Mode == ModeFake {
+	//	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	//	return types.NewBlock(header, txs, uncles, receipts), nil
+	//}
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
@@ -469,7 +469,9 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	header.DposContext = dposContext.ToRoot()
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	return types.NewBlock(header, txs, uncles, receipts), nil
+	block := types.NewBlock(header, txs, uncles, receipts)
+	block.SetDposCtx(dposContext)
+	return block, nil
 }
 
 // checkDeadline check the given block whether is fit to produced at now
@@ -530,7 +532,7 @@ func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results cha
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", d.SealHash(block.Header()))
+			log.Warn("Sealing result is not read by miner", "mode", "fake")
 		}
 		return nil
 	}

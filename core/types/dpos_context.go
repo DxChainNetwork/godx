@@ -566,7 +566,6 @@ func GetValidatorsFromDposTrie(t DposTrie) ([]common.Address, error) {
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
-
 	return validators, nil
 }
 
