@@ -34,6 +34,7 @@ type dposOdrDatabase struct {
 	backend OdrBackend
 }
 
+// NewOdrDposDatabase creates a new odr dpos database
 func NewOdrDposDatabase(ctx context.Context, header *types.Header, odr OdrBackend) *dposOdrDatabase {
 	return &dposOdrDatabase{
 		ctx:     ctx,
@@ -42,7 +43,7 @@ func NewOdrDposDatabase(ctx context.Context, header *types.Header, odr OdrBacken
 	}
 }
 
-// DposTrieIDFromHeader returns a DposTrieID from a block header
+// DposDatabaseIDFromHeader returns a DposTrieID from a block header
 func DposDatabaseIDFromHeader(header *types.Header) *dposDatabaseID {
 	return &dposDatabaseID{
 		blockHash:   header.Hash(),

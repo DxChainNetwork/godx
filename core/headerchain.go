@@ -210,6 +210,7 @@ func (hc *HeaderChain) WriteValidators(validators []common.Address) error {
 // header writes should be protected by the parent chain mutex individually.
 type WhCallback func(data types.HeaderInsertData) error
 
+// ValidateHeaderChain validate the HeaderInsertDataBatch
 func (hc *HeaderChain) ValidateHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
 	chain, _ := data.Split()
 	// Do a sanity check that the provided chain is actually ordered and linked

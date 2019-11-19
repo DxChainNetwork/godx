@@ -372,7 +372,7 @@ func DefaultGenesisBlock() *Genesis {
 	return g
 }
 
-// DefaultGenesisBlock returns the Ethereum main net genesis block.
+// TestGenesisBlockWithInitialCandidates returns the Ethereum main net genesis block.
 func TestGenesisBlockWithInitialCandidates() *Genesis {
 	g := &Genesis{
 		Config:     params.DposChainConfigWithInitialCandidates,

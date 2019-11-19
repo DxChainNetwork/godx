@@ -27,7 +27,7 @@ type peerDropFn func(id string)
 
 // dataPack is a data message returned by a peer for some query.
 type dataPack interface {
-	PeerId() string
+	PeerID() string
 	Items() int
 	Stats() string
 }
@@ -38,7 +38,7 @@ type headerPack struct {
 	headers []*types.Header
 }
 
-func (p *headerPack) PeerId() string { return p.peerID }
+func (p *headerPack) PeerID() string { return p.peerID }
 func (p *headerPack) Items() int     { return len(p.headers) }
 func (p *headerPack) Stats() string  { return fmt.Sprintf("%d", len(p.headers)) }
 
@@ -49,7 +49,7 @@ type bodyPack struct {
 	uncles       [][]*types.Header
 }
 
-func (p *bodyPack) PeerId() string { return p.peerID }
+func (p *bodyPack) PeerID() string { return p.peerID }
 func (p *bodyPack) Items() int {
 	if len(p.transactions) <= len(p.uncles) {
 		return len(p.transactions)
@@ -64,7 +64,7 @@ type receiptPack struct {
 	receipts [][]*types.Receipt
 }
 
-func (p *receiptPack) PeerId() string { return p.peerID }
+func (p *receiptPack) PeerID() string { return p.peerID }
 func (p *receiptPack) Items() int     { return len(p.receipts) }
 func (p *receiptPack) Stats() string  { return fmt.Sprintf("%d", len(p.receipts)) }
 
@@ -74,7 +74,7 @@ type statePack struct {
 	states [][]byte
 }
 
-func (p *statePack) PeerId() string { return p.peerID }
+func (p *statePack) PeerID() string { return p.peerID }
 func (p *statePack) Items() int     { return len(p.states) }
 func (p *statePack) Stats() string  { return fmt.Sprintf("%d", len(p.states)) }
 
@@ -83,6 +83,6 @@ type headerInsertDataPack struct {
 	batch  types.HeaderInsertDataBatch
 }
 
-func (p *headerInsertDataPack) PeerId() string { return p.peerID }
+func (p *headerInsertDataPack) PeerID() string { return p.peerID }
 func (p *headerInsertDataPack) Items() int     { return len(p.batch) }
 func (p *headerInsertDataPack) Stats() string  { return fmt.Sprintf("%d", len(p.batch)) }

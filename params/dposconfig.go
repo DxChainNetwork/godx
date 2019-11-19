@@ -219,7 +219,8 @@ func DefaultDposConfig() *DposConfig {
 	}
 }
 
-func TestDposConfigForDpos() *DposConfig {
+// TestDposConfigWithInitialCandidates returns the DposConfig for testing where
+func TestDposConfigWithInitialCandidates() *DposConfig {
 	return &DposConfig{
 		Validators: DefaultValidators,
 		Candidates: GenesisCandidates,

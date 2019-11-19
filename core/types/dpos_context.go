@@ -80,7 +80,7 @@ func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (DposTrie, error)
 	return db.openTrie(root)
 }
 
-// OpenLastEpochTrie opens the epochTrie in the last epoch
+// OpenLastDelegateTrie opens the epochTrie in the last epoch
 func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
@@ -536,17 +536,38 @@ func (dc *DposContext) Commit() (*DposContextRoot, error) {
 	}, nil
 }
 
-func (dc *DposContext) CandidateTrie() DposTrie         { return dc.candidateTrie }
-func (dc *DposContext) DelegateTrie() DposTrie          { return dc.delegateTrie }
-func (dc *DposContext) VoteTrie() DposTrie              { return dc.voteTrie }
-func (dc *DposContext) EpochTrie() DposTrie             { return dc.epochTrie }
-func (dc *DposContext) MinedCntTrie() DposTrie          { return dc.minedCntTrie }
-func (dc *DposContext) DB() DposDatabase                { return dc.db }
-func (dc *DposContext) SetEpoch(epoch DposTrie)         { dc.epochTrie = epoch }
-func (dc *DposContext) SetDelegate(delegate DposTrie)   { dc.delegateTrie = delegate }
-func (dc *DposContext) SetVote(vote DposTrie)           { dc.voteTrie = vote }
+// CandidateTrie return the candidate trie of the DposContext
+func (dc *DposContext) CandidateTrie() DposTrie { return dc.candidateTrie }
+
+// DelegateTrie return the delegate trie of the DposContext
+func (dc *DposContext) DelegateTrie() DposTrie { return dc.delegateTrie }
+
+// VoteTrie return the vote trie of the DposContext
+func (dc *DposContext) VoteTrie() DposTrie { return dc.voteTrie }
+
+// EpochTrie return the epoch trie of the DposContext
+func (dc *DposContext) EpochTrie() DposTrie { return dc.epochTrie }
+
+// MinedCntTrie return the mined count trie of the DposContext
+func (dc *DposContext) MinedCntTrie() DposTrie { return dc.minedCntTrie }
+
+// DB return the underlying database in the DposContext
+func (dc *DposContext) DB() DposDatabase { return dc.db }
+
+// SetEpoch set the epoch trie of the DposContext
+func (dc *DposContext) SetEpoch(epoch DposTrie) { dc.epochTrie = epoch }
+
+// SetDelegate set the delegate trie of the DposContext
+func (dc *DposContext) SetDelegate(delegate DposTrie) { dc.delegateTrie = delegate }
+
+// SetVote set the vote trie of the DposContext
+func (dc *DposContext) SetVote(vote DposTrie) { dc.voteTrie = vote }
+
+// SetCandidate set the candidate trie of the DposContext
 func (dc *DposContext) SetCandidate(candidate DposTrie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = minedCnt }
+
+// SetMinedCnt set the mined count trie of the DposContext
+func (dc *DposContext) SetMinedCnt(minedCnt DposTrie) { dc.minedCntTrie = minedCnt }
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {

@@ -121,10 +121,14 @@ func (p *FakePeer) RequestHeadersByNumber(number uint64, amount int, skip int, r
 	return nil
 }
 
+// RequestHeaderInsertDataBatchByHash request the HeaderInsertDataBatch by hash
+// TODO: implement this
 func (p *FakePeer) RequestHeaderInsertDataBatchByHash(hash common.Hash, amount int, skip int, reverse bool) error {
 	return errors.New("not implemented")
 }
 
+// RequestHeaderInsertDataBatchByNumber request the HeaderInsertDataBatch by number
+// TODO: implement this
 func (p *FakePeer) RequestHeaderInsertDataBatchByNumber(number uint64, amount int, skip int, reverse bool) error {
 	return errors.New("not implemented")
 }
