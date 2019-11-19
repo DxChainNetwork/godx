@@ -56,6 +56,7 @@ const (
 	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
 	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
 	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxDposProofsFetch       = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
 	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend                = 64  // Amount of transactions to be send per request
 	MaxTxStatus              = 256 // Amount of transactions to queried per request
@@ -75,6 +76,8 @@ type BlockChain interface {
 	CurrentHeader() *types.Header
 	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
+	DposCtx() (*types.DposContext, error)
+	DposCtxAt(*types.DposContextRoot) (*types.DposContext, error)
 	InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
 	GetHeaderByNumber(number uint64) *types.Header
@@ -324,7 +327,20 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 }
 
-var reqList = []uint64{GetBlockHeadersMsg, GetBlockBodiesMsg, GetCodeMsg, GetReceiptsMsg, GetProofsV1Msg, SendTxMsg, SendTxV2Msg, GetTxStatusMsg, GetHeaderProofsMsg, GetProofsV2Msg, GetHelperTrieProofsMsg}
+var reqList = []uint64{
+	GetBlockHeadersMsg,
+	GetBlockBodiesMsg,
+	GetCodeMsg,
+	GetReceiptsMsg,
+	GetProofsV1Msg,
+	SendTxMsg,
+	SendTxV2Msg,
+	GetTxStatusMsg,
+	GetHeaderProofsMsg,
+	GetProofsV2Msg,
+	GetHelperTrieProofsMsg,
+	GetDposProofMsg,
+}
 
 // handleMsg is invoked whenever an inbound message is received from a remote
 // peer. The remote connection is torn down upon returning any error.
@@ -1057,10 +1073,8 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				stats[i] = pm.txStatus([]common.Hash{hashes[i]})[0]
 			}
 		}
-
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-
 		return p.SendTxStatus(req.ReqID, bv, stats)
 
 	case GetTxStatusMsg:
@@ -1081,7 +1095,6 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(reqCnt)*costs.reqCost)
 		pm.server.fcCostStats.update(msg.Code, uint64(reqCnt), rcost)
-
 		return p.SendTxStatus(req.ReqID, bv, pm.txStatus(req.Hashes))
 
 	case TxStatusMsg:
@@ -1097,8 +1110,16 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		if err := msg.Decode(&resp); err != nil {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
-
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
+
+	case GetDposProofMsg:
+		return pm.handleGetDposProofMsg(msg, p, costs, reject)
+
+	case DposProofMsg:
+		deliverMsg, err = pm.handleDposProofMsgToDeliverMsg(msg, p)
+		if err != nil {
+			return err
+		}
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1173,6 +1194,115 @@ func (pm *ProtocolManager) txStatus(hashes []common.Hash) []txStatus {
 		}
 	}
 	return stats
+}
+
+func (pm *ProtocolManager) handleGetDposProofMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
+	p.Log().Trace("Received dpos proof request")
+	rawReq, err := decodeGetDposProofMsg(msg)
+	if err != nil {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	if reject(uint64(len(rawReq.Reqs)), MaxDposProofsFetch) {
+		return errResp(ErrRequestRejected, "")
+	}
+
+	result := calculateDposProofForBatchRequests(pm, rawReq.Reqs, softResponseLimit)
+
+	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + uint64(len(rawReq.Reqs))*costs.reqCost)
+	pm.server.fcCostStats.update(msg.Code, uint64(len(rawReq.Reqs)), rcost)
+	return p.SendDposProof(rawReq.ReqID, bv, result.NodeList())
+}
+
+func calculateDposProofForBatchRequests(pm *ProtocolManager, reqs []DposProofReq, resultLimit int) *light.NodeSet {
+	cache := newDposProofMsgCache(pm)
+	for _, req := range reqs {
+		calculateDposProofForRequest(cache, req)
+		if cache.result.DataSize() >= resultLimit {
+			break
+		}
+	}
+	return cache.result
+}
+
+func calculateDposProofForRequest(ctx *dposProofMsgCache, req DposProofReq) {
+	ctx.openDposCtx(req.BlockHash)
+	if ctx.dposCtx == nil {
+		return
+	}
+	t := selectDposTrie(ctx.dposCtx, req.TrieSpec)
+	if t == nil {
+		return
+	}
+	t.Prove(req.Key, req.FromLevel, ctx.result)
+}
+
+// dposProofMsgCache is the context that caches related data when handling GetDposProofMsg
+type dposProofMsgCache struct {
+	pm            *ProtocolManager
+	dposCtx       *types.DposContext
+	lastBlockHash common.Hash
+	result        *light.NodeSet
+}
+
+func newDposProofMsgCache(pm *ProtocolManager) *dposProofMsgCache {
+	return &dposProofMsgCache{
+		pm:     pm,
+		result: light.NewNodeSet(),
+	}
+}
+
+func (ctx *dposProofMsgCache) openDposCtx(blockHash common.Hash) {
+	if blockHash == ctx.lastBlockHash {
+		return
+	}
+	number := rawdb.ReadHeaderNumber(ctx.pm.chainDb, blockHash)
+	if number == nil {
+		return
+	}
+	header := rawdb.ReadHeader(ctx.pm.chainDb, blockHash, *number)
+	if header == nil {
+		return
+	}
+	dposCtx, err := ctx.pm.blockchain.DposCtxAt(header.DposContext)
+	if err != nil || dposCtx == nil {
+		return
+	}
+	ctx.dposCtx = dposCtx
+	ctx.lastBlockHash = blockHash
+}
+
+func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) *trie.Trie {
+	switch spec {
+	case light.EpochTrieSpec:
+		return dposCtx.EpochTrie()
+	case light.DelegateTrieSpec:
+		return dposCtx.DelegateTrie()
+	case light.CandidateTrieSpec:
+		return dposCtx.CandidateTrie()
+	case light.VoteTrieSpec:
+		return dposCtx.VoteTrie()
+	case light.MinedCntTrieSpec:
+		return dposCtx.MinedCntTrie()
+	default:
+	}
+	return nil
+}
+
+func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) (*Msg, error) {
+	if pm.odr == nil {
+		return nil, errResp(ErrUnexpectedResponse, "")
+	}
+	p.Log().Trace("Received dpos proofs response")
+	rawResp, err := decodeDposProofRequestMsg(msg)
+	if err != nil {
+		return nil, errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	p.fcServer.GotReply(rawResp.ReqID, rawResp.BV)
+	return &Msg{
+		MsgType: MsgDposProofs,
+		ReqID:   rawResp.ReqID,
+		Obj:     rawResp.Data,
+	}, nil
 }
 
 // downloaderPeerNotify implements peerSetNotify

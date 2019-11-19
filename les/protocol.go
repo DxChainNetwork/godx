@@ -79,6 +79,9 @@ const (
 	SendTxV2Msg            = 0x13
 	GetTxStatusMsg         = 0x14
 	TxStatusMsg            = 0x15
+	// Protocol for Dpos
+	GetDposProofMsg = 0x16
+	DposProofMsg    = 0x17
 )
 
 type errCode int

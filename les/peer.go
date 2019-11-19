@@ -42,6 +42,11 @@ var (
 
 const maxResponseErrors = 50 // number of invalid responses tolerated (makes the protocol less brittle but still avoids spam)
 
+// if the total encoded size of a sent transaction batch is over txSizeCostLimit
+// per transaction then the request cost is calculated as proportional to the
+// encoded size instead of the transaction count
+const txSizeCostLimit = 0x4000
+
 const (
 	announceTypeNone = iota
 	announceTypeSimple
@@ -170,6 +175,37 @@ func (p *peer) GetRequestCost(msgcode uint64, amount int) uint64 {
 	return cost
 }
 
+// GetTxRelayCost get the cost for TxRelay
+func (p *peer) GetTxRelayCost(amount, size int) uint64 {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	var msgCode uint64
+	switch p.version {
+	case lpv1:
+		msgCode = SendTxMsg
+	case lpv2:
+		msgCode = SendTxV2Msg
+	default:
+		panic(nil)
+	}
+
+	costs := p.fcCosts[msgCode]
+	if costs == nil {
+		return 0
+	}
+	cost := costs.baseCost + costs.reqCost*uint64(amount)
+	sizeCost := costs.baseCost + costs.reqCost*uint64(size)/txSizeCostLimit
+	if sizeCost > cost {
+		cost = sizeCost
+	}
+
+	if cost > p.fcServerParams.BufLimit {
+		cost = p.fcServerParams.BufLimit
+	}
+	return cost
+}
+
 // HasBlock checks if the peer has a given block
 func (p *peer) HasBlock(hash common.Hash, number uint64, hasState bool) bool {
 	p.lock.RLock()
@@ -230,6 +266,11 @@ func (p *peer) SendHelperTrieProofs(reqID, bv uint64, resp HelperTrieResps) erro
 // SendTxStatus sends a batch of transaction status records, corresponding to the ones requested.
 func (p *peer) SendTxStatus(reqID, bv uint64, stats []txStatus) error {
 	return sendResponse(p.rw, TxStatusMsg, reqID, bv, stats)
+}
+
+// SendDposProof sends a batch of nodes of proof, corresponding to the DposProof requested.
+func (p *peer) SendDposProof(reqID, bv uint64, proofs light.NodeList) error {
+	return sendResponse(p.rw, DposProofMsg, reqID, bv, proofs)
 }
 
 // RequestHeadersByHash fetches a batch of blocks' headers corresponding to the
@@ -318,6 +359,12 @@ func (p *peer) SendTxs(reqID, cost uint64, txs types.Transactions) error {
 	default:
 		panic(nil)
 	}
+}
+
+// RequestDposProof fetches a batch of dpos merkle proofs from a remote node
+func (p *peer) RequestDposProof(reqID, cost uint64, reqs []DposProofReq) error {
+	p.Log().Debug("Fetching batch of Dpos Proofs", "count", len(reqs))
+	return sendRequest(p.rw, GetDposProofMsg, reqID, cost, reqs)
 }
 
 type keyValueEntry struct {

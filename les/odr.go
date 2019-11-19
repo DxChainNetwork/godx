@@ -88,6 +88,7 @@ const (
 	MsgProofsV2
 	MsgHeaderProofs
 	MsgHelperTrieProofs
+	MsgDposProofs
 )
 
 // Msg encodes a LES message that delivers reply data for a request
