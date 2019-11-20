@@ -158,6 +158,11 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Difficulty = b.engine.CalcDifficulty(chainreader, b.header.Time.Uint64(), b.parent.Header())
 }
 
+type fakeChainBackend interface {
+	consensus.ChainReader
+	AddBlock(*types.Block)
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
@@ -170,18 +175,21 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into BlockChain requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen)) ([]*types.Block, []types.Receipts) {
+func GenerateChain(config *params.ChainConfig, parent *types.Block, engine consensus.Engine, db ethdb.Database, n int, gen func(int, *BlockGen), backend fakeChainBackend) ([]*types.Block, []types.Receipts) {
 	if config == nil {
 		config = params.TestChainConfig
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
-	chainreader := newFakeChainReader(config)
+	if backend == nil {
+		backend = newFakeChainReader(config)
+	}
+
 	if parent.Number().Uint64() == 0 {
-		chainreader.AddBlock(parent)
+		backend.AddBlock(parent)
 	}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dposCtx *types.DposContext) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, dposCtx: dposCtx, config: config, engine: engine}
-		b.header = makeHeader(chainreader, parent, statedb, b.engine)
+		b.header = makeHeader(backend, parent, statedb, b.engine)
 
 		// Mutate the state and block according to any hard-fork specs
 		if daoBlock := config.DAOForkBlock; daoBlock != nil {
@@ -201,7 +209,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.Finalize(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, dposCtx)
+			block, _ := b.engine.Finalize(backend, b.header, statedb, b.txs, b.uncles, b.receipts, dposCtx)
 			if _, err := dposCtx.Commit(); err != nil {
 				panic(fmt.Sprintf("cannot commit dposCtx: %v", err))
 			}
@@ -213,7 +221,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
-			chainreader.AddBlock(block)
+			backend.AddBlock(block)
 			return block, b.receipts
 		}
 		return nil, nil
@@ -273,7 +281,7 @@ func makeHeaderChain(parent *types.Header, n int, engine consensus.Engine, db et
 func makeBlockChain(parent *types.Block, n int, engine consensus.Engine, db ethdb.Database, seed int) []*types.Block {
 	blocks, _ := GenerateChain(params.DposChainConfig, parent, engine, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
-	})
+	}, nil)
 	return blocks
 }
 

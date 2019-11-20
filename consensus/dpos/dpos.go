@@ -459,7 +459,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 	//update mined count trie
 	fmt.Println("block number:", header.Number)
-	fmt.Println(parent)
+	fmt.Printf("parent hash: %x\n", parent.Hash())
 	err := updateMinedCnt(parent.Time.Int64(), header.Validator, dposContext)
 	if err != nil {
 		return nil, err
