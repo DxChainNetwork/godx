@@ -40,7 +40,7 @@ var (
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheItems+200, testGenesis)
+var testChainBase = newTestChain(blockCacheItems+200, testGenesis, params.DposChainConfigWithInitialCandidates)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
@@ -49,6 +49,7 @@ func init() {
 	var forkLen = int(MaxForkAncestry + 50)
 	var wg sync.WaitGroup
 	wg.Add(3)
+	fmt.Println("generating fork")
 	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
 	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
 	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
@@ -56,6 +57,7 @@ func init() {
 }
 
 type testChain struct {
+	config        *params.ChainConfig
 	genesis       *types.Block
 	chain         []common.Hash
 	headerm       map[common.Hash]*types.Header
@@ -66,8 +68,9 @@ type testChain struct {
 }
 
 // newTestChain creates a blockchain of the given length.
-func newTestChain(length int, genesis *types.Block) *testChain {
+func newTestChain(length int, genesis *types.Block, config *params.ChainConfig) *testChain {
 	tc := new(testChain).copy(length)
+	tc.config = config
 	tc.genesis = genesis
 	tc.chain = append(tc.chain, genesis.Hash())
 	tc.headerm[tc.genesis.Hash()] = tc.genesis.Header()
@@ -103,6 +106,10 @@ func (tc *testChain) copy(newlen int) *testChain {
 		tdm:           make(map[common.Hash]*big.Int, newlen),
 		validatorsSet: make(map[common.Hash][]common.Address, newlen),
 	}
+	if tc.config != nil {
+		config := *tc.config
+		cpy.config = &config
+	}
 	for i := 0; i < len(tc.chain) && i < newlen; i++ {
 		hash := tc.chain[i]
 		cpy.chain = append(cpy.chain, tc.chain[i])
@@ -123,7 +130,7 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	// start := time.Now()
 
 	engine := dpos.NewDposFaker(testDB)
-	blocks, receipts := core.GenerateChain(params.DposChainConfig, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
+	blocks, receipts := core.GenerateChain(params.DposChainConfigWithInitialCandidates, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
 		if heavy {
@@ -145,7 +152,7 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		//		Number:     big.NewInt(block.Number().Int64() - 1),
 		//	})
 		//}
-	})
+	}, tc)
 
 	// Convert the block-chain into a hash-chain and header/block maps
 	td := new(big.Int).Set(tc.td(parent.Hash()))
@@ -159,14 +166,13 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		tc.chain = append(tc.chain, hash)
 		tc.blockm[hash] = b
 		tc.headerm[hash] = b.Header()
-		tc.receiptm[hash] = receipts[i]
-		tc.tdm[hash] = new(big.Int).Set(td)
-
 		validators, err := b.DposCtx().GetValidators()
 		if err != nil {
 			panic(err)
 		}
 		tc.validatorsSet[hash] = validators
+		tc.receiptm[hash] = receipts[i]
+		tc.tdm[hash] = new(big.Int).Set(td)
 	}
 }
 
@@ -264,4 +270,50 @@ func (tc *testChain) hashToNumber(target common.Hash) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func (tc *testChain) Config() *params.ChainConfig {
+	return tc.config
+}
+
+func (tc *testChain) CurrentHeader() *types.Header {
+	currentHash := tc.chain[len(tc.chain)-1]
+	return tc.headerm[currentHash]
+}
+
+func (tc *testChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	if number >= uint64(len(tc.chain)) {
+		return nil
+	}
+	if gotHash := tc.chain[int(number)]; gotHash != hash {
+		return nil
+	}
+	return tc.headerm[hash]
+}
+
+func (tc *testChain) GetHeaderByNumber(number uint64) *types.Header {
+	if number > uint64(len(tc.chain)-1) {
+		return nil
+	}
+	return tc.headerm[tc.chain[int(number)]]
+}
+
+func (tc *testChain) GetHeaderByHash(hash common.Hash) *types.Header {
+	return tc.headerm[hash]
+}
+
+func (tc *testChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	if number > uint64(len(tc.chain)) {
+		return nil
+	}
+	if gotHash := tc.chain[int(number)]; gotHash != hash {
+		return nil
+	}
+	return tc.blockm[hash]
+}
+
+// AddBlock adds a block to the testChain. It helps testChain to implement the fakeChainBackend interface.
+// The actual AddBlock happens after the fakeSeal process
+func (tc *testChain) AddBlock(b *types.Block) {
+	return
 }
