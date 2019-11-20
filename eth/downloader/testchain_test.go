@@ -50,13 +50,17 @@ func init() {
 	var wg sync.WaitGroup
 	wg.Add(3)
 	fmt.Println("generating fork")
-	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
-	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
-	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
+	//go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
+	//go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
+	//go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
+	func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
+	func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
+	func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
 	wg.Wait()
 }
 
 type testChain struct {
+	engine        consensus.Engine
 	config        *params.ChainConfig
 	genesis       *types.Block
 	chain         []common.Hash
@@ -70,6 +74,7 @@ type testChain struct {
 // newTestChain creates a blockchain of the given length.
 func newTestChain(length int, genesis *types.Block, config *params.ChainConfig) *testChain {
 	tc := new(testChain).copy(length)
+	tc.engine = dpos.NewDposFaker(testDB)
 	tc.config = config
 	tc.genesis = genesis
 	tc.chain = append(tc.chain, genesis.Hash())
@@ -99,6 +104,7 @@ func (tc *testChain) shorten(length int) *testChain {
 
 func (tc *testChain) copy(newlen int) *testChain {
 	cpy := &testChain{
+		engine:        tc.engine,
 		genesis:       tc.genesis,
 		headerm:       make(map[common.Hash]*types.Header, newlen),
 		blockm:        make(map[common.Hash]*types.Block, newlen),
@@ -133,9 +139,9 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 	blocks, receipts := core.GenerateChain(params.DposChainConfigWithInitialCandidates, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
-		if heavy {
-			block.OffsetTime(-1)
-		}
+		//if heavy {
+		//	block.OffsetTime(-1)
+		//}
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.genesis && i%22 == 0 {
 			signer := types.MakeSigner(params.DposChainConfig, block.Number())
@@ -163,17 +169,30 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		}
 		td := td.Add(td, b.Difficulty())
 		hash := b.Hash()
-		tc.chain = append(tc.chain, hash)
-		tc.blockm[hash] = b
-		tc.headerm[hash] = b.Header()
 		validators, err := b.DposCtx().GetValidators()
 		if err != nil {
 			panic(err)
 		}
+
 		tc.validatorsSet[hash] = validators
 		tc.receiptm[hash] = receipts[i]
 		tc.tdm[hash] = new(big.Int).Set(td)
 	}
+}
+
+// SealAndAddBlock seal and then add block to its own structure
+func (tc *testChain) SealAndAddBlock(b *types.Block) *types.Block {
+	sealed, err := tc.fakeSeal(b, tc.engine)
+	fmt.Println("time:", b.Time())
+	if err != nil {
+		fmt.Println("time:", b.Time())
+		panic(err)
+	}
+	hash := sealed.Hash()
+	tc.chain = append(tc.chain, hash)
+	tc.blockm[hash] = sealed
+	tc.headerm[hash] = sealed.Header()
+	return sealed
 }
 
 func (tc *testChain) fakeSeal(b *types.Block, engine consensus.Engine) (*types.Block, error) {
@@ -310,10 +329,4 @@ func (tc *testChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 		return nil
 	}
 	return tc.blockm[hash]
-}
-
-// AddBlock adds a block to the testChain. It helps testChain to implement the fakeChainBackend interface.
-// The actual AddBlock happens after the fakeSeal process
-func (tc *testChain) AddBlock(b *types.Block) {
-	return
 }

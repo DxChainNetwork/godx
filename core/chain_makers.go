@@ -160,7 +160,7 @@ func (b *BlockGen) OffsetTime(seconds int64) {
 
 type fakeChainBackend interface {
 	consensus.ChainReader
-	AddBlock(*types.Block)
+	SealAndAddBlock(*types.Block) *types.Block
 }
 
 // GenerateChain creates a chain of n blocks. The first block's
@@ -185,7 +185,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 
 	if parent.Number().Uint64() == 0 {
-		backend.AddBlock(parent)
+		backend.SealAndAddBlock(parent)
 	}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dposCtx *types.DposContext) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, dposCtx: dposCtx, config: config, engine: engine}
@@ -221,8 +221,8 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			if err := statedb.Database().TrieDB().Commit(root, false); err != nil {
 				panic(fmt.Sprintf("trie write error: %v", err))
 			}
-			backend.AddBlock(block)
-			return block, b.receipts
+			sealed := backend.SealAndAddBlock(block)
+			return sealed, b.receipts
 		}
 		return nil, nil
 	}
@@ -341,7 +341,9 @@ func (cr *fakeChainReader) GetBlock(hash common.Hash, number uint64) *types.Bloc
 	return cr.blocks[hash]
 }
 
-func (cr *fakeChainReader) AddBlock(block *types.Block) {
+// For fake backend, we do not need to seal it
+func (cr *fakeChainReader) SealAndAddBlock(block *types.Block) *types.Block {
+	// In fakeChainReader, the blocks are not actually sealed
 	hash := block.Hash()
 	number := block.Number().Uint64()
 	if number > cr.curBlockNumber {
@@ -350,4 +352,5 @@ func (cr *fakeChainReader) AddBlock(block *types.Block) {
 	cr.hashes[block.Number().Uint64()] = hash
 	cr.headers[hash] = block.Header()
 	cr.blocks[hash] = block
+	return block
 }
