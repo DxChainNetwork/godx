@@ -169,6 +169,21 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	return nil
 }
 
+// FetchHeaderInsertDataBatch sends a header insert data batch request to the remote peer.
+func (p *peerConnection) FetchHeaderInsertDataBatch(from uint64, count int) error {
+	if p.version < 64 {
+		panic(fmt.Sprintf("header insert data batch [eth/64+] requested on %d", p.version))
+	}
+	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
+		return errAlreadyFetching
+	}
+	p.headerStarted = time.Now()
+
+	go p.peer.RequestHeaderInsertDataBatchByNumber(from, count, 0, false)
+
+	return nil
+}
+
 // FetchBodies sends a block body retrieval request to the remote peer.
 func (p *peerConnection) FetchBodies(request *fetchRequest) error {
 	// Sanity check the protocol version

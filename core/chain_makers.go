@@ -185,7 +185,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 
 	if parent.Number().Uint64() == 0 {
-		backend.SealAndAddBlock(parent)
+		parent = backend.SealAndAddBlock(parent)
 	}
 	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dposCtx *types.DposContext) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, dposCtx: dposCtx, config: config, engine: engine}

@@ -49,13 +49,9 @@ func init() {
 	var forkLen = int(MaxForkAncestry + 50)
 	var wg sync.WaitGroup
 	wg.Add(3)
-	fmt.Println("generating fork")
-	//go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
-	//go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
-	//go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
-	func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
-	func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
-	func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
+	go func() { testChainForkLightA = testChainBase.makeFork(forkLen, false, 1); wg.Done() }()
+	go func() { testChainForkLightB = testChainBase.makeFork(forkLen, false, 2); wg.Done() }()
+	go func() { testChainForkHeavy = testChainBase.makeFork(forkLen, true, 3); wg.Done() }()
 	wg.Wait()
 }
 
@@ -182,17 +178,23 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 
 // SealAndAddBlock seal and then add block to its own structure
 func (tc *testChain) SealAndAddBlock(b *types.Block) *types.Block {
-	sealed, err := tc.fakeSeal(b, tc.engine)
-	fmt.Println("time:", b.Time())
-	if err != nil {
-		fmt.Println("time:", b.Time())
-		panic(err)
+	if b.Number().Uint64() != 0 {
+		var err error
+		b, err = tc.fakeSeal(b, tc.engine)
+		if err != nil {
+			panic(err)
+		}
 	}
-	hash := sealed.Hash()
-	tc.chain = append(tc.chain, hash)
-	tc.blockm[hash] = sealed
-	tc.headerm[hash] = sealed.Header()
-	return sealed
+	hash := b.Hash()
+	fmt.Printf("seal block %d: %x\n", b.Number(), b.Hash())
+	if uint64(len(tc.chain)) > uint64(b.Number().Int64()) {
+		tc.chain[int(b.Number().Int64())] = hash
+	} else {
+		tc.chain = append(tc.chain, hash)
+	}
+	tc.blockm[hash] = b
+	tc.headerm[hash] = b.Header()
+	return b
 }
 
 func (tc *testChain) fakeSeal(b *types.Block, engine consensus.Engine) (*types.Block, error) {

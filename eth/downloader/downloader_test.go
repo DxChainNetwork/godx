@@ -344,8 +344,9 @@ func (dlp *downloadTesterPeer) RequestHeadersByNumber(origin uint64, amount int,
 	if reverse {
 		panic("reverse header requests not supported")
 	}
-
+	fmt.Println("request headers by number", origin)
 	result := dlp.chain.headersByNumber(origin, amount, skip)
+	fmt.Println("retrieved result", result[0].Number)
 	go dlp.dl.downloader.DeliverHeaders(dlp.id, result)
 	return nil
 }
@@ -366,6 +367,7 @@ func (dlp *downloadTesterPeer) RequestHeaderInsertDataBatchByNumber(origin uint6
 	}
 
 	result := dlp.chain.headersAndValidatorsByNumber(origin, amount, skip)
+	fmt.Println("returned result for headerInsertDataBatch request", result[0].Header.Number)
 	go dlp.dl.downloader.DeliverHeaderInsertDataBatch(dlp.id, result)
 	return nil
 }

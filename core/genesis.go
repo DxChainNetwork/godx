@@ -330,7 +330,6 @@ func GenesisBlockForDposTesting(db ethdb.Database, addr common.Address, balance 
 	g := TestGenesisBlockWithInitialCandidates()
 	g.Alloc[addr] = GenesisAccount{Balance: balance}
 	b := g.MustCommit(db)
-	fmt.Printf("genesis hash %x\n", b.Hash())
 	return b
 }
 

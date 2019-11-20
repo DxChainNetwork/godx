@@ -468,6 +468,7 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	if d.syncInitHook != nil {
 		d.syncInitHook(origin, height)
 	}
+	fmt.Println("finished preparing. Start to fetch")
 
 	fetchers := []func() error{
 		func() error { return d.fetchHeaders(p, origin+1, pivot) }, // Headers are always retrieved
@@ -502,10 +503,12 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 			d.queue.Close()
 		}
 		if err = <-errc; err != nil {
+			fmt.Println("fetcher error:", err)
 			break
 		}
 	}
 	d.queue.Close()
+	fmt.Println("fetcher finished and canceled")
 	d.Cancel()
 	return err
 }
@@ -693,6 +696,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
 	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
+	fmt.Println("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
@@ -723,6 +727,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				expectNumber := from + int64(i)*int64((skip+1))
 				if number := header.Number.Int64(); number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
+					fmt.Println("received header number", header.Number)
 					return 0, errInvalidChain
 				}
 			}
@@ -878,9 +883,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
+			fmt.Println("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
+			fmt.Println("Fetching full headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
@@ -930,11 +937,14 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				}
 			}
 			batch := packet.(*headerInsertDataPack).batch
+			fmt.Println("processing header data", batch[0].Header.Number)
 
 			// If we received a skeleton batch, resolve internals concurrently
 			if skeleton {
 				filled, proced, err := d.fillHeaderDataSkeleton(from, batch)
+				fmt.Println("finished fill header data skeleton")
 				if err != nil {
+					fmt.Println("fill skeleton error", err)
 					p.log.Debug("Skeleton chain invalid", "err", err)
 					return errInvalidChain
 				}
@@ -1038,7 +1048,9 @@ func (d *Downloader) fillHeaderDataSkeleton(from uint64, skeletonData types.Head
 		reserve  = func(p *peerConnection, count int) (*fetchRequest, bool, error) {
 			return d.queue.ReserveHeaders(p, count), false, nil
 		}
-		fetch    = func(p *peerConnection, req *fetchRequest) error { return p.FetchHeaders(req.From, MaxHeaderFetch) }
+		fetch = func(p *peerConnection, req *fetchRequest) error {
+			return p.FetchHeaderInsertDataBatch(req.From, MaxHeaderFetch)
+		}
 		capacity = func(p *peerConnection) int { return p.HeaderCapacity(d.requestRTT()) }
 		setIdle  = func(p *peerConnection, accepted int) { p.SetHeadersIdle(accepted) }
 	)
@@ -1141,6 +1153,7 @@ func (d *Downloader) fetchParts(errCancel error, deliveryCh chan dataPack, deliv
 	for {
 		select {
 		case <-d.cancelCh:
+			fmt.Println("cancel channel")
 			return errCancel
 
 		case packet := <-deliveryCh:
@@ -1325,6 +1338,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			return errCancelHeaderProcessing
 
 		case dataBatch := <-d.headerDataProcCh:
+			fmt.Println("processing data batch", dataBatch[0].Header.Number)
 			headers, _ := dataBatch.Split()
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
@@ -1408,6 +1422,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 							rollback = append(rollback, chunk[:n]...)
 						}
 						log.Debug("Invalid header encountered", "number", chunk[n].Number, "hash", chunk[n].Hash(), "err", err)
+						fmt.Println("Invalid header encountered", "number", chunk[n].Number, "hash", fmt.Sprintf("%x", chunk[n].Hash()), "err", err)
 						return errInvalidChain
 					}
 					// All verifications passed, store newly found uncertain headers
