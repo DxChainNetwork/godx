@@ -367,7 +367,6 @@ func (dlp *downloadTesterPeer) RequestHeaderInsertDataBatchByNumber(origin uint6
 	}
 
 	result := dlp.chain.headersAndValidatorsByNumber(origin, amount, skip)
-	fmt.Println("returned result for headerInsertDataBatch request", result[0].Header.Number)
 	go dlp.dl.downloader.DeliverHeaderInsertDataBatch(dlp.id, result)
 	return nil
 }
