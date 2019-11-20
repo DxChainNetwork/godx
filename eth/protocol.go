@@ -191,24 +191,19 @@ type blockBody struct {
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
 
-type getBlockHeaderAndValidatorsRequestWithID struct {
-	ReqID uint64
-	Query getBlockHeaderAndValidatorsRequest
-}
-
-func decodeGetBlockHeaderAndValidatorsRequests(msg p2p.Msg) (getBlockHeaderAndValidatorsRequestWithID, error) {
-	var req getBlockHeaderAndValidatorsRequestWithID
-	if err := msg.Decode(&req); err != nil {
-		return getBlockHeaderAndValidatorsRequestWithID{}, err
-	}
-	return req, nil
-}
-
 type getBlockHeaderAndValidatorsRequest struct {
 	Origin  hashOrNumber
 	Amount  uint64
 	Skip    uint64
 	Reverse bool
+}
+
+func decodeGetBlockHeaderAndValidatorsRequests(msg p2p.Msg) (getBlockHeaderAndValidatorsRequest, error) {
+	var req getBlockHeaderAndValidatorsRequest
+	if err := msg.Decode(&req); err != nil {
+		return getBlockHeaderAndValidatorsRequest{}, err
+	}
+	return req, nil
 }
 
 // HeaderAndValidatorData is the data structure for BlockHeaderAndValidatorsMsg

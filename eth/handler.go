@@ -746,11 +746,10 @@ func (pm *ProtocolManager) handleEthMsg(p *peer, msg p2p.Msg) error {
 
 func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
 	p.Log().Trace("Received block header and validators request")
-	req, err := decodeGetBlockHeaderAndValidatorsRequests(msg)
+	query, err := decodeGetBlockHeaderAndValidatorsRequests(msg)
 	if err != nil {
 		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
-	query := req.Query
 	data, err := calculateHeaderAndValidatorsFromRequest(pm, query, p)
 	if err != nil {
 		return err
@@ -881,15 +880,12 @@ func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *pee
 		return errResp(ErrUnexpectedResponse, "")
 	}
 	p.Log().Trace("Received block header and validators response message")
-	var resp struct {
-		ReqID, BV uint64
-		data      types.HeaderInsertDataBatch
-	}
-	if err := msg.Decode(&resp); err != nil {
+	var data types.HeaderInsertDataBatch
+	if err := msg.Decode(&data); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
-	if len(resp.data) != 0 {
-		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, resp.data)
+	if len(data) != 0 {
+		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, data)
 		if err != nil {
 			log.Debug(fmt.Sprint(err))
 		}
