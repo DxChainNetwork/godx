@@ -1378,83 +1378,83 @@ func newHeaderAndValidatorsQueryIterator(pm *ProtocolManager, query getBlockHead
 	}
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) nextQuery() bool {
-	if ctx.hasEnoughResults() {
+func (it *HeaderAndValidatorsQueryIterator) nextQuery() bool {
+	if it.hasEnoughResults() {
 		return false
 	}
-	if ctx.first {
-		return ctx.firstQuery()
+	if it.first {
+		return it.firstQuery()
 	}
-	if ctx.query.Reverse {
-		return ctx.nextQueryInReverse()
+	if it.query.Reverse {
+		return it.nextQueryInReverse()
 	}
-	return ctx.nextQueryNoReverse()
+	return it.nextQueryNoReverse()
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) firstQuery() bool {
-	ctx.first = false
+func (it *HeaderAndValidatorsQueryIterator) firstQuery() bool {
+	it.first = false
 	var h *types.Header
-	if isHashMode(ctx.query.Origin) {
-		h = ctx.pm.blockchain.GetHeaderByHash(ctx.query.Origin.Hash)
+	if isHashMode(it.query.Origin) {
+		h = it.pm.blockchain.GetHeaderByHash(it.query.Origin.Hash)
 	} else {
-		h = ctx.pm.blockchain.GetHeaderByNumber(ctx.query.Origin.Number)
+		h = it.pm.blockchain.GetHeaderByNumber(it.query.Origin.Number)
 	}
 	if h == nil {
 		return false
 	}
-	ctx.curHash = h.Hash()
-	ctx.curNumber = h.Number.Uint64()
+	it.curHash = h.Hash()
+	it.curNumber = h.Number.Uint64()
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) hasEnoughResults() bool {
-	return len(ctx.result) >= int(ctx.query.Amount) || ctx.bytes >= softResponseLimit
+func (it *HeaderAndValidatorsQueryIterator) hasEnoughResults() bool {
+	return len(it.result) >= int(it.query.Amount) || it.bytes >= softResponseLimit
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) nextQueryInReverse() bool {
-	ancestor := ctx.query.Skip + 1
+func (it *HeaderAndValidatorsQueryIterator) nextQueryInReverse() bool {
+	ancestor := it.query.Skip + 1
 	if ancestor == 0 {
 		return false
 	}
-	nextHash, nextNumber := ctx.pm.blockchain.GetAncestor(ctx.curHash, ctx.curNumber, ancestor, ctx.maxNonCanonical)
+	nextHash, nextNumber := it.pm.blockchain.GetAncestor(it.curHash, it.curNumber, ancestor, it.maxNonCanonical)
 	if (nextHash == common.Hash{}) {
 		return false
 	}
-	ctx.curHash, ctx.curNumber = nextHash, nextNumber
+	it.curHash, it.curNumber = nextHash, nextNumber
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) nextQueryNoReverse() bool {
-	nextNumber := ctx.curNumber + ctx.query.Skip + 1
-	if nextNumber <= ctx.curNumber {
-		infos, _ := json.MarshalIndent(ctx.p.Peer.Info(), "", "  ")
-		ctx.p.Log().Warn("GetBlockHeaders skip overflow attack", "current", ctx.curNumber, "skip", ctx.query.Skip, "next", nextNumber, "attacker", infos)
+func (it *HeaderAndValidatorsQueryIterator) nextQueryNoReverse() bool {
+	nextNumber := it.curNumber + it.query.Skip + 1
+	if nextNumber <= it.curNumber {
+		infos, _ := json.MarshalIndent(it.p.Peer.Info(), "", "  ")
+		it.p.Log().Warn("GetBlockHeaders skip overflow attack", "current", it.curNumber, "skip", it.query.Skip, "next", nextNumber, "attacker", infos)
 		return false
 	}
-	header := ctx.pm.blockchain.GetHeaderByNumber(nextNumber)
+	header := it.pm.blockchain.GetHeaderByNumber(nextNumber)
 	if header == nil {
 		return false
 	}
 	nextHash := header.Hash()
-	expOldHash, _ := ctx.pm.blockchain.GetAncestor(nextHash, nextNumber, ctx.query.Skip+1, ctx.maxNonCanonical)
-	if expOldHash != ctx.curHash {
+	expOldHash, _ := it.pm.blockchain.GetAncestor(nextHash, nextNumber, it.query.Skip+1, it.maxNonCanonical)
+	if expOldHash != it.curHash {
 		return false
 	}
-	ctx.curHash, ctx.curNumber = nextHash, nextNumber
+	it.curHash, it.curNumber = nextHash, nextNumber
 	return true
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) calculateQuery() (types.HeaderInsertData, error) {
-	return ctx.pm.blockchain.GetHeaderAndValidators(ctx.curHash, ctx.curNumber)
+func (it *HeaderAndValidatorsQueryIterator) calculateQuery() (types.HeaderInsertData, error) {
+	return it.pm.blockchain.GetHeaderAndValidators(it.curHash, it.curNumber)
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) storeQueryResult(data types.HeaderInsertData) {
-	ctx.bytes += estHeaderAndValidatorRlpSize
-	ctx.result = append(ctx.result, data)
+func (it *HeaderAndValidatorsQueryIterator) storeQueryResult(data types.HeaderInsertData) {
+	it.bytes += estHeaderAndValidatorRlpSize
+	it.result = append(it.result, data)
 }
 
-func (ctx *HeaderAndValidatorsQueryIterator) getResults() types.HeaderInsertDataBatch {
-	return ctx.result
+func (it *HeaderAndValidatorsQueryIterator) getResults() types.HeaderInsertDataBatch {
+	return it.result
 }
 
 func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
