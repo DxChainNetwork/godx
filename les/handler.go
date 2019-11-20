@@ -1408,7 +1408,7 @@ func (ctx *HeaderAndValidatorsQueryIterator) firstQuery() bool {
 }
 
 func (ctx *HeaderAndValidatorsQueryIterator) hasEnoughResults() bool {
-	return len(ctx.result) < int(ctx.query.Amount) && ctx.bytes < softResponseLimit
+	return len(ctx.result) >= int(ctx.query.Amount) || ctx.bytes >= softResponseLimit
 }
 
 func (ctx *HeaderAndValidatorsQueryIterator) nextQueryInReverse() bool {
