@@ -21,69 +21,123 @@ import (
 
 // DposContext wraps 5 tries to store data needed in dpos consensus
 type DposContext struct {
-	epochTrie     *trie.Trie
-	delegateTrie  *trie.Trie
-	voteTrie      *trie.Trie
-	candidateTrie *trie.Trie
-	minedCntTrie  *trie.Trie
+	epochTrie     DposTrie
+	delegateTrie  DposTrie
+	voteTrie      DposTrie
+	candidateTrie DposTrie
+	minedCntTrie  DposTrie
 
-	db *trie.Database
+	db DposDatabase
 }
 
 var (
-	epochPrefix     = []byte("epoch-")
-	delegatePrefix  = []byte("delegate-")
-	votePrefix      = []byte("vote-")
-	candidatePrefix = []byte("candidate-")
-	minedCntPrefix  = []byte("minedCnt-")
-	keyValidator    = []byte("validator")
+	keyValidator = []byte("validator")
 )
 
-func NewEpochTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, epochPrefix, db)
+// DposDatabase is the underlying database under the dposCtx.
+// Implemented by both FullDposDatabase and light.dposOdrDatabase
+type DposDatabase interface {
+	OpenEpochTrie(root common.Hash) (DposTrie, error)
+	OpenDelegateTrie(root common.Hash) (DposTrie, error)
+	OpenLastDelegateTrie(root common.Hash) (DposTrie, error)
+	OpenVoteTrie(root common.Hash) (DposTrie, error)
+	OpenCandidateTrie(root common.Hash) (DposTrie, error)
+	OpenMinedCntTrie(root common.Hash) (DposTrie, error)
+	CopyTrie(DposTrie) DposTrie
 }
 
-func NewDelegateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, delegatePrefix, db)
+// DposTrie is the adapter of trie data structure to be used in dposContext.
+// DposTrie is implemented by
+type DposTrie interface {
+	TryGet(key []byte) ([]byte, error)
+	TryUpdate(key, value []byte) error
+	TryDelete(key []byte) error
+	Commit(onLeaf trie.LeafCallback) (common.Hash, error)
+	Hash() common.Hash
+	NodeIterator(startKey []byte) trie.NodeIterator
+	PrefixIterator(prefix []byte) trie.NodeIterator
+	Prove(key []byte, fromLevel uint, proofDb ethdb.Putter) error
 }
 
-func NewVoteTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, votePrefix, db)
+// FullDposDatabase is the database for full node's dpos contents
+type FullDposDatabase struct {
+	db *trie.Database
 }
 
-func NewCandidateTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, candidatePrefix, db)
+// NewFullDposDatabase creates a new FullDposDatabase based on a diskdb
+func NewFullDposDatabase(diskdb ethdb.Database) *FullDposDatabase {
+	tdb := trie.NewDatabase(diskdb)
+	return &FullDposDatabase{tdb}
 }
 
-func NewMinedCntTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.NewTrieWithPrefix(root, minedCntPrefix, db)
+// OpenEpochTrie opens the epochTrie
+func (db *FullDposDatabase) OpenEpochTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+// OpenDelegateTrie opens the delegateTrie
+func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+// OpenLastEpochTrie opens the epochTrie in the last epoch
+func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+// OpenVoteTrie opens the voteTrie
+func (db *FullDposDatabase) OpenVoteTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+// OpenCandidateTrie opens the CandidateTrie
+func (db *FullDposDatabase) OpenCandidateTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+// OpenMinedCntTrie opens the MinedCntTrie
+func (db *FullDposDatabase) OpenMinedCntTrie(root common.Hash) (DposTrie, error) {
+	return db.openTrie(root)
+}
+
+func (db *FullDposDatabase) openTrie(root common.Hash) (DposTrie, error) {
+	return trie.New(root, db.db)
+}
+
+// CopyTrie copies a dpos trie
+func (db *FullDposDatabase) CopyTrie(t DposTrie) DposTrie {
+	switch t := t.(type) {
+	case *trie.Trie:
+		copy := *t
+		return &copy
+	default:
+		panic(fmt.Errorf("unknown trie type %T", t))
+	}
 }
 
 // NewDposContext creates DposContext with the given database
-func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
-	db := trie.NewDatabase(diskdb)
-
-	epochTrie, err := NewEpochTrie(common.Hash{}, db)
+func NewDposContext(db DposDatabase) (*DposContext, error) {
+	epochTrie, err := db.OpenEpochTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := NewDelegateTrie(common.Hash{}, db)
+	delegateTrie, err := db.OpenDelegateTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := NewVoteTrie(common.Hash{}, db)
+	voteTrie, err := db.OpenVoteTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := NewCandidateTrie(common.Hash{}, db)
+	candidateTrie, err := db.OpenCandidateTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
 
-	minedCntTrie, err := NewMinedCntTrie(common.Hash{}, db)
+	minedCntTrie, err := db.OpenMinedCntTrie(common.Hash{})
 	if err != nil {
 		return nil, err
 	}
@@ -99,30 +153,28 @@ func NewDposContext(diskdb ethdb.Database) (*DposContext, error) {
 }
 
 // NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextRoot) (*DposContext, error) {
-	db := trie.NewDatabase(diskdb)
-
-	epochTrie, err := NewEpochTrie(ctxProto.EpochRoot, db)
+func NewDposContextFromProto(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
+	epochTrie, err := db.OpenEpochTrie(ctxProto.EpochRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	delegateTrie, err := NewDelegateTrie(ctxProto.DelegateRoot, db)
+	delegateTrie, err := db.OpenDelegateTrie(ctxProto.DelegateRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	voteTrie, err := NewVoteTrie(ctxProto.VoteRoot, db)
+	voteTrie, err := db.OpenVoteTrie(ctxProto.VoteRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	candidateTrie, err := NewCandidateTrie(ctxProto.CandidateRoot, db)
+	candidateTrie, err := db.OpenCandidateTrie(ctxProto.CandidateRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	minedCntTrie, err := NewMinedCntTrie(ctxProto.MinedCntRoot, db)
+	minedCntTrie, err := db.OpenMinedCntTrie(ctxProto.MinedCntRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -139,17 +191,12 @@ func NewDposContextFromProto(diskdb ethdb.Database, ctxProto *DposContextRoot) (
 
 // Copy creates a new DposContext which has the same content with old one
 func (dc *DposContext) Copy() *DposContext {
-	epochTrie := *dc.epochTrie
-	delegateTrie := *dc.delegateTrie
-	voteTrie := *dc.voteTrie
-	candidateTrie := *dc.candidateTrie
-	minedCntTrie := *dc.minedCntTrie
 	return &DposContext{
-		epochTrie:     &epochTrie,
-		delegateTrie:  &delegateTrie,
-		voteTrie:      &voteTrie,
-		candidateTrie: &candidateTrie,
-		minedCntTrie:  &minedCntTrie,
+		epochTrie:     dc.db.CopyTrie(dc.epochTrie),
+		delegateTrie:  dc.db.CopyTrie(dc.delegateTrie),
+		voteTrie:      dc.db.CopyTrie(dc.voteTrie),
+		candidateTrie: dc.db.CopyTrie(dc.candidateTrie),
+		minedCntTrie:  dc.db.CopyTrie(dc.minedCntTrie),
 	}
 }
 
@@ -421,6 +468,12 @@ func (dc *DposContext) CancelVote(delegatorAddr common.Address) error {
 
 // Commit writes the data in 5 tries to db
 func (dc *DposContext) Commit() (*DposContextRoot, error) {
+	var tdb *trie.Database
+	if db, ok := dc.db.(*FullDposDatabase); ok {
+		tdb = db.db
+	} else {
+		return nil, errors.New("commit method not implemented for light node")
+	}
 
 	// commit dpos context into memory
 	epochRoot, err := dc.epochTrie.Commit(nil)
@@ -449,27 +502,27 @@ func (dc *DposContext) Commit() (*DposContextRoot, error) {
 	}
 
 	// commit dpos context into disk, and this is the finally commit
-	err = dc.DB().Commit(epochRoot, false)
+	err = tdb.Commit(epochRoot, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dc.DB().Commit(candidateRoot, false)
+	err = tdb.Commit(candidateRoot, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dc.DB().Commit(delegateRoot, false)
+	err = tdb.Commit(delegateRoot, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dc.DB().Commit(minedCntRoot, false)
+	err = tdb.Commit(minedCntRoot, false)
 	if err != nil {
 		return nil, err
 	}
 
-	err = dc.DB().Commit(voteRoot, false)
+	err = tdb.Commit(voteRoot, false)
 	if err != nil {
 		return nil, err
 	}
@@ -483,22 +536,25 @@ func (dc *DposContext) Commit() (*DposContextRoot, error) {
 	}, nil
 }
 
-func (dc *DposContext) CandidateTrie() *trie.Trie         { return dc.candidateTrie }
-func (dc *DposContext) DelegateTrie() *trie.Trie          { return dc.delegateTrie }
-func (dc *DposContext) VoteTrie() *trie.Trie              { return dc.voteTrie }
-func (dc *DposContext) EpochTrie() *trie.Trie             { return dc.epochTrie }
-func (dc *DposContext) MinedCntTrie() *trie.Trie          { return dc.minedCntTrie }
-func (dc *DposContext) DB() *trie.Database                { return dc.db }
-func (dc *DposContext) SetEpoch(epoch *trie.Trie)         { dc.epochTrie = epoch }
-func (dc *DposContext) SetDelegate(delegate *trie.Trie)   { dc.delegateTrie = delegate }
-func (dc *DposContext) SetVote(vote *trie.Trie)           { dc.voteTrie = vote }
-func (dc *DposContext) SetCandidate(candidate *trie.Trie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMinedCnt(minedCnt *trie.Trie)   { dc.minedCntTrie = minedCnt }
+func (dc *DposContext) CandidateTrie() DposTrie         { return dc.candidateTrie }
+func (dc *DposContext) DelegateTrie() DposTrie          { return dc.delegateTrie }
+func (dc *DposContext) VoteTrie() DposTrie              { return dc.voteTrie }
+func (dc *DposContext) EpochTrie() DposTrie             { return dc.epochTrie }
+func (dc *DposContext) MinedCntTrie() DposTrie          { return dc.minedCntTrie }
+func (dc *DposContext) DB() DposDatabase                { return dc.db }
+func (dc *DposContext) SetEpoch(epoch DposTrie)         { dc.epochTrie = epoch }
+func (dc *DposContext) SetDelegate(delegate DposTrie)   { dc.delegateTrie = delegate }
+func (dc *DposContext) SetVote(vote DposTrie)           { dc.voteTrie = vote }
+func (dc *DposContext) SetCandidate(candidate DposTrie) { dc.candidateTrie = candidate }
+func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = minedCnt }
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
-	validatorsRLP := dc.epochTrie.Get(keyValidator)
+	validatorsRLP, err := dc.epochTrie.TryGet(keyValidator)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validator: %v", err)
+	}
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
@@ -513,16 +569,23 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
 	}
 
-	dc.epochTrie.Update(keyValidator, validatorsRLP)
+	err = dc.epochTrie.TryUpdate(keyValidator, validatorsRLP)
+	if err != nil {
+		return fmt.Errorf("failed to set validator: %v", err)
+	}
 	return nil
 }
 
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
-	candidatesRLP := dc.voteTrie.Get(key)
+	candidatesRLP, err := dc.voteTrie.TryGet(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the vote for candidate [%x]: %v", delegator, err)
+	}
+
 	var result []common.Address
-	err := rlp.DecodeBytes(candidatesRLP, &result)
+	err = rlp.DecodeBytes(candidatesRLP, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode vaoted candidates: %s", err)
 	}

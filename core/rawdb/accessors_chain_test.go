@@ -27,7 +27,7 @@ import (
 // Tests block header storage and retrieval operations.
 func TestHeaderStorage(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposCtx, err := types.NewDposContext(db)
+	dposCtx, err := types.NewDposContext(types.NewFullDposDatabase(db))
 	if err != nil {
 		t.Fatalf("failed to new dpos context: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestHeaderStorage(t *testing.T) {
 // Tests block body storage and retrieval operations.
 func TestBodyStorage(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposCtx, err := types.NewDposContext(db)
+	dposCtx, err := types.NewDposContext(types.NewFullDposDatabase(db))
 	if err != nil {
 		t.Fatalf("failed to new dpos context: %v", err)
 	}

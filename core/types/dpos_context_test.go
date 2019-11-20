@@ -26,7 +26,7 @@ var (
 
 func TestDposContextSnapshot(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 	assert.Nil(t, err)
 
 	snapshot := dposContext.Snapshot()
@@ -46,7 +46,7 @@ func TestDposContextSnapshot(t *testing.T) {
 func TestDposContextBecomeCandidate(t *testing.T) {
 	candidates := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
@@ -67,7 +67,7 @@ func TestDposContextBecomeCandidate(t *testing.T) {
 func TestDposContextKickoutCandidate(t *testing.T) {
 	candidates := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, dposContext.BecomeCandidate(candidate))
@@ -108,7 +108,7 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	newCandidate := addresses[1]
 	delegator := addresses[2]
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 	assert.Nil(t, err)
 	assert.Nil(t, dposContext.BecomeCandidate(candidate))
 	assert.Nil(t, dposContext.BecomeCandidate(newCandidate))
@@ -128,13 +128,13 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	assert.Nil(t, err)
 	delegateIter := trie.NewIterator(dposContext.delegateTrie.PrefixIterator(candidate.Bytes()))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(candidate.Bytes(), delegator.Bytes()...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
 	voteIter := trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))
 	if assert.True(t, voteIter.Next()) {
-		assert.Equal(t, append(votePrefix, delegator.Bytes()...), voteIter.Key)
+		assert.Equal(t, delegator.Bytes(), voteIter.Key)
 		assert.Equal(t, candidate, common.BytesToAddress(voteIter.Value))
 	}
 
@@ -145,13 +145,13 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 	assert.False(t, delegateIter.Next())
 	delegateIter = trie.NewIterator(dposContext.delegateTrie.PrefixIterator(newCandidate.Bytes()))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(newCandidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(newCandidate.Bytes(), delegator.Bytes()...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 
 	voteIter = trie.NewIterator(dposContext.voteTrie.NodeIterator(nil))
 	if assert.True(t, voteIter.Next()) {
-		assert.Equal(t, append(votePrefix, delegator.Bytes()...), voteIter.Key)
+		assert.Equal(t, delegator.Bytes(), voteIter.Key)
 		assert.Equal(t, newCandidate, common.BytesToAddress(voteIter.Value))
 	}
 
@@ -169,7 +169,7 @@ func TestDposContextVoteAndCancelVote(t *testing.T) {
 func TestDposContextValidators(t *testing.T) {
 	validators := addresses
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 
 	assert.Nil(t, err)
 	assert.Nil(t, dposContext.SetValidators(validators))
@@ -190,7 +190,7 @@ func TestDposContextValidators(t *testing.T) {
 
 func TestDposContext_GetVotedCandidatesByAddress(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposContext, err := NewDposContext(db)
+	dposContext, err := NewDposContext(NewFullDposDatabase(db))
 	assert.Nil(t, err)
 
 	bytes, err := rlp.EncodeToBytes(addresses)

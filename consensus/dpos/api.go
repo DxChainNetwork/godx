@@ -13,7 +13,6 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/trie"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -48,8 +47,7 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 // GetValidators will return the validator list based on the block header provided
 func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the epochTrie
-	trieDb := trie.NewDatabase(diskdb)
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, trieDb)
+	epochTrie, err := types.NewFullDposDatabase(diskdb).OpenEpochTrie(header.DposContext.EpochRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover the epochTrie based on the root: %s", err.Error())
 	}
@@ -80,8 +78,7 @@ func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Addres
 // GetCandidates will return the candidates list based on the block header provided
 func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
 	// re-construct trieDB and get the candidateTrie
-	trieDb := trie.NewDatabase(diskdb)
-	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
+	candidateTrie, err := types.NewFullDposDatabase(diskdb).OpenCandidateTrie(header.DposContext.CandidateRoot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
@@ -107,12 +104,12 @@ func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, d
 }
 
 // GetCandidateInfo will return the detailed candidates information
-func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
+func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, diskdb ethdb.Database) (common.BigInt, common.BigInt, uint64, error) {
 	// get detailed candidates information
 	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 
 	// get the candidateTrie
-	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
+	delegateTrie, err := types.NewFullDposDatabase(diskdb).OpenDelegateTrie(header.DposContext.DelegateRoot)
 	if err != nil {
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
@@ -125,8 +122,7 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 // getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch
 func getMinedBlocksCount(diskdb ethdb.Database, header *types.Header, validatorAddress common.Address) (int64, error) {
 	// re-construct the minedCntTrie
-	trieDb := trie.NewDatabase(diskdb)
-	minedCntTrie, err := types.NewMinedCntTrie(header.DposContext.MinedCntRoot, trieDb)
+	minedCntTrie, err := types.NewFullDposDatabase(diskdb).OpenMinedCntTrie(header.DposContext.MinedCntRoot)
 	if err != nil {
 		return 0, fmt.Errorf("failed to recover the minedCntTrie based on the root: %s", err.Error())
 	}

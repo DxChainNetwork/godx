@@ -1271,7 +1271,7 @@ func (ctx *dposProofMsgCache) openDposCtx(blockHash common.Hash) {
 	ctx.lastBlockHash = blockHash
 }
 
-func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) *trie.Trie {
+func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) types.DposTrie {
 	switch spec {
 	case light.EpochTrieSpec:
 		return dposCtx.EpochTrie()

@@ -20,7 +20,7 @@ import (
 
 func TestLookupValidator(t *testing.T) {
 	db := ethdb.NewMemDatabase()
-	dposCtx, _ := types.NewDposContext(db)
+	dposCtx, _ := types.NewDposContext(types.NewFullDposDatabase(db))
 	mockEpochContext := &EpochContext{
 		DposContext: dposCtx,
 	}
@@ -73,7 +73,7 @@ func Test_CountVotes(t *testing.T) {
 	stateDB, _ = state.New(root, sdb)
 
 	// create epoch context
-	dposCtx, _ := types.NewDposContext(db)
+	dposCtx, _ := types.NewDposContext(types.NewFullDposDatabase(db))
 	epochContext := &EpochContext{
 		DposContext: dposCtx,
 		stateDB:     stateDB,
@@ -170,18 +170,27 @@ func Test_KickoutValidators(t *testing.T) {
 	}
 
 	for i := 0; i < MaxValidatorSize/3; i++ {
-		canFromTrie := epochContext.DposContext.CandidateTrie().Get(candidates[i].Bytes())
+		canFromTrie, err := epochContext.DposContext.CandidateTrie().TryGet(candidates[i].Bytes())
+		if err != nil {
+			t.Errorf("failed to get from candidate trie: %v", err)
+		}
 		if canFromTrie != nil {
 			t.Errorf("failed to delete the kick out one from candidates trie: %s", candidates[i].String())
 		}
 
-		delegatorFromTrie := epochContext.DposContext.DelegateTrie().Get(append(candidates[i].Bytes(), delegator.Bytes()...))
+		delegatorFromTrie, err := epochContext.DposContext.DelegateTrie().TryGet(append(candidates[i].Bytes(), delegator.Bytes()...))
+		if err != nil {
+			t.Errorf("failed to get from delegate trie: %v", err)
+		}
 		if delegatorFromTrie != nil {
 			t.Errorf("failed to delete the kick out one from delegate trie: %s", candidates[i].String())
 		}
 	}
 
-	votedFromTrie := epochContext.DposContext.VoteTrie().Get(delegator.Bytes())
+	votedFromTrie, err := epochContext.DposContext.VoteTrie().TryGet(delegator.Bytes())
+	if err != nil {
+		t.Errorf("failed to get from vote trie: %v", err)
+	}
 	if votedFromTrie == nil {
 		t.Fatalf("failed to retrieve voted candidates")
 	}

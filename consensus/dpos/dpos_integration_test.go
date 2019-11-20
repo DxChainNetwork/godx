@@ -1291,7 +1291,7 @@ func forEachDelegatorForCandidate(ctx *types.DposContext, candidate common.Addre
 
 // forEachDelegatorForCandidateFromTrie iterate over the delegator votes for the candidate and execute
 //// the cb callback function
-func forEachDelegatorForCandidateFromTrie(delegateTrie *trie.Trie, candidate common.Address, cb func(delegator common.Address) error) error {
+func forEachDelegatorForCandidateFromTrie(delegateTrie types.DposTrie, candidate common.Address, cb func(delegator common.Address) error) error {
 	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate.Bytes()))
 	var hasEntry bool
 	for delegatorIterator.Next() {
@@ -1388,7 +1388,7 @@ func (g *genesisConfig) toBlock(db ethdb.Database) *types.Block {
 
 // dposContextWithGenesis parse the genesis to dposContext
 func dposContextWithGenesis(statedb *state.StateDB, g *genesisConfig, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
+	dc, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}

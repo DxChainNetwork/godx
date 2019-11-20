@@ -58,8 +58,7 @@ func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, can
 // IsCandidate will check whether or not the given address is a candidate address
 func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
 	// re-construct trieDB and get the candidateTrie
-	trieDb := trie.NewDatabase(diskDB)
-	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
+	candidateTrie, err := types.NewFullDposDatabase(diskDB).OpenCandidateTrie(header.DposContext.CandidateRoot)
 	if err != nil {
 		return false
 	}
@@ -67,7 +66,7 @@ func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB e
 }
 
 // isCandidate determines whether the addr is a candidate from a candidateTrie
-func isCandidate(candidateTrie *trie.Trie, addr common.Address) bool {
+func isCandidate(candidateTrie types.DposTrie, addr common.Address) bool {
 	// check if the candidate exists
 	if value, err := candidateTrie.TryGet(addr.Bytes()); err != nil || value == nil {
 		return false
@@ -77,7 +76,7 @@ func isCandidate(candidateTrie *trie.Trie, addr common.Address) bool {
 
 // CalcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
 // candidates himself and the delegated votes from delegator
-func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
+func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie types.DposTrie) common.BigInt {
 	// Calculate the candidates deposit and delegatedVote
 	candidateDeposit := GetCandidateDeposit(state, candidateAddr)
 	delegatedVote := calcCandidateDelegatedVotes(state, candidateAddr, delegateTrie)
@@ -86,7 +85,7 @@ func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delega
 }
 
 // calcCandidateDelegatedVotes calculate the total votes from delegator for the candidates in the current dposContext
-func calcCandidateDelegatedVotes(state stateDB, candidateAddr common.Address, dt *trie.Trie) common.BigInt {
+func calcCandidateDelegatedVotes(state stateDB, candidateAddr common.Address, dt types.DposTrie) common.BigInt {
 	delegateIterator := trie.NewIterator(dt.PrefixIterator(candidateAddr.Bytes()))
 	// loop through each delegator, get all votes
 	delegatorVotes := common.BigInt0

@@ -500,7 +500,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 
 	// construct dpos context from parent's dpos context root
 	chainDB := stateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	dposContext, err := types.NewDposContextFromProto(chainDB, parent.Header().DposContext)
+	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(chainDB), parent.Header().DposContext)
 	if err != nil {
 		log.Error("failed to create dpos context", "error", err)
 		return err

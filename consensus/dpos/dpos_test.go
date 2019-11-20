@@ -17,7 +17,6 @@ import (
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/trie"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -142,7 +141,7 @@ func TestAccumulateRewards(t *testing.T) {
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
-	accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))
+	accumulateRewards(params.MainnetChainConfig, stateDB, header, db, testChain.GetHeaderByNumber(0))
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
 	validatorBalance := stateDB.GetBalance(validator)
@@ -157,7 +156,7 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// mock block sync
 	headerCopy := header
-	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))
+	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, db, testChain.GetHeaderByNumber(0))
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
 	if header.Root != headerCopy.Root {
@@ -490,7 +489,7 @@ func (test testChainReader) insert(hash common.Hash, number uint64, time uint64,
 }
 
 func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*types.DposContext, []common.Address, error) {
-	dposContext, err := types.NewDposContextFromProto(db, &types.DposContextRoot{})
+	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -558,7 +557,7 @@ func mockDposContext(db ethdb.Database, now int64, delegator common.Address) (*t
 	return dposContext, candidates, nil
 }
 
-func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie *trie.Trie, count int64) error {
+func setMinedCntTrie(epochID int64, candidate common.Address, minedCntTrie types.DposTrie, count int64) error {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
