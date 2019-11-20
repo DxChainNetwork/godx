@@ -1338,7 +1338,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			return errCancelHeaderProcessing
 
 		case dataBatch := <-d.headerDataProcCh:
-			fmt.Println("processing data batch", dataBatch[0].Header.Number)
 			headers, _ := dataBatch.Split()
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
