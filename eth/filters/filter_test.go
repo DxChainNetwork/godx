@@ -67,7 +67,7 @@ func BenchmarkFilters(b *testing.B) {
 			gen.AddUncheckedReceipt(receipt)
 
 		}
-	})
+	}, nil)
 	for i, block := range chain {
 		rawdb.WriteBlock(db, block)
 		rawdb.WriteCanonicalHash(db, block.Hash(), block.NumberU64())

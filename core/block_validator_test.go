@@ -48,7 +48,7 @@ func TestHeaderVerification(t *testing.T) {
 		testdb    = ethdb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	for i, block := range blocks {
@@ -102,7 +102,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		testdb    = ethdb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil)
+		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 8, nil, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))
@@ -172,7 +172,7 @@ func testHeaderConcurrentAbortion(t *testing.T, threads int) {
 		testdb    = ethdb.NewMemDatabase()
 		gspec     = &Genesis{Config: params.DposChainConfig, Alloc: DefaultAllocates}
 		genesis   = gspec.MustCommit(testdb)
-		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 1024, nil)
+		blocks, _ = GenerateChain(params.DposChainConfig, genesis, dpos.NewDposFaker(), testdb, 1024, nil, nil)
 	)
 	headers := make([]*types.Header, len(blocks))
 	seals := make([]bool, len(blocks))

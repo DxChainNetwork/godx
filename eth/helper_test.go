@@ -44,7 +44,7 @@ func newTestProtocolManager(mode downloader.SyncMode, blocks int, generator func
 		genesis       = gspec.MustCommit(db)
 		blockchain, _ = core.NewBlockChain(db, nil, gspec.Config, engine, vm.Config{}, nil)
 	)
-	chain, _ := core.GenerateChain(gspec.Config, genesis, dpos.NewDposFaker(), db, blocks, generator)
+	chain, _ := core.GenerateChain(gspec.Config, genesis, dpos.NewDposFaker(), db, blocks, generator, nil)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}

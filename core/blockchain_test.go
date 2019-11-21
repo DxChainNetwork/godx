@@ -66,7 +66,8 @@ func newCanonical(engine consensus.Engine, n int, full bool) (ethdb.Database, *B
 	}
 	// Header-only chain requested
 	headers := makeHeaderChain(genesis.Header(), n, engine, db, canonicalSeed)
-	_, err := blockchain.InsertHeaderChain(headers, 1)
+	batch := types.NewHeaderInsertDataBatch(headers, nil)
+	_, err := blockchain.InsertHeaderChain(batch, 1)
 	return db, blockchain, err
 }
 
@@ -398,10 +399,10 @@ func testReorg(t *testing.T, first, second []int64, td int64, full bool) {
 	// Insert an easy and a difficult chain afterwards
 	easyBlocks, _ := GenerateChain(params.DposChainConfig, blockchain.CurrentBlock(), dpos.NewDposFaker(), db, len(first), func(i int, b *BlockGen) {
 		b.OffsetTime(first[i])
-	})
+	}, nil)
 	diffBlocks, _ := GenerateChain(params.DposChainConfig, blockchain.CurrentBlock(), dpos.NewDposFaker(), db, len(second), func(i int, b *BlockGen) {
 		b.OffsetTime(second[i])
-	})
+	}, nil)
 	if full {
 		if _, err := blockchain.InsertChain(easyBlocks); err != nil {
 			t.Fatalf("failed to insert easy chain: %v", err)
@@ -637,7 +638,7 @@ func TestFastVsFullChains(t *testing.T) {
 		if i%5 == 5 {
 			block.AddUncle(&types.Header{ParentHash: block.PrevBlock(i - 1).Hash(), Number: big.NewInt(int64(i - 1))})
 		}
-	})
+	}, nil)
 	// Import the chain as an archive node for the comparison baseline
 	archiveDb := ethdb.NewMemDatabase()
 	gspec.MustCommit(archiveDb)
@@ -704,7 +705,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 		genesis = gspec.MustCommit(gendb)
 	)
 	height := uint64(1024)
-	blocks, receipts := GenerateChain(gspec.Config, genesis, dpos.NewDposFaker(), gendb, int(height), nil)
+	blocks, receipts := GenerateChain(gspec.Config, genesis, dpos.NewDposFaker(), gendb, int(height), nil, nil)
 
 	// Configure a subchain to roll back
 	remove := []common.Hash{}
@@ -831,7 +832,7 @@ func TestChainTxReorgs(t *testing.T) {
 
 			gen.OffsetTime(9) // Lower the block difficulty to simulate a weaker chain
 		}
-	})
+	}, nil)
 	// Import the chain. This runs all block validation rules.
 	blockchain, _ := NewBlockChain(db, nil, gspec.Config, dpos.NewDposFaker(), vm.Config{}, nil)
 	if i, err := blockchain.InsertChain(chain); err != nil {
@@ -857,7 +858,7 @@ func TestChainTxReorgs(t *testing.T) {
 			futureAdd, _ = types.SignTx(types.NewTransaction(gen.TxNonce(addr3), addr3, big.NewInt(1000), params.TxGas, nil, nil), signer, key3)
 			gen.AddTx(futureAdd) // This transaction will be added after a full reorg
 		}
-	})
+	}, nil)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert forked chain: %v", err)
 	}
@@ -923,7 +924,7 @@ func TestLogReorgs(t *testing.T) {
 			}
 			gen.AddTx(tx)
 		}
-	})
+	}, nil)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		t.Fatalf("failed to insert chain: %v", err)
 	}
@@ -977,7 +978,7 @@ func TestReorgSideEvent(t *testing.T) {
 			t.Fatalf("failed to create tx: %v", err)
 		}
 		gen.AddTx(tx)
-	})
+	}, nil)
 
 	chainSideCh := make(chan ChainSideEvent, 64)
 	blockchain.SubscribeChainSideEvent(chainSideCh)
@@ -1040,7 +1041,7 @@ func TestCanonicalBlockRetrieval(t *testing.T) {
 	}
 	defer blockchain.Stop()
 
-	chain, _ := GenerateChain(blockchain.chainConfig, blockchain.genesisBlock, dpos.NewDposFaker(), blockchain.db, 10, func(i int, gen *BlockGen) {})
+	chain, _ := GenerateChain(blockchain.chainConfig, blockchain.genesisBlock, dpos.NewDposFaker(), blockchain.db, 10, func(i int, gen *BlockGen) {}, nil)
 
 	var pend sync.WaitGroup
 	pend.Add(len(chain))
@@ -1137,7 +1138,7 @@ func TestEIP155Transition(t *testing.T) {
 			}
 			block.AddTx(tx)
 		}
-	})
+	}, nil)
 
 	if _, err := blockchain.InsertChain(blocks); err != nil {
 		t.Fatal(err)
@@ -1175,7 +1176,7 @@ func TestEIP155Transition(t *testing.T) {
 			}
 			block.AddTx(tx)
 		}
-	})
+	}, nil)
 	_, err := blockchain.InsertChain(blocks)
 	if err != types.ErrInvalidChainId {
 		t.Error("expected error:", types.ErrInvalidChainId)
@@ -1226,7 +1227,7 @@ func TestEIP161AccountRemoval(t *testing.T) {
 			t.Fatal(err)
 		}
 		block.AddTx(tx)
-	})
+	}, nil)
 	// account must exist pre eip 161
 	if _, err := blockchain.InsertChain(types.Blocks{blocks[0]}); err != nil {
 		t.Fatal(err)
@@ -1263,7 +1264,7 @@ func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
 
 	db := ethdb.NewMemDatabase()
 	genesis := DefaultGenesisBlock().MustCommit(db)
-	blocks, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) }, nil)
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1272,7 +1273,7 @@ func TestBlockchainHeaderchainReorgConsistency(t *testing.T) {
 		if i > 0 {
 			parent = blocks[i-1]
 		}
-		fork, _ := GenerateChain(params.DposChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+		fork, _ := GenerateChain(params.DposChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) }, nil)
 		forks[i] = fork[0]
 	}
 	// Import the canonical and fork chain side by side, verifying the current block
@@ -1308,7 +1309,7 @@ func TestTrieForkGC(t *testing.T) {
 
 	db := ethdb.NewMemDatabase()
 	genesis := DefaultGenesisBlock().MustCommit(db)
-	blocks, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
+	blocks, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) }, nil)
 
 	// Generate a bunch of fork blocks, each side forking from the canonical chain
 	forks := make([]*types.Block, len(blocks))
@@ -1317,7 +1318,7 @@ func TestTrieForkGC(t *testing.T) {
 		if i > 0 {
 			parent = blocks[i-1]
 		}
-		fork, _ := GenerateChain(params.DposChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
+		fork, _ := GenerateChain(params.DposChainConfig, parent, engine, db, 1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) }, nil)
 		forks[i] = fork[0]
 	}
 	// Import the canonical and fork chain side by side, forcing the trie cache to cache both
@@ -1355,9 +1356,9 @@ func TestLargeReorgTrieGC(t *testing.T) {
 	db := ethdb.NewMemDatabase()
 	genesis := DefaultGenesisBlock().MustCommit(db)
 
-	shared, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) })
-	original, _ := GenerateChain(params.DposChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) })
-	competitor, _ := GenerateChain(params.DposChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) })
+	shared, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, 64, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{1}) }, nil)
+	original, _ := GenerateChain(params.DposChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{2}) }, nil)
+	competitor, _ := GenerateChain(params.DposChainConfig, shared[len(shared)-1], engine, db, 2*triesInMemory+1, func(i int, b *BlockGen) { b.SetCoinbase(common.Address{3}) }, nil)
 
 	// Import the shared chain and the original canonical one
 	diskdb := ethdb.NewMemDatabase()
@@ -1437,7 +1438,7 @@ func benchmarkLargeNumberOfValueToNonexisting(b *testing.B, numTxs, numBlocks in
 		}
 	}
 
-	shared, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, numBlocks, blockGenerator)
+	shared, _ := GenerateChain(params.DposChainConfig, genesis, engine, db, numBlocks, blockGenerator, nil)
 	b.StopTimer()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
