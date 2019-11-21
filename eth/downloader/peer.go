@@ -171,7 +171,7 @@ func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 
 // FetchHeaderInsertDataBatch sends a header insert data batch request to the remote peer.
 func (p *peerConnection) FetchHeaderInsertDataBatch(from uint64, count int) error {
-	if p.version < 64 {
+	if p.version < 62 {
 		panic(fmt.Sprintf("header insert data batch [eth/64+] requested on %d", p.version))
 	}
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {

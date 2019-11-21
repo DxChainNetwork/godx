@@ -186,7 +186,7 @@ func (tc *testChain) SealAndAddBlock(b *types.Block) *types.Block {
 		}
 	}
 	hash := b.Hash()
-	fmt.Printf("seal block %d: %x\n", b.Number(), b.Hash())
+	//fmt.Printf("seal block %d: %x\n", b.Number(), b.Hash())
 	if uint64(len(tc.chain)) > uint64(b.Number().Int64()) {
 		tc.chain[int(b.Number().Int64())] = hash
 	} else {

@@ -937,7 +937,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 				}
 			}
 			batch := packet.(*headerInsertDataPack).batch
-			fmt.Println("processing header data", batch[0].Header.Number)
+			//fmt.Println("processing header data", batch[0].Header.Number)
 
 			// If we received a skeleton batch, resolve internals concurrently
 			if skeleton {
