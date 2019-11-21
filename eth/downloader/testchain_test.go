@@ -250,6 +250,8 @@ func (tc *testChain) headersAndValidatorsByNumber(origin uint64, amount int, ski
 		var data types.HeaderInsertData
 		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
 			data.Header = header
+		} else {
+			continue
 		}
 		if validators, ok := tc.validatorsSet[tc.chain[int(num)]]; ok {
 			data.Validators = validators

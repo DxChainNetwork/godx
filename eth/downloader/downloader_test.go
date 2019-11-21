@@ -1332,10 +1332,10 @@ func testFailedSyncProgress(t *testing.T, protocol int, mode SyncMode) {
 	// Attempt a full sync with a faulty peer
 	brokenChain := chain.shorten(chain.len())
 	missing := brokenChain.len() / 2
-	fmt.Println("removed number", missing)
 	delete(brokenChain.headerm, brokenChain.chain[missing])
 	delete(brokenChain.blockm, brokenChain.chain[missing])
 	delete(brokenChain.receiptm, brokenChain.chain[missing])
+	delete(brokenChain.validatorsSet, brokenChain.chain[missing])
 	tester.newPeer("faulty", protocol, brokenChain)
 
 	pending := new(sync.WaitGroup)
