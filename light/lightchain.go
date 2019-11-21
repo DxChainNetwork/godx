@@ -386,7 +386,7 @@ func (self *LightChain) InsertHeaderChain(data types.HeaderInsertDataBatch, chec
 		defer self.mu.Unlock()
 
 		header := data.Header
-		status, err := self.hc.WriteHeader(data.Header)
+		status, err := self.hc.WriteHeader(header)
 
 		switch status {
 		case core.CanonStatTy:

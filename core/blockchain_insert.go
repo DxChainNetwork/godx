@@ -19,10 +19,9 @@ package core
 import (
 	"time"
 
-	"github.com/DxChainNetwork/godx/consensus"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
+	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/log"
 )
