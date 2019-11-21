@@ -1175,13 +1175,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	case err == consensus.ErrFutureBlock || (err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || err == consensus.ErrUnknownAncestor) {
 			if err := bc.addFutureBlock(block); err != nil {
+				log.Error(fmt.Sprintf("INSERT ERROR!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 			block, err = it.next()
 		}
 		stats.queued += it.processed()
 		stats.ignored += it.remaining()
-
+		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR2!!!!!!: %v", err))
+		}
 		// If there are any still remaining, mark as ignored
 		return it.index, events, coalescedLogs, err
 
@@ -1203,6 +1206,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	case err != nil:
 		stats.ignored += len(it.blocks)
 		bc.reportBlock(block, nil, err)
+		log.Error(fmt.Sprintf("INSERT ERROR 3!!!!!!: %v", err))
 		return it.index, events, coalescedLogs, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
@@ -1215,6 +1219,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBlacklistedHash)
+			log.Error(fmt.Sprintf("INSERT ERROR 4!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, ErrBlacklistedHash
 		}
 		// Retrieve the parent block and it's state to execute on top
@@ -1228,12 +1233,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// construct dpos context from parent's dpos context root
 		dposCtx, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(bc.db), parent.Header().DposContext)
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 5!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		block.SetDposCtx(dposCtx)
 
 		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 6!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
@@ -1242,11 +1249,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		t1 := time.Now()
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
+			log.Error(fmt.Sprintf("INSERT ERROR 7!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		// Validate the state using the default validator
 		if err := bc.Validator().ValidateState(block, parent, state, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
+			log.Error(fmt.Sprintf("INSERT ERROR 8!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 
@@ -1256,12 +1265,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			err = bc.Validator().ValidateDposState(block)
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
+				log.Error(fmt.Sprintf("INSERT ERROR 9!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 
 			err = dposEngine.VerifySeal(bc, block.Header())
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
+				log.Error(fmt.Sprintf("INSERT ERROR 10!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 		}
@@ -1273,6 +1284,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		status, err := bc.WriteBlockWithState(block, receipts, state)
 		t3 := time.Now()
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 11!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		blockInsertTimer.UpdateSince(start)
@@ -1310,12 +1322,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && err == consensus.ErrFutureBlock {
 		if err := bc.addFutureBlock(block); err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 12!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		block, err = it.next()
 
 		for ; block != nil && err == consensus.ErrUnknownAncestor; block, err = it.next() {
 			if err := bc.addFutureBlock(block); err != nil {
+				log.Error(fmt.Sprintf("INSERT ERROR 13!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 			stats.queued++
@@ -1326,6 +1340,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
+	}
+	if err != nil {
+		log.Error(fmt.Sprintf("INSERT ERROR final!!!!!!: %v", err))
 	}
 	return it.index, events, coalescedLogs, err
 }
