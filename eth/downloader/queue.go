@@ -697,8 +697,7 @@ func (q *queue) DeliverHeadersInsertData(id string, dataBatch types.HeaderInsert
 
 	accepted := len(headers) == MaxHeaderFetch
 	if accepted {
-		fmt.Println("size of header batch", len(headers))
-		fmt.Println("first header number", headers[0].Number)
+
 		if headers[0].Number.Uint64() != request.From {
 			log.Trace("First header broke chain ordering", "peer", id, "number", headers[0].Number, "hash", headers[0].Hash(), request.From)
 			accepted = false
@@ -709,8 +708,6 @@ func (q *queue) DeliverHeadersInsertData(id string, dataBatch types.HeaderInsert
 	}
 	if accepted {
 		for i, header := range headers[1:] {
-			fmt.Printf("header hash: %x isNil: %v\n", header.Hash(), header == nil)
-			fmt.Println(i, "number", header.Number)
 			hash := header.Hash()
 			if want := request.From + 1 + uint64(i); header.Number.Uint64() != want {
 				log.Warn("Header broke chain ordering", "peer", id, "number", header.Number, "hash", hash, "expected", want)

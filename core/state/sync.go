@@ -18,6 +18,7 @@ package state
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/rlp"
@@ -30,6 +31,7 @@ func NewStateSync(root common.Hash, database trie.DatabaseReader) *trie.Sync {
 	callback := func(leaf []byte, parent common.Hash) error {
 		var obj Account
 		if err := rlp.Decode(bytes.NewReader(leaf), &obj); err != nil {
+			fmt.Println("error in callback:", err)
 			return err
 		}
 		syncer.AddSubTrie(obj.Root, 64, parent, nil)
