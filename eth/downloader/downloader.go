@@ -411,6 +411,7 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
+	fmt.Println("syncing with peer")
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -434,12 +435,14 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	if err != nil {
 		return err
 	}
+	fmt.Println("after fetch height")
 	height := latest.Number.Uint64()
 
 	origin, err := d.findAncestor(p, latest)
 	if err != nil {
 		return err
 	}
+	fmt.Println("after find ancestor")
 	d.syncStatsLock.Lock()
 	if d.syncStatsChainHeight <= origin || d.syncStatsChainOrigin > origin {
 		d.syncStatsChainOrigin = origin
@@ -878,9 +881,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
+			fmt.Println("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
+			fmt.Println("Fetching full headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
