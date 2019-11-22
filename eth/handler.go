@@ -884,11 +884,9 @@ func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *pee
 	if err := msg.Decode(&data); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
-	if len(data) != 0 {
-		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, data)
-		if err != nil {
-			log.Debug(fmt.Sprint(err))
-		}
+	err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, data)
+	if err != nil {
+		log.Debug(fmt.Sprint(err))
 	}
 	return nil
 }
