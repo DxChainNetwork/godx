@@ -61,7 +61,7 @@ const (
 	MaxHelperTrieProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend                   = 64  // Amount of transactions to be send per request
 	MaxTxStatus                 = 256 // Amount of transactions to queried per request
-	MaxHeaderAndValidatorsFetch = 128 // Amount of headers and validators to be fetched per retrieval request
+	MaxHeaderAndValidatorsFetch = 192 // Amount of headers and validators to be fetched per retrieval request
 
 	disableClientRemovePeer = false
 )
