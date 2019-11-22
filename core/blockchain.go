@@ -1675,8 +1675,15 @@ Error: %v
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
 func (bc *BlockChain) InsertHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
+	if len(data) == 0 {
+		log.Error("inserting empty header chain")
+	} else {
+		log.Error("inserting header chain", "start number", data[0].Header.Number, "size", len(data))
+	}
+
 	start := time.Now()
 	if i, err := bc.hc.ValidateHeaderChain(data, checkFreq); err != nil {
+		log.Error("validate header error", "error", err)
 		return i, err
 	}
 
@@ -1693,12 +1700,19 @@ func (bc *BlockChain) InsertHeaderChain(data types.HeaderInsertDataBatch, checkF
 
 		_, err := bc.hc.WriteHeader(data.Header)
 		if err != nil {
+			log.Error("write header error", "error", err)
 			return err
 		}
+		log.Error("write validators error", "error", err)
 		return bc.writeValidators(data.Validators)
 	}
 
-	return bc.hc.InsertHeaderChain(data, whFunc, start)
+	n, err := bc.hc.InsertHeaderChain(data, whFunc, start)
+	if err != nil {
+		log.Error("insert header chain error", err)
+		return n, err
+	}
+	return n, nil
 }
 
 // writeHeader writes a header into the local chain, given that its parent is

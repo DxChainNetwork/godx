@@ -1333,6 +1333,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 			headers, _ := dataBatch.Split()
 			// Terminate header processing if we synced up
 			if len(headers) == 0 {
+				log.Error("processing empty headers")
 				// Notify everyone that headers are fully processed
 				for _, ch := range []chan bool{d.bodyWakeCh, d.receiptWakeCh} {
 					select {
@@ -1375,6 +1376,8 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				rollback = nil
 				return nil
 			}
+
+			log.Error("processing header data batch", "start number", headers[0], "size", len(headers))
 			// Otherwise split the chunk of headers into batches and process them
 			gotHeaders = true
 
