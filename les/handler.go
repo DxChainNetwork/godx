@@ -61,7 +61,7 @@ const (
 	MaxHelperTrieProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
 	MaxTxSend                   = 64  // Amount of transactions to be send per request
 	MaxTxStatus                 = 256 // Amount of transactions to queried per request
-	MaxHeaderAndValidatorsFetch = 128 // Amount of headers and validators to be fetched per retrieval request
+	MaxHeaderAndValidatorsFetch = 192 // Amount of headers and validators to be fetched per retrieval request
 
 	disableClientRemovePeer = false
 )
@@ -1328,7 +1328,8 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 	query := req.Query
 	fmt.Printf("query: %v\n", query)
 	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
-		return errResp(ErrRequestRejected, "")
+		fmt.Println(query.Amount)
+		return errResp(ErrRequestRejected, "header and validator fetch")
 	}
 	data, err := calculateHeaderAndValidatorsFromRequest(pm, query, p)
 	if err != nil {
