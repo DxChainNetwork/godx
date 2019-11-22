@@ -161,6 +161,7 @@ func sendResponse(w p2p.MsgWriter, msgcode, reqID, bv uint64, data interface{}) 
 		ReqID, BV uint64
 		Data      interface{}
 	}
+	fmt.Printf("Sending response %+v\n", resp{reqID, bv, data})
 	return p2p.Send(w, msgcode, resp{reqID, bv, data})
 }
 
