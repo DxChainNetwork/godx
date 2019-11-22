@@ -579,6 +579,7 @@ func (d *Downloader) fetchHeight(p *peerConnection) (*types.Header, error) {
 			headers := packet.(*headerPack).headers
 			if len(headers) != 1 {
 				p.log.Debug("Multiple headers for single request", "headers", len(headers))
+				p.log.Error("errBadPeer1 - fetch height")
 				return nil, errBadPeer
 			}
 			head := headers[0]
@@ -805,6 +806,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				headers := packer.(*headerPack).headers
 				if len(headers) != 1 {
 					p.log.Debug("Multiple headers for single request", "headers", len(headers))
+					p.log.Error("error bad peer, find ancestor")
 					return 0, errBadPeer
 				}
 				arrived = true
@@ -829,6 +831,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
 				if header.Number.Uint64() != check {
 					p.log.Debug("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
+					p.log.Error("err bad peer - find ancestor 2")
 					return 0, errBadPeer
 				}
 				start = check
@@ -1015,6 +1018,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 			case d.headerDataProcCh <- nil:
 			case <-d.cancelCh:
 			}
+			log.Error("fetch header - time out")
 			return errBadPeer
 		}
 	}
@@ -1377,7 +1381,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				return nil
 			}
 
-			log.Error("processing header data batch", "start number", headers[0], "size", len(headers))
+			log.Error("processing header data batch", "start number", headers[0].Number, "end number", headers[len(headers)-1].Number, "size", len(headers))
 			// Otherwise split the chunk of headers into batches and process them
 			gotHeaders = true
 
@@ -1438,6 +1442,7 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					inserts := d.queue.Schedule(chunk, origin)
 					if len(inserts) != len(chunk) {
 						log.Debug("Stale headers")
+						log.Error("err bad peer - process headers stale")
 						return errBadPeer
 					}
 				}

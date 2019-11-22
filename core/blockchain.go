@@ -1103,6 +1103,7 @@ func (bc *BlockChain) addFutureBlock(block *types.Block) error {
 // After insertion is done, all accumulated events will be fired.
 func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	// Sanity check that we have something meaningful to import
+	log.Error("inserting chain", "start", chain[0].Number(), "end", chain[len(chain)-1].Number(), "size", len(chain))
 	if len(chain) == 0 {
 		return 0, nil
 	}
@@ -1121,6 +1122,7 @@ func (bc *BlockChain) InsertChain(chain types.Blocks) (int, error) {
 	bc.wg.Add(1)
 	bc.chainmu.Lock()
 	n, events, logs, err := bc.insertChain(chain, true)
+	log.Error("Insert chain error", "err", err)
 	bc.chainmu.Unlock()
 	bc.wg.Done()
 
