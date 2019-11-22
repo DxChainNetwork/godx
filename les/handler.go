@@ -1461,16 +1461,16 @@ func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *pee
 	p.Log().Trace("Received block header and validators response message")
 	var resp struct {
 		ReqID, BV uint64
-		data      types.HeaderInsertDataBatch
+		Data      types.HeaderInsertDataBatch
 	}
 	if err := msg.Decode(&resp); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
 	p.fcServer.GotReply(resp.ReqID, resp.BV)
 	if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
-		pm.fetcher.deliverHeaderInsertDataBatch(p, resp.ReqID, resp.data)
+		pm.fetcher.deliverHeaderInsertDataBatch(p, resp.ReqID, resp.Data)
 	} else {
-		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, resp.data)
+		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, resp.Data)
 		if err != nil {
 			log.Debug(fmt.Sprint(err))
 		}
