@@ -888,7 +888,7 @@ func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *pee
 	if err != nil {
 		log.Debug(fmt.Sprint(err))
 	}
-	return nil
+	return err
 }
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or
