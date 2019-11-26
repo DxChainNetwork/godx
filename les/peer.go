@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/DxChainNetwork/godx/log"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/eth"
@@ -153,7 +155,12 @@ func sendRequest(w p2p.MsgWriter, msgcode, reqID, cost uint64, data interface{})
 		ReqID uint64
 		Data  interface{}
 	}
-	return p2p.Send(w, msgcode, req{reqID, data})
+	log.Error("p2p sending request", "code", msgcode)
+	err := p2p.Send(w, msgcode, req{reqID, data})
+	if err != nil {
+		log.Error("request sending through p2p error", "err", err)
+	}
+	return err
 }
 
 func sendResponse(w p2p.MsgWriter, msgcode, reqID, bv uint64, data interface{}) error {
@@ -296,6 +303,7 @@ func (p *peer) RequestHeadersByNumber(reqID, cost, origin uint64, amount int, sk
 // RequestHeadersAndValidatorsByHash fetches a batch of blocks' headers and validators corresponding to
 // the specified header query, based on the hash of an origin block.
 func (p *peer) RequestHeaderInsertDataBatchByHash(reqID, cost uint64, origin common.Hash, amount int, skip int, reverse bool) error {
+	p.Log().Error("header insert data batch requested by hash", "amount", amount)
 	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
 	return sendRequest(p.rw, GetBlockHeaderAndValidatorsMsg, reqID, cost, &getBlockHeaderAndValidatorsRequest{
 		Origin:  hashOrNumber{Hash: origin},
@@ -308,6 +316,7 @@ func (p *peer) RequestHeaderInsertDataBatchByHash(reqID, cost uint64, origin com
 // RequestHeaderInsertDataBatchByNumber fetches a batch of blocks' headers and validators corresponding
 // to the specified header query, based on the number of an origin block.
 func (p *peer) RequestHeaderInsertDataBatchByNumber(reqID, cost, origin uint64, amount, skip int, reverse bool) error {
+	p.Log().Error("header insert data batch requested by number", "start", origin, "amount", amount)
 	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	return sendRequest(p.rw, GetBlockHeaderAndValidatorsMsg, reqID, cost, &getBlockHeaderAndValidatorsRequest{
 		Origin:  hashOrNumber{Number: origin},

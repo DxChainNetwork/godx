@@ -454,6 +454,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 		// if exclusion is needed and the protocol is lightNodeProtocol
 		// then exclude and do not run the lightNodeProtocol
 		if exclusion && proto.Name == LightNodeProtocol {
+			log.Error("light node protocol excluded with peer", "id", p.ID())
 			continue
 		}
 

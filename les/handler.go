@@ -308,7 +308,6 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			pm.serverPool.registered(p.poolEntry)
 		}
 	}
-
 	stop := make(chan struct{})
 	defer close(stop)
 	go func() {
@@ -322,7 +321,7 @@ func (pm *ProtocolManager) handle(p *peer) error {
 			}
 		}
 	}()
-
+	p.Log().Error("les handling message loop")
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
@@ -352,12 +351,15 @@ var reqList = []uint64{
 // peer. The remote connection is torn down upon returning any error.
 func (pm *ProtocolManager) handleMsg(p *peer) error {
 	// Read the next message from the remote peer, and ensure it's fully consumed
+	p.Log().Error("handling message")
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
+		log.Error("read message error", "err", err)
 		return err
 	}
 	p.Log().Trace("Light Ethereum message arrived", "code", msg.Code, "bytes", msg.Size)
 
+	p.Log().Error("read message")
 	costs := p.fcCosts[msg.Code]
 	reject := func(reqCnt, maxCnt uint64) bool {
 		if p.fcClient == nil || reqCnt > maxCnt {
@@ -382,6 +384,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	defer msg.Discard()
 
 	var deliverMsg *Msg
+	p.Log().Error("les handler got message", "code", msg.Code)
 
 	// Handle the message depending on its contents
 	switch msg.Code {
@@ -416,6 +419,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 
 	case GetBlockHeadersMsg:
+		log.Error("got Get block headers message")
 		p.Log().Trace("Received block header request")
 		// Decode the complex header query
 		var req struct {
@@ -516,6 +520,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return p.SendBlockHeaders(req.ReqID, bv, headers)
 
 	case BlockHeadersMsg:
+		log.Error("Got block headers message")
 		if pm.downloader == nil {
 			return errResp(ErrUnexpectedResponse, "")
 		}
@@ -1123,9 +1128,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	case GetBlockHeaderAndValidatorsMsg:
 		fmt.Println("handling get msg")
+		log.Error("handling getBlockHeaderAndValidatorMsg")
 		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p, costs, reject)
 
 	case BlockHeaderAndValidatorsMsg:
+		log.Error("header and validators msg received")
 		fmt.Println("handling response msg")
 		return pm.handleBlockHeaderAndValidatorsMsg(msg, p)
 
@@ -1326,7 +1333,7 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
 	query := req.Query
-	fmt.Printf("query: %v\n", query)
+	log.Error(fmt.Sprintf("query: %v\n", query))
 	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
 		fmt.Println(query.Amount)
 		return errResp(ErrRequestRejected, "header and validator fetch")
@@ -1337,7 +1344,7 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 	}
 	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
 	pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
-	fmt.Printf("send message： %v\n", data)
+	log.Error(fmt.Sprintf("send message： %v\n", data))
 	return p.SendBlockHeadersAndValidators(req.ReqID, bv, data)
 }
 
