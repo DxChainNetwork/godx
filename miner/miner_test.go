@@ -37,7 +37,7 @@ func TestMiner_StartAndStop(t *testing.T) {
 }
 
 func TestMiner_Pending(t *testing.T) {
-	block, state := miner.Pending()
+	block, state, _ := miner.Pending()
 	if block == nil || state == nil {
 		t.Error("retrieve pending block error")
 	}

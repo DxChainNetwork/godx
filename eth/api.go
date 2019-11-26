@@ -271,7 +271,7 @@ func (api *PublicDebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error
 		// If we're dumping the pending state, we need to request
 		// both the pending block as well as the pending state from
 		// the miner and operate on those
-		_, stateDb := api.eth.miner.Pending()
+		_, stateDb, _ := api.eth.miner.Pending()
 		return stateDb.RawDump(), nil
 	}
 	var block *types.Block
