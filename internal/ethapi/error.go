@@ -60,5 +60,8 @@ var (
 	ErrRLPEncodeCandidates = errors.New("failed to rlp encode candidate list")
 
 	// ErrUnknownParameter is returned if input unknown parameter name in dpos tx
-	ErrUnknownParameter = errors.New("unknown parameter name,cannot parse it")
+	ErrUnknownParameter = errors.New("unknown parameter name, cannot parse it")
+
+	// ErrUnknownBlockNumber is returned if opening the related block number gives nil data result
+	ErrUnknownBlockNumber = errors.New("unknown block number")
 )

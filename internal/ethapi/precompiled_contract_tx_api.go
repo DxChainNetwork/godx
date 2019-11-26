@@ -149,19 +149,11 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 	to := vm.CancelCandidateContractAddress
 	ctx := context.Background()
 
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
-
-	// get the latest block header
-	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if header == nil || err != nil {
+	if err := pd.validateCancelCandidateRequest(ctx, from); err != nil {
 		return common.Hash{}, err
 	}
-
-	// check if the address is the candidate address
-	if !dpos.IsCandidate(args.From, header, pd.b.ChainDb()) {
-		return common.Hash{}, ErrNotCandidate
-	}
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
 	// send contract transaction
 	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
@@ -169,6 +161,24 @@ func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Ha
 		return common.Hash{}, err
 	}
 	return txHash, nil
+}
+
+func (pd *PublicDposTxAPI) validateCancelCandidateRequest(ctx context.Context, addr common.Address) error {
+	_, dposCtx, _, err := pd.b.StateDposCtxAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return err
+	}
+	if dposCtx == nil {
+		return errors.New("unknown block number")
+	}
+	isCand, err := dpos.IsCandidate(dposCtx, addr)
+	if err != nil {
+		return err
+	}
+	if !isCand {
+		return ErrNotCandidate
+	}
+	return nil
 }
 
 // SendVoteTx submit a vote tx

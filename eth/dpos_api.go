@@ -109,15 +109,25 @@ func (d *PublicDposAPI) Candidate(candidateAddress common.Address, blockNr *rpc.
 	if err != nil {
 		return CandidateInfo{}, err
 	}
+	if header == nil {
+		return CandidateInfo{}, fmt.Errorf("unknown header with block number: %v", blockNr)
+	}
 
 	// based on the block header root, get the statedb
 	statedb, err := d.e.BlockChain().StateAt(header.Root)
 	if err != nil {
 		return CandidateInfo{}, err
 	}
-
+	dposCtx, err := d.e.BlockChain().DposCtxAt(header.DposContext)
+	if err != nil {
+		return CandidateInfo{}, err
+	}
 	// check if the given address is candidate address
-	if !dpos.IsCandidate(candidateAddress, header, d.e.ChainDb()) {
+	isCan, err := dpos.IsCandidate(dposCtx, candidateAddress)
+	if err != nil {
+		return CandidateInfo{}, err
+	}
+	if !isCan {
 		return CandidateInfo{}, fmt.Errorf("the given address %s is not a candidate", candidateAddress.String())
 	}
 

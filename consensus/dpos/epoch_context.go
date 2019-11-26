@@ -157,7 +157,11 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		}
 		// If the candidate has already canceled candidate, continue to the next
 		// validator
-		if !isCandidate(ec.DposContext.CandidateTrie(), validator.address) {
+		isCand, err := isCandidate(ec.DposContext.CandidateTrie(), validator.address)
+		if err != nil {
+			return fmt.Errorf("error happened when check is candidate")
+		}
+		if !isCand {
 			continue
 		}
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {
