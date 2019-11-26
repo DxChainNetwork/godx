@@ -101,6 +101,27 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return stateDb, header, err
 }
 
+// StateDposCtxAndHeaderByNumber returns the state, dposCtx and header by blockNumber
+func (b *EthAPIBackend) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	if blockNr == rpc.PendingBlockNumber {
+		block, state, dposCtx := b.eth.miner.Pending()
+		return state, dposCtx, block.Header(), nil
+	}
+	header, err := b.HeaderByNumber(ctx, blockNr)
+	if header == nil || err != nil {
+		return nil, nil, nil, err
+	}
+	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	dposCtx, err := b.eth.BlockChain().DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return stateDb, dposCtx, header, nil
+}
+
 func (b *EthAPIBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(hash), nil
 }
