@@ -7,7 +7,6 @@ package dpos
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 // ProcessVote process the process request for state and dpos context
@@ -63,20 +62,19 @@ func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, vot
 }
 
 // HasVoted will check whether the provided delegator address is voted
-func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
+func HasVoted(dposCtx *types.DposContext, addr common.Address) (bool, error) {
 	// re-construct trieDB and get the voteTrie
-	voteTrie, err := types.NewFullDposDatabase(diskDB).OpenVoteTrie(header.DposContext.VoteRoot)
-	if err != nil {
-		return false
-	}
-
+	voteTrie := dposCtx.VoteTrie()
 	// check if the delegator has voted
-	if value, err := voteTrie.TryGet(delegatorAddress.Bytes()); err != nil || value == nil {
-		return false
+	value, err := voteTrie.TryGet(addr.Bytes())
+	if err != nil {
+		return false, err
 	}
-
+	if value == nil {
+		return false, nil
+	}
 	// otherwise, means the delegator has voted
-	return true
+	return true, nil
 }
 
 // checkValidVote checks whether the input argument is valid for a vote transaction

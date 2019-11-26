@@ -209,19 +209,11 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 	to := vm.CancelVoteContractAddress
 	ctx := context.Background()
 
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
-
-	// get the latest block header
-	header, err := pd.b.HeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if header == nil || err != nil {
+	if err := pd.validateCancelVoteRequest(ctx, from); err != nil {
 		return common.Hash{}, err
 	}
-
-	// check if the delegator has voted before
-	if !dpos.HasVoted(args.From, header, pd.b.ChainDb()) {
-		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
-	}
+	// construct args
+	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
 
 	// send the contract transaction
 	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
@@ -229,6 +221,24 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 		return common.Hash{}, err
 	}
 	return txHash, nil
+}
+
+func (pd *PublicDposTxAPI) validateCancelVoteRequest(ctx context.Context, addr common.Address) error {
+	_, dposCtx, _, err := pd.b.StateDposCtxAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	if err != nil {
+		return err
+	}
+	if dposCtx == nil {
+		return ErrUnknownBlockNumber
+	}
+	hasVoted, err := dpos.HasVoted(dposCtx, addr)
+	if err != nil {
+		return err
+	}
+	if !hasVoted {
+		return fmt.Errorf("failed to send cancel vote transaction, %x has not voted before", addr)
+	}
+	return nil
 }
 
 // sendPrecompiledContractTx send precompiled contract tx，mostly need from、to、value、input（rlp encoded）
