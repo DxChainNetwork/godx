@@ -50,6 +50,7 @@ type Backend interface {
 	HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error)
 	BlockByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Block, error)
 	StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error)
+	StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error)
 	GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetTd(blockHash common.Hash) *big.Int
@@ -127,6 +128,11 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Namespace: "dpos",
 			Version:   "1.0",
 			Service:   NewPublicDposTxAPI(apiBackend, nonceLock),
+			Public:    true,
+		}, {
+			Namespace: "dpos",
+			Version:   "1.0",
+			Service:   NewPublicDposAPI(apiBackend),
 			Public:    true,
 		},
 	}

@@ -84,6 +84,17 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	return light.NewState(ctx, header, b.eth.odr), header, nil
 }
 
+// StateDposCtxAndHeaderByNumber return the state, dposContext, and header by block number
+func (b *LesApiBackend) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	header, err := b.HeaderByNumber(ctx, blockNr)
+	if header == nil || err != nil {
+		return nil, nil, nil, err
+	}
+	state := light.NewState(ctx, header, b.eth.odr)
+	dposCtx := light.NewDposContext(ctx, header, b.eth.odr)
+	return state, dposCtx, header, nil
+}
+
 func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
 	return b.eth.blockchain.GetBlockByHash(ctx, blockHash)
 }

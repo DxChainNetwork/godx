@@ -390,6 +390,10 @@ func (b *BackendTest) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.Bl
 	return &state.StateDB{}, &types.Header{}, nil
 }
 
+func (b *BackendTest) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	return &state.StateDB{}, &types.DposContext{}, &types.Header{}, nil
+}
+
 func (b *BackendTest) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
 	return &types.Block{}, nil
 }

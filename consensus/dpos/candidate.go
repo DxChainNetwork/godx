@@ -7,7 +7,6 @@ package dpos
 import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/trie"
 )
 
@@ -55,23 +54,22 @@ func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, can
 	return checkValidCandidate(state, candidateAddress, data.Deposit, data.RewardRatio)
 }
 
-// IsCandidate will check whether or not the given address is a candidate address
-func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
-	// re-construct trieDB and get the candidateTrie
-	candidateTrie, err := types.NewFullDposDatabase(diskDB).OpenCandidateTrie(header.DposContext.CandidateRoot)
-	if err != nil {
-		return false
-	}
-	return isCandidate(candidateTrie, candidateAddress)
+// IsCandidate return whether the provided address is a candidate or not
+func IsCandidate(dposCtx *types.DposContext, address common.Address) (bool, error) {
+	return isCandidate(dposCtx.CandidateTrie(), address)
 }
 
 // isCandidate determines whether the addr is a candidate from a candidateTrie
-func isCandidate(candidateTrie types.DposTrie, addr common.Address) bool {
+func isCandidate(candidateTrie types.DposTrie, addr common.Address) (bool, error) {
 	// check if the candidate exists
-	if value, err := candidateTrie.TryGet(addr.Bytes()); err != nil || value == nil {
-		return false
+	value, err := candidateTrie.TryGet(addr.Bytes())
+	if err != nil {
+		return false, err
 	}
-	return true
+	if value == nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 // CalcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
