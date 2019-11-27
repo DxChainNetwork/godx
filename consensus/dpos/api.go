@@ -41,8 +41,9 @@ type ValidatorInfo struct {
 
 // DelegatorInfo stores detailed DelegatorInfo
 type DelegatorInfo struct {
-	Deposit common.BigInt    `json:"deposit"`
-	Votes   []common.Address `json:"votes"`
+	Delegator common.Address   `json:"delegator"`
+	Deposit   common.BigInt    `json:"deposit"`
+	Votes     []common.Address `json:"votes"`
 }
 
 // GetConfirmedBlockNumber retrieves the latest irreversible block
@@ -80,6 +81,7 @@ func GetValidatorInfo(stateDb *state.StateDB, dposCtx *types.DposContext, header
 	}
 	// return validator information
 	return ValidatorInfo{
+		Validator:   address,
 		Votes:       votes,
 		RewardRatio: rewardRatio,
 		MinedBlocks: minedCount,
@@ -117,6 +119,7 @@ func GetCandidateInfo(stateDb *state.StateDB, dposCtx *types.DposContext, addres
 	rewardRatio := GetRewardRatioNumerator(stateDb, address)
 
 	return CandidateInfo{
+		Candidate:   address,
 		Deposit:     candidateDeposit,
 		Votes:       candidateVotes,
 		RewardRatio: rewardRatio,
@@ -138,7 +141,8 @@ func GetDelegatorInfo(stateDb *state.StateDB, dposCtx *types.DposContext, addres
 		return DelegatorInfo{}, err
 	}
 	return DelegatorInfo{
-		Deposit: deposit,
-		Votes:   votes,
+		Delegator: address,
+		Deposit:   deposit,
+		Votes:     votes,
 	}, nil
 }
