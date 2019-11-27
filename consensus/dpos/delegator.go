@@ -61,7 +61,7 @@ func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, vot
 	return checkValidVote(state, delegatorAddress, voteData.Deposit, voteData.Candidates)
 }
 
-// HasVoted will check whether the provided delegator address is voted
+// HasVoted will check whether the provided delegator address has voted
 func HasVoted(dposCtx *types.DposContext, addr common.Address) (bool, error) {
 	// re-construct trieDB and get the voteTrie
 	voteTrie := dposCtx.VoteTrie()
