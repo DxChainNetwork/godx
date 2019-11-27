@@ -2502,8 +2502,8 @@ var HttpProvider = require('./web3/httpprovider');
 var IpcProvider = require('./web3/ipcprovider');
 var BigNumber = require('bignumber.js');
 var shost = require('./web3/methods/shost');
-
 var sclient = require('./web3/methods/sclient');
+var dpos = require('./web3/methods/dpos');
 
 
 
@@ -2533,6 +2533,7 @@ function Web3 (provider) {
     this._extend({
         properties: properties()
     });
+    this.dpos = new dpos(this)
 }
 
 // expose providers on the class
@@ -2618,7 +2619,7 @@ module.exports = Web3;
 
 
 
-},{"./web3/methods/shost": 213, "./web3/methods/sclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
+},{"./web3/methods/dpos":214, "./web3/methods/shost": 213, "./web3/methods/sclient":200, "./utils/sha3":19,"./utils/utils":20,"./version.json":21,"./web3/batch":24,"./web3/extend":28,"./web3/httpprovider":32,"./web3/iban":33,"./web3/ipcprovider":34,"./web3/methods/db":37,"./web3/methods/eth":38,"./web3/methods/net":39,"./web3/methods/personal":40,"./web3/methods/shh":41,"./web3/methods/swarm":42,"./web3/property":45,"./web3/requestmanager":46,"./web3/settings":47,"bignumber.js":"bignumber.js"}],23:[function(require,module,exports){
 
 
 /*
@@ -13898,6 +13899,94 @@ module.exports = Web3;
 
     module.exports = shost
 
-  }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20},],
+  }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20}],
+
+  214: [function(require,module,exports) {
+    "use strict";
+
+    var Method = require('../method');
+    var Property = require('../property');
+    var formatters = require('../formatters');
+    var utils = require('../../utils/utils');
+
+    var methods = function () {
+      var getValidators = new Method({
+        name: 'getValidators',
+        call: 'dpos_getValidators',
+        params: 1,
+        inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
+      })
+
+      var getValidatorDetails = new Method({
+          name: 'getValidatorDetails',
+          call: 'dpos_getValidatorDetails',
+          params: 2,
+          inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+      })
+
+      var getCandidates = new Method({
+        name: 'getCandidates',
+        call: 'dpos_getCandidates',
+        params: 1,
+        inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
+      })
+
+      var getCandidateDetails = new Method({
+        name: 'getCandidateDetails',
+        call: 'dpos_getCandidateDetails',
+        params: 2,
+        inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+      })
+
+      var getDelegatorDetails = new Method({
+          name: 'getDelegatorDetails',
+          call: 'dpos_getDelegatorDetails',
+          params: 2,
+          inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
+      })
+
+      return [
+        getValidators,
+        getValidatorDetails,
+        getCandidates,
+        getCandidateDetails,
+        getDelegatorDetails,
+      ];
+    };
+
+    var properties = function() {
+        return [
+          new Property({
+            name: 'epochID',
+            getter: 'dpos_getCurrentEpochID',
+          }),
+  
+          new Property({
+            name: 'validators',
+            getter: 'dpos_getCurrentValidators',
+          }),
+        ];
+      };
+
+
+    function dpos(web3){
+      this._requestManager = web3._requestManager;
+
+      var self = this;
+
+      methods().forEach(function(method) {
+        method.attachToObject(self);
+        method.setRequestManager(self._requestManager);
+      });
+
+      properties().forEach(function(p) {
+        p.attachToObject(self);
+        p.setRequestManager(self._requestManager);
+      });
+    }
+
+    module.exports = dpos
+
+  }, {"../formatters":30, "../method":36, "../property":45, "../../utils/utils":20}],
 },{},["web3"])
 //# sourceMappingURL=web3-light.js.map

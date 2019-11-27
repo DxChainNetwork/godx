@@ -32,7 +32,7 @@ var Modules = map[string]string{
 	"shh":        Shh_JS,
 	"swarmfs":    SWARMFS_JS,
 	"txpool":     TxPool_JS,
-	"dpos":       Dpos_JS,
+	//"dpos":       Dpos_JS,
 }
 
 const Chequebook_JS = `
