@@ -635,14 +635,17 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 }
 
 // GetMinedCnt get mined block count in the minedCntTrie
-func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
+func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) (int64, error) {
 	key := makeMinedCntKey(epoch, addr)
 	cntBytes, err := dc.minedCntTrie.TryGet(key)
-	if err != nil || cntBytes == nil || len(cntBytes) < 8 {
-		return 0
+	if err != nil {
+		return 0, err
+	}
+	if cntBytes == nil || len(cntBytes) < 8 {
+		return 0, nil
 	}
 	cnt := int64(binary.BigEndian.Uint64(cntBytes))
-	return cnt
+	return cnt, nil
 }
 
 // GetCandidates will iterate through the candidateTrie and get all candidates

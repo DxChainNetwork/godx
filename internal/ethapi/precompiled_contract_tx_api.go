@@ -7,17 +7,13 @@ package ethapi
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/hexutil"
-	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/rlp"
-	"github.com/DxChainNetwork/godx/rpc"
 )
 
 // PrivateStorageContractTxAPI exposes the storage contract tx methods for the RPC interface
@@ -107,138 +103,6 @@ func (psc *PrivateStorageContractTxAPI) SendStorageProofTX(from common.Address, 
 		return common.Hash{}, err
 	}
 	return txHash, nil
-}
-
-// PublicDposTxAPI exposes the dpos tx methods for the RPC interface
-type PublicDposTxAPI struct {
-	b         Backend
-	nonceLock *AddrLocker
-}
-
-// NewPublicDposTxAPI construct a PublicDposTxAPI object
-func NewPublicDposTxAPI(b Backend, nonceLock *AddrLocker) *PublicDposTxAPI {
-	return &PublicDposTxAPI{b, nonceLock}
-}
-
-// SendApplyCandidateTx submit a apply candidate tx.
-// the parameter ratio is the award distribution ratio that candidate state.
-func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (common.Hash, error) {
-	to := vm.ApplyCandidateContractAddress
-	ctx := context.Background()
-
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// parse precompile contract tx args
-	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
-
-// SendCancelCandidateTx submit a cancel candidate tx
-func (pd *PublicDposTxAPI) SendCancelCandidateTx(from common.Address) (common.Hash, error) {
-	to := vm.CancelCandidateContractAddress
-	ctx := context.Background()
-
-	if err := pd.validateCancelCandidateRequest(ctx, from); err != nil {
-		return common.Hash{}, err
-	}
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
-
-	// send contract transaction
-	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
-
-func (pd *PublicDposTxAPI) validateCancelCandidateRequest(ctx context.Context, addr common.Address) error {
-	_, dposCtx, _, err := pd.b.StateDposCtxAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return err
-	}
-	if dposCtx == nil {
-		return errors.New("unknown block number")
-	}
-	isCand, err := dpos.IsCandidate(dposCtx, addr)
-	if err != nil {
-		return err
-	}
-	if !isCand {
-		return ErrNotCandidate
-	}
-	return nil
-}
-
-// SendVoteTx submit a vote tx
-func (pd *PublicDposTxAPI) SendVoteTx(fields map[string]string) (common.Hash, error) {
-	to := vm.VoteContractAddress
-	ctx := context.Background()
-
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// parse precompile contract tx args
-	args, err := ParseAndValidateVoteTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
-
-// SendCancelVoteTx submit a cancel vote tx
-func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, error) {
-	to := vm.CancelVoteContractAddress
-	ctx := context.Background()
-
-	if err := pd.validateCancelVoteRequest(ctx, from); err != nil {
-		return common.Hash{}, err
-	}
-	// construct args
-	args := NewPrecompiledContractTxArgs(from, to, nil, nil, DposTxGas)
-
-	// send the contract transaction
-	txHash, err := sendPrecompiledContractTx(ctx, pd.b, pd.nonceLock, args)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return txHash, nil
-}
-
-func (pd *PublicDposTxAPI) validateCancelVoteRequest(ctx context.Context, addr common.Address) error {
-	_, dposCtx, _, err := pd.b.StateDposCtxAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
-	if err != nil {
-		return err
-	}
-	if dposCtx == nil {
-		return ErrUnknownBlockNumber
-	}
-	hasVoted, err := dpos.HasVoted(dposCtx, addr)
-	if err != nil {
-		return err
-	}
-	if !hasVoted {
-		return fmt.Errorf("failed to send cancel vote transaction, %x has not voted before", addr)
-	}
-	return nil
 }
 
 // sendPrecompiledContractTx send precompiled contract tx，mostly need from、to、value、input（rlp encoded）

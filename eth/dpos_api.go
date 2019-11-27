@@ -45,18 +45,6 @@ func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
 	}
 }
 
-// Validators will return a list of validators based on the blockNumber provided
-func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, error) {
-	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
-	if err != nil {
-		return nil, err
-	}
-
-	// return the list of validators
-	return dpos.GetValidators(d.e.ChainDb(), header)
-}
-
 // Validator will return detailed validator's information based on the validator address provided
 func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.BlockNumber) (ValidatorInfo, error) {
 	// based on the block number, get the block header
@@ -64,12 +52,6 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.
 	if err != nil {
 		return ValidatorInfo{}, err
 	}
-
-	// check if the given address is a validator's address
-	if err := dpos.IsValidator(d.e.ChainDb(), header, validatorAddress); err != nil {
-		return ValidatorInfo{}, err
-	}
-
 	// get statedb for retrieving detailed information
 	statedb, err := d.e.BlockChain().StateAt(header.Root)
 	if err != nil {
