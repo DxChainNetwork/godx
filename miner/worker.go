@@ -831,19 +831,21 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		receipts[i] = new(types.Receipt)
 		*receipts[i] = *l
 	}
+
 	s := w.current.state.Copy()
+	d := w.current.dposContext.Copy()
 
 	// maintenance missed storage proof
 	height := w.current.header.Number.Uint64()
 	coinchargemaintenance.MaintenanceMissedProof(height, s)
 
-	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts, w.current.dposContext)
+	block, err := w.engine.Finalize(w.chain, w.current.header, s, w.current.txs, uncles, w.current.receipts, d)
 	if err != nil {
 		return err
 	}
 
 	// fill up dpos context to new block
-	block.SetDposCtx(w.current.dposContext)
+	block.SetDposCtx(d)
 
 	if w.isRunning() {
 		if interval != nil {

@@ -145,6 +145,7 @@ func (dc *DposContext) Copy() *DposContext {
 	candidateTrie := *dc.candidateTrie
 	minedCntTrie := *dc.minedCntTrie
 	return &DposContext{
+		db:            dc.DB(),
 		epochTrie:     &epochTrie,
 		delegateTrie:  &delegateTrie,
 		voteTrie:      &voteTrie,
