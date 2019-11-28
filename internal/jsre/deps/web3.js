@@ -13946,31 +13946,31 @@ module.exports = Web3;
       })
 
 
-      new web3._extend.Method({
+      var applyCandidate = new Method({
         name: 'applyCandidate',
         call: 'dpos_sendApplyCandidateTx',
         params: 1,
-      }),
+      })
 
-      new web3._extend.Method({
+      var cancelCandidate = new Method({
         name: 'cancelCandidate',
         call: 'dpos_sendCancelCandidateTx',
         params: 1,
-        inputFormatter: [web3._extend.formatters.inputAddressFormatter]
-      }),
+        inputFormatter: [formatters.inputAddressFormatter]
+      })
 
-      new web3._extend.Method({
+      var vote = new Method({
         name: 'vote',
         call: 'dpos_sendVoteTx',
         params: 1,
-      }),
+      })
 
-      new web3._extend.Method({
+      var cancelVote = new Method({
         name: 'cancelVote',
         call: 'dpos_sendCancelVoteTx',
         params: 1,
-        inputFormatter: [web3._extend.formatters.inputAddressFormatter]
-      }),
+        inputFormatter: [formatters.inputAddressFormatter]
+      })
 
       return [
         getValidators,
