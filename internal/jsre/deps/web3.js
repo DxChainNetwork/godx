@@ -13991,10 +13991,10 @@ module.exports = Web3;
             getter: 'dpos_getCurrentEpochID',
           }),
   
-          new Property({
-            name: 'validators',
-            getter: 'dpos_getCurrentValidators',
-          }),
+          // new Property({
+          //   name: 'validators',
+          //   getter: 'dpos_getCurrentValidators',
+          // }),
         ];
     };
 
