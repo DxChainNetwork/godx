@@ -13945,12 +13945,43 @@ module.exports = Web3;
           inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
       })
 
+
+      new web3._extend.Method({
+        name: 'applyCandidate',
+        call: 'dpos_sendApplyCandidateTx',
+        params: 1,
+      }),
+
+      new web3._extend.Method({
+        name: 'cancelCandidate',
+        call: 'dpos_sendCancelCandidateTx',
+        params: 1,
+        inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+      }),
+
+      new web3._extend.Method({
+        name: 'vote',
+        call: 'dpos_sendVoteTx',
+        params: 1,
+      }),
+
+      new web3._extend.Method({
+        name: 'cancelVote',
+        call: 'dpos_sendCancelVoteTx',
+        params: 1,
+        inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+      }),
+
       return [
         getValidators,
         getValidatorDetails,
         getCandidates,
         getCandidateDetails,
         getDelegatorDetails,
+        applyCandidate,
+        cancelCandidate,
+        vote,
+        cancelVote,
       ];
     };
 
