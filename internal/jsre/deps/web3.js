@@ -13915,62 +13915,61 @@ module.exports = Web3;
         call: 'dpos_getValidators',
         params: 1,
         inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
-      })
+      });
 
       var getValidatorDetails = new Method({
           name: 'getValidatorDetails',
           call: 'dpos_getValidatorDetails',
           params: 2,
           inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
-      })
+      });
 
       var getCandidates = new Method({
         name: 'getCandidates',
         call: 'dpos_getCandidates',
         params: 1,
         inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
-      })
+      });
 
       var getCandidateDetails = new Method({
         name: 'getCandidateDetails',
         call: 'dpos_getCandidateDetails',
         params: 2,
         inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
-      })
+      });
 
       var getDelegatorDetails = new Method({
           name: 'getDelegatorDetails',
           call: 'dpos_getDelegatorDetails',
           params: 2,
           inputFormatter: [formatters.inputAddressFormatter, formatters.inputDefaultBlockNumberFormatter],
-      })
-
+      });
 
       var applyCandidate = new Method({
         name: 'applyCandidate',
         call: 'dpos_sendApplyCandidateTx',
         params: 1,
-      })
+      });
 
       var cancelCandidate = new Method({
         name: 'cancelCandidate',
         call: 'dpos_sendCancelCandidateTx',
         params: 1,
         inputFormatter: [formatters.inputAddressFormatter]
-      })
+      });
 
       var vote = new Method({
         name: 'vote',
         call: 'dpos_sendVoteTx',
         params: 1,
-      })
+      });
 
       var cancelVote = new Method({
         name: 'cancelVote',
         call: 'dpos_sendCancelVoteTx',
         params: 1,
         inputFormatter: [formatters.inputAddressFormatter]
-      })
+      });
 
       return [
         getValidators,
@@ -13997,7 +13996,7 @@ module.exports = Web3;
             getter: 'dpos_getCurrentValidators',
           }),
         ];
-      };
+    };
 
 
     function dpos(web3){
