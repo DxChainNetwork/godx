@@ -13971,6 +13971,13 @@ module.exports = Web3;
         inputFormatter: [formatters.inputAddressFormatter]
       });
 
+      var getEpochID = new Method({
+        name: 'getEpochID',
+        call: 'dpos_getEpochID',
+        params: 1,
+        inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
+      })
+
       return [
         getValidators,
         getValidatorDetails,
@@ -13981,15 +13988,16 @@ module.exports = Web3;
         cancelCandidate,
         vote,
         cancelVote,
+        getEpochID,
       ];
     };
 
     var properties = function() {
         return [
-          new Property({
-            name: 'epochID',
-            getter: 'dpos_getCurrentEpochID',
-          }),
+          // new Property({
+          //   name: 'epochID',
+          //   getter: 'dpos_getCurrentEpochID',
+          // }),
   
           // new Property({
           //   name: 'validators',
