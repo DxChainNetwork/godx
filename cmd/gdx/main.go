@@ -39,6 +39,8 @@ import (
 	"github.com/DxChainNetwork/godx/node"
 	"github.com/elastic/gosigar"
 	"gopkg.in/urfave/cli.v1"
+
+	_ "net/http/pprof"
 )
 
 const (
