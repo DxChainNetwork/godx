@@ -274,26 +274,26 @@ func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 }
 
 func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHelper validatorHelper) error {
-
-	if d.Mode == ModeFake {
-		seal := header.Extra[len(header.Extra)-extraSeal:]
-		targetValidator, err := vHelper.getValidator()
-		if err != nil {
-			return fmt.Errorf("cannot get validator: %v", err)
-		}
-		if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
-			return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
-		}
-		return nil
-	}
-	validator, err := vHelper.getValidator()
-	if err != nil {
-		return fmt.Errorf("cannot get validator: %v", err)
-	}
-	if err := d.verifyBlockSigner(validator, header); err != nil {
-		return err
-	}
-	return d.updateConfirmedBlockHeader(chain)
+	return nil
+	//if d.Mode == ModeFake {
+	//	seal := header.Extra[len(header.Extra)-extraSeal:]
+	//	targetValidator, err := vHelper.getValidator()
+	//	if err != nil {
+	//		return fmt.Errorf("cannot get validator: %v", err)
+	//	}
+	//	if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
+	//		return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
+	//	}
+	//	return nil
+	//}
+	//validator, err := vHelper.getValidator()
+	//if err != nil {
+	//	return fmt.Errorf("cannot get validator: %v", err)
+	//}
+	//if err := d.verifyBlockSigner(validator, header); err != nil {
+	//	return err
+	//}
+	//return d.updateConfirmedBlockHeader(chain)
 }
 
 func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header) error {

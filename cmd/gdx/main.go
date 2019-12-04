@@ -19,6 +19,7 @@ package main
 
 import (
 	"fmt"
+	slog "log"
 	"math"
 	"os"
 	godebug "runtime/debug"
@@ -40,6 +41,7 @@ import (
 	"github.com/elastic/gosigar"
 	"gopkg.in/urfave/cli.v1"
 
+	"net/http"
 	_ "net/http/pprof"
 )
 
@@ -245,6 +247,9 @@ func init() {
 }
 
 func main() {
+	go func() {
+		slog.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
