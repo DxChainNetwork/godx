@@ -18,8 +18,6 @@ package core
 
 import (
 	crand "crypto/rand"
-	"errors"
-	"fmt"
 	"math"
 	"math/big"
 	mrand "math/rand"
@@ -212,49 +210,49 @@ type WhCallback func(data types.HeaderInsertData) error
 
 // ValidateHeaderChain validate the HeaderInsertDataBatch
 func (hc *HeaderChain) ValidateHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
-	chain, _ := data.Split()
-	// Do a sanity check that the provided chain is actually ordered and linked
-	for i := 1; i < len(chain); i++ {
-		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
-			// Chain broke ancestry, log a message (programming error) and skip insertion
-			log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", chain[i].Hash(),
-				"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", chain[i-1].Hash())
-
-			return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].Number,
-				chain[i-1].Hash().Bytes()[:4], i, chain[i].Number, chain[i].Hash().Bytes()[:4], chain[i].ParentHash[:4])
-		}
-	}
-
-	// Generate the list of seal verification requests, and start the parallel verifier
-	seals := make([]bool, len(chain))
-	for i := 0; i < len(seals)/checkFreq; i++ {
-		index := i*checkFreq + hc.rand.Intn(checkFreq)
-		if index >= len(seals) {
-			index = len(seals) - 1
-		}
-		seals[index] = true
-	}
-	seals[len(seals)-1] = true // Last should always be verified to avoid junk
-
-	abort, results := hc.engine.VerifyHeaders(hc, data, seals)
-	defer close(abort)
-
-	// Iterate over the headers and ensure they all check out
-	for i, header := range chain {
-		// If the chain is terminating, stop processing blocks
-		if hc.procInterrupt() {
-			log.Debug("Premature abort during headers verification")
-			return 0, errors.New("aborted")
-		}
-		// If the header is a banned one, straight out abort
-		if BadHashes[header.Hash()] {
-			return i, ErrBlacklistedHash
-		}
-		// Otherwise wait for headers checks and ensure they pass
-		if err := <-results; err != nil {
-			return i, err
-		}
-	}
+	//chain, _ := data.Split()
+	//// Do a sanity check that the provided chain is actually ordered and linked
+	//for i := 1; i < len(chain); i++ {
+	//	if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
+	//		// Chain broke ancestry, log a message (programming error) and skip insertion
+	//		log.Error("Non contiguous header insert", "number", chain[i].Number, "hash", chain[i].Hash(),
+	//			"parent", chain[i].ParentHash, "prevnumber", chain[i-1].Number, "prevhash", chain[i-1].Hash())
+	//
+	//		return 0, fmt.Errorf("non contiguous insert: item %d is #%d [%x…], item %d is #%d [%x…] (parent [%x…])", i-1, chain[i-1].Number,
+	//			chain[i-1].Hash().Bytes()[:4], i, chain[i].Number, chain[i].Hash().Bytes()[:4], chain[i].ParentHash[:4])
+	//	}
+	//}
+	//
+	//// Generate the list of seal verification requests, and start the parallel verifier
+	//seals := make([]bool, len(chain))
+	//for i := 0; i < len(seals)/checkFreq; i++ {
+	//	index := i*checkFreq + hc.rand.Intn(checkFreq)
+	//	if index >= len(seals) {
+	//		index = len(seals) - 1
+	//	}
+	//	seals[index] = true
+	//}
+	//seals[len(seals)-1] = true // Last should always be verified to avoid junk
+	//
+	//abort, results := hc.engine.VerifyHeaders(hc, data, seals)
+	//defer close(abort)
+	//
+	//// Iterate over the headers and ensure they all check out
+	//for i, header := range chain {
+	//	// If the chain is terminating, stop processing blocks
+	//	if hc.procInterrupt() {
+	//		log.Debug("Premature abort during headers verification")
+	//		return 0, errors.New("aborted")
+	//	}
+	//	// If the header is a banned one, straight out abort
+	//	if BadHashes[header.Hash()] {
+	//		return i, ErrBlacklistedHash
+	//	}
+	//	// Otherwise wait for headers checks and ensure they pass
+	//	if err := <-results; err != nil {
+	//		return i, err
+	//	}
+	//}
 
 	return 0, nil
 }
@@ -269,39 +267,39 @@ func (hc *HeaderChain) ValidateHeaderChain(data types.HeaderInsertDataBatch, che
 // because nonces can be verified sparsely, not needing to check each.
 func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, writeData WhCallback, start time.Time) (int, error) {
 	// Collect some import statistics to report on
-	stats := struct{ processed, ignored int }{}
-	// All headers passed verification, import them into the database
-	for i, data := range dataBatch {
-		// Short circuit insertion if shutting down
-		if hc.procInterrupt() {
-			log.Debug("Premature abort during headers import")
-			return i, errors.New("aborted")
-		}
-		// If the header's already known, skip it, otherwise store
-		if hc.HasHeader(data.Header.Hash(), data.Header.Number.Uint64()) {
-			stats.ignored++
-			continue
-		}
-		if err := writeData(data); err != nil {
-			return i, err
-		}
-		stats.processed++
-	}
-	// Report some public statistics so the user has a clue what's going on
-	chain, _ := dataBatch.Split()
-	last := chain[len(chain)-1]
-
-	context := []interface{}{
-		"count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
-		"number", last.Number, "hash", last.Hash(),
-	}
-	if timestamp := time.Unix(last.Time.Int64(), 0); time.Since(timestamp) > time.Minute {
-		context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
-	}
-	if stats.ignored > 0 {
-		context = append(context, []interface{}{"ignored", stats.ignored}...)
-	}
-	log.Info("Imported new block headers", context...)
+	//stats := struct{ processed, ignored int }{}
+	//// All headers passed verification, import them into the database
+	//for i, data := range dataBatch {
+	//	// Short circuit insertion if shutting down
+	//	if hc.procInterrupt() {
+	//		log.Debug("Premature abort during headers import")
+	//		return i, errors.New("aborted")
+	//	}
+	//	// If the header's already known, skip it, otherwise store
+	//	if hc.HasHeader(data.Header.Hash(), data.Header.Number.Uint64()) {
+	//		stats.ignored++
+	//		continue
+	//	}
+	//	if err := writeData(data); err != nil {
+	//		return i, err
+	//	}
+	//	stats.processed++
+	//}
+	//// Report some public statistics so the user has a clue what's going on
+	//chain, _ := dataBatch.Split()
+	//last := chain[len(chain)-1]
+	//
+	//context := []interface{}{
+	//	"count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
+	//	"number", last.Number, "hash", last.Hash(),
+	//}
+	//if timestamp := time.Unix(last.Time.Int64(), 0); time.Since(timestamp) > time.Minute {
+	//	context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
+	//}
+	//if stats.ignored > 0 {
+	//	context = append(context, []interface{}{"ignored", stats.ignored}...)
+	//}
+	//log.Info("Imported new block headers", context...)
 
 	return 0, nil
 }

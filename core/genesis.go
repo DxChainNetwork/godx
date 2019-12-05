@@ -228,23 +228,23 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		db = ethdb.NewMemDatabase()
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
-	for addr, account := range g.Alloc {
-		statedb.AddBalance(addr, account.Balance)
-		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce)
-		for key, value := range account.Storage {
-			statedb.SetState(addr, key, value)
-		}
-	}
-
-	// init genesis block dpos context
-	dposContext, err := initGenesisDposContext(statedb, g, db)
-	if err != nil {
-		panic(err)
-	}
+	//statedb, _ := state.New(common.Hash{}, state.NewDatabase(db))
+	//for addr, account := range g.Alloc {
+	//	statedb.AddBalance(addr, account.Balance)
+	//	statedb.SetCode(addr, account.Code)
+	//	statedb.SetNonce(addr, account.Nonce)
+	//	for key, value := range account.Storage {
+	//		statedb.SetState(addr, key, value)
+	//	}
+	//}
+	//
+	//// init genesis block dpos context
+	//dposContext, err := initGenesisDposContext(statedb, g, db)
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	root := statedb.IntermediateRoot(false)
-	dcProto := dposContext.ToRoot()
 	head := &types.Header{
 		Number:      new(big.Int).SetUint64(g.Number),
 		Nonce:       types.EncodeNonce(g.Nonce),
@@ -257,7 +257,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		MixDigest:   g.Mixhash,
 		Coinbase:    g.Coinbase,
 		Root:        root,
-		DposContext: dcProto,
+		DposContext: &types.DposContextRoot{},
 	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
@@ -265,13 +265,13 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	if g.Difficulty == nil {
 		head.Difficulty = params.GenesisDifficulty
 	}
-	_, err = statedb.Commit(false)
+	_, err := statedb.Commit(false)
 	if err != nil {
 		panic(err)
 	}
-	if _, err = dposContext.Commit(); err != nil {
-		panic(err)
-	}
+	//if _, err = dposContext.Commit(); err != nil {
+	//	panic(err)
+	//}
 
 	err = statedb.Database().TrieDB().Commit(root, true)
 	if err != nil {
@@ -279,7 +279,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	}
 
 	block := types.NewBlock(head, nil, nil, nil)
-	block.SetDposCtx(dposContext)
+	//block.SetDposCtx(dposContext)
 
 	return block
 }

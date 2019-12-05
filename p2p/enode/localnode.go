@@ -280,5 +280,5 @@ func (ln *LocalNode) sign() {
 // Increase the local node sequence by 1 and stores it into db
 func (ln *LocalNode) bumpSeq() {
 	ln.seq++
-	ln.db.storeLocalSeq(ln.id, ln.seq)
+	//ln.db.storeLocalSeq(ln.id, ln.seq)
 }

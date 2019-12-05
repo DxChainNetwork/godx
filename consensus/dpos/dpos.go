@@ -140,6 +140,7 @@ func (d *Dpos) VerifyHeader(chain consensus.ChainReader, header *types.Header, s
 func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, validators []common.Address,
 	parents []*types.Header) error {
 
+	log.Error("verifying Header")
 	if d.Mode == ModeFake {
 		var parent *types.Header
 		if len(parents) > 0 {
@@ -266,6 +267,7 @@ func (d *Dpos) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
 func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+	log.Error("verifying seal")
 	validatorGetter, err := newDBVHelperNoParent(chain, d.db, header)
 	if err != nil {
 		return err
@@ -274,26 +276,26 @@ func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 }
 
 func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHelper validatorHelper) error {
-	return nil
-	//if d.Mode == ModeFake {
-	//	seal := header.Extra[len(header.Extra)-extraSeal:]
-	//	targetValidator, err := vHelper.getValidator()
-	//	if err != nil {
-	//		return fmt.Errorf("cannot get validator: %v", err)
-	//	}
-	//	if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
-	//		return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
-	//	}
-	//	return nil
-	//}
-	//validator, err := vHelper.getValidator()
-	//if err != nil {
-	//	return fmt.Errorf("cannot get validator: %v", err)
-	//}
-	//if err := d.verifyBlockSigner(validator, header); err != nil {
-	//	return err
-	//}
-	//return d.updateConfirmedBlockHeader(chain)
+
+	if d.Mode == ModeFake {
+		seal := header.Extra[len(header.Extra)-extraSeal:]
+		targetValidator, err := vHelper.getValidator()
+		if err != nil {
+			return fmt.Errorf("cannot get validator: %v", err)
+		}
+		if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
+			return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
+		}
+		return nil
+	}
+	validator, err := vHelper.getValidator()
+	if err != nil {
+		return fmt.Errorf("cannot get validator: %v", err)
+	}
+	if err := d.verifyBlockSigner(validator, header); err != nil {
+		return err
+	}
+	return d.updateConfirmedBlockHeader(chain)
 }
 
 func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header) error {
@@ -340,6 +342,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 		validatorMap[curHeader.Validator] = true
 		if len(validatorMap) >= ConsensusSize {
 			d.confirmedBlockHeader = curHeader
+			log.Error("updating confirmed block")
 			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
 				return err
 			}
@@ -357,6 +360,7 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 
 // load the latest confirmed block from the database
 func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
+	log.Error("loading confirmed block header")
 	key, err := d.db.Get(confirmedBlockHead)
 	if err != nil {
 		return nil, err
@@ -441,6 +445,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
+	fmt.Println("finalizing ...")
 	accumulateRewards(chain.Config(), state, header, d.db, genesis)
 
 	//if d.Mode == ModeFake {
@@ -492,6 +497,8 @@ func (d *Dpos) checkDeadline(lastBlock *types.Block, now int64) error {
 
 // CheckValidator check the given block whether has a right validator to produce
 func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
+
+	log.Error("================================================= checking validator")
 	if d.Mode == ModeFake {
 		return nil
 	}

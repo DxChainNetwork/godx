@@ -122,7 +122,7 @@ func newLightFetcher(pm *ProtocolManager) *lightFetcher {
 	pm.peers.notify(f)
 
 	f.pm.wg.Add(1)
-	go f.syncLoop()
+	//go f.syncLoop()
 	return f
 }
 

@@ -122,7 +122,7 @@ func (odr *LesOdr) Retrieve(ctx context.Context, req light.OdrRequest) (err erro
 
 	if err = odr.retriever.retrieve(ctx, reqID, rq, func(p distPeer, msg *Msg) error { return lreq.Validate(odr.db, msg) }, odr.stop); err == nil {
 		// retrieved from network, store in db
-		req.StoreResult(odr.db)
+		//req.StoreResult(odr.db)
 	} else {
 		log.Debug("Failed to retrieve data from network", "err", err)
 	}
