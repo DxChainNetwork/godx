@@ -54,10 +54,9 @@ type Dpos struct {
 	config *params.DposConfig // Consensus engine configuration parameters
 	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
-	signer               common.Address
-	signFn               SignerFn
-	signatures           *lru.ARCCache // Signatures of recent blocks to speed up mining
-	confirmedBlockHeader *types.Header
+	signer     common.Address
+	signFn     SignerFn
+	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 
 	mu   sync.RWMutex
 	stop chan bool
@@ -310,51 +309,6 @@ func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header)
 	return nil
 }
 
-// updateConfirmedBlockHeader update the newest confirmed block
-func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
-	if d.confirmedBlockHeader == nil {
-		header, err := d.loadConfirmedBlockHeader(chain)
-		if err != nil {
-			header = chain.GetHeaderByNumber(0)
-			if header == nil {
-				return err
-			}
-		}
-		d.confirmedBlockHeader = header
-	}
-
-	curHeader := chain.CurrentHeader()
-
-	validatorMap := make(map[common.Address]bool)
-	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
-		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-
-		// fast return
-		// if block number difference less consensusSize-witnessNum,
-		// there is no need to check block is confirmed
-		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
-			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
-			return nil
-		}
-
-		validatorMap[curHeader.Validator] = true
-		if len(validatorMap) >= ConsensusSize {
-			d.confirmedBlockHeader = curHeader
-			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
-				return err
-			}
-			log.Debug("Dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
-			return nil
-		}
-
-		curHeader = chain.GetHeaderByHash(curHeader.ParentHash)
-		if curHeader == nil {
-			return ErrNilBlockHeader
-		}
-	}
-	return nil
-}
-
 // load the latest confirmed block from the database
 func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
 	key, err := d.db.Get(confirmedBlockHead)
@@ -366,11 +320,6 @@ func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Hea
 		return nil, ErrNilBlockHeader
 	}
 	return header, nil
-}
-
-// inserts the confirmed block into the database.
-func (d *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
-	return db.Put(confirmedBlockHead, d.confirmedBlockHeader.Hash().Bytes())
 }
 
 // Prepare implements consensus.Engine, assembly some basic fields into header
