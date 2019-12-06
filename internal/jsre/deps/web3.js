@@ -5506,6 +5506,10 @@ var properties = function () {
         new Property({
             name: 'protocolVersion',
             getter: 'eth_protocolVersion'
+        }),
+        new Property({
+            name: 'confirmedBlockNumber',
+            getter: 'eth_getConfirmedBlockNumber',
         })
     ];
 };

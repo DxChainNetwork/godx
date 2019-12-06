@@ -1853,6 +1853,11 @@ func (bc *BlockChain) GetHeaderAndValidatorsByHash(hash common.Hash) (types.Head
 	return headerToHeaderInsertData(bc, header)
 }
 
+// GetConfirmedBlockNumber get confirmed block number
+func (bc *BlockChain) GetConfirmedBlockNumber() uint64 {
+	return bc.hc.GetConfirmedBlockNumber()
+}
+
 // GetHeaderAndValidators get headers and validators with the given hash and number
 func (bc *BlockChain) GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error) {
 	header := bc.GetHeader(hash, number)

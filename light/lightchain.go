@@ -576,6 +576,11 @@ func (lc *LightChain) GetHeaderAndValidators(hash common.Hash, number uint64) (t
 	return headerToHeaderInsertData(lc, header)
 }
 
+// GetConfirmedBlockNumber get the confirmed block number
+func (lc *LightChain) GetConfirmedBlockNumber() uint64 {
+	return lc.hc.GetConfirmedBlockNumber()
+}
+
 func headerToHeaderInsertData(lc *LightChain, header *types.Header) (types.HeaderInsertData, error) {
 	validators, err := lc.getValidatorsByHeader(header)
 	if err != nil {

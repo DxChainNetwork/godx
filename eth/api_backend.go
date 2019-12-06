@@ -51,6 +51,11 @@ func (b *EthAPIBackend) CurrentBlock() *types.Block {
 	return b.eth.blockchain.CurrentBlock()
 }
 
+// GetConfirmedBlockNumber get confirmed block number
+func (b *EthAPIBackend) GetConfirmedBlockNumber() uint64 {
+	return b.eth.blockchain.GetConfirmedBlockNumber()
+}
+
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)

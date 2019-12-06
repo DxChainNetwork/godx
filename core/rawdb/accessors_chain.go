@@ -356,6 +356,33 @@ func DeleteBlock(db DatabaseDeleter, hash common.Hash, number uint64) {
 	DeleteTd(db, hash, number)
 }
 
+// WriteConfirmedBlockNumber write the confirmed block number to database
+func WriteConfirmedBlockNumber(db DatabaseWriter, blockNumber uint64) {
+	value := make([]byte, 8)
+	binary.LittleEndian.PutUint64(value, blockNumber)
+
+	if err := db.Put(ConfirmedBlockNumberKey, value); err != nil {
+		log.Crit("Failed to store confirmed block number", "err", err)
+	}
+}
+
+// ReadConfirmedBlockNumber read the confirmed block number from the database
+func ReadConfirmedBlockNumber(db DatabaseReader) uint64 {
+	if has, err := db.Has(ConfirmedBlockNumberKey); err != nil {
+		log.Error("Failed to check has confirmed block number", "err", err)
+		return 0
+	} else if !has {
+		return 0
+	}
+	valueBytes, err := db.Get(ConfirmedBlockNumberKey)
+	if err != nil {
+		log.Error("Failed to get confirmed block number", "err", err)
+		return 0
+	}
+	bn := binary.LittleEndian.Uint64(valueBytes)
+	return bn
+}
+
 // FindCommonAncestor returns the last common ancestor of two block headers
 func FindCommonAncestor(db DatabaseReader, a, b *types.Header) *types.Header {
 	for bn := b.Number.Uint64(); a.Number.Uint64() > bn; {
