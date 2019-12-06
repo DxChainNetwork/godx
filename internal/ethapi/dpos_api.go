@@ -32,7 +32,7 @@ func (d *PublicDposAPI) GetCurrentValidators() ([]common.Address, error) {
 	return d.GetValidators(rpc.LatestBlockNumber)
 }
 
-// Validators returns a list of validators based on the blockNumber provided
+// GetValidators returns a list of validators based on the blockNumber provided
 func (d *PublicDposAPI) GetValidators(blockNr rpc.BlockNumber) ([]common.Address, error) {
 	_, dposCtx, _, err := d.stateDposCtxAndHeaderByNumber(blockNr)
 	if err != nil {
@@ -41,7 +41,7 @@ func (d *PublicDposAPI) GetValidators(blockNr rpc.BlockNumber) ([]common.Address
 	return dposCtx.GetValidators()
 }
 
-// Validator returns a detailed info about the validator address provided.
+// GetValidatorDetails returns a detailed info about the validator address provided.
 func (d *PublicDposAPI) GetValidatorDetails(address common.Address, blockNr rpc.BlockNumber) (dpos.ValidatorInfo, error) {
 	statedb, dposCtx, header, err := d.stateDposCtxAndHeaderByNumber(blockNr)
 	if err != nil {
@@ -50,7 +50,7 @@ func (d *PublicDposAPI) GetValidatorDetails(address common.Address, blockNr rpc.
 	return dpos.GetValidatorInfo(statedb, dposCtx, header, address)
 }
 
-// Candidates returns a list of candidates information based on the blockNumber provided
+// GetCandidates returns a list of candidates information based on the blockNumber provided
 func (d *PublicDposAPI) GetCandidates(blockNr rpc.BlockNumber) ([]common.Address, error) {
 	_, dposCtx, _, err := d.stateDposCtxAndHeaderByNumber(blockNr)
 	if err != nil {
@@ -59,7 +59,7 @@ func (d *PublicDposAPI) GetCandidates(blockNr rpc.BlockNumber) ([]common.Address
 	return dposCtx.GetCandidates()
 }
 
-// Candidate returns detailed candidate's information based on the candidate address provided
+// GetCandidateDetails returns detailed candidate's information based on the candidate address provided
 func (d *PublicDposAPI) GetCandidateDetails(address common.Address, blockNr rpc.BlockNumber) (dpos.CandidateInfo, error) {
 	statedb, dposCtx, _, err := d.stateDposCtxAndHeaderByNumber(blockNr)
 	if err != nil {
@@ -82,7 +82,7 @@ func (d *PublicDposAPI) GetCurrentEpochID() (int64, error) {
 	return d.GetEpochID(rpc.LatestBlockNumber)
 }
 
-// EpochID  calculates the epoch id based on the block number provided
+// GetEpochID calculates the epoch id based on the block number provided
 func (d *PublicDposAPI) GetEpochID(blockNr rpc.BlockNumber) (int64, error) {
 	_, _, header, err := d.stateDposCtxAndHeaderByNumber(blockNr)
 	if err != nil {
