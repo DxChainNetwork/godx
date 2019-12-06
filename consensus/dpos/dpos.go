@@ -292,7 +292,7 @@ func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHe
 	if err := d.verifyBlockSigner(validator, header); err != nil {
 		return err
 	}
-	return d.updateConfirmedBlockHeader(chain)
+	return nil
 }
 
 func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header) error {
