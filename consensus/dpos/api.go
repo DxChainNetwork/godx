@@ -6,13 +6,11 @@ package dpos
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // API is a user facing RPC API to allow controlling the delegate and voting
@@ -44,27 +42,6 @@ type DelegatorInfo struct {
 	Delegator common.Address   `json:"delegator"`
 	Deposit   common.BigInt    `json:"deposit"`
 	Votes     []common.Address `json:"votes"`
-}
-
-// GetConfirmedBlockNumber retrieves the latest irreversible block
-func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
-	var err error
-	header := api.dpos.confirmedBlockHeader
-	if header == nil {
-		header, err = api.dpos.loadConfirmedBlockHeader(api.chain)
-		if err != nil {
-
-			// if it's leveldb.ErrNotFound, indicates that only genesis block in local, and return 0
-			if err == leveldb.ErrNotFound {
-				return new(big.Int).SetInt64(0), nil
-			}
-
-			// other errors, return nil
-			return nil, err
-		}
-	}
-
-	return header.Number, nil
 }
 
 // GetValidatorInfo will return the detailed validator information
