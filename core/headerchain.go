@@ -331,27 +331,22 @@ func (hc *HeaderChain) updateConfirmedBlockNumber(header *types.Header) {
 		vMap       = make(map[common.Address]bool)
 		nextHeader *types.Header
 	)
-	log.Error("updating confirmed block number", "curNumber", curNumber, "prev", prevConfirmedNum)
 	for curNumber >= prevConfirmedNum+dpos.ConsensusSize-uint64(len(vMap)) && curNumber > 0 {
 		vMap[curHeader.Validator] = true
 		if len(vMap) >= dpos.ConsensusSize {
 			if curNumber <= hc.GetConfirmedBlockNumber() {
-				log.Error("current number smaller")
 				return
 			}
 			hc.writeConfirmedBlockNumber(curNumber)
-			log.Error("New confirmed block", "number", curNumber, "hash", curHeader.Hash())
+			log.Debug("New confirmed block", "number", curNumber, "hash", curHeader.Hash())
 			return
 		}
 		nextHeader = hc.GetHeader(curHeader.ParentHash, curNumber-1)
 		if nextHeader == nil {
-			log.Error("Update confirmed block number reached unknown block", "hash", curHeader.Hash(), "number", curNumber-1)
 			return
 		}
-		log.Error("continue to next header", "hash", nextHeader.Hash(), "number", nextHeader.Number.Uint64())
 		curHeader, curNumber = nextHeader, nextHeader.Number.Uint64()
 	}
-	log.Error("returning")
 	return
 }
 
