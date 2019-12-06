@@ -10,12 +10,10 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
-	"time"
 
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
-	"github.com/DxChainNetwork/godx/consensus/misc"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -25,7 +23,7 @@ import (
 	"github.com/DxChainNetwork/godx/rlp"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/trie"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -140,70 +138,72 @@ func (d *Dpos) VerifyHeader(chain consensus.ChainReader, header *types.Header, s
 func (d *Dpos) verifyHeader(chain consensus.ChainReader, header *types.Header, validators []common.Address,
 	parents []*types.Header) error {
 
-	if d.Mode == ModeFake {
-		var parent *types.Header
-		if len(parents) > 0 {
-			parent = parents[len(parents)-1]
-		} else {
-			parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-		}
-		if parent == nil || parent.Number.Uint64() != header.Number.Uint64()-1 || parent.Hash() != header.ParentHash {
-			return consensus.ErrUnknownAncestor
-		}
-		return nil
-	}
+	return nil
 
-	if header.Number == nil {
-		return errUnknownBlock
-	}
-	number := header.Number.Uint64()
-	// Unnecessary to verify the block from feature
-	if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
-		return consensus.ErrFutureBlock
-	}
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
-	}
-	if len(header.Extra) < extraVanity+extraSeal {
-		return errMissingSignature
-	}
-	// Ensure that the mix digest is zero as we don't have fork protection currently
-	if header.MixDigest != (common.Hash{}) {
-		return errInvalidMixDigest
-	}
-	// Difficulty always 1
-	if header.Difficulty.Uint64() != 1 {
-		return errInvalidDifficulty
-	}
-	// Ensure that the block doesn't contain any uncles which are meaningless in DPoS
-	if header.UncleHash != uncleHash {
-		return errInvalidUncleHash
-	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
-		return err
-	}
-
-	var parent *types.Header
-	if len(parents) > 0 {
-		parent = parents[len(parents)-1]
-	} else {
-		parent = chain.GetHeader(header.ParentHash, number-1)
-	}
-	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
-		return consensus.ErrUnknownAncestor
-	}
-	if parent.Time.Uint64()+uint64(BlockInterval) > header.Time.Uint64() {
-		return ErrInvalidTimestamp
-	}
-	var vGetter validatorHelper
-	if len(validators) != 0 {
-		vGetter = newVHelper(validators, header)
-	} else {
-		vGetter = newDBVHelper(d.db, parent, header)
-	}
-	return d.verifySeal(chain, header, vGetter)
+	//if d.Mode == ModeFake {
+	//	var parent *types.Header
+	//	if len(parents) > 0 {
+	//		parent = parents[len(parents)-1]
+	//	} else {
+	//		parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+	//	}
+	//	if parent == nil || parent.Number.Uint64() != header.Number.Uint64()-1 || parent.Hash() != header.ParentHash {
+	//		return consensus.ErrUnknownAncestor
+	//	}
+	//	return nil
+	//}
+	//
+	//if header.Number == nil {
+	//	return errUnknownBlock
+	//}
+	//number := header.Number.Uint64()
+	//// Unnecessary to verify the block from feature
+	//if header.Time.Cmp(big.NewInt(time.Now().Unix())) > 0 {
+	//	return consensus.ErrFutureBlock
+	//}
+	//// Check that the extra-data contains both the vanity and signature
+	//if len(header.Extra) < extraVanity {
+	//	return errMissingVanity
+	//}
+	//if len(header.Extra) < extraVanity+extraSeal {
+	//	return errMissingSignature
+	//}
+	//// Ensure that the mix digest is zero as we don't have fork protection currently
+	//if header.MixDigest != (common.Hash{}) {
+	//	return errInvalidMixDigest
+	//}
+	//// Difficulty always 1
+	//if header.Difficulty.Uint64() != 1 {
+	//	return errInvalidDifficulty
+	//}
+	//// Ensure that the block doesn't contain any uncles which are meaningless in DPoS
+	//if header.UncleHash != uncleHash {
+	//	return errInvalidUncleHash
+	//}
+	//// If all checks passed, validate any special fields for hard forks
+	//if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
+	//	return err
+	//}
+	//
+	//var parent *types.Header
+	//if len(parents) > 0 {
+	//	parent = parents[len(parents)-1]
+	//} else {
+	//	parent = chain.GetHeader(header.ParentHash, number-1)
+	//}
+	//if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+	//	return consensus.ErrUnknownAncestor
+	//}
+	//if parent.Time.Uint64()+uint64(BlockInterval) > header.Time.Uint64() {
+	//	return ErrInvalidTimestamp
+	//}
+	//var vGetter validatorHelper
+	//if len(validators) != 0 {
+	//	vGetter = newVHelper(validators, header)
+	//} else {
+	//	vGetter = newDBVHelper(d.db, parent, header)
+	//}
+	//return d.verifySeal(chain, header, vGetter)
 }
 
 // VerifyHeaders verify a batch of headers. The input validatorsSet is the new validators

@@ -884,11 +884,9 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64, pivot uint64) 
 
 		if skeleton {
 			p.log.Trace("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
-			fmt.Println("Fetching skeleton headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from+uint64(MaxHeaderFetch)-1, MaxSkeletonSize, MaxHeaderFetch-1, false)
 		} else {
 			p.log.Trace("Fetching full headers", "count", MaxHeaderFetch, "from", from)
-			fmt.Println("Fetching full headers", "count", MaxHeaderFetch, "from", from)
 			go p.peer.RequestHeaderInsertDataBatchByNumber(from, MaxHeaderFetch, 0, false)
 		}
 	}
@@ -1381,7 +1379,6 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 				return nil
 			}
 
-			log.Error("processing header data batch", "start number", headers[0].Number, "end number", headers[len(headers)-1].Number, "size", len(headers))
 			// Otherwise split the chunk of headers into batches and process them
 			gotHeaders = true
 
