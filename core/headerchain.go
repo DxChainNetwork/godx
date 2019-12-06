@@ -197,14 +197,20 @@ func (hc *HeaderChain) WriteHeader(header *types.Header) (status WriteStatus, er
 	return
 }
 
+// WriteValidators write validators to the underlying database
+func (hc *HeaderChain) WriteValidators(validators []common.Address) error {
+	return types.SaveValidators(validators, hc.chainDb)
+}
+
 // WhCallback is a callback function for inserting individual headers.
 // A callback is used for two reasons: first, in a LightChain, status should be
 // processed and light chain events sent, while in a BlockChain this is not
 // necessary since chain events are sent after inserting blocks. Second, the
 // header writes should be protected by the parent chain mutex individually.
-type WhCallback func(*types.Header) error
+type WhCallback func(data types.HeaderInsertData) error
 
-func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (hc *HeaderChain) ValidateHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
+	chain, _ := data.Split()
 	// Do a sanity check that the provided chain is actually ordered and linked
 	for i := 1; i < len(chain); i++ {
 		if chain[i].Number.Uint64() != chain[i-1].Number.Uint64()+1 || chain[i].ParentHash != chain[i-1].Hash() {
@@ -228,7 +234,7 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 	}
 	seals[len(seals)-1] = true // Last should always be verified to avoid junk
 
-	abort, results := hc.engine.VerifyHeaders(hc, chain, seals)
+	abort, results := hc.engine.VerifyHeaders(hc, data, seals)
 	defer close(abort)
 
 	// Iterate over the headers and ensure they all check out
@@ -259,27 +265,28 @@ func (hc *HeaderChain) ValidateHeaderChain(chain []*types.Header, checkFreq int)
 // should be done or not. The reason behind the optional check is because some
 // of the header retrieval mechanisms already need to verfy nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
-func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, writeHeader WhCallback, start time.Time) (int, error) {
+func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, writeData WhCallback, start time.Time) (int, error) {
 	// Collect some import statistics to report on
 	stats := struct{ processed, ignored int }{}
 	// All headers passed verification, import them into the database
-	for i, header := range chain {
+	for i, data := range dataBatch {
 		// Short circuit insertion if shutting down
 		if hc.procInterrupt() {
 			log.Debug("Premature abort during headers import")
 			return i, errors.New("aborted")
 		}
 		// If the header's already known, skip it, otherwise store
-		if hc.HasHeader(header.Hash(), header.Number.Uint64()) {
+		if hc.HasHeader(data.Header.Hash(), data.Header.Number.Uint64()) {
 			stats.ignored++
 			continue
 		}
-		if err := writeHeader(header); err != nil {
+		if err := writeData(data); err != nil {
 			return i, err
 		}
 		stats.processed++
 	}
 	// Report some public statistics so the user has a clue what's going on
+	chain, _ := dataBatch.Split()
 	last := chain[len(chain)-1]
 
 	context := []interface{}{

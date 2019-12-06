@@ -21,6 +21,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
+	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/log"
 )
@@ -80,43 +81,45 @@ func (st *insertStats) report(chain []*types.Block, index int, cache common.Stor
 
 // insertIterator is a helper to assist during chain import.
 type insertIterator struct {
-	chain     types.Blocks
-	results   <-chan error
+	chain     consensus.ChainReader
+	blocks    types.Blocks
 	index     int
 	validator Validator
+	engine    consensus.Engine
 }
 
 // newInsertIterator creates a new iterator based on the given blocks, which are
 // assumed to be a contiguous chain.
-func newInsertIterator(chain types.Blocks, results <-chan error, validator Validator) *insertIterator {
+func newInsertIterator(chain consensus.ChainReader, blocks types.Blocks, validator Validator, engine consensus.Engine) *insertIterator {
 	return &insertIterator{
 		chain:     chain,
-		results:   results,
+		blocks:    blocks,
 		index:     -1,
 		validator: validator,
+		engine:    engine,
 	}
 }
 
 // next returns the next block in the iterator, along with any potential validation
 // error for that block. When the end is reached, it will return (nil, nil).
 func (it *insertIterator) next() (*types.Block, error) {
-	if it.index+1 >= len(it.chain) {
-		it.index = len(it.chain)
+	if it.index+1 >= len(it.blocks) {
+		it.index = len(it.blocks)
 		return nil, nil
 	}
 	it.index++
-	if err := <-it.results; err != nil {
-		return it.chain[it.index], err
+	if err := it.engine.VerifyHeader(it.chain, it.blocks[it.index].Header(), true); err != nil {
+		return it.blocks[it.index], err
 	}
-	return it.chain[it.index], it.validator.ValidateBody(it.chain[it.index])
+	return it.blocks[it.index], it.validator.ValidateBody(it.blocks[it.index])
 }
 
 // current returns the current block that's being processed.
 func (it *insertIterator) current() *types.Block {
-	if it.index < 0 || it.index+1 >= len(it.chain) {
+	if it.index < 0 || it.index+1 >= len(it.blocks) {
 		return nil
 	}
-	return it.chain[it.index]
+	return it.blocks[it.index]
 }
 
 // previous returns the previous block was being processed, or nil
@@ -124,17 +127,17 @@ func (it *insertIterator) previous() *types.Block {
 	if it.index < 1 {
 		return nil
 	}
-	return it.chain[it.index-1]
+	return it.blocks[it.index-1]
 }
 
 // first returns the first block in the it.
 func (it *insertIterator) first() *types.Block {
-	return it.chain[0]
+	return it.blocks[0]
 }
 
 // remaining returns the number of remaining blocks.
 func (it *insertIterator) remaining() int {
-	return len(it.chain) - it.index
+	return len(it.blocks) - it.index
 }
 
 // processed returns the number of processed blocks.

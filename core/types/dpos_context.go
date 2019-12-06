@@ -550,10 +550,18 @@ func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = mine
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
+	return GetValidatorsFromDposTrie(dc.epochTrie)
+}
+
+// GetValidatorsFromDposTrie get the list of validators from the trie
+func GetValidatorsFromDposTrie(t DposTrie) ([]common.Address, error) {
 	var validators []common.Address
-	validatorsRLP, err := dc.epochTrie.TryGet(keyValidator)
+	validatorsRLP, err := t.TryGet(keyValidator)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get validator: %v", err)
+	}
+	if len(validatorsRLP) == 0 {
+		return nil, fmt.Errorf("empty value for validators, make sure opening the epoch trie")
 	}
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
@@ -574,6 +582,19 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 		return fmt.Errorf("failed to set validator: %v", err)
 	}
 	return nil
+}
+
+// SaveValidators save the validators to db as a trie
+func SaveValidators(validators []common.Address, db ethdb.Database) error {
+	dposCtx, err := NewDposContext(NewFullDposDatabase(db))
+	if err != nil {
+		return err
+	}
+	if err = dposCtx.SetValidators(validators); err != nil {
+		return err
+	}
+	_, err = dposCtx.Commit()
+	return err
 }
 
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
@@ -690,4 +711,41 @@ func (data *VoteTxData) DecodeRLP(s *rlp.Stream) error {
 	}
 	data.Deposit, data.Candidates = common.PtrBigInt(rlpData.Deposit), rlpData.Candidates
 	return nil
+}
+
+// HeaderInsertData is the data structure necessary for header insertion
+type HeaderInsertData struct {
+	Header     *Header
+	Validators []common.Address
+}
+
+// HeaderInsertDataBatch is a batch of HeaderInsertData
+type HeaderInsertDataBatch []HeaderInsertData
+
+// NewHeaderInsertDataBatch return the new HeaderInsertDataBatch
+func NewHeaderInsertDataBatch(headers []*Header, validators [][]common.Address) HeaderInsertDataBatch {
+	if len(validators) == 0 {
+		validators = make([][]common.Address, len(headers))
+	}
+	var data HeaderInsertDataBatch
+	for i, header := range headers {
+		data = append(data, HeaderInsertData{
+			Header:     header,
+			Validators: validators[i],
+		})
+	}
+	return data
+}
+
+// Split split the HeaderInsertDataBatch to two slices:
+// One as a slice of Header, another a slice of validators
+func (hidb HeaderInsertDataBatch) Split() ([]*Header, [][]common.Address) {
+	size := len(hidb)
+	headers := make([]*Header, 0, size)
+	validatorsSet := make([][]common.Address, 0, size)
+	for _, hid := range hidb {
+		headers = append(headers, hid.Header)
+		validatorsSet = append(validatorsSet, hid.Validators)
+	}
+	return headers, validatorsSet
 }

@@ -226,13 +226,15 @@ func allDelegatorForValidators(ctx *types.DposContext, validators []common.Addre
 // lookupValidator returns the validator responsible for producing the block in the curTime.
 // If not a valid timestamp, an error is returned
 func (ec *EpochContext) lookupValidator(blockTime int64) (validator common.Address, err error) {
-	validator = common.Address{}
-	slot, err := calcBlockSlot(blockTime)
+	validators, err := ec.DposContext.GetValidators()
 	if err != nil {
 		return common.Address{}, err
 	}
-	// Get validators and the expected validator
-	validators, err := ec.DposContext.GetValidators()
+	return lookupValidator(blockTime, validators)
+}
+
+func lookupValidator(blockTime int64, validators []common.Address) (validator common.Address, err error) {
+	slot, err := calcBlockSlot(blockTime)
 	if err != nil {
 		return common.Address{}, err
 	}

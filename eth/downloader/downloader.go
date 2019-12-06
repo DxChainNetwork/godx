@@ -169,7 +169,7 @@ type LightChain interface {
 	GetTd(common.Hash, uint64) *big.Int
 
 	// InsertHeaderChain inserts a batch of headers into the local chain.
-	InsertHeaderChain([]*types.Header, int) (int, error)
+	InsertHeaderChain(types.HeaderInsertDataBatch, int) (int, error)
 
 	// Rollback removes a few recently added elements from the local chain.
 	Rollback([]common.Hash)

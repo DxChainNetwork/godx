@@ -1160,11 +1160,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		headers[i] = block.Header()
 		seals[i] = verifySeals
 	}
-	abort, results := bc.engine.VerifyHeaders(bc, headers, seals)
-	defer close(abort)
 
 	// Peek the error for the first block to decide the directing import logic
-	it := newInsertIterator(chain, results, bc.Validator())
+	it := newInsertIterator(bc, chain, bc.Validator(), bc.engine)
 
 	block, err := it.next()
 	switch {
@@ -1202,7 +1200,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 
 	// Some other error occurred, abort
 	case err != nil:
-		stats.ignored += len(it.chain)
+		stats.ignored += len(it.blocks)
 		bc.reportBlock(block, nil, err)
 		return it.index, events, coalescedLogs, err
 	}
@@ -1658,9 +1656,9 @@ Error: %v
 // should be done or not. The reason behind the optional check is because some
 // of the header retrieval mechanisms already need to verify nonces, as well as
 // because nonces can be verified sparsely, not needing to check each.
-func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (int, error) {
+func (bc *BlockChain) InsertHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
 	start := time.Now()
-	if i, err := bc.hc.ValidateHeaderChain(chain, checkFreq); err != nil {
+	if i, err := bc.hc.ValidateHeaderChain(data, checkFreq); err != nil {
 		return i, err
 	}
 
@@ -1671,15 +1669,18 @@ func (bc *BlockChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
-	whFunc := func(header *types.Header) error {
+	whFunc := func(data types.HeaderInsertData) error {
 		bc.mu.Lock()
 		defer bc.mu.Unlock()
 
-		_, err := bc.hc.WriteHeader(header)
-		return err
+		_, err := bc.hc.WriteHeader(data.Header)
+		if err != nil {
+			return err
+		}
+		return bc.writeValidators(data.Validators)
 	}
 
-	return bc.hc.InsertHeaderChain(chain, whFunc, start)
+	return bc.hc.InsertHeaderChain(data, whFunc, start)
 }
 
 // writeHeader writes a header into the local chain, given that its parent is
@@ -1700,6 +1701,11 @@ func (bc *BlockChain) writeHeader(header *types.Header) error {
 
 	_, err := bc.hc.WriteHeader(header)
 	return err
+}
+
+// WriteValidators write validators to the underlying database
+func (bc *BlockChain) writeValidators(validators []common.Address) error {
+	return types.SaveValidators(validators, bc.db)
 }
 
 // CurrentHeader retrieves the current head header of the canonical chain. The
