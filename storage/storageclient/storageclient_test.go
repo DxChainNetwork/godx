@@ -404,6 +404,9 @@ func (b *BackendTest) GetReceipts(ctx context.Context, blockHash common.Hash) (t
 func (b *BackendTest) GetTd(blockHash common.Hash) *big.Int {
 	return big.NewInt(100)
 }
+func (b *BackendTest) GetConfirmedBlockNumber() uint64 {
+	return 0
+}
 
 func (b *BackendTest) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {
 	return nil, nil, nil

@@ -632,6 +632,11 @@ func (s *PublicBlockChainAPI) GetStorageContractByBlockHash(ctx context.Context,
 	return nil, err
 }
 
+// GetConfirmedBlockNumber get the confirmed block number
+func (s *PublicBlockChainAPI) GetConfirmedBlockNumber(ctx context.Context) uint64 {
+	return s.b.GetConfirmedBlockNumber()
+}
+
 // blockToStorageContract return all transactions related to the storage contract on the block.
 func blockToStorageContract(block *types.Block) (map[string]interface{}, error) {
 	fields := make(map[string]interface{})
