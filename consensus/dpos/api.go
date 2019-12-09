@@ -8,17 +8,9 @@ import (
 	"fmt"
 
 	"github.com/DxChainNetwork/godx/common"
-	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 )
-
-// API is a user facing RPC API to allow controlling the delegate and voting
-// mechanisms of the delegated-proof-of-stake
-type API struct {
-	chain consensus.ChainReader
-	dpos  *Dpos
-}
 
 // CandidateInfo stores detailed candidate information
 type CandidateInfo struct {

@@ -530,12 +530,7 @@ func (d *Dpos) Authorize(signer common.Address, signFn SignerFn) {
 
 // APIs implemented Engine interface which includes DPOS API
 func (d *Dpos) APIs(chain consensus.ChainReader) []rpc.API {
-	return []rpc.API{{
-		Namespace: "dpos",
-		Version:   "1.0",
-		Service:   &API{chain: chain, dpos: d},
-		Public:    true,
-	}}
+	return []rpc.API{}
 }
 
 // SealHash implements consensus.Engine, returns the hash of a block prior to it being sealed.
