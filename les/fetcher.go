@@ -250,7 +250,7 @@ func (f *lightFetcher) unregisterPeer(p *peer) {
 func (f *lightFetcher) announce(p *peer, head *announceData) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
-	p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
+	//p.Log().Debug("Received new announcement", "number", head.Number, "hash", head.Hash, "reorg", head.ReorgDepth)
 
 	fp := f.peers[p]
 	if fp == nil {

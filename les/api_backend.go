@@ -21,6 +21,8 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/DxChainNetwork/godx/log"
+
 	"github.com/DxChainNetwork/godx/accounts"
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/math"
@@ -53,6 +55,7 @@ func (b *LesApiBackend) CurrentBlock() *types.Block {
 }
 
 func (b *LesApiBackend) SetHead(number uint64) {
+	log.Error("cancel downloader because of les SetHead")
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
 }

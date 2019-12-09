@@ -297,6 +297,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 		if err := writeData(data); err != nil {
 			return i, err
 		}
+		time.Sleep(100 * time.Millisecond)
 		stats.processed++
 	}
 	// Report some public statistics so the user has a clue what's going on

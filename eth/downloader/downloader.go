@@ -314,6 +314,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	master := id == d.cancelPeer
 	d.cancelLock.RUnlock()
 
+	log.Error("canceling peer because of unregister peer")
 	if master {
 		d.cancel()
 	}
@@ -395,7 +396,10 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 	d.cancelPeer = id
 	d.cancelLock.Unlock()
 
-	defer d.Cancel() // No matter what, we can't leave the cancel channel open
+	defer func() {
+		log.Error("canceled because end of sync with peer")
+		d.Cancel()
+	}() // No matter what, we can't leave the cancel channel open
 
 	// Set the requested sync mode, unless it's forbidden
 	d.mode = mode
@@ -509,6 +513,7 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 		}
 	}
 	d.queue.Close()
+	log.Error("cancelling when spawn sync")
 	d.Cancel()
 	return err
 }
@@ -518,6 +523,7 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 // used when cancelling the downloads from inside the downloader.
 func (d *Downloader) cancel() {
 	// Close the current cancel channel
+	log.Error("downloader canceled")
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
 		select {
@@ -533,6 +539,7 @@ func (d *Downloader) cancel() {
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
 func (d *Downloader) Cancel() {
+	log.Error("downloader canceled in Cancel")
 	d.cancel()
 	d.cancelWg.Wait()
 }
@@ -549,6 +556,7 @@ func (d *Downloader) Terminate() {
 	}
 	d.quitLock.Unlock()
 
+	log.Error("canceling when terminate")
 	// Cancel any pending download requests
 	d.Cancel()
 }

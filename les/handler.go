@@ -24,7 +24,6 @@ import (
 	"math/big"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
@@ -358,19 +357,19 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 
 	costs := p.fcCosts[msg.Code]
 	reject := func(reqCnt, maxCnt uint64) bool {
-		if p.fcClient == nil || reqCnt > maxCnt {
-			return true
-		}
-		bufValue, _ := p.fcClient.AcceptRequest()
-		cost := costs.baseCost + reqCnt*costs.reqCost
-		if cost > pm.server.defParams.BufLimit {
-			cost = pm.server.defParams.BufLimit
-		}
-		if cost > bufValue {
-			recharge := time.Duration((cost - bufValue) * 1000000 / pm.server.defParams.MinRecharge)
-			p.Log().Error("Request came too early", "recharge", common.PrettyDuration(recharge))
-			return true
-		}
+		//if p.fcClient == nil || reqCnt > maxCnt {
+		//	return true
+		//}
+		//bufValue, _ := p.fcClient.AcceptRequest()
+		//cost := costs.baseCost + reqCnt*costs.reqCost
+		//if cost > pm.server.defParams.BufLimit {
+		//	cost = pm.server.defParams.BufLimit
+		//}
+		//if cost > bufValue {
+		//	recharge := time.Duration((cost - bufValue) * 1000000 / pm.server.defParams.MinRecharge)
+		//	p.Log().Error("Request came too early", "recharge", common.PrettyDuration(recharge))
+		//	return true
+		//}
 		return false
 	}
 
