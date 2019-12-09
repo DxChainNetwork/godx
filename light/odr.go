@@ -182,10 +182,15 @@ func (req *BloomRequest) StoreResult(db ethdb.Database) {
 type DposTrieSpecifier uint8
 
 const (
+	// EpochTrieSpec is the DposTrieSpecifier for epoch trie
 	EpochTrieSpec DposTrieSpecifier = iota + 1
+	// DelegateTrieSpec is the DposTrieSpecifier for delegate trie
 	DelegateTrieSpec
+	// CandidateTrieSpec is the DposTrieSpecifier for candidate trie
 	CandidateTrieSpec
+	// VoteTrieSpec is the DposTrieSpecifier for vote trie
 	VoteTrieSpec
+	// MinedCntTrieSpec is the DposTrieSpecifier for mined count trie
 	MinedCntTrieSpec
 )
 

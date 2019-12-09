@@ -18,15 +18,17 @@ package downloader
 
 import (
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/params"
-	"math/big"
-	"sync"
 )
 
 // Test chain parameters.
@@ -34,11 +36,11 @@ var (
 	testKey, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	testAddress = crypto.PubkeyToAddress(testKey.PublicKey)
 	testDB      = ethdb.NewMemDatabase()
-	testGenesis = core.GenesisBlockForTesting(testDB, testAddress, big.NewInt(1000000000))
+	testGenesis = core.GenesisBlockForDposTesting(testDB, testAddress, big.NewInt(1000000000))
 )
 
 // The common prefix of all test chains:
-var testChainBase = newTestChain(blockCacheItems+200, testGenesis)
+var testChainBase = newTestChain(blockCacheItems+200, testGenesis, params.DposChainConfigWithInitialCandidates)
 
 // Different forks on top of the base chain:
 var testChainForkLightA, testChainForkLightB, testChainForkHeavy *testChain
@@ -54,23 +56,29 @@ func init() {
 }
 
 type testChain struct {
-	genesis  *types.Block
-	chain    []common.Hash
-	headerm  map[common.Hash]*types.Header
-	blockm   map[common.Hash]*types.Block
-	receiptm map[common.Hash][]*types.Receipt
-	tdm      map[common.Hash]*big.Int
+	engine        consensus.Engine
+	config        *params.ChainConfig
+	genesis       *types.Block
+	chain         []common.Hash
+	headerm       map[common.Hash]*types.Header
+	blockm        map[common.Hash]*types.Block
+	receiptm      map[common.Hash][]*types.Receipt
+	tdm           map[common.Hash]*big.Int
+	validatorsSet map[common.Hash][]common.Address
 }
 
 // newTestChain creates a blockchain of the given length.
-func newTestChain(length int, genesis *types.Block) *testChain {
+func newTestChain(length int, genesis *types.Block, config *params.ChainConfig) *testChain {
 	tc := new(testChain).copy(length)
+	tc.engine = dpos.NewDposFaker(testDB)
+	tc.config = config
 	tc.genesis = genesis
 	tc.chain = append(tc.chain, genesis.Hash())
 	tc.headerm[tc.genesis.Hash()] = tc.genesis.Header()
 	tc.tdm[tc.genesis.Hash()] = tc.genesis.Difficulty()
 	tc.blockm[tc.genesis.Hash()] = tc.genesis
 	tc.generate(length-1, 0, genesis, false)
+	tc.validatorsSet = make(map[common.Hash][]common.Address)
 	return tc
 }
 
@@ -92,11 +100,17 @@ func (tc *testChain) shorten(length int) *testChain {
 
 func (tc *testChain) copy(newlen int) *testChain {
 	cpy := &testChain{
-		genesis:  tc.genesis,
-		headerm:  make(map[common.Hash]*types.Header, newlen),
-		blockm:   make(map[common.Hash]*types.Block, newlen),
-		receiptm: make(map[common.Hash][]*types.Receipt, newlen),
-		tdm:      make(map[common.Hash]*big.Int, newlen),
+		engine:        tc.engine,
+		genesis:       tc.genesis,
+		headerm:       make(map[common.Hash]*types.Header, newlen),
+		blockm:        make(map[common.Hash]*types.Block, newlen),
+		receiptm:      make(map[common.Hash][]*types.Receipt, newlen),
+		tdm:           make(map[common.Hash]*big.Int, newlen),
+		validatorsSet: make(map[common.Hash][]common.Address, newlen),
+	}
+	if tc.config != nil {
+		config := *tc.config
+		cpy.config = &config
 	}
 	for i := 0; i < len(tc.chain) && i < newlen; i++ {
 		hash := tc.chain[i]
@@ -105,6 +119,7 @@ func (tc *testChain) copy(newlen int) *testChain {
 		cpy.blockm[hash] = tc.blockm[hash]
 		cpy.headerm[hash] = tc.headerm[hash]
 		cpy.receiptm[hash] = tc.receiptm[hash]
+		cpy.validatorsSet[hash] = tc.validatorsSet[hash]
 	}
 	return cpy
 }
@@ -115,14 +130,14 @@ func (tc *testChain) copy(newlen int) *testChain {
 // reassembly.
 func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool) {
 	// start := time.Now()
-	// defer func() { fmt.Printf("test chain generated in %v\n", time.Since(start)) }()
 
-	blocks, receipts := core.GenerateChain(params.DposChainConfig, parent, dpos.NewDposFaker(), testDB, n, func(i int, block *core.BlockGen) {
+	engine := dpos.NewDposFaker(testDB)
+	blocks, receipts := core.GenerateChain(params.DposChainConfigWithInitialCandidates, parent, engine, testDB, n, func(i int, block *core.BlockGen) {
 		block.SetCoinbase(common.Address{seed})
 		// If a heavy chain is requested, delay blocks to raise difficulty
-		if heavy {
-			block.OffsetTime(-1)
-		}
+		//if heavy {
+		//	block.OffsetTime(-1)
+		//}
 		// Include transactions to the miner to make blocks more interesting.
 		if parent == tc.genesis && i%22 == 0 {
 			signer := types.MakeSigner(params.DposChainConfig, block.Number())
@@ -139,19 +154,57 @@ func (tc *testChain) generate(n int, seed byte, parent *types.Block, heavy bool)
 		//		Number:     big.NewInt(block.Number().Int64() - 1),
 		//	})
 		//}
-	})
+	}, tc)
 
 	// Convert the block-chain into a hash-chain and header/block maps
 	td := new(big.Int).Set(tc.td(parent.Hash()))
 	for i, b := range blocks {
+		b, err := tc.fakeSeal(b, engine)
+		if err != nil {
+			panic(err)
+		}
 		td := td.Add(td, b.Difficulty())
 		hash := b.Hash()
-		tc.chain = append(tc.chain, hash)
-		tc.blockm[hash] = b
-		tc.headerm[hash] = b.Header()
+		validators, err := b.DposCtx().GetValidators()
+		if err != nil {
+			panic(err)
+		}
+
+		tc.validatorsSet[hash] = validators
 		tc.receiptm[hash] = receipts[i]
 		tc.tdm[hash] = new(big.Int).Set(td)
 	}
+}
+
+// SealAndAddBlock seal and then add block to its own structure
+func (tc *testChain) SealAndAddBlock(b *types.Block) *types.Block {
+	if b.Number().Uint64() != 0 {
+		var err error
+		b, err = tc.fakeSeal(b, tc.engine)
+		if err != nil {
+			panic(err)
+		}
+	}
+	hash := b.Hash()
+	if uint64(len(tc.chain)) > uint64(b.Number().Int64()) {
+		tc.chain[int(b.Number().Int64())] = hash
+	} else {
+		tc.chain = append(tc.chain, hash)
+	}
+	tc.blockm[hash] = b
+	tc.headerm[hash] = b.Header()
+	return b
+}
+
+func (tc *testChain) fakeSeal(b *types.Block, engine consensus.Engine) (*types.Block, error) {
+	if _, ok := engine.(*dpos.Dpos); !ok {
+		return nil, fmt.Errorf("fake seal should only be allied to dpos engine")
+	}
+	result := make(chan *types.Block, 1)
+	if err := engine.Seal(nil, b, result, nil); err != nil {
+		return nil, err
+	}
+	return <-result, nil
 }
 
 // len returns the total number of blocks in the chain.
@@ -182,6 +235,28 @@ func (tc *testChain) headersByNumber(origin uint64, amount int, skip int) []*typ
 		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
 			result = append(result, header)
 		}
+	}
+	return result
+}
+
+func (tc *testChain) headersAndValidatorsByHash(origin common.Hash, amount int, skip int) types.HeaderInsertDataBatch {
+	num, _ := tc.hashToNumber(origin)
+	return tc.headersAndValidatorsByNumber(num, amount, skip)
+}
+
+func (tc *testChain) headersAndValidatorsByNumber(origin uint64, amount int, skip int) types.HeaderInsertDataBatch {
+	result := make(types.HeaderInsertDataBatch, 0, amount)
+	for num := origin; num < uint64(len(tc.chain)) && len(result) < amount; num += uint64(skip) + 1 {
+		var data types.HeaderInsertData
+		if header, ok := tc.headerm[tc.chain[int(num)]]; ok {
+			data.Header = header
+		} else {
+			continue
+		}
+		if validators, ok := tc.validatorsSet[tc.chain[int(num)]]; ok {
+			data.Validators = validators
+		}
+		result = append(result, data)
 	}
 	return result
 }
@@ -217,4 +292,44 @@ func (tc *testChain) hashToNumber(target common.Hash) (uint64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func (tc *testChain) Config() *params.ChainConfig {
+	return tc.config
+}
+
+func (tc *testChain) CurrentHeader() *types.Header {
+	currentHash := tc.chain[len(tc.chain)-1]
+	return tc.headerm[currentHash]
+}
+
+func (tc *testChain) GetHeader(hash common.Hash, number uint64) *types.Header {
+	if number >= uint64(len(tc.chain)) {
+		return nil
+	}
+	if gotHash := tc.chain[int(number)]; gotHash != hash {
+		return nil
+	}
+	return tc.headerm[hash]
+}
+
+func (tc *testChain) GetHeaderByNumber(number uint64) *types.Header {
+	if number > uint64(len(tc.chain)-1) {
+		return nil
+	}
+	return tc.headerm[tc.chain[int(number)]]
+}
+
+func (tc *testChain) GetHeaderByHash(hash common.Hash) *types.Header {
+	return tc.headerm[hash]
+}
+
+func (tc *testChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	if number > uint64(len(tc.chain)) {
+		return nil
+	}
+	if gotHash := tc.chain[int(number)]; gotHash != hash {
+		return nil
+	}
+	return tc.blockm[hash]
 }

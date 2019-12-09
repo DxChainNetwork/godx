@@ -18,7 +18,7 @@ import (
 // NewDposContext creates a new dposContext
 func NewDposContext(ctx context.Context, header *types.Header, odr OdrBackend) *types.DposContext {
 	db := NewOdrDposDatabase(ctx, header, odr)
-	dposCtx, _ := types.NewDposContextFromProto(db, header.DposContext)
+	dposCtx, _ := types.NewDposContextFromRoot(db, header.DposContext)
 	return dposCtx
 }
 
@@ -34,16 +34,17 @@ type dposOdrDatabase struct {
 	backend OdrBackend
 }
 
-func NewOdrDposDatabase(ctx context.Context, header *types.Header, odr OdrBackend) *dposOdrDatabase {
+// NewOdrDposDatabase creates a new odr dpos database
+func NewOdrDposDatabase(ctx context.Context, header *types.Header, odr OdrBackend) types.DposDatabase {
 	return &dposOdrDatabase{
 		ctx:     ctx,
-		id:      DposDatabaseIDFromHeader(header),
+		id:      dposDatabaseIDFromHeader(header),
 		backend: odr,
 	}
 }
 
-// DposTrieIDFromHeader returns a DposTrieID from a block header
-func DposDatabaseIDFromHeader(header *types.Header) *dposDatabaseID {
+// dposDatabaseIDFromHeader returns a DposTrieID from a block header
+func dposDatabaseIDFromHeader(header *types.Header) *dposDatabaseID {
 	return &dposDatabaseID{
 		blockHash:   header.Hash(),
 		blockNumber: header.Number.Uint64(),

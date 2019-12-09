@@ -28,6 +28,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/consensus/misc"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
@@ -43,8 +44,9 @@ import (
 )
 
 const (
-	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
-	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
+	softResponseLimit            = 2 * 1024 * 1024                                               // Target maximum size of returned blocks, headers or node data.
+	estHeaderRlpSize             = 660                                                           // Approximate size of an RLP encoded block header
+	estHeaderAndValidatorRlpSize = estHeaderRlpSize + dpos.MaxValidatorSize*common.AddressLength // estHeaderAndValidatorRlpSize is the estimated size of HeaderAndValidator
 
 	// txChanSize is the size of channel listening to NewTxsEvent.
 	// The number is referenced from the size of tx pool.
@@ -730,10 +732,163 @@ func (pm *ProtocolManager) handleEthMsg(p *peer, msg p2p.Msg) error {
 		}
 		pm.txpool.AddRemotes(txs)
 
+	case msg.Code == GetBlockHeaderAndValidatorsMsg:
+		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p)
+
+	case msg.Code == BlockHeaderAndValidatorsMsg:
+		return pm.handleBlockHeaderAndValidatorsMsg(msg, p)
+
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
 	}
 	return nil
+}
+
+func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
+	p.Log().Trace("Received block header and validators request")
+	query, err := decodeGetBlockHeaderAndValidatorsRequests(msg)
+	if err != nil {
+		return errResp(ErrDecode, "%v: %v", msg, err)
+	}
+	data, err := calculateHeaderAndValidatorsFromRequest(pm, query, p)
+	if err != nil {
+		return err
+	}
+	return p.SendBlockHeadersAndValidators(data)
+}
+
+func calculateHeaderAndValidatorsFromRequest(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) (types.HeaderInsertDataBatch, error) {
+	it := newHeaderAndValidatorsQueryIterator(pm, query, p)
+	for it.nextQuery() {
+		result, err := it.calculateQuery()
+		if err != nil {
+			return it.getResults(), err
+		}
+		it.storeQueryResult(result)
+	}
+	return it.getResults(), nil
+}
+
+type headerAndValidatorsQueryIterator struct {
+	pm *ProtocolManager
+	p  *peer
+	// original query info
+	query getBlockHeaderAndValidatorsRequest
+	// current data
+	curHash   common.Hash
+	curNumber uint64
+	first     bool
+	// Result fields
+	maxNonCanonical *uint64
+	bytes           common.StorageSize
+	result          types.HeaderInsertDataBatch
+}
+
+func newHeaderAndValidatorsQueryIterator(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) *headerAndValidatorsQueryIterator {
+	maxNonCanonical := uint64(100)
+	return &headerAndValidatorsQueryIterator{
+		pm:              pm,
+		p:               p,
+		query:           query,
+		first:           true,
+		maxNonCanonical: &maxNonCanonical,
+		result:          make(types.HeaderInsertDataBatch, 0, query.Amount),
+	}
+}
+
+func (ctx *headerAndValidatorsQueryIterator) nextQuery() bool {
+	if ctx.hasEnoughResults() {
+		return false
+	}
+	if ctx.first {
+		return ctx.firstQuery()
+	}
+	if ctx.query.Reverse {
+		return ctx.nextQueryInReverse()
+	}
+	return ctx.nextQueryNoReverse()
+}
+
+func (ctx *headerAndValidatorsQueryIterator) firstQuery() bool {
+	ctx.first = false
+	var h *types.Header
+	if isHashMode(ctx.query.Origin) {
+		h = ctx.pm.blockchain.GetHeaderByHash(ctx.query.Origin.Hash)
+	} else {
+		h = ctx.pm.blockchain.GetHeaderByNumber(ctx.query.Origin.Number)
+	}
+	if h == nil {
+		return false
+	}
+	ctx.curHash = h.Hash()
+	ctx.curNumber = h.Number.Uint64()
+	return true
+}
+
+func (ctx *headerAndValidatorsQueryIterator) hasEnoughResults() bool {
+	return len(ctx.result) >= int(ctx.query.Amount) || ctx.bytes >= softResponseLimit
+}
+
+func (ctx *headerAndValidatorsQueryIterator) nextQueryInReverse() bool {
+	ancestor := ctx.query.Skip + 1
+	if ancestor == 0 {
+		return false
+	}
+	nextHash, nextNumber := ctx.pm.blockchain.GetAncestor(ctx.curHash, ctx.curNumber, ancestor, ctx.maxNonCanonical)
+	if (nextHash == common.Hash{}) {
+		return false
+	}
+	ctx.curHash, ctx.curNumber = nextHash, nextNumber
+	return true
+}
+
+func (ctx *headerAndValidatorsQueryIterator) nextQueryNoReverse() bool {
+	nextNumber := ctx.curNumber + ctx.query.Skip + 1
+	if nextNumber <= ctx.curNumber {
+		infos, _ := json.MarshalIndent(ctx.p.Peer.Info(), "", "  ")
+		ctx.p.Log().Warn("GetBlockHeaders skip overflow attack", "current", ctx.curNumber, "skip", ctx.query.Skip, "next", nextNumber, "attacker", infos)
+		return false
+	}
+	header := ctx.pm.blockchain.GetHeaderByNumber(nextNumber)
+	if header == nil {
+		return false
+	}
+	nextHash := header.Hash()
+	expOldHash, _ := ctx.pm.blockchain.GetAncestor(nextHash, nextNumber, ctx.query.Skip+1, ctx.maxNonCanonical)
+	if expOldHash != ctx.curHash {
+		return false
+	}
+	ctx.curHash, ctx.curNumber = nextHash, nextNumber
+	return true
+}
+
+func (ctx *headerAndValidatorsQueryIterator) calculateQuery() (types.HeaderInsertData, error) {
+	return ctx.pm.blockchain.GetHeaderAndValidators(ctx.curHash, ctx.curNumber)
+}
+
+func (ctx *headerAndValidatorsQueryIterator) storeQueryResult(data types.HeaderInsertData) {
+	ctx.bytes += estHeaderAndValidatorRlpSize
+	ctx.result = append(ctx.result, data)
+}
+
+func (ctx *headerAndValidatorsQueryIterator) getResults() types.HeaderInsertDataBatch {
+	return ctx.result
+}
+
+func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
+	if pm.downloader == nil {
+		return errResp(ErrUnexpectedResponse, "")
+	}
+	p.Log().Trace("Received block header and validators response message")
+	var data types.HeaderInsertDataBatch
+	if err := msg.Decode(&data); err != nil {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, data)
+	if err != nil {
+		log.Debug(fmt.Sprint(err))
+	}
+	return err
 }
 
 // BroadcastBlock will either propagate a block to a subset of it's peers, or

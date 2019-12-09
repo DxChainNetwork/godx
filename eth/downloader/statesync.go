@@ -140,9 +140,9 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 		// Handle incoming state packs:
 		case pack := <-d.stateCh:
 			// Discard any data not requested (or previously timed out)
-			req := active[pack.PeerId()]
+			req := active[pack.PeerID()]
 			if req == nil {
-				log.Debug("Unrequested node data", "peer", pack.PeerId(), "len", pack.Items())
+				log.Debug("Unrequested node data", "peer", pack.PeerID(), "len", pack.Items())
 				continue
 			}
 			// Finalize the request and queue up for processing
@@ -150,7 +150,7 @@ func (d *Downloader) runStateSync(s *stateSync) *stateSync {
 			req.response = pack.(*statePack).states
 
 			finished = append(finished, req)
-			delete(active, pack.PeerId())
+			delete(active, pack.PeerID())
 
 		// Handle dropped peer connections:
 		case p := <-peerDrop:

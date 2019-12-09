@@ -53,7 +53,8 @@ var (
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
 	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
 
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	ErrNoGenesis    = errors.New("Genesis not found in chain")
+	ErrUnknownBlock = errors.New("unknown block")
 )
 
 const (
@@ -241,6 +242,7 @@ func (bc *BlockChain) loadLastState() error {
 		if err := bc.repair(&currentBlock); err != nil {
 			return err
 		}
+		rawdb.WriteHeadBlockHash(bc.db, currentBlock.Hash())
 	}
 	// Everything seems to be fine, set as the head block
 	bc.currentBlock.Store(currentBlock)
@@ -412,7 +414,7 @@ func (bc *BlockChain) DposCtx() (*types.DposContext, error) {
 
 // DposCtxAt returns a dposCtx based on a particular point in time.
 func (bc *BlockChain) DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error) {
-	return types.NewDposContextFromProto(types.NewFullDposDatabase(bc.db), root)
+	return types.NewDposContextFromRoot(types.NewFullDposDatabase(bc.db), root)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1174,13 +1176,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	case err == consensus.ErrFutureBlock || (err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(it.first().ParentHash())):
 		for block != nil && (it.index == 0 || err == consensus.ErrUnknownAncestor) {
 			if err := bc.addFutureBlock(block); err != nil {
+				log.Error(fmt.Sprintf("INSERT ERROR!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 			block, err = it.next()
 		}
 		stats.queued += it.processed()
 		stats.ignored += it.remaining()
-
+		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR2!!!!!!: %v", err))
+		}
 		// If there are any still remaining, mark as ignored
 		return it.index, events, coalescedLogs, err
 
@@ -1202,6 +1207,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	case err != nil:
 		stats.ignored += len(it.blocks)
 		bc.reportBlock(block, nil, err)
+		log.Error(fmt.Sprintf("INSERT ERROR 3!!!!!!: %v", err))
 		return it.index, events, coalescedLogs, err
 	}
 	// No validation errors for the first block (or chain prefix skipped)
@@ -1214,6 +1220,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		// If the header is a banned one, straight out abort
 		if BadHashes[block.Hash()] {
 			bc.reportBlock(block, nil, ErrBlacklistedHash)
+			log.Error(fmt.Sprintf("INSERT ERROR 4!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, ErrBlacklistedHash
 		}
 		// Retrieve the parent block and it's state to execute on top
@@ -1225,14 +1232,16 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		}
 
 		// construct dpos context from parent's dpos context root
-		dposCtx, err := types.NewDposContextFromProto(types.NewFullDposDatabase(bc.db), parent.Header().DposContext)
+		dposCtx, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(bc.db), parent.Header().DposContext)
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 5!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		block.SetDposCtx(dposCtx)
 
 		state, err := state.New(parent.Root(), bc.stateCache)
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 6!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		// Process block using the parent state as reference point.
@@ -1241,11 +1250,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		t1 := time.Now()
 		if err != nil {
 			bc.reportBlock(block, receipts, err)
+			log.Error(fmt.Sprintf("INSERT ERROR 7!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		// Validate the state using the default validator
 		if err := bc.Validator().ValidateState(block, parent, state, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
+			log.Error(fmt.Sprintf("INSERT ERROR 8!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 
@@ -1255,12 +1266,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 			err = bc.Validator().ValidateDposState(block)
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
+				log.Error(fmt.Sprintf("INSERT ERROR 9!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 
 			err = dposEngine.VerifySeal(bc, block.Header())
 			if err != nil {
 				bc.reportBlock(block, receipts, err)
+				log.Error(fmt.Sprintf("INSERT ERROR 10!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 		}
@@ -1272,6 +1285,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		status, err := bc.WriteBlockWithState(block, receipts, state)
 		t3 := time.Now()
 		if err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 11!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		blockInsertTimer.UpdateSince(start)
@@ -1309,12 +1323,14 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Any blocks remaining here? The only ones we care about are the future ones
 	if block != nil && err == consensus.ErrFutureBlock {
 		if err := bc.addFutureBlock(block); err != nil {
+			log.Error(fmt.Sprintf("INSERT ERROR 12!!!!!!: %v", err))
 			return it.index, events, coalescedLogs, err
 		}
 		block, err = it.next()
 
 		for ; block != nil && err == consensus.ErrUnknownAncestor; block, err = it.next() {
 			if err := bc.addFutureBlock(block); err != nil {
+				log.Error(fmt.Sprintf("INSERT ERROR 13!!!!!!: %v", err))
 				return it.index, events, coalescedLogs, err
 			}
 			stats.queued++
@@ -1325,6 +1341,9 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	// Append a single chain head event if we've progressed the chain
 	if lastCanon != nil && bc.CurrentBlock().Hash() == lastCanon.Hash() {
 		events = append(events, ChainHeadEvent{lastCanon})
+	}
+	if err != nil {
+		log.Error(fmt.Sprintf("INSERT ERROR final!!!!!!: %v", err))
 	}
 	return it.index, events, coalescedLogs, err
 }
@@ -1801,6 +1820,55 @@ func (bc *BlockChain) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 
 func (bc *BlockChain) SubscribeChainChangeEvent(ch chan<- ChainChangeEvent) event.Subscription {
 	return bc.scope.Track(bc.chainChangeFeed.Subscribe(ch))
+}
+
+// GetHeaderAndValidatorsByNumber get header and validators by number
+func (bc *BlockChain) GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error) {
+	header := bc.GetHeaderByNumber(number)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
+// GetHeaderAndValidatorsByHash get header and validators by hash
+func (bc *BlockChain) GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error) {
+	header := bc.GetHeaderByHash(hash)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
+// GetConfirmedBlockNumber get confirmed block number
+func (bc *BlockChain) GetConfirmedBlockNumber() uint64 {
+	return bc.hc.GetConfirmedBlockNumber()
+}
+
+// GetHeaderAndValidators get headers and validators with the given hash and number
+func (bc *BlockChain) GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error) {
+	header := bc.GetHeader(hash, number)
+	if header == nil {
+		return types.HeaderInsertData{}, ErrUnknownBlock
+	}
+	return headerToHeaderInsertData(bc, header)
+}
+
+// GetValidatorsByHeader retrieve the validators by header
+func (bc *BlockChain) getValidatorsByHeader(header *types.Header) ([]common.Address, error) {
+	epochRoot := header.DposContext.EpochRoot
+	return bc.hc.GetValidators(epochRoot)
+}
+
+func headerToHeaderInsertData(bc *BlockChain, header *types.Header) (types.HeaderInsertData, error) {
+	validators, err := bc.getValidatorsByHeader(header)
+	if err != nil {
+		return types.HeaderInsertData{}, err
+	}
+	return types.HeaderInsertData{
+		Header:     header,
+		Validators: validators,
+	}, nil
 }
 
 // MakeAlloc make the add the validator deposit from ChainConfig to the input allocation accounts.

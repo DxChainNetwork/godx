@@ -116,7 +116,7 @@ func (it *insertIterator) next() (*types.Block, error) {
 
 // current returns the current block that's being processed.
 func (it *insertIterator) current() *types.Block {
-	if it.index < 0 || it.index+1 >= len(it.blocks) {
+	if it.index < 0 || it.index+1 > len(it.blocks) {
 		return nil
 	}
 	return it.blocks[it.index]

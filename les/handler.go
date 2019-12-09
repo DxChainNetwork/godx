@@ -29,6 +29,7 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/mclock"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/state"
@@ -46,20 +47,21 @@ import (
 )
 
 const (
-	softResponseLimit = 2 * 1024 * 1024 // Target maximum size of returned blocks, headers or node data.
-	estHeaderRlpSize  = 500             // Approximate size of an RLP encoded block header
+	softResponseLimit            = 2 * 1024 * 1024                                               // Target maximum size of returned blocks, headers or node data.
+	estHeaderRlpSize             = 660                                                           // Approximate size of an RLP encoded block header
+	estHeaderAndValidatorRlpSize = estHeaderRlpSize + dpos.MaxValidatorSize*common.AddressLength // estHeaderAndValidatorRlpSize is the estimated size of HeaderAndValidator
+	ethVersion                   = 63                                                            // equivalent eth version for the downloader
 
-	ethVersion = 63 // equivalent eth version for the downloader
-
-	MaxHeaderFetch           = 192 // Amount of block headers to be fetched per retrieval request
-	MaxBodyFetch             = 32  // Amount of block bodies to be fetched per retrieval request
-	MaxReceiptFetch          = 128 // Amount of transaction receipts to allow fetching per request
-	MaxCodeFetch             = 64  // Amount of contract codes to allow fetching per request
-	MaxProofsFetch           = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxDposProofsFetch       = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
-	MaxHelperTrieProofsFetch = 64  // Amount of merkle proofs to be fetched per retrieval request
-	MaxTxSend                = 64  // Amount of transactions to be send per request
-	MaxTxStatus              = 256 // Amount of transactions to queried per request
+	MaxHeaderFetch              = 192 // Amount of block headers to be fetched per retrieval request
+	MaxBodyFetch                = 32  // Amount of block bodies to be fetched per retrieval request
+	MaxReceiptFetch             = 128 // Amount of transaction receipts to allow fetching per request
+	MaxCodeFetch                = 64  // Amount of contract codes to allow fetching per request
+	MaxProofsFetch              = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxDposProofsFetch          = 64  // Amount of merkle proofs for dpos tries to be fetched per retrieval request
+	MaxHelperTrieProofsFetch    = 64  // Amount of merkle proofs to be fetched per retrieval request
+	MaxTxSend                   = 64  // Amount of transactions to be send per request
+	MaxTxStatus                 = 256 // Amount of transactions to queried per request
+	MaxHeaderAndValidatorsFetch = 192 // Amount of headers and validators to be fetched per retrieval request
 
 	disableClientRemovePeer = false
 )
@@ -73,6 +75,10 @@ type BlockChain interface {
 	HasHeader(hash common.Hash, number uint64) bool
 	GetHeader(hash common.Hash, number uint64) *types.Header
 	GetHeaderByHash(hash common.Hash) *types.Header
+	GetHeaderByNumber(number uint64) *types.Header
+	GetHeaderAndValidatorsByHash(hash common.Hash) (types.HeaderInsertData, error)
+	GetHeaderAndValidatorsByNumber(number uint64) (types.HeaderInsertData, error)
+	GetHeaderAndValidators(hash common.Hash, number uint64) (types.HeaderInsertData, error)
 	CurrentHeader() *types.Header
 	GetTd(hash common.Hash, number uint64) *big.Int
 	State() (*state.StateDB, error)
@@ -80,7 +86,6 @@ type BlockChain interface {
 	DposCtxAt(*types.DposContextRoot) (*types.DposContext, error)
 	InsertHeaderChain(chain types.HeaderInsertDataBatch, checkFreq int) (int, error)
 	Rollback(chain []common.Hash)
-	GetHeaderByNumber(number uint64) *types.Header
 	GetAncestor(hash common.Hash, number, ancestor uint64, maxNonCanonical *uint64) (common.Hash, uint64)
 	Genesis() *types.Block
 	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
@@ -340,6 +345,7 @@ var reqList = []uint64{
 	GetProofsV2Msg,
 	GetHelperTrieProofsMsg,
 	GetDposProofMsg,
+	GetBlockHeaderAndValidatorsMsg,
 }
 
 // handleMsg is invoked whenever an inbound message is received from a remote
@@ -524,13 +530,10 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
 		p.fcServer.GotReply(resp.ReqID, resp.BV)
-		if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
-			pm.fetcher.deliverHeaders(p, resp.ReqID, resp.Headers)
-		} else {
-			err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
-			if err != nil {
-				log.Debug(fmt.Sprint(err))
-			}
+
+		err := pm.downloader.DeliverHeaders(p.id, resp.Headers)
+		if err != nil {
+			log.Debug(fmt.Sprint(err))
 		}
 
 	case GetBlockBodiesMsg:
@@ -1116,10 +1119,13 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		return pm.handleGetDposProofMsg(msg, p, costs, reject)
 
 	case DposProofMsg:
-		deliverMsg, err = pm.handleDposProofMsgToDeliverMsg(msg, p)
-		if err != nil {
-			return err
-		}
+		return pm.handleDposProofMsgToDeliverMsg(msg, p)
+
+	case GetBlockHeaderAndValidatorsMsg:
+		return pm.handleGetBlockHeaderAndValidatorsMsg(msg, p, costs, reject)
+
+	case BlockHeaderAndValidatorsMsg:
+		return pm.handleBlockHeaderAndValidatorsMsg(msg, p)
 
 	default:
 		p.Log().Trace("Received unknown message", "code", msg.Code)
@@ -1127,12 +1133,17 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 	}
 
 	if deliverMsg != nil {
-		err := pm.retriever.deliver(p, deliverMsg)
-		if err != nil {
-			p.responseErrors++
-			if p.responseErrors > maxResponseErrors {
-				return err
-			}
+		return pm.deliverMsgToRetriever(p, deliverMsg)
+	}
+	return nil
+}
+
+func (pm *ProtocolManager) deliverMsgToRetriever(p *peer, msg *Msg) error {
+	err := pm.retriever.deliver(p, msg)
+	if err != nil {
+		p.responseErrors++
+		if p.responseErrors > maxResponseErrors {
+			return err
 		}
 	}
 	return nil
@@ -1288,21 +1299,183 @@ func selectDposTrie(dposCtx *types.DposContext, spec light.DposTrieSpecifier) ty
 	return nil
 }
 
-func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) (*Msg, error) {
+func (pm *ProtocolManager) handleDposProofMsgToDeliverMsg(msg p2p.Msg, p *peer) error {
 	if pm.odr == nil {
-		return nil, errResp(ErrUnexpectedResponse, "")
+		return errResp(ErrUnexpectedResponse, "")
 	}
 	p.Log().Trace("Received dpos proofs response")
 	rawResp, err := decodeDposProofRequestMsg(msg)
 	if err != nil {
-		return nil, errResp(ErrDecode, "msg %v: %v", msg, err)
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
 	p.fcServer.GotReply(rawResp.ReqID, rawResp.BV)
-	return &Msg{
+	deliverMsg := &Msg{
 		MsgType: MsgDposProofs,
 		ReqID:   rawResp.ReqID,
 		Obj:     rawResp.Data,
-	}, nil
+	}
+	return pm.deliverMsgToRetriever(p, deliverMsg)
+}
+
+func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer, costs *requestCosts, reject func(uint64, uint64) bool) error {
+	p.Log().Trace("Received block header and validators request")
+	req, err := decodeGetBlockHeaderAndValidatorsRequests(msg)
+	if err != nil {
+		return errResp(ErrDecode, "%v: %v", msg, err)
+	}
+	query := req.Query
+	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
+		return errResp(ErrRequestRejected, "")
+	}
+	data, err := calculateHeaderAndValidatorsFromRequest(pm, query, p)
+	if err != nil {
+		return err
+	}
+	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
+	pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
+	return p.SendBlockHeadersAndValidators(req.ReqID, bv, data)
+}
+
+func calculateHeaderAndValidatorsFromRequest(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) (types.HeaderInsertDataBatch, error) {
+	it := newHeaderAndValidatorsQueryIterator(pm, query, p)
+	for it.nextQuery() {
+		result, err := it.calculateQuery()
+		if err != nil {
+			return it.getResults(), err
+		}
+		it.storeQueryResult(result)
+	}
+	return it.getResults(), nil
+}
+
+type headerAndValidatorsQueryIterator struct {
+	pm *ProtocolManager
+	p  *peer
+	// original query info
+	query getBlockHeaderAndValidatorsRequest
+	// current data
+	curHash   common.Hash
+	curNumber uint64
+	first     bool
+	// Result fields
+	maxNonCanonical *uint64
+	bytes           common.StorageSize
+	result          types.HeaderInsertDataBatch
+}
+
+func newHeaderAndValidatorsQueryIterator(pm *ProtocolManager, query getBlockHeaderAndValidatorsRequest, p *peer) *headerAndValidatorsQueryIterator {
+	maxNonCanonical := uint64(100)
+	return &headerAndValidatorsQueryIterator{
+		pm:              pm,
+		p:               p,
+		query:           query,
+		first:           true,
+		maxNonCanonical: &maxNonCanonical,
+		result:          make(types.HeaderInsertDataBatch, 0, query.Amount),
+	}
+}
+
+func (it *headerAndValidatorsQueryIterator) nextQuery() bool {
+	if it.hasEnoughResults() {
+		return false
+	}
+	if it.first {
+		return it.firstQuery()
+	}
+	if it.query.Reverse {
+		return it.nextQueryInReverse()
+	}
+	return it.nextQueryNoReverse()
+}
+
+func (it *headerAndValidatorsQueryIterator) firstQuery() bool {
+	it.first = false
+	var h *types.Header
+	if isHashMode(it.query.Origin) {
+		h = it.pm.blockchain.GetHeaderByHash(it.query.Origin.Hash)
+	} else {
+		h = it.pm.blockchain.GetHeaderByNumber(it.query.Origin.Number)
+	}
+	if h == nil {
+		return false
+	}
+	it.curHash = h.Hash()
+	it.curNumber = h.Number.Uint64()
+	return true
+}
+
+func (it *headerAndValidatorsQueryIterator) hasEnoughResults() bool {
+	return len(it.result) >= int(it.query.Amount) || it.bytes >= softResponseLimit
+}
+
+func (it *headerAndValidatorsQueryIterator) nextQueryInReverse() bool {
+	ancestor := it.query.Skip + 1
+	if ancestor == 0 {
+		return false
+	}
+	nextHash, nextNumber := it.pm.blockchain.GetAncestor(it.curHash, it.curNumber, ancestor, it.maxNonCanonical)
+	if (nextHash == common.Hash{}) {
+		return false
+	}
+	it.curHash, it.curNumber = nextHash, nextNumber
+	return true
+}
+
+func (it *headerAndValidatorsQueryIterator) nextQueryNoReverse() bool {
+	nextNumber := it.curNumber + it.query.Skip + 1
+	if nextNumber <= it.curNumber {
+		infos, _ := json.MarshalIndent(it.p.Peer.Info(), "", "  ")
+		it.p.Log().Warn("GetBlockHeaders skip overflow attack", "current", it.curNumber, "skip", it.query.Skip, "next", nextNumber, "attacker", infos)
+		return false
+	}
+	header := it.pm.blockchain.GetHeaderByNumber(nextNumber)
+	if header == nil {
+		return false
+	}
+	nextHash := header.Hash()
+	expOldHash, _ := it.pm.blockchain.GetAncestor(nextHash, nextNumber, it.query.Skip+1, it.maxNonCanonical)
+	if expOldHash != it.curHash {
+		return false
+	}
+	it.curHash, it.curNumber = nextHash, nextNumber
+	return true
+}
+
+func (it *headerAndValidatorsQueryIterator) calculateQuery() (types.HeaderInsertData, error) {
+	return it.pm.blockchain.GetHeaderAndValidators(it.curHash, it.curNumber)
+}
+
+func (it *headerAndValidatorsQueryIterator) storeQueryResult(data types.HeaderInsertData) {
+	it.bytes += estHeaderAndValidatorRlpSize
+	it.result = append(it.result, data)
+}
+
+func (it *headerAndValidatorsQueryIterator) getResults() types.HeaderInsertDataBatch {
+	return it.result
+}
+
+func (pm *ProtocolManager) handleBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *peer) error {
+	if pm.downloader == nil {
+		return errResp(ErrUnexpectedResponse, "")
+	}
+	p.Log().Trace("Received block header and validators response message")
+	var resp struct {
+		ReqID, BV uint64
+		Data      types.HeaderInsertDataBatch
+	}
+	if err := msg.Decode(&resp); err != nil {
+		return errResp(ErrDecode, "msg %v: %v", msg, err)
+	}
+	p.fcServer.GotReply(resp.ReqID, resp.BV)
+	if pm.fetcher != nil && pm.fetcher.requestedID(resp.ReqID) {
+		pm.fetcher.deliverHeaderInsertDataBatch(p, resp.ReqID, resp.Data)
+	} else {
+		err := pm.downloader.DeliverHeaderInsertDataBatch(p.id, resp.Data)
+		if err != nil {
+			log.Debug(fmt.Sprint(err))
+		}
+	}
+	return nil
 }
 
 // downloaderPeerNotify implements peerSetNotify
@@ -1356,6 +1529,58 @@ func (pc *peerConnection) RequestHeadersByNumber(origin uint64, amount int, skip
 			cost := peer.GetRequestCost(GetBlockHeadersMsg, amount)
 			peer.fcServer.QueueRequest(reqID, cost)
 			return func() { peer.RequestHeadersByNumber(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return light.ErrNoPeers
+	}
+	return nil
+}
+
+// RequestHeadersAndValidatorsByHash fetches a batch of blocks' headers and validators corresponding to
+// the specified header query, based on the hash of an origin block.
+func (pc *peerConnection) RequestHeaderInsertDataBatchByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeaderInsertDataBatchByHash(reqID, cost, origin, amount, skip, reverse) }
+		},
+	}
+	_, ok := <-pc.manager.reqDist.queue(rq)
+	if !ok {
+		return light.ErrNoPeers
+	}
+	return nil
+}
+
+// RequestHeaderInsertDataBatchByNumber fetches a batch of blocks' headers and validators corresponding to
+// the specified header query, based on the number of an origin block.
+func (pc *peerConnection) RequestHeaderInsertDataBatchByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	reqID := genReqID()
+	rq := &distReq{
+		getCost: func(dp distPeer) uint64 {
+			peer := dp.(*peer)
+			return peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+		},
+		canSend: func(dp distPeer) bool {
+			return dp.(*peer) == pc.peer
+		},
+		request: func(dp distPeer) func() {
+			peer := dp.(*peer)
+			cost := peer.GetRequestCost(GetBlockHeaderAndValidatorsMsg, amount)
+			peer.fcServer.QueueRequest(reqID, cost)
+			return func() { peer.RequestHeaderInsertDataBatchByNumber(reqID, cost, origin, amount, skip, reverse) }
 		},
 	}
 	_, ok := <-pc.manager.reqDist.queue(rq)

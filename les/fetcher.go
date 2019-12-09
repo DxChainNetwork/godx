@@ -100,9 +100,9 @@ type fetchRequest struct {
 
 // fetchResponse represents a header download response
 type fetchResponse struct {
-	reqID   uint64
-	headers []*types.Header
-	peer    *peer
+	reqID uint64
+	batch types.HeaderInsertDataBatch
+	peer  *peer
 }
 
 // newLightFetcher creates a new light fetcher
@@ -498,44 +498,45 @@ func (f *lightFetcher) nextRequest() (*distReq, uint64, bool) {
 					time.Sleep(hardRequestTimeout)
 					f.timeoutChn <- reqID
 				}()
-				return func() { p.RequestHeadersByHash(reqID, cost, bestHash, int(bestAmount), 0, true) }
+				return func() { _ = p.RequestHeaderInsertDataBatchByHash(reqID, cost, bestHash, int(bestAmount), 0, true) }
 			},
 		}
 	}
 	return rq, reqID, bestSyncing
 }
 
-// deliverHeaders delivers header download request responses for processing
-func (f *lightFetcher) deliverHeaders(peer *peer, reqID uint64, headers []*types.Header) {
-	f.deliverChn <- fetchResponse{reqID: reqID, headers: headers, peer: peer}
+// deliverHeaderInsertDataBatch delivers the HeaderInsertDataBatch to the deliver channel
+func (f *lightFetcher) deliverHeaderInsertDataBatch(peer *peer, reqID uint64, batch types.HeaderInsertDataBatch) {
+	f.deliverChn <- fetchResponse{reqID: reqID, batch: batch, peer: peer}
 }
 
 // processResponse processes header download request responses, returns true if successful
 func (f *lightFetcher) processResponse(req fetchRequest, resp fetchResponse) bool {
-	if uint64(len(resp.headers)) != req.amount || resp.headers[0].Hash() != req.hash {
-		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.headers), "reqfrom", resp.headers[0], "delivered", req.amount, "delfrom", req.hash)
+	if uint64(len(resp.batch)) != req.amount || resp.batch[0].Header.Hash() != req.hash {
+		req.peer.Log().Debug("Response content mismatch", "requested", len(resp.batch), "reqfrom", resp.batch[0].Header, "delivered", req.amount, "delfrom", req.hash)
 		return false
 	}
-	headers := make([]*types.Header, req.amount)
-	for i, header := range resp.headers {
-		headers[int(req.amount)-1-i] = header
+	dataBatch := make(types.HeaderInsertDataBatch, req.amount)
+	for i, data := range resp.batch {
+		dataBatch[int(req.amount)-1-i] = data
 	}
-	if _, err := f.chain.InsertHeaderChain(headers, 1); err != nil {
+	if _, err := f.chain.InsertHeaderChain(dataBatch, 1); err != nil {
 		if err == consensus.ErrFutureBlock {
 			return true
 		}
 		log.Debug("Failed to insert header chain", "err", err)
 		return false
 	}
-	tds := make([]*big.Int, len(headers))
-	for i, header := range headers {
-		td := f.chain.GetTd(header.Hash(), header.Number.Uint64())
+	tds := make([]*big.Int, len(dataBatch))
+	for i, data := range dataBatch {
+		td := f.chain.GetTd(data.Header.Hash(), data.Header.Number.Uint64())
 		if td == nil {
-			log.Debug("Total difficulty not found for header", "index", i+1, "number", header.Number, "hash", header.Hash())
+			log.Debug("Total difficulty not found for header", "index", i+1, "number", data.Header.Number, "hash", data.Header.Hash())
 			return false
 		}
 		tds[i] = td
 	}
+	headers, _ := dataBatch.Split()
 	f.newHeaders(headers, tds)
 	return true
 }

@@ -36,19 +36,19 @@ type testTxRelay struct {
 	send, discard, mined chan int
 }
 
-func (self *testTxRelay) Send(txs types.Transactions) {
-	self.send <- len(txs)
+func (relay *testTxRelay) Send(txs types.Transactions) {
+	relay.send <- len(txs)
 }
 
-func (self *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
+func (relay *testTxRelay) NewHead(head common.Hash, mined []common.Hash, rollback []common.Hash) {
 	m := len(mined)
 	if m != 0 {
-		self.mined <- m
+		relay.mined <- m
 	}
 }
 
-func (self *testTxRelay) Discard(hashes []common.Hash) {
-	self.discard <- len(hashes)
+func (relay *testTxRelay) Discard(hashes []common.Hash) {
+	relay.discard <- len(hashes)
 }
 
 const poolTestTxs = 1000
@@ -95,7 +95,7 @@ func TestTxPool(t *testing.T) {
 	gspec.MustCommit(ldb)
 	// Assemble the test environment
 	blockchain, _ := core.NewBlockChain(sdb, nil, params.TestChainConfig, ethash.NewFullFaker(), vm.Config{}, nil)
-	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, poolTestBlocks, txPoolTestChainGen)
+	gchain, _ := core.GenerateChain(params.TestChainConfig, genesis, ethash.NewFaker(), sdb, poolTestBlocks, txPoolTestChainGen, nil)
 	if _, err := blockchain.InsertChain(gchain); err != nil {
 		panic(err)
 	}

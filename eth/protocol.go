@@ -25,6 +25,7 @@ import (
 	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/event"
+	"github.com/DxChainNetwork/godx/p2p"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -60,6 +61,10 @@ const (
 	NodeDataMsg    = 0x0e
 	GetReceiptsMsg = 0x0f
 	ReceiptsMsg    = 0x10
+
+	// Protocol messages for dpos
+	GetBlockHeaderAndValidatorsMsg = 0x11
+	BlockHeaderAndValidatorsMsg    = 0x12
 )
 
 type errCode int
@@ -74,6 +79,7 @@ const (
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
 	ErrSuspendedPeer
+	ErrUnexpectedResponse
 )
 
 func (e errCode) String() string {
@@ -91,6 +97,7 @@ var errorToString = map[int]string{
 	ErrNoStatusMsg:             "No status message",
 	ErrExtraStatusMsg:          "Extra status message",
 	ErrSuspendedPeer:           "Suspended peer",
+	ErrUnexpectedResponse:      "Unexpected response",
 }
 
 type txPool interface {
@@ -133,6 +140,10 @@ type getBlockHeadersData struct {
 type hashOrNumber struct {
 	Hash   common.Hash // Block hash from which to retrieve headers (excludes Number)
 	Number uint64      // Block hash from which to retrieve headers (excludes Hash)
+}
+
+func isHashMode(hon hashOrNumber) bool {
+	return hon.Hash != common.Hash{}
 }
 
 // EncodeRLP is a specialized encoder for hashOrNumber to encode only one of the
@@ -179,3 +190,99 @@ type blockBody struct {
 
 // blockBodiesData is the network packet for block content distribution.
 type blockBodiesData []*blockBody
+
+type getBlockHeaderAndValidatorsRequest struct {
+	Origin  hashOrNumber
+	Amount  uint64
+	Skip    uint64
+	Reverse bool
+}
+
+func decodeGetBlockHeaderAndValidatorsRequests(msg p2p.Msg) (getBlockHeaderAndValidatorsRequest, error) {
+	var req getBlockHeaderAndValidatorsRequest
+	if err := msg.Decode(&req); err != nil {
+		return getBlockHeaderAndValidatorsRequest{}, err
+	}
+	return req, nil
+}
+
+// HeaderAndValidatorData is the data structure for BlockHeaderAndValidatorsMsg
+type HeaderAndValidatorData struct {
+	data types.HeaderInsertDataBatch
+}
+
+// EncodeRLP defines the rlp encoding rule for HeaderAndValidatorData.
+func (data *HeaderAndValidatorData) EncodeRLP(w io.Writer) error {
+	compressed := compressHeaderInsertDataBatch(data.data)
+	return rlp.Encode(w, compressed)
+}
+
+// DecodeRLP defines the rlp decoding rule for HeaderAndValidatorData.
+func (data *HeaderAndValidatorData) DecodeRLP(s *rlp.Stream) error {
+	var compressed types.HeaderInsertDataBatch
+	if err := s.Decode(&compressed); err != nil {
+		return fmt.Errorf("cannot decode HeaderAndValidatorData: %v", err)
+	}
+	rawData, err := decompressHeaderInsertDataBatch(compressed)
+	if err != nil {
+		return fmt.Errorf("cannot decode HeaderAndValidatorData: %v", err)
+	}
+	data.data = rawData
+	return nil
+}
+
+// compressHeaderInsertDataBatch compress the types.HeaderInsertDataBatch, validators will be omitted for the latter one of the two
+// consecutive data. Thus the same validators will not be send through network again and again.
+func compressHeaderInsertDataBatch(raw types.HeaderInsertDataBatch) types.HeaderInsertDataBatch {
+	compressed := make(types.HeaderInsertDataBatch, 0, len(raw))
+	var lastValidators []common.Address
+	for _, entry := range raw {
+		if isValidatorsEqual(entry.Validators, lastValidators) {
+			compressed = append(compressed, types.HeaderInsertData{
+				Header: entry.Header,
+			})
+		} else {
+			compressed = append(compressed, types.HeaderInsertData{
+				Header:     entry.Header,
+				Validators: entry.Validators,
+			})
+			lastValidators = entry.Validators
+		}
+	}
+	return compressed
+}
+
+func isValidatorsEqual(validators1, validators2 []common.Address) bool {
+	if len(validators1) != len(validators2) {
+		return false
+	}
+	for i := range validators1 {
+		val1, val2 := validators1[i], validators2[i]
+		if val1 != val2 {
+			return false
+		}
+	}
+	return true
+}
+
+// decompressHeaderInsertDataBatch decompress the compressed data batch.
+func decompressHeaderInsertDataBatch(compressed types.HeaderInsertDataBatch) (types.HeaderInsertDataBatch, error) {
+	rawData := make(types.HeaderInsertDataBatch, 0, len(compressed))
+	if len(compressed[0].Validators) == 0 {
+		return nil, fmt.Errorf("first entry does not have validators")
+	}
+	var lastValidators []common.Address
+	for _, entry := range compressed {
+		rawEntry := types.HeaderInsertData{Header: entry.Header}
+		if entry.Validators == nil {
+			rawEntry.Validators = make([]common.Address, len(lastValidators))
+			copy(rawEntry.Validators, lastValidators)
+		} else {
+			rawEntry.Validators = make([]common.Address, len(entry.Validators))
+			copy(rawEntry.Validators, entry.Validators)
+			lastValidators = entry.Validators
+		}
+		rawData = append(rawData, rawEntry)
+	}
+	return rawData, nil
+}

@@ -80,7 +80,7 @@ func (db *FullDposDatabase) OpenDelegateTrie(root common.Hash) (DposTrie, error)
 	return db.openTrie(root)
 }
 
-// OpenLastEpochTrie opens the epochTrie in the last epoch
+// OpenLastDelegateTrie opens the epochTrie in the last epoch
 func (db *FullDposDatabase) OpenLastDelegateTrie(root common.Hash) (DposTrie, error) {
 	return db.openTrie(root)
 }
@@ -152,8 +152,8 @@ func NewDposContext(db DposDatabase) (*DposContext, error) {
 	}, nil
 }
 
-// NewDposContextFromProto creates DposContext with database and trie root
-func NewDposContextFromProto(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
+// NewDposContextFromRoot creates DposContext with database and trie root
+func NewDposContextFromRoot(db DposDatabase, ctxProto *DposContextRoot) (*DposContext, error) {
 	epochTrie, err := db.OpenEpochTrie(ctxProto.EpochRoot)
 	if err != nil {
 		return nil, err
@@ -536,17 +536,38 @@ func (dc *DposContext) Commit() (*DposContextRoot, error) {
 	}, nil
 }
 
-func (dc *DposContext) CandidateTrie() DposTrie         { return dc.candidateTrie }
-func (dc *DposContext) DelegateTrie() DposTrie          { return dc.delegateTrie }
-func (dc *DposContext) VoteTrie() DposTrie              { return dc.voteTrie }
-func (dc *DposContext) EpochTrie() DposTrie             { return dc.epochTrie }
-func (dc *DposContext) MinedCntTrie() DposTrie          { return dc.minedCntTrie }
-func (dc *DposContext) DB() DposDatabase                { return dc.db }
-func (dc *DposContext) SetEpoch(epoch DposTrie)         { dc.epochTrie = epoch }
-func (dc *DposContext) SetDelegate(delegate DposTrie)   { dc.delegateTrie = delegate }
-func (dc *DposContext) SetVote(vote DposTrie)           { dc.voteTrie = vote }
+// CandidateTrie return the candidate trie of the DposContext
+func (dc *DposContext) CandidateTrie() DposTrie { return dc.candidateTrie }
+
+// DelegateTrie return the delegate trie of the DposContext
+func (dc *DposContext) DelegateTrie() DposTrie { return dc.delegateTrie }
+
+// VoteTrie return the vote trie of the DposContext
+func (dc *DposContext) VoteTrie() DposTrie { return dc.voteTrie }
+
+// EpochTrie return the epoch trie of the DposContext
+func (dc *DposContext) EpochTrie() DposTrie { return dc.epochTrie }
+
+// MinedCntTrie return the mined count trie of the DposContext
+func (dc *DposContext) MinedCntTrie() DposTrie { return dc.minedCntTrie }
+
+// DB return the underlying database in the DposContext
+func (dc *DposContext) DB() DposDatabase { return dc.db }
+
+// SetEpoch set the epoch trie of the DposContext
+func (dc *DposContext) SetEpoch(epoch DposTrie) { dc.epochTrie = epoch }
+
+// SetDelegate set the delegate trie of the DposContext
+func (dc *DposContext) SetDelegate(delegate DposTrie) { dc.delegateTrie = delegate }
+
+// SetVote set the vote trie of the DposContext
+func (dc *DposContext) SetVote(vote DposTrie) { dc.voteTrie = vote }
+
+// SetCandidate set the candidate trie of the DposContext
 func (dc *DposContext) SetCandidate(candidate DposTrie) { dc.candidateTrie = candidate }
-func (dc *DposContext) SetMinedCnt(minedCnt DposTrie)   { dc.minedCntTrie = minedCnt }
+
+// SetMinedCnt set the mined count trie of the DposContext
+func (dc *DposContext) SetMinedCnt(minedCnt DposTrie) { dc.minedCntTrie = minedCnt }
 
 // GetValidators retrieves validator list in current epoch
 func (dc *DposContext) GetValidators() ([]common.Address, error) {
@@ -566,7 +587,6 @@ func GetValidatorsFromDposTrie(t DposTrie) ([]common.Address, error) {
 	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
-
 	return validators, nil
 }
 
@@ -615,18 +635,21 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 }
 
 // GetMinedCnt get mined block count in the minedCntTrie
-func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
+func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) (int64, error) {
 	key := makeMinedCntKey(epoch, addr)
 	cntBytes, err := dc.minedCntTrie.TryGet(key)
-	if err != nil || cntBytes == nil || len(cntBytes) < 8 {
-		return 0
+	if err != nil {
+		return 0, err
+	}
+	if cntBytes == nil || len(cntBytes) < 8 {
+		return 0, nil
 	}
 	cnt := int64(binary.BigEndian.Uint64(cntBytes))
-	return cnt
+	return cnt, nil
 }
 
 // GetCandidates will iterate through the candidateTrie and get all candidates
-func (dc *DposContext) GetCandidates() []common.Address {
+func (dc *DposContext) GetCandidates() ([]common.Address, error) {
 	var candidates []common.Address
 	iterCandidate := trie.NewIterator(dc.candidateTrie.NodeIterator(nil))
 	for iterCandidate.Next() {
@@ -634,7 +657,7 @@ func (dc *DposContext) GetCandidates() []common.Address {
 		candidates = append(candidates, candidateAddr)
 	}
 
-	return candidates
+	return candidates, iterCandidate.Err
 }
 
 // makeMinedCntKey is the private function to make the key for the specified addr and

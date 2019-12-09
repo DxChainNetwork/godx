@@ -28,11 +28,13 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
+	"github.com/DxChainNetwork/godx/consensus/dpos"
 	"github.com/DxChainNetwork/godx/core/rawdb"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
+	"github.com/DxChainNetwork/godx/trie"
 	"github.com/hashicorp/golang-lru"
 )
 
@@ -122,6 +124,17 @@ func (hc *HeaderChain) GetBlockNumber(hash common.Hash) *uint64 {
 	return number
 }
 
+// GetConfirmedBlockHeader get the confirmed block header from chain db
+func (hc *HeaderChain) GetConfirmedBlockHeader() *types.Header {
+	bn := rawdb.ReadConfirmedBlockNumber(hc.chainDb)
+	return hc.GetHeaderByNumber(bn)
+}
+
+// GetConfirmedBlockNumber get the confirmed block number from chain db
+func (hc *HeaderChain) GetConfirmedBlockNumber() uint64 {
+	return rawdb.ReadConfirmedBlockNumber(hc.chainDb)
+}
+
 // WriteHeader writes a header into the local chain, given that its parent is
 // already known. If the total difficulty of the newly inserted header becomes
 // greater than the current known TD, the canonical chain is re-routed.
@@ -209,6 +222,7 @@ func (hc *HeaderChain) WriteValidators(validators []common.Address) error {
 // header writes should be protected by the parent chain mutex individually.
 type WhCallback func(data types.HeaderInsertData) error
 
+// ValidateHeaderChain validate the HeaderInsertDataBatch
 func (hc *HeaderChain) ValidateHeaderChain(data types.HeaderInsertDataBatch, checkFreq int) (int, error) {
 	chain, _ := data.Split()
 	// Do a sanity check that the provided chain is actually ordered and linked
@@ -288,6 +302,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 	// Report some public statistics so the user has a clue what's going on
 	chain, _ := dataBatch.Split()
 	last := chain[len(chain)-1]
+	hc.updateConfirmedBlockNumber(last)
 
 	context := []interface{}{
 		"count", stats.processed, "elapsed", common.PrettyDuration(time.Since(start)),
@@ -302,6 +317,39 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 	log.Info("Imported new block headers", context...)
 
 	return 0, nil
+}
+
+func (hc *HeaderChain) updateConfirmedBlockNumber(header *types.Header) {
+	prevConfirmedNum := hc.GetConfirmedBlockNumber()
+
+	if header.Number.Uint64() <= prevConfirmedNum {
+		return
+	}
+	var (
+		curHeader  = header
+		curNumber  = header.Number.Uint64()
+		vMap       = make(map[common.Address]bool)
+		nextHeader *types.Header
+	)
+	for curNumber >= prevConfirmedNum+dpos.ConsensusSize-uint64(len(vMap)) && curNumber > 0 {
+		vMap[curHeader.Validator] = true
+		if len(vMap) >= dpos.ConsensusSize {
+			hc.writeConfirmedBlockNumber(curNumber)
+			log.Debug("New confirmed block", "number", curNumber, "hash", curHeader.Hash())
+			return
+		}
+		nextHeader = hc.GetHeader(curHeader.ParentHash, curNumber-1)
+		if nextHeader == nil {
+			return
+		}
+		curHeader, curNumber = nextHeader, nextHeader.Number.Uint64()
+	}
+	return
+}
+
+// writeConfirmedBlockNumber write the confirmed block number to database
+func (hc *HeaderChain) writeConfirmedBlockNumber(number uint64) {
+	rawdb.WriteConfirmedBlockNumber(hc.chainDb, number)
 }
 
 // GetBlockHashesFromHash retrieves a number of block hashes starting at a given
@@ -514,4 +562,13 @@ func (hc *HeaderChain) Engine() consensus.Engine { return hc.engine }
 // a header chain does not have blocks available for retrieval.
 func (hc *HeaderChain) GetBlock(hash common.Hash, number uint64) *types.Block {
 	return nil
+}
+
+// GetValidators return the validators of the specified root.
+func (hc *HeaderChain) GetValidators(root common.Hash) ([]common.Address, error) {
+	t, err := trie.New(root, trie.NewDatabase(hc.chainDb))
+	if err != nil {
+		return []common.Address{}, err
+	}
+	return types.GetValidatorsFromDposTrie(t)
 }

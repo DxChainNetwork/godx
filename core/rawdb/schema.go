@@ -19,6 +19,7 @@ package rawdb
 
 import (
 	"encoding/binary"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/metrics"
 )
@@ -60,6 +61,8 @@ var (
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	ConfirmedBlockNumberKey = []byte("confirmed-block-number")
 )
 
 // TxLookupEntry is a positional metadata to help looking up the data content of

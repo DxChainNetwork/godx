@@ -324,6 +324,15 @@ func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big
 	return g.MustCommit(db)
 }
 
+// GenesisBlockForDposTesting creates and writes a block for dpos testing where some addresses are
+// assigned as candidate also
+func GenesisBlockForDposTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
+	g := TestGenesisBlockWithInitialCandidates()
+	g.Alloc[addr] = GenesisAccount{Balance: balance}
+	b := g.MustCommit(db)
+	return b
+}
+
 // DefaultGenesisBlock returns the Ethereum main net genesis block.
 func DefaultGenesisBlock() *Genesis {
 	g := &Genesis{
@@ -358,6 +367,61 @@ func DefaultGenesisBlock() *Genesis {
 			common.HexToAddress("0xc8c85cae16d18076741e2f94528d6ffaa5960fa1"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
 			common.HexToAddress("0xbbb1244fd311481e68253f9995a02715ac22ece6"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
 			common.HexToAddress("0x816f4378aca62e72d75ead38495bb896f72eefce"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+		},
+	}
+
+	return g
+}
+
+// TestGenesisBlockWithInitialCandidates returns the Ethereum main net genesis block.
+func TestGenesisBlockWithInitialCandidates() *Genesis {
+	g := &Genesis{
+		Config:     params.DposChainConfigWithInitialCandidates,
+		Nonce:      66,
+		ExtraData:  hexutil.MustDecode("0x4478436861696e204e6574776f726b20546573746e657420302e372e32"),
+		GasLimit:   3141592,
+		Difficulty: big.NewInt(1048576),
+		Alloc: map[common.Address]GenesisAccount{
+			// faucet
+			common.HexToAddress("0x5747595e5fe0ff31df1c4feb7ae6110a34f4714a"): {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 192), big.NewInt(9))},
+
+			// validators
+			common.HexToAddress("0xccdfb5a54db1d805ca24a33b8b15f49d8945bb4b"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x116204ed3e5749ab6c1318314300dbabf5aa972b"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xa60e0361cffc636da87ea8cb246e7926870621c9"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xf6a0da1f0b9a8d4e6b4392fe60a5e1f99c6aa873"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x08edc1328ba5236b151d273f7ad4703c1585def1"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x11720ac932723d5df4221dad1420ea6695acc68a"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x4a83c1c000ac1d1a8c06e8d18dc641c8530e0625"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x9374268a703851b2302b35d4de62c2f498099514"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x7d038901709e9d8cdb040e52e54c493bc726a05d"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x944eb166879a0b9a5e3c7a0512836a4d22a0bb47"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xf7925a26ebf873cea35fbe2f8278a8cc94fad801"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x31423da09afc3202844131da5888f9acd5593c6f"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x8fd7c0503e27b35ee6ef79c21559b4195536b780"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x9c0d5b2713ebebfa9ec0819186809cbd510554e8"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x18cead672df01dbd808fcc7e0e988bdc67551de5"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x2f03b5b4416e7ce86773f1908939291787cb8086"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xe61aa6815e667f1dff7d257ad2c1f30d02bcf3da"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xdfb1cca8d7299b0210086745dc7dad14a03ce2d3"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xc8c85cae16d18076741e2f94528d6ffaa5960fa1"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0xbbb1244fd311481e68253f9995a02715ac22ece6"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x816f4378aca62e72d75ead38495bb896f72eefce"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+
+			// candidates
+			common.HexToAddress("0x1000000000000000000000000000000000000001"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000002"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000003"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000004"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000005"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000006"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000007"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000008"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000009"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000010"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000011"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000012"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
+			common.HexToAddress("0x1000000000000000000000000000000000000013"): {Balance: common.NewBigIntUint64(1e18).MultInt64(20000).BigIntPtr()},
 		},
 	}
 
@@ -441,7 +505,7 @@ func decodePrealloc(data string) GenesisAlloc {
 
 // initGenesisDposContext returns the dpos context of given genesis block
 func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Database) (*types.DposContext, error) {
-	dc, err := types.NewDposContextFromProto(types.NewFullDposDatabase(db), &types.DposContextRoot{})
+	dc, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(db), &types.DposContextRoot{})
 	if err != nil {
 		return nil, err
 	}
@@ -463,27 +527,15 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	// vMap is the structure to check the duplication of the validators
 	vMap := make(map[common.Address]struct{})
 	for _, validator := range g.Config.Dpos.Validators {
-		validatorAddr := validator.Address
-		if _, exist := vMap[validatorAddr]; exist {
-			return nil, fmt.Errorf("duplicate validator address %x", validatorAddr)
-		}
-		vMap[validatorAddr] = struct{}{}
-
-		err = dc.CandidateTrie().TryUpdate(validatorAddr.Bytes(), validatorAddr.Bytes())
-		if err != nil {
+		if err := applyGenesisValidator(validator, dc, stateDB, vMap); err != nil {
 			return nil, err
 		}
+	}
 
-		// set deposit and frozen assets
-		if balance := common.PtrBigInt(stateDB.GetBalance(validatorAddr)); balance.Cmp(validator.Deposit) < 0 {
-			return nil, fmt.Errorf("during initializing for genesis, validator %x has not enough balance for deposit", validatorAddr)
+	for _, candidate := range g.Config.Dpos.Candidates {
+		if err := applyGenesisCandidate(candidate, dc, stateDB); err != nil {
+			return nil, err
 		}
-		dpos.SetCandidateDeposit(stateDB, validatorAddr, validator.Deposit)
-		dpos.SetFrozenAssets(stateDB, validatorAddr, validator.Deposit)
-
-		// set reward ratio
-		dpos.SetRewardRatioNumerator(stateDB, validatorAddr, validator.RewardRatio)
-		dpos.SetRewardRatioNumeratorLastEpoch(stateDB, validatorAddr, validator.RewardRatio)
 	}
 
 	// init the KeyValueCommonAddress account and set its nonce 1 to avoid deleting empty state object
@@ -491,4 +543,39 @@ func initGenesisDposContext(stateDB *state.StateDB, g *Genesis, db ethdb.Databas
 	stateDB.SetState(dpos.KeyValueCommonAddress, dpos.KeyPreEpochSnapshotDelegateTrieRoot, dc.DelegateTrie().Hash())
 
 	return dc, nil
+}
+
+func applyGenesisValidator(validatorInfo params.ValidatorConfig, dc *types.DposContext, stateDB *state.StateDB, vMap map[common.Address]struct{}) error {
+	addr := validatorInfo.Address
+	if _, exist := vMap[addr]; exist {
+		return fmt.Errorf("duplicate validator address %x", addr)
+	}
+	vMap[addr] = struct{}{}
+
+	if err := dc.CandidateTrie().TryUpdate(addr.Bytes(), addr.Bytes()); err != nil {
+		return err
+	}
+	if balance := common.PtrBigInt(stateDB.GetBalance(addr)); balance.Cmp(validatorInfo.Deposit) < 0 {
+		return fmt.Errorf("during genesis intialization, validator %x does not have enough balance", addr)
+	}
+	dpos.SetCandidateDeposit(stateDB, addr, validatorInfo.Deposit)
+	dpos.SetFrozenAssets(stateDB, addr, validatorInfo.Deposit)
+	dpos.SetRewardRatioNumerator(stateDB, addr, validatorInfo.RewardRatio)
+	dpos.SetRewardRatioNumeratorLastEpoch(stateDB, addr, validatorInfo.RewardRatio)
+	return nil
+}
+
+func applyGenesisCandidate(candidateInfo params.CandidateConfig, dc *types.DposContext, stateDB *state.StateDB) error {
+	addr := candidateInfo.Address
+	if err := dc.CandidateTrie().TryUpdate(addr.Bytes(), addr.Bytes()); err != nil {
+		return err
+	}
+	if balance := common.PtrBigInt(stateDB.GetBalance(addr)); balance.Cmp(candidateInfo.Deposit) < 0 {
+		return fmt.Errorf("during genesis intialization, candidate %x does not have enough balance", addr)
+	}
+	dpos.SetCandidateDeposit(stateDB, addr, candidateInfo.Deposit)
+	dpos.SetFrozenAssets(stateDB, addr, candidateInfo.Deposit)
+	dpos.SetRewardRatioNumerator(stateDB, addr, candidateInfo.RewardRatio)
+	dpos.SetRewardRatioNumeratorLastEpoch(stateDB, addr, candidateInfo.RewardRatio)
+	return nil
 }

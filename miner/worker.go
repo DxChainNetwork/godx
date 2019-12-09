@@ -134,9 +134,10 @@ type worker struct {
 	pendingMu    sync.RWMutex
 	pendingTasks map[common.Hash]*task
 
-	snapshotMu    sync.RWMutex // The lock used to protect the block snapshot and state snapshot
-	snapshotBlock *types.Block
-	snapshotState *state.StateDB
+	snapshotMu      sync.RWMutex // The lock used to protect the block snapshot and state snapshot
+	snapshotBlock   *types.Block
+	snapshotState   *state.StateDB
+	snapshotDposCtx *types.DposContext
 
 	// atomic status counters
 	running int32 // The indicator whether the consensus engine is running or not.
@@ -205,14 +206,14 @@ func (w *worker) setExtra(extra []byte) {
 }
 
 // pending returns the pending state and corresponding block.
-func (w *worker) pending() (*types.Block, *state.StateDB) {
+func (w *worker) pending() (*types.Block, *state.StateDB, *types.DposContext) {
 	// return a snapshot to avoid contention on currentMu mutex
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
-	if w.snapshotState == nil {
-		return nil, nil
+	if w.snapshotState == nil || w.snapshotDposCtx == nil {
+		return nil, nil, nil
 	}
-	return w.snapshotBlock, w.snapshotState.Copy()
+	return w.snapshotBlock, w.snapshotState.Copy(), w.snapshotDposCtx.Copy()
 }
 
 // pendingBlock returns pending block.
@@ -500,7 +501,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 
 	// construct dpos context from parent's dpos context root
 	chainDB := stateDB.Database().TrieDB().DiskDB().(ethdb.Database)
-	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(chainDB), parent.Header().DposContext)
+	dposContext, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(chainDB), parent.Header().DposContext)
 	if err != nil {
 		log.Error("failed to create dpos context", "error", err)
 		return err
@@ -581,6 +582,7 @@ func (w *worker) updateSnapshot() {
 	)
 
 	w.snapshotState = w.current.state.Copy()
+	w.snapshotDposCtx = w.current.dposContext.Copy()
 }
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {

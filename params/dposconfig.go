@@ -121,23 +121,109 @@ var (
 			RewardRatio: 30,
 		},
 	}
+
+	// GenesisCandidates is a list of candidates in already claimed as candidates in genesis block
+	GenesisCandidates = []CandidateConfig{
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000001"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000002"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000003"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000004"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000005"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000006"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000007"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000008"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000009"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000010"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000011"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000012"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+		{
+			Address:     common.HexToAddress("0x1000000000000000000000000000000000000013"),
+			Deposit:     common.NewBigIntUint64(1e18).MultInt64(10000),
+			RewardRatio: 30,
+		},
+	}
 )
 
 // DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
-type DposConfig struct {
-	//Validators []common.Address `json:"validators"` // Genesis validator list
-	Validators []ValidatorConfig `json:"validators"` // Genesis validator list
-}
+type (
+	DposConfig struct {
+		Validators []ValidatorConfig `json:"validators"` // Genesis validator list
 
-type ValidatorConfig struct {
-	Address     common.Address `json:"address" gencodec:"required"`
-	Deposit     common.BigInt  `json:"deposit" gencodec:"required"`
-	RewardRatio uint64         `json:"rewardRatio"`
-}
+		Candidates []CandidateConfig `json:"candidates"` // Genesis candidate list
+	}
+
+	ValidatorConfig struct {
+		Address     common.Address `json:"address" gencodec:"required"`
+		Deposit     common.BigInt  `json:"deposit" gencodec:"required"`
+		RewardRatio uint64         `json:"rewardRatio"`
+	}
+
+	CandidateConfig struct {
+		Address     common.Address `json:"address" gencodec:"required"`
+		Deposit     common.BigInt  `json:"deposit" gencodec:"required"`
+		RewardRatio uint64         `json:"rewardRatio"`
+	}
+)
 
 func DefaultDposConfig() *DposConfig {
 	return &DposConfig{
 		Validators: DefaultValidators,
+	}
+}
+
+// TestDposConfigWithInitialCandidates returns the DposConfig for testing where
+func TestDposConfigWithInitialCandidates() *DposConfig {
+	return &DposConfig{
+		Validators: DefaultValidators,
+		Candidates: GenesisCandidates,
 	}
 }
 

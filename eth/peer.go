@@ -317,6 +317,11 @@ func (p *peer) SendBlockHeaders(headers []*types.Header) error {
 	return p2p.Send(p.rw, BlockHeadersMsg, headers)
 }
 
+// SendBlockHeadersAndValidators sends a batch of block headers and validators to the remote peer
+func (p *peer) SendBlockHeadersAndValidators(data types.HeaderInsertDataBatch) error {
+	return p2p.Send(p.rw, BlockHeaderAndValidatorsMsg, data)
+}
+
 // SendBlockBodies sends a batch of block contents to the remote peer.
 func (p *peer) SendBlockBodies(bodies []*blockBody) error {
 	return p2p.Send(p.rw, BlockBodiesMsg, blockBodiesData(bodies))
@@ -359,6 +364,30 @@ func (p *peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 func (p *peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	return p2p.Send(p.rw, GetBlockHeadersMsg, &getBlockHeadersData{Origin: hashOrNumber{Number: origin}, Amount: uint64(amount), Skip: uint64(skip), Reverse: reverse})
+}
+
+// RequestHeadersAndValidatorsByHash fetches a batch of blocks' headers and validators corresponding to
+// the specified header query, based on the hash of an origin block.
+func (p *peer) RequestHeaderInsertDataBatchByHash(origin common.Hash, amount int, skip int, reverse bool) error {
+	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromhash", origin, "skip", skip, "reverse", reverse)
+	return p2p.Send(p.rw, GetBlockHeaderAndValidatorsMsg, &getBlockHeaderAndValidatorsRequest{
+		Origin:  hashOrNumber{Hash: origin},
+		Amount:  uint64(amount),
+		Skip:    uint64(skip),
+		Reverse: reverse,
+	})
+}
+
+// RequestHeaderInsertDataBatchByNumber fetches a batch of blocks' headers and validators corresponding
+// to the specified header query, based on the number of an origin block.
+func (p *peer) RequestHeaderInsertDataBatchByNumber(origin uint64, amount, skip int, reverse bool) error {
+	p.Log().Debug("Fetching batch of HeaderInsertDataBatch", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
+	return p2p.Send(p.rw, GetBlockHeaderAndValidatorsMsg, &getBlockHeaderAndValidatorsRequest{
+		Origin:  hashOrNumber{Number: origin},
+		Amount:  uint64(amount),
+		Skip:    uint64(skip),
+		Reverse: reverse,
+	})
 }
 
 // RequestBodies fetches a batch of blocks' bodies corresponding to the hashes

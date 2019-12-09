@@ -56,10 +56,9 @@ type Dpos struct {
 	config *params.DposConfig // Consensus engine configuration parameters
 	db     ethdb.Database     // Database to store and retrieve snapshot checkpoints
 
-	signer               common.Address
-	signFn               SignerFn
-	signatures           *lru.ARCCache // Signatures of recent blocks to speed up mining
-	confirmedBlockHeader *types.Header
+	signer     common.Address
+	signFn     SignerFn
+	signatures *lru.ARCCache // Signatures of recent blocks to speed up mining
 
 	mu   sync.RWMutex
 	stop chan bool
@@ -115,9 +114,10 @@ func New(config *params.DposConfig, db ethdb.Database) *Dpos {
 }
 
 // NewDposFaker create fake dpos for test
-func NewDposFaker() *Dpos {
+func NewDposFaker(db ethdb.Database) *Dpos {
 	return &Dpos{
 		Mode: ModeFake,
+		db:   db,
 	}
 }
 
@@ -275,6 +275,14 @@ func (d *Dpos) VerifySeal(chain consensus.ChainReader, header *types.Header) err
 func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHelper validatorHelper) error {
 
 	if d.Mode == ModeFake {
+		seal := header.Extra[len(header.Extra)-extraSeal:]
+		targetValidator, err := vHelper.getValidator()
+		if err != nil {
+			return fmt.Errorf("cannot get validator: %v", err)
+		}
+		if !bytes.Equal(seal[:common.AddressLength], targetValidator[:]) {
+			return fmt.Errorf("fake verify seal failed. got %x, expect %x", seal[:common.AddressLength], targetValidator[:])
+		}
 		return nil
 	}
 	validator, err := vHelper.getValidator()
@@ -284,7 +292,7 @@ func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, vHe
 	if err := d.verifyBlockSigner(validator, header); err != nil {
 		return err
 	}
-	return d.updateConfirmedBlockHeader(chain)
+	return nil
 }
 
 func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header) error {
@@ -301,51 +309,6 @@ func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header)
 	return nil
 }
 
-// updateConfirmedBlockHeader update the newest confirmed block
-func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
-	if d.confirmedBlockHeader == nil {
-		header, err := d.loadConfirmedBlockHeader(chain)
-		if err != nil {
-			header = chain.GetHeaderByNumber(0)
-			if header == nil {
-				return err
-			}
-		}
-		d.confirmedBlockHeader = header
-	}
-
-	curHeader := chain.CurrentHeader()
-
-	validatorMap := make(map[common.Address]bool)
-	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
-		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
-
-		// fast return
-		// if block number difference less consensusSize-witnessNum,
-		// there is no need to check block is confirmed
-		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
-			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
-			return nil
-		}
-
-		validatorMap[curHeader.Validator] = true
-		if len(validatorMap) >= ConsensusSize {
-			d.confirmedBlockHeader = curHeader
-			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
-				return err
-			}
-			log.Debug("Dpos set confirmed block header success", "currentHeader", curHeader.Number.String())
-			return nil
-		}
-
-		curHeader = chain.GetHeaderByHash(curHeader.ParentHash)
-		if curHeader == nil {
-			return ErrNilBlockHeader
-		}
-	}
-	return nil
-}
-
 // load the latest confirmed block from the database
 func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Header, error) {
 	key, err := d.db.Get(confirmedBlockHead)
@@ -357,11 +320,6 @@ func (d *Dpos) loadConfirmedBlockHeader(chain consensus.ChainReader) (*types.Hea
 		return nil, ErrNilBlockHeader
 	}
 	return header, nil
-}
-
-// inserts the confirmed block into the database.
-func (d *Dpos) storeConfirmedBlockHeader(db ethdb.Database) error {
-	return db.Put(confirmedBlockHead, d.confirmedBlockHeader.Hash().Bytes())
 }
 
 // Prepare implements consensus.Engine, assembly some basic fields into header
@@ -429,14 +387,15 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
 func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
+
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
 	accumulateRewards(chain.Config(), state, header, d.db, genesis)
 
-	if d.Mode == ModeFake {
-		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
-		return types.NewBlock(header, txs, uncles, receipts), nil
-	}
+	//if d.Mode == ModeFake {
+	//	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	//	return types.NewBlock(header, txs, uncles, receipts), nil
+	//}
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
@@ -461,7 +420,9 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	header.DposContext = dposContext.ToRoot()
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	return types.NewBlock(header, txs, uncles, receipts), nil
+	block := types.NewBlock(header, txs, uncles, receipts)
+	block.SetDposCtx(dposContext)
+	return block, nil
 }
 
 // checkDeadline check the given block whether is fit to produced at now
@@ -487,7 +448,7 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	dposContext, err := types.NewDposContextFromProto(types.NewFullDposDatabase(d.db), lastBlock.Header().DposContext)
+	dposContext, err := types.NewDposContextFromRoot(types.NewFullDposDatabase(d.db), lastBlock.Header().DposContext)
 	if err != nil {
 		return err
 	}
@@ -509,10 +470,20 @@ func (d *Dpos) Seal(chain consensus.ChainReader, block *types.Block, results cha
 	if d.Mode == ModeFake {
 		header := block.Header()
 		header.Nonce, header.MixDigest = types.BlockNonce{}, common.Hash{}
+		header.Extra = make([]byte, extraSeal)
+		validators, err := block.DposCtx().GetValidators()
+		if err != nil {
+			return fmt.Errorf("fake mode get validators error: %v", err)
+		}
+		validator, err := lookupValidator(block.Time().Int64(), validators[:])
+		if err != nil {
+			return fmt.Errorf("fake mode look up validator error: %v", err)
+		}
+		copy(header.Extra, validator[:])
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "mode", "fake", "sealhash", d.SealHash(block.Header()))
+			log.Warn("Sealing result is not read by miner", "mode", "fake")
 		}
 		return nil
 	}
@@ -559,12 +530,7 @@ func (d *Dpos) Authorize(signer common.Address, signFn SignerFn) {
 
 // APIs implemented Engine interface which includes DPOS API
 func (d *Dpos) APIs(chain consensus.ChainReader) []rpc.API {
-	return []rpc.API{{
-		Namespace: "dpos",
-		Version:   "1.0",
-		Service:   &API{chain: chain, dpos: d},
-		Public:    true,
-	}}
+	return []rpc.API{}
 }
 
 // SealHash implements consensus.Engine, returns the hash of a block prior to it being sealed.

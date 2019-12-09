@@ -390,6 +390,10 @@ func (b *BackendTest) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.Bl
 	return &state.StateDB{}, &types.Header{}, nil
 }
 
+func (b *BackendTest) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	return &state.StateDB{}, &types.DposContext{}, &types.Header{}, nil
+}
+
 func (b *BackendTest) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {
 	return &types.Block{}, nil
 }
@@ -399,6 +403,9 @@ func (b *BackendTest) GetReceipts(ctx context.Context, blockHash common.Hash) (t
 }
 func (b *BackendTest) GetTd(blockHash common.Hash) *big.Int {
 	return big.NewInt(100)
+}
+func (b *BackendTest) GetConfirmedBlockNumber() uint64 {
+	return 0
 }
 
 func (b *BackendTest) GetEVM(ctx context.Context, msg core.Message, state *state.StateDB, header *types.Header) (*vm.EVM, func() error, error) {

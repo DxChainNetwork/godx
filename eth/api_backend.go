@@ -51,6 +51,11 @@ func (b *EthAPIBackend) CurrentBlock() *types.Block {
 	return b.eth.blockchain.CurrentBlock()
 }
 
+// GetConfirmedBlockNumber get confirmed block number
+func (b *EthAPIBackend) GetConfirmedBlockNumber() uint64 {
+	return b.eth.blockchain.GetConfirmedBlockNumber()
+}
+
 func (b *EthAPIBackend) SetHead(number uint64) {
 	b.eth.protocolManager.downloader.Cancel()
 	b.eth.blockchain.SetHead(number)
@@ -89,7 +94,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, blockNr rpc.BlockNumb
 func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.Header, error) {
 	// Pending state is only known by the miner
 	if blockNr == rpc.PendingBlockNumber {
-		block, state := b.eth.miner.Pending()
+		block, state, _ := b.eth.miner.Pending()
 		return state, block.Header(), nil
 	}
 	// Otherwise resolve the block number and return its state
@@ -99,6 +104,27 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 	}
 	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
 	return stateDb, header, err
+}
+
+// StateDposCtxAndHeaderByNumber returns the state, dposCtx and header by blockNumber
+func (b *EthAPIBackend) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	if blockNr == rpc.PendingBlockNumber {
+		block, state, dposCtx := b.eth.miner.Pending()
+		return state, dposCtx, block.Header(), nil
+	}
+	header, err := b.HeaderByNumber(ctx, blockNr)
+	if header == nil || err != nil {
+		return nil, nil, nil, err
+	}
+	stateDb, err := b.eth.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	dposCtx, err := b.eth.BlockChain().DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return stateDb, dposCtx, header, nil
 }
 
 func (b *EthAPIBackend) GetBlock(ctx context.Context, hash common.Hash) (*types.Block, error) {

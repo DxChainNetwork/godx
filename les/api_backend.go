@@ -57,6 +57,11 @@ func (b *LesApiBackend) SetHead(number uint64) {
 	b.eth.blockchain.SetHead(number)
 }
 
+// GetConfirmedBlockNumber get the confirmed block number
+func (b *LesApiBackend) GetConfirmedBlockNumber() uint64 {
+	return b.eth.blockchain.GetConfirmedBlockNumber()
+}
+
 func (b *LesApiBackend) HeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*types.Header, error) {
 	if blockNr == rpc.LatestBlockNumber || blockNr == rpc.PendingBlockNumber {
 		return b.eth.blockchain.CurrentHeader(), nil
@@ -82,6 +87,17 @@ func (b *LesApiBackend) StateAndHeaderByNumber(ctx context.Context, blockNr rpc.
 		return nil, nil, err
 	}
 	return light.NewState(ctx, header, b.eth.odr), header, nil
+}
+
+// StateDposCtxAndHeaderByNumber return the state, dposContext, and header by block number
+func (b *LesApiBackend) StateDposCtxAndHeaderByNumber(ctx context.Context, blockNr rpc.BlockNumber) (*state.StateDB, *types.DposContext, *types.Header, error) {
+	header, err := b.HeaderByNumber(ctx, blockNr)
+	if header == nil || err != nil {
+		return nil, nil, nil, err
+	}
+	state := light.NewState(ctx, header, b.eth.odr)
+	dposCtx := light.NewDposContext(ctx, header, b.eth.odr)
+	return state, dposCtx, header, nil
 }
 
 func (b *LesApiBackend) GetBlock(ctx context.Context, blockHash common.Hash) (*types.Block, error) {

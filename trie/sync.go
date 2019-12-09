@@ -3,6 +3,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/common/prque"
 	"github.com/DxChainNetwork/godx/ethdb"
@@ -171,6 +172,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 		// Decode the node data content and update the request.
 		node, err := decodeNode(item.Hash[:], item.Data, 0)
 		if err != nil {
+			fmt.Println("decode node error", err)
 			return committed, i, err
 		}
 		request.data = item.Data
@@ -178,6 +180,7 @@ func (s *Sync) Process(results []SyncResult) (bool, int, error) {
 		// Create and schedule a request for all the children nodes
 		requests, err := s.children(request, node)
 		if err != nil {
+			fmt.Println("children error", err)
 			return committed, i, err
 		}
 		if len(requests) == 0 && request.deps == 0 {
