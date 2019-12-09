@@ -335,9 +335,6 @@ func (hc *HeaderChain) updateConfirmedBlockNumber(header *types.Header) {
 	for curNumber >= prevConfirmedNum+dpos.ConsensusSize-uint64(len(vMap)) && curNumber > 0 {
 		vMap[curHeader.Validator] = true
 		if len(vMap) >= dpos.ConsensusSize {
-			if curNumber <= hc.GetConfirmedBlockNumber() {
-				return
-			}
 			hc.writeConfirmedBlockNumber(curNumber)
 			log.Debug("New confirmed block", "number", curNumber, "hash", curHeader.Hash())
 			return
