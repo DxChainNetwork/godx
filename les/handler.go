@@ -1321,7 +1321,6 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 		return errResp(ErrDecode, "%v: %v", msg, err)
 	}
 	query := req.Query
-	log.Error(fmt.Sprintf("query: %v\n", query))
 	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
 		fmt.Println(query.Amount)
 		return errResp(ErrRequestRejected, "header and validator fetch")
@@ -1332,7 +1331,6 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 	}
 	bv, rcost := p.fcClient.RequestProcessed(costs.baseCost + query.Amount*costs.reqCost)
 	pm.server.fcCostStats.update(msg.Code, query.Amount, rcost)
-	log.Error(fmt.Sprintf("send message： %v\n", data))
 	return p.SendBlockHeadersAndValidators(req.ReqID, bv, data)
 }
 
