@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -316,7 +317,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 		context = append(context, []interface{}{"ignored", stats.ignored}...)
 	}
 	log.Info("Imported new block headers", context...)
-	//debug.FreeOSMemory()
+	debug.FreeOSMemory()
 	return 0, nil
 }
 
