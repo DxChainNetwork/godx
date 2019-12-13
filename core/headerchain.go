@@ -297,7 +297,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 		if err := writeData(data); err != nil {
 			return i, err
 		}
-		time.Sleep(1 * time.Second)
+		//time.Sleep(1 * time.Second)
 		stats.processed++
 	}
 	// Report some public statistics so the user has a clue what's going on
@@ -316,7 +316,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 		context = append(context, []interface{}{"ignored", stats.ignored}...)
 	}
 	log.Info("Imported new block headers", context...)
-
+	//debug.FreeOSMemory()
 	return 0, nil
 }
 
