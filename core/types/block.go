@@ -21,9 +21,11 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"hash"
 	"io"
 	"math/big"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -271,8 +273,18 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+var shaPool = sync.Pool{
+	New: func() interface{} {
+		return sha3.NewLegacyKeccak256()
+	},
+}
+
 func rlpHash(x interface{}) (h common.Hash) {
-	hw := sha3.NewLegacyKeccak256()
+	hw := shaPool.Get().(hash.Hash)
+	defer func() {
+		hw.Reset()
+		shaPool.Put(hw)
+	}()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
 	return h
