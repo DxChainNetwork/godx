@@ -23,6 +23,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"runtime/debug"
 	"sync/atomic"
 	"time"
 
@@ -35,7 +36,7 @@ import (
 	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/trie"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 )
 
 const (
@@ -315,7 +316,7 @@ func (hc *HeaderChain) InsertHeaderChain(dataBatch types.HeaderInsertDataBatch, 
 		context = append(context, []interface{}{"ignored", stats.ignored}...)
 	}
 	log.Info("Imported new block headers", context...)
-
+	debug.FreeOSMemory()
 	return 0, nil
 }
 

@@ -1325,7 +1325,7 @@ func (pm *ProtocolManager) handleGetBlockHeaderAndValidatorsMsg(msg p2p.Msg, p *
 	}
 	query := req.Query
 	if reject(query.Amount, MaxHeaderAndValidatorsFetch) {
-		return errResp(ErrRequestRejected, "")
+		return errResp(ErrRequestRejected, "header and validator fetch")
 	}
 	data, err := calculateHeaderAndValidatorsFromRequest(pm, query, p)
 	if err != nil {
