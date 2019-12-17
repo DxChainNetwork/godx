@@ -270,10 +270,10 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	}
 
 	if !pm.lightSync && !p.Peer.Info().Network.Trusted {
-		addr, ok := p.RemoteAddr().(*net.TCPAddr)
+		_, ok := p.RemoteAddr().(*net.TCPAddr)
 		// test peer address is not a tcp address, don't use client pool if can not typecast
 		if ok {
-			id := addr.IP.String()
+			id := p.Peer.Info().Enode
 			if !pm.clientPool.connect(id, func() { go pm.removePeer(p.id) }) {
 				return p2p.DiscTooManyPeers
 			}

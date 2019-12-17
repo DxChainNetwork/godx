@@ -192,6 +192,7 @@ func NewDposContextFromRoot(db DposDatabase, ctxProto *DposContextRoot) (*DposCo
 // Copy creates a new DposContext which has the same content with old one
 func (dc *DposContext) Copy() *DposContext {
 	return &DposContext{
+		db:            dc.DB(),
 		epochTrie:     dc.db.CopyTrie(dc.epochTrie),
 		delegateTrie:  dc.db.CopyTrie(dc.delegateTrie),
 		voteTrie:      dc.db.CopyTrie(dc.voteTrie),
