@@ -17,7 +17,7 @@ const (
 	inmemorySignatures = 4096
 
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
-	MaxValidatorSize = 4
+	MaxValidatorSize = 5
 
 	// SafeSize indicates that the least number of validators in dpos consensus
 	SafeSize = MaxValidatorSize*2/3 + 1
@@ -39,7 +39,7 @@ const (
 	BlockInterval = int64(2)
 
 	// EpochInterval indicates that a new epoch will be elected every a day
-	EpochInterval = int64(100)
+	EpochInterval = int64(43200)
 
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
