@@ -121,12 +121,17 @@ var (
 			RewardRatio: 30,
 		},
 	}
+
+	// TODO: specify the real donated account address
+	// DefaultDonatedAccount is the address that receive some donation when producing a new block
+	DefaultDonatedAccount = common.HexToAddress("0xabc")
 )
 
 // DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
 type DposConfig struct {
 	//Validators []common.Address `json:"validators"` // Genesis validator list
-	Validators []ValidatorConfig `json:"validators"` // Genesis validator list
+	Validators     []ValidatorConfig `json:"validators"`     // Genesis validator list
+	DonatedAccount common.Address    `json:"donatedAccount"` // address for receiving donation
 }
 
 type ValidatorConfig struct {
@@ -137,7 +142,8 @@ type ValidatorConfig struct {
 
 func DefaultDposConfig() *DposConfig {
 	return &DposConfig{
-		Validators: DefaultValidators,
+		Validators:     DefaultValidators,
+		DonatedAccount: DefaultDonatedAccount,
 	}
 }
 

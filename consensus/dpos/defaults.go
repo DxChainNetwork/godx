@@ -44,6 +44,12 @@ const (
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
 	MaxVoteCount = 30
+
+	// DonationRatio is the value of donation ratio for every new block reward
+	DonationRatio = uint64(10)
+
+	// PercentageDenominator is used to calculate percentage
+	PercentageDenominator = uint64(100)
 )
 
 var (

@@ -366,6 +366,11 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// set the stable reward when producing a new block
 	blockReward := rewardPerBlock
 
+	// donate 10% of block reward to DxChain foundation account
+	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	state.AddBalance(config.Dpos.DonatedAccount, donation.BigIntPtr())
+	blockReward = blockReward.Sub(donation)
+
 	// retrieve the total vote weight of header's validator
 	voteCount := GetTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
