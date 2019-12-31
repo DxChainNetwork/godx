@@ -362,14 +362,10 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 
 // accumulateRewards add the block award to Coinbase of validator
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header) {
-	// Select the correct block reward based on chain progression
-	blockReward := frontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = byzantiumBlockReward
-	}
-	if config.IsConstantinople(header.Number) {
-		blockReward = constantinopleBlockReward
-	}
+
+	// set the stable reward when producing a new block
+	blockReward := rewardPerBlock
+
 	// retrieve the total vote weight of header's validator
 	voteCount := GetTotalVote(state, header.Validator)
 	if voteCount.Cmp(common.BigInt0) <= 0 {
@@ -385,7 +381,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
-		log.Error("couldn't get snapshot delegate trie, error:", err)
+		log.Error("Couldn't get snapshot delegate trie, error:", err)
 		return
 	}
 
