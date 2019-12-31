@@ -4,11 +4,11 @@
 
 package unit
 
-// The block generation rate for Ethereum is 15s/block. Therefore, 240 blocks
+// The block generation rate for DxChain is 8s/block. Therefore, 450 blocks
 // can be generated in an hour
 const (
-	BlocksPerMin   = uint64(4)
-	BlocksPerHour  = uint64(240)
+	BlocksPerMin   = uint64(7)
+	BlocksPerHour  = uint64(450)
 	BlocksPerDay   = 24 * BlocksPerHour
 	BlocksPerWeek  = 7 * BlocksPerDay
 	BlocksPerMonth = 30 * BlocksPerDay
