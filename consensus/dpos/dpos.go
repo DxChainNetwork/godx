@@ -631,7 +631,7 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 type substituteCandidate struct {
 	address          common.Address
 	vote             common.BigInt
-	rewardPercentage common.BigInt
+	rewardPercentage float64
 }
 
 // getRewardedSubstituteCandidates retrieve substitute candidates that need reward in current dpos context
@@ -682,7 +682,7 @@ LOOP:
 
 	// calculate the reward percentage for every substitute candidate
 	for i := range result {
-		rewardPercentage := result[i].vote.Div(totalVote)
+		rewardPercentage := result[i].vote.DivWithFloatResult(totalVote)
 		result[i].rewardPercentage = rewardPercentage
 	}
 
@@ -698,8 +698,8 @@ func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigI
 	}
 
 	for _, can := range substituteCandidates {
-		canReward := reward.Mult(can.rewardPercentage)
-		err = allocateReward(state, can.address, can.address, canReward, db, genesis)
+		canReward := reward.Float64() * (can.rewardPercentage)
+		err = allocateReward(state, can.address, can.address, common.NewBigIntFloat64(canReward), db, genesis)
 		if err != nil {
 			log.Error("Failed to allocate rewarded for substitute candidate", "candidate", can.address.String(), "error", err)
 			return err
