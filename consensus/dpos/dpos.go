@@ -628,10 +628,20 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 	return allocateReward(state, coinbase, validator, reward, db, genesis)
 }
 
+type substituteCandidates []substituteCandidate
 type substituteCandidate struct {
 	address          common.Address
 	vote             common.BigInt
 	rewardPercentage float64
+}
+
+func (scs substituteCandidates) Swap(i, j int) { scs[i], scs[j] = scs[j], scs[i] }
+func (scs substituteCandidates) Len() int      { return len(scs) }
+func (scs substituteCandidates) Less(i, j int) bool {
+	if scs[i].vote.Cmp(scs[j].vote) != 0 {
+		return scs[i].vote.Cmp(scs[j].vote) == 1
+	}
+	return scs[i].address.String() > scs[j].address.String()
 }
 
 // getRewardedSubstituteCandidates retrieve substitute candidates that need reward in current dpos context
@@ -662,14 +672,14 @@ func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.Dp
 	// filter current validators from sorted current vote list
 LOOP:
 	for _, cv := range candidateVotes {
+		if len(result) >= MaxRewardedCandidateCount {
+			break
+		}
+
 		for _, validator := range currentValidators {
 			if validator == cv.addr {
 				continue LOOP
 			}
-		}
-
-		if len(result) >= MaxRewardedCandidateCount {
-			break
 		}
 
 		sc := substituteCandidate{
