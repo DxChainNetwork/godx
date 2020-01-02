@@ -109,6 +109,7 @@ func TestAccumulateRewards(t *testing.T) {
 	// set vote deposit and weight ratio for delegator
 	validator := candidates[1]
 	SetVoteLastEpoch(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
+	SetVoteDeposit(stateDB, delegator, common.PtrBigInt(big.NewInt(100000)))
 
 	// set validator reward ratio
 	var rewardRatioNumerator uint64 = 50
@@ -138,8 +139,12 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
-	expectedDelegatorReward := big.NewInt(1.5e+18)
-	expectedValidatorReward := big.NewInt(1.5e+18)
+
+	expectedDonationReward := common.NewBigInt(115).MultInt64(1e18).DivUint64(10)
+	expectedRewardToValidator := rewardPerBlock.Sub(expectedDonationReward).MultInt64(80).DivUint64(PercentageDenominator)
+	expectedDelegatorReward := expectedRewardToValidator.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
+	expectedValidatorReward := expectedRewardToValidator.Sub(expectedDelegatorReward)
+	expectedRewardToSubstituteCandidate := rewardPerBlock.Sub(expectedDonationReward).Sub(expectedRewardToValidator).DivUint64(5)
 
 	// allocate the block reward among validator and its delegators
 	err = accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
@@ -149,14 +154,26 @@ func TestAccumulateRewards(t *testing.T) {
 
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
+	donationBalance := stateDB.GetBalance(params.DefaultDonatedAccount)
+	if donationBalance.Cmp(expectedDonationReward.BigIntPtr()) != 0 {
+		t.Errorf("donation reward is wrong, want: %v, got: %v", expectedDonationReward, donationBalance)
+	}
+
 	validatorBalance := stateDB.GetBalance(validator)
-	if validatorBalance.Cmp(expectedValidatorReward) != 0 {
-		t.Errorf("validator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
+	if validatorBalance.Cmp(expectedValidatorReward.BigIntPtr()) != 0 {
+		t.Errorf("validator reward is wrong, want: %v, got: %v", expectedValidatorReward, validatorBalance)
 	}
 
 	delegatorBalance := stateDB.GetBalance(delegator)
-	if delegatorBalance.Cmp(expectedDelegatorReward) != 0 {
-		t.Errorf("delegator reward not equal to the value assigned to address, want: %v, got: %v", expectedValidatorReward.String(), validatorBalance.String())
+	if delegatorBalance.Cmp(expectedDelegatorReward.BigIntPtr()) != 0 {
+		t.Errorf("delegator reward is wrong, want: %v, got: %v", expectedDelegatorReward, delegatorBalance)
+	}
+
+	for i := MaxValidatorSize; i < MaxValidatorSize+5; i++ {
+		canBalance := stateDB.GetBalance(candidates[i])
+		if canBalance.Cmp(expectedRewardToSubstituteCandidate.BigIntPtr()) != 0 {
+			t.Errorf("the substitute candidate of %x reward is wrong, want: %v, got: %v", candidates[i], expectedRewardToSubstituteCandidate, canBalance)
+		}
 	}
 
 	// mock block sync
@@ -242,7 +259,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
 					dposEng := New(nil, db)
 					dposEng.signer = validator
-					return dposEng.CheckValidator(lastBlock, int64(86410))
+					return dposEng.CheckValidator(lastBlock, int64(86408))
 				},
 				wantErr: nil,
 			},
@@ -264,7 +281,7 @@ func TestDpos_CheckValidator(t *testing.T) {
 	for _, test := range tests {
 		err := test.fn(db, dposRoot, candidates[1])
 		if err != test.wantErr {
-			t.Errorf("wanted %v, got %v", test.wantErr, err)
+			t.Errorf("the case【%s】,wanted %v, got %v", test.name, test.wantErr, err)
 		}
 	}
 }
