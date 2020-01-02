@@ -1150,7 +1150,7 @@ func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, erro
 func (ec *expectContext) accumulateRewards(state stateDB, validator common.Address,
 	db ethdb.Database, genesis *types.Header) {
 
-	blockReward := byzantiumBlockReward
+	blockReward := rewardPerBlock
 	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
 	totalVotes := ec.getTotalVotesLastEpoch(validator)
 	delegatorVotes := ec.countDelegateVotesForCandidate(validator)

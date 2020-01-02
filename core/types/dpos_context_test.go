@@ -31,7 +31,7 @@ func TestDposContextSnapshot(t *testing.T) {
 
 	snapshot := dposContext.Snapshot()
 	assert.Equal(t, dposContext.Root(), snapshot.Root())
-	assert.NotEqual(t, dposContext, snapshot)
+	assert.Equal(t, dposContext, snapshot)
 
 	// change dposContext
 	assert.Nil(t, dposContext.BecomeCandidate(addresses[0]))
@@ -40,7 +40,7 @@ func TestDposContextSnapshot(t *testing.T) {
 	// revert snapshot
 	dposContext.RevertToSnapShot(snapshot)
 	assert.Equal(t, dposContext.Root(), snapshot.Root())
-	assert.NotEqual(t, dposContext, snapshot)
+	assert.Equal(t, dposContext, snapshot)
 }
 
 func TestDposContextBecomeCandidate(t *testing.T) {

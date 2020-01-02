@@ -142,7 +142,11 @@ func TestAccumulateRewards(t *testing.T) {
 	expectedValidatorReward := big.NewInt(1.5e+18)
 
 	// allocate the block reward among validator and its delegators
-	accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))
+	err = accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
+	if err != nil {
+		t.Fatalf("failed to accumulateRewards,error: %v", err)
+	}
+
 	header.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(header.Number))
 
 	validatorBalance := stateDB.GetBalance(validator)
@@ -157,7 +161,11 @@ func TestAccumulateRewards(t *testing.T) {
 
 	// mock block sync
 	headerCopy := header
-	accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, trie.NewDatabase(db), testChain.GetHeaderByNumber(0))
+	err = accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
+	if err != nil {
+		t.Fatalf("failed to accumulateRewards,error: %v", err)
+	}
+
 	headerCopy.Root = stateDB.IntermediateRoot(params.MainnetChainConfig.IsEIP158(headerCopy.Number))
 
 	if header.Root != headerCopy.Root {
