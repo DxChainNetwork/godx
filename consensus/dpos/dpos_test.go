@@ -140,11 +140,10 @@ func TestAccumulateRewards(t *testing.T) {
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
 
-	expectedDonationReward := common.NewBigInt(115).MultInt64(1e18).DivUint64(10)
-	expectedRewardToValidator := rewardPerBlock.Sub(expectedDonationReward).MultInt64(80).DivUint64(PercentageDenominator)
+	expectedDonationReward := rewardPerBlock.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	expectedRewardToValidator := rewardPerBlock.Sub(expectedDonationReward).MultUint64(ValidatorRewardRatio).DivUint64(PercentageDenominator)
 	expectedDelegatorReward := expectedRewardToValidator.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
 	expectedValidatorReward := expectedRewardToValidator.Sub(expectedDelegatorReward)
-	expectedRewardToSubstituteCandidate := rewardPerBlock.Sub(expectedDonationReward).Sub(expectedRewardToValidator).DivUint64(5)
 
 	// allocate the block reward among validator and its delegators
 	err = accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
@@ -169,6 +168,7 @@ func TestAccumulateRewards(t *testing.T) {
 		t.Errorf("delegator reward is wrong, want: %v, got: %v", expectedDelegatorReward, delegatorBalance)
 	}
 
+	expectedRewardToSubstituteCandidate := rewardPerBlock.Sub(expectedDonationReward).Sub(expectedRewardToValidator).DivUint64(5)
 	for i := MaxValidatorSize; i < MaxValidatorSize+5; i++ {
 		canBalance := stateDB.GetBalance(candidates[i])
 		if canBalance.Cmp(expectedRewardToSubstituteCandidate.BigIntPtr()) != 0 {

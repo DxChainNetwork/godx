@@ -46,7 +46,7 @@ const (
 	MaxVoteCount = 30
 
 	// DonationRatio is the value of donation ratio for every new block reward
-	DonationRatio = uint64(10)
+	DonationRatio = uint64(3)
 
 	// PercentageDenominator is used to calculate percentage
 	PercentageDenominator = uint64(100)
