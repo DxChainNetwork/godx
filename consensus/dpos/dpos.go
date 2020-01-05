@@ -364,6 +364,13 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 // accumulateRewards add the block award to Coinbase of validator
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header, dposContext *types.DposContext) error {
 
+	// check whether the sum allocated reward is beyond total reward until now
+	sumAllocatedReward := getSumAllocatedReward(state)
+	if sumAllocatedReward.Cmp(totalBlockReward) >= 0 {
+		log.Debug("Cannot allocate block reward,because the sum allocated reward has reached the total reward")
+		return nil
+	}
+
 	// set the stable reward when producing a new block
 	blockReward := rewardPerBlock
 
@@ -390,6 +397,9 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return err
 	}
 
+	// set the sum of all allocated reward until now
+	sumAllocatedReward = sumAllocatedReward.Add(rewardPerBlock)
+	setSumAllocatedReward(state, common.BigToHash(sumAllocatedReward.BigIntPtr()))
 	return nil
 }
 

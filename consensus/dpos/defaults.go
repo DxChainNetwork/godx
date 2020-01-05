@@ -67,4 +67,7 @@ var (
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
+
+	// totalBlockReward defines the total block reward for main net
+	totalBlockReward = common.NewBigInt(1e18).MultInt64(4.5e10)
 )

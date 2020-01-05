@@ -54,6 +54,9 @@ var (
 
 	// KeyValueCommonAddress is the address for some common key-value storage
 	KeyValueCommonAddress = common.BigToAddress(big.NewInt(0))
+
+	// KeySumAllocatedReward is the key of sum allocated block reward until now
+	KeySumAllocatedReward = common.BytesToHash([]byte("sum-allocated-reward"))
 )
 
 // GetCandidateDeposit get the candidates deposit of the addr from the state
@@ -229,4 +232,19 @@ func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) c
 func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
 	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
 	state.SetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot, value)
+}
+
+// setSumAllocatedReward set the sum allocated block reward until now
+func setSumAllocatedReward(state stateDB, sumAllocatedReward common.Hash) {
+	if !state.Exist(KeyValueCommonAddress) {
+		state.CreateAccount(KeyValueCommonAddress)
+	}
+	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
+	state.SetState(KeyValueCommonAddress, KeySumAllocatedReward, sumAllocatedReward)
+}
+
+// getSumAllocatedReward get the sum allocated block reward until now
+func getSumAllocatedReward(state stateDB) common.BigInt {
+	sumAllocatedRewardHash := state.GetState(KeyValueCommonAddress, KeySumAllocatedReward)
+	return common.PtrBigInt(sumAllocatedRewardHash.Big())
 }
