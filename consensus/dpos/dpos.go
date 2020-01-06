@@ -391,7 +391,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// allocate reward to substitute candidates and its delegator
-	err = allocateSubstituteCandidatesReward(state, rewardToSubstituteCandidates, db, genesis, dposContext)
+	err = allocateSubstituteCandidatesReward(state, rewardToSubstituteCandidates, db, genesis, dposContext, config.Dpos.DonatedAccount)
 	if err != nil {
 		log.Error("Failed to allocate reward to substitute candidates", "error", err)
 		return err
@@ -710,11 +710,17 @@ LOOP:
 }
 
 // allocateSubstituteCandidatesReward allocate the block reward to substitute candidates and their delegator
-func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigInt, db *trie.Database, genesis *types.Header, dposContext *types.DposContext) error {
+func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigInt, db *trie.Database, genesis *types.Header, dposContext *types.DposContext, donationAccount common.Address) error {
 	substituteCandidates, err := getRewardedSubstituteCandidates(state, dposContext)
 	if err != nil {
 		log.Error("Failed to get rewarded substitute candidates", "error", err)
 		return err
+	}
+
+	// if their are no substitute candidates, then donate the reward to dx foundation
+	if len(substituteCandidates) == 0 {
+		state.AddBalance(donationAccount, reward.BigIntPtr())
+		return nil
 	}
 
 	for _, can := range substituteCandidates {
