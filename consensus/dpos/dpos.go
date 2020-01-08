@@ -672,9 +672,8 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 
 type substituteCandidates []substituteCandidate
 type substituteCandidate struct {
-	address          common.Address
-	vote             common.BigInt
-	rewardPercentage float64
+	address common.Address
+	vote    common.BigInt
 }
 
 func (scs substituteCandidates) Swap(i, j int) { scs[i], scs[j] = scs[j], scs[i] }
@@ -687,7 +686,7 @@ func (scs substituteCandidates) Less(i, j int) bool {
 }
 
 // getRewardedSubstituteCandidates retrieve substitute candidates that need reward in current dpos context
-func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.DposContext) ([]substituteCandidate, error) {
+func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.DposContext) ([]substituteCandidate, common.BigInt, error) {
 	result := make([]substituteCandidate, 0)
 	totalVote := common.NewBigInt(0)
 	ec := &EpochContext{
@@ -699,7 +698,7 @@ func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.Dp
 	candidateVotes, err := ec.countVotes()
 	if err != nil {
 		log.Error("Failed to count votes for getting substitute candidates", "error", err)
-		return nil, err
+		return nil, common.BigInt0, err
 	}
 
 	// sorted by descending order
@@ -708,7 +707,7 @@ func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.Dp
 	currentValidators, err := dposContext.GetValidators()
 	if err != nil {
 		log.Error("Failed to get validators for getting substitute candidates", "error", err)
-		return nil, err
+		return nil, common.BigInt0, err
 	}
 
 	vMap := make(map[common.Address]struct{})
@@ -735,18 +734,12 @@ func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.Dp
 		result = append(result, sc)
 	}
 
-	// calculate the reward percentage for every substitute candidate
-	for i := range result {
-		rewardPercentage := result[i].vote.DivWithFloatResult(totalVote)
-		result[i].rewardPercentage = rewardPercentage
-	}
-
-	return result, nil
+	return result, totalVote, nil
 }
 
 // allocateSubstituteCandidatesReward allocate the block reward to substitute candidates and their delegator
 func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigInt, dposContext *types.DposContext, donationAccount common.Address) error {
-	substituteCandidates, err := getRewardedSubstituteCandidates(state, dposContext)
+	substituteCandidates, totalVote, err := getRewardedSubstituteCandidates(state, dposContext)
 	if err != nil {
 		log.Error("Failed to get rewarded substitute candidates", "error", err)
 		return err
@@ -754,12 +747,13 @@ func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigI
 
 	// if their are no substitute candidates, then donate the reward to dx foundation
 	if len(substituteCandidates) == 0 {
+		log.Debug("No substitute candidates to reward")
 		state.AddBalance(donationAccount, reward.BigIntPtr())
 		return nil
 	}
 
 	for _, can := range substituteCandidates {
-		canReward := reward.MultFloat64(can.rewardPercentage)
+		canReward := reward.Mult(can.vote).Div(totalVote)
 		err = allocateReward(state, can.address, canReward, dposContext)
 		if err != nil {
 			log.Error("Failed to allocate rewarded for substitute candidate", "candidate", can.address.String(), "error", err)
