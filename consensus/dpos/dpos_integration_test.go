@@ -1152,9 +1152,6 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 	db ethdb.Database, genesis *types.Header) {
 
 	blockReward := rewardPerBlock
-	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
-	totalVotes := ec.getTotalVotesLastEpoch(validator)
-	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
 
 	// donate 10% of block reward to DxChain foundation account
 	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
@@ -1163,31 +1160,57 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 
 	// 80% of the left block reward to validators, and 20% to substitute candidates
 	rewardToValidator := blockReward.MultUint64(ValidatorRewardRatio).DivUint64(PercentageDenominator)
-	rewardToSubstituteCandidates := blockReward.MultUint64(SubstituteCandidatesRewardRatio).DivUint64(PercentageDenominator)
+	rewardToSubstituteCandidates := blockReward.Sub(rewardToValidator)
 
 	// Distribute the reward to validator
-	sharedReward := rewardToValidator.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
-	assignedReward := common.BigInt0
-	for delegator, votes := range delegatorVotes {
-		delegatorReward := sharedReward.Mult(votes).Div(totalVotes)
-		ec.addBalance(delegator, delegatorReward)
-		assignedReward = assignedReward.Add(delegatorReward)
-	}
-	ec.addBalance(validator, rewardToValidator.Sub(assignedReward))
+	ec.mockAllocateRewardToValidator(rewardToValidator, validator)
+
 	// Update mined count
 	ec.incrementMinedCnt(validator)
 
 	// Distribute the reward to substitute candidates
-	substituteCandidates := ec.pickSubstituteCandidates()
+	ec.mockAllocateRewardToSubstituteCandidates(rewardToSubstituteCandidates)
+}
+
+func (ec *expectContext) mockAllocateRewardToValidator(reward common.BigInt, validator common.Address) {
+	totalVote := ec.getTotalVotesLastEpoch(validator)
+	if totalVote.Cmp(common.BigInt0) <= 0 {
+		ec.addBalance(validator, reward)
+		return
+	}
+
+	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
+	sharedReward := reward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
+	assignedReward := common.BigInt0
+
+	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
+	for delegator, vote := range delegatorVotes {
+		delegatorReward := sharedReward.Mult(vote).Div(totalVote)
+		ec.addBalance(delegator, delegatorReward)
+		assignedReward = assignedReward.Add(delegatorReward)
+	}
+	ec.addBalance(validator, reward.Sub(assignedReward))
+}
+
+func (ec *expectContext) mockAllocateRewardToSubstituteCandidates(reward common.BigInt) {
+
+	// if no substitute candidates to reward,then allocated to donation account
+	substituteCandidates, totalVoteOfSubstituteCandidates := ec.pickSubstituteCandidates()
+	if len(substituteCandidates) == 0 {
+		ec.addBalance(params.DefaultDonatedAccount, reward)
+		return
+	}
+
 	for _, sc := range substituteCandidates {
-		scReward := rewardToSubstituteCandidates.MultFloat64(sc.rewardPercentage)
+		scReward := reward.Mult(sc.vote).Div(totalVoteOfSubstituteCandidates)
+
+		// assign reward to delegators
 		rewardRatio := ec.candidateRecords[sc.address].rewardRatio
 		sharedReward := scReward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
-		totalVotes := ec.getTotalVotes(sc.address)
+		totalVote, delegators := ec.getTotalVotes(sc.address)
 		assignedReward := common.BigInt0
-		for delegator := range ec.candidateRecords[sc.address].votes {
-			vote := ec.delegatorRecords[delegator].deposit
-			delegatorReward := sharedReward.Mult(vote).Div(totalVotes)
+		for delegator, vote := range delegators {
+			delegatorReward := sharedReward.Mult(vote).Div(totalVote)
 			ec.addBalance(delegator, delegatorReward)
 			assignedReward = assignedReward.Add(delegatorReward)
 		}
@@ -1195,20 +1218,21 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 	}
 }
 
-func (ec *expectContext) pickSubstituteCandidates() substituteCandidates {
+func (ec *expectContext) pickSubstituteCandidates() (substituteCandidates, common.BigInt) {
 	result := make(substituteCandidates, 0)
 	totalVote := common.NewBigInt(0)
+	vMap := make(map[common.Address]struct{})
+	for _, v := range ec.validators {
+		vMap[v] = struct{}{}
+	}
 
 	// filter current validators from sorted current vote list
-LOOP:
 	for addr, cr := range ec.candidateRecords {
-		for _, validator := range ec.validators {
-			if validator == addr {
-				continue LOOP
-			}
+		if _, ok := vMap[addr]; ok {
+			continue
 		}
 
-		scVote := common.NewBigInt(0)
+		scVote := cr.deposit
 		for delAddr := range cr.votes {
 			scVote = scVote.Add(ec.delegatorRecords[delAddr].deposit)
 		}
@@ -1229,13 +1253,7 @@ LOOP:
 		totalVote = totalVote.Add(result[i].vote)
 	}
 
-	// calculate the reward percentage for every substitute candidate
-	for i := range result {
-		rewardPercentage := result[i].vote.DivWithFloatResult(totalVote)
-		result[i].rewardPercentage = rewardPercentage
-	}
-
-	return result
+	return result, totalVote
 }
 
 // getTotalVotesLastEpoch get the total votes in the last epoch
@@ -1247,13 +1265,16 @@ func (ec *expectContext) getTotalVotesLastEpoch(candidate common.Address) common
 	return totalVotes
 }
 
-// getTotalVotes get the total votes in the last epoch
-func (ec *expectContext) getTotalVotes(candidate common.Address) common.BigInt {
+// getTotalVotes get the total votes for candidate until now
+func (ec *expectContext) getTotalVotes(candidate common.Address) (common.BigInt, map[common.Address]common.BigInt) {
+	delegators := make(map[common.Address]common.BigInt)
 	totalVotes := ec.candidateRecords[candidate].deposit
 	for delegator := range ec.candidateRecords[candidate].votes {
-		totalVotes = totalVotes.Add(ec.delegatorRecords[delegator].deposit)
+		vote := ec.delegatorRecords[delegator].deposit
+		totalVotes = totalVotes.Add(vote)
+		delegators[delegator] = vote
 	}
-	return totalVotes
+	return totalVotes, delegators
 }
 
 // countDelegateVotesForCandidate count the delegator votes for a candidate
