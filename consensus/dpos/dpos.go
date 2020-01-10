@@ -625,8 +625,12 @@ func makeMinedCntKey(epoch int64, addr common.Address) []byte {
 
 // allocateValidatorReward allocate the block reward to validator and its delegator
 func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Address, reward common.BigInt, db *trie.Database, genesis *types.Header) error {
-	voteCount := GetTotalVote(state, validator)
-	if voteCount.Cmp(common.BigInt0) <= 0 {
+
+	// calculate the total vote of all delegators
+	totalVote := GetTotalVote(state, validator)
+	selfDeposit := GetCandidateDeposit(state, validator)
+	allDelegatorVotes := totalVote.Sub(selfDeposit)
+	if allDelegatorVotes.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(coinbase, reward.BigIntPtr())
 		return nil
 	}
@@ -649,7 +653,7 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 		// get the votes of delegator to vote for delegate
 		delegatorVote := GetVoteLastEpoch(state, delegator)
 		// calculate reward of each delegator due to it's vote(stake) percent
-		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
+		delegatorReward := delegatorVote.Mult(sharedReward).Div(allDelegatorVotes)
 		state.AddBalance(delegator, delegatorReward.BigIntPtr())
 		assignedReward = assignedReward.Add(delegatorReward)
 	}
