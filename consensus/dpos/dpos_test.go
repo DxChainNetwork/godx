@@ -141,9 +141,9 @@ func TestAccumulateRewards(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
 
 	expectedDonationReward := rewardPerBlock.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
-	expectedRewardToValidator := rewardPerBlock.Sub(expectedDonationReward).MultUint64(ValidatorRewardRatio).DivUint64(PercentageDenominator)
-	expectedDelegatorReward := expectedRewardToValidator.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
-	expectedValidatorReward := expectedRewardToValidator.Sub(expectedDelegatorReward)
+	leftRewardToValidatorAndDelegators := rewardPerBlock.Sub(expectedDonationReward)
+	expectedDelegatorReward := leftRewardToValidatorAndDelegators.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
+	expectedValidatorReward := leftRewardToValidatorAndDelegators.Sub(expectedDelegatorReward)
 
 	// allocate the block reward among validator and its delegators
 	err = accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
@@ -166,14 +166,6 @@ func TestAccumulateRewards(t *testing.T) {
 	delegatorBalance := stateDB.GetBalance(delegator)
 	if delegatorBalance.Cmp(expectedDelegatorReward.BigIntPtr()) != 0 {
 		t.Errorf("delegator reward is wrong, want: %v, got: %v", expectedDelegatorReward, delegatorBalance)
-	}
-
-	expectedRewardToSubstituteCandidate := rewardPerBlock.Sub(expectedDonationReward).Sub(expectedRewardToValidator).DivUint64(5)
-	for i := MaxValidatorSize; i < MaxValidatorSize+5; i++ {
-		canBalance := stateDB.GetBalance(candidates[i])
-		if canBalance.Cmp(expectedRewardToSubstituteCandidate.BigIntPtr()) != 0 {
-			t.Errorf("the substitute candidate of %x reward is wrong, want: %v, got: %v", candidates[i], expectedRewardToSubstituteCandidate, canBalance)
-		}
 	}
 
 	// mock block sync
