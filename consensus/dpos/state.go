@@ -57,6 +57,12 @@ var (
 
 	// KeySumAllocatedReward is the key of sum allocated block reward until now
 	KeySumAllocatedReward = common.BytesToHash([]byte("sum-allocated-reward"))
+
+	// KeyValidatorAllocatedReward is the key of reward allocated to validator at last block
+	KeyValidatorAllocatedReward = common.BytesToHash([]byte("validator-allocated-reward-last-block"))
+
+	// KeyDelegatorAllocatedReward is the key of reward allocated to delegator at last block
+	KeyDelegatorAllocatedReward = common.BytesToHash([]byte("delegator-allocated-reward-last-block"))
 )
 
 // GetCandidateDeposit get the candidates deposit of the addr from the state
@@ -219,8 +225,8 @@ func removeAddressInState(state stateDB, addr common.Address) {
 	state.SetNonce(addr, 0)
 }
 
-// getPreEpochSnapshotDelegateTrieRoot get the block number of snapshot delegate trie
-func getPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) common.Hash {
+// GetPreEpochSnapshotDelegateTrieRoot get the block number of snapshot delegate trie
+func GetPreEpochSnapshotDelegateTrieRoot(state stateDB, genesis *types.Header) common.Hash {
 	h := state.GetState(KeyValueCommonAddress, KeyPreEpochSnapshotDelegateTrieRoot)
 	if h == types.EmptyHash {
 		h = genesis.DposContext.DelegateRoot
@@ -247,4 +253,28 @@ func setSumAllocatedReward(state stateDB, sumAllocatedReward common.Hash) {
 func getSumAllocatedReward(state stateDB) common.BigInt {
 	sumAllocatedRewardHash := state.GetState(KeyValueCommonAddress, KeySumAllocatedReward)
 	return common.PtrBigInt(sumAllocatedRewardHash.Big())
+}
+
+// SetValidatorAllocatedReward set the current allocated reward for validator
+func SetValidatorAllocatedReward(state stateDB, reward common.BigInt, validator common.Address) {
+	v := common.BigToHash(reward.BigIntPtr())
+	state.SetState(validator, KeyValidatorAllocatedReward, v)
+}
+
+// GetValidatorAllocatedReward get the current allocated reward for validator
+func GetValidatorAllocatedReward(state stateDB, validator common.Address) *big.Int {
+	v := state.GetState(validator, KeyValidatorAllocatedReward)
+	return v.Big()
+}
+
+// SetDelegatorAllocatedReward set the current allocated reward for delegator
+func SetDelegatorAllocatedReward(state stateDB, reward common.BigInt, delegator common.Address) {
+	v := common.BigToHash(reward.BigIntPtr())
+	state.SetState(delegator, KeyDelegatorAllocatedReward, v)
+}
+
+// GetDelegatorAllocatedReward get the current allocated reward for delegator
+func GetDelegatorAllocatedReward(state stateDB, delegator common.Address) *big.Int {
+	v := state.GetState(delegator, KeyDelegatorAllocatedReward)
+	return v.Big()
 }

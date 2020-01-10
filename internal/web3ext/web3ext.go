@@ -236,6 +236,20 @@ web3._extend({
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+
+		new web3._extend.Method({
+			name: 'getBlockRewardByAddress',
+			call: 'dpos_getBlockRewardByAddress',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'getAllDelegatorRewardByBlockNumber',
+			call: 'dpos_getAllDelegatorRewardByBlockNumber',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
 	]
 });
 `

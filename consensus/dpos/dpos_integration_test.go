@@ -933,7 +933,7 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB stateDB, ctx *typ
 		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
 	}
 	// check the delegate trie from the last epoch
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return fmt.Errorf("cannot recover delegate trie: %v", err)
@@ -1028,7 +1028,7 @@ func (ec *expectContext) checkDelegatorLastEpoch(stateDB stateDB, ctx *types.Dpo
 	if gotDeposit.Cmp(record.deposit) != 0 {
 		return fmt.Errorf("delegator %x last epoch deposit: expect %v, got %v", addr, gotDeposit, record.deposit)
 	}
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
 	dt, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return fmt.Errorf("cannot recover delegate trie: %v", err)

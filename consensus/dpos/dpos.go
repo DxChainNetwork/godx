@@ -632,6 +632,7 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 	allDelegatorVotes := totalVote.Sub(selfDeposit)
 	if allDelegatorVotes.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(coinbase, reward.BigIntPtr())
+		SetValidatorAllocatedReward(state, reward, validator)
 		return nil
 	}
 
@@ -641,7 +642,7 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 	assignedReward := common.BigInt0
 
 	// Loop over the delegators to add delegator rewards
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(state, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return err
@@ -655,11 +656,13 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 		// calculate reward of each delegator due to it's vote(stake) percent
 		delegatorReward := delegatorVote.Mult(sharedReward).Div(allDelegatorVotes)
 		state.AddBalance(delegator, delegatorReward.BigIntPtr())
+		SetDelegatorAllocatedReward(state, delegatorReward, delegator)
 		assignedReward = assignedReward.Add(delegatorReward)
 	}
 
 	// accumulate the rest rewards for the candidate
-	candidateReward := reward.Sub(assignedReward)
-	state.AddBalance(coinbase, candidateReward.BigIntPtr())
+	validatorReward := reward.Sub(assignedReward)
+	state.AddBalance(coinbase, validatorReward.BigIntPtr())
+	SetValidatorAllocatedReward(state, validatorReward, validator)
 	return nil
 }

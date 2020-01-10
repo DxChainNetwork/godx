@@ -38,6 +38,12 @@ type ValidatorInfo struct {
 	RewardRatio uint64         `json:"reward_distribution"`
 }
 
+// DelegatorReward stores detailed delegator reward
+type DelegatorReward struct {
+	Delegator common.Address `json:"delegator"`
+	Reward    *big.Int       `json:"reward"`
+}
+
 // NewPublicDposAPI will create a PublicDposAPI object that is used
 // to access all DPOS API Method
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
@@ -195,4 +201,82 @@ func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Heade
 
 	// return
 	return header, nil
+}
+
+func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rpc.BlockNumber) (*big.Int, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return nil, err
+	}
+
+	// based on the block header root, get the statedb
+	statedb, err := d.e.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	// if given address is the validator of the block, return validator allocated reward
+	if addr == header.Validator {
+		reward := dpos.GetValidatorAllocatedReward(statedb, addr)
+		return reward, nil
+	}
+
+	genesis := d.e.BlockChain().Genesis()
+	preEpochSnapshotDelegateTrieRoot := dpos.GetPreEpochSnapshotDelegateTrieRoot(statedb, genesis.Header())
+	db := trie.NewDatabase(d.e.chainDb)
+	delegateTrie, err := types.NewDelegateTrie(preEpochSnapshotDelegateTrieRoot, db)
+	if err != nil {
+		return nil, err
+	}
+
+	delegator, err := delegateTrie.TryGet(append(header.Validator.Bytes(), addr.Bytes()...))
+	if err != nil {
+		return nil, err
+	}
+
+	// if given address is the delegator that voted validator of the given block, return delegator allocated reward
+	if addr == common.BytesToAddress(delegator) {
+		reward := dpos.GetDelegatorAllocatedReward(statedb, addr)
+		return reward, nil
+	}
+
+	return nil, fmt.Errorf("not allocated reward to %s in block %v", addr.String(), *blockNr)
+}
+
+func (d *PublicDposAPI) GetAllDelegatorRewardByBlockNumber(blockNr *rpc.BlockNumber) ([]DelegatorReward, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return nil, err
+	}
+
+	// based on the block header root, get the statedb
+	statedb, err := d.e.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	genesis := d.e.BlockChain().Genesis()
+	preEpochSnapshotDelegateTrieRoot := dpos.GetPreEpochSnapshotDelegateTrieRoot(statedb, genesis.Header())
+	db := trie.NewDatabase(d.e.chainDb)
+	delegateTrie, err := types.NewDelegateTrie(preEpochSnapshotDelegateTrieRoot, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// get all delegator reward in the given block
+	result := make([]DelegatorReward, 0)
+	it := trie.NewIterator(delegateTrie.NodeIterator(nil))
+	for it.Next() {
+		delegator := common.BytesToAddress(it.Value)
+		reward := dpos.GetDelegatorAllocatedReward(statedb, delegator)
+		result = append(result, DelegatorReward{Delegator: delegator, Reward: reward})
+	}
+
+	if len(result) != 0 {
+		return result, nil
+	}
+
+	return nil, fmt.Errorf("no reward allocated to delegators in block %v", *blockNr)
 }
