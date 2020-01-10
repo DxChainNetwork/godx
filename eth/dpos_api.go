@@ -203,6 +203,7 @@ func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Heade
 	return header, nil
 }
 
+// GetBlockRewardByAddress query the allocated reward of given address at given block
 func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rpc.BlockNumber) (*big.Int, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderBasedOnNumber(blockNr, d.e)
@@ -244,6 +245,7 @@ func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rp
 	return nil, fmt.Errorf("not allocated reward to %s in block %v", addr.String(), *blockNr)
 }
 
+// GetAllDelegatorRewardByBlockNumber query all delegator reward at the given block
 func (d *PublicDposAPI) GetAllDelegatorRewardByBlockNumber(blockNr *rpc.BlockNumber) ([]DelegatorReward, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderBasedOnNumber(blockNr, d.e)
