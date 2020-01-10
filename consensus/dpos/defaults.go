@@ -50,15 +50,6 @@ const (
 
 	// PercentageDenominator is used to calculate percentage
 	PercentageDenominator = uint64(100)
-
-	// MaxRewardedCandidateCount is the max count of candidates that not became validator should be rewarded
-	MaxRewardedCandidateCount = 79
-
-	// ValidatorRewardRatio is the ratio of reward for validator in a whole block reward
-	ValidatorRewardRatio = uint64(80)
-
-	// SubstituteCandidatesRewardRatio is the ratio of reward for substitute candidates in a whole block reward
-	SubstituteCandidatesRewardRatio = uint64(20)
 )
 
 var (

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 	"sync"
 	"time"
 
@@ -374,26 +373,17 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	// set the stable reward when producing a new block
 	blockReward := rewardPerBlock
 
-	// donate 10% of block reward to DxChain foundation account
+	// donate 5% of block reward to DxChain foundation account
 	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
 	state.AddBalance(config.Dpos.DonatedAccount, donation.BigIntPtr())
+
+	// 95% of the block reward to validator and their delegators
 	blockReward = blockReward.Sub(donation)
 
-	// 80% of the left block reward to validators, and 20% to substitute candidates
-	rewardToValidator := blockReward.MultUint64(ValidatorRewardRatio).DivUint64(PercentageDenominator)
-	rewardToSubstituteCandidates := blockReward.Sub(rewardToValidator)
-
 	// allocate reward to validator and its delegator
-	err := allocateValidatorReward(state, header.Coinbase, header.Validator, rewardToValidator, db, genesis)
+	err := allocateValidatorReward(state, header.Coinbase, header.Validator, blockReward, db, genesis)
 	if err != nil {
 		log.Error("Failed to allocate reward to validator", "error", err)
-		return err
-	}
-
-	// allocate reward to substitute candidates and its delegator
-	err = allocateSubstituteCandidatesReward(state, rewardToSubstituteCandidates, dposContext, config.Dpos.DonatedAccount)
-	if err != nil {
-		log.Error("Failed to allocate reward to substitute candidates", "error", err)
 		return err
 	}
 
@@ -667,138 +657,5 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 	// accumulate the rest rewards for the candidate
 	candidateReward := reward.Sub(assignedReward)
 	state.AddBalance(coinbase, candidateReward.BigIntPtr())
-	return nil
-}
-
-type substituteCandidates []substituteCandidate
-type substituteCandidate struct {
-	address common.Address
-	vote    common.BigInt
-}
-
-func (scs substituteCandidates) Swap(i, j int) { scs[i], scs[j] = scs[j], scs[i] }
-func (scs substituteCandidates) Len() int      { return len(scs) }
-func (scs substituteCandidates) Less(i, j int) bool {
-	if scs[i].vote.Cmp(scs[j].vote) != 0 {
-		return scs[i].vote.Cmp(scs[j].vote) == 1
-	}
-	return scs[i].address.String() > scs[j].address.String()
-}
-
-// getRewardedSubstituteCandidates retrieve substitute candidates that need reward in current dpos context
-func getRewardedSubstituteCandidates(state *state.StateDB, dposContext *types.DposContext) ([]substituteCandidate, common.BigInt, error) {
-	result := make([]substituteCandidate, 0)
-	totalVote := common.NewBigInt(0)
-	ec := &EpochContext{
-		stateDB:     state,
-		DposContext: dposContext,
-	}
-
-	// calculate votes based on current dpos context
-	candidateVotes, err := ec.countVotes()
-	if err != nil {
-		log.Error("Failed to count votes for getting substitute candidates", "error", err)
-		return nil, common.BigInt0, err
-	}
-
-	// sorted by descending order
-	sort.Sort(candidateVotes)
-
-	currentValidators, err := dposContext.GetValidators()
-	if err != nil {
-		log.Error("Failed to get validators for getting substitute candidates", "error", err)
-		return nil, common.BigInt0, err
-	}
-
-	vMap := make(map[common.Address]struct{})
-	for _, validator := range currentValidators {
-		vMap[validator] = struct{}{}
-	}
-
-	// filter current validators from sorted current vote list
-	for _, cv := range candidateVotes {
-		if len(result) >= MaxRewardedCandidateCount {
-			break
-		}
-
-		// filter current validators
-		if _, ok := vMap[cv.addr]; ok {
-			continue
-		}
-
-		sc := substituteCandidate{
-			address: cv.addr,
-			vote:    cv.vote,
-		}
-		totalVote = totalVote.Add(cv.vote)
-		result = append(result, sc)
-	}
-
-	return result, totalVote, nil
-}
-
-// allocateSubstituteCandidatesReward allocate the block reward to substitute candidates and their delegator
-func allocateSubstituteCandidatesReward(state *state.StateDB, reward common.BigInt, dposContext *types.DposContext, donationAccount common.Address) error {
-	substituteCandidates, totalVote, err := getRewardedSubstituteCandidates(state, dposContext)
-	if err != nil {
-		log.Error("Failed to get rewarded substitute candidates", "error", err)
-		return err
-	}
-
-	// if their are no substitute candidates, then donate the reward to dx foundation
-	if len(substituteCandidates) == 0 {
-		log.Debug("No substitute candidates to reward")
-		state.AddBalance(donationAccount, reward.BigIntPtr())
-		return nil
-	}
-
-	for _, can := range substituteCandidates {
-		canReward := reward.Mult(can.vote).Div(totalVote)
-		err = allocateReward(state, can.address, canReward, dposContext)
-		if err != nil {
-			log.Error("Failed to allocate rewarded for substitute candidate", "candidate", can.address.String(), "error", err)
-			return err
-		}
-	}
-
-	return nil
-}
-
-// allocateReward allocate the given reward to substitute candidate and its delegator
-func allocateReward(state *state.StateDB, candidate common.Address, reward common.BigInt, dposContext *types.DposContext) error {
-	voteCount := GetTotalVote(state, candidate)
-	if voteCount.Cmp(common.BigInt0) <= 0 {
-		state.AddBalance(candidate, reward.BigIntPtr())
-		return nil
-	}
-
-	// get current ratio of reward between the given candidate and its delegator
-	rewardRatioNumerator := GetRewardRatioNumerator(state, candidate)
-	sharedReward := reward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
-	assignedReward := common.BigInt0
-
-	// get current delegate trie from current dpos context
-	delegateTrie := dposContext.DelegateTrie()
-	if delegateTrie == nil {
-		return fmt.Errorf("get nil delegate trie for allocating reward for substitute candidate: %x", candidate)
-	}
-
-	// loop current delegate trie to allocate reward to delegator
-	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(candidate.Bytes()))
-	for delegatorIterator.Next() {
-		delegator := common.BytesToAddress(delegatorIterator.Value)
-
-		// get current votes by delegator
-		delegatorVote := GetVoteDeposit(state, delegator)
-
-		// calculate reward of each delegator based on it's vote(stake) percent
-		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
-		state.AddBalance(delegator, delegatorReward.BigIntPtr())
-		assignedReward = assignedReward.Add(delegatorReward)
-	}
-
-	// accumulate the rest rewards for the candidate
-	candidateReward := reward.Sub(assignedReward)
-	state.AddBalance(candidate, candidateReward.BigIntPtr())
 	return nil
 }
