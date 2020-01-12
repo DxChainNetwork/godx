@@ -238,8 +238,15 @@ web3._extend({
 		}),
 
 		new web3._extend.Method({
-			name: 'getBlockRewardByAddress',
-			call: 'dpos_getBlockRewardByAddress',
+			name: 'getValidatorRewardByBlockNum',
+			call: 'dpos_getValidatorRewardByBlockNum',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+
+		new web3._extend.Method({
+			name: 'getDelegatorRewardByBlockNum',
+			call: 'dpos_getDelegatorRewardByBlockNum',
 			params: 2,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
 		}),

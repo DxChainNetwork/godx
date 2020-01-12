@@ -203,8 +203,8 @@ func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Heade
 	return header, nil
 }
 
-// GetBlockRewardByAddress query the allocated reward of given address at given block
-func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rpc.BlockNumber) (*big.Int, error) {
+// GetValidatorRewardByBlockNum query the validator allocated reward at given block
+func (d *PublicDposAPI) GetValidatorRewardByBlockNum(validator common.Address, blockNr *rpc.BlockNumber) (*big.Int, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderBasedOnNumber(blockNr, d.e)
 	if err != nil {
@@ -218,9 +218,26 @@ func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rp
 	}
 
 	// if given address is the validator of the block, return validator allocated reward
-	if addr == header.Validator {
-		reward := dpos.GetValidatorAllocatedReward(statedb, addr)
+	if validator == header.Validator {
+		reward := dpos.GetValidatorAllocatedReward(statedb, validator)
 		return reward, nil
+	}
+
+	return nil, fmt.Errorf("%s is not validator of block %v", validator.String(), *blockNr)
+}
+
+// GetDelegatorRewardByBlockNum query the delegator allocated reward at given block
+func (d *PublicDposAPI) GetDelegatorRewardByBlockNum(delegator common.Address, blockNr *rpc.BlockNumber) (*big.Int, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return nil, err
+	}
+
+	// based on the block header root, get the statedb
+	statedb, err := d.e.BlockChain().StateAt(header.Root)
+	if err != nil {
+		return nil, err
 	}
 
 	genesis := d.e.BlockChain().Genesis()
@@ -231,18 +248,19 @@ func (d *PublicDposAPI) GetBlockRewardByAddress(addr common.Address, blockNr *rp
 		return nil, err
 	}
 
-	delegator, err := delegateTrie.TryGet(append(header.Validator.Bytes(), addr.Bytes()...))
+	delegatorInTrie, err := delegateTrie.TryGet(append(header.Validator.Bytes(), delegator.Bytes()...))
 	if err != nil {
 		return nil, err
 	}
 
-	// if given address is the delegator that voted validator of the given block, return delegator allocated reward
-	if addr == common.BytesToAddress(delegator) {
-		reward := dpos.GetDelegatorAllocatedReward(statedb, addr)
+	// if given address is the delegatorInTrie that voted delegator of the given block,
+	// return delegatorInTrie allocated reward
+	if delegator == common.BytesToAddress(delegatorInTrie) {
+		reward := dpos.GetDelegatorAllocatedReward(statedb, delegator)
 		return reward, nil
 	}
 
-	return nil, fmt.Errorf("not allocated reward to %s in block %v", addr.String(), *blockNr)
+	return nil, fmt.Errorf("%s has not voted the validator of block %v", delegator.String(), *blockNr)
 }
 
 // GetAllDelegatorRewardByBlockNumber query all delegator reward at the given block
