@@ -210,7 +210,7 @@ func (pd *PublicDposTxAPI) SendCancelVoteTx(from common.Address) (common.Hash, e
 
 	// check if the delegator has voted before
 	if !dpos.HasVoted(args.From, header, pd.b.ChainDb()) {
-		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %v has not voted before", args.From)
+		return common.Hash{}, fmt.Errorf("failed to send cancel vote transaction, %s has not voted before", args.From.String())
 	}
 
 	// send the contract transaction
