@@ -50,15 +50,22 @@ const (
 
 	// PercentageDenominator is used to calculate percentage
 	PercentageDenominator = uint64(100)
+
+	// BlockCountFirstYear is the count of blocks produced per year
+	BlockCountPerYear = uint64(3942000)
 )
 
 var (
-	// reward 115 dx for successfully mining a block
-	rewardPerBlock = common.NewBigIntUint64(1e18).MultInt64(115)
+	// rewardPerBlockAfterOneYear defines reward 115 dx for successfully mining a block after one year
+	rewardPerBlockAfterOneYear = common.NewBigIntUint64(1e18).MultInt64(115)
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
 
 	// totalBlockReward defines the total block reward for main net
 	totalBlockReward = common.NewBigInt(1e18).MultInt64(4.5e10)
+
+	// rewardPerBlockFirstYear is block reward for the first year
+	// means that the prev 3942000 blocks will be rewarded as 254 dx
+	rewardPerBlockFirstYear = common.NewBigIntUint64(1e18).MultInt64(254)
 )

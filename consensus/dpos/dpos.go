@@ -370,8 +370,13 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 		return nil
 	}
 
-	// set the stable reward when producing a new block
-	blockReward := rewardPerBlock
+	// block reward is 254 dx in the first year
+	blockReward := rewardPerBlockFirstYear
+
+	// after one year, the block reward adjust to 115 dx
+	if header.Number.Uint64() > BlockCountPerYear {
+		blockReward = rewardPerBlockAfterOneYear
+	}
 
 	// donate 5% of block reward to DxChain foundation account
 	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
@@ -388,7 +393,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	}
 
 	// set the sum of all allocated reward until now
-	sumAllocatedReward = sumAllocatedReward.Add(rewardPerBlock)
+	sumAllocatedReward = sumAllocatedReward.Add(blockReward)
 	setSumAllocatedReward(state, common.BigToHash(sumAllocatedReward.BigIntPtr()))
 	return nil
 }
