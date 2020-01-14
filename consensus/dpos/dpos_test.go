@@ -140,8 +140,8 @@ func TestAccumulateRewards(t *testing.T) {
 	// Byzantium
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
 
-	expectedDonationReward := rewardPerBlock.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
-	leftRewardToValidatorAndDelegators := rewardPerBlock.Sub(expectedDonationReward)
+	expectedDonationReward := rewardPerBlockFirstYear.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	leftRewardToValidatorAndDelegators := rewardPerBlockFirstYear.Sub(expectedDonationReward)
 	expectedDelegatorReward := leftRewardToValidatorAndDelegators.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
 	expectedValidatorReward := leftRewardToValidatorAndDelegators.Sub(expectedDelegatorReward)
 

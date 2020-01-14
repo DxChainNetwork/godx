@@ -1151,7 +1151,7 @@ func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, erro
 func (ec *expectContext) accumulateRewards(state stateDB, validator common.Address,
 	db ethdb.Database, genesis *types.Header) {
 
-	blockReward := rewardPerBlock
+	blockReward := rewardPerBlockFirstYear
 
 	// donate 5% of block reward to DxChain foundation account
 	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
