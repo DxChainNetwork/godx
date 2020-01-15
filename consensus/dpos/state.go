@@ -63,6 +63,9 @@ var (
 
 	// KeyDelegatorAllocatedReward is the key of reward allocated to delegator at last block
 	KeyDelegatorAllocatedReward = common.BytesToHash([]byte("delegator-allocated-reward-last-block"))
+
+	// KeyCandidateDepositLastEpoch is the candidate deposit in the last epoch
+	KeyCandidateDepositLastEpoch = common.BytesToHash([]byte("candidate-deposit-last-epoch"))
 )
 
 // GetCandidateDeposit get the candidates deposit of the addr from the state
@@ -277,4 +280,16 @@ func SetDelegatorAllocatedReward(state stateDB, reward common.BigInt, delegator 
 func GetDelegatorAllocatedReward(state stateDB, delegator common.Address) *big.Int {
 	v := state.GetState(delegator, KeyDelegatorAllocatedReward)
 	return v.Big()
+}
+
+// GetCandidateDepositLastEpoch get the candidates deposit at last epoch
+func GetCandidateDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
+	depositHash := state.GetState(addr, KeyCandidateDepositLastEpoch)
+	return common.PtrBigInt(depositHash.Big())
+}
+
+// SetCandidateDepositLastEpoch set the candidates deposit at last epoch
+func SetCandidateDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
+	hash := common.BigToHash(deposit.BigIntPtr())
+	state.SetState(addr, KeyCandidateDepositLastEpoch, hash)
 }

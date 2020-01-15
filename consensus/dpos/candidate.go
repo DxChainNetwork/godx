@@ -77,12 +77,12 @@ func isCandidate(candidateTrie *trie.Trie, addr common.Address) bool {
 
 // CalcCandidateTotalVotes calculate the total votes for the candidates. The result include the deposit for the
 // candidates himself and the delegated votes from delegator
-func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
+func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) (common.BigInt, common.BigInt) {
 	// Calculate the candidates deposit and delegatedVote
 	candidateDeposit := GetCandidateDeposit(state, candidateAddr)
 	delegatedVote := calcCandidateDelegatedVotes(state, candidateAddr, delegateTrie)
 	// return the sum of candidates deposit and delegated vote
-	return candidateDeposit.Add(delegatedVote)
+	return candidateDeposit.Add(delegatedVote), candidateDeposit
 }
 
 // calcCandidateDelegatedVotes calculate the total votes from delegator for the candidates in the current dposContext

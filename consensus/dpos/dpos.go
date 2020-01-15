@@ -633,7 +633,7 @@ func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Ad
 
 	// calculate the total vote of all delegators
 	totalVote := GetTotalVote(state, validator)
-	selfDeposit := GetCandidateDeposit(state, validator)
+	selfDeposit := GetCandidateDepositLastEpoch(state, validator)
 	allDelegatorVotes := totalVote.Sub(selfDeposit)
 	if allDelegatorVotes.Cmp(common.BigInt0) <= 0 {
 		state.AddBalance(coinbase, reward.BigIntPtr())
