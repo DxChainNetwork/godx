@@ -155,7 +155,7 @@ web3._extend({
 			name: 'validator',
 			call: 'dpos_validator',
 			params: 2,
-			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 		
 		new web3._extend.Method({
@@ -169,19 +169,21 @@ web3._extend({
 			name: 'candidate',
 			call: 'dpos_candidate',
 			params: 2,
-			inputFormatter: [null, web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
 			name: 'candidateDeposit',
 			call: 'dpos_candidateDeposit',
 			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
 
 		new web3._extend.Method({
 			name: 'voteDeposit',
 			call: 'dpos_voteDeposit',
 			params: 1,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
 
 		new web3._extend.Method({
@@ -193,7 +195,7 @@ web3._extend({
 
 		new web3._extend.Method({
 			name: 'getVotedCandidatesByAddress',
-			call: 'getVotedCandidatesByAddress',
+			call: 'dpos_getVotedCandidatesByAddress',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
 		}),
