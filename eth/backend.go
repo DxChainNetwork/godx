@@ -924,3 +924,8 @@ func (s *Ethereum) GetBlockByNumber(number uint64) (*types.Block, error) {
 func (s *Ethereum) SelfEnodeURL() string {
 	return s.server.NodeInfo().Enode
 }
+
+// DposCtxAt returns the dpos context at the given root
+func (s *Ethereum) DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error) {
+	return s.blockchain.DposCtxAt(root)
+}

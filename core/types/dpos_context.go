@@ -511,10 +511,14 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
 	candidatesRLP := dc.voteTrie.Get(key)
+	if candidatesRLP == nil {
+		return nil, nil
+	}
+
 	var result []common.Address
 	err := rlp.DecodeBytes(candidatesRLP, &result)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode vaoted candidates: %s", err)
+		return nil, fmt.Errorf("failed to decode voted candidates: %s", err)
 	}
 
 	return result, nil

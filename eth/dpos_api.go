@@ -300,3 +300,20 @@ func (d *PublicDposAPI) GetAllDelegatorRewardByBlockNumber(blockNr *rpc.BlockNum
 
 	return nil, fmt.Errorf("no reward allocated to delegators in block %v", *blockNr)
 }
+
+// GetVotedCandidatesByAddress query all voted candidates by the delegator on the block
+func (d *PublicDposAPI) GetVotedCandidatesByAddress(delegator common.Address, blockNr *rpc.BlockNumber) ([]common.Address, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return nil, err
+	}
+
+	// get dpos context on the block
+	dctx, err := d.e.DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, err
+	}
+
+	return dctx.GetVotedCandidatesByAddress(delegator)
+}
