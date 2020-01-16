@@ -160,3 +160,12 @@ func randomBigInt(r *rand.Rand, max common.BigInt) common.BigInt {
 	randNum := new(big.Int).Rand(r, max.BigIntPtr())
 	return common.PtrBigInt(randNum)
 }
+
+func (entries randomSelectorEntries) Swap(i, j int) { entries[i], entries[j] = entries[j], entries[i] }
+func (entries randomSelectorEntries) Len() int      { return len(entries) }
+func (entries randomSelectorEntries) Less(i, j int) bool {
+	if entries[i].vote.Cmp(entries[j].vote) != 0 {
+		return entries[i].vote.Cmp(entries[j].vote) == 1
+	}
+	return entries[i].addr.String() > entries[j].addr.String()
+}

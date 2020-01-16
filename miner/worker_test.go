@@ -218,63 +218,6 @@ func testCheckDposBalance(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 }
 
-func TestStreamUncleBlock(t *testing.T) {
-	dposEngine := dpos.NewDposFaker()
-	defer dposEngine.Close()
-
-	w, b := newTestWorker(t, dposChainConfig, dposEngine, 1)
-	defer w.close()
-
-	var taskCh = make(chan struct{})
-
-	taskIndex := 0
-	w.newTaskHook = func(task *task) {
-		if task.block.NumberU64() == 2 {
-			if taskIndex == 2 {
-				have := task.block.Header().UncleHash
-				want := types.EmptyUncleHash
-				if have != want {
-					t.Errorf("uncle hash mismatch: have %s, want %s", have.Hex(), want.Hex())
-				}
-			}
-			taskCh <- struct{}{}
-			taskIndex += 1
-		}
-	}
-	w.skipSealHook = func(task *task) bool {
-		return true
-	}
-	w.fullTaskHook = func() {
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	// Ensure worker has finished initialization
-	for {
-		b := w.pendingBlock()
-		if b != nil && b.NumberU64() == 2 {
-			break
-		}
-	}
-	w.start()
-
-	// Ignore the first two works
-	for i := 0; i < 2; i += 1 {
-		select {
-		case <-taskCh:
-		case <-time.NewTimer(10 * time.Second).C:
-			t.Error("new task timeout")
-		}
-	}
-
-	b.PostChainEvents([]interface{}{core.ChainSideEvent{Block: b.uncleBlock}})
-
-	select {
-	case <-taskCh:
-	case <-time.NewTimer(10 * time.Second).C:
-		t.Error("new task timeout")
-	}
-}
-
 func TestRegenerateMiningBlockEthash(t *testing.T) {
 	testRegenerateMiningBlock(t, dposChainConfig, dpos.NewDposFaker())
 }

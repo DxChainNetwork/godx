@@ -27,6 +27,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/core/vm"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/log"
 	"github.com/DxChainNetwork/godx/params"
 )
 
@@ -175,7 +176,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	}
 	blocks, receipts := make(types.Blocks, n), make([]types.Receipts, n)
 	chainreader := &fakeChainReader{config: config}
-	genblock := func(i int, parent *types.Block, statedb *state.StateDB) (*types.Block, types.Receipts) {
+	genblock := func(i int, parent *types.Block, statedb *state.StateDB, dcx *types.DposContext) (*types.Block, types.Receipts) {
 		b := &BlockGen{i: i, chain: blocks, parent: parent, statedb: statedb, config: config, engine: engine}
 		b.header = makeHeader(chainreader, parent, statedb, b.engine)
 
@@ -197,7 +198,11 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		}
 		if b.engine != nil {
 			// Finalize and seal the block
-			block, _ := b.engine.Finalize(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, nil)
+			block, err := b.engine.Finalize(chainreader, b.header, statedb, b.txs, b.uncles, b.receipts, dcx)
+			if err != nil {
+				log.Error("Failed to finalize", "error", err)
+				return nil, nil
+			}
 
 			// Write state changes to db
 			root, err := statedb.Commit(config.IsEIP158(b.header.Number))
@@ -216,7 +221,13 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if err != nil {
 			panic(err)
 		}
-		block, receipt := genblock(i, parent, statedb)
+
+		dcx, err := types.NewDposContext(db)
+		if err != nil {
+			panic(fmt.Sprintf("create dpos context error: %v", err))
+		}
+
+		block, receipt := genblock(i, parent, statedb, dcx)
 		blocks[i] = block
 		receipts[i] = receipt
 		parent = block

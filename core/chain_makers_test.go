@@ -99,5 +99,5 @@ func ExampleGenerateChain() {
 	// last block: #5
 	// balance of addr1: 989000
 	// balance of addr2: 10000
-	// balance of addr3: 9000000000000001000
+	// balance of addr3: 723900000000000001000
 }

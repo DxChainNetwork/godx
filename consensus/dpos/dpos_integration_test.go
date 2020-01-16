@@ -130,7 +130,7 @@ func init() {
 
 func TestDPOSIntegration(t *testing.T) {
 	genesis := getGenesis()
-	tec, err := newTestEpochContext(1000, genesis)
+	tec, err := newTestEpochContext(30, genesis)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +470,7 @@ func (tec *testEpochContext) checkConsistency() error {
 		return fmt.Errorf("check frozen assets consistency: %v", err)
 	}
 	if err := tec.checkBalanceConsistency(); err != nil {
-		return fmt.Errorf("check balance consisstency: %v", err)
+		return fmt.Errorf("check balance consistency: %v", err)
 	}
 	return nil
 }
@@ -581,11 +581,17 @@ func (tec *testEpochContext) checkFrozenAssetsConsistency() error {
 
 // checkBalanceConsistency checks whether the balance is consistent in state
 func (tec *testEpochContext) checkBalanceConsistency() error {
+	expectedDonationBal := tec.ec.getBalance(params.DefaultDonatedAccount)
+	gotDonatedBal := GetBalance(tec.epc.stateDB, params.DefaultDonatedAccount)
+	if expectedDonationBal.Cmp(gotDonatedBal) != 0 {
+		return fmt.Errorf("balance of donated account（%x） not expected: expect %v; got %v", params.DefaultDonatedAccount, expectedDonationBal, gotDonatedBal)
+	}
+
 	for addr := range tec.ec.userRecords {
 		expectedBalance := tec.ec.getBalance(addr)
 		gotBalance := GetBalance(tec.epc.stateDB, addr)
 		if expectedBalance.Cmp(gotBalance) != 0 {
-			return fmt.Errorf("balance not expected. %x: expect %v; got %v", addr, expectedBalance, gotBalance)
+			return fmt.Errorf("balance of %x not expected: expect %v; got %v", addr, expectedBalance, gotBalance)
 		}
 	}
 	return nil
@@ -607,12 +613,7 @@ func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := statedb.Commit(true); err != nil {
-		return nil, err
-	}
-	if _, err := tec.epc.DposContext.Commit(); err != nil {
-		return nil, err
-	}
+
 	// Update expect context
 	tec.ec.accumulateRewards(tec.epc.stateDB, validator, tec.db, tec.genesis)
 	l.Printf("validator mined a block %x\n", validator)
@@ -932,7 +933,7 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB stateDB, ctx *typ
 		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
 	}
 	// check the delegate trie from the last epoch
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return fmt.Errorf("cannot recover delegate trie: %v", err)
@@ -1027,7 +1028,7 @@ func (ec *expectContext) checkDelegatorLastEpoch(stateDB stateDB, ctx *types.Dpo
 	if gotDeposit.Cmp(record.deposit) != 0 {
 		return fmt.Errorf("delegator %x last epoch deposit: expect %v, got %v", addr, gotDeposit, record.deposit)
 	}
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
 	dt, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)
 	if err != nil {
 		return fmt.Errorf("cannot recover delegate trie: %v", err)
@@ -1150,21 +1151,40 @@ func (ec *expectContext) getBlockProducer(blockTime int64) (common.Address, erro
 func (ec *expectContext) accumulateRewards(state stateDB, validator common.Address,
 	db ethdb.Database, genesis *types.Header) {
 
-	blockReward := byzantiumBlockReward
+	blockReward := rewardPerBlockFirstYear
+
+	// donate 5% of block reward to DxChain foundation account
+	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	ec.addBalance(params.DefaultDonatedAccount, donation)
+
+	// 95% of the block reward to validator and their delegators
+	blockReward = blockReward.Sub(donation)
+
+	// Distribute the reward to validator
+	ec.mockAllocateRewardToValidator(blockReward, validator)
+
+	// Update mined count
+	ec.incrementMinedCnt(validator)
+}
+
+func (ec *expectContext) mockAllocateRewardToValidator(reward common.BigInt, validator common.Address) {
+	totalVote := ec.getTotalVotesLastEpoch(validator)
+	if totalVote.Cmp(common.BigInt0) <= 0 {
+		ec.addBalance(validator, reward)
+		return
+	}
+
 	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
-	totalVotes := ec.getTotalVotesLastEpoch(validator)
-	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
-	// Distribute the reward
-	sharedReward := blockReward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
+	sharedReward := reward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
 	assignedReward := common.BigInt0
-	for delegator, votes := range delegatorVotes {
-		delegatorReward := sharedReward.Mult(votes).Div(totalVotes)
+
+	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
+	for delegator, vote := range delegatorVotes {
+		delegatorReward := sharedReward.Mult(vote).Div(totalVote)
 		ec.addBalance(delegator, delegatorReward)
 		assignedReward = assignedReward.Add(delegatorReward)
 	}
-	ec.addBalance(validator, blockReward.Sub(assignedReward))
-	// Update mined count
-	ec.incrementMinedCnt(validator)
+	ec.addBalance(validator, reward.Sub(assignedReward))
 }
 
 // getTotalVotesLastEpoch get the total votes in the last epoch
@@ -1174,6 +1194,18 @@ func (ec *expectContext) getTotalVotesLastEpoch(candidate common.Address) common
 		totalVotes = totalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
 	}
 	return totalVotes
+}
+
+// getTotalVotes get the total votes for candidate until now
+func (ec *expectContext) getTotalVotes(candidate common.Address) (common.BigInt, map[common.Address]common.BigInt) {
+	delegators := make(map[common.Address]common.BigInt)
+	totalVotes := ec.candidateRecords[candidate].deposit
+	for delegator := range ec.candidateRecords[candidate].votes {
+		vote := ec.delegatorRecords[delegator].deposit
+		totalVotes = totalVotes.Add(vote)
+		delegators[delegator] = vote
+	}
+	return totalVotes, delegators
 }
 
 // countDelegateVotesForCandidate count the delegator votes for a candidate
@@ -1318,7 +1350,8 @@ func getGenesis() *genesisConfig {
 		})
 	}
 	dposConfig := &params.DposConfig{
-		Validators: genesisValidators,
+		Validators:     genesisValidators,
+		DonatedAccount: params.DefaultDonatedAccount,
 	}
 	chainConfig := &params.ChainConfig{
 		ChainID:        big.NewInt(5),

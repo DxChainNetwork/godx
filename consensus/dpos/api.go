@@ -108,15 +108,13 @@ func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, d
 
 // GetCandidateInfo will return the detailed candidates information
 func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
-	// get detailed candidates information
-	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 
 	// get the candidateTrie
 	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
 	if err != nil {
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
-	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
+	candidateVotes, candidateDeposit := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
 	rewardRatio := GetRewardRatioNumerator(stateDb, candidateAddress)
 
 	return candidateDeposit, candidateVotes, rewardRatio, nil

@@ -361,47 +361,41 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 }
 
 // accumulateRewards add the block award to Coinbase of validator
-func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header) {
-	// Select the correct block reward based on chain progression
-	blockReward := frontierBlockReward
-	if config.IsByzantium(header.Number) {
-		blockReward = byzantiumBlockReward
-	}
-	if config.IsConstantinople(header.Number) {
-		blockReward = constantinopleBlockReward
-	}
-	// retrieve the total vote weight of header's validator
-	voteCount := GetTotalVote(state, header.Validator)
-	if voteCount.Cmp(common.BigInt0) <= 0 {
-		state.AddBalance(header.Coinbase, blockReward.BigIntPtr())
-		return
-	}
-	// get ratio of reward between validator and its delegator
-	rewardRatioNumerator := GetRewardRatioNumeratorLastEpoch(state, header.Validator)
-	sharedReward := blockReward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
-	assignedReward := common.BigInt0
+func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, db *trie.Database, genesis *types.Header, dposContext *types.DposContext) error {
 
-	// Loop over the delegators to add delegator rewards
-	preEpochSnapshotDelegateTrieRoot := getPreEpochSnapshotDelegateTrieRoot(state, genesis)
-	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
+	// check whether the sum allocated reward is beyond total reward until now
+	sumAllocatedReward := getSumAllocatedReward(state)
+	if sumAllocatedReward.Cmp(totalBlockReward) >= 0 {
+		log.Debug("Cannot allocate block reward,because the sum allocated reward has reached the total reward")
+		return nil
+	}
+
+	// block reward is 254 dx in the first year
+	blockReward := rewardPerBlockFirstYear
+
+	// after one year, the block reward adjust to 115 dx
+	if header.Number.Uint64() > BlockCountPerYear {
+		blockReward = rewardPerBlockAfterOneYear
+	}
+
+	// donate 5% of block reward to DxChain foundation account
+	donation := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	state.AddBalance(config.Dpos.DonatedAccount, donation.BigIntPtr())
+
+	// 95% of the block reward to validator and their delegators
+	blockReward = blockReward.Sub(donation)
+
+	// allocate reward to validator and its delegator
+	err := allocateValidatorReward(state, header.Coinbase, header.Validator, blockReward, db, genesis)
 	if err != nil {
-		log.Error("couldn't get snapshot delegate trie, error:", err)
-		return
+		log.Error("Failed to allocate reward to validator", "error", err)
+		return err
 	}
 
-	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(header.Validator.Bytes()))
-	for delegatorIterator.Next() {
-		delegator := common.BytesToAddress(delegatorIterator.Value)
-		// get the votes of delegator to vote for delegate
-		delegatorVote := GetVoteLastEpoch(state, delegator)
-		// calculate reward of each delegator due to it's vote(stake) percent
-		delegatorReward := delegatorVote.Mult(sharedReward).Div(voteCount)
-		state.AddBalance(delegator, delegatorReward.BigIntPtr())
-		assignedReward = assignedReward.Add(delegatorReward)
-	}
-	// accumulate the rest rewards for the validator
-	validatorReward := blockReward.Sub(assignedReward)
-	state.AddBalance(header.Coinbase, validatorReward.BigIntPtr())
+	// set the sum of all allocated reward until now
+	sumAllocatedReward = sumAllocatedReward.Add(blockReward)
+	setSumAllocatedReward(state, common.BigToHash(sumAllocatedReward.BigIntPtr()))
+	return nil
 }
 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context
@@ -409,7 +403,10 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	uncles []*types.Header, receipts []*types.Receipt, dposContext *types.DposContext) (*types.Block, error) {
 	// Accumulate block rewards and commit the final state root
 	genesis := chain.GetHeaderByNumber(0)
-	accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis)
+	err := accumulateRewards(chain.Config(), state, header, trie.NewDatabase(d.db), genesis, dposContext)
+	if err != nil {
+		return nil, err
+	}
 
 	if d.Mode == ModeFake {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -426,7 +423,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 	updateTimeOfFirstBlockIfNecessary(chain)
 
 	//update mined count trie
-	err := updateMinedCnt(parent.Time.Int64(), header.Validator, dposContext)
+	err = updateMinedCnt(parent.Time.Int64(), header.Validator, dposContext)
 	if err != nil {
 		return nil, err
 	}
@@ -629,4 +626,48 @@ func getMinedCnt(minedCntTrie *trie.Trie, epoch int64, validator common.Address)
 func makeMinedCntKey(epoch int64, addr common.Address) []byte {
 	epochBytes := common.Uint64ToByte(uint64(epoch))
 	return append(epochBytes, addr.Bytes()...)
+}
+
+// allocateValidatorReward allocate the block reward to validator and its delegator
+func allocateValidatorReward(state *state.StateDB, coinbase, validator common.Address, reward common.BigInt, db *trie.Database, genesis *types.Header) error {
+
+	// calculate the total vote of all delegators
+	totalVote := GetTotalVote(state, validator)
+	selfDeposit := GetCandidateDepositLastEpoch(state, validator)
+	allDelegatorVotes := totalVote.Sub(selfDeposit)
+	if allDelegatorVotes.Cmp(common.BigInt0) <= 0 {
+		state.AddBalance(coinbase, reward.BigIntPtr())
+		SetValidatorAllocatedReward(state, reward, validator)
+		return nil
+	}
+
+	// get ratio of reward between candidate and its delegator
+	rewardRatioNumerator := GetRewardRatioNumeratorLastEpoch(state, validator)
+	sharedReward := reward.MultUint64(rewardRatioNumerator).DivUint64(RewardRatioDenominator)
+	assignedReward := common.BigInt0
+
+	// Loop over the delegators to add delegator rewards
+	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(state, genesis)
+	delegateTrie, err := getPreEpochSnapshotDelegateTrie(db, preEpochSnapshotDelegateTrieRoot)
+	if err != nil {
+		return err
+	}
+
+	delegatorIterator := trie.NewIterator(delegateTrie.PrefixIterator(validator.Bytes()))
+	for delegatorIterator.Next() {
+		delegator := common.BytesToAddress(delegatorIterator.Value)
+		// get the votes of delegator to vote for delegate
+		delegatorVote := GetVoteLastEpoch(state, delegator)
+		// calculate reward of each delegator due to it's vote(stake) percent
+		delegatorReward := delegatorVote.Mult(sharedReward).Div(allDelegatorVotes)
+		state.AddBalance(delegator, delegatorReward.BigIntPtr())
+		SetDelegatorAllocatedReward(state, delegatorReward, delegator)
+		assignedReward = assignedReward.Add(delegatorReward)
+	}
+
+	// accumulate the rest rewards for the candidate
+	validatorReward := reward.Sub(assignedReward)
+	state.AddBalance(coinbase, validatorReward.BigIntPtr())
+	SetValidatorAllocatedReward(state, validatorReward, validator)
+	return nil
 }

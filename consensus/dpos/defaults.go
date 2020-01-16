@@ -28,15 +28,15 @@ const (
 	// RewardRatioDenominator is the max value of reward ratio
 	RewardRatioDenominator uint64 = 100
 
-	// ThawingEpochDuration defines that if user cancel candidates or vote, the deposit will be thawed after 2 epochs
-	ThawingEpochDuration = 2
+	// ThawingEpochDuration defines that if user cancel candidates or vote, the deposit will be thawed after 4 epochs
+	ThawingEpochDuration = 4
 
 	// eligibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
 	// produces block less than expected by this denominator, it is considered as ineligible.
 	eligibleValidatorDenominator = 2
 
-	// BlockInterval indicates that a block will be produced every 10 seconds
-	BlockInterval = int64(10)
+	// BlockInterval indicates that a block will be produced every 8 seconds
+	BlockInterval = int64(8)
 
 	// EpochInterval indicates that a new epoch will be elected every a day
 	EpochInterval = int64(86400)
@@ -44,18 +44,28 @@ const (
 	// MaxVoteCount is the maximum number of candidates that a vote transaction could
 	// include
 	MaxVoteCount = 30
+
+	// DonationRatio is the value of donation ratio for every new block reward
+	DonationRatio = uint64(5)
+
+	// PercentageDenominator is used to calculate percentage
+	PercentageDenominator = uint64(100)
+
+	// BlockCountFirstYear is the count of blocks produced per year
+	BlockCountPerYear = uint64(3942000)
 )
 
 var (
-	// Block reward in camel for successfully mining a block
-	frontierBlockReward = common.NewBigIntUint64(1e18).MultInt64(5)
-
-	// Block reward in camel for successfully mining a block upward from Byzantium
-	byzantiumBlockReward = common.NewBigIntUint64(1e18).MultInt64(3)
-
-	// Block reward in camel for successfully mining a block upward from Constantinople
-	constantinopleBlockReward = common.NewBigIntUint64(1e18).MultInt64(2)
+	// rewardPerBlockAfterOneYear defines reward 115 dx for successfully mining a block after one year
+	rewardPerBlockAfterOneYear = common.NewBigIntUint64(1e18).MultInt64(115)
 
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
+
+	// totalBlockReward defines the total block reward for main net
+	totalBlockReward = common.NewBigInt(1e18).MultInt64(4.5e10)
+
+	// rewardPerBlockFirstYear is block reward for the first year
+	// means that the prev 3942000 blocks will be rewarded as 254 dx
+	rewardPerBlockFirstYear = common.NewBigIntUint64(1e18).MultInt64(254)
 )
