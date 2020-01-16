@@ -227,9 +227,10 @@ web3._extend({
 		}),
 
 		new web3._extend.Method({
-			name: 'candidateVotes',
-			call: 'dpos_getCandidatesVote',
-			params: 1,
+			name: 'getAllVotesOfCandidate',
+			call: 'dpos_getAllVotesOfCandidate',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({

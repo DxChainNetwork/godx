@@ -44,6 +44,12 @@ type DelegatorReward struct {
 	Reward    *big.Int       `json:"reward"`
 }
 
+// DelegatorInfo stores delegator info
+type DelegatorInfo struct {
+	Delegator common.Address `json:"delegator"`
+	Deposit   *big.Int       `json:"deposit"`
+}
+
 // NewPublicDposAPI will create a PublicDposAPI object that is used
 // to access all DPOS API Method
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
@@ -316,4 +322,34 @@ func (d *PublicDposAPI) GetVotedCandidatesByAddress(delegator common.Address, bl
 	}
 
 	return dctx.GetVotedCandidatesByAddress(delegator)
+}
+
+// GetAllDelegatorsOfCandidate query all delegators that voted the candidate on the block
+func (d *PublicDposAPI) GetAllVotesOfCandidate(candidate common.Address, blockNr *rpc.BlockNumber) ([]DelegatorInfo, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	if err != nil {
+		return nil, err
+	}
+
+	// get dpos context on the block
+	dctx, err := d.e.DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []DelegatorInfo
+	delegators, err := dctx.GetAllDelegatorsOfCandidate(candidate)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range delegators {
+		deposit, err := d.VoteDeposit(addr)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, DelegatorInfo{addr, deposit})
+	}
+	return result, nil
 }

@@ -524,6 +524,23 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 	return result, nil
 }
 
+// GetAllDelegatorsOfCandidate retrieve all delegators of the candidate
+func (dc *DposContext) GetAllDelegatorsOfCandidate(candidate common.Address) ([]common.Address, error) {
+	var result []common.Address
+	prefixKey := candidate.Bytes()
+	it := trie.NewIterator(dc.delegateTrie.PrefixIterator(prefixKey))
+	for it.Next() {
+		if it.Value == nil {
+			return nil, fmt.Errorf("something wrong in dpos context:%s query a nil delegator", candidate.String())
+		}
+
+		del := common.BytesToAddress(it.Value)
+		result = append(result, del)
+	}
+
+	return result, nil
+}
+
 // GetMinedCnt get mined block count in the minedCntTrie
 func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
 	key := makeMinedCntKey(epoch, addr)
