@@ -57,9 +57,6 @@ var (
 
 	// KeySumAllocatedReward is the key of sum allocated block reward until now
 	KeySumAllocatedReward = common.BytesToHash([]byte("sum-allocated-reward"))
-
-	// KeyCandidateDepositLastEpoch is the candidate deposit in the last epoch
-	KeyCandidateDepositLastEpoch = common.BytesToHash([]byte("candidate-deposit-last-epoch"))
 )
 
 // GetCandidateDeposit get the candidates deposit of the addr from the state
@@ -258,16 +255,4 @@ func addSumAllocatedReward(state stateDB, diff common.BigInt) {
 	prevSum := getSumAllocatedReward(state)
 	newSum := prevSum.Add(diff)
 	setSumAllocatedReward(state, newSum)
-}
-
-// GetCandidateDepositLastEpoch get the candidates deposit at last epoch
-func GetCandidateDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
-	depositHash := state.GetState(addr, KeyCandidateDepositLastEpoch)
-	return common.PtrBigInt(depositHash.Big())
-}
-
-// SetCandidateDepositLastEpoch set the candidates deposit at last epoch
-func SetCandidateDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
-	hash := common.BigToHash(deposit.BigIntPtr())
-	state.SetState(addr, KeyCandidateDepositLastEpoch, hash)
 }
