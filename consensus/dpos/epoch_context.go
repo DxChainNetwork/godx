@@ -116,7 +116,6 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 		totalVotes, candidateDeposit := CalcCandidateTotalVotes(candidateAddr, statedb, ec.DposContext.DelegateTrie())
 		// write the totalVotes to result and state
 		votes = append(votes, &randomSelectorEntry{addr: candidateAddr, vote: totalVotes})
-		SetTotalVote(statedb, candidateAddr, totalVotes)
 	}
 	// if there are no candidates, return error
 	if !hasCandidate {

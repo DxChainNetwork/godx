@@ -927,11 +927,6 @@ func (ec *expectContext) checkCandidateRecordLastEpoch(stateDB stateDB, ctx *typ
 	for delegator := range record.votes {
 		expectTotalVotes = expectTotalVotes.Add(ec.delegatorRecordsLastEpoch[delegator].deposit)
 	}
-	gotTotalVotes := GetTotalVote(stateDB, addr)
-	// special case for genesis. Skip checking if the candidate have no votes
-	if len(record.votes) != 0 && expectTotalVotes.Cmp(gotTotalVotes) != 0 {
-		return fmt.Errorf("canidate %x last epoch total vote not expected. Got %v, Expect %v", addr, gotTotalVotes, expectTotalVotes)
-	}
 	// check the delegate trie from the last epoch
 	preEpochSnapshotDelegateTrieRoot := GetPreEpochSnapshotDelegateTrieRoot(stateDB, genesis)
 	delegateTrie, err := getPreEpochSnapshotDelegateTrie(ctx.DB(), preEpochSnapshotDelegateTrieRoot)

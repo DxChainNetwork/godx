@@ -109,18 +109,6 @@ func SetRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address, value 
 	state.SetState(addr, KeyRewardRatioNumeratorLastEpoch, hash)
 }
 
-// GetTotalVote get the total vote for the candidates address
-func GetTotalVote(state stateDB, addr common.Address) common.BigInt {
-	hash := state.GetState(addr, KeyTotalVote)
-	return common.PtrBigInt(hash.Big())
-}
-
-// SetTotalVote set the total vote to value for the candidates address
-func SetTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) {
-	hash := common.BigToHash(totalVotes.BigIntPtr())
-	state.SetState(addr, KeyTotalVote, hash)
-}
-
 // GetFrozenAssets returns the frozen assets for an addr
 func GetFrozenAssets(state stateDB, addr common.Address) common.BigInt {
 	hash := state.GetState(addr, KeyFrozenAssets)

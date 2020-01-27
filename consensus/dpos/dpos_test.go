@@ -115,9 +115,6 @@ func TestAccumulateRewards(t *testing.T) {
 	var rewardRatioNumerator uint64 = 50
 	SetRewardRatioNumeratorLastEpoch(stateDB, validator, rewardRatioNumerator)
 
-	// set the total vote weight for validator
-	SetTotalVote(stateDB, validator, common.PtrBigInt(big.NewInt(100000)))
-
 	stateDbCopy := stateDB.Copy()
 
 	dposEng := &Dpos{
