@@ -510,9 +510,12 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
-	candidatesRLP := dc.voteTrie.Get(key)
+	candidatesRLP, err := dc.voteTrie.TryGet(key)
+	if err != nil {
+		return nil, err
+	}
 	if candidatesRLP == nil {
-		return nil, nil
+		return nil, errors.New("the candidate is not a valid delegator")
 	}
 
 	var result []common.Address
