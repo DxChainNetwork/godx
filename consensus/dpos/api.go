@@ -113,7 +113,8 @@ func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, h
 	if err != nil {
 		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
 	}
-	candidateVotes, candidateDeposit := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
+	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
+	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
 	rewardRatio := GetRewardRatioNumerator(stateDb, candidateAddress)
 
 	return candidateDeposit, candidateVotes, rewardRatio, nil
