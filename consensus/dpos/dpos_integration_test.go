@@ -1163,23 +1163,7 @@ func (ec *expectContext) accumulateRewards(state stateDB, validator common.Addre
 }
 
 func (ec *expectContext) mockAllocateRewardToValidator(reward common.BigInt, validator common.Address) {
-	totalVote := ec.getTotalVotesLastEpoch(validator)
-	if totalVote.Cmp(common.BigInt0) <= 0 {
-		ec.addBalance(validator, reward)
-		return
-	}
-
-	rewardRatio := ec.candidateRecordsLastEpoch[validator].rewardRatio
-	sharedReward := reward.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
-	assignedReward := common.BigInt0
-
-	delegatorVotes := ec.countDelegateVotesForCandidate(validator)
-	for delegator, vote := range delegatorVotes {
-		delegatorReward := sharedReward.Mult(vote).Div(totalVote)
-		ec.addBalance(delegator, delegatorReward)
-		assignedReward = assignedReward.Add(delegatorReward)
-	}
-	ec.addBalance(validator, reward.Sub(assignedReward))
+	ec.addBalance(validator, reward)
 }
 
 // getTotalVotesLastEpoch get the total votes in the last epoch
