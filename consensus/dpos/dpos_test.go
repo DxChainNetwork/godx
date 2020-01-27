@@ -141,12 +141,10 @@ func TestAccumulateRewards(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
 
 	expectedDonationReward := rewardPerBlockFirstYear.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
-	leftRewardToValidatorAndDelegators := rewardPerBlockFirstYear.Sub(expectedDonationReward)
-	expectedDelegatorReward := leftRewardToValidatorAndDelegators.MultUint64(rewardRatioNumerator).DivUint64(PercentageDenominator)
-	expectedValidatorReward := leftRewardToValidatorAndDelegators.Sub(expectedDelegatorReward)
+	expectedValidatorReward := rewardPerBlockFirstYear.Sub(expectedDonationReward)
 
 	// allocate the block reward among validator and its delegators
-	err = accumulateRewards(params.MainnetChainConfig, stateDB, header, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
+	err = accumulateRewards(params.MainnetChainConfig, stateDB, header)
 	if err != nil {
 		t.Fatalf("failed to accumulateRewards,error: %v", err)
 	}
@@ -163,14 +161,9 @@ func TestAccumulateRewards(t *testing.T) {
 		t.Errorf("validator reward is wrong, want: %v, got: %v", expectedValidatorReward, validatorBalance)
 	}
 
-	delegatorBalance := stateDB.GetBalance(delegator)
-	if delegatorBalance.Cmp(expectedDelegatorReward.BigIntPtr()) != 0 {
-		t.Errorf("delegator reward is wrong, want: %v, got: %v", expectedDelegatorReward, delegatorBalance)
-	}
-
 	// mock block sync
 	headerCopy := header
-	err = accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy, trie.NewDatabase(db), testChain.GetHeaderByNumber(0), dposCtx)
+	err = accumulateRewards(params.MainnetChainConfig, stateDbCopy, headerCopy)
 	if err != nil {
 		t.Fatalf("failed to accumulateRewards,error: %v", err)
 	}

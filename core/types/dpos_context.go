@@ -519,7 +519,7 @@ func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]
 	}
 
 	var result []common.Address
-	err := rlp.DecodeBytes(candidatesRLP, &result)
+	err = rlp.DecodeBytes(candidatesRLP, &result)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode voted candidates: %s", err)
 	}

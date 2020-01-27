@@ -244,18 +244,26 @@ func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
 }
 
 // setSumAllocatedReward set the sum allocated block reward until now
-func setSumAllocatedReward(state stateDB, sumAllocatedReward common.Hash) {
+func setSumAllocatedReward(state stateDB, value common.BigInt) {
 	if !state.Exist(KeyValueCommonAddress) {
 		state.CreateAccount(KeyValueCommonAddress)
 	}
 	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
-	state.SetState(KeyValueCommonAddress, KeySumAllocatedReward, sumAllocatedReward)
+	hash := common.BigToHash(value.BigIntPtr())
+	state.SetState(KeyValueCommonAddress, KeySumAllocatedReward, hash)
 }
 
 // getSumAllocatedReward get the sum allocated block reward until now
 func getSumAllocatedReward(state stateDB) common.BigInt {
 	sumAllocatedRewardHash := state.GetState(KeyValueCommonAddress, KeySumAllocatedReward)
 	return common.PtrBigInt(sumAllocatedRewardHash.Big())
+}
+
+// addSumAllocatedReward add diff to the sum allocated block reward
+func addSumAllocatedReward(state stateDB, diff common.BigInt) {
+	prevSum := getSumAllocatedReward(state)
+	newSum := prevSum.Add(diff)
+	setSumAllocatedReward(state, newSum)
 }
 
 // SetValidatorAllocatedReward set the current allocated reward for validator
