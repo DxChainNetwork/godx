@@ -32,7 +32,6 @@ type CandidateInfo struct {
 // ValidatorInfo stores detailed validator information
 type ValidatorInfo struct {
 	Validator   common.Address `json:"validator"`
-	Votes       common.BigInt  `json:"votes"`
 	EpochID     int64          `json:"current_epoch"`
 	MinedBlocks int64          `json:"epoch_mined_blocks"`
 	RewardRatio uint64         `json:"reward_distribution"`
@@ -90,14 +89,13 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.
 	}
 
 	// get the detailed information
-	votes, rewardRatio, minedCount, epochID, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
+	rewardRatio, minedCount, epochID, err := dpos.GetValidatorInfo(statedb, validatorAddress, d.e.ChainDb(), header)
 	if err != nil {
 		return ValidatorInfo{}, err
 	}
 
 	return ValidatorInfo{
 		Validator:   validatorAddress,
-		Votes:       votes,
 		RewardRatio: rewardRatio,
 		MinedBlocks: minedCount,
 		EpochID:     epochID,
