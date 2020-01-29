@@ -383,7 +383,7 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 // getBlockReward get the block reward to be distributed given the current block number and state
-func getBlockReward(blockNumber *big.Int, state *state.StateDB) common.BigInt {
+func getBlockReward(blockNumber *big.Int, state stateDB) common.BigInt {
 	sumAllocatedReward := getSumAllocatedReward(state)
 	if sumAllocatedReward.Cmp(totalBlockReward) >= 0 {
 		log.Debug("Cannot allocate block reward,because the sum allocated reward has reached the total reward")
