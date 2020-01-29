@@ -168,7 +168,8 @@ func NewAPIHelper(bc BlockChain) *APIHelper {
 	}
 }
 
-// candidateVoteStat return the vote stat for a candidate
+// candidateVoteStat return the vote stat for a candidate. The result is a list of structure of address
+// and vote value, which is sorted in descending votes.
 func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header) ([]ValueEntry, error) {
 	ctx, err := ah.epochCtxAt(header)
 	if err != nil {
@@ -177,6 +178,7 @@ func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header
 	if !isCandidate(ctx.DposContext.CandidateTrie(), cand) {
 		return nil, fmt.Errorf("%x is not a valid candidate", cand)
 	}
+	// For each delegator who voted the candidate, count the delegator vote and add to result.
 	delegators := getAllDelegatorForCandidate(ctx.DposContext, cand)
 	res := make([]ValueEntry, 0, len(delegators))
 	for _, delegator := range delegators {
@@ -186,11 +188,15 @@ func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header
 			Value: vote,
 		})
 	}
+	// Sort the entries in descending order and return result
 	sort.Sort(valuesDescending(res))
 	return res, nil
 }
 
-// ValidatorVoteStat return the vote stat for a validator in last epoch
+// ValidatorVoteStat return the vote stat for a validator in last epoch.
+// First identify whether the given address is a validator, then call lastElectBlockHeader to find the block
+// where election happens before the given block, and call CandidateVoteStat on last elect block to calculate
+// the vote for the validator.
 func (ah *APIHelper) ValidatorVoteStat(validator common.Address, header *types.Header) ([]ValueEntry, error) {
 	ctx, err := ah.bc.DposCtxAt(header.DposContext)
 	if err != nil {

@@ -41,7 +41,7 @@ func TestApiHelper_lastElectBlockHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	helper := APIHelper{bc}
+	helper := NewAPIHelper(bc)
 	for _, test := range testData {
 		header := helper.bc.GetHeaderByNumber(test.blockNum)
 		if header == nil {
