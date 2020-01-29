@@ -232,9 +232,10 @@ func (ah *ApiHelper) ValidatorVoteStat(validator common.Address, header *types.H
 }
 
 // ValidatorRewardInRange return the validator reward within range start and end.
-func (ah *ApiHelper) ValidatorRewardInRange(validator common.Address, endHash common.Hash, size uint64) (common.BigInt, error) {
+// The donation has already been subtracted from the rewards
+func (ah *ApiHelper) ValidatorRewardInRange(validator common.Address, endHeader *types.Header, size uint64) (common.BigInt, error) {
 	total := common.BigInt0
-	err := ah.forEachBlockInRange(endHash, size, func(header *types.Header) error {
+	err := ah.forEachBlockInRange(endHeader, size, func(header *types.Header) error {
 		ec, err := ah.epochCtxAt(header)
 		if err != nil {
 			return err
@@ -259,12 +260,8 @@ func (ah *ApiHelper) ValidatorRewardInRange(validator common.Address, endHash co
 // The range ends in endBlock specified by endHash, and the range is of size `size`.
 // Note: the start and end block is included within the range.
 // 		 if the size is greater than end height, blocks 1 to end will be iterated.
-func (ah *ApiHelper) forEachBlockInRange(endHash common.Hash, size uint64, f func(header *types.Header) error) error {
+func (ah *ApiHelper) forEachBlockInRange(endHeader *types.Header, size uint64, f func(header *types.Header) error) error {
 	// Validation. Avoid size > endHeader.Number
-	endHeader := ah.bc.GetHeaderByHash(endHash)
-	if endHeader == nil {
-		return fmt.Errorf("unknown block %x", endHash)
-	}
 	endHeight := endHeader.Number.Uint64()
 	if size > endHeight {
 		size = endHeight
@@ -315,36 +312,53 @@ func isValidator(dposCtx *types.DposContext, addr common.Address) (bool, error) 
 
 // CalcValidatorDistributionInRange calculate the validator reward distribution to delegators
 // within a range. Ending with endHash and covers number of (size) blocks
-func (ah *ApiHelper) CalcValidatorDistributionInRange(validator common.Address, endHash common.Hash, size uint64) ([]ValueEntry, error) {
+func (ah *ApiHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64) ([]ValueEntry, error) {
 	// First, divide the whole range into epochs
-	eis, err := ah.calcEpochIntervalInRange(endHash, size)
+	eis, err := ah.calcEpochIntervalInRange(endHeader, size)
 	if err != nil {
 		return nil, err
 	}
+	dist := make(validatorDistribution)
 	// For each epoch calculate the distribution
-
-	return nil, nil
+	for _, interval := range eis {
+		end := interval.endHeader
+		size := interval.size
+		totalReward, err := ah.ValidatorRewardInRange(validator, end, size)
+		if err != nil {
+			return nil, err
+		}
+		delegatorVotes, err := ah.ValidatorVoteStat(validator, end)
+		if err != nil {
+			return nil, err
+		}
+		rewardRatio, err := ah.getValidatorRewardRatio(validator, end)
+		if err != nil {
+			return nil, err
+		}
+		ah.addDelegatorDistribution(dist, totalReward, delegatorVotes, rewardRatio)
+	}
+	return dist.sortedList(), nil
 }
 
 // epochInterval specifies the epoch interval for calculating validator distribution in range.
-// an epoch interval is specified by a endHash and the size of the interval.
+// an epoch interval is specified by a endHeader and the size of the interval.
 type epochInterval struct {
-	endHash common.Hash
-	size    uint64
+	endHeader *types.Header
+	size      uint64
 }
 
 // calcEpochIntervalInRange calculate the epochInterval within the range endHash of size
 // It will split a full interval into small intervals by elect blocks
-func (ah *ApiHelper) calcEpochIntervalInRange(endHash common.Hash, size uint64) ([]epochInterval, error) {
+func (ah *ApiHelper) calcEpochIntervalInRange(endHeader *types.Header, size uint64) ([]epochInterval, error) {
 	var eis []epochInterval
 	if size == 0 {
 		return eis, nil
 	}
 	curEpoch := epochInterval{
-		endHash: endHash,
-		size:    0,
+		endHeader: endHeader,
+		size:      0,
 	}
-	err := ah.forEachBlockInRange(endHash, size, func(header *types.Header) error {
+	err := ah.forEachBlockInRange(endHeader, size, func(header *types.Header) error {
 		prevHeader := ah.bc.GetHeaderByHash(header.ParentHash)
 		if prevHeader == nil {
 			return fmt.Errorf("unkown header %x", header.ParentHash)
@@ -362,8 +376,8 @@ func (ah *ApiHelper) calcEpochIntervalInRange(endHash common.Hash, size uint64) 
 			eis = append(eis, curEpoch)
 		}
 		curEpoch = epochInterval{
-			endHash: header.Hash(),
-			size:    1,
+			endHeader: header,
+			size:      1,
 		}
 		return nil
 	})
@@ -391,6 +405,31 @@ func (ah *ApiHelper) epochCtxAt(header *types.Header) (*EpochContext, error) {
 		DposContext: ctx,
 		stateDB:     statedb,
 	}, nil
+}
+
+// getValidatorRewardRatio get the validator reward ratio in the last epoch specified
+// by header.
+func (ah *ApiHelper) getValidatorRewardRatio(validator common.Address, header *types.Header) (uint64, error) {
+	statedb, err := ah.bc.StateAt(header.Root)
+	if err != nil {
+		return 0, err
+	}
+	rewardRatio := GetRewardRatioNumeratorLastEpoch(statedb, validator)
+	return rewardRatio, nil
+}
+
+// addDelegatorDistribution add the delegator distribution to dist.
+func (ah *ApiHelper) addDelegatorDistribution(dist validatorDistribution, rewards common.BigInt, votes []ValueEntry, rewardRatio uint64) {
+	sharedRewards := rewards.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
+	totalVotes := common.BigInt0
+	for _, entry := range votes {
+		totalVotes = totalVotes.Add(entry.Value)
+	}
+	for _, entry := range votes {
+		addr := entry.Addr
+		reward := sharedRewards.Mult(entry.Value).Div(totalVotes)
+		dist.addValue(addr, reward)
+	}
 }
 
 // isElectBlock returns whether the given header is a block where election happens.
@@ -487,12 +526,21 @@ func (vd validatorDistribution) merge(vd2 validatorDistribution) {
 	}
 }
 
+// addReward add value to an address in ValidatorDistribution
+func (vd validatorDistribution) addValue(addr common.Address, value common.BigInt) {
+	if v, ok := vd[addr]; !ok {
+		vd[addr] = value
+	} else {
+		vd[addr] = v.Add(value)
+	}
+}
+
 // sortedList change the validatorDistribution to a sorted list
 func (vd validatorDistribution) sortedList() []ValueEntry {
 	ves := make([]ValueEntry, 0, len(vd))
 	for addr, v := range vd {
 		ves = append(ves, ValueEntry{addr, v})
 	}
-	sort.Sort(valuesDescending{ves})
+	sort.Sort(valuesDescending(ves))
 	return ves
 }
