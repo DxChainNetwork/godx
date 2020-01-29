@@ -241,6 +241,13 @@ func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader 
 
 // CalcValidatorDistributionInRange calculate the validator reward distribution to delegators
 // within a range. Ending with endHash and covers number of (size) blocks
+//  1. Split the full interval by elect blocks.
+//  2. For each interval
+//     2.1 calculate validator rewards
+//     2.2 calculate validator vote stats (in the last epoch)
+//     2.3 find reward ratio of validator (in the last epoch)
+//     2.4 split shared rewards among delegators and add to result
+//  3. return result
 func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64) ([]ValueEntry, error) {
 	// First, divide the whole range into epochs
 	eis, err := ah.calcEpochIntervalInRange(endHeader, size)

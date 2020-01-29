@@ -10,6 +10,7 @@ import (
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus/dpos"
+	"github.com/DxChainNetwork/godx/core"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/rpc"
 	"github.com/DxChainNetwork/godx/trie"
@@ -37,16 +38,16 @@ type ValidatorInfo struct {
 	RewardRatio uint64         `json:"reward_distribution"`
 }
 
-// DelegatorReward stores detailed delegator reward
-type DelegatorReward struct {
-	Delegator common.Address `json:"delegator"`
-	Reward    *big.Int       `json:"reward"`
-}
-
 // DelegatorInfo stores delegator info
 type DelegatorInfo struct {
 	Delegator common.Address `json:"delegator"`
-	Deposit   *big.Int       `json:"deposit"`
+	Vote      *big.Int       `json:"vote"`
+}
+
+// DelegatorReward stores how many reward should be distributed to delegator
+type DelegatorReward struct {
+	Delegator common.Address `json:"delegator"`
+	Reward    *big.Int       `json:"reward"`
 }
 
 // NewPublicDposAPI will create a PublicDposAPI object that is used
@@ -60,7 +61,7 @@ func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
 // Validators will return a list of validators based on the blockNumber provided
 func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, error) {
 	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +73,7 @@ func (d *PublicDposAPI) Validators(blockNr *rpc.BlockNumber) ([]common.Address, 
 // Validator will return detailed validator's information based on the validator address provided
 func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.BlockNumber) (ValidatorInfo, error) {
 	// based on the block number, get the block header
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return ValidatorInfo{}, err
 	}
@@ -105,7 +106,7 @@ func (d *PublicDposAPI) Validator(validatorAddress common.Address, blockNr *rpc.
 // Candidates will return a list of candidates information based on the blockNumber provided
 func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, error) {
 	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +117,7 @@ func (d *PublicDposAPI) Candidates(blockNr *rpc.BlockNumber) ([]common.Address, 
 // Candidate will return detailed candidate's information based on the candidate address provided
 func (d *PublicDposAPI) Candidate(candidateAddress common.Address, blockNr *rpc.BlockNumber) (CandidateInfo, error) {
 	// based on the block number, retrieve the header
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return CandidateInfo{}, err
 	}
@@ -179,7 +180,7 @@ func (d *PublicDposAPI) VoteDeposit(voteAddress common.Address) (*big.Int, error
 // EpochID will calculates the epoch id based on the block number provided
 func (d *PublicDposAPI) EpochID(blockNr *rpc.BlockNumber) (int64, error) {
 	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return 0, nil
 	}
@@ -188,29 +189,10 @@ func (d *PublicDposAPI) EpochID(blockNr *rpc.BlockNumber) (int64, error) {
 	return dpos.CalculateEpochID(header.Time.Int64()), nil
 }
 
-// getHeaderBasedOnNumber will return the block header information based on the block number provided
-func getHeaderBasedOnNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Header, error) {
-	// based on the block number, get the block header
-	var header *types.Header
-	if blockNr == nil {
-		header = e.BlockChain().CurrentHeader()
-	} else {
-		header = e.BlockChain().GetHeaderByNumber(uint64(blockNr.Int64()))
-	}
-
-	// sanity check
-	if header == nil {
-		return nil, fmt.Errorf("unknown block")
-	}
-
-	// return
-	return header, nil
-}
-
 // GetVotedCandidatesByAddress query all voted candidates by the delegator on the block
 func (d *PublicDposAPI) GetVotedCandidatesByAddress(delegator common.Address, blockNr *rpc.BlockNumber) ([]common.Address, error) {
 	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return nil, err
 	}
@@ -226,30 +208,124 @@ func (d *PublicDposAPI) GetVotedCandidatesByAddress(delegator common.Address, bl
 
 // GetAllDelegatorsOfCandidate query all delegators that voted the candidate on the block
 func (d *PublicDposAPI) GetAllVotesOfCandidate(candidate common.Address, blockNr *rpc.BlockNumber) ([]DelegatorInfo, error) {
-	// get the block header information based on the block number
-	header, err := getHeaderBasedOnNumber(blockNr, d.e)
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return nil, err
 	}
-
-	// get dpos context on the block
-	dctx, err := d.e.DposCtxAt(header.DposContext)
+	ah := dpos.NewAPIHelper(d.e.BlockChain())
+	ves, err := ah.CandidateVoteStat(candidate, header)
 	if err != nil {
 		return nil, err
 	}
+	return delegatorInfoFromValueEntries(ves), nil
+}
 
-	var result []DelegatorInfo
-	delegators, err := dctx.GetAllDelegatorsOfCandidate(candidate)
+// GetAllVotesOfValidator returns all delegator that voted the validator in the last epoch
+// before blockNr.
+func (d *PublicDposAPI) GetAllVotesOfValidator(validator common.Address, blockNr *rpc.BlockNumber) ([]DelegatorInfo, error) {
+	header, err := getHeaderByNumber(blockNr, d.e)
 	if err != nil {
 		return nil, err
 	}
-
-	for _, addr := range delegators {
-		deposit, err := d.VoteDeposit(addr)
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, DelegatorInfo{addr, deposit})
+	ah := dpos.NewAPIHelper(d.e.BlockChain())
+	ves, err := ah.ValidatorVoteStat(validator, header)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+	return delegatorInfoFromValueEntries(ves), nil
+}
+
+// GetValidatorReward returns validator's earned reward within a range of [startNr, endNr]
+func (d *PublicDposAPI) GetValidatorReward(validator common.Address, startNr, endNr *rpc.BlockNumber) (*big.Int, error) {
+	endHeader, size, err := parseStartEndBlockNumber(startNr, endNr, d.e.BlockChain())
+	if err != nil {
+		return nil, err
+	}
+	ah := dpos.NewAPIHelper(d.e.BlockChain())
+	reward, err := ah.ValidatorRewardInRange(validator, endHeader, size)
+	if err != nil {
+		return nil, err
+	}
+	return reward.BigIntPtr(), nil
+}
+
+// GetValidatorDistribution get the validator distribution to delegator from startNr to endNr.
+// Return a slice of DelegatorReward
+func (d *PublicDposAPI) GetValidatorDistribution(validator common.Address, startNr, endNr *rpc.BlockNumber) ([]DelegatorReward, error) {
+	endHeader, size, err := parseStartEndBlockNumber(startNr, endNr, d.e.BlockChain())
+	if err != nil {
+		return nil, err
+	}
+	ah := dpos.NewAPIHelper(d.e.BlockChain())
+	ves, err := ah.CalcValidatorDistributionInRange(validator, endHeader, size)
+	if err != nil {
+		return nil, err
+	}
+	return delegatorRewardFromValueEntries(ves), nil
+}
+
+// parseStartEndBlockNumber validate and parse start and end number to the end header and size of interval.
+// Return an error if validation failed.
+func parseStartEndBlockNumber(start, end *rpc.BlockNumber, bc *core.BlockChain) (*types.Header, uint64, error) {
+	if start == nil {
+		return nil, 0, fmt.Errorf("start block number must be specified")
+	}
+	if (start != nil && start.Int64() < 0) || (end != nil && end.Int64() < 0) {
+		return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", start, end)
+	}
+	var endHeader *types.Header
+	if end == nil {
+		endHeader = bc.CurrentHeader()
+	} else {
+		endHeader = bc.GetHeaderByNumber(uint64(end.Int64()))
+	}
+	endNr := endHeader.Number.Int64()
+	startNr := start.Int64()
+	if startNr > endNr {
+		return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", startNr, endNr)
+	}
+	return endHeader, uint64(endNr - startNr), nil
+}
+
+// delegatorInfoFromValueEntries convert []dpos.ValueEntry to []DelegatorInfo
+func delegatorInfoFromValueEntries(ves []dpos.ValueEntry) []DelegatorInfo {
+	dis := make([]DelegatorInfo, 0, len(ves))
+	for _, ve := range ves {
+		dis = append(dis, DelegatorInfo{
+			Delegator: ve.Addr,
+			Vote:      ve.Value.BigIntPtr(),
+		})
+	}
+	return dis
+}
+
+// delegatorRewardFromValueEntries convert []dpos.ValueEntry to []DelegatorReward
+func delegatorRewardFromValueEntries(ves []dpos.ValueEntry) []DelegatorReward {
+	drs := make([]DelegatorReward, 0, len(ves))
+	for _, ve := range ves {
+		drs = append(drs, DelegatorReward{
+			Delegator: ve.Addr,
+			Reward:    ve.Value.BigIntPtr(),
+		})
+	}
+	return drs
+}
+
+// getHeaderByNumber will return the block header information based on the block number provided
+func getHeaderByNumber(blockNr *rpc.BlockNumber, e *Ethereum) (*types.Header, error) {
+	// based on the block number, get the block header
+	var header *types.Header
+	if blockNr == nil {
+		header = e.BlockChain().CurrentHeader()
+	} else {
+		header = e.BlockChain().GetHeaderByNumber(uint64(blockNr.Int64()))
+	}
+
+	// sanity check
+	if header == nil {
+		return nil, fmt.Errorf("unknown block")
+	}
+
+	// return
+	return header, nil
 }
