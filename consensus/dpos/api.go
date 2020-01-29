@@ -151,8 +151,8 @@ type BlockChain interface {
 }
 
 type (
-	// ApiHelper is the helper structure for dpos related api commands
-	ApiHelper struct {
+	// APIHelper is the helper structure for dpos related api commands
+	APIHelper struct {
 		bc BlockChain
 
 		genesis  *types.Header
@@ -161,38 +161,15 @@ type (
 	}
 )
 
-// NewApiHelper creates a new api helper
-func NewApiHelper(bc BlockChain) *ApiHelper {
-	return &ApiHelper{
+// NewAPIHelper creates a new api helper
+func NewAPIHelper(bc BlockChain) *APIHelper {
+	return &APIHelper{
 		bc: bc,
 	}
 }
 
-// LastElectBlockHeight return the block header of last election
-func (ah *ApiHelper) lastElectBlockHeader(header *types.Header) (*types.Header, error) {
-	cur := header.Number.Uint64()
-	if cur <= 1 {
-		return ah.genesis, nil
-	}
-	curNum := header.Number.Uint64() - 1
-	curHeader := ah.bc.GetHeader(header.ParentHash, curNum)
-	for ; curNum > 0; curNum -= 1 {
-		parHeader := ah.bc.GetHeader(curHeader.ParentHash, curNum-1)
-		if parHeader == nil {
-			return nil, fmt.Errorf("unknown block %x at %v", curHeader.ParentHash, curNum-1)
-		}
-		if is, err := ah.isElectBlock(curHeader); err != nil {
-			return nil, err
-		} else if is {
-			return curHeader, nil
-		}
-		curHeader = parHeader
-	}
-	return ah.getGenesis()
-}
-
 // candidateVoteStat return the vote stat for a candidate
-func (ah *ApiHelper) CandidateVoteStat(cand common.Address, header *types.Header) ([]ValueEntry, error) {
+func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header) ([]ValueEntry, error) {
 	ctx, err := ah.epochCtxAt(header)
 	if err != nil {
 		return nil, err
@@ -214,7 +191,7 @@ func (ah *ApiHelper) CandidateVoteStat(cand common.Address, header *types.Header
 }
 
 // ValidatorVoteStat return the vote stat for a validator in last epoch
-func (ah *ApiHelper) ValidatorVoteStat(validator common.Address, header *types.Header) ([]ValueEntry, error) {
+func (ah *APIHelper) ValidatorVoteStat(validator common.Address, header *types.Header) ([]ValueEntry, error) {
 	ctx, err := ah.bc.DposCtxAt(header.DposContext)
 	if err != nil {
 		return nil, err
@@ -233,7 +210,7 @@ func (ah *ApiHelper) ValidatorVoteStat(validator common.Address, header *types.H
 
 // ValidatorRewardInRange return the validator reward within range start and end.
 // The donation has already been subtracted from the rewards
-func (ah *ApiHelper) ValidatorRewardInRange(validator common.Address, endHeader *types.Header, size uint64) (common.BigInt, error) {
+func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader *types.Header, size uint64) (common.BigInt, error) {
 	total := common.BigInt0
 	err := ah.forEachBlockInRange(endHeader, size, func(header *types.Header) error {
 		ec, err := ah.epochCtxAt(header)
@@ -256,11 +233,62 @@ func (ah *ApiHelper) ValidatorRewardInRange(validator common.Address, endHeader 
 	return total, nil
 }
 
+// CalcValidatorDistributionInRange calculate the validator reward distribution to delegators
+// within a range. Ending with endHash and covers number of (size) blocks
+func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64) ([]ValueEntry, error) {
+	// First, divide the whole range into epochs
+	eis, err := ah.calcEpochIntervalInRange(endHeader, size)
+	if err != nil {
+		return nil, err
+	}
+	dist := make(validatorDistribution)
+	// For each epoch calculate the distribution
+	for _, interval := range eis {
+		end := interval.endHeader
+		size := interval.size
+		totalReward, err := ah.ValidatorRewardInRange(validator, end, size)
+		if err != nil {
+			return nil, err
+		}
+		delegatorVotes, err := ah.ValidatorVoteStat(validator, end)
+		if err != nil {
+			return nil, err
+		}
+		rewardRatio, err := ah.getValidatorRewardRatio(validator, end)
+		if err != nil {
+			return nil, err
+		}
+		ah.addDelegatorDistribution(dist, totalReward, delegatorVotes, rewardRatio)
+	}
+	return dist.sortedList(), nil
+}
+
+// LastElectBlockHeight return the block header of last election
+func (ah *APIHelper) lastElectBlockHeader(header *types.Header) (*types.Header, error) {
+	cur := header.Number.Uint64()
+	if cur <= 1 {
+		return ah.getGenesis()
+	}
+	curHeader := header
+	for curNum := header.Number.Uint64() - 1; curNum > 0; curNum -= 1 {
+		curHeader = ah.bc.GetHeader(curHeader.ParentHash, curNum)
+		if curHeader == nil {
+			return nil, fmt.Errorf("unknown block %x at %v", curHeader.ParentHash, curNum-1)
+		}
+		if is, err := ah.isElectBlock(curHeader); err != nil {
+			return nil, err
+		} else if is {
+			return curHeader, nil
+		}
+	}
+	return ah.getGenesis()
+}
+
 // forEachBlockInRange apply the function f on all blocks in range
 // The range ends in endBlock specified by endHash, and the range is of size `size`.
 // Note: the start and end block is included within the range.
 // 		 if the size is greater than end height, blocks 1 to end will be iterated.
-func (ah *ApiHelper) forEachBlockInRange(endHeader *types.Header, size uint64, f func(header *types.Header) error) error {
+func (ah *APIHelper) forEachBlockInRange(endHeader *types.Header, size uint64, f func(header *types.Header) error) error {
 	// Validation. Avoid size > endHeader.Number
 	endHeight := endHeader.Number.Uint64()
 	if size > endHeight {
@@ -310,36 +338,6 @@ func isValidator(dposCtx *types.DposContext, addr common.Address) (bool, error) 
 	return false, nil
 }
 
-// CalcValidatorDistributionInRange calculate the validator reward distribution to delegators
-// within a range. Ending with endHash and covers number of (size) blocks
-func (ah *ApiHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64) ([]ValueEntry, error) {
-	// First, divide the whole range into epochs
-	eis, err := ah.calcEpochIntervalInRange(endHeader, size)
-	if err != nil {
-		return nil, err
-	}
-	dist := make(validatorDistribution)
-	// For each epoch calculate the distribution
-	for _, interval := range eis {
-		end := interval.endHeader
-		size := interval.size
-		totalReward, err := ah.ValidatorRewardInRange(validator, end, size)
-		if err != nil {
-			return nil, err
-		}
-		delegatorVotes, err := ah.ValidatorVoteStat(validator, end)
-		if err != nil {
-			return nil, err
-		}
-		rewardRatio, err := ah.getValidatorRewardRatio(validator, end)
-		if err != nil {
-			return nil, err
-		}
-		ah.addDelegatorDistribution(dist, totalReward, delegatorVotes, rewardRatio)
-	}
-	return dist.sortedList(), nil
-}
-
 // epochInterval specifies the epoch interval for calculating validator distribution in range.
 // an epoch interval is specified by a endHeader and the size of the interval.
 type epochInterval struct {
@@ -349,7 +347,7 @@ type epochInterval struct {
 
 // calcEpochIntervalInRange calculate the epochInterval within the range endHash of size
 // It will split a full interval into small intervals by elect blocks
-func (ah *ApiHelper) calcEpochIntervalInRange(endHeader *types.Header, size uint64) ([]epochInterval, error) {
+func (ah *APIHelper) calcEpochIntervalInRange(endHeader *types.Header, size uint64) ([]epochInterval, error) {
 	var eis []epochInterval
 	if size == 0 {
 		return eis, nil
@@ -359,10 +357,6 @@ func (ah *ApiHelper) calcEpochIntervalInRange(endHeader *types.Header, size uint
 		size:      0,
 	}
 	err := ah.forEachBlockInRange(endHeader, size, func(header *types.Header) error {
-		prevHeader := ah.bc.GetHeaderByHash(header.ParentHash)
-		if prevHeader == nil {
-			return fmt.Errorf("unkown header %x", header.ParentHash)
-		}
 		// If the current header is not an elect block, simply increment curEpoch.size
 		// and move on
 		if is, err := ah.isElectBlock(header); err != nil {
@@ -391,7 +385,7 @@ func (ah *ApiHelper) calcEpochIntervalInRange(endHeader *types.Header, size uint
 }
 
 // dposCtxAndStateAt return the dposCtx and statedb at a given block header
-func (ah *ApiHelper) epochCtxAt(header *types.Header) (*EpochContext, error) {
+func (ah *APIHelper) epochCtxAt(header *types.Header) (*EpochContext, error) {
 	ctx, err := ah.bc.DposCtxAt(header.DposContext)
 	if err != nil {
 		return nil, err
@@ -409,7 +403,7 @@ func (ah *ApiHelper) epochCtxAt(header *types.Header) (*EpochContext, error) {
 
 // getValidatorRewardRatio get the validator reward ratio in the last epoch specified
 // by header.
-func (ah *ApiHelper) getValidatorRewardRatio(validator common.Address, header *types.Header) (uint64, error) {
+func (ah *APIHelper) getValidatorRewardRatio(validator common.Address, header *types.Header) (uint64, error) {
 	statedb, err := ah.bc.StateAt(header.Root)
 	if err != nil {
 		return 0, err
@@ -419,7 +413,7 @@ func (ah *ApiHelper) getValidatorRewardRatio(validator common.Address, header *t
 }
 
 // addDelegatorDistribution add the delegator distribution to dist.
-func (ah *ApiHelper) addDelegatorDistribution(dist validatorDistribution, rewards common.BigInt, votes []ValueEntry, rewardRatio uint64) {
+func (ah *APIHelper) addDelegatorDistribution(dist validatorDistribution, rewards common.BigInt, votes []ValueEntry, rewardRatio uint64) {
 	sharedRewards := rewards.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
 	totalVotes := common.BigInt0
 	for _, entry := range votes {
@@ -433,7 +427,7 @@ func (ah *ApiHelper) addDelegatorDistribution(dist validatorDistribution, reward
 }
 
 // isElectBlock returns whether the given header is a block where election happens.
-func (ah *ApiHelper) isElectBlock(header *types.Header) (bool, error) {
+func (ah *APIHelper) isElectBlock(header *types.Header) (bool, error) {
 	if header.Number.Cmp(big.NewInt(0)) == 0 {
 		// genesis is not a elect block
 		return false, nil
@@ -449,9 +443,9 @@ func (ah *ApiHelper) isElectBlock(header *types.Header) (bool, error) {
 	return isElectBlock(header, parent, geneTime), nil
 }
 
-// loadGenesis will load genesis info to ApiHelper's genesis fields.
+// loadGenesis will load genesis info to APIHelper's genesis fields.
 // If an error happens, the error will be save to ah.geneErr
-func (ah *ApiHelper) getGenesisTimeStamp() (int64, error) {
+func (ah *APIHelper) getGenesisTimeStamp() (int64, error) {
 	genesis, err := ah.getGenesis()
 	if err != nil {
 		return 0, err
@@ -460,7 +454,7 @@ func (ah *ApiHelper) getGenesisTimeStamp() (int64, error) {
 }
 
 // getGenesis return the genesis block
-func (ah *ApiHelper) getGenesis() (*types.Header, error) {
+func (ah *APIHelper) getGenesis() (*types.Header, error) {
 	if err := ah.loadGenesis(); err != nil {
 		return nil, err
 	}
@@ -468,7 +462,7 @@ func (ah *ApiHelper) getGenesis() (*types.Header, error) {
 }
 
 // loadGenesis load the genesis into api helper
-func (ah *ApiHelper) loadGenesis() error {
+func (ah *APIHelper) loadGenesis() error {
 	ah.geneOnce.Do(func() {
 		genesis := ah.bc.GetHeaderByNumber(0)
 		if genesis == nil {
