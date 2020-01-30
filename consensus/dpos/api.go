@@ -328,7 +328,7 @@ func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, 
 		if err != nil {
 			return nil, err
 		}
-		delegatorVotes, err := ah.ValidatorVoteStat(validator, end)
+		delegatorVotes, err := ah.validatorVoteStat(validator, end)
 		if err != nil {
 			return nil, err
 		}
