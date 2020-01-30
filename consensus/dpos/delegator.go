@@ -8,7 +8,6 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/trie"
 )
 
 // ProcessVote process the process request for state and dpos context
@@ -66,7 +65,6 @@ func VoteTxDepositValidation(state stateDB, delegatorAddress common.Address, vot
 // HasVoted will check whether the provided delegator address is voted
 func HasVoted(delegatorAddress common.Address, header *types.Header, diskDB ethdb.Database) bool {
 	// re-construct trieDB and get the voteTrie
-	trieDb := trie.NewDatabase(diskDB)
 	dposCtx, err := types.NewDposContextFromProto(diskDB, header.DposContext)
 	if err != nil {
 		return false
