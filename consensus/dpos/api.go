@@ -15,8 +15,6 @@ import (
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
-	"github.com/DxChainNetwork/godx/ethdb"
-	"github.com/DxChainNetwork/godx/trie"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -48,99 +46,6 @@ func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
 	return header.Number, nil
 }
 
-// GetValidators will return the validator list based on the block header provided
-func GetValidators(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
-	// re-construct trieDB and get the epochTrie
-	trieDb := trie.NewDatabase(diskdb)
-	epochTrie, err := types.NewEpochTrie(header.DposContext.EpochRoot, trieDb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to recover the epochTrie based on the root: %s", err.Error())
-	}
-
-	// construct dposContext and get validators
-	dposContext := types.DposContext{}
-	dposContext.SetEpoch(epochTrie)
-	return dposContext.GetValidators()
-}
-
-// IsValidator checks if the given address is a validator address
-func IsValidator(diskdb ethdb.Database, header *types.Header, addr common.Address) error {
-	validators, err := GetValidators(diskdb, header)
-	if err != nil {
-		return err
-	}
-
-	// check if the address is the validator address
-	for _, validator := range validators {
-		if validator == addr {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("the given address %s is not a validator's address", addr.String())
-}
-
-// GetCandidates will return the candidates list based on the block header provided
-func GetCandidates(diskdb ethdb.Database, header *types.Header) ([]common.Address, error) {
-	// re-construct trieDB and get the candidateTrie
-	trieDb := trie.NewDatabase(diskdb)
-	candidateTrie, err := types.NewCandidateTrie(header.DposContext.CandidateRoot, trieDb)
-	if err != nil {
-		return nil, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
-	}
-
-	// based on the candidateTrie, get the list of candidates and return
-	dposContext := types.DposContext{}
-	dposContext.SetCandidate(candidateTrie)
-	return dposContext.GetCandidates(), nil
-}
-
-// GetValidatorInfo will return the detailed validator information
-func GetValidatorInfo(stateDb *state.StateDB, validatorAddress common.Address, diskdb ethdb.Database, header *types.Header) (uint64, int64, int64, error) {
-	rewardRatio := GetRewardRatioNumeratorLastEpoch(stateDb, validatorAddress)
-	minedCount, err := getMinedBlocksCount(diskdb, header, validatorAddress)
-	epochID := CalculateEpochID(header.Time.Int64())
-	if err != nil {
-		return 0, 0, 0, err
-	}
-
-	// return validator information
-	return rewardRatio, minedCount, epochID, nil
-}
-
-// GetCandidateInfo will return the detailed candidates information
-func GetCandidateInfo(stateDb *state.StateDB, candidateAddress common.Address, header *types.Header, trieDb *trie.Database) (common.BigInt, common.BigInt, uint64, error) {
-
-	// get the candidateTrie
-	delegateTrie, err := types.NewDelegateTrie(header.DposContext.DelegateRoot, trieDb)
-	if err != nil {
-		return common.BigInt0, common.BigInt0, 0, fmt.Errorf("failed to recover the candidateTrie based on the root: %s", err.Error())
-	}
-	candidateVotes := CalcCandidateTotalVotes(candidateAddress, stateDb, delegateTrie)
-	candidateDeposit := GetCandidateDeposit(stateDb, candidateAddress)
-	rewardRatio := GetRewardRatioNumerator(stateDb, candidateAddress)
-
-	return candidateDeposit, candidateVotes, rewardRatio, nil
-}
-
-// getMinedBlocksCount will return the number of blocks mined by the validator within the current epoch
-func getMinedBlocksCount(diskdb ethdb.Database, header *types.Header, validatorAddress common.Address) (int64, error) {
-	// re-construct the minedCntTrie
-	trieDb := trie.NewDatabase(diskdb)
-	minedCntTrie, err := types.NewMinedCntTrie(header.DposContext.MinedCntRoot, trieDb)
-	if err != nil {
-		return 0, fmt.Errorf("failed to recover the minedCntTrie based on the root: %s", err.Error())
-	}
-
-	// based on the header, calculate the epochID
-	epochID := CalculateEpochID(header.Time.Int64())
-
-	// construct dposContext and get mined count
-	dposContext := types.DposContext{}
-	dposContext.SetMinedCnt(minedCntTrie)
-	return dposContext.GetMinedCnt(epochID, validatorAddress), nil
-}
-
 // BlockChain is the interface for the blockchain backend for api helper
 type BlockChain interface {
 	GetHeaderByNumber(bn uint64) *types.Header
@@ -151,13 +56,29 @@ type BlockChain interface {
 }
 
 type (
-	// APIHelper is the helper structure for dpos related api commands
+	// APIHelper is the api helper for dpos related api commands
 	APIHelper struct {
 		bc BlockChain
 
 		genesis  *types.Header
 		geneOnce sync.Once
 		geneErr  error
+	}
+
+	// CandidateInfo is the structure for candidate information
+	CandidateInfo struct {
+		Deposit     common.BigInt
+		TotalVotes  common.BigInt
+		RewardRatio uint64
+	}
+
+	// ValidatorInfo is the structure for validator information.
+	// Note that in this structure, reward ratio and votes are stats from the last epoch.
+	ValidatorInfo struct {
+		TotalVotes  common.BigInt
+		RewardRatio uint64
+		MinedCount  int64
+		EpochID     int64
 	}
 )
 
@@ -168,6 +89,138 @@ func NewAPIHelper(bc BlockChain) *APIHelper {
 	}
 }
 
+// GetValidators return the validator list based on the block header provided
+func (ah *APIHelper) GetValidators(header *types.Header) ([]common.Address, error) {
+	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, err
+	}
+	return dposCtx.GetValidators()
+}
+
+// IsValidator checks whether the given address is a validator in the block header provided.
+func (ah *APIHelper) IsValidator(addr common.Address, header *types.Header) (bool, error) {
+	validators, err := ah.GetValidators(header)
+	if err != nil {
+		return false, err
+	}
+	for _, validator := range validators {
+		if validator == addr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// GetCandidates return the candidate list based on the block header provided
+func (ah *APIHelper) GetCandidates(header *types.Header) ([]common.Address, error) {
+	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, err
+	}
+	return dposCtx.GetCandidates()
+}
+
+// GetCandidateInfo return the candidate info of a given address
+func (ah *APIHelper) GetCandidateInfo(addr common.Address, header *types.Header) (CandidateInfo, error) {
+	epochCtx, err := ah.epochCtxAt(header)
+	dposCtx, statedb := epochCtx.DposContext, epochCtx.stateDB
+	if err != nil {
+		return CandidateInfo{}, err
+	}
+	if is, err := isCandidate(dposCtx, addr); err != nil {
+		return CandidateInfo{}, err
+	} else if !is {
+		return CandidateInfo{}, fmt.Errorf("address %x is not a candidate", addr)
+	}
+	totalVotes := CalcCandidateTotalVotes(addr, epochCtx.stateDB, epochCtx.DposContext.DelegateTrie())
+	deposit := GetCandidateDeposit(statedb, addr)
+	rewardRatio := GetRewardRatioNumerator(statedb, addr)
+	return CandidateInfo{
+		Deposit:     deposit,
+		TotalVotes:  totalVotes,
+		RewardRatio: rewardRatio,
+	}, nil
+}
+
+// getCandidateDeposit return the candidate deposit of the address in the given header
+func (ah *APIHelper) GetCandidateDeposit(addr common.Address, header *types.Header) (common.BigInt, error) {
+	state, err := ah.bc.StateAt(header.Root)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	return GetCandidateDeposit(state, addr), nil
+}
+
+// GetValidatorInfo returns the validator info for an address with a given header.
+func (ah *APIHelper) GetValidatorInfo(addr common.Address, header *types.Header) (ValidatorInfo, error) {
+	if is, err := ah.IsValidator(addr, header); err != nil {
+		return ValidatorInfo{}, err
+	} else if !is {
+		return ValidatorInfo{}, fmt.Errorf("%x is not a validator", addr)
+	}
+	votes, err := ah.GetValidatorTotalVotes(addr, header)
+	if err != nil {
+		return ValidatorInfo{}, err
+	}
+	rewardRatio, err := ah.getValidatorRewardRatio(addr, header)
+	if err != nil {
+		return ValidatorInfo{}, err
+	}
+	minedCnt, err := ah.getValidatorMinedBlocksCount(addr, header)
+	if err != nil {
+		return ValidatorInfo{}, err
+	}
+	epochID := CalculateEpochID(header.Time.Int64())
+	return ValidatorInfo{
+		TotalVotes:  votes,
+		RewardRatio: rewardRatio,
+		MinedCount:  minedCnt,
+		EpochID:     epochID,
+	}, nil
+}
+
+// GetValidatorTotalVotes returns the total votes for a validator in the last epoch.
+// The votes include the deposit from himself and votes from delegator.
+func (ah *APIHelper) GetValidatorTotalVotes(addr common.Address, header *types.Header) (common.BigInt, error) {
+	ves, err := ah.ValidatorVoteStat(addr, header)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	votes := common.BigInt0
+	for _, ve := range ves {
+		votes = votes.Add(ve.Value)
+	}
+	deposit, err := ah.getValidatorDeposit(addr, header)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	return votes.Add(deposit), nil
+}
+
+// GetVoteDeposit return the vote deposit of a given delegator address
+func (ah *APIHelper) GetVoteDeposit(addr common.Address, header *types.Header) (common.BigInt, error) {
+	ctx, err := ah.epochCtxAt(header)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	if is, err := hasVoted(addr, ctx.DposContext); err != nil {
+		return common.BigInt0, err
+	} else if !is {
+		return common.BigInt0, fmt.Errorf("%x is not a delegator", addr)
+	}
+	return GetVoteDeposit(ctx.stateDB, addr), nil
+}
+
+// GetVotedCandidates return the voted candidates for an address in the specified header
+func (ah *APIHelper) GetVotedCandidates(addr common.Address, header *types.Header) ([]common.Address, error) {
+	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
+	if err != nil {
+		return nil, err
+	}
+	return dposCtx.GetVotedCandidatesByAddress(addr)
+}
+
 // candidateVoteStat return the vote stat for a candidate. The result is a list of structure of address
 // and vote value, which is sorted in descending votes.
 func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header) ([]ValueEntry, error) {
@@ -175,7 +228,9 @@ func (ah *APIHelper) CandidateVoteStat(cand common.Address, header *types.Header
 	if err != nil {
 		return nil, err
 	}
-	if !isCandidate(ctx.DposContext.CandidateTrie(), cand) {
+	if is, err := isCandidate(ctx.DposContext, cand); err != nil {
+		return nil, fmt.Errorf("error when checking is candidate: %v", err)
+	} else if !is {
 		return nil, fmt.Errorf("%x is not a valid candidate", cand)
 	}
 	// For each delegator who voted the candidate, count the delegator vote and add to result.
@@ -425,6 +480,21 @@ func (ah *APIHelper) getValidatorRewardRatio(validator common.Address, header *t
 	return rewardRatio, nil
 }
 
+// getValidatorDeposit return the validator deposit in the last epoch specified by
+// header.
+func (ah *APIHelper) getValidatorDeposit(validator common.Address, header *types.Header) (common.BigInt, error) {
+	lastElect, err := ah.lastElectBlockHeader(header)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	statedb, err := ah.bc.StateAt(lastElect.Root)
+	if err != nil {
+		return common.BigInt0, err
+	}
+	deposit := GetCandidateDeposit(statedb, validator)
+	return deposit, nil
+}
+
 // addDelegatorDistribution add the delegator distribution to dist.
 func (ah *APIHelper) addDelegatorDistribution(dist validatorDistribution, rewards common.BigInt, votes []ValueEntry, rewardRatio uint64) {
 	sharedRewards := rewards.MultUint64(rewardRatio).DivUint64(RewardRatioDenominator)
@@ -499,6 +569,16 @@ func isElectBlock(header, parent *types.Header, genesisTime int64) bool {
 		return false
 	}
 	return true
+}
+
+// getValidatorMinedBlocksCount will return the number of blocks mined by the validator within the current epoch
+func (ah *APIHelper) getValidatorMinedBlocksCount(addr common.Address, header *types.Header) (int64, error) {
+	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
+	if err != nil {
+		return 0, err
+	}
+	epochID := CalculateEpochID(header.Time.Int64())
+	return dposCtx.GetMinedCnt(epochID, addr), nil
 }
 
 type (

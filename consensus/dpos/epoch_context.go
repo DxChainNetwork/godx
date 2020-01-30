@@ -151,12 +151,14 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	for i, validator := range needKickoutValidators {
 		// ensure candidates count greater than or equal to safeSize
 		if candidateCount <= SafeSize {
-			log.Info("No more candidates can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
+			log.Info("No more candidates can be kick out", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
 		// If the candidate has already canceled candidate, continue to the next
 		// validator
-		if !isCandidate(ec.DposContext.CandidateTrie(), validator.address) {
+		if is, err := isCandidate(ec.DposContext, validator.address); err != nil {
+			return err
+		} else if !is {
 			continue
 		}
 		if err := ec.DposContext.KickoutCandidate(validator.address); err != nil {

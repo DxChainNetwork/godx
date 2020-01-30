@@ -556,7 +556,7 @@ func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
 }
 
 // GetCandidates will iterate through the candidateTrie and get all candidates
-func (dc *DposContext) GetCandidates() []common.Address {
+func (dc *DposContext) GetCandidates() ([]common.Address, error) {
 	var candidates []common.Address
 	iterCandidate := trie.NewIterator(dc.candidateTrie.NodeIterator(nil))
 	for iterCandidate.Next() {
@@ -564,7 +564,7 @@ func (dc *DposContext) GetCandidates() []common.Address {
 		candidates = append(candidates, candidateAddr)
 	}
 
-	return candidates
+	return candidates, iterCandidate.Err
 }
 
 // makeMinedCntKey is the private function to make the key for the specified addr and
