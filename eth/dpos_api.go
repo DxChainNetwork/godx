@@ -108,7 +108,7 @@ func (d *PublicDposAPI) Candidate(addr common.Address, blockNr *rpc.BlockNumber)
 	if err != nil {
 		return CandidateInfo{}, err
 	}
-	ci, err := d.ah.GetCandidateInfo(addr, header)
+	ci, err := d.ah.CandidateInfo(addr, header)
 	if err != nil {
 		return CandidateInfo{}, err
 	}
