@@ -148,7 +148,7 @@ web3._extend({
 			name: 'validators',
 			call: 'dpos_validators',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [web3._extend.formatters.                       ]
 		}),
 
 		new web3._extend.Method({
@@ -175,15 +175,15 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'candidateDeposit',
 			call: 'dpos_candidateDeposit',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
 			name: 'voteDeposit',
 			call: 'dpos_voteDeposit',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
@@ -196,8 +196,8 @@ web3._extend({
 		new web3._extend.Method({
 			name: 'getVotedCandidatesByAddress',
 			call: 'dpos_getVotedCandidatesByAddress',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter]
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
@@ -230,7 +230,7 @@ web3._extend({
 			name: 'getAllVotesOfCandidate',
 			call: 'dpos_getAllVotesOfCandidate',
 			params: 2,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
@@ -241,25 +241,33 @@ web3._extend({
 		}),
 
 		new web3._extend.Method({
-			name: 'getValidatorRewardByBlockNum',
-			call: 'dpos_getValidatorRewardByBlockNum',
+			name: 'getAllVotesOfValidator',
+			call: 'dpos_getAllVotesOfValidator',
 			params: 2,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
+			inputFormatter: [web3._extend.formatters.inputAddressFormatter, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
-			name: 'getDelegatorRewardByBlockNum',
-			call: 'dpos_getDelegatorRewardByBlockNum',
-			params: 2,
-			inputFormatter: [web3._extend.formatters.inputAddressFormatter,web3._extend.formatters.inputBlockNumberFormatter]
+			name: 'getValidatorReward',
+			call: 'dpos_getValidatorReward',
+			params: 3,
+			inputFormatter: [
+				web3._extend.formatters.inputAddressFormatter, 
+				web3._extend.formatters.inputBlockNumberFormatter,
+				web3._extend.formatters.inputBlockNumberFormatter,
+			]
 		}),
 
 		new web3._extend.Method({
-			name: 'getAllDelegatorRewardByBlockNumber',
-			call: 'dpos_getAllDelegatorRewardByBlockNumber',
-			params: 1,
-			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
-		}),
+			name: 'getValidatorDistribution',
+			call: 'dpos_getValidatorDistribution',
+			params: 3,
+			inputFormatter: [
+				web3._extend.formatters.inputAddressFormatter, 
+				web3._extend.formatters.inputBlockNumberFormatter,
+				web3._extend.formatters.inputBlockNumberFormatter,
+			]
+		})
 	]
 });
 `
