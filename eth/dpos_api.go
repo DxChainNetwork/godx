@@ -227,14 +227,23 @@ func parseStartEndBlockNumber(start, end *rpc.BlockNumber, bc *core.BlockChain) 
 	if start == nil {
 		return nil, 0, fmt.Errorf("start block number must be specified")
 	}
-	if (start != nil && start.Int64() < 0) || (end != nil && end.Int64() < 0) {
-		return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", start, end)
+	if start != nil && start.Int64() < 0 {
+		return nil, 0, fmt.Errorf("invalid start block number: %v", start.Int64())
+	}
+	if end != nil && end.Int64() < 0 {
+		return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", start.Int64(), end.Int64())
 	}
 	var endHeader *types.Header
 	if end == nil {
 		endHeader = bc.CurrentHeader()
+		if endHeader == nil {
+			return nil, 0, fmt.Errorf("unknown current header")
+		}
 	} else {
 		endHeader = bc.GetHeaderByNumber(uint64(end.Int64()))
+		if endHeader == nil {
+			return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", start.Int64(), end.Int64())
+		}
 	}
 	endNr := endHeader.Number.Int64()
 	startNr := start.Int64()
