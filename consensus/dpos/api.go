@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/consensus"
@@ -60,9 +59,7 @@ type (
 	APIHelper struct {
 		bc BlockChain
 
-		genesis  *types.Header
-		geneOnce sync.Once
-		geneErr  error
+		genesis *types.Header
 	}
 
 	// CandidateInfo is the structure for candidate information
@@ -89,7 +86,7 @@ func NewAPIHelper(bc BlockChain) *APIHelper {
 	}
 }
 
-// GetCandidates return the candidate list based on the block header provided
+// GetCandidates return the candidate list based on the block header provided.
 func (ah *APIHelper) GetCandidates(header *types.Header) ([]common.Address, error) {
 	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
 	if err != nil {
@@ -99,6 +96,7 @@ func (ah *APIHelper) GetCandidates(header *types.Header) ([]common.Address, erro
 }
 
 // CandidateInfo return the candidate info of a given address
+// Return an error if the given addr is not a candidate
 func (ah *APIHelper) CandidateInfo(addr common.Address, header *types.Header) (CandidateInfo, error) {
 	if err := ah.checkIsCandidate(addr, header); err != nil {
 		return CandidateInfo{}, err
@@ -125,7 +123,8 @@ func (ah *APIHelper) candidateInfo(addr common.Address, header *types.Header) (C
 }
 
 // CandidateVoteStat return the vote stat for a candidate. The result is a list of structure of address
-// and vote value, which is sorted in descending votes.
+// and vote value, which is sorted in descending votes. Return an error if the given address
+// is not a candidate.
 func (ah *APIHelper) CandidateVoteStat(addr common.Address, header *types.Header) ([]ValueEntry, error) {
 	if err := ah.checkIsCandidate(addr, header); err != nil {
 		return nil, err
@@ -156,7 +155,8 @@ func (ah *APIHelper) candidateVoteStat(addr common.Address, header *types.Header
 	return res, nil
 }
 
-// GetCandidateDeposit return the candidate deposit of the address in the given header
+// GetCandidateDeposit return the candidate deposit of the address in the given header.
+// Return an error if the given address is not a candidate.
 func (ah *APIHelper) GetCandidateDeposit(addr common.Address, header *types.Header) (common.BigInt, error) {
 	if err := ah.checkIsCandidate(addr, header); err != nil {
 		return common.BigInt0, err
@@ -164,7 +164,7 @@ func (ah *APIHelper) GetCandidateDeposit(addr common.Address, header *types.Head
 	return ah.getCandidateDeposit(addr, header)
 }
 
-// GetCandidateDeposit return the candidate deposit of the address in the given header
+// getCandidateDeposit return the candidate deposit of the address in the given header
 func (ah *APIHelper) getCandidateDeposit(addr common.Address, header *types.Header) (common.BigInt, error) {
 	statedb, err := ah.bc.StateAt(header.Root)
 	if err != nil {
@@ -173,7 +173,7 @@ func (ah *APIHelper) getCandidateDeposit(addr common.Address, header *types.Head
 	return GetCandidateDeposit(statedb, addr), nil
 }
 
-// checkIsCandidate checks whether the addr is a candidate in the header. If not,
+// checkIsCandidate checks whether the addr is a candidate in the given header. If not,
 // return an error.
 func (ah *APIHelper) checkIsCandidate(addr common.Address, header *types.Header) error {
 	dposCtx, err := ah.bc.DposCtxAt(header.DposContext)
@@ -198,8 +198,8 @@ func (ah *APIHelper) GetValidators(header *types.Header) ([]common.Address, erro
 }
 
 // GetValidatorTotalVotes returns the total votes for a validator in the last epoch.
-// If the given address is not a validator, return an error.
 // The votes include the deposit from himself and votes from delegator.
+// If the given address is not a validator, return an error.
 func (ah *APIHelper) GetValidatorTotalVotes(addr common.Address, header *types.Header) (common.BigInt, error) {
 	if err := ah.checkIsValidator(addr, header); err != nil {
 		return common.BigInt0, err
@@ -226,6 +226,7 @@ func (ah *APIHelper) getValidatorTotalVotes(addr common.Address, header *types.H
 }
 
 // GetValidatorInfo returns the validator info for an address with a given header.
+// If the given addr is not a validator, return an error.
 func (ah *APIHelper) GetValidatorInfo(addr common.Address, header *types.Header) (ValidatorInfo, error) {
 	if err := ah.checkIsValidator(addr, header); err != nil {
 		return ValidatorInfo{}, err
@@ -257,9 +258,8 @@ func (ah *APIHelper) getValidatorInfo(addr common.Address, header *types.Header)
 }
 
 // ValidatorVoteStat return the vote stat for a validator in last epoch.
-// First identify whether the given address is a validator, then call lastElectBlockHeader to find the block
-// where election happens before the given block, and call CandidateVoteStat on last elect block to calculate
-// the vote for the validator.
+// First identify whether the given address is a validator, and then call validatorVoteStat
+// to obtain the vote stat from last elect block.
 func (ah *APIHelper) ValidatorVoteStat(addr common.Address, header *types.Header) ([]ValueEntry, error) {
 	if err := ah.checkIsValidator(addr, header); err != nil {
 		return nil, err
@@ -267,6 +267,7 @@ func (ah *APIHelper) ValidatorVoteStat(addr common.Address, header *types.Header
 	return ah.validatorVoteStat(addr, header)
 }
 
+// validatorVoteStat return the vote stat for a validator in last epoch.
 func (ah *APIHelper) validatorVoteStat(addr common.Address, header *types.Header) ([]ValueEntry, error) {
 	lastElect, err := ah.lastElectBlockHeader(header)
 	if err != nil {
@@ -584,24 +585,24 @@ func (ah *APIHelper) getGenesisTimeStamp() (int64, error) {
 	return genesis.Time.Int64(), nil
 }
 
-// getGenesis return the genesis block
+// getGenesis return the genesis block. If the genesis block has not read, read into memory.
 func (ah *APIHelper) getGenesis() (*types.Header, error) {
-	if err := ah.loadGenesis(); err != nil {
-		return nil, err
+	if ah.genesis == nil {
+		if err := ah.loadGenesis(); err != nil {
+			return nil, err
+		}
 	}
 	return ah.genesis, nil
 }
 
 // loadGenesis load the genesis into api helper
 func (ah *APIHelper) loadGenesis() error {
-	ah.geneOnce.Do(func() {
-		genesis := ah.bc.GetHeaderByNumber(0)
-		if genesis == nil {
-			ah.geneErr = errors.New("unknown genesis block")
-		}
-		ah.genesis = genesis
-	})
-	return ah.geneErr
+	ah.genesis = ah.bc.GetHeaderByNumber(0)
+	var err error
+	if ah.genesis == nil {
+		err = errors.New("unknown genesis block")
+	}
+	return err
 }
 
 // isElect return whether the block specified by header is a block where election
