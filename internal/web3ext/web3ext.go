@@ -148,7 +148,7 @@ web3._extend({
 			name: 'validators',
 			call: 'dpos_validators',
 			params: 1,
-			inputFormatter: [web3._extend.formatters.                       ]
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
 		}),
 
 		new web3._extend.Method({
