@@ -152,7 +152,7 @@ func (d *PublicDposAPI) EpochID(blockNr *rpc.BlockNumber) (int64, error) {
 	// get the block header information based on the block number
 	header, err := getHeaderByNumber(blockNr, d.bc)
 	if err != nil {
-		return 0, nil
+		return 0, fmt.Errorf("unknown block")
 	}
 	// calculate epochID and return
 	return dpos.CalculateEpochID(header.Time.Int64()), nil
