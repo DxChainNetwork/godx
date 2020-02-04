@@ -19,6 +19,7 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/syslog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -115,17 +116,24 @@ func init() {
 func Setup(ctx *cli.Context, logdir string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if logdir != "" {
-		rfh, err := log.RotatingFileHandler(
-			logdir,
-			262144,
-			log.JSONFormatOrderedEx(false, true),
-		)
-		if err != nil {
-			return err
-		}
-		glogger.SetHandler(log.MultiHandler(ostream, rfh))
+	//if logdir != "" {
+	//	rfh, err := log.RotatingFileHandler(
+	//		logdir,
+	//		262144,
+	//		log.JSONFormatOrderedEx(false, true),
+	//	)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	fmt.Println("setting handler")
+	//	glogger.SetHandler(log.MultiHandler(ostream, rfh))
+	//}
+	syslogHandler, err := log.SyslogHandler(syslog.LOG_DEBUG, "godx", log.LogfmtFormat())
+	if err != nil {
+		return err
 	}
+	glogger.SetHandler(log.MultiHandler(ostream, syslogHandler))
+
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
 	glogger.BacktraceAt(ctx.GlobalString(backtraceAtFlag.Name))
