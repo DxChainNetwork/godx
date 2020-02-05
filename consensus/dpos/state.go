@@ -57,15 +57,6 @@ var (
 
 	// KeySumAllocatedReward is the key of sum allocated block reward until now
 	KeySumAllocatedReward = common.BytesToHash([]byte("sum-allocated-reward"))
-
-	// KeyValidatorAllocatedReward is the key of reward allocated to validator at last block
-	KeyValidatorAllocatedReward = common.BytesToHash([]byte("validator-allocated-reward-last-block"))
-
-	// KeyDelegatorAllocatedReward is the key of reward allocated to delegator at last block
-	KeyDelegatorAllocatedReward = common.BytesToHash([]byte("delegator-allocated-reward-last-block"))
-
-	// KeyCandidateDepositLastEpoch is the candidate deposit in the last epoch
-	KeyCandidateDepositLastEpoch = common.BytesToHash([]byte("candidate-deposit-last-epoch"))
 )
 
 // GetCandidateDeposit get the candidates deposit of the addr from the state
@@ -116,18 +107,6 @@ func GetRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address) uint64
 func SetRewardRatioNumeratorLastEpoch(state stateDB, addr common.Address, value uint64) {
 	hash := uint64ToHash(value)
 	state.SetState(addr, KeyRewardRatioNumeratorLastEpoch, hash)
-}
-
-// GetTotalVote get the total vote for the candidates address
-func GetTotalVote(state stateDB, addr common.Address) common.BigInt {
-	hash := state.GetState(addr, KeyTotalVote)
-	return common.PtrBigInt(hash.Big())
-}
-
-// SetTotalVote set the total vote to value for the candidates address
-func SetTotalVote(state stateDB, addr common.Address, totalVotes common.BigInt) {
-	hash := common.BigToHash(totalVotes.BigIntPtr())
-	state.SetState(addr, KeyTotalVote, hash)
 }
 
 // GetFrozenAssets returns the frozen assets for an addr
@@ -244,12 +223,13 @@ func setPreEpochSnapshotDelegateTrieRoot(state stateDB, value common.Hash) {
 }
 
 // setSumAllocatedReward set the sum allocated block reward until now
-func setSumAllocatedReward(state stateDB, sumAllocatedReward common.Hash) {
+func setSumAllocatedReward(state stateDB, value common.BigInt) {
 	if !state.Exist(KeyValueCommonAddress) {
 		state.CreateAccount(KeyValueCommonAddress)
 	}
 	state.SetNonce(KeyValueCommonAddress, state.GetNonce(KeyValueCommonAddress)+1)
-	state.SetState(KeyValueCommonAddress, KeySumAllocatedReward, sumAllocatedReward)
+	hash := common.BigToHash(value.BigIntPtr())
+	state.SetState(KeyValueCommonAddress, KeySumAllocatedReward, hash)
 }
 
 // getSumAllocatedReward get the sum allocated block reward until now
@@ -258,38 +238,9 @@ func getSumAllocatedReward(state stateDB) common.BigInt {
 	return common.PtrBigInt(sumAllocatedRewardHash.Big())
 }
 
-// SetValidatorAllocatedReward set the current allocated reward for validator
-func SetValidatorAllocatedReward(state stateDB, reward common.BigInt, validator common.Address) {
-	v := common.BigToHash(reward.BigIntPtr())
-	state.SetState(validator, KeyValidatorAllocatedReward, v)
-}
-
-// GetValidatorAllocatedReward get the current allocated reward for validator
-func GetValidatorAllocatedReward(state stateDB, validator common.Address) *big.Int {
-	v := state.GetState(validator, KeyValidatorAllocatedReward)
-	return v.Big()
-}
-
-// SetDelegatorAllocatedReward set the current allocated reward for delegator
-func SetDelegatorAllocatedReward(state stateDB, reward common.BigInt, delegator common.Address) {
-	v := common.BigToHash(reward.BigIntPtr())
-	state.SetState(delegator, KeyDelegatorAllocatedReward, v)
-}
-
-// GetDelegatorAllocatedReward get the current allocated reward for delegator
-func GetDelegatorAllocatedReward(state stateDB, delegator common.Address) *big.Int {
-	v := state.GetState(delegator, KeyDelegatorAllocatedReward)
-	return v.Big()
-}
-
-// GetCandidateDepositLastEpoch get the candidates deposit at last epoch
-func GetCandidateDepositLastEpoch(state stateDB, addr common.Address) common.BigInt {
-	depositHash := state.GetState(addr, KeyCandidateDepositLastEpoch)
-	return common.PtrBigInt(depositHash.Big())
-}
-
-// SetCandidateDepositLastEpoch set the candidates deposit at last epoch
-func SetCandidateDepositLastEpoch(state stateDB, addr common.Address, deposit common.BigInt) {
-	hash := common.BigToHash(deposit.BigIntPtr())
-	state.SetState(addr, KeyCandidateDepositLastEpoch, hash)
+// addSumAllocatedReward add diff to the sum allocated block reward
+func addSumAllocatedReward(state stateDB, diff common.BigInt) {
+	prevSum := getSumAllocatedReward(state)
+	newSum := prevSum.Add(diff)
+	setSumAllocatedReward(state, newSum)
 }

@@ -63,26 +63,35 @@ func IsCandidate(candidateAddress common.Address, header *types.Header, diskDB e
 	if err != nil {
 		return false
 	}
-	return isCandidate(candidateTrie, candidateAddress)
-}
-
-// isCandidate determines whether the addr is a candidate from a candidateTrie
-func isCandidate(candidateTrie *trie.Trie, addr common.Address) bool {
-	// check if the candidate exists
-	if value, err := candidateTrie.TryGet(addr.Bytes()); err != nil || value == nil {
+	if is, err := isCandidateFromCandidateTrie(candidateTrie, candidateAddress); !is || err != nil {
 		return false
 	}
 	return true
 }
 
-// CalcCandidateTotalVotes calculate the total votes for the candidates. It returns the total votes and the deposit of the
-// candidates himself.
-func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) (common.BigInt, common.BigInt) {
+// isCandidate determines whether the addr is a candidate from a dposCtx
+func isCandidate(dposCtx *types.DposContext, addr common.Address) (bool, error) {
+	return isCandidateFromCandidateTrie(dposCtx.CandidateTrie(), addr)
+}
+
+// isCandidateFromCandidateTrie returns whether an addr is a candidate given a
+// candidateTrie.
+func isCandidateFromCandidateTrie(candidateTrie *trie.Trie, addr common.Address) (bool, error) {
+	if value, err := candidateTrie.TryGet(addr.Bytes()); err != nil {
+		return false, err
+	} else if value == nil || len(value) == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+// CalcCandidateTotalVotes calculate the total votes for the candidates. It returns the total votes.
+func CalcCandidateTotalVotes(candidateAddr common.Address, state stateDB, delegateTrie *trie.Trie) common.BigInt {
 	// Calculate the candidates deposit and delegatedVote
 	candidateDeposit := GetCandidateDeposit(state, candidateAddr)
 	delegatedVote := calcCandidateDelegatedVotes(state, candidateAddr, delegateTrie)
 	// return the sum of candidates deposit and delegated vote
-	return candidateDeposit.Add(delegatedVote), candidateDeposit
+	return candidateDeposit.Add(delegatedVote)
 }
 
 // calcCandidateDelegatedVotes calculate the total votes from delegator for the candidates in the current dposContext

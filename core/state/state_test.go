@@ -2,8 +2,13 @@ package state
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/crypto"
@@ -233,4 +238,70 @@ func compareStateObjects(so0, so1 *stateObject, t *testing.T) {
 			t.Errorf("Origin storage key %x mismatch: have %v, want none.", k, v)
 		}
 	}
+}
+
+// tempDir returns the temporary directory
+func tempDir(dirs ...string) string {
+	path := filepath.Join(os.TempDir(), "statedb", filepath.Join(dirs...))
+	err := os.RemoveAll(path)
+	if err != nil {
+		panic(fmt.Sprintf("cannot move files under %v", path))
+	}
+	err = os.MkdirAll(path, 0777)
+	if err != nil {
+		panic(fmt.Sprintf("cannot create directory %v", path))
+	}
+	return path
+}
+
+// TestStateDB_capacity test the amount of database size increasing as the accounts keep changing balance
+func TestStateDB_capacity(t *testing.T) {
+	t.Skip("skipped for now")
+	dbDir := tempDir(t.Name())
+	fmt.Println("db directory:", dbDir)
+	db, err := ethdb.NewLDBDatabase(dbDir, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statedb, err := New(common.Hash{}, NewDatabase(db))
+	if err != nil {
+		t.Fatal(err)
+	}
+	accounts := generateAccounts(10000)
+	for _, acc := range accounts {
+		statedb.CreateAccount(acc)
+	}
+	if _, err := statedb.Commit(true); err != nil {
+		t.Fatal("cannot commit statedb:", err)
+	}
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < 1000; i++ {
+		for _, acc := range accounts {
+			amount := randomBalance(100000000)
+			statedb.AddBalance(acc, amount)
+		}
+		root, err := statedb.Commit(true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := statedb.db.TrieDB().Commit(root, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// randomBalance create a random balance within the max balance
+func randomBalance(maxBalance int) *big.Int {
+	i := rand.Intn(maxBalance)
+	return big.NewInt(int64(i))
+}
+
+func generateAccounts(num int) []common.Address {
+	addresses := make([]common.Address, 0, num)
+	for i := 0; i < num; i++ {
+		s := fmt.Sprintf("%x", i)
+		addr := common.HexToAddress(s)
+		addresses = append(addresses, addr)
+	}
+	return addresses
 }

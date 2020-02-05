@@ -510,11 +510,35 @@ func (dc *DposContext) SetValidators(validators []common.Address) error {
 // GetVotedCandidatesByAddress retrieve all voted candidates of given delegator
 func (dc *DposContext) GetVotedCandidatesByAddress(delegator common.Address) ([]common.Address, error) {
 	key := delegator.Bytes()
-	candidatesRLP := dc.voteTrie.Get(key)
-	var result []common.Address
-	err := rlp.DecodeBytes(candidatesRLP, &result)
+	candidatesRLP, err := dc.voteTrie.TryGet(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode vaoted candidates: %s", err)
+		return nil, err
+	}
+	if candidatesRLP == nil {
+		return nil, errors.New("the candidate is not a valid delegator")
+	}
+
+	var result []common.Address
+	err = rlp.DecodeBytes(candidatesRLP, &result)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode voted candidates: %s", err)
+	}
+
+	return result, nil
+}
+
+// GetAllDelegatorsOfCandidate retrieve all delegators of the candidate
+func (dc *DposContext) GetAllDelegatorsOfCandidate(candidate common.Address) ([]common.Address, error) {
+	var result []common.Address
+	prefixKey := candidate.Bytes()
+	it := trie.NewIterator(dc.delegateTrie.PrefixIterator(prefixKey))
+	for it.Next() {
+		if it.Value == nil {
+			return nil, fmt.Errorf("something wrong in dpos context:%s query a nil delegator", candidate.String())
+		}
+
+		del := common.BytesToAddress(it.Value)
+		result = append(result, del)
 	}
 
 	return result, nil
@@ -532,7 +556,7 @@ func (dc *DposContext) GetMinedCnt(epoch int64, addr common.Address) int64 {
 }
 
 // GetCandidates will iterate through the candidateTrie and get all candidates
-func (dc *DposContext) GetCandidates() []common.Address {
+func (dc *DposContext) GetCandidates() ([]common.Address, error) {
 	var candidates []common.Address
 	iterCandidate := trie.NewIterator(dc.candidateTrie.NodeIterator(nil))
 	for iterCandidate.Next() {
@@ -540,7 +564,7 @@ func (dc *DposContext) GetCandidates() []common.Address {
 		candidates = append(candidates, candidateAddr)
 	}
 
-	return candidates
+	return candidates, iterCandidate.Err
 }
 
 // makeMinedCntKey is the private function to make the key for the specified addr and
