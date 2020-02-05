@@ -128,11 +128,11 @@ func Setup(ctx *cli.Context, logdir string) error {
 	//	fmt.Println("setting handler")
 	//	glogger.SetHandler(log.MultiHandler(ostream, rfh))
 	//}
-	syslogHandler, err := log.SyslogHandler(syslog.LOG_DEBUG, "godx", log.LogfmtFormat())
-	if err != nil {
-		return err
+	syslogHandler, err := log.SyslogHandler(syslog.LOG_DEBUG, "[GODX]", log.LogfmtFormat())
+	if err == nil {
+		// set syslog handler only if syslog is supported.
+		glogger.SetHandler(log.MultiHandler(ostream, syslogHandler))
 	}
-	glogger.SetHandler(log.MultiHandler(ostream, syslogHandler))
 
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
