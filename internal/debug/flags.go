@@ -89,7 +89,7 @@ var (
 	}
 	noSyslogFlag = cli.BoolFlag{
 		Name:  "no-syslog",
-		Usage: "Not open syslog for logging",
+		Usage: "Disable syslog for logging",
 	}
 )
 
