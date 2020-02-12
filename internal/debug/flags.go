@@ -19,6 +19,7 @@ package debug
 import (
 	"fmt"
 	"io"
+	"log/syslog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -86,13 +87,17 @@ var (
 		Name:  "trace",
 		Usage: "Write execution trace to the given file",
 	}
+	noSyslogFlag = cli.BoolFlag{
+		Name:  "no-syslog",
+		Usage: "Disable syslog for logging",
+	}
 )
 
 // Flags holds all command-line flags required for debugging.
 var Flags = []cli.Flag{
 	verbosityFlag, vmoduleFlag, backtraceAtFlag, debugFlag,
-	pprofFlag, pprofAddrFlag, pprofPortFlag,
-	memprofilerateFlag, blockprofilerateFlag, cpuprofileFlag, traceFlag,
+	pprofFlag, pprofAddrFlag, pprofPortFlag, memprofilerateFlag,
+	blockprofilerateFlag, cpuprofileFlag, traceFlag, noSyslogFlag,
 }
 
 var (
@@ -115,16 +120,13 @@ func init() {
 func Setup(ctx *cli.Context, logdir string) error {
 	// logging
 	log.PrintOrigins(ctx.GlobalBool(debugFlag.Name))
-	if logdir != "" {
-		rfh, err := log.RotatingFileHandler(
-			logdir,
-			262144,
-			log.JSONFormatOrderedEx(false, true),
-		)
-		if err != nil {
-			return err
+	// If noSyslog flag is not set, open syslog handler
+	if !ctx.GlobalBool(noSyslogFlag.Name) {
+		syslogHandler, err := log.SyslogHandler(syslog.LOG_DEBUG, "[GODX]", log.LogfmtFormat())
+		if err == nil {
+			// set syslog handler only if syslog is supported.
+			glogger.SetHandler(log.MultiHandler(ostream, syslogHandler))
 		}
-		glogger.SetHandler(log.MultiHandler(ostream, rfh))
 	}
 	glogger.Verbosity(log.Lvl(ctx.GlobalInt(verbosityFlag.Name)))
 	glogger.Vmodule(ctx.GlobalString(vmoduleFlag.Name))
