@@ -18,6 +18,7 @@ func TestParseFund(t *testing.T) {
 		{"100 camel", common.NewBigInt(100)},
 		{"100camel", common.NewBigInt(100).MultUint64(CurrencyIndexMap["camel"])},
 		{"99876GCAMEL", common.NewBigInt(99876).MultUint64(CurrencyIndexMap["gcamel"])},
+		{"100dx", common.NewBigInt(100).MultUint64(CurrencyIndexMap["dx"])},
 	}
 
 	for _, table := range tables {
@@ -43,13 +44,13 @@ func TestParseFundFail(t *testing.T) {
 		"120cdcamel", // error, even the suffix is dx
 		"a1200camel", // error, even the suffix is dx
 		"120gdxc",    // error, does not match with any unit
+		"10.6dx",     // error, float input
 	}
 
 	for _, failedCase := range failedExpected {
 		if _, err := ParseCurrency(failedCase); err == nil {
 			t.Errorf("error is expected with the input %s", failedCase)
 		}
-
 	}
 }
 

@@ -6,10 +6,11 @@ package unit
 
 import (
 	"fmt"
-	"github.com/DxChainNetwork/godx/common"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/DxChainNetwork/godx/common"
 )
 
 // ParseBool will parse the string into boolean.
@@ -60,10 +61,15 @@ func formatString(s string) (formatted string) {
 
 // stringToBigInt will convert the string to common.BigInt type
 func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
+	// the fund cannot be float
+	if strings.Contains(fund, ".") {
+		err = fmt.Errorf("the fund %s is invalid: fund cannot be float", fund)
+		return
+	}
+
 	// from the currency indexMap, get the conversion rate
-	var bigFloat = new(big.Float)
-	conversionRate := CurrencyIndexMap[unit]
 	var bigInt = new(big.Int)
+	conversionRate := CurrencyIndexMap[unit]
 
 	// remove the unit
 	fund = strings.TrimSuffix(fund, unit)
@@ -75,18 +81,15 @@ func stringToBigInt(unit, fund string) (parsed common.BigInt, err error) {
 	}
 
 	// convert the string to *big.int
-	if _, err = fmt.Sscan(fund, bigFloat); err != nil {
+	if _, err = fmt.Sscan(fund, bigInt); err != nil {
 		err = fmt.Errorf("failed to convert the string to *big.Int: %s", err.Error())
 		return
 	}
 
-	parsedFloat := new(big.Float).Mul(bigFloat, new(big.Float).SetUint64(conversionRate))
-
-	parsedFloat.Int(bigInt)
+	parsedInt := new(big.Int).Mul(bigInt, new(big.Int).SetUint64(conversionRate))
 
 	// convert the result to common.BigInt
-	parsed = common.PtrBigInt(bigInt)
-
+	parsed = common.PtrBigInt(parsedInt)
 	return
 }
 
