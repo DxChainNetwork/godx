@@ -250,7 +250,7 @@ func parseStartEndBlockNumber(start, end *rpc.BlockNumber, bc *core.BlockChain) 
 	if startNr > endNr {
 		return nil, 0, fmt.Errorf("invalid interval: [%v, %v]", startNr, endNr)
 	}
-	return endHeader, uint64(endNr - startNr), nil
+	return endHeader, uint64(endNr - startNr + 1), nil
 }
 
 // delegatorInfoFromValueEntries convert []dpos.ValueEntry to []DelegatorInfo
