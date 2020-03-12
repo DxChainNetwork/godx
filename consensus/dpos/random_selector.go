@@ -5,6 +5,7 @@
 package dpos
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"sync"
@@ -201,7 +202,7 @@ func (lw *luckyWheel) selectSingleEntry() int {
 	for i, entry := range lw.entries {
 		vote := entry.vote
 		// The entry is selected
-		if selected.Cmp(vote) <= 0 {
+		if selected.Cmp(vote) < 0 {
 			return i
 		}
 		selected = selected.Sub(vote)
@@ -209,6 +210,7 @@ func (lw *luckyWheel) selectSingleEntry() int {
 	// Sanity: This shall never reached if code is correct. If this happens, currently
 	// return the last entry of the entries
 	// TODO: Should we panic here?
+	fmt.Println("This is very wrong ")
 	return len(lw.entries) - 1
 }
 

@@ -12,6 +12,61 @@ import (
 	"github.com/DxChainNetwork/godx/common"
 )
 
+// TestLuckySpinnerWithWeight test whether the lucky spinner will random select according
+// to weight
+func TestLuckySpinnerWithWeight(t *testing.T) {
+	countMap := make(map[common.Address]int)
+	raw := makeTestEntries(100)
+	for i := 0; i != 100000; i++ {
+		if i%10000 == 0 {
+			fmt.Println(i)
+		}
+		res, err := randomSelectAddress(typeLuckySpinner, raw, time.Now().UnixNano(), 21)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, addr := range res {
+			if _, ok := countMap[addr]; !ok {
+				countMap[addr] = 1
+			} else {
+				countMap[addr] += 1
+			}
+		}
+	}
+	//fmt.Println(countMap)
+	if err := checkExpectCount(countMap, raw); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkExpectCount checks whether the selected count is proportional to the vote power
+func checkExpectCount(cntMap map[common.Address]int, entries randomSelectorEntries) error {
+	if len(cntMap) == 0 || len(entries) == 0 {
+		return fmt.Errorf("empty input")
+	}
+	//allowedDiff := float64(0.1)
+	unitAddress, unitVote := entries[0].addr, entries[0].vote
+	for _, entry := range entries {
+		got := float64(cntMap[entry.addr]) / float64(cntMap[unitAddress])
+		expect := entry.vote.Float64() / unitVote.Float64()
+		fmt.Println(got-expect, got, expect)
+		//if math.Abs(got-expect) > allowedDiff {
+		//	return fmt.Errorf("distribution not proportional to the vote power")
+		//}
+	}
+	return nil
+}
+
+func makeTestEntries(numEntries int) randomSelectorEntries {
+	entries := make(randomSelectorEntries, 0, numEntries)
+	for i := 1; i != numEntries; i++ {
+		addr := common.BigToAddress(common.NewBigIntUint64(uint64(i)).BigIntPtr())
+		vote := common.NewBigInt(int64(i)).Mult(common.NewBigIntUint64(1000000000000000000))
+		entries = append(entries, &randomSelectorEntry{addr, vote})
+	}
+	return entries
+}
+
 // TestRandomSelectAddress test randomSelectAddress
 func TestRandomSelectAddress(t *testing.T) {
 	for i := 0; i != 100; i++ {
@@ -60,15 +115,15 @@ func testRandomSelectAddress(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddress_Weight test whether the function randomSelectAddress will
+// TestLuckyWheelSelectWithWeight test whether the lucky wheel will
 // select address based on weight.
-func TestRandomSelectAddressWeight(t *testing.T) {
+func TestLuckyWheelSelectWithWeight(t *testing.T) {
 	for i := 0; i < 10000; i++ {
-		testRandomSelectAddressWeight(t)
+		testLuckyWheelSelectWithWeight(t)
 	}
 }
 
-func testRandomSelectAddressWeight(t *testing.T) {
+func testLuckyWheelSelectWithWeight(t *testing.T) {
 	// Create entry data. Only one of the addresses are given a high weight
 	data := makeRandomSelectorData(5)
 	selectedIndex := 1
@@ -117,9 +172,9 @@ func TestRandomSelectAddressType(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddressConsistent test the consistency of randomSelectAddressConsistent.
+// TestLuckyWheelSelectConsistent test the consistency of luckyWheel.
 // Given the same input, the function should always give the same output.
-func TestRandomSelectAddressConsistent(t *testing.T) {
+func TestLuckyWheelSelectConsistent(t *testing.T) {
 	tests := []struct {
 		dataSize   int
 		targetSize int
@@ -149,9 +204,9 @@ func TestRandomSelectAddressConsistent(t *testing.T) {
 	}
 }
 
-// Given the different seed, the randomSelectAddress function should return different
+// Given the different seed, the lucky wheel selection should return different
 // results.
-func TestRandomSelectAddressDifferent(t *testing.T) {
+func TestRandomSelectLuckyWheelDifferent(t *testing.T) {
 	tests := []struct {
 		dataSize   int
 		targetSize int
