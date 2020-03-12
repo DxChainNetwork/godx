@@ -21,21 +21,28 @@ func TestRandomSelectAddress(t *testing.T) {
 
 func testRandomSelectAddress(t *testing.T) {
 	tests := []struct {
+		typeSelector int
 		entrySize    int
 		targetSize   int
 		expectedSize int
 	}{
-		{4, 4, 4},
-		{5, 4, 4},
-		{100, 100, 100},
-		{100, 4, 4},
-		{4, 100, 4},
-		{1000, 21, 21},
+		{typeLuckyWheel, 4, 4, 4},
+		{typeLuckyWheel, 5, 4, 4},
+		{typeLuckyWheel, 100, 100, 100},
+		{typeLuckyWheel, 100, 4, 4},
+		{typeLuckyWheel, 4, 100, 4},
+		{typeLuckyWheel, 1000, 21, 21},
+		{typeLuckySpinner, 4, 4, 4},
+		{typeLuckySpinner, 5, 4, 4},
+		{typeLuckySpinner, 100, 100, 100},
+		{typeLuckySpinner, 100, 4, 4},
+		{typeLuckySpinner, 4, 100, 4},
+		{typeLuckySpinner, 1000, 21, 21},
 	}
 	for i, test := range tests {
 		data := makeRandomSelectorData(test.entrySize)
 		seed := time.Now().UnixNano()
-		selected, err := randomSelectAddress(typeLuckyWheel, data, seed, test.targetSize)
+		selected, err := randomSelectAddress(test.typeSelector, data, seed, test.targetSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,8 +88,8 @@ func testRandomSelectAddressWeight(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddressError test the error case for randomSelectAddress
-func TestRandomSelectAddressError(t *testing.T) {
+// TestRandomSelectAddressType test the error case for randomSelectAddress
+func TestRandomSelectAddressType(t *testing.T) {
 	tests := []struct {
 		typeCode    int
 		entries     randomSelectorEntries
@@ -90,12 +97,16 @@ func TestRandomSelectAddressError(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			1, makeRandomSelectorData(10), 5,
-			errUnknownRandomAddressSelectorType,
+			typeLuckyWheel, makeRandomSelectorData(10), 4,
+			nil,
 		},
 		{
-			0, makeRandomSelectorData(10), 4,
+			typeLuckySpinner, makeRandomSelectorData(10), 4,
 			nil,
+		},
+		{
+			typeInvalidRandomSelector, makeRandomSelectorData(10), 5,
+			errUnknownRandomAddressSelectorType,
 		},
 	}
 	for _, test := range tests {
@@ -145,27 +156,32 @@ func TestRandomSelectAddressDifferent(t *testing.T) {
 		dataSize   int
 		targetSize int
 	}{
-		//{1000, 21},
+		{100, 21},
 		{15, 21},
 	}
 	for i, test := range tests {
-		seed1 := time.Now().UnixNano()
-		time.Sleep(1 * time.Nanosecond)
-		seed2 := time.Now().UnixNano()
-		data := makeRandomSelectorData(test.dataSize)
-		validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, test.targetSize)
-		if err != nil {
-			t.Fatal(err)
+		for retry := 0; retry != 3; retry++ {
+			seed1 := time.Now().UnixNano()
+			time.Sleep(1 * time.Nanosecond)
+			seed2 := time.Now().UnixNano()
+			data := makeRandomSelectorData(test.dataSize)
+			validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, test.targetSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, test.targetSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The possibility of validators1 == validators2 being exactly the same is really small.
+			// So if the two validator set is exactly the same, report the error.
+			if err := checkSameValidatorSet(validators1, validators2); err != nil {
+				break
+			} else if err == nil && retry == 3 {
+				t.Fatalf("Test %d: different seed should not yield same result", i)
+			}
 		}
-		validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, test.targetSize)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// The possibility of validators1 == validators2 being exactly the same is really small.
-		// So if the two validator set is exactly the same, report the error.
-		if err := checkSameValidatorSet(validators1, validators2); err == nil {
-			t.Fatalf("Test %d: different seed should not yield same result", i)
-		}
+
 	}
 }
 

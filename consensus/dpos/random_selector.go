@@ -21,6 +21,7 @@ type randomAddressSelector interface {
 const (
 	typeLuckyWheel = iota
 	typeLuckySpinner
+	typeInvalidRandomSelector
 )
 
 // randomSelectAddress randomly select entries based on weight from the entries.
