@@ -110,7 +110,7 @@ func (ls *luckySpinner) selectEntry() int {
 		if pick.Cmp(vote) < 0 {
 			return i
 		}
-		pick := pick.Sub(vote)
+		pick = pick.Sub(vote)
 	}
 	// This shall never happen
 	return len(ls.data) - 1
