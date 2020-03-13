@@ -6,22 +6,23 @@ package dpos
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 )
 
-// TestLuckySpinnerWithWeight test whether the lucky spinner will random select according
+// TestSingleSelectWithWeight test whether the lucky spinner will random select according
 // to weight
-func TestLuckySpinnerWithWeight(t *testing.T) {
+func TestSingleSelectWithWeight(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
 	countMap := make(map[common.Address]int)
 	raw := makeTestEntries(100)
-	for i := 0; i != 100000; i++ {
-		if i%10000 == 0 {
-			fmt.Println(i)
-		}
-		res, err := randomSelectAddress(typeLuckySpinner, raw, time.Now().UnixNano(), 21)
+	for i := 0; i != 1000000; i++ {
+		res, err := randomSelectAddress(typeLuckySpinner, raw, time.Now().UnixNano(), 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -33,26 +34,27 @@ func TestLuckySpinnerWithWeight(t *testing.T) {
 			}
 		}
 	}
-	//fmt.Println(countMap)
-	if err := checkExpectCount(countMap, raw); err != nil {
+	if err := checkExpectCount(countMap, raw, t); err != nil {
 		t.Fatal(err)
 	}
 }
 
 // checkExpectCount checks whether the selected count is proportional to the vote power
-func checkExpectCount(cntMap map[common.Address]int, entries randomSelectorEntries) error {
+func checkExpectCount(cntMap map[common.Address]int, entries randomSelectorEntries, t *testing.T) error {
 	if len(cntMap) == 0 || len(entries) == 0 {
 		return fmt.Errorf("empty input")
 	}
-	//allowedDiff := float64(0.1)
-	unitAddress, unitVote := entries[0].addr, entries[0].vote
+	allowedBias := float64(300)
+	unitAddress, unitVote := entries[len(entries)-1].addr, entries[len(entries)-1].vote
+	sumBias := float64(0)
 	for _, entry := range entries {
 		got := float64(cntMap[entry.addr]) / float64(cntMap[unitAddress])
 		expect := entry.vote.Float64() / unitVote.Float64()
-		fmt.Println(got-expect, got, expect)
-		//if math.Abs(got-expect) > allowedDiff {
-		//	return fmt.Errorf("distribution not proportional to the vote power")
-		//}
+		sumBias += (got - expect) / expect * 100
+	}
+	t.Logf("bias: %.2f%%", sumBias/100)
+	if math.Abs(sumBias) > allowedBias {
+		return fmt.Errorf("result distribution is strongly biased")
 	}
 	return nil
 }
@@ -62,6 +64,7 @@ func makeTestEntries(numEntries int) randomSelectorEntries {
 	for i := 1; i != numEntries; i++ {
 		addr := common.BigToAddress(common.NewBigIntUint64(uint64(i)).BigIntPtr())
 		vote := common.NewBigInt(int64(i)).Mult(common.NewBigIntUint64(1000000000000000000))
+
 		entries = append(entries, &randomSelectorEntry{addr, vote})
 	}
 	return entries
