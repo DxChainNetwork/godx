@@ -429,7 +429,7 @@ func (d *Dpos) Finalize(chain consensus.ChainReader, header *types.Header, state
 		return nil, err
 	}
 	// try to elect, if current block is the first one in a new epoch, then elect new epoch
-	err = epochContext.tryElect(genesis, parent)
+	err = epochContext.tryElect(chain.Config(), genesis, parent)
 	if err != nil {
 		return nil, fmt.Errorf("got error when elect next epoch, err: %s", err)
 	}

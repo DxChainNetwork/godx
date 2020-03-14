@@ -14,6 +14,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/crypto"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/trie"
 )
 
@@ -25,7 +26,7 @@ type EpochContext struct {
 }
 
 // tryElect will process election at the beginning of current epoch
-func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
+func (ec *EpochContext) tryElect(config *params.ChainConfig, genesis, parent *types.Header) error {
 	genesisEpoch := CalculateEpochID(genesis.Time.Int64())
 	prevEpoch := CalculateEpochID(parent.Time.Int64())
 	currentEpoch := CalculateEpochID(ec.TimeStamp)
@@ -65,7 +66,8 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 		// Create the seed and pseudo-randomly select the validators
 		seed := makeSeed(parent.Hash(), i)
-		validators, err := selectValidator(candidateVotes, seed)
+		typeRandomSelector := ec.getRandomSelectorType(config)
+		validators, err := selectValidator(candidateVotes, seed, typeRandomSelector)
 		if err != nil {
 			return err
 		}
@@ -207,9 +209,17 @@ func isEligibleValidator(gotBlockProduced, expectedBlockProduced int64) bool {
 	return gotBlockProduced >= expectedBlockProduced/eligibleValidatorDenominator
 }
 
+// getRandomSelectorType get the random selector type should be used
+func (ec *EpochContext) getRandomSelectorType(config *params.ChainConfig) int {
+	if config.Dpos.IsLuckySpinner(ec.TimeStamp) {
+		return typeLuckySpinner
+	}
+	return typeLuckyWheel
+}
+
 // selectValidator select validators randomly based on candidates votes and seed
-func selectValidator(candidateVotes randomSelectorEntries, seed int64) ([]common.Address, error) {
-	return randomSelectAddress(typeLuckyWheel, candidateVotes, seed, MaxValidatorSize)
+func selectValidator(candidateVotes randomSelectorEntries, seed int64, typeRandomSelector int) ([]common.Address, error) {
+	return randomSelectAddress(typeRandomSelector, candidateVotes, seed, MaxValidatorSize)
 }
 
 // allDelegatorForValidators returns a map containing all delegators who vote for the validators
