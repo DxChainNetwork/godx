@@ -7,6 +7,7 @@ package dpos
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -67,6 +68,10 @@ func makeTestEntries(numEntries int) randomSelectorEntries {
 
 		entries = append(entries, &randomSelectorEntry{addr, vote})
 	}
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(entries), func(i, j int) {
+		entries[i], entries[j] = entries[j], entries[i]
+	})
 	return entries
 }
 
