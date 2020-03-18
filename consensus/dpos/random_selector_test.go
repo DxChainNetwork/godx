@@ -6,11 +6,93 @@ package dpos
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/DxChainNetwork/godx/common"
 )
+
+// TestSingleSelectWithWeight test whether the lucky spinner will random select according
+// to weight
+func TestSingleSelectWithWeight(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+	countMap := make(map[common.Address]int)
+	raw := makeTestEntries(100)
+	for i := 0; i != 10000000; i++ {
+		res, err := randomSelectAddress(typeLuckySpinner, raw, time.Now().UnixNano(), 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, addr := range res {
+			if _, ok := countMap[addr]; !ok {
+				countMap[addr] = 1
+			} else {
+				countMap[addr] += 1
+			}
+		}
+	}
+	if err := checkExpectCount(countMap, raw, t); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkExpectCount checks whether the selected count is proportional to the vote power
+func checkExpectCount(cntMap map[common.Address]int, entries randomSelectorEntries, t *testing.T) error {
+	if len(cntMap) == 0 || len(entries) == 0 {
+		return fmt.Errorf("empty input")
+	}
+	//allowedBias := float64(500)
+	baseEntry := selectMaxEntry(entries)
+	unitAddress, unitVote := baseEntry.addr, baseEntry.vote
+	sumBias := float64(0)
+	for _, entry := range entries {
+		got := float64(cntMap[entry.addr]) / float64(cntMap[unitAddress])
+		expect := entry.vote.Float64() / unitVote.Float64()
+		sumBias += (got - expect) / expect * 100
+	}
+	t.Logf("bias: %.2f%%", sumBias/100)
+	//if math.Abs(sumBias) > allowedBias {
+	//	return fmt.Errorf("result distribution is strongly biased")
+	//}
+	return nil
+}
+
+// makeTestEntries randomly makes a number of randomSelectorEntries. Note that numEntries
+// cannot be zero.
+func makeTestEntries(numEntries int) randomSelectorEntries {
+	if numEntries == 0 {
+		panic("cannot test with zero entry")
+	}
+	entries := make(randomSelectorEntries, 0, numEntries)
+	for i := 1; i != numEntries; i++ {
+		addr := common.BigToAddress(common.NewBigIntUint64(uint64(i)).BigIntPtr())
+		vote := common.NewBigInt(int64(i)).Mult(common.NewBigIntUint64(1000000000000000000))
+
+		entries = append(entries, &randomSelectorEntry{addr, vote})
+	}
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(entries), func(i, j int) {
+		entries[i], entries[j] = entries[j], entries[i]
+	})
+	return entries
+}
+
+// selectMaxEntry select the entry with the maximum voting power
+func selectMaxEntry(entries randomSelectorEntries) *randomSelectorEntry {
+	maxEntry := entries[0]
+	for i, entry := range entries {
+		if i == 0 {
+			continue
+		}
+		if entry.vote.Cmp(maxEntry.vote) > 0 {
+			maxEntry = entry
+		}
+	}
+	return maxEntry
+}
 
 // TestRandomSelectAddress test randomSelectAddress
 func TestRandomSelectAddress(t *testing.T) {
@@ -21,21 +103,28 @@ func TestRandomSelectAddress(t *testing.T) {
 
 func testRandomSelectAddress(t *testing.T) {
 	tests := []struct {
+		typeSelector int
 		entrySize    int
 		targetSize   int
 		expectedSize int
 	}{
-		{4, 4, 4},
-		{5, 4, 4},
-		{100, 100, 100},
-		{100, 4, 4},
-		{4, 100, 4},
-		{1000, 21, 21},
+		{typeLuckyWheel, 4, 4, 4},
+		{typeLuckyWheel, 5, 4, 4},
+		{typeLuckyWheel, 100, 100, 100},
+		{typeLuckyWheel, 100, 4, 4},
+		{typeLuckyWheel, 4, 100, 4},
+		{typeLuckyWheel, 1000, 21, 21},
+		{typeLuckySpinner, 4, 4, 4},
+		{typeLuckySpinner, 5, 4, 4},
+		{typeLuckySpinner, 100, 100, 100},
+		{typeLuckySpinner, 100, 4, 4},
+		{typeLuckySpinner, 4, 100, 4},
+		{typeLuckySpinner, 1000, 21, 21},
 	}
 	for i, test := range tests {
 		data := makeRandomSelectorData(test.entrySize)
 		seed := time.Now().UnixNano()
-		selected, err := randomSelectAddress(typeLuckyWheel, data, seed, test.targetSize)
+		selected, err := randomSelectAddress(test.typeSelector, data, seed, test.targetSize)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -53,15 +142,15 @@ func testRandomSelectAddress(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddress_Weight test whether the function randomSelectAddress will
+// TestLuckyWheelSelectWithWeight test whether the lucky wheel will
 // select address based on weight.
-func TestRandomSelectAddressWeight(t *testing.T) {
+func TestLuckyWheelSelectWithWeight(t *testing.T) {
 	for i := 0; i < 10000; i++ {
-		testRandomSelectAddressWeight(t)
+		testLuckyWheelSelectWithWeight(t)
 	}
 }
 
-func testRandomSelectAddressWeight(t *testing.T) {
+func testLuckyWheelSelectWithWeight(t *testing.T) {
 	// Create entry data. Only one of the addresses are given a high weight
 	data := makeRandomSelectorData(5)
 	selectedIndex := 1
@@ -81,8 +170,8 @@ func testRandomSelectAddressWeight(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddressError test the error case for randomSelectAddress
-func TestRandomSelectAddressError(t *testing.T) {
+// TestRandomSelectAddressType test the error case for randomSelectAddress
+func TestRandomSelectAddressType(t *testing.T) {
 	tests := []struct {
 		typeCode    int
 		entries     randomSelectorEntries
@@ -90,12 +179,16 @@ func TestRandomSelectAddressError(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			1, makeRandomSelectorData(10), 5,
-			errUnknownRandomAddressSelectorType,
+			typeLuckyWheel, makeRandomSelectorData(10), 4,
+			nil,
 		},
 		{
-			0, makeRandomSelectorData(10), 4,
+			typeLuckySpinner, makeRandomSelectorData(10), 4,
 			nil,
+		},
+		{
+			typeInvalidRandomSelector, makeRandomSelectorData(10), 5,
+			errUnknownRandomAddressSelectorType,
 		},
 	}
 	for _, test := range tests {
@@ -106,9 +199,9 @@ func TestRandomSelectAddressError(t *testing.T) {
 	}
 }
 
-// TestRandomSelectAddressConsistent test the consistency of randomSelectAddressConsistent.
+// TestLuckyWheelSelectConsistent test the consistency of luckyWheel.
 // Given the same input, the function should always give the same output.
-func TestRandomSelectAddressConsistent(t *testing.T) {
+func TestLuckyWheelSelectConsistent(t *testing.T) {
 	tests := []struct {
 		dataSize   int
 		targetSize int
@@ -138,34 +231,39 @@ func TestRandomSelectAddressConsistent(t *testing.T) {
 	}
 }
 
-// Given the different seed, the randomSelectAddress function should return different
+// Given the different seed, the lucky wheel selection should return different
 // results.
-func TestRandomSelectAddressDifferent(t *testing.T) {
+func TestRandomSelectLuckyWheelDifferent(t *testing.T) {
 	tests := []struct {
 		dataSize   int
 		targetSize int
 	}{
-		//{1000, 21},
+		{100, 21},
 		{15, 21},
 	}
 	for i, test := range tests {
-		seed1 := time.Now().UnixNano()
-		time.Sleep(1 * time.Nanosecond)
-		seed2 := time.Now().UnixNano()
-		data := makeRandomSelectorData(test.dataSize)
-		validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, test.targetSize)
-		if err != nil {
-			t.Fatal(err)
+		for retry := 0; retry != 3; retry++ {
+			seed1 := time.Now().UnixNano()
+			time.Sleep(1 * time.Nanosecond)
+			seed2 := time.Now().UnixNano()
+			data := makeRandomSelectorData(test.dataSize)
+			validators1, err := randomSelectAddress(typeLuckyWheel, data, seed1, test.targetSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, test.targetSize)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The possibility of validators1 == validators2 being exactly the same is really small.
+			// So if the two validator set is exactly the same, report the error.
+			if err := checkSameValidatorSet(validators1, validators2); err != nil {
+				break
+			} else if err == nil && retry == 3 {
+				t.Fatalf("Test %d: different seed should not yield same result", i)
+			}
 		}
-		validators2, err := randomSelectAddress(typeLuckyWheel, data, seed2, test.targetSize)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// The possibility of validators1 == validators2 being exactly the same is really small.
-		// So if the two validator set is exactly the same, report the error.
-		if err := checkSameValidatorSet(validators1, validators2); err == nil {
-			t.Fatalf("Test %d: different seed should not yield same result", i)
-		}
+
 	}
 }
 

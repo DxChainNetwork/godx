@@ -125,6 +125,9 @@ var (
 	// TODO: specify the real donated account address
 	// DefaultDonatedAccount is the address that receive some donation when producing a new block
 	DefaultDonatedAccount = common.HexToAddress("0xabc")
+
+	// DefaultSpinnerTime is the default time to use lucky spinner
+	DefaultSpinnerTime = int64(1584489598)
 )
 
 // DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
@@ -132,6 +135,7 @@ type DposConfig struct {
 	//Validators []common.Address `json:"validators"` // Genesis validator list
 	Validators     []ValidatorConfig `json:"validators"`     // Genesis validator list
 	DonatedAccount common.Address    `json:"donatedAccount"` // address for receiving donation
+	SFSpinnerTime  *int64            `json:"sfSpinnerTime, omitempty"`
 }
 
 type ValidatorConfig struct {
@@ -144,6 +148,7 @@ func DefaultDposConfig() *DposConfig {
 	return &DposConfig{
 		Validators:     DefaultValidators,
 		DonatedAccount: DefaultDonatedAccount,
+		SFSpinnerTime:  &DefaultSpinnerTime,
 	}
 }
 
@@ -152,6 +157,14 @@ func (d *DposConfig) ParseValidators() (validators []common.Address) {
 		validators = append(validators, validator.Address)
 	}
 	return
+}
+
+// IsLuckySpinner decides whether we should use lucky spinner or not
+func (d *DposConfig) IsLuckySpinner(blockTime int64) bool {
+	if d.SFSpinnerTime == nil || blockTime >= *d.SFSpinnerTime {
+		return true
+	}
+	return false
 }
 
 // String implements the stringer interface, returning the consensus engine details.
