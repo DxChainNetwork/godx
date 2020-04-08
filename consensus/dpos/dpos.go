@@ -460,6 +460,11 @@ func (d *Dpos) CheckValidator(lastBlock *types.Block, now int64) error {
 		return nil
 	}
 
+	// maybe worker produced 2 blocks at the same timestamp, that should not be allowed
+	if lastBlock.Time().Int64() == now {
+		return ErrProduced2Blocks
+	}
+
 	if err := d.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}

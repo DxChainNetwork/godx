@@ -44,6 +44,9 @@ var (
 
 	// ErrNilBlockHeader is returned if returning a nil block header in api functions
 	ErrNilBlockHeader = errors.New("nil block header returned")
+
+	// ErrProduced2Blocks is returned if worker produced 2 blocks at the same timestamp
+	ErrProduced2Blocks = errors.New("produced 2 blocks at the same timestamp")
 )
 
 var (

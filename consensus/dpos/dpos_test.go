@@ -182,6 +182,22 @@ func TestDpos_CheckValidator(t *testing.T) {
 			wantErr error
 		}{
 			{
+				name: "produced 2 blocks at the same timestamp",
+				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
+					lastBlockTime := int64(86430)
+					lastBlockHeader := &types.Header{
+						Time:        new(big.Int).SetInt64(lastBlockTime),
+						DposContext: dposRoot,
+					}
+
+					lastBlock := types.NewBlockWithHeader(lastBlockHeader)
+					dposEng := New(nil, db)
+					dposEng.signer = validator
+					return dposEng.CheckValidator(lastBlock, int64(86430))
+				},
+				wantErr: ErrProduced2Blocks,
+			},
+			{
 				name: "mined the future block",
 				fn: func(db ethdb.Database, dposRoot *types.DposContextRoot, validator common.Address) error {
 					lastBlockTime := int64(86430)
