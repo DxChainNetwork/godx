@@ -109,6 +109,7 @@ func (ah *APIHelper) candidateInfo(addr common.Address, header *types.Header) (C
 	epochCtx, err := ah.epochCtxAt(header)
 	if err != nil {
 		return CandidateInfo{}, err
+
 	}
 	dposCtx, statedb := epochCtx.DposContext, epochCtx.stateDB
 
