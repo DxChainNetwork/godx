@@ -437,7 +437,7 @@ func (client *StorageClient) refreshHostsAndWorkers() map[string]struct{} {
 	return hosts
 }
 
-// repairLoop works through the upload heap repairing segments. The repair
+// uploadOrRepair works through the upload heap repairing segments. The repair
 // loop will continue until the storage client stops, there are no more Segments, or
 // enough time has passed indicated by the rebuildHeapSignal
 func (client *StorageClient) uploadOrRepair() {
