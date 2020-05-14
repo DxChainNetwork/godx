@@ -178,7 +178,7 @@ func TestAddSectorStopRecoverPhysical(t *testing.T) {
 		if err := checkFoldersHasExpectedSectors(newSM, 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
-		newSM.shutdown(t,time.Second)
+		newSM.shutdown(t, time.Second)
 		if err := checkWalTxnNum(filepath.Join(sm.persistDir, walFileName), 0); err != nil {
 			t.Fatalf("test %v: %v", test.keyWord, err)
 		}
