@@ -126,13 +126,14 @@ func (pd *PublicDposTxAPI) SendApplyCandidateTx(fields map[string]string) (commo
 	to := vm.ApplyCandidateContractAddress
 	ctx := context.Background()
 
-	stateDB, _, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
+	stateDB, header, err := pd.b.StateAndHeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	config := pd.b.ChainConfig().Dpos
 	// parse precompile contract tx args
-	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager())
+	args, err := ParseAndValidateCandidateApplyTxArgs(to, DposTxGas, fields, stateDB, pd.b.AccountManager(), header, config)
 	if err != nil {
 		return common.Hash{}, err
 	}

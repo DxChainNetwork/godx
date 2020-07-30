@@ -7,6 +7,7 @@ package dpos
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 )
 
 // candidates is the structure of necessary information about a candidates
@@ -37,7 +39,8 @@ func TestProcessAddCandidate(t *testing.T) {
 	}
 	c := newCandidatePrototype(candidateAddr)
 	addOrigCandidateInState(state, c)
-	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	config := params.DefaultDposConfig()
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio, big.NewInt(10), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +53,7 @@ func TestProcessAddCandidate(t *testing.T) {
 	// the rewardRatio and deposit
 	c.deposit = c.deposit.AddInt64(1e18)
 	c.rewardRatio = c.rewardRatio + 1
-	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio, big.NewInt(10), config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +79,8 @@ func TestProcessAddCandidateError(t *testing.T) {
 	}
 	// Decrease the deposit and add candidates.
 	c.deposit = c.prevDeposit.SubInt64(1000)
-	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio)
+	config := params.DefaultDposConfig()
+	err = ProcessAddCandidate(state, dposCtx, candidateAddr, c.deposit, c.rewardRatio, big.NewInt(10), config)
 	if err == nil {
 		t.Fatal("decrease the deposit should report error")
 	}
@@ -91,12 +95,13 @@ func TestProcessCancelCandidate(t *testing.T) {
 	}
 	c := candidatePrototype(addr)
 	addAccountInState(state, c.address, c.balance, c.frozenAssets)
-	if err = ProcessAddCandidate(state, dposCtx, c.address, c.deposit, c.rewardRatio); err != nil {
+	config := params.DefaultDposConfig()
+	if err = ProcessAddCandidate(state, dposCtx, c.address, c.deposit, c.rewardRatio, big.NewInt(10), config); err != nil {
 		t.Fatal(err)
 	}
 	// cancel the candidates and commit
 	curTime := time.Now().Unix()
-	if err = ProcessCancelCandidate(state, dposCtx, addr, curTime); err != nil {
+	if err = ProcessCancelCandidate(state, dposCtx, addr, curTime, 0, config); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := state.Commit(true); err != nil {
@@ -111,7 +116,7 @@ func TestProcessCancelCandidate(t *testing.T) {
 	m := map[common.Address]common.BigInt{
 		addr: c.deposit,
 	}
-	epoch := calcThawingEpoch(CalculateEpochID(curTime))
+	epoch := calcThawingEpoch(CalculateEpochID(curTime), 10, config)
 	if err = checkThawingAddressAndValue(state, epoch, m); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +171,8 @@ func TestCheckValidCandidate(t *testing.T) {
 			t.Fatal(err)
 		}
 		addOrigCandidateInState(state, c)
-		err = checkValidCandidate(state, c.address, c.deposit, c.rewardRatio)
+		config := params.DefaultDposConfig()
+		err = checkValidCandidate(state, c.address, c.deposit, c.rewardRatio, big.NewInt(10), config)
 		if err != test.expectErr {
 			t.Errorf("check valid candidates %d error: \nexpect [%v]\ngot [%v]", i, test.expectErr, err)
 		}

@@ -51,6 +51,12 @@ type DelegatorReward struct {
 	Reward    *big.Int       `json:"reward"`
 }
 
+// EpochDeposit store the information for epoch deposit
+type EpochDeposit struct {
+	Epoch                 int64    `json: "epoch"`
+	TotalCandidateDeposit *big.Int `json:"totalCandidateDeposit"`
+}
+
 // NewPublicDposAPI will create a PublicDposAPI object that is used
 // to access all DPOS API Method
 func NewPublicDposAPI(e *Ethereum) *PublicDposAPI {
@@ -200,7 +206,7 @@ func (d *PublicDposAPI) GetValidatorReward(validator common.Address, startNr, en
 	if err != nil {
 		return nil, err
 	}
-	reward, err := d.ah.ValidatorRewardInRange(validator, endHeader, size)
+	reward, err := d.ah.ValidatorRewardInRange(validator, endHeader, size, d.bc.Config().Dpos)
 	if err != nil {
 		return nil, err
 	}
@@ -214,11 +220,41 @@ func (d *PublicDposAPI) GetValidatorDistribution(validator common.Address, start
 	if err != nil {
 		return nil, err
 	}
-	ves, err := d.ah.CalcValidatorDistributionInRange(validator, endHeader, size)
+	ves, err := d.ah.CalcValidatorDistributionInRange(validator, endHeader, size, d.bc.Config().Dpos)
 	if err != nil {
 		return nil, err
 	}
 	return delegatorRewardFromValueEntries(ves), nil
+}
+
+// GetBlockReward get the block reward for a given block number
+func (d *PublicDposAPI) GetBlockReward(blockNr *rpc.BlockNumber) (*dpos.BlockReward, error) {
+	header, err := getHeaderByNumber(blockNr, d.bc)
+	if err != nil {
+		return nil, err
+	}
+	rewards, err := d.ah.GetBlockReward(header)
+	if err != nil {
+		return nil, err
+	}
+	return rewards, nil
+}
+
+// GetEpochDepositByNumber get the init total epoch deposit in the epoch which the block number in
+func (d *PublicDposAPI) GetEpochInitDepositByNumber(blockNr *rpc.BlockNumber) (*EpochDeposit, error) {
+	// get the block header information based on the block number
+	header, err := getHeaderByNumber(blockNr, d.bc)
+	if err != nil {
+		return nil, fmt.Errorf("unknown block")
+	}
+	epochID, deposit, err := d.ah.GetEpochDeposit(header)
+	if err != nil {
+		return nil, err
+	}
+	return &EpochDeposit{
+		Epoch:                 epochID,
+		TotalCandidateDeposit: deposit.BigIntPtr(),
+	}, nil
 }
 
 // parseStartEndBlockNumber validate and parse start and end number to the end header and size of interval.

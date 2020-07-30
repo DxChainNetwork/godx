@@ -8,12 +8,13 @@ import (
 	"encoding/binary"
 
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/params"
 )
 
 // markThawingAddressAndValue add the thawing diff to the addr's thawing assets in corresponding epoch,
 // and mark the address to be thawed in the thawing address
-func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int64, diff common.BigInt) {
-	thawingEpoch := calcThawingEpoch(curEpoch)
+func markThawingAddressAndValue(state stateDB, addr common.Address, curEpoch int64, diff common.BigInt, blockNumber int64, config *params.DposConfig) {
+	thawingEpoch := calcThawingEpoch(curEpoch, blockNumber, config)
 	// Add the diff value to thawing assets to be thawed
 	AddThawingAssets(state, addr, thawingEpoch, diff)
 	// Mark the address in the thawing address
@@ -104,6 +105,9 @@ func getAddressFromThawingValue(h common.Hash) common.Address {
 }
 
 // calcThawingEpoch calculate the epoch to be thawed for the thawing record in the current epoch
-func calcThawingEpoch(curEpoch int64) int64 {
+func calcThawingEpoch(curEpoch int64, blockNumber int64, config *params.DposConfig) int64 {
+	if config.IsDip8(blockNumber) {
+		return curEpoch + ThawingEpochDurationAfterDip8
+	}
 	return curEpoch + ThawingEpochDuration
 }

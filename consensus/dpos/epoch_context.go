@@ -44,14 +44,19 @@ func (ec *EpochContext) tryElect(config *params.ChainConfig, genesis, parent *ty
 		return nil
 	}
 
+	currentBlockNumber := parent.Number.Int64() + 1
+	dposConfig := config.Dpos
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, uint64(prevEpoch))
 	iter := trie.NewIterator(ec.DposContext.MinedCntTrie().PrefixIterator(prevEpochBytes))
 	// do election from prevEpoch to currentEpoch
 	for i := prevEpoch; i < currentEpoch; i++ {
+		// Get target validators numbers
+		target := calMaxValidatorsNumbers(currentBlockNumber, ec.TimeStamp, ec.stateDB, dposConfig)
+		safeSize := calSafeSize(target)
 		// if prevEpoch is not genesis, kick out not active candidates
 		if iter.Next() {
-			if err := ec.kickoutValidators(prevEpoch); err != nil {
+			if err := ec.kickoutValidators(prevEpoch, safeSize, currentBlockNumber, dposConfig); err != nil {
 				return err
 			}
 		}
@@ -61,13 +66,13 @@ func (ec *EpochContext) tryElect(config *params.ChainConfig, genesis, parent *ty
 			return err
 		}
 		// check if number of candidates is smaller than safe size
-		if len(candidateVotes) < SafeSize {
+		if len(candidateVotes) < safeSize {
 			return errors.New("too few candidates")
 		}
 		// Create the seed and pseudo-randomly select the validators
 		seed := makeSeed(parent.Hash(), i)
 		typeRandomSelector := ec.getRandomSelectorType(config)
-		validators, err := selectValidator(candidateVotes, seed, typeRandomSelector)
+		validators, err := selectValidator(candidateVotes, seed, typeRandomSelector, target)
 		if err != nil {
 			return err
 		}
@@ -84,19 +89,67 @@ func (ec *EpochContext) tryElect(config *params.ChainConfig, genesis, parent *ty
 			ratio := GetRewardRatioNumerator(ec.stateDB, validator)
 			SetRewardRatioNumeratorLastEpoch(ec.stateDB, validator, ratio)
 		}
-		// Set vote last epoch for all delegators who select the validators.
-		allDelegators := allDelegatorForValidators(ec.DposContext, validators)
-		for delegator := range allDelegators {
-			// get the vote deposit and set it in vote last epoch
-			vote := GetVoteDeposit(ec.stateDB, delegator)
-			SetVoteLastEpoch(ec.stateDB, delegator, vote)
+
+		if !dposConfig.IsDip8(currentBlockNumber) {
+			// Set vote last epoch for all delegators who select the validators.
+			allDelegators := allDelegatorForValidators(ec.DposContext, validators)
+			for delegator := range allDelegators {
+				// get the vote deposit and set it in vote last epoch
+				vote := GetVoteDeposit(ec.stateDB, delegator)
+				SetVoteLastEpoch(ec.stateDB, delegator, vote)
+			}
 		}
+
+		// Save epoch deposit info and candidates length after dip8
+		if config.Dpos.IsDip8(currentBlockNumber) {
+			// Save epoch deposit
+			// 1. Get candidates list in this epoch
+			candidates, err := ec.DposContext.GetCandidates()
+			candidatesLength := int64(len(candidates))
+			if err != nil {
+				log.Error("Fail to get epoch candidate, epoch = ", i)
+				return err
+			}
+			// 2. Sum up add candidate's deposit
+			totalDepositThisEpoch := common.BigInt0
+			delegatorList := make(map[common.Address]common.BigInt)
+			for _, candidate := range candidates {
+				// candidate deposit
+				deposit := GetCandidateDeposit(ec.stateDB, candidate)
+				totalDepositThisEpoch = totalDepositThisEpoch.Add(deposit)
+				// delegators vote deposit
+				delegatorVoteDeposit := ec.getDelegatorsVoteDeposit(candidate, delegatorList)
+				totalDepositThisEpoch = totalDepositThisEpoch.Add(delegatorVoteDeposit)
+			}
+			// 3. Save total deposit
+			SetEpochTotalDeposit(ec.stateDB, currentEpoch, totalDepositThisEpoch)
+			SetCandidatesNumber(ec.stateDB, currentEpoch, common.NewBigInt(candidatesLength))
+		}
+
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 
-	// Finally, set the snapshot delegate trie root for accumulateRewards
-	setPreEpochSnapshotDelegateTrieRoot(ec.stateDB, ec.DposContext.DelegateTrie().Hash())
+	if !dposConfig.IsDip8(currentBlockNumber) {
+		// Finally, set the snapshot delegate trie root for accumulateRewards
+		setPreEpochSnapshotDelegateTrieRoot(ec.stateDB, ec.DposContext.DelegateTrie().Hash())
+	}
 	return nil
+}
+
+// getDelegatorsVoteDeposit will sum all vote deposit comes from delegators for a candidate
+func (ec *EpochContext) getDelegatorsVoteDeposit(candidate common.Address, delegatorList map[common.Address]common.BigInt) common.BigInt {
+	delegators := getAllDelegatorForCandidate(ec.DposContext, candidate)
+	totalDelegatorVoteDeposit := common.BigInt0
+
+	for _, d := range delegators {
+		if _, ok := delegatorList[d]; !ok {
+			vote := GetVoteDeposit(ec.stateDB, d)
+			delegatorList[d] = vote
+			totalDelegatorVoteDeposit = totalDelegatorVoteDeposit.Add(vote)
+		}
+	}
+
+	return totalDelegatorVoteDeposit
 }
 
 // countVotes will calculate the number of votes at the beginning of current epoch
@@ -127,8 +180,8 @@ func (ec *EpochContext) countVotes() (votes randomSelectorEntries, err error) {
 }
 
 // kickoutValidators will kick out irresponsible validators of last epoch at the beginning of current epoch
-func (ec *EpochContext) kickoutValidators(epoch int64) error {
-	needKickoutValidators, err := getIneligibleValidators(ec.DposContext, epoch, ec.TimeStamp)
+func (ec *EpochContext) kickoutValidators(epoch int64, safeSize int, blockNumber int64, config *params.DposConfig) error {
+	needKickoutValidators, err := getIneligibleValidators(ec.DposContext, epoch, blockNumber, ec.TimeStamp, ec.stateDB, config)
 	if err != nil {
 		return err
 	}
@@ -145,14 +198,14 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 	iter := trie.NewIterator(ec.DposContext.CandidateTrie().NodeIterator(nil))
 	for iter.Next() {
 		candidateCount++
-		if candidateCount >= needKickoutValidatorCnt+SafeSize {
+		if candidateCount >= needKickoutValidatorCnt+safeSize {
 			break
 		}
 	}
 	// Loop over the first part of the needKickOutValidators to kick out
 	for i, validator := range needKickoutValidators {
 		// ensure candidates count greater than or equal to safeSize
-		if candidateCount <= SafeSize {
+		if candidateCount <= safeSize {
 			log.Info("No more candidates can be kick out", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickoutValidators)-i)
 			return nil
 		}
@@ -169,7 +222,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 		// if successfully above, then mark the validator that will be thawed in next next epoch
 		currentEpochID := CalculateEpochID(ec.TimeStamp)
 		deposit := GetCandidateDeposit(ec.stateDB, validator.address)
-		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit)
+		markThawingAddressAndValue(ec.stateDB, validator.address, currentEpochID, deposit, blockNumber, config)
 		// set candidates deposit to 0
 		SetCandidateDeposit(ec.stateDB, validator.address, common.BigInt0)
 		SetRewardRatioNumerator(ec.stateDB, validator.address, 0)
@@ -182,7 +235,7 @@ func (ec *EpochContext) kickoutValidators(epoch int64) error {
 
 // getIneligibleValidators return the ineligible validators in a certain epoch. An ineligible validator is
 // defined as a validator who produced blocks less than half as expected
-func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64) (addressesByCnt, error) {
+func getIneligibleValidators(ctx *types.DposContext, epoch int64, blockNumber int64, curTime int64, state stateDB, config *params.DposConfig) (addressesByCnt, error) {
 	validators, err := ctx.GetValidators()
 	if err != nil {
 		return addressesByCnt{}, fmt.Errorf("failed to get validator: %s", err)
@@ -190,7 +243,7 @@ func getIneligibleValidators(ctx *types.DposContext, epoch int64, curTime int64)
 	if len(validators) == 0 {
 		return addressesByCnt{}, errors.New("no validators")
 	}
-	expectedBlockPerValidator := expectedBlocksPerValidatorInEpoch(timeOfFirstBlock, curTime)
+	expectedBlockPerValidator := expectedBlocksPerValidatorInEpoch(timeOfFirstBlock, blockNumber, curTime, state, config)
 	var ineligibleValidators addressesByCnt
 	for _, validator := range validators {
 		cnt := ctx.GetMinedCnt(epoch, validator)
@@ -218,8 +271,41 @@ func (ec *EpochContext) getRandomSelectorType(config *params.ChainConfig) int {
 }
 
 // selectValidator select validators randomly based on candidates votes and seed
-func selectValidator(candidateVotes randomSelectorEntries, seed int64, typeRandomSelector int) ([]common.Address, error) {
-	return randomSelectAddress(typeRandomSelector, candidateVotes, seed, MaxValidatorSize)
+func selectValidator(candidateVotes randomSelectorEntries, seed int64, typeRandomSelector int, target int) ([]common.Address, error) {
+	return randomSelectAddress(typeRandomSelector, candidateVotes, seed, target)
+}
+
+// calMaxValidatorsNumbers get the validators number in this epoch after hardfork
+func calMaxValidatorsNumbers(blockNumber int64, blockTime int64, state stateDB, config *params.DposConfig) int {
+	epoch := CalculateEpochID(blockTime)
+
+	if !config.IsDip8(blockNumber) || epoch <= CalculateAverageForDip8 {
+		return MaxValidatorSize
+	}
+
+	// After the hardfork
+	// 1. Calculate the lastest 14 epochs average candidates numbers
+	totalCandidates := common.BigInt0
+	for e := epoch - CalculateAverageForDip8; e < epoch; e++ {
+		cn := GetCandidatesNumber(state, e)
+		totalCandidates = totalCandidates.Add(cn)
+	}
+	averageCandidates := totalCandidates.DivUint64(CalculateAverageForDip8)
+	// 2. Choose different validators number according to the average result
+	switch {
+	case averageCandidates.CmpUint64(60) < 0:
+		return MaxValidatorSizeUnder60
+	case averageCandidates.CmpUint64(60) >= 0 && averageCandidates.CmpUint64(90) < 0:
+		return MaxValidatorSizeFrom60To90
+	case averageCandidates.CmpUint64(90) >= 0:
+		return MaxValidatorSizeOver90
+	}
+	return 0
+}
+
+// calSafeSize get the safe validators size after hard fork
+func calSafeSize(maxValidatorSize int) int {
+	return maxValidatorSize*2/3 + 1
 }
 
 // allDelegatorForValidators returns a map containing all delegators who vote for the validators

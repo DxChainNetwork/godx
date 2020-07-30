@@ -778,7 +778,7 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, dpos
 		return nil, gasRemainDec, errDec
 	}
 	// Add candidate in dpos
-	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, voteData.Deposit, voteData.RewardRatio); err != nil {
+	if err := dpos.ProcessAddCandidate(evm.StateDB, dposContext, caller, voteData.Deposit, voteData.RewardRatio, evm.BlockNumber, evm.ChainConfig().Dpos); err != nil {
 		return nil, gasRemainDec, err
 	}
 	// defines that dposCtx.BecomeCandidate and SetState all cost params.SstoreSetGas
@@ -794,7 +794,7 @@ func (evm *EVM) CandidateTx(caller common.Address, data []byte, gas uint64, dpos
 // CandidateCancelTx cancellation of candidate thawing assets requires a defrosting period.
 func (evm *EVM) CandidateCancelTx(caller common.Address, gas uint64, dposContext *types.DposContext) ([]byte, uint64, error) {
 	log.Trace("Enter cancel candidate tx executing ... ")
-	if err := dpos.ProcessCancelCandidate(evm.StateDB, dposContext, caller, evm.Time.Int64()); err != nil {
+	if err := dpos.ProcessCancelCandidate(evm.StateDB, dposContext, caller, evm.Time.Int64(), evm.BlockNumber.Int64(), evm.ChainConfig().Dpos); err != nil {
 		return nil, gas, err
 	}
 	// defines that dposCtx.KickoutCandidate and markThawingAddress all cost params.SstoreSetGas
@@ -815,7 +815,7 @@ func (evm *EVM) VoteTx(caller common.Address, dposCtx *types.DposContext, data [
 	if errDec != nil {
 		return nil, gasRemainDec, errDec
 	}
-	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, voteData.Deposit, voteData.Candidates, evm.Time.Int64())
+	successVote, err := dpos.ProcessVote(evm.StateDB, dposCtx, caller, voteData.Deposit, voteData.Candidates, evm.Time.Int64(), evm.BlockNumber.Int64(), evm.ChainConfig().Dpos)
 	if err != nil {
 		return nil, gasRemainDec, err
 	}
@@ -833,7 +833,7 @@ func (evm *EVM) CancelVoteTx(caller common.Address, dposCtx *types.DposContext, 
 	log.Trace("Enter cancel vote tx executing ... ")
 	// remove all vote record from dpos context
 
-	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64()); err != nil {
+	if err := dpos.ProcessCancelVote(evm.StateDB, dposCtx, caller, evm.Time.Int64(), evm.BlockNumber.Int64(), evm.ChainConfig().Dpos); err != nil {
 		return nil, gas, err
 	}
 	ok, gasRemain := DeductGas(gas, params.SstoreSetGas*2)

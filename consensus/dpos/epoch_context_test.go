@@ -15,6 +15,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
@@ -155,7 +156,8 @@ func Test_KickoutValidators(t *testing.T) {
 	}
 
 	epochID := CalculateEpochID(now)
-	err = epochContext.kickoutValidators(epochID)
+	config := params.DefaultDposConfig()
+	err = epochContext.kickoutValidators(epochID, 15, 15, config)
 	if err != nil {
 		t.Errorf("something wrong to kick out validators,error: %v", err)
 	}
@@ -237,6 +239,59 @@ func TestAllDelegatorForValidators(t *testing.T) {
 	}
 }
 
+func TestCalMaxValidatorsNumbers(t *testing.T) {
+	blockNumber := int64(2000001)
+	blockTime := int64(blockNumber * BlockInterval)
+	mockEpochID := CalculateEpochID(blockTime)
+
+	var tests = []struct {
+		name       string
+		candidates common.BigInt
+		validators int
+	}{
+		{
+			name:       "Total candidates < 60",
+			candidates: common.NewBigInt(50),
+			validators: 21,
+		},
+		{
+			name:       "Total candidates = 60",
+			candidates: common.NewBigInt(60),
+			validators: 33,
+		},
+		{
+			name:       " 60 <  Total candidates < 90",
+			candidates: common.NewBigInt(70),
+			validators: 33,
+		},
+		{
+			name:       " Total candidates = 90",
+			candidates: common.NewBigInt(90),
+			validators: 66,
+		},
+		{
+			name:       " Total candidates >= 90",
+			candidates: common.NewBigInt(120),
+			validators: 66,
+		},
+	}
+
+	config := params.DefaultDposConfig()
+	for _, tt := range tests {
+		db := ethdb.NewMemDatabase()
+		state, _ := newStateDB(db)
+
+		for epochID := int64(mockEpochID - 14); epochID < mockEpochID; epochID++ {
+			SetCandidatesNumber(state, int64(epochID), tt.candidates)
+		}
+
+		expectResult := calMaxValidatorsNumbers(blockNumber, blockTime, state, config)
+		if expectResult != tt.validators {
+			t.Fatalf("Can not get the right validators number")
+		}
+	}
+}
+
 // randomProcessVote use the input arguments as vote parameters, randomly select 30 voting candidates from candidates
 // and vote. If one or more of the selected candidates exist in validators, return true and error. Else return false.
 func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt, candidates []common.Address,
@@ -251,7 +306,8 @@ func randomProcessVote(stateDB *state.StateDB, ctx *types.DposContext, addr comm
 			break
 		}
 	}
-	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, time); err != nil {
+	config := params.DefaultDposConfig()
+	if _, err := ProcessVote(stateDB, ctx, addr, deposit, votedCandidates, time, 10, config); err != nil {
 		return false, err
 	}
 	return selected, nil

@@ -53,7 +53,8 @@ var (
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
 	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
 
-	ErrNoGenesis = errors.New("Genesis not found in chain")
+	ErrNoGenesis                     = errors.New("Genesis not found in chain")
+	ErrNoDipBlockNumberInChainConfig = errors.New("Not found dip8 hard fork number")
 )
 
 const (
@@ -151,6 +152,11 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			TrieTimeLimit:  5 * time.Minute,
 		}
 	}
+	if chainConfig.Dpos.Dip8BlockNumber == nil {
+		log.Error("Failed to found dip8 hard fork block number.")
+		return nil, ErrNoDipBlockNumberInChainConfig
+	}
+
 	bodyCache, _ := lru.New(bodyCacheLimit)
 	bodyRLPCache, _ := lru.New(bodyCacheLimit)
 	receiptsCache, _ := lru.New(receiptsCacheLimit)
@@ -158,6 +164,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	futureBlocks, _ := lru.New(maxFutureBlocks)
 	badBlocks, _ := lru.New(badBlockLimit)
 	log.Info("config", "luckySpinner timestamp", chainConfig.Dpos.SFSpinnerTime)
+	log.Info("config", "dip8 hard fork block number", *chainConfig.Dpos.Dip8BlockNumber)
 	bc := &BlockChain{
 		chainConfig:    chainConfig,
 		cacheConfig:    cacheConfig,

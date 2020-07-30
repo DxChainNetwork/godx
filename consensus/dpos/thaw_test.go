@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DxChainNetwork/godx/core/state"
-
 	"github.com/DxChainNetwork/godx/common"
+	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 )
 
 func TestMarkThawingAddressAndValue(t *testing.T) {
@@ -33,11 +33,12 @@ func TestMarkThawingAddressAndValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	config := params.DefaultDposConfig()
 	// check the two periods
-	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch1), m1); err != nil {
+	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch1, 10, config), m1); err != nil {
 		t.Error("period1: ", err)
 	}
-	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch2), m2); err != nil {
+	if err := checkThawingAddressAndValue(state, calcThawingEpoch(epoch2, 10, config), m2); err != nil {
 		t.Error("period2: ", err)
 	}
 }
@@ -48,7 +49,8 @@ func TestEmptyThawAllFrozenAssetsInEpoch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	epoch := calcThawingEpoch(CalculateEpochID(time.Now().Unix()))
+	config := params.DefaultDposConfig()
+	epoch := calcThawingEpoch(CalculateEpochID(time.Now().Unix()), 10, config)
 	err = checkThawingAddressAndValue(state, epoch, make(map[common.Address]common.BigInt))
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +69,8 @@ func TestThawAllFrozenAssetsInEpoch(t *testing.T) {
 	epoch1, epoch2 := int64(100), int64(101)
 	randomMarkThawAddresses(state, addresses, epoch1)
 	randomMarkThawAddresses(state, addresses, epoch2)
-	epoch1, epoch2 = calcThawingEpoch(epoch1), calcThawingEpoch(epoch2)
+	config := params.DefaultDposConfig()
+	epoch1, epoch2 = calcThawingEpoch(epoch1, 10, config), calcThawingEpoch(epoch2, 10, config)
 	// thaw the assets
 	if err := thawAllFrozenAssetsInEpoch(state, epoch1); err != nil {
 		t.Fatal(err)
@@ -108,7 +111,8 @@ func TestThawAllFrozenAssetsInEpochError(t *testing.T) {
 	// Hard code to set the frozen assets to 0, which should incur error
 	SetFrozenAssets(state, addr, common.BigInt0)
 	// thaw the asset, which should trigger errInsufficientFrozenAssets error
-	epoch = calcThawingEpoch(epoch)
+	config := params.DefaultDposConfig()
+	epoch = calcThawingEpoch(epoch, 10, config)
 	err = thawAllFrozenAssetsInEpoch(state, epoch)
 	if err != errInsufficientFrozenAssets {
 		t.Errorf("error expect [%v], got [%v]", errInsufficientFrozenAssets, err)
@@ -120,9 +124,10 @@ func TestThawAllFrozenAssetsInEpochError(t *testing.T) {
 // Return the thawing address to value field.
 func randomMarkThawAddresses(stateDB *state.StateDB, addresses []common.Address, epoch int64) (map[common.Address]common.BigInt, error) {
 	m := make(map[common.Address]common.BigInt)
+	config := params.DefaultDposConfig()
 	for _, addr := range addresses {
 		ta := common.RandomBigInt()
-		markThawingAddressAndValue(stateDB, addr, epoch, ta)
+		markThawingAddressAndValue(stateDB, addr, epoch, ta, 0, config)
 		AddFrozenAssets(stateDB, addr, ta)
 		m[addr] = ta
 	}

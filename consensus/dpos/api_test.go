@@ -14,6 +14,7 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 )
 
 const (
@@ -144,6 +145,10 @@ func (bc *fakeBlockChain) DposCtxAt(roots *types.DposContextRoot) (*types.DposCo
 		return nil, fmt.Errorf("unkwown dpos context %x", roots.EpochRoot)
 	}
 	return bc.dposCtxs[int(bn)], nil
+}
+
+func (bc *fakeBlockChain) Config() *params.ChainConfig {
+	return params.TestnetChainConfig
 }
 
 func makeBlockHash(i int) common.Hash {

@@ -14,6 +14,7 @@ import (
 	"github.com/DxChainNetwork/godx/consensus"
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -52,6 +53,7 @@ type BlockChain interface {
 	GetHeader(hash common.Hash, bn uint64) *types.Header
 	StateAt(hash common.Hash) (*state.StateDB, error)
 	DposCtxAt(root *types.DposContextRoot) (*types.DposContext, error)
+	Config() *params.ChainConfig
 }
 
 type (
@@ -198,6 +200,58 @@ func (ah *APIHelper) GetValidators(header *types.Header) ([]common.Address, erro
 	return dposCtx.GetValidators()
 }
 
+// GetBlockReward return the block reward for a given header
+func (ah *APIHelper) GetBlockReward(header *types.Header) (*BlockReward, error) {
+	blockReward, err := ah.getBlockReward(header)
+	if err != nil {
+		return nil, err
+	}
+
+	return blockReward, nil
+}
+
+// getBlockReward return the total block reward, block reward for donation and validator
+func (ah *APIHelper) getBlockReward(header *types.Header) (*BlockReward, error) {
+	config := ah.bc.Config().Dpos
+	state, err := ah.bc.StateAt(header.Root)
+	if err != nil {
+		return nil, err
+	}
+
+	blockReward := getBlockReward(header, state, config)
+	donationReward := blockReward.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
+	validatorReward := blockReward.Sub(donationReward)
+
+	dAccount := ah.bc.Config().Dpos.DonatedAccount
+	vAccount := header.Coinbase
+	res := &BlockReward{
+		RewardItems: []ValueEntry{
+			ValueEntry{
+				Addr:  dAccount,
+				Value: donationReward,
+			},
+			ValueEntry{
+				Addr:  vAccount,
+				Value: validatorReward,
+			},
+		},
+		TotalReward: blockReward,
+	}
+
+	return res, nil
+}
+
+// GetEpochDeposit return the epoch deposit in the epoch the header in
+func (ah *APIHelper) GetEpochDeposit(header *types.Header) (int64, common.BigInt, error) {
+	state, err := ah.bc.StateAt(header.Root)
+	if err != nil {
+		return 0, common.BigInt0, err
+	}
+	epochID := CalculateEpochID(header.Time.Int64())
+	deposit := GetEpochTotalDeposit(state, epochID)
+	return epochID, deposit, nil
+}
+
 // GetValidatorTotalVotes returns the total votes for a validator in the last epoch.
 // The votes include the deposit from himself and votes from delegator.
 // If the given address is not a validator, return an error.
@@ -282,7 +336,7 @@ func (ah *APIHelper) validatorVoteStat(addr common.Address, header *types.Header
 
 // ValidatorRewardInRange return the validator reward within range start and end.
 // The donation has already been subtracted from the rewards
-func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader *types.Header, size uint64) (common.BigInt, error) {
+func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader *types.Header, size uint64, config *params.DposConfig) (common.BigInt, error) {
 	total := common.BigInt0
 	err := ah.forEachBlockInRange(endHeader, size, func(header *types.Header) error {
 		ec, err := ah.epochCtxAt(header)
@@ -294,7 +348,7 @@ func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader 
 			return err
 		}
 		if expValidator == validator {
-			vReward := calcValidatorReward(header.Number, ec.stateDB)
+			vReward := calcValidatorReward(header, ec.stateDB, config)
 			total = total.Add(vReward)
 		}
 		return nil
@@ -314,7 +368,7 @@ func (ah *APIHelper) ValidatorRewardInRange(validator common.Address, endHeader 
 //     2.3 find reward ratio of validator (in the last epoch)
 //     2.4 split shared rewards among delegators and add to result
 //  3. return result
-func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64) ([]ValueEntry, error) {
+func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, endHeader *types.Header, size uint64, config *params.DposConfig) ([]ValueEntry, error) {
 	// First, divide the whole range into epochs
 	eis, err := ah.calcEpochIntervalInRange(endHeader, size)
 	if err != nil {
@@ -325,7 +379,7 @@ func (ah *APIHelper) CalcValidatorDistributionInRange(validator common.Address, 
 	for _, interval := range eis {
 		end := interval.endHeader
 		size := interval.size
-		totalReward, err := ah.ValidatorRewardInRange(validator, end, size)
+		totalReward, err := ah.ValidatorRewardInRange(validator, end, size, config)
 		if err != nil {
 			return nil, err
 		}
@@ -473,8 +527,8 @@ func (ah *APIHelper) forEachBlockInRange(endHeader *types.Header, size uint64, f
 
 // calcValidatorReward calculate for the total assigned reward to a validator of
 // a given block.
-func calcValidatorReward(number *big.Int, state stateDB) common.BigInt {
-	blockReward := getBlockReward(number, state)
+func calcValidatorReward(header *types.Header, state stateDB, config *params.DposConfig) common.BigInt {
+	blockReward := getBlockReward(header, state, config)
 	if blockReward.Cmp(common.BigInt0) == 0 {
 		return common.BigInt0
 	}
@@ -634,12 +688,18 @@ func (ah *APIHelper) getValidatorMinedBlocksCount(addr common.Address, header *t
 type (
 	// ValueEntry is an entry for a a certain value for an address
 	ValueEntry struct {
-		Addr  common.Address
-		Value common.BigInt
+		Addr  common.Address `json:"addr"`
+		Value common.BigInt  `json:"value"`
 	}
 
 	// valuesDescending is the descending sorting of the ValueEntry slice
 	valuesDescending []ValueEntry
+
+	// BlockReward is a compose of block total reward, donation reward and validator reward
+	BlockReward struct {
+		TotalReward common.BigInt `json:"totalReward"`
+		RewardItems []ValueEntry  `json:"rewardItems"`
+	}
 )
 
 func (vd valuesDescending) Len() int           { return len(vd) }

@@ -5,17 +5,20 @@
 package dpos
 
 import (
+	"math/big"
+
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/ethdb"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/trie"
 )
 
 // ProcessAddCandidate adds a candidates to the DposContext and updated the related fields in stateDB
 func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Address, deposit common.BigInt,
-	rewardRatio uint64) error {
+	rewardRatio uint64, number *big.Int, config *params.DposConfig) error {
 
-	if err := checkValidCandidate(state, addr, deposit, rewardRatio); err != nil {
+	if err := checkValidCandidate(state, addr, deposit, rewardRatio, number, config); err != nil {
 		return err
 	}
 	// Add the candidates to DposContext
@@ -35,7 +38,7 @@ func ProcessAddCandidate(state stateDB, ctx *types.DposContext, addr common.Addr
 }
 
 // ProcessCancelCandidate cancel the addr being an candidates
-func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.Address, time int64) error {
+func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.Address, time int64, blockNumber int64, config *params.DposConfig) error {
 	// Kick out the candidates in DposContext
 	if err := ctx.KickoutCandidate(addr); err != nil {
 		return err
@@ -43,7 +46,7 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 	// Mark the thawing address in the future
 	prevDeposit := GetCandidateDeposit(state, addr)
 	currentEpochID := CalculateEpochID(time)
-	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit)
+	markThawingAddressAndValue(state, addr, currentEpochID, prevDeposit, blockNumber, config)
 	// set the candidates deposit to 0
 	SetCandidateDeposit(state, addr, common.BigInt0)
 	SetRewardRatioNumerator(state, addr, 0)
@@ -51,8 +54,8 @@ func ProcessCancelCandidate(state stateDB, ctx *types.DposContext, addr common.A
 }
 
 // CandidateTxDataValidation will validate the candidate apply transaction before sending it
-func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address) error {
-	return checkValidCandidate(state, candidateAddress, data.Deposit, data.RewardRatio)
+func CandidateTxDataValidation(state stateDB, data types.AddCandidateTxData, candidateAddress common.Address, header *types.Header, config *params.DposConfig) error {
+	return checkValidCandidate(state, candidateAddress, data.Deposit, data.RewardRatio, header.Number, config)
 }
 
 // IsCandidate will check whether or not the given address is a candidate address
@@ -123,11 +126,15 @@ func getAllDelegatorForCandidate(ctx *types.DposContext, candidateAddr common.Ad
 
 // checkValidCandidate checks whether the candidateAddr in transaction is valid for becoming a candidates.
 // If not valid, an error is returned.
-func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64) error {
+func checkValidCandidate(state stateDB, candidateAddr common.Address, deposit common.BigInt, rewardRatio uint64, number *big.Int, config *params.DposConfig) error {
 	// Candidate deposit should be great than the threshold
+	if config.IsDip8(number.Int64()) && deposit.Cmp(minDepositAfterDip8) < 0 {
+		return errCandidateInsufficientDepositAfterDip8
+	}
 	if deposit.Cmp(minDeposit) < 0 {
 		return errCandidateInsufficientDeposit
 	}
+
 	// Reward ratio should be between 0 and 100
 	if rewardRatio > RewardRatioDenominator {
 		return errCandidateInvalidRewardRatio

@@ -43,6 +43,10 @@ const (
 var (
 	// PrefixThawingAddr is the prefix thawing string of frozen account
 	PrefixThawingAddr = "thawing_"
+	// PrefixEpochDepositAddr is the prefix of the epoch deposit account
+	PrefixEpochDepositAddr = "total_deposit_"
+	// PrefixCandidatesNumberAddr is the prefix of the candidates number of the epoch account
+	PrefixCandidatesNumberAddr = "total_candidates_"
 
 	confirmedBlockHead = []byte("confirmed-block-head")
 )
@@ -262,7 +266,11 @@ func (d *Dpos) verifySeal(chain consensus.ChainReader, header *types.Header, par
 	if err := d.verifyBlockSigner(validator, header); err != nil {
 		return err
 	}
-	return d.updateConfirmedBlockHeader(chain)
+	state, err := state.New(parent.Root, state.NewDatabase(d.db))
+	if err != nil {
+		return err
+	}
+	return d.updateConfirmedBlockHeader(chain, state)
 }
 
 func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header) error {
@@ -280,7 +288,7 @@ func (d *Dpos) verifyBlockSigner(validator common.Address, header *types.Header)
 }
 
 // updateConfirmedBlockHeader update the newest confirmed block
-func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
+func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader, state *state.StateDB) error {
 	if d.confirmedBlockHeader == nil {
 		header, err := d.loadConfirmedBlockHeader(chain)
 		if err != nil {
@@ -293,7 +301,8 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 	}
 
 	curHeader := chain.CurrentHeader()
-
+	maxValidators := calMaxValidatorsNumbers(curHeader.Number.Int64(), curHeader.Time.Int64(), state, chain.Config().Dpos)
+	consensusSize := calSafeSize(maxValidators)
 	validatorMap := make(map[common.Address]bool)
 	for d.confirmedBlockHeader.Hash() != curHeader.Hash() &&
 		d.confirmedBlockHeader.Number.Uint64() < curHeader.Number.Uint64() {
@@ -301,13 +310,13 @@ func (d *Dpos) updateConfirmedBlockHeader(chain consensus.ChainReader) error {
 		// fast return
 		// if block number difference less consensusSize-witnessNum,
 		// there is no need to check block is confirmed
-		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(ConsensusSize-len(validatorMap)) {
+		if curHeader.Number.Int64()-d.confirmedBlockHeader.Number.Int64() < int64(consensusSize-len(validatorMap)) {
 			log.Debug("Dpos fast return", "current", curHeader.Number.String(), "confirmed", d.confirmedBlockHeader.Number.String(), "witnessCount", len(validatorMap))
 			return nil
 		}
 
 		validatorMap[curHeader.Validator] = true
-		if len(validatorMap) >= ConsensusSize {
+		if len(validatorMap) >= consensusSize {
 			d.confirmedBlockHeader = curHeader
 			if err := d.storeConfirmedBlockHeader(d.db); err != nil {
 				return err
@@ -362,7 +371,7 @@ func (d *Dpos) Prepare(chain consensus.ChainReader, header *types.Header) error 
 
 // accumulateRewards add the block award to Coinbase of validator
 func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header) error {
-	blockReward := getBlockReward(header.Number, state)
+	blockReward := getBlockReward(header, state, config.Dpos)
 	if blockReward.Cmp(common.BigInt0) == 0 {
 		// short circuit for zero block reward
 		return nil
@@ -383,20 +392,50 @@ func accumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 }
 
 // getBlockReward get the block reward to be distributed given the current block number and state
-func getBlockReward(blockNumber *big.Int, state stateDB) common.BigInt {
+func getBlockReward(header *types.Header, state stateDB, config *params.DposConfig) common.BigInt {
 	sumAllocatedReward := getSumAllocatedReward(state)
 	if sumAllocatedReward.Cmp(totalBlockReward) >= 0 {
 		log.Debug("Cannot allocate block reward,because the sum allocated reward has reached the total reward")
 		return common.BigInt0
 	}
-	// block reward is 254 dx in the first year
-	blockReward := rewardPerBlockFirstYear
 
-	// after one year, the block reward adjust to 115 dx
-	if blockNumber.Uint64() > BlockCountPerYear {
-		blockReward = rewardPerBlockAfterOneYear
+	// NOTE: This is a hard fork about block reward cal.
+	// Calculate current epoch id
+	epochID := CalculateEpochID(header.Time.Int64())
+	if !config.IsDip8(header.Number.Int64()) || epochID <= CalculateAverageForDip8 {
+		// block reward is 254 dx in the first year
+		blockReward := rewardPerBlockFirstYear
+		// after one year, the block reward adjust to 115 dx
+		if header.Number.Uint64() > BlockCountPerYear {
+			blockReward = rewardPerBlockAfterOneYear
+		}
+		return blockReward
 	}
-	return blockReward
+	// Enter hard forked block reward process
+	// Cal the average epoch deposit of the previous 14 epochs.
+	totalDepositValue := common.BigInt0
+	for i := epochID - CalculateAverageForDip8; i < epochID; i++ {
+		deposit := GetEpochTotalDeposit(state, i)
+		totalDepositValue = totalDepositValue.Add(deposit)
+	}
+	averageDeposit := totalDepositValue.DivUint64(CalculateAverageForDip8)
+	// Choose block reward according to the average deposit
+	switch {
+	case averageDeposit.Cmp(totalDeposit150) < 0:
+		return rewardDepositUnder150
+	case averageDeposit.Cmp(totalDeposit150) >= 0 && averageDeposit.Cmp(totalDeposit200) < 0:
+		return rewardDepositFrom150To200
+	case averageDeposit.Cmp(totalDeposit200) >= 0 && averageDeposit.Cmp(totalDeposit250) < 0:
+		return rewardDepositFrom200To250
+	case averageDeposit.Cmp(totalDeposit250) >= 0 && averageDeposit.Cmp(totalDeposit300) < 0:
+		return rewardDepositFrom250To300
+	case averageDeposit.Cmp(totalDeposit300) >= 0 && averageDeposit.Cmp(totalDeposit350) < 0:
+		return rewardDepositFrom300To350
+	case averageDeposit.Cmp(totalDeposit350) >= 0:
+		return rewardDepositOver350
+	}
+
+	return common.BigInt0
 }
 
 // Finalize implements consensus.Engine, commit state、calculate block award and update some context

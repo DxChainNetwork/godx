@@ -65,6 +65,8 @@ var (
 	emptyHash common.Hash
 
 	l *testLog
+
+	SafeSize = MaxValidatorSize*2/3 + 1
 )
 
 type (
@@ -352,7 +354,8 @@ func (tec *testEpochContext) executeAddCandidate(addr common.Address) error {
 	newRewardRatio := (RewardRatioDenominator-prevRewardRatio)/4 + prevRewardRatio
 	l.Printf("User %x add candidate (%v / %v) -> (%v / %v)\n", addr, prevDeposit, prevRewardRatio, newDeposit, newRewardRatio)
 	// Process Add candidate
-	if err := ProcessAddCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, newRewardRatio); err != nil {
+	config := params.DefaultDposConfig()
+	if err := ProcessAddCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, newRewardRatio, big.NewInt(10), config); err != nil {
 		return err
 	}
 	// Update the expected result
@@ -367,7 +370,8 @@ func (tec *testEpochContext) executeCancelCandidate(addr common.Address) error {
 		return fmt.Errorf("address %x not previously in candidateRecords", addr)
 	}
 	l.Printf("User %x cancel candidate\n", addr)
-	if err := ProcessCancelCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
+	config := params.DefaultDposConfig()
+	if err := ProcessCancelCandidate(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp, 10, config); err != nil {
 		return err
 	}
 	// Update the expected result
@@ -387,7 +391,8 @@ func (tec *testEpochContext) executeVoteIncreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.Add(GetAvailableBalance(tec.epc.stateDB, addr).DivUint64(100))
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x increase vote deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
+	config := params.DefaultDposConfig()
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp, 10, config); err != nil {
 		return err
 	}
 	// Update expected context
@@ -407,7 +412,8 @@ func (tec *testEpochContext) executeVoteDecreaseDeposit(addr common.Address) err
 	newDeposit := prevDeposit.MultInt64(2).DivUint64(3)
 	votes := randomPickCandidates(tec.ec.candidateRecords, maxVotes)
 	l.Printf("User %x decrease deposit %v -> %v\n", addr, prevDeposit, newDeposit)
-	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp); err != nil {
+	config := params.DefaultDposConfig()
+	if _, err := ProcessVote(tec.epc.stateDB, tec.epc.DposContext, addr, newDeposit, votes, tec.epc.TimeStamp, 10, config); err != nil {
 		return err
 	}
 	// Update expected context
@@ -422,7 +428,8 @@ func (tec *testEpochContext) executeCancelVote(addr common.Address) error {
 		return errors.New("vote record previously not in record map")
 	}
 	l.Printf("User %x cancel vote\n", addr)
-	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp); err != nil {
+	config := params.DefaultDposConfig()
+	if err := ProcessCancelVote(tec.epc.stateDB, tec.epc.DposContext, addr, tec.epc.TimeStamp, 10, config); err != nil {
 		return err
 	}
 	tec.ec.cancelVote(addr, tec.epc.TimeStamp)
@@ -546,7 +553,8 @@ func (tec *testEpochContext) checkDelegatorRecordsLastEpochConsistency() error {
 func (tec *testEpochContext) checkThawingConsistency() error {
 	// only check the thawing effected epoch
 	curEpoch := CalculateEpochID(tec.epc.TimeStamp)
-	thawEpoch := calcThawingEpoch(curEpoch)
+	config := params.DefaultDposConfig()
+	thawEpoch := calcThawingEpoch(curEpoch, 10, config)
 	for epoch := curEpoch + 1; epoch <= thawEpoch; epoch++ {
 		l.Println("expect epoch", epoch)
 		thawMap := tec.ec.thawing[epoch]
@@ -608,6 +616,7 @@ func (tec *testEpochContext) finalize(dpos *Dpos) (*types.Block, error) {
 	parentHeader := tec.cr.CurrentHeader()
 	newHeader, err := makeHeader(parentHeader.Hash(), validator, statedb, tec.epc.DposContext,
 		tec.blockNumber, tec.epc.TimeStamp)
+
 	b, err := dpos.Finalize(tec.cr, newHeader, statedb, []*types.Transaction{}, []*types.Header{},
 		[]*types.Receipt{}, tec.epc.DposContext)
 	if err != nil {
@@ -1067,7 +1076,8 @@ func (ec *expectContext) deleteDelegateVotes(delegator common.Address) {
 
 // addThawing add the thawing of diff amount of address addr to the thawing record.
 func (ec *expectContext) addThawing(addr common.Address, diff common.BigInt, curTime int64) {
-	thawEpoch := calcThawingEpoch(CalculateEpochID(curTime))
+	config := params.DefaultDposConfig()
+	thawEpoch := calcThawingEpoch(CalculateEpochID(curTime), 10, config)
 	prevThawing, exist := ec.thawing[thawEpoch][addr]
 	if !exist {
 		prevThawing = common.BigInt0
@@ -1254,7 +1264,8 @@ func (ec *expectContext) getIneligibleValidators(cr consensus.ChainReader, curTi
 		return addressesByCnt{}
 	}
 	timeFirstBlock := firstHeader.Time.Int64()
-	expectBlocks := expectedBlocksPerValidatorInEpoch(timeFirstBlock, curTime)
+	config := params.DefaultDposConfig()
+	expectBlocks := expectedBlocksPerValidatorInEpoch(timeFirstBlock, 0, curTime, nil, config)
 	// Iterate over the validators
 	var ineligibleValidators addressesByCnt
 	for _, addr := range ec.validators {
@@ -1329,8 +1340,9 @@ func getGenesis() *genesisConfig {
 		})
 	}
 	dposConfig := &params.DposConfig{
-		Validators:     genesisValidators,
-		DonatedAccount: params.DefaultDonatedAccount,
+		Validators:      genesisValidators,
+		DonatedAccount:  params.DefaultDonatedAccount,
+		Dip8BlockNumber: &params.DefaultDip8BlockNumber,
 	}
 	chainConfig := &params.ChainConfig{
 		ChainID:        big.NewInt(5),

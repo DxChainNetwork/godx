@@ -267,7 +267,25 @@ web3._extend({
 				web3._extend.formatters.inputBlockNumberFormatter,
 				web3._extend.formatters.inputBlockNumberFormatter,
 			]
-		})
+		}),
+
+		new web3._extend.Method({
+			name: 'getBlockReward',
+			call: 'dpos_getBlockReward',
+			params: 1,
+			inputFormatter: [
+				web3._extend.formatters.inputBlockNumberFormatter,
+			]
+		}),
+
+		new web3._extend.Method({
+			name: 'getEpochInitDepositByNumber',
+			call: 'dpos_getEpochInitDepositByNumber',
+			params: 1,
+			inputFormatter: [
+				web3._extend.formatters.inputBlockNumberFormatter,
+			]
+		}),
 	]
 });
 `

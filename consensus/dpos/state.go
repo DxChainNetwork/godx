@@ -43,6 +43,12 @@ var (
 	// KeyTotalVote is the key of total vote for each candidates
 	KeyTotalVote = common.BytesToHash([]byte("total-vote"))
 
+	// KeyTotalDeposit is the key of total deposit in one epoch
+	KeyTotalDeposit = common.BytesToHash([]byte("total-deposit"))
+
+	// KeyTotalCandidates is the key of the total candidates number  in one epoch
+	KeyTotalCandidates = common.BytesToHash([]byte("total-candidates"))
+
 	// KeyFrozenAssets is the key for frozen assets for in an account
 	KeyFrozenAssets = common.BytesToHash([]byte("frozen-assets"))
 
@@ -198,6 +204,36 @@ func GetVoteLastEpoch(state stateDB, addr common.Address) common.BigInt {
 func SetVoteLastEpoch(state stateDB, addr common.Address, value common.BigInt) {
 	h := common.BigToHash(value.BigIntPtr())
 	state.SetState(addr, KeyVoteLastEpoch, h)
+}
+
+// SetEpochTotalDeposit set the total candidates deposit in one epoch
+func SetEpochTotalDeposit(state stateDB, epochID int64, value common.BigInt) {
+	addr := getEpochTotalDepositAddress(epochID)
+	h := common.BigToHash(value.BigIntPtr())
+	state.SetState(addr, KeyTotalDeposit, h)
+	state.SetNonce(addr, 1)
+}
+
+// GetEpochTotalDeposit get the total candidates deposit in one epoch
+func GetEpochTotalDeposit(state stateDB, epochID int64) common.BigInt {
+	constractAddr := getEpochTotalDepositAddress(epochID)
+	depositHash := state.GetState(constractAddr, KeyTotalDeposit)
+	return common.PtrBigInt(depositHash.Big())
+}
+
+// SetCandidatesNumber set the total candidates deposit in one epoch
+func SetCandidatesNumber(state stateDB, epochID int64, value common.BigInt) {
+	addr := getCandidateNumberAddress(epochID)
+	h := common.BigToHash(value.BigIntPtr())
+	state.SetState(addr, KeyTotalCandidates, h)
+	state.SetNonce(addr, 1)
+}
+
+// GetCandidatesNumber get the total candidates deposit in one epoch
+func GetCandidatesNumber(state stateDB, epochID int64) common.BigInt {
+	addr := getCandidateNumberAddress(epochID)
+	candidatesHash := state.GetState(addr, KeyTotalCandidates)
+	return common.PtrBigInt(candidatesHash.Big())
 }
 
 // removeAddressInState remove the address from the state. Note currently only set nonce to 0.

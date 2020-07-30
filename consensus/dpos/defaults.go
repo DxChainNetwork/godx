@@ -18,18 +18,19 @@ const (
 
 	// MaxValidatorSize indicates that the max number of validators in dpos consensus
 	MaxValidatorSize = 21
-
-	// SafeSize indicates that the least number of validators in dpos consensus
-	SafeSize = MaxValidatorSize*2/3 + 1
-
-	// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
-	ConsensusSize = MaxValidatorSize*2/3 + 1
+	// Dynamic maxValidatorSize after hard fork dip 7, 8
+	MaxValidatorSizeUnder60    = 21
+	MaxValidatorSizeFrom60To90 = 33
+	MaxValidatorSizeOver90     = 66
 
 	// RewardRatioDenominator is the max value of reward ratio
 	RewardRatioDenominator uint64 = 100
 
 	// ThawingEpochDuration defines that if user cancel candidates or vote, the deposit will be thawed after 4 epochs
 	ThawingEpochDuration = 4
+
+	// ThawingEpochDurationAfterDip8 defines that if user cancel candidates or vote, the deposit will be thawed after 1 epochs
+	ThawingEpochDurationAfterDip8 = 1
 
 	// eligibleValidatorDenominator defines the denominator of the minimum expected block. If a validator
 	// produces block less than expected by this denominator, it is considered as ineligible.
@@ -51,8 +52,11 @@ const (
 	// PercentageDenominator is used to calculate percentage
 	PercentageDenominator = uint64(100)
 
-	// BlockCountFirstYear is the count of blocks produced per year
+	// BlockCountPerYear is the count of blocks produced per year
 	BlockCountPerYear = uint64(3942000)
+
+	// CalculateAverageForDip8 used to cal average epoch deposit and candidates length
+	CalculateAverageForDip8 = 14
 )
 
 var (
@@ -62,10 +66,38 @@ var (
 	// minDeposit defines the minimum deposit of candidate
 	minDeposit = common.NewBigIntUint64(1e18).MultInt64(10000)
 
+	// minDepositAfterFork defines the minimum deposit of candidate after the hard fork
+	minDepositAfterDip8 = common.NewBigIntUint64(1e18).MultInt64(20000000)
+
 	// totalBlockReward defines the total block reward for main net
 	totalBlockReward = common.NewBigInt(1e18).MultInt64(4.5e10)
 
 	// rewardPerBlockFirstYear is block reward for the first year
 	// means that the prev 3942000 blocks will be rewarded as 254 dx
+	// After a hard fork, The reward becomes dynamic as epoch depost changes.
 	rewardPerBlockFirstYear = common.NewBigIntUint64(1e18).MultInt64(254)
+
+	// rewardPerBlock when the passed 14 average deposit < 150 * 100 million dx
+	rewardDepositUnder150 = common.NewBigIntUint64(1e18).MultInt64(254)
+
+	// rewardPerBlock when the passed 14 average deposit >= 150 * 100 million dx && < 200 * 100 million dx
+	rewardDepositFrom150To200 = common.NewBigIntUint64(1e18).MultInt64(342)
+
+	// rewardPerBlock when the passed 14 average deposit >= 200 * 100 million dx && < 250 * 100 million dx
+	rewardDepositFrom200To250 = common.NewBigIntUint64(1e18).MultInt64(419)
+
+	// rewardPerBlock when the passed 14 average deposit >= 250 * 100 million dx && < 300 * 100 million dx
+	rewardDepositFrom250To300 = common.NewBigIntUint64(1e18).MultInt64(482)
+
+	// rewardPerBlock when the passed 14 average deposit >= 300 * 100 million dx && < 350 * 100 million dx
+	rewardDepositFrom300To350 = common.NewBigIntUint64(1e18).MultInt64(533)
+
+	// rewardPerBlock when the passed 14 average deposit >= 350 * 100 million dx
+	rewardDepositOver350 = common.NewBigIntUint64(1e18).MultInt64(571)
+
+	totalDeposit150 = common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(150)
+	totalDeposit200 = common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(200)
+	totalDeposit250 = common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(250)
+	totalDeposit300 = common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(300)
+	totalDeposit350 = common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(350)
 )

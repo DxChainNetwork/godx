@@ -66,6 +66,10 @@ var (
 	// that the candidates's deposit is lower than the threshold
 	errCandidateInsufficientDeposit = fmt.Errorf("candidates argument not qualified - minimum deposit: %v", minDeposit)
 
+	// errCandidateInsufficientDepositAfterDip8 happens when processing a candidates transaction, found
+	// that the candidates's deposit is lower than the threshold after the hard fork
+	errCandidateInsufficientDepositAfterDip8 = fmt.Errorf("candidates argument not qualified - minimum deposit: %v", minDepositAfterDip8)
+
 	// errCandidateInvalidRewardRatio happens when processing a candidates transaction, found
 	// the value of reward ratio is invalid
 	errCandidateInvalidRewardRatio = fmt.Errorf("candidates argument not qualified - invalid reward ratio: must between 0 to %v", RewardRatioDenominator)

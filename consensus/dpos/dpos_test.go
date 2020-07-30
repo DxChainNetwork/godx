@@ -21,6 +21,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// ConsensusSize indicates that a confirmed block needs the least number of validators to approve
+var ConsensusSize = MaxValidatorSize*2/3 + 1
+
 func TestUpdateMinedCnt(t *testing.T) {
 	var (
 		delegator = common.HexToAddress("0xaaa")
@@ -125,7 +128,7 @@ func TestAccumulateRewards(t *testing.T) {
 		headers: make(map[uint64]*testHeader, 0),
 	}
 
-	for i := uint64(0); i < ConsensusSize; i++ {
+	for i := uint64(0); i < uint64(ConsensusSize); i++ {
 		hash := common.BigToHash(new(big.Int).SetUint64(i))
 		if i == 0 {
 			testChain.insertGenesis(hash, uint64(10*i+1000), dposCtx)
@@ -135,7 +138,7 @@ func TestAccumulateRewards(t *testing.T) {
 	}
 
 	// Byzantium
-	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator}
+	header := &types.Header{Number: big.NewInt(1), Difficulty: big.NewInt(1 << 10), Coinbase: validator, Validator: validator, Time: big.NewInt(10)}
 
 	expectedDonationReward := rewardPerBlockFirstYear.MultUint64(DonationRatio).DivUint64(PercentageDenominator)
 	expectedValidatorReward := rewardPerBlockFirstYear.Sub(expectedDonationReward)
@@ -303,7 +306,7 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 						headers: make(map[uint64]*testHeader, 0),
 					}
 
-					for i := uint64(0); i < ConsensusSize; i++ {
+					for i := uint64(0); i < uint64(ConsensusSize); i++ {
 						hash := common.BigToHash(new(big.Int).SetUint64(i))
 						if i == 0 {
 							testChain.insertGenesis(hash, uint64(10*i+1000), nil)
@@ -345,7 +348,7 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 
 					return dposEng.confirmedBlockHeader.Number.Uint64(), nil
 				},
-				wantConfirmedBlockNum: (MaxValidatorSize + 5) - ConsensusSize,
+				wantConfirmedBlockNum: (MaxValidatorSize + 5) - uint64(ConsensusSize),
 			},
 		}
 	)
@@ -361,6 +364,109 @@ func TestUpdateConfirmedBlockHeader(t *testing.T) {
 		}
 	}
 
+}
+
+func TestGetBlockRewardBeforeHardfork(t *testing.T) {
+	db := ethdb.NewMemDatabase()
+	state, _ := newStateDB(db)
+
+	// Check block reward in first year
+	headerFirstYear := types.Header{
+		Number: big.NewInt(1000),
+		Time:   big.NewInt(EpochInterval * 20),
+	}
+
+	config := params.DefaultDposConfig()
+	expectBlockReward := getBlockReward(&headerFirstYear, state, config)
+	if !expectBlockReward.IsEqual(rewardPerBlockFirstYear) {
+		t.Fatalf("Get block reward in first year error")
+	}
+}
+
+func TestGetBlockRewardAfterHardfork(t *testing.T) {
+	mockEpochID := int64(20)
+	config := params.DefaultDposConfig()
+	header := types.Header{
+		Number: big.NewInt(*config.Dip8BlockNumber),
+		Time:   big.NewInt(EpochInterval * mockEpochID),
+	}
+
+	var tests = []struct {
+		name                   string
+		singleCandidateDeposit common.BigInt
+		expectBlockReward      common.BigInt
+	}{
+		{
+			name:                   "TotalDeposit < 150",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(100),
+			expectBlockReward:      rewardDepositUnder150,
+		},
+		{
+			name:                   "TotalDeposit = 150",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(150),
+			expectBlockReward:      rewardDepositFrom150To200,
+		},
+		{
+			name:                   " 150 <= TotalDeposit < 200",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(160),
+			expectBlockReward:      rewardDepositFrom150To200,
+		},
+		{
+			name:                   " 200 = TotalDeposit",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(200),
+			expectBlockReward:      rewardDepositFrom200To250,
+		},
+		{
+			name:                   " 200 <= TotalDeposit < 250",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(220),
+			expectBlockReward:      rewardDepositFrom200To250,
+		},
+		{
+			name:                   " 250 = TotalDeposit",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(250),
+			expectBlockReward:      rewardDepositFrom250To300,
+		},
+		{
+			name:                   " 250 <= TotalDeposit < 300",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(270),
+			expectBlockReward:      rewardDepositFrom250To300,
+		},
+		{
+			name:                   " 300 = TotalDeposit",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(300),
+			expectBlockReward:      rewardDepositFrom300To350,
+		},
+		{
+			name:                   " 300 <= TotalDeposit < 350",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(310),
+			expectBlockReward:      rewardDepositFrom300To350,
+		},
+		{
+			name:                   " TotalDeposit =  350 ",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(350),
+			expectBlockReward:      rewardDepositOver350,
+		},
+		{
+			name:                   " TotalDeposit >= 350 ",
+			singleCandidateDeposit: common.NewBigIntUint64(1e18).MultInt64(1e8).MultInt64(500),
+			expectBlockReward:      rewardDepositOver350,
+		},
+	}
+
+	for _, tt := range tests {
+		db := ethdb.NewMemDatabase()
+		state, _ := newStateDB(db)
+
+		for epochID := int64(6); epochID < mockEpochID; epochID++ {
+			SetEpochTotalDeposit(state, int64(epochID), tt.singleCandidateDeposit)
+		}
+
+		config := params.DefaultDposConfig()
+		expectBlockReward := getBlockReward(&header, state, config)
+		if !expectBlockReward.IsEqual(tt.expectBlockReward) {
+			t.Fatalf("Failed to get block reward")
+		}
+	}
 }
 
 type testHeader struct {
@@ -379,7 +485,7 @@ type testChainReader struct {
 }
 
 func (test testChainReader) Config() *params.ChainConfig {
-	return nil
+	return params.TestnetChainConfig
 }
 
 func (test testChainReader) CurrentHeader() *types.Header {
@@ -504,7 +610,7 @@ func (test testChainReader) insert(hash common.Hash, number uint64, time uint64,
 	test.headers[number] = header
 	test.currentHash = hash
 	test.currentNum = number
-	err := dposEng.updateConfirmedBlockHeader(test)
+	err := dposEng.updateConfirmedBlockHeader(test, nil)
 	if err != nil {
 		return err
 	}

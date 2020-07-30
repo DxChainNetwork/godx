@@ -16,11 +16,12 @@ import (
 	"github.com/DxChainNetwork/godx/core/state"
 	"github.com/DxChainNetwork/godx/core/types"
 	"github.com/DxChainNetwork/godx/log"
+	"github.com/DxChainNetwork/godx/params"
 	"github.com/DxChainNetwork/godx/rlp"
 )
 
 // ParseAndValidateCandidateApplyTxArgs will parse and validate the candidate apply transaction arguments
-func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB, account *accounts.Manager) (*PrecompiledContractTxArgs, error) {
+func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields map[string]string, stateDB *state.StateDB, account *accounts.Manager, header *types.Header, config *params.DposConfig) (*PrecompiledContractTxArgs, error) {
 	// parse the candidateAddress field
 	var candidateAddress common.Address
 	if fromStr, ok := fields["from"]; ok {
@@ -42,7 +43,7 @@ func ParseAndValidateCandidateApplyTxArgs(to common.Address, gas uint64, fields 
 	}
 
 	// validate candidate tx data
-	if err := dpos.CandidateTxDataValidation(stateDB, addCandidateTxData, candidateAddress); err != nil {
+	if err := dpos.CandidateTxDataValidation(stateDB, addCandidateTxData, candidateAddress, header, config); err != nil {
 		return nil, err
 	}
 

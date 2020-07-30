@@ -128,14 +128,18 @@ var (
 
 	// DefaultSpinnerTime is the default time to use lucky spinner
 	DefaultSpinnerTime = int64(1584489598)
+
+	// DefaultDip8BlockNumber the default block number to tigger dip7, 8 hard fork
+	DefaultDip8BlockNumber = int64(2000000)
 )
 
 // DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
 type DposConfig struct {
 	//Validators []common.Address `json:"validators"` // Genesis validator list
-	Validators     []ValidatorConfig `json:"validators"`     // Genesis validator list
-	DonatedAccount common.Address    `json:"donatedAccount"` // address for receiving donation
-	SFSpinnerTime  *int64            `json:"sfSpinnerTime, omitempty"`
+	Validators      []ValidatorConfig `json:"validators"`     // Genesis validator list
+	DonatedAccount  common.Address    `json:"donatedAccount"` // address for receiving donation
+	SFSpinnerTime   *int64            `json:"sfSpinnerTime, omitempty"`
+	Dip8BlockNumber *int64            `json:"dip8BlockNumber, omitempty"`
 }
 
 type ValidatorConfig struct {
@@ -146,9 +150,10 @@ type ValidatorConfig struct {
 
 func DefaultDposConfig() *DposConfig {
 	return &DposConfig{
-		Validators:     DefaultValidators,
-		DonatedAccount: DefaultDonatedAccount,
-		SFSpinnerTime:  &DefaultSpinnerTime,
+		Validators:      DefaultValidators,
+		DonatedAccount:  DefaultDonatedAccount,
+		SFSpinnerTime:   &DefaultSpinnerTime,
+		Dip8BlockNumber: &DefaultDip8BlockNumber,
 	}
 }
 
@@ -162,6 +167,14 @@ func (d *DposConfig) ParseValidators() (validators []common.Address) {
 // IsLuckySpinner decides whether we should use lucky spinner or not
 func (d *DposConfig) IsLuckySpinner(blockTime int64) bool {
 	if d.SFSpinnerTime == nil || blockTime >= *d.SFSpinnerTime {
+		return true
+	}
+	return false
+}
+
+// IsDip8 indicates whether we should hard fork to dip7 and dip8
+func (d *DposConfig) IsDip8(blockNumber int64) bool {
+	if d.Dip8BlockNumber == nil || blockNumber >= *d.Dip8BlockNumber {
 		return true
 	}
 	return false

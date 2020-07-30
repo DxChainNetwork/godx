@@ -8,12 +8,10 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/DxChainNetwork/godx/core/types"
-
-	"github.com/DxChainNetwork/godx/ethdb"
-
 	"github.com/DxChainNetwork/godx/common"
 	"github.com/DxChainNetwork/godx/core/state"
+	"github.com/DxChainNetwork/godx/core/types"
+	"github.com/DxChainNetwork/godx/ethdb"
 )
 
 func TestMakeThawingAssetsKey(t *testing.T) {
@@ -27,6 +25,19 @@ func TestMakeThawingAssetsKey(t *testing.T) {
 			t.Fatal("key collision")
 		}
 		res[h] = struct{}{}
+	}
+}
+
+func TestEpochCandidatesDeposit(t *testing.T) {
+	state, _, _ := newStateAndDposContext()
+	epochID := int64(30)
+	totalDeposit := common.NewBigInt(50000)
+
+	SetEpochTotalDeposit(state, epochID, totalDeposit)
+
+	expectEpochDeposit := GetEpochTotalDeposit(state, epochID)
+	if !totalDeposit.IsEqual(expectEpochDeposit) {
+		t.Fatalf("Failed to get epoch deposit.")
 	}
 }
 
